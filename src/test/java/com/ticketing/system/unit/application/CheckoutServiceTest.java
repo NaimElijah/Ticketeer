@@ -38,7 +38,7 @@ import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
 import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
 import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
 import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;

@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.notifications;
+package com.ticketing.system.notifications.domain;
 
 import java.util.HashMap;
 import java.util.Map;

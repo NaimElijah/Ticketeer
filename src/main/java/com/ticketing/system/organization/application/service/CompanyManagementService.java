@@ -46,7 +46,7 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 
 import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
 import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;

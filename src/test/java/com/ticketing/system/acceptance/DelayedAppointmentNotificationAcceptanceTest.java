@@ -22,8 +22,8 @@ import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 
 /**
@@ -41,7 +41,7 @@ class DelayedAppointmentNotificationAcceptanceTest {
 
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
-    @Autowired private INotificationRepository notificationRepository;
+    @Autowired private NotificationRepository notificationRepository;
     @Autowired private ProductionCompanyRepository companyRepository;
     @Autowired private UserRepository userRepository;
 

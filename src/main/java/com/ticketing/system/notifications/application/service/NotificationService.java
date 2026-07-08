@@ -1,4 +1,5 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.notifications.application.service;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -8,11 +9,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
-import com.ticketing.system.Core.Domain.notifications.NotificationType;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.notifications.domain.NotificationType;
 import lombok.extern.slf4j.Slf4j;
 
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 public class NotificationService implements INotificationService {
 
     private final NotificationDispatchService dispatcher;
-    private final INotificationRepository notificationRepository;
+    private final NotificationRepository notificationRepository;
 
     @Override
     public void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> ticketIds) {

@@ -1,7 +1,7 @@
 package com.ticketing.system.Infrastructure.scheduling;
 
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
-import com.ticketing.system.Core.Application.services.NotificationDispatchService;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.Presentation.components.NotificationBellComponent;
 import com.ticketing.system.Presentation.session.AuthSession;
 import com.ticketing.system.Presentation.session.NotificationSession;

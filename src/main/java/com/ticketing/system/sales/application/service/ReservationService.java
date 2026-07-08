@@ -16,7 +16,7 @@ import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
 import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
 import com.ticketing.system.Core.Application.dto.BuyerContextDTO;
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;

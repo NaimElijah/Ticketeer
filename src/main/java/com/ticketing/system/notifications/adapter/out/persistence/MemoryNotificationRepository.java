@@ -1,9 +1,9 @@
-package com.ticketing.system.Infrastructure.persistence.NotificationPersistence;
+package com.ticketing.system.notifications.adapter.out.persistence;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
 
 import java.util.List;
 import java.util.Map;
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 @Profile("!jpa")
-public class MemoryNotificationRepository implements INotificationRepository {
+public class MemoryNotificationRepository implements NotificationRepository {
     // ConcurrentHashMap (not HashMap) for thread-safe concurrent access, matching the
     // other Memory repositories — notifications are written and read from many threads.
     private final Map<String, Notification> storage = new ConcurrentHashMap<>();

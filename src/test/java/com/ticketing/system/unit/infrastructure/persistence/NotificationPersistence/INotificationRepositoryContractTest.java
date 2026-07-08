@@ -16,22 +16,22 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
-import com.ticketing.system.Core.Domain.notifications.NotificationType;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.notifications.domain.NotificationType;
 
 /**
- * Contract every {@link INotificationRepository} implementation must satisfy. The Memory and
+ * Contract every {@link NotificationRepository} implementation must satisfy. The Memory and
  * JPA adapters each subclass this with their own {@link #newRepository()} factory; the tests
  * are reused. The {@code data} round-trip test pins the acceptance: a heterogeneous payload
  * survives serialization to the JSON column and back.
  */
 abstract class INotificationRepositoryContractTest {
 
-    protected abstract INotificationRepository newRepository();
+    protected abstract NotificationRepository newRepository();
 
-    private INotificationRepository repo;
+    private NotificationRepository repo;
 
     private static final LocalDateTime T = LocalDateTime.of(2026, 1, 1, 12, 0, 0);
 

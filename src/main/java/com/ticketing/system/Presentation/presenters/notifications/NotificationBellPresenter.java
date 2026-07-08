@@ -2,7 +2,7 @@ package com.ticketing.system.Presentation.presenters.notifications;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.Presentation.session.AuthSession;
 
 /**

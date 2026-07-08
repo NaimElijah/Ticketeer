@@ -18,23 +18,23 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
-import com.ticketing.system.Core.Application.interfaces.IPushNotificationService;
-import com.ticketing.system.Core.Application.services.NotificationDispatchService;
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
-import com.ticketing.system.Core.Domain.notifications.NotificationType;
+import com.ticketing.system.notifications.application.port.out.PushNotificationService;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.notifications.domain.NotificationType;
 
 class NotificationDispatchServiceTest {
 
-    private INotificationRepository mockRepo;
-    private IPushNotificationService mockPushService;
+    private NotificationRepository mockRepo;
+    private PushNotificationService mockPushService;
     private NotificationDispatchService service;
 
     @BeforeEach
     void setUp() {
-        mockRepo = mock(INotificationRepository.class);
-        mockPushService = mock(IPushNotificationService.class);
+        mockRepo = mock(NotificationRepository.class);
+        mockPushService = mock(PushNotificationService.class);
         service = new NotificationDispatchService(mockRepo, mockPushService);
     }
 

@@ -34,7 +34,7 @@ import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.NotificationDispatchService;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;

@@ -1,6 +1,6 @@
 package com.ticketing.system.Presentation.security;
 
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinServiceInitListener;
 import com.vaadin.flow.server.VaadinSession;

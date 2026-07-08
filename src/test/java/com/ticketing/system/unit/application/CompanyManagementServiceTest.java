@@ -20,7 +20,7 @@ import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
 import com.ticketing.system.Core.Application.dto.PermissionEditDTO;
 import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.organization.application.service.CompanyManagementService;

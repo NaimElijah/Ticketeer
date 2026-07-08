@@ -1,4 +1,7 @@
-package com.ticketing.system.Core.Domain.notifications;
+package com.ticketing.system.notifications.application.port.out;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.identity.domain.User;
 
 import java.util.List;
@@ -8,7 +11,7 @@ import com.ticketing.system.shared.IRepository;
 // Aggregate-root entry point for the Notification aggregate (UC-36 design walkthrough).
 // Notification was promoted from a sub-entity of User to its own aggregate so high-volume
 // PENDING-storage and login-time delivery (UC-37) don't drag the User aggregate.
-public interface INotificationRepository extends IRepository<Notification, String> {
+public interface NotificationRepository extends IRepository<Notification, String> {
 
     void save(Notification notification);
 

@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.NotificationPersistence;
+package com.ticketing.system.notifications.adapter.out.persistence;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -7,14 +7,14 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
 
 /**
- * JPA-backed {@link INotificationRepository} — active only in the {@code jpa} run/dev
+ * JPA-backed {@link NotificationRepository} — active only in the {@code jpa} run/dev
  * profile. Adapts the domain port onto Spring Data ({@link SpringDataNotificationRepository});
- * the application layer depends only on {@code INotificationRepository}, never on Spring Data.
+ * the application layer depends only on {@code NotificationRepository}, never on Spring Data.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrent writes are guarded by
  * {@code Notification}'s {@code @Version} optimistic lock within the surrounding transaction.
@@ -25,7 +25,7 @@ import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
  */
 @Repository
 @Profile("jpa")
-public class JpaNotificationRepository implements INotificationRepository {
+public class JpaNotificationRepository implements NotificationRepository {
 
     private final SpringDataNotificationRepository data;
     private final AtomicInteger idSequence = new AtomicInteger(1);

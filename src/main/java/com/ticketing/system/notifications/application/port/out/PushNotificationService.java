@@ -1,12 +1,12 @@
-package com.ticketing.system.Core.Application.interfaces;
+package com.ticketing.system.notifications.application.port.out;
 
-import com.ticketing.system.Core.Domain.notifications.Notification;
+import com.ticketing.system.notifications.domain.Notification;
 
 /**
  * Port for the low-level delivery channel (WebSocket, SSE, Email, etc.).
  * Responsible only for the technical act of pushing a notification to a recipient.
  */
-public interface IPushNotificationService {
+public interface PushNotificationService {
 
     /**
      * Attempts to push a notification to a recipient.

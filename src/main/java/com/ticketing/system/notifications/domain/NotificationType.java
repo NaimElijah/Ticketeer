@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.notifications;
+package com.ticketing.system.notifications.domain;
 
 // Categorizes Notification entities (UC-35 design walkthrough).
 // TODO (team to confirm full set per UC-35 — open question #13 in design walkthrough)

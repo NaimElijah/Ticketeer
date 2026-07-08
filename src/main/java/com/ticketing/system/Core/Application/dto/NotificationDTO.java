@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 
 import java.time.LocalDateTime;
 
