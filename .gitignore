@@ -54,9 +54,6 @@ docs/*
 # Runtime log output (logs/event-ticket-system.log + rolled .gz archives)
 logs/
 
-# Claude Code per-project skills + agent tooling (run skill, drivers, screenshots).
-.claude/
-
 # Local configuration files (e.g. for IDEs, build tools, etc.)
 .idea/
 .vscode/
