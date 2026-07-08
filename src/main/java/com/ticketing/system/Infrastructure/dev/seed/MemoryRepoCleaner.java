@@ -4,7 +4,7 @@ import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepos
 import com.ticketing.system.identity.adapter.out.persistence.MemoryAdminRepository;
 import com.ticketing.system.messaging.adapter.out.persistence.MemoryConversationRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
-import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.MemoryNotificationRepository;
+import com.ticketing.system.notifications.adapter.out.persistence.MemoryNotificationRepository;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryOrderReceiptRepository;
 import com.ticketing.system.organization.adapter.out.persistence.MemoryProductionCompanyRepository;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;

@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.notifications;
+package com.ticketing.system.notifications.domain;
 
 // Lifecycle states for a Notification (UC-36 design walkthrough).
 //   PENDING  - stored offline, awaiting delivery to the bell

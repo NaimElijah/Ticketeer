@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;

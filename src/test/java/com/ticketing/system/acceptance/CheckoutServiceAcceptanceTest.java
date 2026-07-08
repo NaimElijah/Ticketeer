@@ -1,4 +1,5 @@
 package com.ticketing.system.acceptance;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;

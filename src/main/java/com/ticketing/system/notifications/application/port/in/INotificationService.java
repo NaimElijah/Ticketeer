@@ -1,11 +1,14 @@
-package com.ticketing.system.Core.Application.interfaces;
+package com.ticketing.system.notifications.application.port.in;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
+import com.ticketing.system.notifications.application.service.NotificationService;
+import com.ticketing.system.notifications.application.port.out.PushNotificationService;
 
 import java.util.List;
 
 // High-level, application-facing notification facade. Each notifyXxx method translates a
 // business event into a Notification domain object and delegates to NotificationDispatchService,
 // which persists it and routes delivery. The low-level push channel (WebSocket / SSE / email)
-// is a separate port, IPushNotificationService.
+// is a separate port, PushNotificationService.
 // V1 implementation is NotificationService.
 public interface INotificationService {
 

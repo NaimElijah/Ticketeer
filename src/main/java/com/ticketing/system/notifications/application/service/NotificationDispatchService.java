@@ -1,13 +1,13 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.notifications.application.service;
 
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
-import com.ticketing.system.Core.Application.interfaces.IPushNotificationService;
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
+import com.ticketing.system.notifications.application.port.out.PushNotificationService;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
 
 // Owns the entire notification subsystem (UC-35, UC-36, UC-37).
 // - UC-35: dispatch on domain event → check online → push live or hand off to UC-36
@@ -24,12 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class NotificationDispatchService {
 
-    private final INotificationRepository notificationRepository;
-    private final IPushNotificationService pushService; // low-level push channel (used by deliverPending)
+    private final NotificationRepository notificationRepository;
+    private final PushNotificationService pushService; // low-level push channel (used by deliverPending)
 
     public NotificationDispatchService(
-            INotificationRepository notificationRepository,
-            IPushNotificationService pushService) {
+            NotificationRepository notificationRepository,
+            PushNotificationService pushService) {
         this.notificationRepository = notificationRepository;
         this.pushService = pushService;
     }

@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.notifications;
+package com.ticketing.system.notifications.domain;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.identity.domain.User;
 

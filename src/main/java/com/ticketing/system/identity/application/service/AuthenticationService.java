@@ -1,5 +1,5 @@
 package com.ticketing.system.identity.application.service;
-import com.ticketing.system.Core.Application.services.NotificationDispatchService; // transitional: cross-context call, to be rewired via an inbound port later
+import com.ticketing.system.notifications.application.service.NotificationDispatchService; // transitional: cross-context call, to be rewired via an inbound port later
 import com.ticketing.system.sales.application.service.ReservationService; // transitional: cross-context call, to be rewired via an inbound port later
 
 import java.util.List;

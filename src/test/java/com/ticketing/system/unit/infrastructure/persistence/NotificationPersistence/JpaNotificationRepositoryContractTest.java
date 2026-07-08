@@ -6,9 +6,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.JpaNotificationRepository;
-import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.SpringDataNotificationRepository;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.adapter.out.persistence.JpaNotificationRepository;
+import com.ticketing.system.notifications.adapter.out.persistence.SpringDataNotificationRepository;
 
 /**
  * Runs the {@link INotificationRepositoryContractTest} suite against the JPA adapter on an
@@ -35,7 +35,7 @@ class JpaNotificationRepositoryContractTest extends INotificationRepositoryContr
     }
 
     @Override
-    protected INotificationRepository newRepository() {
+    protected NotificationRepository newRepository() {
         return repository;
     }
 }
