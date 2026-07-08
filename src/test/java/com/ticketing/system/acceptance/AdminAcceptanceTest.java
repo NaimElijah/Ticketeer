@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.sales.adapter.out.wsep.StubPaymentGateway;

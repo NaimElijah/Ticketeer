@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.services.MemberAccountService;
+import com.ticketing.system.identity.application.service.MemberAccountService;
 import com.ticketing.system.Presentation.session.AuthSession;
 
 import lombok.extern.slf4j.Slf4j;

@@ -1,5 +1,5 @@
 package com.ticketing.system.sales.application.service;
-import com.ticketing.system.Core.Application.services.SystemAdminService; // transitional: market-gate check, to be rewired via a governance inbound port later
+import com.ticketing.system.governance.application.service.SystemAdminService; // transitional: market-gate check, to be rewired via a governance inbound port later
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;

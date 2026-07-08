@@ -8,7 +8,7 @@ import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.MemberAccountService;
+import com.ticketing.system.identity.application.service.MemberAccountService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;

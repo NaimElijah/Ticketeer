@@ -1,4 +1,5 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.governance.application.service;
+import com.ticketing.system.governance.application.service.SystemIntegrityVerifier;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 

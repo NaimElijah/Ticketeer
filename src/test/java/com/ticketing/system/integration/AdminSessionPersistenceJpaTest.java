@@ -12,7 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 
 /**

@@ -1,4 +1,5 @@
 package com.ticketing.system.sales.adapter.out.persistence;
+import com.ticketing.system.identity.application.service.MemberAccountService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.catalog.application.service.EventManagementService;

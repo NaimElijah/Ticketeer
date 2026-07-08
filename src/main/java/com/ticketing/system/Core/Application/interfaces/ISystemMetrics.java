@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.interfaces;
+import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 
 import java.time.Duration;
 
