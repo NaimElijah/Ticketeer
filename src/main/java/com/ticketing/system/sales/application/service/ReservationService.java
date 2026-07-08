@@ -33,8 +33,8 @@ import com.ticketing.system.organization.application.port.out.ProductionCompanyR
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.sales.domain.PurchaseContext;
-import com.ticketing.system.sales.domain.PurchaseStage;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchaseStage;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;

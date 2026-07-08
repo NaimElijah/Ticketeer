@@ -57,7 +57,7 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
-import com.ticketing.system.sales.domain.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;

@@ -59,13 +59,13 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
-import com.ticketing.system.sales.domain.OrPurchasePolicy;
-import com.ticketing.system.sales.domain.PurchasePolicy;
-import com.ticketing.system.sales.domain.AgePurchasePolicy;
-import com.ticketing.system.sales.domain.AndPurchasePolicy;
-import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
-import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
 
 @Service
 @Slf4j

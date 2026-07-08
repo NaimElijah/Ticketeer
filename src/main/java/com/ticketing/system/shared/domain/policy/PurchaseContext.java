@@ -1,7 +1,11 @@
-package com.ticketing.system.sales.domain;
+package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
 
 import com.ticketing.system.shared.InvariantChecked;
 
+/**
+ * Immutable snapshot of the facts a {@link PurchasePolicy} evaluates: buyer id/age, event, company,
+ * quantity, and the {@link PurchaseStage} (reserve vs checkout) the check runs at.
+ */
 public class PurchaseContext implements InvariantChecked {
 
     private final int buyerId;

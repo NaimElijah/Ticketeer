@@ -1,7 +1,11 @@
-package com.ticketing.system.sales.domain;
+package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
 
 import com.ticketing.system.shared.InvariantChecked;
 
+/**
+ * Leaf purchase policy enforcing a lower bound on ticket count. Skipped at the reserve stage (the
+ * cart is still being built up) and enforced at checkout.
+ */
 public class MinTicketsPurchasePolicy implements PurchasePolicy, InvariantChecked {
 
     private final int minimumTickets;

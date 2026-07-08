@@ -1,6 +1,9 @@
-package com.ticketing.system.sales.domain;
-import com.ticketing.system.organization.domain.ProductionCompany;
+package com.ticketing.system.shared.domain.policy;
 
+// NOTE: no import of organization.domain.ProductionCompany — the class is referenced only by a
+// fully-qualified {@link} in the Javadoc below, so an import would be unused and would (wrongly)
+// make this shared-kernel type depend on the organization context. Kept out to keep policy a clean
+// shared citizen.
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -13,11 +13,11 @@ import com.ticketing.system.shared.exception.PolicyViolationException;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.sales.domain.AndPurchasePolicy;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
-import com.ticketing.system.sales.domain.PurchaseContext;
-import com.ticketing.system.sales.domain.PurchasePolicy;
-import com.ticketing.system.sales.domain.PurchasePolicyJsonConverter;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicyJsonConverter;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;

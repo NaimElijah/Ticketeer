@@ -55,13 +55,13 @@ import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
-import com.ticketing.system.sales.domain.PurchasePolicy;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
-import com.ticketing.system.sales.domain.AgePurchasePolicy;
-import com.ticketing.system.sales.domain.AndPurchasePolicy;
-import com.ticketing.system.sales.domain.OrPurchasePolicy;
-import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
-import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

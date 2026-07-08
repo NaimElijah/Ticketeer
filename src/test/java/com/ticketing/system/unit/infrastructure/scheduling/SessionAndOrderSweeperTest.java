@@ -41,13 +41,13 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
-import com.ticketing.system.sales.domain.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 
 class SessionAndOrderSweeperTest {
 

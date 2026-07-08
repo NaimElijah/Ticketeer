@@ -1,4 +1,4 @@
-package com.ticketing.system.sales.domain;
+package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
 
 /**
  * The point in the buyer flow at which a purchase policy is evaluated.

@@ -1,7 +1,11 @@
-package com.ticketing.system.sales.domain;
+package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
 
 import com.ticketing.system.shared.InvariantChecked;
 
+/**
+ * Leaf purchase policy enforcing a minimum buyer age. When the age is unknown it defers at the
+ * reserve stage and fails at checkout (where the age is collected).
+ */
 public class AgePurchasePolicy implements PurchasePolicy, InvariantChecked {
 
     private final int minimumAge;

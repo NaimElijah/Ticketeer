@@ -31,7 +31,7 @@ import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 
