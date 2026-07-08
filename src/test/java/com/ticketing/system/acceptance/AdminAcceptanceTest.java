@@ -13,7 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
-import com.ticketing.system.Core.Domain.exceptions.ExternalServiceUnavailableException;
+import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.Infrastructure.external.StubPaymentGateway;
 import com.ticketing.system.Infrastructure.external.StubTicketIssuer;
 

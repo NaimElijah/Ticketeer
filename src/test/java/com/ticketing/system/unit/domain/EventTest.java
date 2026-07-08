@@ -19,7 +19,7 @@ import com.ticketing.system.Core.Domain.events.Location;
 import com.ticketing.system.Core.Domain.events.VenueMap;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.exceptions.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.support.BaseDomainTest;
 
 import java.time.LocalDateTime;

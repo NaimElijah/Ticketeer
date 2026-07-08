@@ -1,7 +1,7 @@
 package com.ticketing.system.Core.Domain.ActiveOrder;
 
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO.CartLineDTO;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import java.time.LocalDateTime;
 import java.time.Duration;

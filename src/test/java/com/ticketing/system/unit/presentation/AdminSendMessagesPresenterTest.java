@@ -26,7 +26,7 @@ import com.ticketing.system.Core.Application.dto.OutreachRequestDTO;
 import com.ticketing.system.Core.Application.dto.OutreachResultDTO;
 import com.ticketing.system.Core.Application.services.MemberQueryService;
 import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.Presentation.presenters.messaging.AdminSendMessagesPresenter;
 
 class AdminSendMessagesPresenterTest {

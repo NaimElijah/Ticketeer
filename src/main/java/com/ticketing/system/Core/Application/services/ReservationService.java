@@ -30,8 +30,8 @@ import com.ticketing.system.Core.Domain.users.User;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseContext;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseStage;
 import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
-import com.ticketing.system.Core.Domain.exceptions.MarketNotOpenException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.MarketNotOpenException;
 
 
 @Service

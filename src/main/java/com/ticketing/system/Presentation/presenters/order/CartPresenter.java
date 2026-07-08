@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
 import com.ticketing.system.Core.Application.services.ReservationService;
-import com.ticketing.system.Core.Domain.exceptions.DomainException;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.Presentation.components.Money;
 import com.ticketing.system.Presentation.session.SessionIdentity;
 

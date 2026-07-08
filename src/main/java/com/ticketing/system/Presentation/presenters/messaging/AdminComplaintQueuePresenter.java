@@ -9,7 +9,7 @@ import com.ticketing.system.Core.Application.dto.ComplaintFilterDTO;
 import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 
 /**
  * MVP presenter for {@code AdminComplaintQueueView} (#269). Holds no Vaadin imports so the

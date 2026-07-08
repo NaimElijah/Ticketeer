@@ -1,6 +1,6 @@
 package com.ticketing.system.Core.Domain.events;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.Embeddable;
 

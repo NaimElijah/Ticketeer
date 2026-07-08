@@ -3,7 +3,7 @@ package com.ticketing.system.Core.Domain.messaging;
 import java.util.List;
 import java.util.Optional;
 
-import com.ticketing.system.Core.Domain.shared.IRepository;
+import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the Conversation aggregate (per course's
 // IXxxRepository convention). Owns the centralized messaging subsystem —

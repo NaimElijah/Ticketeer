@@ -4,8 +4,8 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.Set;
 
-import com.ticketing.system.Core.Domain.exceptions.InvalidPermissionException;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.InvalidPermissionException;
+import com.ticketing.system.shared.InvariantChecked;
 
 import java.util.List;
 

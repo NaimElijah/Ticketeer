@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.Core.Application.services.ReservationService;
-import com.ticketing.system.Core.Domain.exceptions.PaymentGatewayException;
-import com.ticketing.system.Core.Domain.exceptions.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.PaymentGatewayException;
+import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.Presentation.presenters.order.CheckoutPresenter;
 import com.ticketing.system.Presentation.session.SessionIdentity;
 

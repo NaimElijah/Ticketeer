@@ -9,7 +9,7 @@ import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
 import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
 import com.ticketing.system.Core.Application.services.CompanyAnalyticsService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 
 /**
  * MVP presenter for {@code OwnerDashboardView} (V2-WIRE-OWNER-DASH). Holds no Vaadin imports so
