@@ -15,7 +15,7 @@ import com.ticketing.system.Infrastructure.dev.seed.DemoClock;
 import com.ticketing.system.Infrastructure.dev.seed.RepoCleaner;
 import com.ticketing.system.Infrastructure.dev.seed.SeedHarness;
 import com.ticketing.system.Infrastructure.dev.seed.SeedReport;
-import com.ticketing.system.Presentation.dev.DevUserSeeder;
+import com.ticketing.system.ui.dev.DevUserSeeder;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;

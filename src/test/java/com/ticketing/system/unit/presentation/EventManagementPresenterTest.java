@@ -25,7 +25,7 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.company.EventManagementPresenter;
+import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 
 /**
  * Unit tests for {@link EventManagementPresenter#create}. The create flow assembles an

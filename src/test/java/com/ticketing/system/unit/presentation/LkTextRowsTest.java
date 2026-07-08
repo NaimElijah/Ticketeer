@@ -9,8 +9,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Presentation.components.kit.LkBtn;
-import com.ticketing.system.Presentation.components.kit.LkTextRows;
+import com.ticketing.system.ui.components.kit.LkBtn;
+import com.ticketing.system.ui.components.kit.LkTextRows;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.textfield.TextField;

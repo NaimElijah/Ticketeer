@@ -1,67 +1,67 @@
 package com.ticketing.system.unit.presentation;
 import com.ticketing.system.identity.domain.Admin;
 
-import com.ticketing.system.Presentation.components.company.EditPermissionsDialog;
-import com.ticketing.system.Presentation.components.kit.LkBadge;
-import com.ticketing.system.Presentation.components.kit.LkBtn;
-import com.ticketing.system.Presentation.components.kit.LkCard;
-import com.ticketing.system.Presentation.components.kit.LkConfirm;
-import com.ticketing.system.Presentation.components.kit.LkIcon;
-import com.ticketing.system.Presentation.components.kit.LkSearchPanel;
-import com.ticketing.system.Presentation.components.kit.LkSideNav;
-import com.ticketing.system.Presentation.components.kit.LkTextRows;
-import com.ticketing.system.Presentation.components.venue.VkQuantitySelector;
-import com.ticketing.system.Presentation.components.venue.VkSeat;
-import com.ticketing.system.Presentation.components.venue.VkSeatLegend;
-import com.ticketing.system.Presentation.components.venue.VkSeatedZonePicker;
-import com.ticketing.system.Presentation.components.venue.VkStandingZone;
-import com.ticketing.system.Presentation.components.Toasts;
-import com.ticketing.system.Presentation.layouts.WorkspaceLayout;
-import com.ticketing.system.Presentation.layouts.MainLayout;
-import com.ticketing.system.Presentation.views.admin.AdminComplaintQueueView;
-import com.ticketing.system.Presentation.views.admin.AdminComplaintRespondView;
-import com.ticketing.system.Presentation.views.admin.AdminDashboardView;
-import com.ticketing.system.Presentation.views.admin.AdminInboxView;
-import com.ticketing.system.Presentation.views.admin.AdminSendMessagesView;
-import com.ticketing.system.Presentation.views.admin.GlobalHistoryView;
-import com.ticketing.system.Presentation.views.admin.OrganizationalTreeView;
-import com.ticketing.system.Presentation.views.admin.SystemAnalyticsView;
-import com.ticketing.system.Presentation.views.catalog.BrowseEventsView;
-import com.ticketing.system.Presentation.views.catalog.EventDetailsView;
-import com.ticketing.system.Presentation.presenters.admin.AdminDashboardPresenter;
-import com.ticketing.system.Presentation.presenters.admin.GlobalHistoryPresenter;
-import com.ticketing.system.Presentation.presenters.admin.OrgTreePresenter;
-import com.ticketing.system.Presentation.presenters.admin.SystemAnalyticsPresenter;
-import com.ticketing.system.Presentation.presenters.catalog.BrowseEventsPresenter;
-import com.ticketing.system.Presentation.presenters.catalog.EventDetailsPresenter;
-import com.ticketing.system.Presentation.session.SessionIdentity;
-import com.ticketing.system.Presentation.views.company.CompanyInquiryInboxView;
-import com.ticketing.system.Presentation.views.company.CompanyInquiryRespondView;
-import com.ticketing.system.Presentation.views.company.EventManagementView;
-import com.ticketing.system.Presentation.presenters.company.EventManagementPresenter;
-import com.ticketing.system.Presentation.views.company.ManagerListView;
-import com.ticketing.system.Presentation.views.company.OwnerDashboardView;
-import com.ticketing.system.Presentation.views.account.MyAccountView;
-import com.ticketing.system.Presentation.views.account.MyInvitationsView;
-import com.ticketing.system.Presentation.views.account.ReceiptView;
-import com.ticketing.system.Presentation.views.account.SupportInboxView;
-import com.ticketing.system.Presentation.presenters.account.MyAccountPresenter;
-import com.ticketing.system.Presentation.presenters.account.ReceiptPresenter;
-import com.ticketing.system.Presentation.presenters.account.RefundPresenter;
-import com.ticketing.system.Presentation.views.landing.LandingView;
-import com.ticketing.system.Presentation.views.messaging.NewInquiryView;
-import com.ticketing.system.Presentation.views.messaging.SubmitComplaintView;
-import com.ticketing.system.Presentation.presenters.company.ManagerListPresenter;
-import com.ticketing.system.Presentation.presenters.company.OwnerDashboardPresenter;
-import com.ticketing.system.Presentation.presenters.messaging.AdminComplaintQueuePresenter;
-import com.ticketing.system.Presentation.presenters.messaging.AdminInboxPresenter;
-import com.ticketing.system.Presentation.presenters.messaging.AdminSendMessagesPresenter;
-import com.ticketing.system.Presentation.presenters.messaging.CompanyInquiryInboxPresenter;
-import com.ticketing.system.Presentation.presenters.messaging.NewInquiryPresenter;
-import com.ticketing.system.Presentation.presenters.account.MyInvitationsPresenter;
-import com.ticketing.system.Presentation.presenters.landing.LandingPresenter;
-import com.ticketing.system.Presentation.presenters.messaging.SubmitComplaintPresenter;
-import com.ticketing.system.Presentation.presenters.messaging.SupportInboxPresenter;
+import com.ticketing.system.ui.components.company.EditPermissionsDialog;
+import com.ticketing.system.ui.components.kit.LkBadge;
+import com.ticketing.system.ui.components.kit.LkBtn;
+import com.ticketing.system.ui.components.kit.LkCard;
+import com.ticketing.system.ui.components.kit.LkConfirm;
+import com.ticketing.system.ui.components.kit.LkIcon;
+import com.ticketing.system.ui.components.kit.LkSearchPanel;
+import com.ticketing.system.ui.components.kit.LkSideNav;
+import com.ticketing.system.ui.components.kit.LkTextRows;
+import com.ticketing.system.ui.components.venue.VkQuantitySelector;
+import com.ticketing.system.ui.components.venue.VkSeat;
+import com.ticketing.system.ui.components.venue.VkSeatLegend;
+import com.ticketing.system.ui.components.venue.VkSeatedZonePicker;
+import com.ticketing.system.ui.components.venue.VkStandingZone;
+import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.layouts.WorkspaceLayout;
+import com.ticketing.system.ui.layouts.MainLayout;
+import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
+import com.ticketing.system.ui.views.admin.AdminComplaintRespondView;
+import com.ticketing.system.ui.views.admin.AdminDashboardView;
+import com.ticketing.system.ui.views.admin.AdminInboxView;
+import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
+import com.ticketing.system.ui.views.admin.GlobalHistoryView;
+import com.ticketing.system.ui.views.admin.OrganizationalTreeView;
+import com.ticketing.system.ui.views.admin.SystemAnalyticsView;
+import com.ticketing.system.ui.views.catalog.BrowseEventsView;
+import com.ticketing.system.ui.views.catalog.EventDetailsView;
+import com.ticketing.system.ui.presenters.admin.AdminDashboardPresenter;
+import com.ticketing.system.ui.presenters.admin.GlobalHistoryPresenter;
+import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
+import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
+import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
+import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
+import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.views.company.CompanyInquiryInboxView;
+import com.ticketing.system.ui.views.company.CompanyInquiryRespondView;
+import com.ticketing.system.ui.views.company.EventManagementView;
+import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
+import com.ticketing.system.ui.views.company.ManagerListView;
+import com.ticketing.system.ui.views.company.OwnerDashboardView;
+import com.ticketing.system.ui.views.account.MyAccountView;
+import com.ticketing.system.ui.views.account.MyInvitationsView;
+import com.ticketing.system.ui.views.account.ReceiptView;
+import com.ticketing.system.ui.views.account.SupportInboxView;
+import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
+import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
+import com.ticketing.system.ui.presenters.account.RefundPresenter;
+import com.ticketing.system.ui.views.landing.LandingView;
+import com.ticketing.system.ui.views.messaging.NewInquiryView;
+import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
+import com.ticketing.system.ui.presenters.company.ManagerListPresenter;
+import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
+import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
+import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
+import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
+import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
+import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
+import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
+import com.ticketing.system.ui.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
+import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
 import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
 import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
 import com.ticketing.system.Core.Application.dto.MarketStateDTO;
@@ -143,11 +143,11 @@ class VaadinSmokeTest {
         // application.yml `vaadin.allowed-packages`, otherwise Vaadin's
         // route scanner won't discover them.
         assertTrue(BrowseEventsView.class.getPackageName()
-                .startsWith("com.ticketing.system.Presentation"),
-            "BrowseEventsView must live under com.ticketing.system.Presentation");
+                .startsWith("com.ticketing.system.ui"),
+            "BrowseEventsView must live under com.ticketing.system.ui");
         assertTrue(AdminDashboardView.class.getPackageName()
-                .startsWith("com.ticketing.system.Presentation"),
-            "AdminDashboardView must live under com.ticketing.system.Presentation");
+                .startsWith("com.ticketing.system.ui"),
+            "AdminDashboardView must live under com.ticketing.system.ui");
     }
 
     @Test

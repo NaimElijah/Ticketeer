@@ -2,9 +2,9 @@ package com.ticketing.system.Infrastructure.scheduling;
 
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
-import com.ticketing.system.Presentation.components.NotificationBellComponent;
-import com.ticketing.system.Presentation.session.AuthSession;
-import com.ticketing.system.Presentation.session.NotificationSession;
+import com.ticketing.system.ui.components.NotificationBellComponent;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.NotificationSession;
 import com.vaadin.flow.component.UI;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

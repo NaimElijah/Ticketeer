@@ -25,7 +25,7 @@ import com.ticketing.system.Core.Application.dto.SendMessageRequestDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.messaging.CompanyInquiryInboxPresenter;
+import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
 
 class CompanyInquiryInboxPresenterTest {
 

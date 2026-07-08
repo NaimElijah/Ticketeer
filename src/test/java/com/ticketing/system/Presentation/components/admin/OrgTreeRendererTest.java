@@ -1,4 +1,4 @@
-package com.ticketing.system.Presentation.components.admin;
+package com.ticketing.system.ui.components.admin;
 
 import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
 import com.ticketing.system.Core.Domain.users.Permission;

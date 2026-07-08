@@ -22,7 +22,7 @@ import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
 import com.ticketing.system.Core.Application.dto.InvitationDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.account.MyInvitationsPresenter;
+import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 
 class MyInvitationsPresenterTest {
 

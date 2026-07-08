@@ -16,7 +16,7 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
-import com.ticketing.system.Presentation.presenters.auth.RegisterPresenter;
+import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

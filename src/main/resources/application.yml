@@ -76,7 +76,7 @@ management:
 #    Maven `production` profile, not by yml.
 vaadin:
   launch-browser: false
-  allowed-packages: com.ticketing.system.Presentation
+  allowed-packages: com.ticketing.system.ui
 
 # Default System Admin (UC-1 / I.1.4) — auto-created at initialization when none exists.
 # Defaults live here only; override in production via env, and never ship the default password.

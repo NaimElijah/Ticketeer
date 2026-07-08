@@ -24,7 +24,7 @@ import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.messaging.NewInquiryPresenter;
+import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 
 class NewInquiryPresenterTest {
 

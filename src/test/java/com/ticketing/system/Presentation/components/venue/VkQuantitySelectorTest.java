@@ -1,4 +1,4 @@
-package com.ticketing.system.Presentation.components.venue;
+package com.ticketing.system.ui.components.venue;
 
 import org.junit.jupiter.api.Test;
 

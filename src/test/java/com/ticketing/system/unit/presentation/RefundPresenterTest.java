@@ -17,7 +17,7 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Presentation.presenters.account.RefundPresenter;
+import com.ticketing.system.ui.presenters.account.RefundPresenter;
 
 class RefundPresenterTest {
 
