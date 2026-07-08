@@ -11,9 +11,10 @@
  *
  * <p>Migration note: this step is a mechanical relocation. Several cross-context couplings remain
  * transitional and are addressed in dedicated follow-up steps: sales still loads catalog {@code Event}
- * and mutates its inventory directly (&rarr; an inbound inventory command port on catalog), checks the
- * market gate via {@code SystemAdminService} (&rarr; a governance port), and notifies synchronously
- * (&rarr; domain events). Module-boundary verification is switched on at Step 10.
+ * and mutates its inventory directly (&rarr; an inbound inventory command port on catalog) and notifies
+ * synchronously (&rarr; domain events). The market gate is already inverted: sales queries the
+ * {@code MarketGate} outbound port, which governance implements — sales no longer imports governance.
+ * Module-boundary verification is switched on at Step 10.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Sales & Ticketing")
 package com.ticketing.system.sales;

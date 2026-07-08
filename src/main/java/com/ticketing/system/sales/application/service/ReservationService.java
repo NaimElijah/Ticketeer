@@ -1,5 +1,5 @@
 package com.ticketing.system.sales.application.service;
-import com.ticketing.system.governance.application.service.SystemAdminService; // transitional: market-gate check, to be rewired via a governance inbound port later
+import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
 import com.ticketing.system.sales.application.service.CheckoutService;
 
 import java.time.LocalDateTime;
@@ -51,7 +51,7 @@ public class ReservationService {
     private final ApplicationEventPublisher eventPublisher;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
-    private final SystemAdminService systemAdminService;
+    private final MarketGate marketGate; // queried to enforce the UC-32 market-open gate (dependency-inverted away from governance)
     private final ISystemMetrics systemMetrics;
 
     @Value("${constants.ticket-reservation-duration}")
@@ -64,7 +64,7 @@ public class ReservationService {
             ApplicationEventPublisher eventPublisher,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
-            SystemAdminService systemAdminService,
+            MarketGate marketGate,
             ISystemMetrics systemMetrics) {
         this.eventRepository = eventRepository;
         this.activeOrderRepository = activeOrderRepository;
@@ -72,7 +72,7 @@ public class ReservationService {
         this.eventPublisher = eventPublisher;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
-        this.systemAdminService = systemAdminService;
+        this.marketGate = marketGate;
         this.systemMetrics = systemMetrics;
     }
 
@@ -121,7 +121,7 @@ public class ReservationService {
         // UC-32 / I.2.1 — no tickets may be held while the trading market is closed.
         // Checked before any locks are acquired. (Removing items from an existing
         // cart is intentionally NOT gated.)
-        if (!systemAdminService.isMarketOpen()) {
+        if (!marketGate.isOpen()) {
             throw new MarketNotOpenException();
         }
 

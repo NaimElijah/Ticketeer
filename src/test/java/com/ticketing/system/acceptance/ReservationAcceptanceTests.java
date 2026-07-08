@@ -7,7 +7,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
@@ -60,8 +60,8 @@ public class ReservationAcceptanceTests {
         sessionManager = mock(SessionManager.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
 
-        SystemAdminService systemAdminService = mock(SystemAdminService.class);
-        when(systemAdminService.isMarketOpen()).thenReturn(true);
+        MarketGate marketGate = mock(MarketGate.class);
+        when(marketGate.isOpen()).thenReturn(true);
 
         reservationService = new ReservationService(
                 eventRepository,
@@ -70,7 +70,7 @@ public class ReservationAcceptanceTests {
                 eventPublisher,
                 mock(ProductionCompanyRepository.class),
                 mock(UserRepository.class),
-                systemAdminService,
+                marketGate,
                 mock(ISystemMetrics.class)
         );
 

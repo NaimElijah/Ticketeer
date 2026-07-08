@@ -43,7 +43,7 @@ import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -88,7 +88,7 @@ class CheckoutServiceTest {
     private ApplicationEventPublisher mockEventPublisher;
     private SessionManager mockiSessionManager;
     private UserRepository mockUserRepository;
-    private SystemAdminService mockSystemAdminService;
+    private MarketGate mockMarketGate;
 
     private CheckoutService checkoutService;
 
@@ -143,8 +143,8 @@ class CheckoutServiceTest {
           when(mockUserRepository.getUserById(USER_ID)).thenReturn(mockUser); 
         
 
-        mockSystemAdminService = mock(SystemAdminService.class);
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(true);
+        mockMarketGate = mock(MarketGate.class);
+        when(mockMarketGate.isOpen()).thenReturn(true);
 
         checkoutService = new CheckoutService(
                 mockActiveOrderRepo,
@@ -157,7 +157,7 @@ class CheckoutServiceTest {
                 mockiSessionManager,
                 mockUserRepository,
                 mock(ProductionCompanyRepository.class),
-                mockSystemAdminService,
+                mockMarketGate,
                 TestTransactions.noOpManager()
         );
 
@@ -208,7 +208,7 @@ class CheckoutServiceTest {
     void GivenMarketClosed_WhenCheckoutMember_ThenThrowsAndNoCharge() {
         // Events are ON_SALE (see setUp) and the order is valid — the closed market
         // is the only thing blocking the sale, and it blocks before any charge.
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(false);
+        when(mockMarketGate.isOpen()).thenReturn(false);
         assertThrows(MarketNotOpenException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
         verify(mockPaymentGateway, never()).charge(any());
@@ -216,7 +216,7 @@ class CheckoutServiceTest {
 
     @Test
     void GivenMarketClosed_WhenCheckoutGuest_ThenThrowsAndNoCharge() {
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(false);
+        when(mockMarketGate.isOpen()).thenReturn(false);
         assertThrows(MarketNotOpenException.class, () ->
                 checkoutService.checkoutGuest("guest-session", "guest@test.com",
                         IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, 30));
@@ -2622,7 +2622,7 @@ private AtomicBoolean trackReceiptSave() {
                 PAYMENT_METHOD_TOKEN);
 
         // The market closes after the purchase completed.
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(false);
+        when(mockMarketGate.isOpen()).thenReturn(false);
 
         // The idempotent retry must still return the cached receipt, not throw MarketNotOpenException.
         CheckoutResultDTO retry = checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY,

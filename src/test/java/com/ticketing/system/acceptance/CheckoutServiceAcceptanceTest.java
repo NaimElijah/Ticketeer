@@ -15,7 +15,7 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.sales.domain.*;
 import com.ticketing.system.sales.domain.*;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -54,7 +54,7 @@ public class CheckoutServiceAcceptanceTest {
     private UserRepository userRepository;
 
     private CheckoutService checkoutService;
-    private SystemAdminService systemAdminService;
+    private MarketGate marketGate;
 
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
@@ -114,8 +114,8 @@ public class CheckoutServiceAcceptanceTest {
         eventPublisher = mock(ApplicationEventPublisher.class);
         sessionManager = mock(SessionManager.class);
 
-        systemAdminService = mock(SystemAdminService.class);
-        when(systemAdminService.isMarketOpen()).thenReturn(true);
+        marketGate = mock(MarketGate.class);
+        when(marketGate.isOpen()).thenReturn(true);
 
         checkoutService = new CheckoutService(
                 activeOrderRepository,
@@ -128,7 +128,7 @@ public class CheckoutServiceAcceptanceTest {
                 sessionManager,
                 userRepository,
                 companyRepository,
-                systemAdminService,
+                marketGate,
                 TestTransactions.noOpManager()
         );
 
@@ -936,7 +936,7 @@ public class CheckoutServiceAcceptanceTest {
                 sessionManager,
                 userRepository,
                 companyRepository,
-                systemAdminService,
+                marketGate,
                 TestTransactions.noOpManager()
         );
     }

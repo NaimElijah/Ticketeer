@@ -6,7 +6,7 @@ import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
@@ -60,7 +60,7 @@ public class ReservationServiceTest {
     private ActiveOrderRepository activeOrderRepository;
     private SessionManager sessionManager;
     private ApplicationEventPublisher eventPublisher;
-    private SystemAdminService systemAdminService;
+    private MarketGate marketGate;
 
     private ReservationService reservationService;
 
@@ -85,8 +85,8 @@ public class ReservationServiceTest {
         zone = mock(InventoryZone.class);
         activeOrder = mock(ActiveOrder.class);
 
-        systemAdminService = mock(SystemAdminService.class);
-        when(systemAdminService.isMarketOpen()).thenReturn(true);
+        marketGate = mock(MarketGate.class);
+        when(marketGate.isOpen()).thenReturn(true);
 
         reservationService = new ReservationService(
                 eventRepository,
@@ -95,7 +95,7 @@ public class ReservationServiceTest {
                 eventPublisher,
                 mock(ProductionCompanyRepository.class),
                 mock(UserRepository.class),
-                systemAdminService,
+                marketGate,
                 mock(ISystemMetrics.class)
         );
     }
@@ -106,7 +106,7 @@ public class ReservationServiceTest {
     void GivenMarketClosed_WhenReserveForMember_ThenThrows() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(systemAdminService.isMarketOpen()).thenReturn(false);
+        when(marketGate.isOpen()).thenReturn(false);
 
         assertThrows(MarketNotOpenException.class,
                 () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,

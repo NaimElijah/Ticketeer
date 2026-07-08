@@ -1,5 +1,5 @@
 package com.ticketing.system.sales.application.service;
-import com.ticketing.system.governance.application.service.SystemAdminService; // transitional: market-gate check, to be rewired via a governance inbound port later
+import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -79,7 +79,7 @@ public class CheckoutService {
     private final SessionManager sessionManager;
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
-    private final SystemAdminService systemAdminService;
+    private final MarketGate marketGate; // queried to enforce the UC-32 market-open gate (dependency-inverted away from governance)
     // Programmatic transactions for the checkout's Phase-3 DB work. Checkout cannot be a single
     // @Transactional method because the WSEP charge + issue (Phase 2, 20s HTTP timeouts) must run
     // OUTSIDE any transaction so a slow gateway never pins a DB connection. This template wraps only
@@ -113,7 +113,7 @@ public class CheckoutService {
             SessionManager sessionManager,
             UserRepository userRepository,
             ProductionCompanyRepository companyRepository,
-            SystemAdminService systemAdminService,
+            MarketGate marketGate,
             PlatformTransactionManager transactionManager) {
         this.activeOrderRepository = activeOrderRepository;
         this.eventRepository = eventRepository;
@@ -125,7 +125,7 @@ public class CheckoutService {
         this.sessionManager = sessionManager;
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
-        this.systemAdminService = systemAdminService;
+        this.marketGate = marketGate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -141,7 +141,7 @@ public class CheckoutService {
     // checkout try-block so it propagates cleanly instead of being wrapped as a
     // generic checkout failure.
     private void requireMarketOpen() {
-        if (!systemAdminService.isMarketOpen()) {
+        if (!marketGate.isOpen()) {
             throw new MarketNotOpenException();
         }
     }
