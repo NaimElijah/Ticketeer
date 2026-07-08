@@ -1,4 +1,8 @@
-# event-ticket-system
+> This project is an extended and upgraded version of [event-ticket-system](https://github.com/AdamSimkinbgu/event-ticket-system), 
+> originally built by me and collaborators as a university project at Ben-Gurion University.
+> Being extended and enhanced by me in this repository.
+
+# Events Ticketing System
 
 An event management and ticketing platform that provides an infrastructure for trading event
 tickets between producers and buyers. Users can visit the platform to purchase tickets, as well as
