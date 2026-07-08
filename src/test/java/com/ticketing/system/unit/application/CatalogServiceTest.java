@@ -1,5 +1,5 @@
 package com.ticketing.system.unit.application;
-import com.ticketing.system.organization.application.service.CompanyRatings;
+import com.ticketing.system.catalog.application.service.CompanyRatings;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

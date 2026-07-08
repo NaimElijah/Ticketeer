@@ -1,13 +1,16 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +20,11 @@ import com.ticketing.system.shared.dto.CompanyDashboardDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.messaging.domain.Conversation;
@@ -27,6 +34,8 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.domain.User;
 
 class CompanyAnalyticsServiceTest {
 
@@ -36,12 +45,24 @@ class CompanyAnalyticsServiceTest {
     private static final int EVENT_B = 101;
     private static final int OTHER_COMPANY_EVENT = 999;
 
+    // Fixtures for the relocated viewSalesHistory tests (UC-22, moved here from CompanyManagementServiceTest).
+    private static final String OWNER_TOKEN = "owner-token";
+    private static final String TARGET_TOKEN = "target-token";
+    private static final String INVALID_TOKEN = "invalid-token";
+    private static final int OWNER_ID = 1;
+    private static final int TARGET_USER_ID = 2;
+    private static final int ORDER_RECEIPT_ID = 11;
+    private static final String COMPANY_1_NAME = "Company1";
+    private static final String COMPANY_1_DESCRIPTION = "A test production company1";
+
     private EventRepository eventRepository;
     private OrderReceiptRepository orderReceiptRepository;
     private ConversationRepository conversationRepository;
     private  TicketRepository ticketRepository;
     private  ProductionCompanyRepository companyRepository;
     private  UserRepository userRepository;
+    // Session/token port used by viewSalesHistory's token authentication.
+    private SessionManager sessionManager;
     private CompanyAnalyticsService service;
 
     @BeforeEach
@@ -52,7 +73,8 @@ class CompanyAnalyticsServiceTest {
         ticketRepository = mock(TicketRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
-        service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository);
+        sessionManager = mock(SessionManager.class);
+        service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, sessionManager);
     }
 
     private static ReceiptLine line(int ticketId, double price, int eventId) {
@@ -222,5 +244,141 @@ class CompanyAnalyticsServiceTest {
         assertEquals(1, result.records().size());
         assertEquals(1,     result.records().get(0).tickets().size()); // only EVENT_A ticket
         assertEquals(100.0, result.records().get(0).totalPaid());      // only EVENT_A revenue
+    }
+
+    // ─── viewSalesHistory (UC-22) unit tests, relocated from CompanyManagementServiceTest ─────────
+
+    @Test
+    void GivenInvalidToken_WhenViewSalesHistory_ThenThrowException() {
+        when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false); // token fails validation
+
+        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(INVALID_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenCompanyNotFound_WhenViewSalesHistory_ThenThrowException() {
+        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(null); // unknown company
+
+        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenUserNotFound_WhenViewSalesHistory_ThenThrowException() {
+        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+
+        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
+        when(userRepository.getUserById(OWNER_ID)).thenReturn(null); // caller no longer exists
+
+        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenUserWithNoPermission_WhenViewSalesHistory_ThenThrowException() {
+        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+        User requester = mock(User.class);
+
+        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
+        when(userRepository.getUserById(OWNER_ID)).thenReturn(requester);
+        when(requester.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(false); // denied
+
+        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenOwnerWithNoSales_WhenViewSalesHistory_ThenReturnEmptyList() {
+        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+        User ownerUser = mock(User.class);
+
+        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(new ArrayList<>()); // company has no events
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
+        when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+        when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
+
+        List<PurchaseHistoryDTO> result = service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void GivenManagerWithViewSalesPermission_WhenViewSalesHistory_ThenReturnSalesHistory() {
+        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+        User managerUser = mock(User.class);
+        OrderReceipt mockReceipt = mock(OrderReceipt.class);
+        Ticket ticket = new Ticket(1, 1, ORDER_RECEIPT_ID, null, 50.0, 10, "BARCODE-001");
+        Event mockEvent = mock(Event.class);
+
+        when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
+        when(userRepository.getUserById(TARGET_USER_ID)).thenReturn(managerUser);
+        when(managerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
+
+        when(mockReceipt.getId()).thenReturn(42);
+        when(mockReceipt.getPurchaseTime()).thenReturn(LocalDateTime.now());
+        ReceiptLine mockLine = mock(ReceiptLine.class);
+        when(mockLine.getTicketId()).thenReturn(10);
+        when(mockLine.getPriceAtReservation()).thenReturn(50.0);
+        when(mockReceipt.getReceiptLines()).thenReturn(List.of(mockLine));
+        when(ticketRepository.findByOrderReceiptId(42)).thenReturn(List.of(ticket));
+        when(eventRepository.findById(1)).thenReturn(mockEvent);
+        when(mockEvent.getName()).thenReturn("Rock Concert");
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(1));
+        when(orderReceiptRepository.findByEventIds(List.of(1))).thenReturn(List.of(mockReceipt));
+
+        List<PurchaseHistoryDTO> result = service.viewSalesHistory(TARGET_TOKEN, COMPANY_ID);
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
+        assertEquals(42, record.orderReceiptId());
+        assertEquals(50.0, record.totalPaid());
+        assertEquals(1, record.tickets().size());
+    }
+
+    @Test
+    void GivenOwnerWithMultipleSales_WhenViewSalesHistory_ThenReturnAllRecords() {
+        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+        User ownerUser = mock(User.class);
+        OrderReceipt mockReceipt1 = mock(OrderReceipt.class);
+        OrderReceipt mockReceipt2 = mock(OrderReceipt.class);
+        Event mockEvent = mock(Event.class);
+
+        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
+        when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+        when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
+
+        when(mockEvent.getName()).thenReturn("Summer Festival");
+
+        when(mockReceipt1.getId()).thenReturn(1);
+        when(mockReceipt1.getPurchaseTime()).thenReturn(LocalDateTime.now());
+        when(ticketRepository.findByOrderReceiptId(1)).thenReturn(new ArrayList<>());
+        when(eventRepository.findById(10)).thenReturn(mockEvent);
+
+        when(mockReceipt2.getId()).thenReturn(2);
+        when(mockReceipt2.getPurchaseTime()).thenReturn(LocalDateTime.now());
+        when(ticketRepository.findByOrderReceiptId(2)).thenReturn(new ArrayList<>());
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(10));
+        when(orderReceiptRepository.findByEventIds(List.of(10))).thenReturn(List.of(mockReceipt1, mockReceipt2));
+
+        List<PurchaseHistoryDTO> result = service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
     }
 }

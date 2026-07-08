@@ -11,15 +11,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.time.LocalDateTime;
-
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.InvitationDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
 import com.ticketing.system.organization.application.dto.PermissionEditDTO;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
-import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
@@ -28,16 +25,10 @@ import com.ticketing.system.shared.dto.AppointmentResponseDTO;
 import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
-import com.ticketing.system.sales.domain.OrderReceipt;
-import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
@@ -46,11 +37,10 @@ public class CompanyManagementServiceTest {
 
         private ProductionCompanyRepository mockCompanyRepo;
         private UserRepository mockUserRepo;
-        private OrderReceiptRepository mockOrderReceiptRepo;
         private SessionManager sessionManager;
         private CompanyManagementService companyService;
-        private TicketRepository ticketRepository;
-        private EventRepository eventRepository;
+        // Outbound port to catalog's active-event count (replaces the former direct EventRepository read).
+        private CompanyEventStatsPort companyEventStatsPort;
         private ApplicationEventPublisher eventPublisher;
 
         private final String OWNER_TOKEN = "owner-token";
@@ -59,7 +49,6 @@ public class CompanyManagementServiceTest {
 
         private final int COMPANY_ID = 100;
         private final int OWNER_ID = 1;
-        private final int ORDER_RECEIPT_ID = 11;
         private final String COMPANY_1_NAME = "Company1";
         private final String COMPANY_1_DESCRIPTION = "A test production company1";
 
@@ -70,19 +59,15 @@ public class CompanyManagementServiceTest {
         public void setUp() {
                 mockCompanyRepo = mock(ProductionCompanyRepository.class);
                 mockUserRepo = mock(UserRepository.class);
-                mockOrderReceiptRepo = mock(OrderReceiptRepository.class);
                 sessionManager = mock(SessionManager.class);
-                ticketRepository = mock(TicketRepository.class);
-                eventRepository = mock(EventRepository.class);
+                companyEventStatsPort = mock(CompanyEventStatsPort.class);
                 eventPublisher = mock(ApplicationEventPublisher.class);
 
                 companyService = new CompanyManagementService(
                                 mockCompanyRepo,
                                 mockUserRepo,
-                                mockOrderReceiptRepo,
                                 sessionManager,
-                                ticketRepository,
-                                eventRepository,
+                                companyEventStatsPort,
                                 eventPublisher);
 
                 defaultPermissions = new ArrayList<>();
@@ -682,145 +667,8 @@ public class CompanyManagementServiceTest {
                 assertEquals("Database connection lost", exception.getCause().getMessage());
         }
 
-        @Test
-        public void GivenInvalidToken_WhenViewSalesHistory_ThenThrowException() {
-                when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(INVALID_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenCompanyNotFound_WhenViewSalesHistory_ThenThrowException() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenUserNotFound_WhenViewSalesHistory_ThenThrowException() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(null);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenUserWithNoPermission_WhenViewSalesHistory_ThenThrowException() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User requester = mock(User.class);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(requester);
-                when(requester.isOwnerInCompany(COMPANY_ID)).thenReturn(false);
-                when(requester.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(false);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenOwnerWithNoSales_WhenViewSalesHistory_ThenReturnEmptyList() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User ownerUser = mock(User.class);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(new ArrayList<>());
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-                // when(mockOrderReceiptRepo.findByCompanyId(COMPANY_ID)).thenReturn(new
-                // ArrayList<>());
-
-                List<PurchaseHistoryDTO> result = companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
-
-                assertNotNull(result);
-                assertTrue(result.isEmpty());
-        }
-
-        @Test
-        public void GivenManagerWithViewSalesPermission_WhenViewSalesHistory_ThenReturnSalesHistory() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User managerUser = mock(User.class);
-                OrderReceipt mockReceipt = mock(OrderReceipt.class);
-                Ticket ticket = new Ticket(1, 1, ORDER_RECEIPT_ID, null, 50.0, 10, "BARCODE-001");
-                Event mockEvent = mock(Event.class);
-
-                when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(managerUser);
-                when(managerUser.isOwnerInCompany(COMPANY_ID)).thenReturn(false);
-                when(managerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-
-                when(mockReceipt.getId()).thenReturn(42);
-                when(mockReceipt.getPurchaseTime()).thenReturn(LocalDateTime.now());
-                ReceiptLine mockLine = mock(ReceiptLine.class);
-                when(mockLine.getTicketId()).thenReturn(10);
-                when(mockLine.getPriceAtReservation()).thenReturn(50.0);
-                when(mockReceipt.getReceiptLines()).thenReturn(List.of(mockLine));
-                when(ticketRepository.findByOrderReceiptId(42)).thenReturn(List.of(ticket));
-                when(eventRepository.findById(1)).thenReturn(mockEvent);
-                when(mockEvent.getName()).thenReturn("Rock Concert");
-                when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(1));
-                when(mockOrderReceiptRepo.findByEventIds(List.of(1))).thenReturn(List.of(mockReceipt));
-
-                List<PurchaseHistoryDTO> result = companyService.viewSalesHistory(TARGET_TOKEN, COMPANY_ID);
-
-                assertNotNull(result);
-                assertEquals(1, result.size());
-                PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
-                assertEquals(42, record.orderReceiptId());
-                // assertEquals(1, record.eventId());
-                // assertEquals("Rock Concert", record.eventName());
-                assertEquals(50.0, record.totalPaid());
-                assertEquals(1, record.tickets().size());
-        }
-
-        @Test
-        public void GivenOwnerWithMultipleSales_WhenViewSalesHistory_ThenReturnAllRecords() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User ownerUser = mock(User.class);
-                OrderReceipt mockReceipt1 = mock(OrderReceipt.class);
-                OrderReceipt mockReceipt2 = mock(OrderReceipt.class);
-                Event mockEvent = mock(Event.class);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-
-                when(mockEvent.getName()).thenReturn("Summer Festival");
-
-                when(mockReceipt1.getId()).thenReturn(1);
-                when(mockReceipt1.getPurchaseTime()).thenReturn(LocalDateTime.now());
-                when(ticketRepository.findByOrderReceiptId(1)).thenReturn(new ArrayList<>());
-                when(eventRepository.findById(10)).thenReturn(mockEvent);
-
-                when(mockReceipt2.getId()).thenReturn(2);
-                when(mockReceipt2.getPurchaseTime()).thenReturn(LocalDateTime.now());
-                when(ticketRepository.findByOrderReceiptId(2)).thenReturn(new ArrayList<>());
-                when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(10));
-                when(mockOrderReceiptRepo.findByEventIds(List.of(10))).thenReturn(List.of(mockReceipt1, mockReceipt2));
-
-                List<PurchaseHistoryDTO> result = companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
-
-                assertNotNull(result);
-                assertEquals(2, result.size());
-        }
+        // NOTE: the viewSalesHistory tests moved with the method to CompanyAnalyticsServiceTest
+        // (reporting) — organization no longer owns that cross-context sales read.
 
         @Test
         public void GivenInvalidToken_WhenViewOrganizationalTree_ThenThrowException() {

@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,9 +20,7 @@ import com.ticketing.system.organization.application.dto.PermissionEditDTO;
 import com.ticketing.system.shared.dto.AppointmentResponseDTO;
 import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
-import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.organization.application.dtoMappers.AppointmentInfoMapper;
-import com.ticketing.system.sales.application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -33,12 +30,7 @@ import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.sales.domain.Ticket;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.domain.EventStatus;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
 import com.ticketing.system.organization.domain.AppointmentStatus;
 import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.CompanyRole;
@@ -71,24 +63,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class CompanyManagementService {
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
-    private final OrderReceiptRepository orderReceiptRepository;
     private final SessionManager sessionManager;
-    private final TicketRepository ticketRepository;
-    private final EventRepository eventRepository;
+    // Outbound port to catalog's active-event count — organization asks through this port instead of
+    // importing any catalog type (keeps organization strictly below catalog in the dependency graph).
+    private final CompanyEventStatsPort companyEventStatsPort;
     // Publisher for cross-context integration events (role-change / appointment notices); the
     // notifications context listens for these instead of organization calling it directly.
     private final ApplicationEventPublisher eventPublisher;
 
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
-            OrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
-            TicketRepository ticketRepository, EventRepository eventRepository,
+            SessionManager sessionManager, CompanyEventStatsPort companyEventStatsPort,
             ApplicationEventPublisher eventPublisher) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
-        this.orderReceiptRepository = orderReceiptRepository;
         this.sessionManager = sessionManager;
-        this.ticketRepository = ticketRepository;
-        this.eventRepository = eventRepository;
+        this.companyEventStatsPort = companyEventStatsPort;
         this.eventPublisher = eventPublisher;
     }
 
@@ -533,67 +522,6 @@ public class CompanyManagementService {
         log.info("Purchase policy updated for company {} by user {}", config.companyId(), userId);
     }
 
-    // UC-22 — Owner-side flat list of company sales.
-    // this function returns a list of PurchaseHistoryDTO, each containing a single
-    // PurchaseRecordDTO, which represents a single OrderReceipt that has
-    // at least one ticket for an event of this company. The PurchaseRecordDTO
-    // contains a list of TicketRecordDTOs, but only those that are
-    // for events of this company (the rest are filtered out). This way we return
-    // the full receipt details for each relevant purchase, but only
-    // include the tickets that are relevant to this company's sales history.
-    @Transactional(readOnly = true)
-    public List<PurchaseHistoryDTO> viewSalesHistory(String token, int companyId) {
-        log.info("Attempting to view sales history for company {}", companyId);
-
-        int requesterId = authenticate(token);
-        ProductionCompany company = companyRepository.getCompanyById(companyId);
-        if (company == null) {
-            log.warn("Company {} not found", companyId);
-            throw new CompanyNotFoundException();
-        }
-
-        User currUser = userRepository.getUserById(requesterId);
-        if (currUser == null) {
-            log.warn("User {} not found", requesterId);
-            throw new UserNotFoundException();
-        }
-        if (!currUser.hasPermissionInCompany(companyId, Permission.VIEW_SALES)) {
-            log.warn("User {} does not have permission to view sales history for company {}", requesterId, companyId);
-            throw new UnauthorizedActionException("view this company's data");
-        }
-
-        List<Integer> companyEventIds = eventRepository.findIdsByCompany(companyId);
-
-        if (companyEventIds == null || companyEventIds.isEmpty()) {
-            return List.of();
-        }
-
-        Set<Integer> companyEventIdSet = Set.copyOf(companyEventIds);
-        OrderReceiptMapper mapper = new OrderReceiptMapper();
-
-        // The repository method finds all receipts that have at least one ticket for
-        // the company's events.
-        List<PurchaseHistoryDTO> salesHistory = this.orderReceiptRepository.findByEventIds(companyEventIds).stream()
-                .map(receipt -> {
-                    List<Ticket> companyTickets = ticketRepository.findByOrderReceiptId(receipt.getId()).stream()
-                            .filter(ticket -> companyEventIdSet.contains(ticket.getEventId()))
-                            .toList();
-
-                    return new PurchaseHistoryDTO(List.of(mapper.toPurchaseRecordDTO(
-                            receipt, companyTickets, eventRepository, companyRepository, userRepository)));
-                    // use overloaded mapper to pass the filtered list of tickets for richer DTO
-                    // construction without bloating service logic
-                }).toList();
-
-        // This is the correct responsibility split.
-        // The repository finds receipts related to company events.
-        // The service filters the tickets to only this company’s events.
-        // The mapper maps the receipt and the selected tickets into DTOs.
-
-        log.info("Successfully retrieved sales history for company {}", companyId);
-        return salesHistory;
-    }
-
     // UC-25 — recursive organizational tree (Owners only per II.4.15).
     @Transactional(readOnly = true)
     public OrganizationalTreeNodeDTO viewOrganizationalTree(String token, int companyId) {
@@ -746,7 +674,8 @@ public class CompanyManagementService {
                 displayRole(userId, appointment, company),
                 company.getStatus().name(),
                 company.getOwnersIds().size() + company.getManagers().size(),
-                countActiveEvents(company.getCompanyId()),
+                // Active-event count comes from catalog via the outbound port (no catalog import here).
+                companyEventStatsPort.countActiveEvents(company.getCompanyId()),
                 managerPermissions);
     }
 
@@ -758,17 +687,6 @@ public class CompanyManagementService {
         if (appointment.getRole() == CompanyRole.Manager)
             return "Manager";
         return appointment.getRole().name();
-    }
-
-    private int countActiveEvents(int companyId) {
-        int count = 0;
-        for (Event event : eventRepository.findByCompanyId(companyId)) {
-            EventStatus status = event.getStatus();
-            if (status == EventStatus.ON_SALE || status == EventStatus.SCHEDULED || status == EventStatus.SOLD_OUT) {
-                count++;
-            }
-        }
-        return count;
     }
 
     private int authenticate(String token) {

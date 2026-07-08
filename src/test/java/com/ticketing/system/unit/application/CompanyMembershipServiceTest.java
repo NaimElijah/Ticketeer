@@ -16,10 +16,8 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
@@ -28,7 +26,8 @@ class CompanyMembershipServiceTest {
 
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
-    private EventRepository eventRepository;
+    // Outbound port to catalog's active-event count (replaces the former direct EventRepository read).
+    private CompanyEventStatsPort companyEventStatsPort;
     private CompanyManagementService service;
 
     private static final int USER_ID = 7;
@@ -38,14 +37,12 @@ class CompanyMembershipServiceTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
-        eventRepository = mock(EventRepository.class);
+        companyEventStatsPort = mock(CompanyEventStatsPort.class);
         service = new CompanyManagementService(
                 companyRepository,
                 userRepository,
-                mock(OrderReceiptRepository.class),
                 mock(SessionManager.class),
-                mock(TicketRepository.class),
-                eventRepository,
+                companyEventStatsPort,
                 mock(ApplicationEventPublisher.class));
     }
 
@@ -59,7 +56,8 @@ class CompanyMembershipServiceTest {
 
         when(userRepository.getUserById(USER_ID)).thenReturn(user);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(eventRepository.findByCompanyId(COMPANY_ID)).thenReturn(List.of());
+        // Company has no active events — the outbound port answers 0 (was: eventRepository stub).
+        when(companyEventStatsPort.countActiveEvents(COMPANY_ID)).thenReturn(0);
 
         var memberships = service.listForUser(USER_ID);
 
@@ -81,7 +79,8 @@ class CompanyMembershipServiceTest {
 
         when(userRepository.getUserById(USER_ID)).thenReturn(user);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(eventRepository.findByCompanyId(COMPANY_ID)).thenReturn(List.of());
+        // Company has no active events — the outbound port answers 0 (was: eventRepository stub).
+        when(companyEventStatsPort.countActiveEvents(COMPANY_ID)).thenReturn(0);
 
         var memberships = service.listForUser(USER_ID);
 

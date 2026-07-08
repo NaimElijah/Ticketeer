@@ -1,6 +1,5 @@
 package com.ticketing.system.catalog.application.service;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.organization.application.service.CompanyRatings;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
