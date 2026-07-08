@@ -5,7 +5,7 @@ import com.ticketing.system.notifications.application.port.in.INotificationServi
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;

@@ -39,7 +39,7 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.Location;

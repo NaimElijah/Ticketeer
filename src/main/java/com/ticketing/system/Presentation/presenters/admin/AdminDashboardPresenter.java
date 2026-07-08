@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
-import com.ticketing.system.Core.Application.services.SystemAnalyticsService;
+import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 
 /**
  * MVP presenter for {@code AdminDashboardView} (#279). Vaadin-free POJO that loads the platform

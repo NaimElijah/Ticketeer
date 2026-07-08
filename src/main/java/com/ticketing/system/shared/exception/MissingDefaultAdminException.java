@@ -1,4 +1,5 @@
 package com.ticketing.system.shared.exception;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.domain.Admin;
 
 // Thrown if SystemAdminService cannot create the default admin during startup.

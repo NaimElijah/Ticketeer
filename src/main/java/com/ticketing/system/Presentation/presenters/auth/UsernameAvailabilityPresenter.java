@@ -1,6 +1,6 @@
 package com.ticketing.system.Presentation.presenters.auth;
 
-import com.ticketing.system.Core.Application.services.MemberQueryService;
+import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.Presentation.session.AuthSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

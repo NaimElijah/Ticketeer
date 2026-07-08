@@ -9,7 +9,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Infrastructure.dev.seed.DemoClock;
 import com.ticketing.system.Infrastructure.dev.seed.RepoCleaner;

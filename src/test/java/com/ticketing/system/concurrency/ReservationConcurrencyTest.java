@@ -22,7 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;

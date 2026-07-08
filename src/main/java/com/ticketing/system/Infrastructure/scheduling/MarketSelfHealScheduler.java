@@ -4,7 +4,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 
 import lombok.extern.slf4j.Slf4j;
 

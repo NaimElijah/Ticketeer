@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.Presentation.session.AuthSession;
 
 import lombok.extern.slf4j.Slf4j;

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.ticketing.system.Core.Application.services.MemberQueryService;
+import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;

@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.identity.application.service;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.domain.User;
 

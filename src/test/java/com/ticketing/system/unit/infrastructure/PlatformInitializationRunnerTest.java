@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.services.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.Infrastructure.PlatformInitializationRunner;
 

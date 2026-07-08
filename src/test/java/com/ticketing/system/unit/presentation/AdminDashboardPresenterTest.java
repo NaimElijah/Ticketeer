@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
-import com.ticketing.system.Core.Application.services.SystemAnalyticsService;
+import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.Presentation.presenters.admin.AdminDashboardPresenter;
 
 /**
