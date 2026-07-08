@@ -2,7 +2,7 @@ package com.ticketing.system.Presentation.session;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 
 /**
  * Single source of truth for "member or guest, and which backend credential to use."
@@ -12,9 +12,9 @@ import com.ticketing.system.Core.Application.interfaces.ISessionManager;
 @Component
 public class SessionIdentity {
 
-    private final ISessionManager sessionManager;
+    private final SessionManager sessionManager;
 
-    public SessionIdentity(ISessionManager sessionManager) {
+    public SessionIdentity(SessionManager sessionManager) {
         this.sessionManager = sessionManager;
     }
 

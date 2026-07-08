@@ -1,15 +1,16 @@
-package com.ticketing.system.Infrastructure.persistence.SessionPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
 import java.time.Instant;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.domain.Session;
 
 /**
  * Spring Data JPA repository for {@link Session} — the auto-implemented SQL backing
  * {@link JpaSessionRepository}. The application layer never sees this type; it depends
- * only on the {@code ISessionRepository} domain port.
+ * only on the {@code SessionRepository} domain port.
  *
  * <p>Two derived queries push the Session-specific predicates into SQL:
  * <ul>

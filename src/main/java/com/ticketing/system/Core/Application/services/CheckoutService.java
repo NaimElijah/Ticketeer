@@ -21,7 +21,7 @@ import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
 import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
@@ -55,10 +55,10 @@ import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
 import com.ticketing.system.Core.Domain.orders.TransactionRecord;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseContext;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 
 @Service
 @Slf4j
@@ -71,8 +71,8 @@ public class CheckoutService {
     private final ITicketIssuer ticketIssuer;
     private final IPaymentGateway paymentGateway;
     private final INotificationService notificationService;
-    private final ISessionManager sessionManager;
-    private final IUserRepository userRepository;
+    private final SessionManager sessionManager;
+    private final UserRepository userRepository;
     private final IProductionCompanyRepository companyRepository;
     private final SystemAdminService systemAdminService;
     // Programmatic transactions for the checkout's Phase-3 DB work. Checkout cannot be a single
@@ -105,8 +105,8 @@ public class CheckoutService {
             ITicketIssuer ticketIssuer,
             IPaymentGateway paymentGateway,
             INotificationService notificationService,
-            ISessionManager sessionManager,
-            IUserRepository userRepository,
+            SessionManager sessionManager,
+            UserRepository userRepository,
             IProductionCompanyRepository companyRepository,
             SystemAdminService systemAdminService,
             PlatformTransactionManager transactionManager) {

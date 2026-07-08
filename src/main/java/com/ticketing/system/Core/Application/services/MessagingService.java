@@ -19,9 +19,9 @@ import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
 import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.Core.Application.dtoMappers.ConversationMapper;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.company.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
@@ -34,9 +34,9 @@ import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
 import com.ticketing.system.Core.Domain.messaging.ParticipantType;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -57,17 +57,17 @@ public class MessagingService {
     private static final int SNIPPET_MAX = 120;
 
     private final IConversationRepository conversationRepository;
-    private final ISessionManager sessionManager;
-    private final IAdminRepository adminRepository;
-    private final IUserRepository userRepository;
+    private final SessionManager sessionManager;
+    private final AdminRepository adminRepository;
+    private final UserRepository userRepository;
     private final IProductionCompanyRepository companyRepository;
     private final INotificationService notificationService;
 
     public MessagingService(
             IConversationRepository conversationRepository,
-            ISessionManager sessionManager,
-            IAdminRepository adminRepository,
-            IUserRepository userRepository,
+            SessionManager sessionManager,
+            AdminRepository adminRepository,
+            UserRepository userRepository,
             IProductionCompanyRepository companyRepository,
             INotificationService notificationService
     ) {

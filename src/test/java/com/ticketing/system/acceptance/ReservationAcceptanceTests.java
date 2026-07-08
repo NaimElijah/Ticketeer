@@ -1,9 +1,10 @@
 package com.ticketing.system.acceptance;
+import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
 import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
@@ -18,7 +19,7 @@ import com.ticketing.system.Core.Domain.events.Seat;
 import com.ticketing.system.Core.Domain.events.SeatStatus;
 import com.ticketing.system.Core.Domain.events.SeatedZone;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ public class ReservationAcceptanceTests {
 
     private IEventRepository eventRepository;
     private IActiveOrderRepository activeOrderRepository;
-    private ISessionManager sessionManager;
+    private SessionManager sessionManager;
     private INotificationService notificationService;
 
     private Event event;
@@ -56,7 +57,7 @@ public class ReservationAcceptanceTests {
     void setUp() {
         eventRepository = mock(IEventRepository.class);
         activeOrderRepository = mock(IActiveOrderRepository.class);
-        sessionManager = mock(ISessionManager.class);
+        sessionManager = mock(SessionManager.class);
         notificationService = mock(INotificationService.class);
 
         SystemAdminService systemAdminService = mock(SystemAdminService.class);
@@ -68,7 +69,7 @@ public class ReservationAcceptanceTests {
                 sessionManager,
                 notificationService,
                 mock(IProductionCompanyRepository.class),
-                mock(IUserRepository.class),
+                mock(UserRepository.class),
                 systemAdminService,
                 mock(ISystemMetrics.class)
         );

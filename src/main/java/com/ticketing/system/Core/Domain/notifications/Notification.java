@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Domain.notifications;
+import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
 import com.ticketing.system.shared.InvariantChecked;

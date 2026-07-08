@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.Admin;
+package com.ticketing.system.identity.domain;
 
 import com.ticketing.system.shared.InvariantChecked;
 

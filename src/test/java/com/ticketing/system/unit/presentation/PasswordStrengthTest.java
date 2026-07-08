@@ -1,4 +1,5 @@
 package com.ticketing.system.unit.presentation;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

@@ -33,7 +33,7 @@ import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
 import com.ticketing.system.Core.Domain.orders.TransactionRecord;
 import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.SpringDataOrderReceiptRepository;
-import com.ticketing.system.Infrastructure.security.JwtSessionManager;
+import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 
 /**
  * No-double-refund concurrency proof (#410), run on the real JPA stack.

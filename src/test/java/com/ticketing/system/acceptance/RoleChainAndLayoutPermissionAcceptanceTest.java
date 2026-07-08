@@ -33,7 +33,7 @@ import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO.ZoneConfigDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
@@ -44,7 +44,7 @@ import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.Location;
 import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
 
 /**
@@ -70,7 +70,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
     @Autowired private CheckoutService checkoutService;
     @Autowired private CatalogService catalogService;
     @Autowired private IProductionCompanyRepository companyRepository;
-    @Autowired private IUserRepository userRepository;
+    @Autowired private UserRepository userRepository;
     @Autowired private SystemAdminService systemAdminService;
 
     /** Reservations/checkout require the trading market open; the test profile boots closed. */

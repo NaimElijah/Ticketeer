@@ -23,12 +23,12 @@ import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.Core.Application.dto.SendMessageRequestDTO;
 import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
 import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -60,8 +60,8 @@ class MessagingAcceptanceTest {
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
     @Autowired private MessagingService messagingService;
-    @Autowired private IAdminRepository adminRepository;
-    @Autowired private IPasswordHasher passwordHasher;
+    @Autowired private AdminRepository adminRepository;
+    @Autowired private PasswordHasher passwordHasher;
 
     // II.3.10 — Member contacts Company
     @Test

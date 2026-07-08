@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Domain.ActiveOrder;
+import com.ticketing.system.identity.domain.Session;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

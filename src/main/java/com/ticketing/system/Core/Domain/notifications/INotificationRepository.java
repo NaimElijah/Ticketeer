@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Domain.notifications;
+import com.ticketing.system.identity.domain.User;
 
 import java.util.List;
 

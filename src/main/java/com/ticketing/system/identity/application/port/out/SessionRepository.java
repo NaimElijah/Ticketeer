@@ -1,4 +1,6 @@
-package com.ticketing.system.Core.Domain.users;
+package com.ticketing.system.identity.application.port.out;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.domain.Session;
 
 import java.time.Instant;
 import java.util.List;
@@ -12,7 +14,7 @@ import com.ticketing.system.shared.IRepository;
  * <p>Implemented in Infrastructure (V1: in-memory, V2: JPA-backed).
  * See docs/auth-rework-plan.md.
  */
-public interface ISessionRepository extends IRepository<Session, String> {
+public interface SessionRepository extends IRepository<Session, String> {
 
     /** Persist a new or updated session. */
     void save(Session session);
@@ -22,7 +24,7 @@ public interface ISessionRepository extends IRepository<Session, String> {
 
     /**
      * Returns {@code true} iff at least one non-expired Member session exists
-     * for {@code userId}. Used by {@code ISessionManager.isOnline} (UC-35/36).
+     * for {@code userId}. Used by {@code SessionManager.isOnline} (UC-35/36).
      *
      * <p>With multi-device login (Q4), several sessions may share a userId;
      * this method only answers presence, not multiplicity.

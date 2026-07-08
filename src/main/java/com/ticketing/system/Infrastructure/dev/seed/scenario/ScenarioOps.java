@@ -1,4 +1,5 @@
 package com.ticketing.system.Infrastructure.dev.seed.scenario;
+import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.Core.Application.dto.OutreachRequestDTO;
 import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
@@ -26,7 +27,7 @@ import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO.SeatConfigDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO.ZoneConfigDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
@@ -37,9 +38,9 @@ import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.Location;
 import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Infrastructure.dev.seed.DemoClock;
 import com.ticketing.system.Infrastructure.dev.seed.SeedHarness;
 
@@ -75,7 +76,7 @@ public final class ScenarioOps {
     private final CheckoutService checkoutService;
     private final CatalogService catalogService;
     private final MessagingService messaging;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
     private final DemoClock clock;
 
     private final Map<String, OpHandler> registry = new LinkedHashMap<>();
@@ -88,7 +89,7 @@ public final class ScenarioOps {
             CheckoutService checkoutService,
             CatalogService catalogService,
             MessagingService messaging,
-            IUserRepository userRepository,
+            UserRepository userRepository,
             DemoClock clock) {
         this.auth = auth;
         this.companyService = companyService;

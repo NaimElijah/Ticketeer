@@ -1,4 +1,5 @@
 package com.ticketing.system.shared.exception;
+import com.ticketing.system.identity.domain.User;
 
 // Specific subclass of EntityNotFoundException for User lookups.
 // UC-12, UC-13, UC-16, UC-23/24, UC-31, etc.

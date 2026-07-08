@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Domain.users;
+import com.ticketing.system.identity.domain.User;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;

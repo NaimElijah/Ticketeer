@@ -26,7 +26,7 @@ import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 class CompanyAnalyticsServiceTest {
 
@@ -41,7 +41,7 @@ class CompanyAnalyticsServiceTest {
     private IConversationRepository conversationRepository;
     private  ITicketRepository ticketRepository;
     private  IProductionCompanyRepository companyRepository;
-    private  IUserRepository userRepository;
+    private  UserRepository userRepository;
     private CompanyAnalyticsService service;
 
     @BeforeEach
@@ -51,7 +51,7 @@ class CompanyAnalyticsServiceTest {
         conversationRepository = mock(IConversationRepository.class);
         ticketRepository = mock(ITicketRepository.class);
         companyRepository = mock(IProductionCompanyRepository.class);
-        userRepository = mock(IUserRepository.class);
+        userRepository = mock(UserRepository.class);
         service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository);
     }
 

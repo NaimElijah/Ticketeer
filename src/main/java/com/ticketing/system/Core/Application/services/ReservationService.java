@@ -15,7 +15,7 @@ import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
 import com.ticketing.system.Core.Application.dto.BuyerContextDTO;
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
 import com.ticketing.system.Core.Domain.events.InventorySelection;
@@ -25,8 +25,8 @@ import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseContext;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseStage;
 import com.ticketing.system.Core.Domain.events.InventoryZone;
@@ -39,10 +39,10 @@ import com.ticketing.system.shared.exception.MarketNotOpenException;
 public class ReservationService {
     private final IEventRepository eventRepository;
     private final IActiveOrderRepository activeOrderRepository;
-    private final ISessionManager iSessionManager;
+    private final SessionManager iSessionManager;
     private final INotificationService notificationService;
     private final IProductionCompanyRepository companyRepository;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
     private final SystemAdminService systemAdminService;
     private final ISystemMetrics systemMetrics;
 
@@ -52,10 +52,10 @@ public class ReservationService {
     public ReservationService(
             IEventRepository eventRepository,
             IActiveOrderRepository activeOrderRepository,
-            ISessionManager iSessionManager,
+            SessionManager iSessionManager,
             INotificationService notificationService,
             IProductionCompanyRepository companyRepository,
-            IUserRepository userRepository,
+            UserRepository userRepository,
             SystemAdminService systemAdminService,
             ISystemMetrics systemMetrics) {
         this.eventRepository = eventRepository;

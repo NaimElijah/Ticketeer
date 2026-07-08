@@ -8,19 +8,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ticketing.system.Core.Application.services.MemberQueryService;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class MemberQueryServiceTest {
 
-    private IUserRepository userRepository;
+    private UserRepository userRepository;
     private MemberQueryService service;
 
     @BeforeEach
     void setUp() {
-        userRepository = mock(IUserRepository.class);
+        userRepository = mock(UserRepository.class);
         service = new MemberQueryService(userRepository);
     }
 

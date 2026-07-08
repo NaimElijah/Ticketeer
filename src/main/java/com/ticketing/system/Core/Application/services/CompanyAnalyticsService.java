@@ -21,7 +21,7 @@ import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 /**
  * Read-side aggregator for the owner-workspace dashboard counters (V2-WIRE-OWNER-DASH).
@@ -45,7 +45,7 @@ public class CompanyAnalyticsService {
     private final IConversationRepository conversationRepository;
     private final ITicketRepository ticketRepository;
     private final IProductionCompanyRepository companyRepository;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
 
     public CompanyAnalyticsService(
             IEventRepository eventRepository,
@@ -53,7 +53,7 @@ public class CompanyAnalyticsService {
             IConversationRepository conversationRepository,
             ITicketRepository ticketRepository,
             IProductionCompanyRepository companyRepository,
-            IUserRepository userRepository) {
+            UserRepository userRepository) {
         this.eventRepository = eventRepository;
         this.orderReceiptRepository = orderReceiptRepository;
         this.conversationRepository = conversationRepository;

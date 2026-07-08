@@ -1,4 +1,5 @@
 package com.ticketing.system.Presentation.views.auth;
+import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.Presentation.components.Toasts;
 import com.ticketing.system.Presentation.components.kit.LkAuthCard;
