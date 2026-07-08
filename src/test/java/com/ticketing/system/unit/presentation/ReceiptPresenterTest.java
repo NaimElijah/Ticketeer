@@ -15,7 +15,7 @@ import com.ticketing.system.identity.application.service.MemberAccountService;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Presentation.presenters.account.ReceiptPresenter;
+import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
 
 class ReceiptPresenterTest {
 

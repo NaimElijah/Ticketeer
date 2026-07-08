@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.Presentation.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.presenters.landing.LandingPresenter;
 
 class LandingPresenterTest {
 

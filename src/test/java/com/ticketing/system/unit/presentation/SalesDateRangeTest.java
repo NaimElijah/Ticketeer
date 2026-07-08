@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Presentation.views.admin.SalesDateRange;
+import com.ticketing.system.ui.views.admin.SalesDateRange;
 
 /** Window math for the Company Sales date filter (pure; no Vaadin). */
 class SalesDateRangeTest {

@@ -19,7 +19,7 @@ import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.company.OwnerDashboardPresenter;
+import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
 
 class OwnerDashboardPresenterTest {
 

@@ -12,8 +12,8 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
-import com.ticketing.system.Presentation.presenters.order.CheckoutPresenter;
-import com.ticketing.system.Presentation.session.SessionIdentity;
+import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
+import com.ticketing.system.ui.session.SessionIdentity;
 
 /**
  * Pins the payment-failure mapping in {@link CheckoutPresenter#payAsMember} (issue #428): a real

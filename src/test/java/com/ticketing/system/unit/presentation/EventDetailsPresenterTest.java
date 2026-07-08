@@ -24,7 +24,7 @@ import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
-import com.ticketing.system.Presentation.presenters.catalog.EventDetailsPresenter;
+import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 
 class EventDetailsPresenterTest {
 

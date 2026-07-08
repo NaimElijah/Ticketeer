@@ -25,7 +25,7 @@ import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.messaging.AdminComplaintQueuePresenter;
+import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 
 class AdminComplaintQueuePresenterTest {
 

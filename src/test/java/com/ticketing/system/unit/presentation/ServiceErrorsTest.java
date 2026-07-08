@@ -8,7 +8,7 @@ import java.net.ConnectException;
 import java.sql.SQLException;
 import java.sql.SQLTransientConnectionException;
 
-import com.ticketing.system.Presentation.support.ServiceErrors;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;

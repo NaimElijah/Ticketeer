@@ -27,7 +27,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
-import com.ticketing.system.Presentation.presenters.company.CompanySalesPresenter;
+import com.ticketing.system.ui.presenters.company.CompanySalesPresenter;
 
 /**
  * Issue #430 [Eval 9] — after a successful purchase the sale must appear in the owner's

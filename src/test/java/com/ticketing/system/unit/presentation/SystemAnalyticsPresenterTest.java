@@ -20,7 +20,7 @@ import com.ticketing.system.governance.application.service.SystemAnalyticsServic
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Presentation.presenters.admin.SystemAnalyticsPresenter;
+import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
 
 /**
  * Unit tests for {@link SystemAnalyticsPresenter} (UC-46 / #43, #279). Both

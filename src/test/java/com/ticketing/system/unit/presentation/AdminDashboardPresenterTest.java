@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
-import com.ticketing.system.Presentation.presenters.admin.AdminDashboardPresenter;
+import com.ticketing.system.ui.presenters.admin.AdminDashboardPresenter;
 
 /**
  * Unit tests for {@link AdminDashboardPresenter} (#279). The analytics service is mocked; the

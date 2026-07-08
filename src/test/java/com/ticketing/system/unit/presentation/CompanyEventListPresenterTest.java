@@ -10,7 +10,7 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.company.CompanyEventListPresenter;
+import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

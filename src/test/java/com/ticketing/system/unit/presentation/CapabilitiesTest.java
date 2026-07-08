@@ -1,8 +1,8 @@
 package com.ticketing.system.unit.presentation;
 
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Presentation.security.Capabilities;
-import com.ticketing.system.Presentation.security.Capability;
+import com.ticketing.system.ui.security.Capabilities;
+import com.ticketing.system.ui.security.Capability;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;

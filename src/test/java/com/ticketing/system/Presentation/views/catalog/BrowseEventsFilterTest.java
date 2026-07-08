@@ -1,4 +1,4 @@
-package com.ticketing.system.Presentation.views.catalog;
+package com.ticketing.system.ui.views.catalog;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
