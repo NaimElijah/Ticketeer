@@ -3,7 +3,7 @@ package com.ticketing.system.Core.Domain.company;
 import java.util.List;
 import java.util.Optional;
 
-import com.ticketing.system.Core.Domain.shared.IRepository;
+import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the ProductionCompany aggregate.
 public interface IProductionCompanyRepository extends IRepository<ProductionCompany, Integer> {

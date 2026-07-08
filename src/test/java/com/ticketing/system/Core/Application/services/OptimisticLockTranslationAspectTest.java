@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 
-import com.ticketing.system.Core.Domain.exceptions.ConcurrentReservationException;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.Infrastructure.persistence.OptimisticLockTranslationAspect;
 
 /**

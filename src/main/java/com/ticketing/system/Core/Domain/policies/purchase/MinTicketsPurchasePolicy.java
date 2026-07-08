@@ -1,6 +1,6 @@
 package com.ticketing.system.Core.Domain.policies.purchase;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 public class MinTicketsPurchasePolicy implements PurchasePolicy, InvariantChecked {
 

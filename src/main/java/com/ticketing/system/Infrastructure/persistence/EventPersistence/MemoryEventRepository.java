@@ -12,7 +12,7 @@ import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;

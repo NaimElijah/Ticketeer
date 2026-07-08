@@ -12,8 +12,8 @@ import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
 import com.ticketing.system.Core.Application.dto.LoginDTO;
 import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
 import com.ticketing.system.Core.Application.services.AuthenticationService;
-import com.ticketing.system.Core.Domain.exceptions.AuthenticationFailedException;
-import com.ticketing.system.Core.Domain.exceptions.GuestSessionRequiredException;
+import com.ticketing.system.shared.exception.AuthenticationFailedException;
+import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.Presentation.presenters.auth.LoginPresenter;
 
 import org.junit.jupiter.api.BeforeEach;

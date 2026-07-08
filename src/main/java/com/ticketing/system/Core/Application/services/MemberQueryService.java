@@ -45,7 +45,7 @@ public class MemberQueryService {
      * The member's profile projection (id, username, email) by id — backs {@code MyProfileView}.
      * Returns a {@link MemberDTO}, never the domain object or anything sensitive (no passwordHash).
      *
-     * @throws com.ticketing.system.Core.Domain.exceptions.UserNotFoundException if no user with that id exists
+     * @throws com.ticketing.system.shared.exception.UserNotFoundException if no user with that id exists
      */
     public MemberDTO getMemberProfile(int userId) {
         User u = userRepository.getUserById(userId);

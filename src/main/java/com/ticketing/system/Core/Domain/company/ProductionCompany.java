@@ -3,8 +3,8 @@ package com.ticketing.system.Core.Domain.company;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.InvariantChecked;
 import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;

@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;

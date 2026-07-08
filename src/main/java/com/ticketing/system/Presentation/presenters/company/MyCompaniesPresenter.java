@@ -7,8 +7,8 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.Core.Application.dto.OwnerAppointmentRequestDTO;
 import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Core.Domain.exceptions.UserNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.Presentation.session.AuthSession;
 import com.ticketing.system.Presentation.session.CurrentCompanies;
 

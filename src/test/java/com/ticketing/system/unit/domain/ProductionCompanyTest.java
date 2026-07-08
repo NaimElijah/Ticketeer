@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Domain.company.CompanyStatus;
 import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.support.BaseDomainTest;
 

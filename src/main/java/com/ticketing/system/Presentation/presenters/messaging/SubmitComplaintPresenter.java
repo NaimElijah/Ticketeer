@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 
 /**
  * MVP presenter for {@code SubmitComplaintView} (#267). Holds no Vaadin imports so

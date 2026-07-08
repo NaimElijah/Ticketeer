@@ -9,7 +9,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Domain.exceptions.ConcurrentReservationException;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 
 import lombok.extern.slf4j.Slf4j;
 

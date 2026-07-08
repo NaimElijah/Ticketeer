@@ -12,9 +12,9 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.Core.Application.services.MemberAccountService;
-import com.ticketing.system.Core.Domain.exceptions.EntityNotFoundException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.EntityNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.Presentation.presenters.account.ReceiptPresenter;
 
 class ReceiptPresenterTest {

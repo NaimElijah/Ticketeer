@@ -3,7 +3,7 @@ package com.ticketing.system.Core.Domain.ActiveOrder;
 import java.util.List;
 import java.util.Optional;
 
-import com.ticketing.system.Core.Domain.shared.IRepository;
+import com.ticketing.system.shared.IRepository;
 
 /**
  * Aggregate-root entry point for the {@link ActiveOrder} aggregate.

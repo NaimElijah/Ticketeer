@@ -44,7 +44,7 @@ import com.ticketing.system.Core.Application.interfaces.ISessionManager;
 import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.exceptions.MarketNotOpenException;
+import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;

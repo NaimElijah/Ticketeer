@@ -24,7 +24,7 @@ import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
 import com.ticketing.system.Core.Application.dto.PermissionEditDTO;
 import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.Presentation.presenters.company.ManagerListPresenter;
 

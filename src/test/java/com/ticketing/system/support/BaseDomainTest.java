@@ -5,7 +5,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 /**
  * Base class for domain-aggregate unit tests. Each test that mutates an

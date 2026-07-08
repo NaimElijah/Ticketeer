@@ -4,9 +4,9 @@ import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
 import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
 import com.ticketing.system.Core.Application.dto.RefundResultDTO;
 import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Domain.exceptions.IdempotencyConflictException;
-import com.ticketing.system.Core.Domain.exceptions.PaymentGatewayException;
-import com.ticketing.system.Core.Domain.exceptions.RefundFailedException;
+import com.ticketing.system.shared.exception.IdempotencyConflictException;
+import com.ticketing.system.shared.exception.PaymentGatewayException;
+import com.ticketing.system.shared.exception.RefundFailedException;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;

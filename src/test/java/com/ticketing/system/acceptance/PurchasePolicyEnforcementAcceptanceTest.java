@@ -42,7 +42,7 @@ import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.Location;
 import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.exceptions.PolicyViolationException;
+import com.ticketing.system.shared.exception.PolicyViolationException;
 
 /**
  * Eval point 3 — purchase policy "between 2 and 4 tickets". An event carries an

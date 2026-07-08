@@ -17,9 +17,9 @@ import com.ticketing.system.Core.Application.dto.MarketStateDTO;
 import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Application.services.SystemAnalyticsService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidStateTransitionException;
-import com.ticketing.system.Core.Domain.exceptions.MarketNotOpenException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.Presentation.presenters.admin.SystemAnalyticsPresenter;
 
 /**

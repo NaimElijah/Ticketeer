@@ -24,7 +24,7 @@ import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.Presentation.presenters.company.EventManagementPresenter;
 
 /**

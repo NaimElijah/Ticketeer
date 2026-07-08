@@ -10,7 +10,7 @@ import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 
 /**
  * MVP presenter for {@code NewInquiryView} (II.3.10 — a member opens an inquiry with a company).

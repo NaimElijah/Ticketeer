@@ -2,7 +2,7 @@ package com.ticketing.system.Core.Domain.notifications;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.shared.IRepository;
+import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the Notification aggregate (UC-36 design walkthrough).
 // Notification was promoted from a sub-entity of User to its own aggregate so high-volume

@@ -7,7 +7,7 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * Per-key lock map used by the in-memory repository implementations to
  * provide the pessimistic-lock semantics promised by
- * {@link com.ticketing.system.Core.Domain.shared.IRepository#findByIdForUpdate}.
+ * {@link com.ticketing.system.shared.IRepository#findByIdForUpdate}.
  *
  * <p>Each {@code MemoryXxxRepository} owns one instance and routes its
  * {@code findByIdForUpdate} / {@code save} / {@code delete} / {@code unlock}

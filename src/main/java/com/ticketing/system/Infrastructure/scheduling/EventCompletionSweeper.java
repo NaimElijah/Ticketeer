@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 
 /**
  * Lifecycle sweeper: scans live events (ON_SALE / SOLD_OUT) whose last show date has
