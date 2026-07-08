@@ -25,7 +25,7 @@ import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
 import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.services.MessagingService;
+import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -34,13 +34,13 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.MemoryConversationRepository;
+import com.ticketing.system.messaging.adapter.out.persistence.MemoryConversationRepository;
 
 class MessagingServiceTest {
 
@@ -56,7 +56,7 @@ class MessagingServiceTest {
     private static final int ADMIN_ID = 1;
     private static final int COMPANY_ID = 5;
 
-    private IConversationRepository conversationRepository;
+    private ConversationRepository conversationRepository;
     private SessionManager sessionManager;
     private AdminRepository adminRepository;
     private UserRepository userRepository;

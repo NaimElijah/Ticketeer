@@ -18,8 +18,8 @@ import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
@@ -44,7 +44,7 @@ public class CompanyAnalyticsService {
 
     private final EventRepository eventRepository;
     private final OrderReceiptRepository orderReceiptRepository;
-    private final IConversationRepository conversationRepository;
+    private final ConversationRepository conversationRepository;
     private final TicketRepository ticketRepository;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -52,7 +52,7 @@ public class CompanyAnalyticsService {
     public CompanyAnalyticsService(
             EventRepository eventRepository,
             OrderReceiptRepository orderReceiptRepository,
-            IConversationRepository conversationRepository,
+            ConversationRepository conversationRepository,
             TicketRepository ticketRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {

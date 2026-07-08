@@ -2,7 +2,7 @@ package com.ticketing.system.Infrastructure.dev.seed;
 
 import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
 import com.ticketing.system.identity.adapter.out.persistence.MemoryAdminRepository;
-import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.MemoryConversationRepository;
+import com.ticketing.system.messaging.adapter.out.persistence.MemoryConversationRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
 import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.MemoryNotificationRepository;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryOrderReceiptRepository;

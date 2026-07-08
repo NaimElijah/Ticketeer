@@ -1,12 +1,12 @@
 package com.ticketing.system.unit.infrastructure.persistence.ConversationPersistence;
 
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.MemoryConversationRepository;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.messaging.adapter.out.persistence.MemoryConversationRepository;
 
 class MemoryConversationRepositoryContractTest extends IConversationRepositoryContractTest {
 
     @Override
-    protected IConversationRepository newRepository() {
+    protected ConversationRepository newRepository() {
         return new MemoryConversationRepository();
     }
 }

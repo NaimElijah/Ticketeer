@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.messaging;
+package com.ticketing.system.messaging.domain;
 
 // Lifecycle states for a Conversation.
 //   OPEN       - awaiting any reply

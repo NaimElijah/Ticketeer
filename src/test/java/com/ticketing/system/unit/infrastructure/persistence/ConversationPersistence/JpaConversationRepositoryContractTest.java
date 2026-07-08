@@ -6,9 +6,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.JpaConversationRepository;
-import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.SpringDataConversationRepository;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.messaging.adapter.out.persistence.JpaConversationRepository;
+import com.ticketing.system.messaging.adapter.out.persistence.SpringDataConversationRepository;
 
 /**
  * Runs the {@link IConversationRepositoryContractTest} suite against the JPA adapter on an embedded H2
@@ -35,7 +35,7 @@ class JpaConversationRepositoryContractTest extends IConversationRepositoryContr
     }
 
     @Override
-    protected IConversationRepository newRepository() {
+    protected ConversationRepository newRepository() {
         return repository;
     }
 }

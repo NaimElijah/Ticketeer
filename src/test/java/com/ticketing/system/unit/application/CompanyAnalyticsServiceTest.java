@@ -20,9 +20,9 @@ import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
@@ -38,7 +38,7 @@ class CompanyAnalyticsServiceTest {
 
     private EventRepository eventRepository;
     private OrderReceiptRepository orderReceiptRepository;
-    private IConversationRepository conversationRepository;
+    private ConversationRepository conversationRepository;
     private  TicketRepository ticketRepository;
     private  ProductionCompanyRepository companyRepository;
     private  UserRepository userRepository;
@@ -48,7 +48,7 @@ class CompanyAnalyticsServiceTest {
     void setUp() {
         eventRepository = mock(EventRepository.class);
         orderReceiptRepository = mock(OrderReceiptRepository.class);
-        conversationRepository = mock(IConversationRepository.class);
+        conversationRepository = mock(ConversationRepository.class);
         ticketRepository = mock(TicketRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);

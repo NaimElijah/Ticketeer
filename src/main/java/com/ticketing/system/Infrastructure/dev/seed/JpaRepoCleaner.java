@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.sales.adapter.out.persistence.SpringDataActiveOrderRepository;
-import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.SpringDataConversationRepository;
+import com.ticketing.system.messaging.adapter.out.persistence.SpringDataConversationRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.SpringDataNotificationRepository;
 import com.ticketing.system.sales.adapter.out.persistence.SpringDataOrderReceiptRepository;

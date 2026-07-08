@@ -25,9 +25,9 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 
@@ -45,7 +45,7 @@ class SystemAnalyticsServiceTest {
     private OrderReceiptRepository orderReceiptRepository;
     private ProductionCompanyRepository companyRepository;
     private EventRepository eventRepository;
-    private IConversationRepository conversationRepository;
+    private ConversationRepository conversationRepository;
     private SystemAnalyticsService service;
 
     @BeforeEach
@@ -54,7 +54,7 @@ class SystemAnalyticsServiceTest {
         orderReceiptRepository = mock(OrderReceiptRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         eventRepository = mock(EventRepository.class);
-        conversationRepository = mock(IConversationRepository.class);
+        conversationRepository = mock(ConversationRepository.class);
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new SystemAnalyticsService(metrics, orderReceiptRepository, companyRepository,
                 eventRepository, conversationRepository, clock, WINDOW);
