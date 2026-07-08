@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.dev.seed.scenario;
+package com.ticketing.system.bootstrap.dev.seed.scenario;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

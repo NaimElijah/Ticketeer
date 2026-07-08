@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.scheduling;
+package com.ticketing.system.bootstrap.scheduling;
 import com.ticketing.system.sales.application.service.CheckoutService;
 
 import java.time.Clock;

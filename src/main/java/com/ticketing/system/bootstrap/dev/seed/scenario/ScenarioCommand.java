@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.dev.seed.scenario;
+package com.ticketing.system.bootstrap.dev.seed.scenario;
 
 import java.util.List;
 import java.util.Map;

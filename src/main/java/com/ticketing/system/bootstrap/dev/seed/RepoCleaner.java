@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.dev.seed;
+package com.ticketing.system.bootstrap.dev.seed;
 
 /**
  * Wipes all application data for a {@code seed.mode=wipe}/{@code reset} run (#366).

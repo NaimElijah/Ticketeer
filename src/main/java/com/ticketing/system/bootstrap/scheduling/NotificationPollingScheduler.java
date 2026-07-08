@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.scheduling;
+package com.ticketing.system.bootstrap.scheduling;
 
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
-import com.ticketing.system.Infrastructure.PlatformInitializationRunner;
+import com.ticketing.system.bootstrap.PlatformInitializationRunner;
 
 class PlatformInitializationRunnerTest {
 

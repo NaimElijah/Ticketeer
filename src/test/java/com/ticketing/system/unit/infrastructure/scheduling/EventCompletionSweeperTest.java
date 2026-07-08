@@ -30,7 +30,7 @@ import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.sales.domain.NoPurchasePolicy;
 import com.ticketing.system.sales.domain.PurchasePolicy;
-import com.ticketing.system.Infrastructure.scheduling.EventCompletionSweeper;
+import com.ticketing.system.bootstrap.scheduling.EventCompletionSweeper;
 
 /**
  * Drives {@link EventCompletionSweeper#completeFinishedEvents(LocalDateTime)} directly with a

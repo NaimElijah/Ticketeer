@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.scheduling;
+package com.ticketing.system.bootstrap.scheduling;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

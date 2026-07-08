@@ -33,7 +33,7 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
-import com.ticketing.system.Infrastructure.scheduling.SessionAndOrderSweeper;
+import com.ticketing.system.bootstrap.scheduling.SessionAndOrderSweeper;
 
 
 import com.ticketing.system.catalog.domain.DiscountPolicy;

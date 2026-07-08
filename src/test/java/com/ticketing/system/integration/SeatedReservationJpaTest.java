@@ -37,7 +37,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.Infrastructure.scheduling.EventCompletionSweeper;
+import com.ticketing.system.bootstrap.scheduling.EventCompletionSweeper;
 
 /**
  * Regression test for the seated-ticket reservation failure under the {@code jpa} profile.

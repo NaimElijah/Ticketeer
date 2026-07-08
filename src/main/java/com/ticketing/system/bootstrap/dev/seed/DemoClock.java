@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.dev.seed;
+package com.ticketing.system.bootstrap.dev.seed;
 
 import java.time.Clock;
 import java.time.Instant;

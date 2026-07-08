@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.config;
+package com.ticketing.system.sales.config;
 
 import java.time.Duration;
 

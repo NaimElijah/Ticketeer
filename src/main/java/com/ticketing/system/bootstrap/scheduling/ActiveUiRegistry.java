@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.scheduling;
+package com.ticketing.system.bootstrap.scheduling;
 
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.server.ServiceInitEvent;

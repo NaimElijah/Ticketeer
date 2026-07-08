@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.dev.seed;
+package com.ticketing.system.bootstrap.dev.seed;
 
 import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
 import com.ticketing.system.identity.adapter.out.persistence.MemoryAdminRepository;

@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure;
+package com.ticketing.system.bootstrap;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

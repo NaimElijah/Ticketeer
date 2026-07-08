@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.dev.seed.scenario;
+package com.ticketing.system.bootstrap.dev.seed.scenario;
 
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -11,10 +11,10 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Infrastructure.dev.seed.DemoClock;
-import com.ticketing.system.Infrastructure.dev.seed.RepoCleaner;
-import com.ticketing.system.Infrastructure.dev.seed.SeedHarness;
-import com.ticketing.system.Infrastructure.dev.seed.SeedReport;
+import com.ticketing.system.bootstrap.dev.seed.DemoClock;
+import com.ticketing.system.bootstrap.dev.seed.RepoCleaner;
+import com.ticketing.system.bootstrap.dev.seed.SeedHarness;
+import com.ticketing.system.bootstrap.dev.seed.SeedReport;
 import com.ticketing.system.ui.dev.DevUserSeeder;
 
 import lombok.extern.slf4j.Slf4j;

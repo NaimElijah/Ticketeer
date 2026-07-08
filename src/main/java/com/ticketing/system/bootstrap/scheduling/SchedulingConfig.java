@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.scheduling;
+package com.ticketing.system.bootstrap.scheduling;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;

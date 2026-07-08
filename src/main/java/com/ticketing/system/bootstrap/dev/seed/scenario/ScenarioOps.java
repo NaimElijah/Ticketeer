@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.dev.seed.scenario;
+package com.ticketing.system.bootstrap.dev.seed.scenario;
 import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.shared.dto.OutreachRequestDTO;
@@ -41,8 +41,8 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.Infrastructure.dev.seed.DemoClock;
-import com.ticketing.system.Infrastructure.dev.seed.SeedHarness;
+import com.ticketing.system.bootstrap.dev.seed.DemoClock;
+import com.ticketing.system.bootstrap.dev.seed.SeedHarness;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
