@@ -2,7 +2,7 @@ package com.ticketing.system.Core.Domain.users;
 
 import java.time.Instant;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

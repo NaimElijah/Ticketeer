@@ -1,8 +1,8 @@
 package com.ticketing.system.Core.Domain.Tickets;
 
 
-import com.ticketing.system.Core.Domain.exceptions.TicketNotAvailableException;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.TicketNotAvailableException;
+import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

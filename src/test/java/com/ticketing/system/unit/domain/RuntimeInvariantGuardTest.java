@@ -23,7 +23,7 @@ import com.ticketing.system.support.BaseDomainTest;
 /**
  * Regression coverage for the "invariants hold at runtime, not just at construction"
  * work: every state-mutating method re-asserts {@link
- * com.ticketing.system.Core.Domain.shared.InvariantChecked#checkInvariants()}, and
+ * com.ticketing.system.shared.InvariantChecked#checkInvariants()}, and
  * collection getters hand back defensive copies so external code cannot corrupt an
  * aggregate behind its own back.
  *

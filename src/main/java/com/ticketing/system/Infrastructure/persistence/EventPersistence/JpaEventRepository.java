@@ -12,7 +12,7 @@ import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 
 /**
  * JPA-backed {@link IEventRepository} — active only in the {@code jpa} run/dev profile. Adapts the

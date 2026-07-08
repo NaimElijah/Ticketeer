@@ -2,7 +2,7 @@ package com.ticketing.system.Core.Domain.Tickets;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.shared.IRepository;
+import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the unified Ticket aggregate.
 public interface ITicketRepository extends IRepository<Ticket, Integer> {

@@ -11,9 +11,9 @@ import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
 import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
 import com.ticketing.system.Core.Application.dto.RefundResultDTO;
 import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Domain.exceptions.PaymentGatewayException;
-import com.ticketing.system.Core.Domain.exceptions.PaymentGatewayUnreachableException;
-import com.ticketing.system.Core.Domain.exceptions.RefundFailedException;
+import com.ticketing.system.shared.exception.PaymentGatewayException;
+import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundFailedException;
 
 import lombok.extern.slf4j.Slf4j;
 

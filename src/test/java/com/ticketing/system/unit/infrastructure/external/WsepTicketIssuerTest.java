@@ -19,7 +19,7 @@ import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
 import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
-import com.ticketing.system.Core.Domain.exceptions.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.Infrastructure.external.WsepCommunicationException;
 import com.ticketing.system.Infrastructure.external.WsepHttpClient;
 import com.ticketing.system.Infrastructure.external.WsepTicketIssuer;

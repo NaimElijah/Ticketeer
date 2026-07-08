@@ -2,7 +2,7 @@ package com.ticketing.system.Core.Domain.events;
 
 import java.time.LocalDateTime;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 public class DiscountPolicy implements InvariantChecked { //? Note: but not in implementation plan  <------------   <-----------    <---------------
 

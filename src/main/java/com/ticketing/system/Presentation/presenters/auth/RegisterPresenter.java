@@ -2,11 +2,11 @@ package com.ticketing.system.Presentation.presenters.auth;
 
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
 import com.ticketing.system.Core.Application.services.AuthenticationService;
-import com.ticketing.system.Core.Domain.exceptions.DuplicateEmailException;
-import com.ticketing.system.Core.Domain.exceptions.DuplicateUsernameException;
-import com.ticketing.system.Core.Domain.exceptions.GuestSessionRequiredException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidEmailFormatException;
-import com.ticketing.system.Core.Domain.exceptions.WeakPasswordException;
+import com.ticketing.system.shared.exception.DuplicateEmailException;
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
+import com.ticketing.system.shared.exception.GuestSessionRequiredException;
+import com.ticketing.system.shared.exception.InvalidEmailFormatException;
+import com.ticketing.system.shared.exception.WeakPasswordException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 

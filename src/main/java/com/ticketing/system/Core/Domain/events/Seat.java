@@ -2,7 +2,7 @@ package com.ticketing.system.Core.Domain.events;
 
 import java.time.LocalDateTime;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

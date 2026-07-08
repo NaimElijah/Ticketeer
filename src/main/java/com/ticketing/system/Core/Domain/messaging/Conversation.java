@@ -5,12 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.exceptions.ConversationClosedException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidParticipantException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidStateTransitionException;
-import com.ticketing.system.Core.Domain.exceptions.MessageNotFoundException;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.ConversationClosedException;
+import com.ticketing.system.shared.exception.InvalidParticipantException;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.MessageNotFoundException;
+import com.ticketing.system.shared.InvariantChecked;
 
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;

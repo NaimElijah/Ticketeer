@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketing.system.Core.Domain.company.CompanyStatus;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.exceptions.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 
 /**
  * JPA-backed {@link IProductionCompanyRepository} — active only in the {@code jpa} run/dev profile.

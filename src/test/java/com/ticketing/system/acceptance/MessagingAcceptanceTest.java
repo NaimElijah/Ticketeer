@@ -29,9 +29,9 @@ import com.ticketing.system.Core.Application.services.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.MessagingService;
 import com.ticketing.system.Core.Domain.Admin.Admin;
 import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.exceptions.ConversationClosedException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.ConversationClosedException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 // End-to-end acceptance tests for the messaging subsystem, exercised through the real
 // Spring "test" context (AuthenticationService → CompanyManagementService → MessagingService).

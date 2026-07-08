@@ -27,7 +27,7 @@ import com.ticketing.system.Core.Domain.events.Location;
 import com.ticketing.system.Core.Domain.events.ShowDate;
 import com.ticketing.system.Core.Domain.events.StandingZone;
 import com.ticketing.system.Core.Domain.events.VenueMap;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
 import com.ticketing.system.Infrastructure.scheduling.EventCompletionSweeper;

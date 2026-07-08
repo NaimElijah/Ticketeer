@@ -1,7 +1,7 @@
 package com.ticketing.system.Core.Domain.notifications;
 
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
