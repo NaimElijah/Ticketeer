@@ -1,4 +1,10 @@
-package com.ticketing.system.Core.Domain.users;
+package com.ticketing.system.identity.domain;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.Core.Domain.users.AppointmentStatus; // transitional: organization type still in the legacy users package (relocated in Step 3)
+import com.ticketing.system.Core.Domain.users.CompanyRole; // transitional: organization type still in the legacy users package (relocated in Step 3)
+import com.ticketing.system.Core.Domain.users.Permission; // transitional: organization type still in the legacy users package (relocated in Step 3)
+import com.ticketing.system.Core.Domain.users.CompanyAppointment; // transitional: organization type still in the legacy users package (relocated in Step 3)
 
 import java.util.EnumSet;
 import java.util.ArrayList;
@@ -19,7 +25,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
-// V3: mapped to JPA. userId is an ASSIGNED @Id (minted by IUserRepository.nextId(), never
+// V3: mapped to JPA. userId is an ASSIGNED @Id (minted by UserRepository.nextId(), never
 // @GeneratedValue); email is unique; @Version drives optimistic locking. companyAppointments are
 // owned children (@OneToMany cascade-all + orphan-removal) loaded eagerly so a detached User is
 // fully usable, exactly like the in-memory version. A protected no-arg ctor lets Hibernate

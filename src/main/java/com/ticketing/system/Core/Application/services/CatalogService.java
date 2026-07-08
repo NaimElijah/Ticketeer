@@ -24,7 +24,7 @@ import com.ticketing.system.Core.Application.dto.SearchResultDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.Core.Application.dtoMappers.VenueMapMapper;
 import com.ticketing.system.Core.Application.dtoMappers.EventMapper;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.company.CompanyStatus;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
@@ -43,13 +43,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CatalogService {
 
-    private final ISessionManager sessionManager;
+    private final SessionManager sessionManager;
     private final IEventRepository eventRepository;
     private final IProductionCompanyRepository productionCompanyRepository;
     private final ITicketRepository ticketRepository;
 
     public CatalogService(
-            ISessionManager sessionManager,
+            SessionManager sessionManager,
             IEventRepository eventRepository,
             IProductionCompanyRepository productionCompanyRepository,
             ITicketRepository ticketRepository

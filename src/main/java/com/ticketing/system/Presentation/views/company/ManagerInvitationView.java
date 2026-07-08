@@ -1,4 +1,5 @@
 package com.ticketing.system.Presentation.views.company;
+import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.Presentation.components.Toasts;

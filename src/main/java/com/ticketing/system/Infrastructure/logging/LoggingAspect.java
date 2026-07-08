@@ -29,7 +29,11 @@ public class LoggingAspect {
     /**
      * Matches every public method declared inside the application services package.
      */
-    @Pointcut("execution(public * com.ticketing.system.Core.Application.services..*(..))")
+    // Covers both the canonical per-context service package (<context>.application.service, populated
+    // by the migration) and the not-yet-migrated legacy Core.Application.services package. The legacy
+    // clause is removed once every service has moved (Step 10).
+    @Pointcut("execution(public * com.ticketing.system..application.service..*(..)) "
+            + "|| execution(public * com.ticketing.system.Core.Application.services..*(..))")
     public void applicationService() {
     }
 

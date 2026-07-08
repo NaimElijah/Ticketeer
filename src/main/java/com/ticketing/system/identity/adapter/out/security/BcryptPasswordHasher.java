@@ -1,19 +1,19 @@
-package com.ticketing.system.Infrastructure.security;
+package com.ticketing.system.identity.adapter.out.security;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
 
 /**
- * BCrypt-backed implementation of {@link IPasswordHasher}. UC-11 / UC-12.
+ * BCrypt-backed implementation of {@link PasswordHasher}. UC-11 / UC-12.
  *
  * <p>Uses Spring Security's {@link BCryptPasswordEncoder} with the default cost
  * factor (10). Each {@link #hash} call generates a fresh salt; the salt is
  * embedded in the returned string so verification only needs the stored value.
  */
 @Component
-public class BcryptPasswordHasher implements IPasswordHasher {
+public class BcryptPasswordHasher implements PasswordHasher {
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 

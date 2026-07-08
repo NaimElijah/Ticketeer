@@ -39,8 +39,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class OptimisticLockTranslationAspect {
 
-    /** Every public application-service method — the same surface {@code LoggingAspect} traces. */
-    @Pointcut("execution(public * com.ticketing.system.Core.Application.services..*(..))")
+    /** Every public application-service method — the same surface {@code LoggingAspect} traces.
+     *  Covers both the canonical per-context service package (<context>.application.service) and the
+     *  not-yet-migrated legacy Core.Application.services; the legacy clause is removed at Step 10. */
+    @Pointcut("execution(public * com.ticketing.system..application.service..*(..)) "
+            + "|| execution(public * com.ticketing.system.Core.Application.services..*(..))")
     public void applicationService() {
     }
 

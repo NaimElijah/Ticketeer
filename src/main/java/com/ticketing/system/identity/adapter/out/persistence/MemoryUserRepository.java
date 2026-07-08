@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.UserPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
 import java.util.List;
@@ -11,11 +11,11 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 
 /**
- * In-memory {@link IUserRepository}.
+ * In-memory {@link UserRepository}.
  *
  * <p>Storage is a thread-safe {@code ConcurrentHashMap}; IDs are minted from
  * an {@code AtomicInteger} starting at 1. {@code @Profile("!jpa")}: the {@code jpa}
@@ -23,7 +23,7 @@ import com.ticketing.system.Core.Domain.users.User;
  */
 @Repository
 @Profile("!jpa")
-public class MemoryUserRepository implements IUserRepository {
+public class MemoryUserRepository implements UserRepository {
 
     private final Map<Integer, User> usersById = new ConcurrentHashMap<>();
     private final AtomicInteger idSequence = new AtomicInteger(1);

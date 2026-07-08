@@ -1,8 +1,9 @@
 package com.ticketing.system.Presentation.security;
+import com.ticketing.system.identity.domain.Session;
 
 import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
 import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Presentation.session.AuthSession;
 import com.ticketing.system.Presentation.session.CurrentCompanies;
 import com.ticketing.system.Presentation.session.GuestSession;

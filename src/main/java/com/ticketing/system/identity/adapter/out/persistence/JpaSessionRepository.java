@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.SessionPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -8,16 +8,16 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
 /**
- * JPA-backed {@link ISessionRepository} — active only in the {@code jpa} run/dev profile.
+ * JPA-backed {@link SessionRepository} — active only in the {@code jpa} run/dev profile.
  * Adapts the domain port onto Spring Data ({@link SpringDataSessionRepository}); the
- * application layer depends only on {@code ISessionRepository}, never on Spring Data.
+ * application layer depends only on {@code SessionRepository}, never on Spring Data.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrent writes are guarded by
  * {@code Session}'s {@code @Version} optimistic lock within the surrounding transaction
@@ -41,7 +41,7 @@ import jakarta.persistence.PersistenceContext;
  */
 @Repository
 @Profile("jpa")
-public class JpaSessionRepository implements ISessionRepository {
+public class JpaSessionRepository implements SessionRepository {
 
     private final SpringDataSessionRepository data;
     private final Clock clock;

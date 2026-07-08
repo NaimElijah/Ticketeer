@@ -1,4 +1,5 @@
 package com.ticketing.system.unit.presentation;
+import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.Presentation.components.company.EditPermissionsDialog;
 import com.ticketing.system.Presentation.components.kit.LkBadge;

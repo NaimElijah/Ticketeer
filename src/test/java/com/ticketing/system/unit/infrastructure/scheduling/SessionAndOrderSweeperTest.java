@@ -31,8 +31,8 @@ import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.events.InventorySelection;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.Infrastructure.scheduling.SessionAndOrderSweeper;
 
 
@@ -53,7 +53,7 @@ class SessionAndOrderSweeperTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
 
-    private ISessionRepository sessionRepo;
+    private SessionRepository sessionRepo;
     private IActiveOrderRepository orderRepo;
     private IEventRepository eventRepo;
     private Clock fixedClock;
@@ -63,7 +63,7 @@ class SessionAndOrderSweeperTest {
 
     @BeforeEach
     void setUp() {
-        sessionRepo    = mock(ISessionRepository.class);
+        sessionRepo    = mock(SessionRepository.class);
         orderRepo      = mock(IActiveOrderRepository.class);
         eventRepo      = mock(IEventRepository.class);
         fixedClock     = Clock.fixed(T0, ZoneOffset.UTC);

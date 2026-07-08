@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
 import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Presentation.security.SignOutFlow;
 import com.vaadin.flow.server.VaadinSession;
 

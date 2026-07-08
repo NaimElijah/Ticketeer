@@ -1,4 +1,5 @@
 package com.ticketing.system.shared.exception;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 
 /**
  * Thrown when an operation that mutates session state is invoked without an

@@ -22,9 +22,9 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
@@ -59,18 +59,18 @@ import com.ticketing.system.Core.Application.dto.ShowDateDTO;
 import com.ticketing.system.Core.Domain.events.DiscountPolicy;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 
 class EventManagementServiceTest {
 
         private IEventRepository mockEventRepo;
         private IProductionCompanyRepository mockCompanyRepo;
         private ITicketRepository mockTicketRepo;
-        private ISessionManager sessionManager;
+        private SessionManager sessionManager;
         private EventManagementService eventService;
         private IOrderReceiptRepository orderReceiptRepository;
         private IPaymentGateway paymentGateway;
-        private IUserRepository userRepository;
+        private UserRepository userRepository;
         private INotificationService notificationService;
 
         private final String OWNER_TOKEN = "owner-token";
@@ -102,10 +102,10 @@ class EventManagementServiceTest {
                 mockEventRepo = mock(IEventRepository.class);
                 mockCompanyRepo = mock(IProductionCompanyRepository.class);
                 mockTicketRepo = mock(ITicketRepository.class);
-                sessionManager = mock(ISessionManager.class);
+                sessionManager = mock(SessionManager.class);
                 orderReceiptRepository = mock(IOrderReceiptRepository.class);
                 paymentGateway = mock(IPaymentGateway.class);
-                userRepository = mock(IUserRepository.class);
+                userRepository = mock(UserRepository.class);
                 notificationService = mock(INotificationService.class);
 
                 eventService = new EventManagementService(

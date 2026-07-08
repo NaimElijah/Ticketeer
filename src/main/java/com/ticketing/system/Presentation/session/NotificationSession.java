@@ -1,4 +1,5 @@
 package com.ticketing.system.Presentation.session;
+import com.ticketing.system.identity.domain.Session;
 
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
 import com.ticketing.system.Presentation.components.NotificationBellComponent;

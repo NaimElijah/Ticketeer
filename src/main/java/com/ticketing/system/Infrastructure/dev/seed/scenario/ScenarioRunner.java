@@ -1,8 +1,8 @@
 package com.ticketing.system.Infrastructure.dev.seed.scenario;
 
 import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
@@ -10,7 +10,7 @@ import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Application.services.MessagingService;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Infrastructure.dev.seed.DemoClock;
 import com.ticketing.system.Infrastructure.dev.seed.RepoCleaner;
 import com.ticketing.system.Infrastructure.dev.seed.SeedHarness;
@@ -80,11 +80,11 @@ public class ScenarioRunner implements ApplicationRunner {
     private final CheckoutService checkoutService;
     private final CatalogService catalogService;
     private final MessagingService messagingService;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
     private final RepoCleaner repoCleaner;
     private final ObjectProvider<DevUserSeeder> devUserSeeder;
     private final SystemAdminService systemAdminService;
-    private final ISessionManager sessionManager;
+    private final SessionManager sessionManager;
     private final ResourceLoader resourceLoader;
     private final Environment environment;
     private final java.time.Clock clock;
@@ -107,11 +107,11 @@ public class ScenarioRunner implements ApplicationRunner {
             CheckoutService checkoutService,
             CatalogService catalogService,
             MessagingService messagingService,
-            IUserRepository userRepository,
+            UserRepository userRepository,
             RepoCleaner repoCleaner,
             ObjectProvider<DevUserSeeder> devUserSeeder,
             SystemAdminService systemAdminService,
-            ISessionManager sessionManager,
+            SessionManager sessionManager,
             ResourceLoader resourceLoader,
             Environment environment,
             java.time.Clock clock,
