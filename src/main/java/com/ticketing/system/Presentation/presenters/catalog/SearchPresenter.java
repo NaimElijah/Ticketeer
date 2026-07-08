@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.SearchResultDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.Presentation.session.RecentSearches;
 
 import lombok.extern.slf4j.Slf4j;

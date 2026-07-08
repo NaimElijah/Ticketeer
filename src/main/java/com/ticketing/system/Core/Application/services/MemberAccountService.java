@@ -7,7 +7,7 @@ import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -35,13 +35,13 @@ public class MemberAccountService {
                                                                // methods.
     private final IOrderReceiptRepository orderReceiptRepository;
     private final ITicketRepository ticketRepository;
-    private final IEventRepository eventRepository; // For event name lookups in history records.
+    private final EventRepository eventRepository; // For event name lookups in history records.
 
     public MemberAccountService(
             AuthenticationService authenticationService,
             IOrderReceiptRepository orderReceiptRepository,
             ITicketRepository ticketRepository,
-            IEventRepository eventRepository) {
+            EventRepository eventRepository) {
         this.authenticationService = authenticationService;
         this.orderReceiptRepository = orderReceiptRepository;
         this.ticketRepository = ticketRepository;

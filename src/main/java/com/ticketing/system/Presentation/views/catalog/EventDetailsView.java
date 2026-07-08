@@ -3,7 +3,7 @@ package com.ticketing.system.Presentation.views.catalog;
 import com.ticketing.system.Core.Application.dto.EventDetailDTO;
 import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
 import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
-import com.ticketing.system.Core.Domain.events.EventStatus;
+import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.Presentation.components.kit.Lk;
 import com.ticketing.system.Presentation.components.kit.LkBadge;
 import com.ticketing.system.Presentation.components.kit.LkBanner;

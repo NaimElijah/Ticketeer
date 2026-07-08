@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.ticketing.system.Core.Domain.events.InventorySelection;
+import com.ticketing.system.catalog.domain.InventorySelection;
 
 /**
  * Application-layer DTO for inventory selection input.

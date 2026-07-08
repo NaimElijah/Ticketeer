@@ -1,12 +1,14 @@
 package com.ticketing.system.Core.Application.dtoMappers;
+import com.ticketing.system.catalog.application.service.CatalogService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 
 import com.ticketing.system.Core.Application.dto.EventDetailDTO;
 import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
 import com.ticketing.system.Core.Application.dto.ShowDateDTO;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.Location;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.Location;
 
 public class EventMapper {
 

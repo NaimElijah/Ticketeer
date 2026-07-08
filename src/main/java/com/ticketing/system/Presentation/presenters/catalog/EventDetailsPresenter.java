@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.Core.Application.dto.EventDetailDTO;
 import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;

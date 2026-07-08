@@ -25,24 +25,24 @@ import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Application.services.EventManagementService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
@@ -56,14 +56,14 @@ import com.ticketing.system.Core.Application.dto.EventDetailDTO;
 import com.ticketing.system.Core.Application.dto.EventUpdateDTO;
 import com.ticketing.system.Core.Application.dto.LocationDTO;
 import com.ticketing.system.Core.Application.dto.ShowDateDTO;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.EventCategory;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.identity.domain.User;
 
 class EventManagementServiceTest {
 
-        private IEventRepository mockEventRepo;
+        private EventRepository mockEventRepo;
         private ProductionCompanyRepository mockCompanyRepo;
         private ITicketRepository mockTicketRepo;
         private SessionManager sessionManager;
@@ -99,7 +99,7 @@ class EventManagementServiceTest {
 
         @BeforeEach
         public void setUp() {
-                mockEventRepo = mock(IEventRepository.class);
+                mockEventRepo = mock(EventRepository.class);
                 mockCompanyRepo = mock(ProductionCompanyRepository.class);
                 mockTicketRepo = mock(ITicketRepository.class);
                 sessionManager = mock(SessionManager.class);

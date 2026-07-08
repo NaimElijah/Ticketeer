@@ -2,9 +2,9 @@ package com.ticketing.system.Core.Application.dto;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.ShowDate;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.ShowDate;
 
 public record EventCreationDTO(
         int companyId,

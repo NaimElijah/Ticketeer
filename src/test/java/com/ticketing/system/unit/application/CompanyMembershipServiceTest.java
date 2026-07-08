@@ -17,7 +17,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -28,7 +28,7 @@ class CompanyMembershipServiceTest {
 
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     private CompanyManagementService service;
 
     private static final int USER_ID = 7;
@@ -38,7 +38,7 @@ class CompanyMembershipServiceTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
-        eventRepository = mock(IEventRepository.class);
+        eventRepository = mock(EventRepository.class);
         service = new CompanyManagementService(
                 companyRepository,
                 userRepository,

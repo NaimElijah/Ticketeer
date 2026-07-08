@@ -33,8 +33,8 @@ import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
@@ -50,7 +50,7 @@ public class CompanyManagementServiceTest {
         private SessionManager sessionManager;
         private CompanyManagementService companyService;
         private ITicketRepository ticketRepository;
-        private IEventRepository eventRepository;
+        private EventRepository eventRepository;
         private INotificationService notificationService;
 
         private final String OWNER_TOKEN = "owner-token";
@@ -73,7 +73,7 @@ public class CompanyManagementServiceTest {
                 mockOrderReceiptRepo = mock(IOrderReceiptRepository.class);
                 sessionManager = mock(SessionManager.class);
                 ticketRepository = mock(ITicketRepository.class);
-                eventRepository = mock(IEventRepository.class);
+                eventRepository = mock(EventRepository.class);
                 notificationService = mock(INotificationService.class);
 
                 companyService = new CompanyManagementService(

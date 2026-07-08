@@ -1,4 +1,5 @@
 package com.ticketing.system.acceptance;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.Core.Application.dto.*;
@@ -6,12 +7,12 @@ import com.ticketing.system.Core.Application.interfaces.*;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
-import com.ticketing.system.Core.Application.services.EventManagementService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Domain.ActiveOrder.*;
 import com.ticketing.system.Core.Domain.Tickets.*;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.events.*;
+import com.ticketing.system.catalog.domain.*;
 import com.ticketing.system.Core.Domain.orders.*;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
@@ -36,7 +37,7 @@ import static org.mockito.Mockito.*;
 public class CheckoutServiceAcceptanceTest {
 
     private IActiveOrderRepository activeOrderRepository;
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     private ITicketRepository ticketRepository;
     private IOrderReceiptRepository orderReceiptRepository;
     private ITicketIssuer ticketIssuer;
@@ -52,7 +53,7 @@ public class CheckoutServiceAcceptanceTest {
     @Autowired private CompanyManagementService companyService;
     @Autowired private EventManagementService eventManagementService;
     private ProductionCompanyRepository companyRepository;
-    @Autowired private IEventRepository eventRepository1;
+    @Autowired private EventRepository eventRepository1;
     @Autowired private ITicketRepository ticketRepository1;
     @Autowired private IOrderReceiptRepository orderReceiptRepository1;
 
@@ -92,7 +93,7 @@ public class CheckoutServiceAcceptanceTest {
     @BeforeEach
     void setUp() {
         activeOrderRepository = mock(IActiveOrderRepository.class);
-        eventRepository = mock(IEventRepository.class);
+        eventRepository = mock(EventRepository.class);
         ticketRepository = mock(ITicketRepository.class);
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);

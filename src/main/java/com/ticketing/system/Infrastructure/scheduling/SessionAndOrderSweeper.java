@@ -19,9 +19,9 @@ import com.ticketing.system.Core.Application.interfaces.MetricType;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
@@ -56,7 +56,7 @@ public class SessionAndOrderSweeper {
 
     private final SessionRepository sessionRepository;
     private final IActiveOrderRepository activeOrderRepository;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
     private final ISystemMetrics systemMetrics;
@@ -64,7 +64,7 @@ public class SessionAndOrderSweeper {
     public SessionAndOrderSweeper(
             SessionRepository sessionRepository,
             IActiveOrderRepository activeOrderRepository,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             Clock clock,
             ApplicationEventPublisher eventPublisher,
             ISystemMetrics systemMetrics) {

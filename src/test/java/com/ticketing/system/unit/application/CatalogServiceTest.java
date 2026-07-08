@@ -24,21 +24,21 @@ import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
 import com.ticketing.system.Core.Application.dto.SearchResultDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -46,13 +46,13 @@ import com.ticketing.system.shared.exception.NullVenueMapException;
 
 import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
 import com.ticketing.system.Core.Application.dto.SeatDTO;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatedZone;
 
 class CatalogServiceTest {
 
     private SessionManager mockSessionManager;
-    private IEventRepository mockEventRepository;
+    private EventRepository mockEventRepository;
     private ProductionCompanyRepository mockCompanyRepository;
     private ITicketRepository mockTicketRepository;
     private CatalogService catalogService;
@@ -64,7 +64,7 @@ class CatalogServiceTest {
     @BeforeEach
     void setUp() {
         mockSessionManager = mock(SessionManager.class);
-        mockEventRepository = mock(IEventRepository.class);
+        mockEventRepository = mock(EventRepository.class);
         mockCompanyRepository = mock(ProductionCompanyRepository.class);
         mockTicketRepository = mock(ITicketRepository.class);
         catalogService = new CatalogService(

@@ -31,17 +31,17 @@ import com.ticketing.system.Core.Application.dto.EventUpdateDTO;
 import com.ticketing.system.Core.Application.dto.LocationDTO;
 import com.ticketing.system.Core.Application.dto.ShowDateDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Domain.events.EventStatus;
+import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
-import com.ticketing.system.Core.Application.services.EventManagementService;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.ShowDate;
+import com.ticketing.system.catalog.application.service.EventManagementService;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
@@ -59,7 +59,7 @@ class CompanyAcceptanceTest {
         @Autowired
         private EventManagementService eventManagementService;
         @Autowired
-        private IEventRepository eventRepository;
+        private EventRepository eventRepository;
         @Autowired
         private UserRepository userRepository;
 

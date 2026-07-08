@@ -35,8 +35,8 @@ import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
@@ -58,7 +58,7 @@ class SystemAdminServiceTest {
     private AdminRepository adminRepository;
     private IOrderReceiptRepository orderReceiptRepository;
     private ITicketRepository ticketRepository;
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     private ProductionCompanyRepository companyRepository;
     private UserRepository userRepository;
     private PasswordHasher passwordHasher;
@@ -72,7 +72,7 @@ class SystemAdminServiceTest {
         adminRepository = mock(AdminRepository.class);
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
         ticketRepository = mock(ITicketRepository.class);
-        eventRepository = mock(IEventRepository.class);
+        eventRepository = mock(EventRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
         passwordHasher = mock(PasswordHasher.class);

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 
 import lombok.extern.slf4j.Slf4j;
 

@@ -12,24 +12,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.Location;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.VenueMap;
-import com.ticketing.system.Core.Domain.events.EventCategory;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.VenueMap;
+import com.ticketing.system.catalog.domain.EventCategory;
 
-// Contract tests every IEventRepository implementation must satisfy. Future JPA-backed
+// Contract tests every EventRepository implementation must satisfy. Future JPA-backed
 // adapter will subclass this with its own newRepository() factory; tests are reused.
 public abstract class IEventRepositoryContractTest {
 
-    protected abstract IEventRepository newRepository();
+    protected abstract EventRepository newRepository();
 
-    private IEventRepository eventRepo;
+    private EventRepository eventRepo;
 
     // Far-future timestamps used across test events (ShowDate enforces future-only
     // times).

@@ -1,4 +1,6 @@
 package com.ticketing.system.organization.adapter.out.persistence;
+import com.ticketing.system.catalog.application.service.CatalogService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;

@@ -10,17 +10,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.StandingZone;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.support.BaseDomainTest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.ticketing.system.Core.Domain.events.ZoneType;
+import com.ticketing.system.catalog.domain.ZoneType;
 
 public class InventoryZoneTest extends BaseDomainTest {
 

@@ -25,10 +25,10 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
@@ -36,17 +36,17 @@ import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.Infrastructure.scheduling.SessionAndOrderSweeper;
 
 
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 
 class SessionAndOrderSweeperTest {
@@ -55,7 +55,7 @@ class SessionAndOrderSweeperTest {
 
     private SessionRepository sessionRepo;
     private IActiveOrderRepository orderRepo;
-    private IEventRepository eventRepo;
+    private EventRepository eventRepo;
     private Clock fixedClock;
     private ApplicationEventPublisher eventPublisher;
     private ISystemMetrics systemMetrics;
@@ -65,7 +65,7 @@ class SessionAndOrderSweeperTest {
     void setUp() {
         sessionRepo    = mock(SessionRepository.class);
         orderRepo      = mock(IActiveOrderRepository.class);
-        eventRepo      = mock(IEventRepository.class);
+        eventRepo      = mock(EventRepository.class);
         fixedClock     = Clock.fixed(T0, ZoneOffset.UTC);
         eventPublisher = mock(ApplicationEventPublisher.class);
         systemMetrics  = mock(ISystemMetrics.class);

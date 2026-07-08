@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.Core.Application.dto.CompanySummaryDTO;
 import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.Core.Application.services.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 

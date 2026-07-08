@@ -1,9 +1,10 @@
 package com.ticketing.system.organization.application.service;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
 
 import java.util.Collection;
 
-import com.ticketing.system.Core.Domain.events.Event;
+import com.ticketing.system.catalog.domain.Event;
 
 /**
  * A production company's rating is <b>derived, not stored</b>: it is the mean of its events'

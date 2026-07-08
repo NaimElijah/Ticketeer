@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
 import com.ticketing.system.Core.Application.dto.VenueLayoutDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Application.services.EventManagementService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 
 @Component

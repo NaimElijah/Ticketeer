@@ -28,14 +28,14 @@ import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
@@ -65,7 +65,7 @@ import com.ticketing.system.identity.domain.User;
 public class CheckoutService {
 
     private final IActiveOrderRepository activeOrderRepository;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final ITicketRepository ticketRepository;
     private final IOrderReceiptRepository orderReceiptRepository;
     private final ITicketIssuer ticketIssuer;
@@ -99,7 +99,7 @@ public class CheckoutService {
 
     public CheckoutService(
             IActiveOrderRepository activeOrderRepository,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             ITicketRepository ticketRepository,
             IOrderReceiptRepository orderReceiptRepository,
             ITicketIssuer ticketIssuer,

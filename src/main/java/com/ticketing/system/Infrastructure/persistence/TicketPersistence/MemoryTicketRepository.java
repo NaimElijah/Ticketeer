@@ -1,4 +1,6 @@
 package com.ticketing.system.Infrastructure.persistence.TicketPersistence;
+import com.ticketing.system.catalog.application.service.CatalogService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
 import java.util.ArrayList;

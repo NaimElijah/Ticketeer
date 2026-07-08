@@ -22,9 +22,9 @@ import com.ticketing.system.Core.Application.interfaces.MetricType;
 import com.ticketing.system.Core.Application.services.SystemAnalyticsService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.Conversation;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
@@ -44,7 +44,7 @@ class SystemAnalyticsServiceTest {
     private ISystemMetrics metrics;
     private IOrderReceiptRepository orderReceiptRepository;
     private ProductionCompanyRepository companyRepository;
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     private IConversationRepository conversationRepository;
     private SystemAnalyticsService service;
 
@@ -53,7 +53,7 @@ class SystemAnalyticsServiceTest {
         metrics = mock(ISystemMetrics.class);
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
-        eventRepository = mock(IEventRepository.class);
+        eventRepository = mock(EventRepository.class);
         conversationRepository = mock(IConversationRepository.class);
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new SystemAnalyticsService(metrics, orderReceiptRepository, companyRepository,

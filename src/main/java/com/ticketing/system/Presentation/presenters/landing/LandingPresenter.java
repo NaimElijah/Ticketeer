@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 
 /**
  * MVP presenter for {@code LandingView} (V2-LANDING-01). Holds no Vaadin imports so the

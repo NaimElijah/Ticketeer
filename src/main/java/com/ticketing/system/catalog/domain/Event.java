@@ -1,5 +1,6 @@
 
-package com.ticketing.system.Core.Domain.events;
+package com.ticketing.system.catalog.domain;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -516,7 +517,7 @@ public class Event implements InvariantChecked {
 
 
     // UC-19 — partial update of mutable metadata. Only allowed in DRAFT or SCHEDULED state.
-    // Caller must hold the event lock (IEventRepository.lockForUpdate) before calling this method —
+    // Caller must hold the event lock (EventRepository.lockForUpdate) before calling this method —
     // the mutated fields are non-final, so concurrent reads depend on the service's lock discipline.
     // Each argument is null-coalesced: null means "leave this field alone". The service is
     // responsible for converting LocationDTO/ShowDateDTO into the domain Location/ShowDate passed here.

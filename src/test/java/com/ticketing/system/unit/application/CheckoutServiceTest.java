@@ -50,20 +50,20 @@ import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
@@ -80,7 +80,7 @@ import com.ticketing.system.Core.Domain.policies.purchase.OrPurchasePolicy;
 class CheckoutServiceTest {
 
     private IActiveOrderRepository mockActiveOrderRepo;
-    private IEventRepository mockEventRepo;
+    private EventRepository mockEventRepo;
     private ITicketRepository mockTicketRepo;
     private IOrderReceiptRepository mockOrderReceiptRepo;
     private ITicketIssuer mockTicketIssuer;
@@ -126,7 +126,7 @@ class CheckoutServiceTest {
     @BeforeEach
     void setUp() {
         mockActiveOrderRepo = mock(IActiveOrderRepository.class);
-        mockEventRepo = mock(IEventRepository.class);
+        mockEventRepo = mock(EventRepository.class);
         mockTicketRepo = mock(ITicketRepository.class);
         
         mockOrderReceiptRepo = mock(IOrderReceiptRepository.class);

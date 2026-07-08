@@ -11,13 +11,13 @@ import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 
@@ -44,7 +44,7 @@ public class ReservationAcceptanceTests {
 
     private ReservationService reservationService;
 
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     private IActiveOrderRepository activeOrderRepository;
     private SessionManager sessionManager;
     private INotificationService notificationService;
@@ -55,7 +55,7 @@ public class ReservationAcceptanceTests {
 
     @BeforeEach
     void setUp() {
-        eventRepository = mock(IEventRepository.class);
+        eventRepository = mock(EventRepository.class);
         activeOrderRepository = mock(IActiveOrderRepository.class);
         sessionManager = mock(SessionManager.class);
         notificationService = mock(INotificationService.class);
