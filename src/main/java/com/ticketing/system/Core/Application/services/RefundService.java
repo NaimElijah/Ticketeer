@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import java.util.ArrayList;
@@ -15,9 +16,9 @@ import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -51,7 +52,7 @@ public class RefundService {
     private final IOrderReceiptRepository orderReceiptRepository;
     private final ITicketRepository ticketRepository;
     private final IPaymentGateway paymentGateway;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     // Programmatic transaction for the refund critical section: it must hold a real row lock on the
     // receipt (SELECT … FOR UPDATE) across the eligibility check + gateway refund + receipt flip so a
     // double-click can't refund twice (#410). The gateway-first call runs inside it by design.
@@ -62,7 +63,7 @@ public class RefundService {
             IOrderReceiptRepository orderReceiptRepository,
             ITicketRepository ticketRepository,
             IPaymentGateway paymentGateway,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             PlatformTransactionManager transactionManager) {
         this.authenticationService = authenticationService;
         this.orderReceiptRepository = orderReceiptRepository;

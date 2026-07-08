@@ -17,16 +17,16 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
@@ -52,12 +52,12 @@ class EventCompletionSweeperTest {
     // Derived from SHOW_END (not a fresh now()) so the ordering BEFORE_SHOW < SHOW_END is explicit and clock-stable.
     private static final LocalDateTime BEFORE_SHOW = SHOW_END.minusDays(1);
 
-    private IEventRepository eventRepo;
+    private EventRepository eventRepo;
     private EventCompletionSweeper sweeper;
 
     @BeforeEach
     void setUp() {
-        eventRepo = mock(IEventRepository.class);
+        eventRepo = mock(EventRepository.class);
         Clock fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
         sweeper = new EventCompletionSweeper(eventRepo, fixedClock);
 

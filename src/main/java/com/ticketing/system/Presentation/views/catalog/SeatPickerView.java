@@ -3,7 +3,7 @@ package com.ticketing.system.Presentation.views.catalog;
 import java.util.List;
 
 import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
-import com.ticketing.system.Core.Domain.events.ZoneType;
+import com.ticketing.system.catalog.domain.ZoneType;
 import com.ticketing.system.Presentation.components.Toasts;
 import com.ticketing.system.Presentation.components.kit.Lk;
 import com.ticketing.system.Presentation.components.kit.LkBanner;

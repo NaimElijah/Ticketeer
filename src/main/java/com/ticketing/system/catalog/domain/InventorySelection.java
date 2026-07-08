@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.events;
+package com.ticketing.system.catalog.domain;
 
 import java.util.ArrayList;
 import java.util.HashSet;

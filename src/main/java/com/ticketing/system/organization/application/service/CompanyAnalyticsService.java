@@ -17,7 +17,7 @@ import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
@@ -42,7 +42,7 @@ public class CompanyAnalyticsService {
 
     private static final int WINDOW_DAYS = 30;
 
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final IOrderReceiptRepository orderReceiptRepository;
     private final IConversationRepository conversationRepository;
     private final ITicketRepository ticketRepository;
@@ -50,7 +50,7 @@ public class CompanyAnalyticsService {
     private final UserRepository userRepository;
 
     public CompanyAnalyticsService(
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             IOrderReceiptRepository orderReceiptRepository,
             IConversationRepository conversationRepository,
             ITicketRepository ticketRepository,

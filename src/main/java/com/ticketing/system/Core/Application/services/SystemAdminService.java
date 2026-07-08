@@ -18,7 +18,7 @@ import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
@@ -44,7 +44,7 @@ public class SystemAdminService {
     private final AdminRepository adminRepository;
     private final IOrderReceiptRepository orderReceiptRepository;
     private final ITicketRepository ticketRepository;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final List<IPaymentGateway> paymentGateways;
@@ -70,7 +70,7 @@ public class SystemAdminService {
             AdminRepository adminRepository,
             IOrderReceiptRepository orderReceiptRepository,
             ITicketRepository ticketRepository,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
             List<IPaymentGateway> paymentGateways,

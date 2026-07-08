@@ -10,25 +10,25 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.events.EventCategory;
+import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.support.BaseDomainTest;
 
 import java.time.LocalDateTime;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
 
 // Unit tests for the Event aggregate (Event + VenueMap + InventoryZone + ShowDate + policies).
 class EventTest extends BaseDomainTest {

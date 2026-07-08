@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.events;
+package com.ticketing.system.catalog.domain;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;

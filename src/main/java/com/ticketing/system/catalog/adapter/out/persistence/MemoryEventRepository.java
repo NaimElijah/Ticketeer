@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.EventPersistence;
+package com.ticketing.system.catalog.adapter.out.persistence;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryReadWriteLocks;
 import java.time.LocalDate;
@@ -8,10 +8,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.EventCategory;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 
 import org.springframework.context.annotation.Profile;
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 @Profile("!jpa")
-public class MemoryEventRepository implements IEventRepository {
+public class MemoryEventRepository implements EventRepository {
 
     private final ConcurrentHashMap<Integer, Event> events = new ConcurrentHashMap<>();
     private final AtomicInteger idSequence = new AtomicInteger(1);

@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.SpringDataActiveOrderRepository;
 import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.SpringDataConversationRepository;
-import com.ticketing.system.Infrastructure.persistence.EventPersistence.SpringDataEventRepository;
+import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.SpringDataNotificationRepository;
 import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.SpringDataOrderReceiptRepository;
 import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;

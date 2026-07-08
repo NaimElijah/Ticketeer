@@ -35,9 +35,9 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.users.AppointmentStatus;
 import com.ticketing.system.Core.Domain.users.CompanyAppointment;
@@ -71,12 +71,12 @@ public class CompanyManagementService {
     private final IOrderReceiptRepository orderReceiptRepository;
     private final SessionManager sessionManager;
     private final ITicketRepository ticketRepository;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final INotificationService notificationService;
 
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
             IOrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
-            ITicketRepository ticketRepository, IEventRepository eventRepository,
+            ITicketRepository ticketRepository, EventRepository eventRepository,
             INotificationService notificationService) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;

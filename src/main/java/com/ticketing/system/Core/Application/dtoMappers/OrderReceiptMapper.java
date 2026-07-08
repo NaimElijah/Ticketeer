@@ -13,9 +13,9 @@ import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
 import com.ticketing.system.Core.Domain.orders.TransactionRecord;
@@ -36,7 +36,7 @@ public class OrderReceiptMapper {
     /** Full receipt → record (member history / unfiltered global history). */
     public PurchaseHistoryDTO.PurchaseRecordDTO toPurchaseRecordDTO(OrderReceipt receipt,
             ITicketRepository ticketRepository,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receipt.getId());
@@ -50,7 +50,7 @@ public class OrderReceiptMapper {
      */
     public PurchaseHistoryDTO.PurchaseRecordDTO toPurchaseRecordDTO(OrderReceipt receipt,
             List<Ticket> selectedTickets,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         return map(receipt, safeList(selectedTickets), true, false, eventRepository, companyRepository, userRepository);
@@ -60,7 +60,7 @@ public class OrderReceiptMapper {
     public PurchaseHistoryDTO.PurchaseRecordDTO toFilteredPurchaseRecordDTO(OrderReceipt receipt,
             Set<Integer> selectedEventIds,
             ITicketRepository ticketRepository,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receipt.getId());
@@ -86,7 +86,7 @@ public class OrderReceiptMapper {
     // Actual mapping work, with options to include only selected tickets and to include/exclude transactions.
     private PurchaseHistoryDTO.PurchaseRecordDTO map(OrderReceipt receipt, List<Ticket> tickets,
             boolean selectedTicketsOnly, boolean includeTransactions,
-            IEventRepository eventRepository, ProductionCompanyRepository companyRepository,
+            EventRepository eventRepository, ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         Map<Integer, Ticket> ticketsById = byId(tickets);
 
@@ -130,7 +130,7 @@ public class OrderReceiptMapper {
     }
 
     private PurchaseHistoryDTO.TicketRecordDTO toTicketRecordDTO(OrderReceipt receipt, ReceiptLine line,
-            Map<Integer, Ticket> ticketsById, IEventRepository eventRepository,
+            Map<Integer, Ticket> ticketsById, EventRepository eventRepository,
             ProductionCompanyRepository companyRepository) {
         Ticket ticket = ticketsById.get(line.getTicketId());
         TicketStatus currentStatus = ticket != null ? ticket.getStatus() : fallbackStatus(receipt);
@@ -169,7 +169,7 @@ public class OrderReceiptMapper {
 
     // ---- name resolution (all null-safe; a null repo yields a null name) ----
 
-    private static Event findEvent(IEventRepository eventRepository, int eventId) {
+    private static Event findEvent(EventRepository eventRepository, int eventId) {
         if (eventRepository == null) return null;
         try {
             return eventRepository.findById(eventId);

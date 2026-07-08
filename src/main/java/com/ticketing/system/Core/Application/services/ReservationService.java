@@ -18,18 +18,18 @@ import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseContext;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseStage;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
+import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 
@@ -37,7 +37,7 @@ import com.ticketing.system.shared.exception.MarketNotOpenException;
 @Service
 @Slf4j
 public class ReservationService {
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final IActiveOrderRepository activeOrderRepository;
     private final SessionManager iSessionManager;
     private final INotificationService notificationService;
@@ -50,7 +50,7 @@ public class ReservationService {
     private int reservationTimeoutMinutes;
 
     public ReservationService(
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             IActiveOrderRepository activeOrderRepository,
             SessionManager iSessionManager,
             INotificationService notificationService,

@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.events;
+package com.ticketing.system.catalog.domain;
 
 // Lifecycle states for an Event (UC-4 / UC-19 / UC-32 design walkthrough).
 // The transitions are:

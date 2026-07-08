@@ -109,7 +109,7 @@ public class LandingView extends LkPage {
 
     // ---- poster field mapping ----
 
-    /** Map the domain {@link com.ticketing.system.Core.Domain.events.EventCategory} name to a
+    /** Map the domain {@link com.ticketing.system.catalog.domain.EventCategory} name to a
      *  BzPoster category key (drives its gradient + chip label). */
     private static String posterCategory(String category) {
         return switch (category == null ? "" : category.toUpperCase(Locale.ROOT)) {

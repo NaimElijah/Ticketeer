@@ -4,16 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EventNotFoundException;
-import com.ticketing.system.Infrastructure.persistence.EventPersistence.MemoryEventRepository;
+import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
 
 public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
 
     @Override
-    protected IEventRepository newRepository() {
+    protected EventRepository newRepository() {
         return new MemoryEventRepository();
     }
 
@@ -23,7 +23,7 @@ public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
 
     @Test
     void givenExistingEvent_whenDeletedWithoutHoldingWriteLock_thenThrows() {
-        IEventRepository repo = newRepository();
+        EventRepository repo = newRepository();
         repo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
 
         assertThrows(IllegalStateException.class, () -> repo.delete(1));
@@ -31,7 +31,7 @@ public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
 
     @Test
     void givenExistingEvent_whenDeletedHoldingWriteLock_thenEventIsRemoved() {
-        IEventRepository repo = newRepository();
+        EventRepository repo = newRepository();
         repo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
 
         repo.lockForUpdate(1);

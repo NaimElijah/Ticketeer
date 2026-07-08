@@ -1,4 +1,5 @@
-package com.ticketing.system.Core.Domain.events;
+package com.ticketing.system.catalog.domain;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 
 import java.util.List;
 
@@ -20,7 +21,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
 // V3: an owned @Entity of Event (mapped via Event's @OneToOne). Assigned int @Id (minted by
-// IEventRepository.nextVenueMapId()). location is an @Embedded value (nullable). The polymorphic
+// EventRepository.nextVenueMapId()). location is an @Embedded value (nullable). The polymorphic
 // inventoryZones are owned children (@OneToMany cascade-all + orphan-removal) loaded eagerly. A
 // protected no-arg ctor lets Hibernate hydrate.
 @Entity

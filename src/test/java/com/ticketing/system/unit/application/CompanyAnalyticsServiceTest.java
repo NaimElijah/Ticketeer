@@ -18,8 +18,8 @@ import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.Conversation;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
@@ -36,7 +36,7 @@ class CompanyAnalyticsServiceTest {
     private static final int EVENT_B = 101;
     private static final int OTHER_COMPANY_EVENT = 999;
 
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     private IOrderReceiptRepository orderReceiptRepository;
     private IConversationRepository conversationRepository;
     private  ITicketRepository ticketRepository;
@@ -46,7 +46,7 @@ class CompanyAnalyticsServiceTest {
 
     @BeforeEach
     void setUp() {
-        eventRepository = mock(IEventRepository.class);
+        eventRepository = mock(EventRepository.class);
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
         conversationRepository = mock(IConversationRepository.class);
         ticketRepository = mock(ITicketRepository.class);

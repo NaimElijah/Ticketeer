@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.EventPersistence;
+package com.ticketing.system.catalog.adapter.out.persistence;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,8 +6,8 @@ import java.util.List;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;

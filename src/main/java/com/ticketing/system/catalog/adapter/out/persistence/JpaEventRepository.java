@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.EventPersistence;
+package com.ticketing.system.catalog.adapter.out.persistence;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -9,15 +9,15 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 
 /**
- * JPA-backed {@link IEventRepository} — active only in the {@code jpa} run/dev profile. Adapts the
+ * JPA-backed {@link EventRepository} — active only in the {@code jpa} run/dev profile. Adapts the
  * domain port onto Spring Data ({@link SpringDataEventRepository}); the application layer depends only
- * on {@code IEventRepository}, never on Spring Data. The owned VenueMap / zone hierarchy / seats /
+ * on {@code EventRepository}, never on Spring Data. The owned VenueMap / zone hierarchy / seats /
  * element collections persist by cascade with the event.
  *
  * <p>Locking is OPTIMISTIC and fine-grained: {@code lockForUpdate}/{@code lockForBuyerOperation} and
@@ -32,7 +32,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
  */
 @Repository
 @Profile("jpa")
-public class JpaEventRepository implements IEventRepository {
+public class JpaEventRepository implements EventRepository {
 
     private final SpringDataEventRepository data;
     private final AtomicInteger eventIdSequence = new AtomicInteger(0);

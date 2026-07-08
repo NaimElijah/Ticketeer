@@ -69,8 +69,8 @@ public class Ticket implements InvariantChecked {
 
     /**
      * Seated-zone ticket constructor — {@code seatLabel} is the label of the
-     * {@link com.ticketing.system.Core.Domain.events.Seat} this ticket refers
-     * to inside its {@link com.ticketing.system.Core.Domain.events.SeatedZone}.
+     * {@link com.ticketing.system.catalog.domain.Seat} this ticket refers
+     * to inside its {@link com.ticketing.system.catalog.domain.SeatedZone}.
      * Pass {@code null} for standing-zone tickets (or use the 5-arg form).
      */
     public Ticket(int eventId, int zoneid, int orderReceiptId, String seatLabel, double price, int ticketId, String barcodeValue) {

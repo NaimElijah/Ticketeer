@@ -2,7 +2,7 @@ package com.ticketing.system.Presentation.views.company;
 
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Domain.events.EventStatus;
+import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.Presentation.components.Toasts;
 import com.ticketing.system.Presentation.components.kit.Lk;
 import com.ticketing.system.Presentation.components.kit.LkBtn;

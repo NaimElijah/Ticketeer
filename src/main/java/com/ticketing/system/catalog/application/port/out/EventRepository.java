@@ -1,4 +1,6 @@
-package com.ticketing.system.Core.Domain.events;
+package com.ticketing.system.catalog.application.port.out;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.Event;
 
 import java.util.List;
 
@@ -6,7 +8,7 @@ import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the Event aggregate.
-public interface IEventRepository extends IRepository<Event, Integer> {
+public interface EventRepository extends IRepository<Event, Integer> {
 
     Event findById(int eventId);
 

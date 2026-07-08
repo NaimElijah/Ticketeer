@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.events;
+package com.ticketing.system.catalog.domain;
 
 public enum ZoneType {
     STANDING,

@@ -5,9 +5,9 @@ import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
 import com.ticketing.system.Core.Application.dto.LocationDTO;
 import com.ticketing.system.Core.Application.dto.SeatDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 
 import java.util.List;
 

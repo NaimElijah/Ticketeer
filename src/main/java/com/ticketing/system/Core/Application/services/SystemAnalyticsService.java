@@ -16,8 +16,8 @@ import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
@@ -46,7 +46,7 @@ public class SystemAnalyticsService {
     private final ISystemMetrics metrics;
     private final IOrderReceiptRepository orderReceiptRepository;
     private final ProductionCompanyRepository companyRepository;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final IConversationRepository conversationRepository;
     private final Clock clock;
     private final int windowMinutes;
@@ -55,7 +55,7 @@ public class SystemAnalyticsService {
             ISystemMetrics metrics,
             IOrderReceiptRepository orderReceiptRepository,
             ProductionCompanyRepository companyRepository,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             IConversationRepository conversationRepository,
             Clock clock,
             @Value("${analytics.rate-window-minutes:5}") int windowMinutes) {

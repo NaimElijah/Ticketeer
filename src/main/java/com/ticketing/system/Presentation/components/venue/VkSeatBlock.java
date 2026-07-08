@@ -1,6 +1,6 @@
 package com.ticketing.system.Presentation.components.venue;
 
-import com.ticketing.system.Core.Domain.events.SeatLabels;
+import com.ticketing.system.catalog.domain.SeatLabels;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 

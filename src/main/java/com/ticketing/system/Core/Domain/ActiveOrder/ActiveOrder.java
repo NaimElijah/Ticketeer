@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.CollectionTable;
@@ -72,9 +72,9 @@ public class ActiveOrder implements InvariantChecked {
     @Transient
     private final Object itemsLock = new Object();
     /**
-     * Stable identity assigned at construction. Passed to {@link com.ticketing.system.Core.Domain.events.InventorySelection}
-     * so that {@link com.ticketing.system.Core.Domain.events.StandingZone} and
-     * {@link com.ticketing.system.Core.Domain.events.SeatedZone} can record which
+     * Stable identity assigned at construction. Passed to {@link com.ticketing.system.catalog.domain.InventorySelection}
+     * so that {@link com.ticketing.system.catalog.domain.StandingZone} and
+     * {@link com.ticketing.system.catalog.domain.SeatedZone} can record which
      * order holds each reservation. Enables the 3-phase checkout to verify ownership
      * in checkout's Phase 3 without holding event locks during checkout's Phase 2 (payment/issuance).
      */
@@ -477,7 +477,7 @@ public class ActiveOrder implements InvariantChecked {
 
     /**
      * Returns the stable key that identifies this order's inventory holds.
-     * Passed into {@link com.ticketing.system.Core.Domain.events.InventorySelection}
+     * Passed into {@link com.ticketing.system.catalog.domain.InventorySelection}
      * on every reserve/release/confirmSale call so zones can enforce ownership.
      */
     public String getOrderKey() {

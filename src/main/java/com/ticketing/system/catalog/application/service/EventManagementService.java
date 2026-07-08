@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.catalog.application.service;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,24 +40,24 @@ import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.OrPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
@@ -70,7 +70,7 @@ import com.ticketing.system.Core.Domain.policies.purchase.MinTicketsPurchasePoli
 @Slf4j
 public class EventManagementService {
 
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final ProductionCompanyRepository companyRepository;
     private final ITicketRepository ticketRepository;
     private final SessionManager sessionManager;
@@ -81,7 +81,7 @@ public class EventManagementService {
     private int currentVenueMapIdCounter;
 
     public EventManagementService(
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             ITicketRepository ticketRepository,
             SessionManager sessionManager,

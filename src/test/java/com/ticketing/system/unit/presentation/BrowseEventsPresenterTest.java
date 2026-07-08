@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.Presentation.presenters.catalog.BrowseEventsPresenter;
 
 class BrowseEventsPresenterTest {

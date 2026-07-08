@@ -2,10 +2,10 @@ package com.ticketing.system.Core.Application.dto;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.ShowDate;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.ShowDate;
 
 // Full Event detail — used when the catalog summary (EventSummaryDTO) isn't enough.
 // UC-8 (alongside VenueMapDTO), UC-19 (Owner viewing their event for edit).

@@ -33,15 +33,15 @@ import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO.ZoneConfigDTO
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
-import com.ticketing.system.Core.Application.services.EventManagementService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.ShowDate;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.exception.PolicyViolationException;
 
 /**

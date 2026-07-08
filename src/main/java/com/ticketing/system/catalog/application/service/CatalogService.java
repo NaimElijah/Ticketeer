@@ -1,4 +1,5 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.catalog.application.service;
+import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.organization.application.service.CompanyRatings;
 
 import java.time.LocalDateTime;
@@ -14,9 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import com.ticketing.system.shared.exception.*;
 
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.ShowDate;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.Core.Application.dto.CompanySummaryDTO;
 import com.ticketing.system.Core.Application.dto.EventDetailDTO;
@@ -30,7 +31,7 @@ import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 
 // Read-side service for guest- and visitor-facing catalog queries.
 // Owns UC-3 (Browse Events as Guest), UC-7 (Browse + Search Catalogs), UC-8 (View Venue Map + Inventory).
@@ -45,13 +46,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class CatalogService {
 
     private final SessionManager sessionManager;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final ProductionCompanyRepository productionCompanyRepository;
     private final ITicketRepository ticketRepository;
 
     public CatalogService(
             SessionManager sessionManager,
-            IEventRepository eventRepository,
+            EventRepository eventRepository,
             ProductionCompanyRepository productionCompanyRepository,
             ITicketRepository ticketRepository
     ) {

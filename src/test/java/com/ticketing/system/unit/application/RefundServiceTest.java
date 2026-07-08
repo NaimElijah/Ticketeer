@@ -28,8 +28,8 @@ import com.ticketing.system.Core.Application.services.RefundService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -49,7 +49,7 @@ class RefundServiceTest {
     @Mock IOrderReceiptRepository orderReceiptRepository;
     @Mock ITicketRepository ticketRepository;
     @Mock IPaymentGateway paymentGateway;
-    @Mock IEventRepository eventRepository;
+    @Mock EventRepository eventRepository;
     @Mock Ticket ticket;
     @Mock Event event;
 
@@ -252,7 +252,7 @@ class RefundServiceTest {
         Mockito.when(auth.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         ITicketRepository ticketRepo = Mockito.mock(ITicketRepository.class);
         Mockito.when(ticketRepo.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of());
-        IEventRepository eventRepo = Mockito.mock(IEventRepository.class);
+        EventRepository eventRepo = Mockito.mock(EventRepository.class);
 
         RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, eventRepo, TestTransactions.noOpManager());
 

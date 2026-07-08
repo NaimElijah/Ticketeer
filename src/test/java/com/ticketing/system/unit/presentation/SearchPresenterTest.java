@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.SearchResultDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
+import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.Presentation.presenters.catalog.SearchPresenter;
 
 class SearchPresenterTest {

@@ -26,21 +26,21 @@ import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.SpringDataActiveOrderRepository;
-import com.ticketing.system.Infrastructure.persistence.EventPersistence.SpringDataEventRepository;
+import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 
 /**
@@ -76,7 +76,7 @@ class ReservationConcurrencyTest {
     @Autowired
     private ReservationService reservationService;
     @Autowired
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     @Autowired
     private ProductionCompanyRepository companyRepository;
 

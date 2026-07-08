@@ -19,16 +19,16 @@ import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
@@ -42,7 +42,7 @@ class SystemIntegrityVerifierTest {
 
     private final UserRepository userRepository = mock(UserRepository.class);
     private final ProductionCompanyRepository companyRepository = mock(ProductionCompanyRepository.class);
-    private final IEventRepository eventRepository = mock(IEventRepository.class);
+    private final EventRepository eventRepository = mock(EventRepository.class);
     private final IActiveOrderRepository activeOrderRepository = mock(IActiveOrderRepository.class);
     private final SystemIntegrityVerifier verifier = new SystemIntegrityVerifier(
             userRepository, companyRepository, eventRepository, activeOrderRepository);

@@ -16,9 +16,9 @@ import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.InvariantChecked;
@@ -81,12 +81,12 @@ public class SystemIntegrityVerifier {
 
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final IActiveOrderRepository activeOrderRepository;
 
     public SystemIntegrityVerifier(UserRepository userRepository,
                                    ProductionCompanyRepository companyRepository,
-                                   IEventRepository eventRepository,
+                                   EventRepository eventRepository,
                                    IActiveOrderRepository activeOrderRepository) {
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;

@@ -9,9 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 
 /**
@@ -30,10 +30,10 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 @Slf4j
 public class EventCompletionSweeper {
 
-    private final IEventRepository eventRepository;
+    private final EventRepository eventRepository;
     private final Clock clock;
 
-    public EventCompletionSweeper(IEventRepository eventRepository, Clock clock) {
+    public EventCompletionSweeper(EventRepository eventRepository, Clock clock) {
         this.eventRepository = eventRepository;
         this.clock = clock;
     }

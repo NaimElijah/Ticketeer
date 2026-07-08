@@ -13,24 +13,24 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicyJsonConverter;
-import com.ticketing.system.Infrastructure.persistence.EventPersistence.JpaEventRepository;
-import com.ticketing.system.Infrastructure.persistence.EventPersistence.SpringDataEventRepository;
+import com.ticketing.system.catalog.adapter.out.persistence.JpaEventRepository;
+import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 
 /**
  * Runs the {@link IEventRepositoryContractTest} suite (incl. all search filters) against the JPA
@@ -56,7 +56,7 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     }
 
     @Override
-    protected IEventRepository newRepository() {
+    protected EventRepository newRepository() {
         return repository;
     }
 
