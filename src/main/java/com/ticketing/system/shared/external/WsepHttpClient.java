@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.external;
+package com.ticketing.system.shared.external;
 
 import java.io.IOException;
 import java.net.URI;

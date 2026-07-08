@@ -4,7 +4,7 @@ import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.identity.domain.Admin;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

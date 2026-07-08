@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.external;
+package com.ticketing.system.shared.external;
 
 /**
  * Masks sensitive values before they reach a log sink.

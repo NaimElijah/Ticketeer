@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.external;
+package com.ticketing.system.shared.external;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

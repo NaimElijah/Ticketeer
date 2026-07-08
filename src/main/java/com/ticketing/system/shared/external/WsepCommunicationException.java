@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.external;
+package com.ticketing.system.shared.external;
 
 /**
  * Signals that a call to the WSEP endpoint could not complete at the transport

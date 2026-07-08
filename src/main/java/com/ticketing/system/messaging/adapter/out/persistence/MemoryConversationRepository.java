@@ -1,7 +1,7 @@
 package com.ticketing.system.messaging.adapter.out.persistence;
 import com.ticketing.system.messaging.application.service.MessagingService;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

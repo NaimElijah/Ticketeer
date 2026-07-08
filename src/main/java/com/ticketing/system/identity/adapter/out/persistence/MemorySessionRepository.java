@@ -1,6 +1,6 @@
 package com.ticketing.system.identity.adapter.out.persistence;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;

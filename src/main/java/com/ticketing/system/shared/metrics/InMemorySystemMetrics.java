@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.metrics;
+package com.ticketing.system.shared.metrics;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -11,8 +11,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.interfaces.MetricType;
+import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
 
 import lombok.extern.slf4j.Slf4j;
 

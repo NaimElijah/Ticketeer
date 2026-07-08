@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Application.interfaces;
+package com.ticketing.system.shared.metrics;
 
 /**
  * The platform-activity events tracked for the System Analytics dashboard

@@ -1,7 +1,7 @@
 package com.ticketing.system.identity.adapter.out.persistence;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

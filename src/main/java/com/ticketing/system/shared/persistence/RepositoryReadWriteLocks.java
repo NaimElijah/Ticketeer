@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence;
+package com.ticketing.system.shared.persistence;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

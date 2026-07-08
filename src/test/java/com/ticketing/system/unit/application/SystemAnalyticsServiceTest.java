@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
 import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
-import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.interfaces.MetricType;
+import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;

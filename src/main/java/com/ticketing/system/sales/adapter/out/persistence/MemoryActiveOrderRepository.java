@@ -1,6 +1,6 @@
 package com.ticketing.system.sales.adapter.out.persistence;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

@@ -1,6 +1,6 @@
 package com.ticketing.system.catalog.adapter.out.persistence;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryReadWriteLocks;
+import com.ticketing.system.shared.persistence.RepositoryReadWriteLocks;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;

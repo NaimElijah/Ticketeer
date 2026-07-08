@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence;
+package com.ticketing.system.shared.persistence;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
