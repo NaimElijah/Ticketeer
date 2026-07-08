@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.AdminPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
 import java.util.ArrayList;
@@ -9,18 +9,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 
 /**
- * In-memory {@link IAdminRepository} for V1.
+ * In-memory {@link AdminRepository} for V1.
  *
  * <p>Lets Spring wire SystemAdminService. A future JPA-backed adapter
  * replaces this class without touching the application layer.
  */
 @Repository
 @Profile("!jpa")
-public class MemoryAdminRepository implements IAdminRepository {
+public class MemoryAdminRepository implements AdminRepository {
 
     private final Map<Integer, Admin> adminsById = new ConcurrentHashMap<>();
     private final RepositoryLocks<Integer> locks = new RepositoryLocks<>();

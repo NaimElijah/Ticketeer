@@ -1,4 +1,5 @@
 package com.ticketing.system.integration;
+import com.ticketing.system.identity.domain.Session;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,10 +10,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
 
 /**
  * Regression test for the admin "session expired" bug: {@code AuthenticationService.signInAsAdmin}
@@ -22,7 +23,7 @@ import com.ticketing.system.Core.Domain.users.ISessionRepository;
  * then failed validation as "session not found", stranding admins on every admin page.
  *
  * <p>This runs under {@code {"test", "jpa"}} on purpose: {@code jpa} swaps in the real
- * {@link com.ticketing.system.Infrastructure.persistence.SessionPersistence.JpaSessionRepository}
+ * {@link com.ticketing.system.identity.adapter.out.persistence.JpaSessionRepository}
  * (the in-memory repo used by the rest of the suite has no flush semantics, which is exactly why
  * the bug slipped through), while {@code test} keeps the in-process external-service stubs and the
  * H2 datasource. Fails before the {@code @Transactional} fix, passes after.
@@ -36,9 +37,9 @@ class AdminSessionPersistenceJpaTest {
     @Autowired
     private SystemAdminService systemAdminService;
     @Autowired
-    private ISessionManager sessionManager;
+    private SessionManager sessionManager;
     @Autowired
-    private ISessionRepository sessionRepository;
+    private SessionRepository sessionRepository;
 
     @Test
     void adminSignIn_persistsSessionRow_soTheTokenValidates() {

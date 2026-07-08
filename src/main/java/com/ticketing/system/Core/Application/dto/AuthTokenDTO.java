@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 
 // Returned by AuthenticationService.login() (UC-12) and signInAsAdmin() (#290).
 // 'expiresAt' is epoch millis to keep the DTO primitive-only.

@@ -1,4 +1,5 @@
 package com.ticketing.system.Presentation.components.messaging;
+import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.Presentation.components.kit.LkIcon;
 import com.vaadin.flow.component.html.Div;

@@ -32,15 +32,15 @@ import com.ticketing.system.Core.Domain.events.VenueMap;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 
 class SystemIntegrityVerifierTest {
 
     private static final LocalDateTime FUTURE_START = LocalDateTime.of(2099, 6, 1, 18, 0);
     private static final LocalDateTime FUTURE_END = LocalDateTime.of(2099, 6, 1, 22, 0);
 
-    private final IUserRepository userRepository = mock(IUserRepository.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
     private final IProductionCompanyRepository companyRepository = mock(IProductionCompanyRepository.class);
     private final IEventRepository eventRepository = mock(IEventRepository.class);
     private final IActiveOrderRepository activeOrderRepository = mock(IActiveOrderRepository.class);

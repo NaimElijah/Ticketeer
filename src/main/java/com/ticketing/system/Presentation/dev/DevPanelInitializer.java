@@ -1,6 +1,6 @@
 package com.ticketing.system.Presentation.dev;
 
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Presentation.security.SignOutFlow;
 import com.vaadin.flow.server.ServiceInitEvent;

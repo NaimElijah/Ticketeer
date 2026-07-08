@@ -1,7 +1,7 @@
 package com.ticketing.system.Presentation.presenters.auth;
 
 import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.Presentation.support.ServiceErrors;

@@ -1,16 +1,16 @@
-package com.ticketing.system.Infrastructure.persistence.AdminPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
 import java.util.List;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 
 /**
- * JPA-backed {@link IAdminRepository} — active only in the {@code jpa} run/dev
+ * JPA-backed {@link AdminRepository} — active only in the {@code jpa} run/dev
  * profile. Adapts the domain port onto Spring Data ({@link SpringDataAdminRepository});
- * the application layer depends only on {@code IAdminRepository}, never on Spring Data.
+ * the application layer depends only on {@code AdminRepository}, never on Spring Data.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrent writes are guarded by
  * {@code Admin}'s {@code @Version} optimistic lock within the surrounding transaction
@@ -19,7 +19,7 @@ import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
  */
 @Repository
 @Profile("jpa")
-public class JpaAdminRepository implements IAdminRepository {
+public class JpaAdminRepository implements AdminRepository {
 
     private final SpringDataAdminRepository data;
 

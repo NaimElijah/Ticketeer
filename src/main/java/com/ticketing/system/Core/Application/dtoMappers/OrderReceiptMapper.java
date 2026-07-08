@@ -19,8 +19,8 @@ import com.ticketing.system.Core.Domain.events.InventoryZone;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
 import com.ticketing.system.Core.Domain.orders.TransactionRecord;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 
 /**
  * Maps {@link OrderReceipt} to {@link PurchaseHistoryDTO} read models.
@@ -38,7 +38,7 @@ public class OrderReceiptMapper {
             ITicketRepository ticketRepository,
             IEventRepository eventRepository,
             IProductionCompanyRepository companyRepository,
-            IUserRepository userRepository) {
+            UserRepository userRepository) {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receipt.getId());
         return map(receipt, safeList(tickets), false, true, eventRepository, companyRepository, userRepository);
     }
@@ -52,7 +52,7 @@ public class OrderReceiptMapper {
             List<Ticket> selectedTickets,
             IEventRepository eventRepository,
             IProductionCompanyRepository companyRepository,
-            IUserRepository userRepository) {
+            UserRepository userRepository) {
         return map(receipt, safeList(selectedTickets), true, false, eventRepository, companyRepository, userRepository);
     }
 
@@ -62,7 +62,7 @@ public class OrderReceiptMapper {
             ITicketRepository ticketRepository,
             IEventRepository eventRepository,
             IProductionCompanyRepository companyRepository,
-            IUserRepository userRepository) {
+            UserRepository userRepository) {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receipt.getId());
         Map<Integer, Ticket> ticketsById = byId(safeList(tickets));
 
@@ -87,7 +87,7 @@ public class OrderReceiptMapper {
     private PurchaseHistoryDTO.PurchaseRecordDTO map(OrderReceipt receipt, List<Ticket> tickets,
             boolean selectedTicketsOnly, boolean includeTransactions,
             IEventRepository eventRepository, IProductionCompanyRepository companyRepository,
-            IUserRepository userRepository) {
+            UserRepository userRepository) {
         Map<Integer, Ticket> ticketsById = byId(tickets);
 
         List<ReceiptLine> linesToMap = receipt.getReceiptLines();
@@ -116,7 +116,7 @@ public class OrderReceiptMapper {
     private PurchaseHistoryDTO.PurchaseRecordDTO buildRecord(OrderReceipt receipt, double totalPaid,
             List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos,
             List<PurchaseHistoryDTO.TicketRecordDTO> ticketRecords,
-            IUserRepository userRepository) {
+            UserRepository userRepository) {
         return new PurchaseHistoryDTO.PurchaseRecordDTO(
                 receipt.getId(),
                 receipt.getHolderUserId(),
@@ -196,7 +196,7 @@ public class OrderReceiptMapper {
         }
     }
 
-    private static String resolveBuyerName(Integer holderUserId, IUserRepository userRepository) {
+    private static String resolveBuyerName(Integer holderUserId, UserRepository userRepository) {
         if (holderUserId == null || userRepository == null) return null;
         try {
             User user = userRepository.getUserById(holderUserId);

@@ -21,7 +21,7 @@ import com.ticketing.system.Core.Application.dto.PermissionEditDTO;
 import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
 import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
@@ -38,16 +38,16 @@ import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 
 public class CompanyManagementServiceTest {
 
         private IProductionCompanyRepository mockCompanyRepo;
-        private IUserRepository mockUserRepo;
+        private UserRepository mockUserRepo;
         private IOrderReceiptRepository mockOrderReceiptRepo;
-        private ISessionManager sessionManager;
+        private SessionManager sessionManager;
         private CompanyManagementService companyService;
         private ITicketRepository ticketRepository;
         private IEventRepository eventRepository;
@@ -69,9 +69,9 @@ public class CompanyManagementServiceTest {
         @BeforeEach
         public void setUp() {
                 mockCompanyRepo = mock(IProductionCompanyRepository.class);
-                mockUserRepo = mock(IUserRepository.class);
+                mockUserRepo = mock(UserRepository.class);
                 mockOrderReceiptRepo = mock(IOrderReceiptRepository.class);
-                sessionManager = mock(ISessionManager.class);
+                sessionManager = mock(SessionManager.class);
                 ticketRepository = mock(ITicketRepository.class);
                 eventRepository = mock(IEventRepository.class);
                 notificationService = mock(INotificationService.class);

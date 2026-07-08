@@ -19,12 +19,12 @@ import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
 import com.ticketing.system.Core.Application.dto.OwnerAppointmentRequestDTO;
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
 import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 /**
  * Eval point 2 — delayed (offline) notifications.
@@ -43,7 +43,7 @@ class DelayedAppointmentNotificationAcceptanceTest {
     @Autowired private CompanyManagementService companyService;
     @Autowired private INotificationRepository notificationRepository;
     @Autowired private IProductionCompanyRepository companyRepository;
-    @Autowired private IUserRepository userRepository;
+    @Autowired private UserRepository userRepository;
 
     @Test
     void GivenOfflineAppointee_WhenTheyLogIn_ThenSeeAppointmentNotificationAndCanConfirm() {

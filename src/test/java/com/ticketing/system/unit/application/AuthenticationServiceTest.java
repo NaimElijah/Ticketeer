@@ -30,16 +30,16 @@ import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
 import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
 import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.NotificationDispatchService;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
@@ -47,10 +47,10 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.Session;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.User;
 
 class AuthenticationServiceTest {
 
@@ -58,12 +58,12 @@ class AuthenticationServiceTest {
     private static final long GUEST_IDLE_MINUTES = 30;
     private static final long MEMBER_TTL_MINUTES = 1440;
 
-    private IUserRepository mockUserRepo;
-    private IPasswordHasher mockHasher;
-    private ISessionManager mockSessionManager;
-    private ISessionRepository mockSessionRepo;
+    private UserRepository mockUserRepo;
+    private PasswordHasher mockHasher;
+    private SessionManager mockSessionManager;
+    private SessionRepository mockSessionRepo;
     private IActiveOrderRepository mockActiveOrderRepo;
-    private IAdminRepository mockAdminRepo;
+    private AdminRepository mockAdminRepo;
     private Clock fixedClock;
     private AuthenticationService service;
     private NotificationDispatchService mockNotification;
@@ -71,14 +71,14 @@ class AuthenticationServiceTest {
 
     @BeforeEach
     void setUp() {
-        mockUserRepo = mock(IUserRepository.class);
-        mockHasher = mock(IPasswordHasher.class);
-        mockSessionManager = mock(ISessionManager.class);
+        mockUserRepo = mock(UserRepository.class);
+        mockHasher = mock(PasswordHasher.class);
+        mockSessionManager = mock(SessionManager.class);
         mockNotification = mock(NotificationDispatchService.class);
         mockReservation = mock(ReservationService.class);
-        mockSessionRepo = mock(ISessionRepository.class);
+        mockSessionRepo = mock(SessionRepository.class);
         mockActiveOrderRepo = mock(IActiveOrderRepository.class);
-        mockAdminRepo = mock(IAdminRepository.class);
+        mockAdminRepo = mock(AdminRepository.class);
         fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockReservation, mockNotification,

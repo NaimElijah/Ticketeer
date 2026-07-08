@@ -1,8 +1,9 @@
 package com.ticketing.system.Presentation.dev;
+import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import lombok.extern.slf4j.Slf4j;

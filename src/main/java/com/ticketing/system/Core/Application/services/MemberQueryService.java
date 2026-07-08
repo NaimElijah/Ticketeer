@@ -1,12 +1,13 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import java.util.Comparator;
 import java.util.List;
 
 import com.ticketing.system.Core.Application.dto.MemberDTO;
 import com.ticketing.system.Core.Application.dto.MemberSearchResultDTO;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,9 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class MemberQueryService {
 
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
 
-    public MemberQueryService(IUserRepository userRepository) {
+    public MemberQueryService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 

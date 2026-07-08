@@ -1,15 +1,15 @@
 package com.ticketing.system.Infrastructure.dev.seed;
 
 import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.MemoryActiveOrderRepository;
-import com.ticketing.system.Infrastructure.persistence.AdminPersistence.MemoryAdminRepository;
+import com.ticketing.system.identity.adapter.out.persistence.MemoryAdminRepository;
 import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.MemoryConversationRepository;
 import com.ticketing.system.Infrastructure.persistence.EventPersistence.MemoryEventRepository;
 import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.MemoryNotificationRepository;
 import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.MemoryOrderReceiptRepository;
 import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.MemoryProductionCompanyRepository;
-import com.ticketing.system.Infrastructure.persistence.SessionPersistence.MemorySessionRepository;
+import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.Infrastructure.persistence.TicketPersistence.MemoryTicketRepository;
-import com.ticketing.system.Infrastructure.persistence.UserPersistence.MemoryUserRepository;
+import com.ticketing.system.identity.adapter.out.persistence.MemoryUserRepository;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;

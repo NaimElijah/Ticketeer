@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.identity.domain.Admin;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -23,7 +24,7 @@ import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dtoMappers.AppointmentInfoMapper;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Domain.company.CompanyStatus;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.company.ProductionCompany;
@@ -41,9 +42,9 @@ import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.users.AppointmentStatus;
 import com.ticketing.system.Core.Domain.users.CompanyAppointment;
 import com.ticketing.system.Core.Domain.users.CompanyRole;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 
@@ -66,15 +67,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class CompanyManagementService {
     private final IProductionCompanyRepository companyRepository;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
     private final IOrderReceiptRepository orderReceiptRepository;
-    private final ISessionManager sessionManager;
+    private final SessionManager sessionManager;
     private final ITicketRepository ticketRepository;
     private final IEventRepository eventRepository;
     private final INotificationService notificationService;
 
-    public CompanyManagementService(IProductionCompanyRepository companyRepository, IUserRepository userRepository,
-            IOrderReceiptRepository orderReceiptRepository, ISessionManager sessionManager,
+    public CompanyManagementService(IProductionCompanyRepository companyRepository, UserRepository userRepository,
+            IOrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
             ITicketRepository ticketRepository, IEventRepository eventRepository,
             INotificationService notificationService) {
         this.companyRepository = companyRepository;

@@ -1,4 +1,5 @@
 package com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence;
+import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
 import java.util.List;

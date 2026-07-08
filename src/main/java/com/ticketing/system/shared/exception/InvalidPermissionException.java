@@ -1,4 +1,5 @@
 package com.ticketing.system.shared.exception;
+import com.ticketing.system.identity.domain.User;
 
 // Thrown when a permission-check fails on a CompanyAppointment.
 // Differs from UnauthorizedActionException: this is specifically about a Manager
