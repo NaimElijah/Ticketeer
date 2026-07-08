@@ -1,0 +1,17 @@
+@startuml
+set separator none
+title Shared Kernel
+
+top to bottom direction
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+Container_Boundary("EventTicketSystemApplication.EventTicketSystemApplication_boundary", "EventTicketSystemApplication", $tags="") {
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "Shared Kernel", $techn="Module", $descr="", $tags="", $link="")
+}
+
+
+SHOW_LEGEND(true)
+@enduml

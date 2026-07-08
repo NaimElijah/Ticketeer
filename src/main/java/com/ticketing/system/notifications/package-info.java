@@ -14,4 +14,5 @@
  * event-driven step, where the synchronous {@code notify*} calls become domain-event subscriptions.
  * Module-boundary verification is switched on at Step 10.
  */
+@org.springframework.modulith.ApplicationModule(displayName = "Notifications")
 package com.ticketing.system.notifications;

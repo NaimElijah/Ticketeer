@@ -17,4 +17,5 @@
  * those calls are routed through an inbound port when their owning contexts move, and module-boundary
  * verification is switched on at Step 10.
  */
+@org.springframework.modulith.ApplicationModule(displayName = "Identity & Access")
 package com.ticketing.system.identity;

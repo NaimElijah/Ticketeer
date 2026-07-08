@@ -27,13 +27,11 @@ import org.springframework.stereotype.Component;
 public class LoggingAspect {
 
     /**
-     * Matches every public method declared inside the application services package.
+     * Matches every public method in a bounded context's {@code application.service} package
+     * ({@code com.ticketing.system.<context>.application.service}). The legacy
+     * {@code Core.Application.services} clause was dropped once that package was emptied (Step 8).
      */
-    // Covers both the canonical per-context service package (<context>.application.service, populated
-    // by the migration) and the not-yet-migrated legacy Core.Application.services package. The legacy
-    // clause is removed once every service has moved (Step 10).
-    @Pointcut("execution(public * com.ticketing.system..application.service..*(..)) "
-            + "|| execution(public * com.ticketing.system.Core.Application.services..*(..))")
+    @Pointcut("execution(public * com.ticketing.system..application.service..*(..))")
     public void applicationService() {
     }
 

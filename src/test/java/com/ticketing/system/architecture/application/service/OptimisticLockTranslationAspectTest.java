@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.architecture.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -14,10 +14,13 @@ import com.ticketing.system.Infrastructure.persistence.OptimisticLockTranslation
 /**
  * Unit test for {@link OptimisticLockTranslationAspect}.
  *
- * <p>The aspect advises {@code execution(... Core.Application.services..*(..))}, so the stand-in
- * service it wraps must live in that package — which is why this test sits here rather than under the
- * usual {@code unit/} tree. {@link AspectJProxyFactory} weaves the aspect around a plain target with
- * no Spring context, keeping the test fast and focused purely on the advice's behaviour.
+ * <p>The aspect advises {@code execution(public * com.ticketing.system..application.service..*(..))},
+ * so the stand-in service it wraps must live in an {@code ..application.service} package — hence this
+ * test sits in {@code architecture.application.service} rather than under the usual {@code unit/} tree.
+ * {@link AspectJProxyFactory} weaves the aspect around a plain target with no Spring context, keeping
+ * the test fast and focused purely on the advice's behaviour. This test also guards against silent
+ * pointcut breakage (a mismatched pointcut would let the raw {@code OptimisticLockingFailureException}
+ * escape untranslated).
  */
 class OptimisticLockTranslationAspectTest {
 

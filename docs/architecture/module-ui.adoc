@@ -1,0 +1,21 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.ui`
+|Bean references
+|* `c.t.s.s.application.service.ReservationService` (in Sales & Ticketing)
+* `c.t.s.i.application.service.AuthenticationService` (in Identity & Access)
+* `c.t.s.i.application.service.MemberAccountService` (in Identity & Access)
+* `c.t.s.o.application.service.CompanyManagementService` (in Organization)
+* `c.t.s.i.application.service.MemberQueryService` (in Identity & Access)
+* `c.t.s.s.application.service.RefundService` (in Sales & Ticketing)
+* `c.t.s.g.application.service.SystemAnalyticsService` (in Platform Governance)
+* `c.t.s.g.application.service.SystemAdminService` (in Platform Governance)
+* `c.t.s.c.application.service.CatalogService` (in Catalog & Events)
+* `c.t.s.c.application.service.EventManagementService` (in Catalog & Events)
+* `c.t.s.o.application.service.CompanyAnalyticsService` (in Organization)
+* `c.t.s.m.application.service.MessagingService` (in Messaging & Support)
+* `c.t.s.n.application.port.in.INotificationService` (in Notifications)
+* `c.t.s.s.application.service.CheckoutService` (in Sales & Ticketing)
+* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+|===

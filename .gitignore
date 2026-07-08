@@ -50,6 +50,8 @@ docs/*
 # V3-DOC-02 (#374) deliverables are tracked; the rest of docs/ stays ignored.
 !docs/use-cases-v3.md
 !docs/version-3-requirements.html
+# Spring Modulith architecture docs (generated snapshot) are tracked.
+!docs/architecture/
 
 # Runtime log output (logs/event-ticket-system.log + rolled .gz archives)
 logs/

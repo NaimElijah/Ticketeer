@@ -1,0 +1,27 @@
+@startuml
+set separator none
+title Notifications
+
+top to bottom direction
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+Container_Boundary("EventTicketSystemApplication.EventTicketSystemApplication_boundary", "EventTicketSystemApplication", $tags="") {
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "Shared Kernel", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.Core, "Core", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.Infrastructure, "Infrastructure", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "Notifications", $techn="Module", $descr="", $tags="", $link="")
+}
+
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Core, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, EventTicketSystemApplication.EventTicketSystemApplication.Infrastructure, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, EventTicketSystemApplication.EventTicketSystemApplication.Core, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Infrastructure, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Infrastructure, EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Infrastructure, EventTicketSystemApplication.EventTicketSystemApplication.Core, "uses", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+@enduml

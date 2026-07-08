@@ -1,0 +1,47 @@
+== EventTicketSystemApplication
+plantuml::components.puml[,,format=svg]
+
+== Core
+plantuml::module-Core.puml[,,format=svg]
+include::module-Core.adoc[]
+
+== Infrastructure
+plantuml::module-Infrastructure.puml[,,format=svg]
+include::module-Infrastructure.adoc[]
+
+== Catalog & Events
+plantuml::module-catalog.puml[,,format=svg]
+include::module-catalog.adoc[]
+
+== Platform Governance
+plantuml::module-governance.puml[,,format=svg]
+include::module-governance.adoc[]
+
+== Identity & Access
+plantuml::module-identity.puml[,,format=svg]
+include::module-identity.adoc[]
+
+== Messaging & Support
+plantuml::module-messaging.puml[,,format=svg]
+include::module-messaging.adoc[]
+
+== Notifications
+plantuml::module-notifications.puml[,,format=svg]
+include::module-notifications.adoc[]
+
+== Organization
+plantuml::module-organization.puml[,,format=svg]
+include::module-organization.adoc[]
+
+== Sales & Ticketing
+plantuml::module-sales.puml[,,format=svg]
+include::module-sales.adoc[]
+
+== Shared Kernel
+plantuml::module-shared.puml[,,format=svg]
+include::module-shared.adoc[]
+
+== UI (Vaadin driving adapter)
+plantuml::module-ui.puml[,,format=svg]
+include::module-ui.adoc[]
+
