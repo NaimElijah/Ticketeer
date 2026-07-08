@@ -36,11 +36,11 @@ import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.Location;
 import com.ticketing.system.Core.Domain.events.ShowDate;
@@ -69,7 +69,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
     @Autowired private ReservationService reservationService;
     @Autowired private CheckoutService checkoutService;
     @Autowired private CatalogService catalogService;
-    @Autowired private IProductionCompanyRepository companyRepository;
+    @Autowired private ProductionCompanyRepository companyRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private SystemAdminService systemAdminService;
 

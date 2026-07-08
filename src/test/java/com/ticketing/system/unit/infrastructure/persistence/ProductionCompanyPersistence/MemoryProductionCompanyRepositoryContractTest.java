@@ -1,12 +1,12 @@
 package com.ticketing.system.unit.infrastructure.persistence.ProductionCompanyPersistence;
 
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.MemoryProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.adapter.out.persistence.MemoryProductionCompanyRepository;
 
 class MemoryProductionCompanyRepositoryContractTest extends IProductionCompanyRepositoryContractTest {
 
     @Override
-    protected IProductionCompanyRepository newRepository() {
+    protected ProductionCompanyRepository newRepository() {
         return new MemoryProductionCompanyRepository();
     }
 }

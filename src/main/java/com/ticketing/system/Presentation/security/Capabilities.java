@@ -1,7 +1,7 @@
 package com.ticketing.system.Presentation.security;
 
 import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.Presentation.session.AuthSession;
 import com.ticketing.system.Presentation.session.CompanyManagementBridge;

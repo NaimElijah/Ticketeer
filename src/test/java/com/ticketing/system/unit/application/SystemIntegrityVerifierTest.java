@@ -17,8 +17,8 @@ import com.ticketing.system.Core.Application.services.SystemIntegrityVerifier;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.DiscountPolicy;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventCategory;
@@ -41,7 +41,7 @@ class SystemIntegrityVerifierTest {
     private static final LocalDateTime FUTURE_END = LocalDateTime.of(2099, 6, 1, 22, 0);
 
     private final UserRepository userRepository = mock(UserRepository.class);
-    private final IProductionCompanyRepository companyRepository = mock(IProductionCompanyRepository.class);
+    private final ProductionCompanyRepository companyRepository = mock(ProductionCompanyRepository.class);
     private final IEventRepository eventRepository = mock(IEventRepository.class);
     private final IActiveOrderRepository activeOrderRepository = mock(IActiveOrderRepository.class);
     private final SystemIntegrityVerifier verifier = new SystemIntegrityVerifier(

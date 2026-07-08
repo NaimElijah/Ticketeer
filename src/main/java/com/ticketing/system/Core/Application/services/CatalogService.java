@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.organization.application.service.CompanyRatings;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,9 +27,9 @@ import com.ticketing.system.Core.Application.dtoMappers.VenueMapMapper;
 import com.ticketing.system.Core.Application.dtoMappers.EventMapper;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 
 // Read-side service for guest- and visitor-facing catalog queries.
@@ -45,13 +46,13 @@ public class CatalogService {
 
     private final SessionManager sessionManager;
     private final IEventRepository eventRepository;
-    private final IProductionCompanyRepository productionCompanyRepository;
+    private final ProductionCompanyRepository productionCompanyRepository;
     private final ITicketRepository ticketRepository;
 
     public CatalogService(
             SessionManager sessionManager,
             IEventRepository eventRepository,
-            IProductionCompanyRepository productionCompanyRepository,
+            ProductionCompanyRepository productionCompanyRepository,
             ITicketRepository ticketRepository
     ) {
         this.sessionManager = sessionManager;

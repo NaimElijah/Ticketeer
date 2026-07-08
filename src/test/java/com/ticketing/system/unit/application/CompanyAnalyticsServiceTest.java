@@ -15,9 +15,9 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.services.CompanyAnalyticsService;
+import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.messaging.Conversation;
@@ -40,7 +40,7 @@ class CompanyAnalyticsServiceTest {
     private IOrderReceiptRepository orderReceiptRepository;
     private IConversationRepository conversationRepository;
     private  ITicketRepository ticketRepository;
-    private  IProductionCompanyRepository companyRepository;
+    private  ProductionCompanyRepository companyRepository;
     private  UserRepository userRepository;
     private CompanyAnalyticsService service;
 
@@ -50,7 +50,7 @@ class CompanyAnalyticsServiceTest {
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
         conversationRepository = mock(IConversationRepository.class);
         ticketRepository = mock(ITicketRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
         service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository);
     }

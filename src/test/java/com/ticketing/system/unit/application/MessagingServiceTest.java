@@ -28,8 +28,8 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.services.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
@@ -60,7 +60,7 @@ class MessagingServiceTest {
     private SessionManager sessionManager;
     private AdminRepository adminRepository;
     private UserRepository userRepository;
-    private IProductionCompanyRepository companyRepository;
+    private ProductionCompanyRepository companyRepository;
     private INotificationService notificationService;
     private MessagingService service;
 
@@ -70,7 +70,7 @@ class MessagingServiceTest {
         sessionManager = mock(SessionManager.class);
         adminRepository = mock(AdminRepository.class);
         userRepository = mock(UserRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
         notificationService = mock(INotificationService.class);
         service = new MessagingService(conversationRepository, sessionManager, adminRepository,
                 userRepository, companyRepository, notificationService);

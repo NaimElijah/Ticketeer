@@ -1,4 +1,5 @@
 package com.ticketing.system.shared.exception;
+import com.ticketing.system.organization.domain.ProductionCompany;
 
 // Thrown when an actor attempts an action they're not permitted to perform.
 // Per lecture 2: authorization is a domain concern, not just an app-service concern.

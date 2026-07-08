@@ -29,9 +29,9 @@ import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -64,7 +64,7 @@ import com.ticketing.system.identity.domain.User;
 class EventManagementServiceTest {
 
         private IEventRepository mockEventRepo;
-        private IProductionCompanyRepository mockCompanyRepo;
+        private ProductionCompanyRepository mockCompanyRepo;
         private ITicketRepository mockTicketRepo;
         private SessionManager sessionManager;
         private EventManagementService eventService;
@@ -100,7 +100,7 @@ class EventManagementServiceTest {
         @BeforeEach
         public void setUp() {
                 mockEventRepo = mock(IEventRepository.class);
-                mockCompanyRepo = mock(IProductionCompanyRepository.class);
+                mockCompanyRepo = mock(ProductionCompanyRepository.class);
                 mockTicketRepo = mock(ITicketRepository.class);
                 sessionManager = mock(SessionManager.class);
                 orderReceiptRepository = mock(IOrderReceiptRepository.class);

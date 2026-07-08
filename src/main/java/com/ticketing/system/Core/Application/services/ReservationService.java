@@ -23,8 +23,8 @@ import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseContext;
@@ -41,7 +41,7 @@ public class ReservationService {
     private final IActiveOrderRepository activeOrderRepository;
     private final SessionManager iSessionManager;
     private final INotificationService notificationService;
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final SystemAdminService systemAdminService;
     private final ISystemMetrics systemMetrics;
@@ -54,7 +54,7 @@ public class ReservationService {
             IActiveOrderRepository activeOrderRepository,
             SessionManager iSessionManager,
             INotificationService notificationService,
-            IProductionCompanyRepository companyRepository,
+            ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
             SystemAdminService systemAdminService,
             ISystemMetrics systemMetrics) {

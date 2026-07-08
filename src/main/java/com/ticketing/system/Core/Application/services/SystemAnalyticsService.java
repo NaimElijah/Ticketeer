@@ -15,7 +15,7 @@ import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
@@ -45,7 +45,7 @@ public class SystemAnalyticsService {
 
     private final ISystemMetrics metrics;
     private final IOrderReceiptRepository orderReceiptRepository;
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final IEventRepository eventRepository;
     private final IConversationRepository conversationRepository;
     private final Clock clock;
@@ -54,7 +54,7 @@ public class SystemAnalyticsService {
     public SystemAnalyticsService(
             ISystemMetrics metrics,
             IOrderReceiptRepository orderReceiptRepository,
-            IProductionCompanyRepository companyRepository,
+            ProductionCompanyRepository companyRepository,
             IEventRepository eventRepository,
             IConversationRepository conversationRepository,
             Clock clock,

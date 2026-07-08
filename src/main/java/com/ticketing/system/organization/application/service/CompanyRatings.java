@@ -1,4 +1,5 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.organization.application.service;
+import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
 
 import java.util.Collection;
 
