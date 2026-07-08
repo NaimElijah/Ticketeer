@@ -58,6 +58,11 @@ logs/
 .idea/
 .vscode/
 
+# Claude Code project config — kept local, never committed. Claude auto-loads
+# .claude/CLAUDE.md, .claude/rules/, .claude/agents/, .claude/skills/ from disk
+# at session start regardless of git-tracking, so ignoring it costs no functionality.
+.claude/
+
 # binaries
 .classpath
 .project
