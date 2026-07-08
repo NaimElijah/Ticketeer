@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence;
+package com.ticketing.system.organization.adapter.out.persistence;
 
 import java.util.List;
 import java.util.Optional;
@@ -8,15 +8,15 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 
 /**
- * JPA-backed {@link IProductionCompanyRepository} — active only in the {@code jpa} run/dev profile.
+ * JPA-backed {@link ProductionCompanyRepository} — active only in the {@code jpa} run/dev profile.
  * Adapts the domain port onto Spring Data ({@link SpringDataProductionCompanyRepository}); the
- * application layer depends only on {@code IProductionCompanyRepository}, never on Spring Data.
+ * application layer depends only on {@code ProductionCompanyRepository}, never on Spring Data.
  * Owner/manager id lists ({@code @ElementCollection}) and the purchase policy (JSON column) persist
  * by cascade with the company.
  *
@@ -28,7 +28,7 @@ import com.ticketing.system.shared.exception.CompanyNotFoundException;
  */
 @Repository
 @Profile("jpa")
-public class JpaProductionCompanyRepository implements IProductionCompanyRepository {
+public class JpaProductionCompanyRepository implements ProductionCompanyRepository {
 
     private final SpringDataProductionCompanyRepository data;
     private final AtomicInteger idSequence = new AtomicInteger(0);

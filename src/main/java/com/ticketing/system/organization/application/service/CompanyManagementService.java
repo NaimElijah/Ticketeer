@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.organization.application.service;
 import com.ticketing.system.identity.domain.Admin;
 
 import java.util.ArrayList;
@@ -25,9 +25,9 @@ import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dtoMappers.AppointmentInfoMapper;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -66,7 +66,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 public class CompanyManagementService {
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final IOrderReceiptRepository orderReceiptRepository;
     private final SessionManager sessionManager;
@@ -74,7 +74,7 @@ public class CompanyManagementService {
     private final IEventRepository eventRepository;
     private final INotificationService notificationService;
 
-    public CompanyManagementService(IProductionCompanyRepository companyRepository, UserRepository userRepository,
+    public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
             IOrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
             ITicketRepository ticketRepository, IEventRepository eventRepository,
             INotificationService notificationService) {
@@ -479,7 +479,7 @@ public class CompanyManagementService {
                     request.getDescription().trim(),
                     0.0);
 
-            // IProductionCompanyRepository.save returns void; the new instance IS the saved
+            // ProductionCompanyRepository.save returns void; the new instance IS the saved
             // one.
             companyRepository.save(newProductionCompany);
             user.addFounderAppointment(companyId);

@@ -5,12 +5,12 @@ import com.ticketing.system.Core.Application.dto.*;
 import com.ticketing.system.Core.Application.interfaces.*;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Domain.ActiveOrder.*;
 import com.ticketing.system.Core.Domain.Tickets.*;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.events.*;
 import com.ticketing.system.Core.Domain.orders.*;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -51,7 +51,7 @@ public class CheckoutServiceAcceptanceTest {
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
     @Autowired private EventManagementService eventManagementService;
-    private IProductionCompanyRepository companyRepository;
+    private ProductionCompanyRepository companyRepository;
     @Autowired private IEventRepository eventRepository1;
     @Autowired private ITicketRepository ticketRepository1;
     @Autowired private IOrderReceiptRepository orderReceiptRepository1;
@@ -95,7 +95,7 @@ public class CheckoutServiceAcceptanceTest {
         eventRepository = mock(IEventRepository.class);
         ticketRepository = mock(ITicketRepository.class);
         userRepository = mock(UserRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
 
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);

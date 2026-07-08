@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Domain.messaging;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.domain.User;
 

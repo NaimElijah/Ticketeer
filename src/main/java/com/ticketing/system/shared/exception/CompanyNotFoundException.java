@@ -1,4 +1,5 @@
 package com.ticketing.system.shared.exception;
+import com.ticketing.system.organization.domain.ProductionCompany;
 
 // Specific subclass of EntityNotFoundException for ProductionCompany lookups.
 // UC-18, UC-19, UC-22, UC-25.

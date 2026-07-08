@@ -22,8 +22,8 @@ import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationNotFoundException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
@@ -60,7 +60,7 @@ public class MessagingService {
     private final SessionManager sessionManager;
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final INotificationService notificationService;
 
     public MessagingService(
@@ -68,7 +68,7 @@ public class MessagingService {
             SessionManager sessionManager,
             AdminRepository adminRepository,
             UserRepository userRepository,
-            IProductionCompanyRepository companyRepository,
+            ProductionCompanyRepository companyRepository,
             INotificationService notificationService
     ) {
         this.conversationRepository = conversationRepository;

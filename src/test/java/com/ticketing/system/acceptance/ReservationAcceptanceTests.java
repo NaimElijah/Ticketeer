@@ -18,7 +18,7 @@ import com.ticketing.system.Core.Domain.events.InventoryZone;
 import com.ticketing.system.Core.Domain.events.Seat;
 import com.ticketing.system.Core.Domain.events.SeatStatus;
 import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -68,7 +68,7 @@ public class ReservationAcceptanceTests {
                 activeOrderRepository,
                 sessionManager,
                 notificationService,
-                mock(IProductionCompanyRepository.class),
+                mock(ProductionCompanyRepository.class),
                 mock(UserRepository.class),
                 systemAdminService,
                 mock(ISystemMetrics.class)

@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.events.InventoryZone;
@@ -80,12 +80,12 @@ import lombok.extern.slf4j.Slf4j;
 public class SystemIntegrityVerifier {
 
     private final UserRepository userRepository;
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final IEventRepository eventRepository;
     private final IActiveOrderRepository activeOrderRepository;
 
     public SystemIntegrityVerifier(UserRepository userRepository,
-                                   IProductionCompanyRepository companyRepository,
+                                   ProductionCompanyRepository companyRepository,
                                    IEventRepository eventRepository,
                                    IActiveOrderRepository activeOrderRepository) {
         this.userRepository = userRepository;

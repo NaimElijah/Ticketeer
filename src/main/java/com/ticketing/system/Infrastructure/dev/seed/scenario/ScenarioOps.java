@@ -30,7 +30,7 @@ import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Application.services.MessagingService;
 import com.ticketing.system.Core.Application.services.ReservationService;

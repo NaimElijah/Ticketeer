@@ -23,16 +23,16 @@ import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
 import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
 import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
 import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
@@ -44,7 +44,7 @@ import com.ticketing.system.identity.domain.User;
 
 public class CompanyManagementServiceTest {
 
-        private IProductionCompanyRepository mockCompanyRepo;
+        private ProductionCompanyRepository mockCompanyRepo;
         private UserRepository mockUserRepo;
         private IOrderReceiptRepository mockOrderReceiptRepo;
         private SessionManager sessionManager;
@@ -68,7 +68,7 @@ public class CompanyManagementServiceTest {
 
         @BeforeEach
         public void setUp() {
-                mockCompanyRepo = mock(IProductionCompanyRepository.class);
+                mockCompanyRepo = mock(ProductionCompanyRepository.class);
                 mockUserRepo = mock(UserRepository.class);
                 mockOrderReceiptRepo = mock(IOrderReceiptRepository.class);
                 sessionManager = mock(SessionManager.class);
@@ -592,7 +592,7 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(userId))
                                 .thenReturn(new User(userId, "founder", "user@test.com", "password", 30));
 
-                // save() is void per IProductionCompanyRepository — no return-value mock
+                // save() is void per ProductionCompanyRepository — no return-value mock
                 // needed.
                 // The service builds the DTO from the locally-constructed ProductionCompany,
                 // so the test verifies via the captured argument below + the returned DTO.
