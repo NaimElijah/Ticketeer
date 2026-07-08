@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.messaging.application.service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,11 +29,11 @@ import com.ticketing.system.shared.exception.ConversationNotFoundException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.identity.domain.User;
@@ -56,7 +56,7 @@ public class MessagingService {
     private static final int GROUP_SENTINEL = 0;
     private static final int SNIPPET_MAX = 120;
 
-    private final IConversationRepository conversationRepository;
+    private final ConversationRepository conversationRepository;
     private final SessionManager sessionManager;
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
@@ -64,7 +64,7 @@ public class MessagingService {
     private final INotificationService notificationService;
 
     public MessagingService(
-            IConversationRepository conversationRepository,
+            ConversationRepository conversationRepository,
             SessionManager sessionManager,
             AdminRepository adminRepository,
             UserRepository userRepository,

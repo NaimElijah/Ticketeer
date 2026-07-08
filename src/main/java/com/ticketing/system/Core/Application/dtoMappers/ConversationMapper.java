@@ -1,11 +1,12 @@
 package com.ticketing.system.Core.Application.dtoMappers;
+import com.ticketing.system.messaging.application.service.MessagingService;
 
 import java.util.List;
 
 import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.MessageDTO;
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.Message;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.Message;
 
 /**
  * Maps the {@link Conversation} aggregate to its DTO view (the "never return domain

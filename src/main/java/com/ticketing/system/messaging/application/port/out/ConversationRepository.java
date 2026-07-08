@@ -1,4 +1,8 @@
-package com.ticketing.system.Core.Domain.messaging;
+package com.ticketing.system.messaging.application.port.out;
+import com.ticketing.system.messaging.domain.ParticipantType;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.domain.User;
 
@@ -10,7 +14,7 @@ import com.ticketing.system.shared.IRepository;
 // Aggregate-root entry point for the Conversation aggregate (per course's
 // IXxxRepository convention). Owns the centralized messaging subsystem —
 // replaces per-User MessageInbox, per-Company Inbox, and the standalone Complaint repo.
-public interface IConversationRepository extends IRepository<Conversation, String> {
+public interface ConversationRepository extends IRepository<Conversation, String> {
 
     void save(Conversation conversation);
 

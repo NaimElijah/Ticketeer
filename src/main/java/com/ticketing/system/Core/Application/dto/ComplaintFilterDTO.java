@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.messaging.application.service.MessagingService;
 
 import java.time.LocalDate;
 

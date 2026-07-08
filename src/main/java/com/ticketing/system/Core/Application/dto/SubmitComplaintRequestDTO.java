@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.messaging.application.service.MessagingService;
 
 // Input to MessagingService.submitComplaint() — replaces the old Complaint flow.
 // Creates a Conversation with type=COMPLAINT and counterparty=ADMIN_GROUP.

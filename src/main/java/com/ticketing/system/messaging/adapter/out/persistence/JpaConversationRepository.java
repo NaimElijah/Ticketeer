@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.ConversationPersistence;
+package com.ticketing.system.messaging.adapter.out.persistence;
 
 import java.util.List;
 import java.util.Optional;
@@ -7,16 +7,16 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.messaging.domain.ParticipantType;
 
 /**
- * JPA-backed {@link IConversationRepository} — active only in the {@code jpa} run/dev profile. Adapts
+ * JPA-backed {@link ConversationRepository} — active only in the {@code jpa} run/dev profile. Adapts
  * the domain port onto Spring Data ({@link SpringDataConversationRepository}); the application layer
- * depends only on {@code IConversationRepository}, never on Spring Data. Owned, send-ordered messages
+ * depends only on {@code ConversationRepository}, never on Spring Data. Owned, send-ordered messages
  * ({@code @OneToMany} + {@code @OrderColumn}) persist by cascade with the conversation.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops (concurrency via {@code @Version}). {@code save}
@@ -27,7 +27,7 @@ import com.ticketing.system.Core.Domain.messaging.ParticipantType;
  */
 @Repository
 @Profile("jpa")
-public class JpaConversationRepository implements IConversationRepository {
+public class JpaConversationRepository implements ConversationRepository {
 
     private final SpringDataConversationRepository data;
 

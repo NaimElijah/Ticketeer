@@ -7,7 +7,7 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.Core.Application.services.MessagingService;
+import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.identity.application.port.out.UserRepository;

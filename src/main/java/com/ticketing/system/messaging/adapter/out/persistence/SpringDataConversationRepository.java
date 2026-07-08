@@ -1,4 +1,5 @@
-package com.ticketing.system.Infrastructure.persistence.ConversationPersistence;
+package com.ticketing.system.messaging.adapter.out.persistence;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 
 import java.util.List;
 
@@ -6,15 +7,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.domain.ParticipantType;
 
 /**
  * Spring Data JPA repository for {@link Conversation} — the auto-implemented SQL backing
  * {@link JpaConversationRepository}. The application layer never sees this type; it depends only on
- * the {@code IConversationRepository} domain port. Owned messages persist as an ordered
+ * the {@code ConversationRepository} domain port. Owned messages persist as an ordered
  * {@code @OneToMany} by cascade with the conversation.
  */
 public interface SpringDataConversationRepository extends JpaRepository<Conversation, String> {
@@ -32,12 +33,12 @@ public interface SpringDataConversationRepository extends JpaRepository<Conversa
      * member is the counterparty. Mirrors {@code MemoryConversationRepository.findMemberInbox}.
      */
     @Query("select c from Conversation c where "
-            + "((c.type = com.ticketing.system.Core.Domain.messaging.ConversationType.INQUIRY "
-            + "  or c.type = com.ticketing.system.Core.Domain.messaging.ConversationType.COMPLAINT) "
-            + " and c.initiatorType = com.ticketing.system.Core.Domain.messaging.ParticipantType.MEMBER "
+            + "((c.type = com.ticketing.system.messaging.domain.ConversationType.INQUIRY "
+            + "  or c.type = com.ticketing.system.messaging.domain.ConversationType.COMPLAINT) "
+            + " and c.initiatorType = com.ticketing.system.messaging.domain.ParticipantType.MEMBER "
             + " and c.initiatorId = :memberId) "
-            + "or (c.type = com.ticketing.system.Core.Domain.messaging.ConversationType.DIRECT "
-            + " and c.counterpartyType = com.ticketing.system.Core.Domain.messaging.ParticipantType.MEMBER "
+            + "or (c.type = com.ticketing.system.messaging.domain.ConversationType.DIRECT "
+            + " and c.counterpartyType = com.ticketing.system.messaging.domain.ParticipantType.MEMBER "
             + " and c.counterpartyId = :memberId)")
     List<Conversation> findMemberInbox(@Param("memberId") int memberId);
 
@@ -53,8 +54,8 @@ public interface SpringDataConversationRepository extends JpaRepository<Conversa
      * conversations where the member is a participant — derived directly from message read-state.
      */
     @Query("select count(m) from Conversation c join c.messages m where "
-            + "((c.initiatorType = com.ticketing.system.Core.Domain.messaging.ParticipantType.MEMBER and c.initiatorId = :memberId) or "
-            + " (c.counterpartyType = com.ticketing.system.Core.Domain.messaging.ParticipantType.MEMBER and c.counterpartyId = :memberId)) "
+            + "((c.initiatorType = com.ticketing.system.messaging.domain.ParticipantType.MEMBER and c.initiatorId = :memberId) or "
+            + " (c.counterpartyType = com.ticketing.system.messaging.domain.ParticipantType.MEMBER and c.counterpartyId = :memberId)) "
             + "and m.senderId <> :memberId and m.read = false")
     long countUnreadForMember(@Param("memberId") int memberId);
 }

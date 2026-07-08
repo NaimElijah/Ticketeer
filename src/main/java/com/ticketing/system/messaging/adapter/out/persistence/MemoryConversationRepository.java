@@ -1,4 +1,5 @@
-package com.ticketing.system.Infrastructure.persistence.ConversationPersistence;
+package com.ticketing.system.messaging.adapter.out.persistence;
+import com.ticketing.system.messaging.application.service.MessagingService;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
 import java.util.ArrayList;
@@ -10,14 +11,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.messaging.domain.ParticipantType;
 
 /**
- * In-memory {@link IConversationRepository}. Lets Spring wire MessagingService.
+ * In-memory {@link ConversationRepository}. Lets Spring wire MessagingService.
  * {@code @Profile("!jpa")}: the {@code jpa} run/dev profile swaps in
  * {@link JpaConversationRepository} instead.
  *
@@ -27,7 +28,7 @@ import com.ticketing.system.Core.Domain.messaging.ParticipantType;
  */
 @Repository
 @Profile("!jpa")
-public class MemoryConversationRepository implements IConversationRepository {
+public class MemoryConversationRepository implements ConversationRepository {
 
     private final Map<String, Conversation> conversationsById = new ConcurrentHashMap<>();
     private final RepositoryLocks<String> locks = new RepositoryLocks<>();

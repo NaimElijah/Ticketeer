@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.messaging;
+package com.ticketing.system.messaging.domain;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.domain.User;

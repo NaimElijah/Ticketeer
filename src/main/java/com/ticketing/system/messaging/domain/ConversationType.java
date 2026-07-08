@@ -1,4 +1,4 @@
-package com.ticketing.system.Core.Domain.messaging;
+package com.ticketing.system.messaging.domain;
 
 // Categorizes a Conversation by its purpose. Drives RBAC and routing.
 //   INQUIRY   - Member contacts a Company; two-way chat (II.3.10 / II.4.4)
