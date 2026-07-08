@@ -13,7 +13,7 @@ import com.ticketing.system.Core.Application.dto.BarcodeDTO;
 import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
 import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
 import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
-import com.ticketing.system.Core.Domain.exceptions.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 
 import lombok.extern.slf4j.Slf4j;
 

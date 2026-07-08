@@ -13,10 +13,10 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.RefundResultDTO;
 import com.ticketing.system.Core.Application.services.RefundService;
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.exceptions.EntityNotFoundException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.EntityNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.Presentation.presenters.account.RefundPresenter;
 
 class RefundPresenterTest {

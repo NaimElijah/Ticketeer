@@ -4,7 +4,7 @@ import java.util.EnumSet;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;

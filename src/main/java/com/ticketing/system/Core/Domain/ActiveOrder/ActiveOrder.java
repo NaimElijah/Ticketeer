@@ -9,7 +9,7 @@ import java.util.UUID;
 
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
 import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;

@@ -17,7 +17,7 @@ import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Domain.events.ZoneType;
-import com.ticketing.system.Core.Domain.exceptions.DomainException;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.Presentation.components.venue.VkSeat;
 import com.ticketing.system.Presentation.components.venue.VkSeatedZonePicker;
 import com.ticketing.system.Presentation.session.SessionIdentity;

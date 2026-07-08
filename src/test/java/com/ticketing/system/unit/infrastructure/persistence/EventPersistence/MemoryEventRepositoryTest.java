@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.Infrastructure.persistence.EventPersistence.MemoryEventRepository;
 
 public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {

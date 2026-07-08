@@ -6,7 +6,7 @@ import com.ticketing.system.Core.Application.interfaces.ISessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.exceptions.MarketNotOpenException;
+import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.Core.Domain.events.Event;

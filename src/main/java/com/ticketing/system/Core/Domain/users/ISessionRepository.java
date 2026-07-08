@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import com.ticketing.system.Core.Domain.shared.IRepository;
+import com.ticketing.system.shared.IRepository;
 
 /**
  * Aggregate-root entry point for the {@link Session} aggregate.

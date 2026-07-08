@@ -39,9 +39,9 @@ public interface ISessionManager {
      *
      * @return {@code true} for a well-formed, signed, unexpired token; {@code false}
      *     only for {@code null} / blank input
-     * @throws com.ticketing.system.Core.Domain.exceptions.InvalidTokenException
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException
      *     malformed, bad signature, or revoked
-     * @throws com.ticketing.system.Core.Domain.exceptions.SessionExpiredException
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     past the {@code exp} claim
      */
     boolean validateToken(String token);

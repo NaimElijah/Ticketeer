@@ -6,9 +6,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
-import com.ticketing.system.Core.Domain.exceptions.InvalidStateTransitionException;
-import com.ticketing.system.Core.Domain.exceptions.PolicyViolationException;
+import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.PolicyViolationException;
 
 import lombok.extern.slf4j.Slf4j;
 

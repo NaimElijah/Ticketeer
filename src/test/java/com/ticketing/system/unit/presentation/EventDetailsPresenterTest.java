@@ -20,10 +20,10 @@ import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.exceptions.CompanyClosedException;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Core.Domain.exceptions.NullVenueMapException;
+import com.ticketing.system.shared.exception.CompanyClosedException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.NullVenueMapException;
 import com.ticketing.system.Presentation.presenters.catalog.EventDetailsPresenter;
 
 class EventDetailsPresenterTest {

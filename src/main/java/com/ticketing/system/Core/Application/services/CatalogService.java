@@ -11,7 +11,7 @@ import java.util.Set;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.Core.Domain.exceptions.*;
+import com.ticketing.system.shared.exception.*;
 
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventStatus;

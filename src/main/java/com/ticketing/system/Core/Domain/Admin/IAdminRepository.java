@@ -2,7 +2,7 @@ package com.ticketing.system.Core.Domain.Admin;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.shared.IRepository;
+import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the Admin aggregate.
 public interface IAdminRepository extends IRepository<Admin, Integer> {

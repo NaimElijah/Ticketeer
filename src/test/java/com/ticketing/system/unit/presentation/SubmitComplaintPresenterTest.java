@@ -20,7 +20,7 @@ import org.mockito.ArgumentCaptor;
 import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.Presentation.presenters.messaging.SubmitComplaintPresenter;
 
 class SubmitComplaintPresenterTest {

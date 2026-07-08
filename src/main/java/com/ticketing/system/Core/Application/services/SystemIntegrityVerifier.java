@@ -18,9 +18,9 @@ import com.ticketing.system.Core.Domain.company.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.exceptions.SystemIntegrityViolationException;
-import com.ticketing.system.Core.Domain.exceptions.UserNotFoundException;
-import com.ticketing.system.Core.Domain.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
+import com.ticketing.system.shared.InvariantChecked;
 import com.ticketing.system.Core.Domain.users.IUserRepository;
 import com.ticketing.system.Core.Domain.users.User;
 
