@@ -31,6 +31,11 @@
 		<jjwt.version>0.12.6</jjwt.version>
 		<!-- Vaadin Flow (V2-F-01) - compatible with Spring Boot 3.5 -->
 		<vaadin.version>24.7.0</vaadin.version>
+		<!-- Spring Modulith 1.4.x is the line compiled against Spring Boot 3.5 (per the official
+		     compatibility matrix); it enforces the bounded-context module boundaries. -->
+		<spring-modulith.version>1.4.1</spring-modulith.version>
+		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. -->
+		<archunit.version>1.4.1</archunit.version>
 	</properties>
 
 	<!-- Vaadin BOM manages versions for the entire Vaadin Flow stack -->
@@ -40,6 +45,14 @@
 				<groupId>com.vaadin</groupId>
 				<artifactId>vaadin-bom</artifactId>
 				<version>${vaadin.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<!-- Spring Modulith BOM manages the versions of all spring-modulith-* artifacts. -->
+			<dependency>
+				<groupId>org.springframework.modulith</groupId>
+				<artifactId>spring-modulith-bom</artifactId>
+				<version>${spring-modulith.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -119,6 +132,30 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Spring Modulith (bounded-context modules) — versions from the BOM above.
+		     starter-core: @ApplicationModule model at runtime.
+		     starter-test: ApplicationModules.verify() + Documenter (diagram/canvas generation).
+		     The JPA event-publication registry (spring-modulith-starter-jpa) is deliberately
+		     deferred until domain events are introduced (Step 7), so it doesn't perturb the
+		     current persistence/test context. -->
+		<dependency>
+			<groupId>org.springframework.modulith</groupId>
+			<artifactId>spring-modulith-starter-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.modulith</groupId>
+			<artifactId>spring-modulith-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- ArchUnit — hexagonal layering + naming rules enforced as JUnit 5 tests. -->
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit-junit5</artifactId>
+			<version>${archunit.version}</version>
 			<scope>test</scope>
 		</dependency>
 
