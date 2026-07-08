@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.application.dto;
-import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.identity.domain.User;
 
 /**

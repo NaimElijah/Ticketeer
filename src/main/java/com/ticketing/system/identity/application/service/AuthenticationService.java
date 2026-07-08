@@ -1,6 +1,5 @@
 package com.ticketing.system.identity.application.service;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService; // transitional: cross-context call, to be rewired via an inbound port later
-import com.ticketing.system.sales.application.service.ReservationService; // transitional: cross-context call, to be rewired via an inbound port later
 
 import java.util.List;
 import java.time.Clock;
@@ -26,12 +25,11 @@ import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.shared.dto.RefreshTokenRequestDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.identity.application.port.out.CartRestorationPort;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
-import com.ticketing.system.sales.domain.ActiveOrder;
-import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.identity.domain.Admin;
@@ -45,7 +43,6 @@ import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
 
 
 /**
@@ -68,10 +65,9 @@ public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final SessionManager sessionManager;
-    private final ReservationService reservationService; // for UC-13 order restoration
+    private final CartRestorationPort cartRestorationPort; // for UC-13 cart restore/merge (sales-owned adapter)
     private final NotificationDispatchService notificationDispatchService; // for UC-37 notification flush
     private final SessionRepository sessionRepository;
-    private final ActiveOrderRepository activeOrderRepository;
     private final ISystemMetrics systemMetrics;
     private final Clock clock;
     private final long guestIdleMinutes;
@@ -90,10 +86,9 @@ public class AuthenticationService {
             UserRepository userRepository,
             PasswordHasher passwordHasher,
             SessionManager sessionManager,
-            ReservationService reservationService,
+            CartRestorationPort cartRestorationPort,
             NotificationDispatchService notificationDispatchService,
             SessionRepository sessionRepository,
-            ActiveOrderRepository activeOrderRepository,
             ISystemMetrics systemMetrics,
             Clock clock,
             AdminRepository adminRepository,
@@ -104,10 +99,9 @@ public class AuthenticationService {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.sessionManager = sessionManager;
-        this.reservationService = reservationService;
+        this.cartRestorationPort = cartRestorationPort;
         this.notificationDispatchService = notificationDispatchService;
         this.sessionRepository = sessionRepository;
-        this.activeOrderRepository = activeOrderRepository;
         this.systemMetrics = systemMetrics;
         this.clock = clock;
         this.adminRepository = adminRepository;
@@ -285,8 +279,9 @@ public class AuthenticationService {
         session.promoteTo(user.getUserId(), memberExpiry);
         sessionRepository.save(session);
 
-        // 4. D9a — cart handling on promotion.
-        handleCartOnPromotion(session, user);
+        // 4. D9a — cart handling on promotion, delegated to the sales-owned adapter
+        //    (runs inside this @Transactional login, so it stays atomic with the promotion).
+        cartRestorationPort.mergeGuestCartOnPromotion(session.getSessionId(), user.getUserId());
 
         // 5. Issue a JWT bound to the existing (now-Member) session.
         String token = sessionManager.generateTokenForSession(session, user.getUsername());
@@ -296,7 +291,7 @@ public class AuthenticationService {
                 user.getUsername(), user.getUserId(), session.getSessionId());
 
         AuthTokenDTO authTokenDTO = new AuthTokenDTO(token, expiresAt, user.getUserId(), user.getUsername());
-        ActiveOrderDTO activeOrderDTO = reservationService.restoreActiveOrder(user.getUserId());
+        ActiveOrderDTO activeOrderDTO = cartRestorationPort.restoreActiveOrder(user.getUserId());
         List<NotificationDTO> notifications = notificationDispatchService.deliverPending(user.getUserId());
         return new LoginDTO(authTokenDTO, activeOrderDTO, notifications);
     }
@@ -378,52 +373,6 @@ public class AuthenticationService {
 
     private record LoginAttempts(int failures, Instant lockedUntil) { }
 
-    /**
-     * D9a cart wiring at promotion time. Two cases:
-     * <ol>
-     * <li>A Guest cart was bound to this session (user filled it while
-     * browsing) → claim it for the now-authenticated user.</li>
-     * <li>No Guest cart this session, but an orphaned Member cart exists
-     * from a previous logout → re-attach it to the new session.</li>
-     * </ol>
-     * If both happen to exist, the Guest cart wins (most recent intent);
-     * the {@link MemoryActiveOrderRepository}'s save() collapses identity
-     * by userId, so the stale Member cart is replaced automatically.
-     */
-    private void handleCartOnPromotion(Session session, User user) {
-        String guestKey = "sess:" + session.getSessionId();
-        String userKey  = "user:" + user.getUserId();
-
-        // Lock both keys in lexicographic order so every caller acquires them
-        // in the same sequence, preventing deadlocks with ReservationService
-        // and the SessionAndOrderSweeper which use the same key convention.
-        String firstKey  = guestKey.compareTo(userKey) <= 0 ? guestKey : userKey;
-        String secondKey = guestKey.compareTo(userKey) <= 0 ? userKey  : guestKey;
-
-        activeOrderRepository.lockForUpdate(firstKey);
-        activeOrderRepository.lockForUpdate(secondKey);
-        try {
-            Optional<ActiveOrder> guestCart = activeOrderRepository.getBySessionId(session.getSessionId());
-            if (guestCart.isPresent() && guestCart.get().isGuest()) {
-                guestCart.get().attachToUser(user.getUserId());
-                activeOrderRepository.save(guestCart.get());
-                log.debug("cart promoted to member userId={} sid={}",
-                        user.getUserId(), session.getSessionId());
-                return;
-            }
-            ActiveOrder priorMemberCart = activeOrderRepository.getByUserId(user.getUserId());
-            if (priorMemberCart != null) {
-                priorMemberCart.attachToSession(session.getSessionId());
-                activeOrderRepository.save(priorMemberCart);
-                log.debug("member cart restored userId={} sid={}",
-                        user.getUserId(), session.getSessionId());
-            }
-        } finally {
-            activeOrderRepository.unlock(secondKey);
-            activeOrderRepository.unlock(firstKey);
-        }
-    }
-
     // ------------------------------------------------------------------
     // Logout (UC-14)
     // ------------------------------------------------------------------
@@ -436,7 +385,8 @@ public class AuthenticationService {
      * Per II.3.1 the session state downgrades back to Guest-Visitor — to act again the
      * visitor must {@link #startGuestSession()} for a fresh sessionId (the old one is dead).
      * The Member cart is not touched here: it persists by userId (II.3.0.1) and is restored
-     * on the next login (UC-13 / D9a, via {@link #handleCartOnPromotion}).
+     * on the next login (UC-13 / D9a, via
+     * {@link CartRestorationPort#mergeGuestCartOnPromotion}).
      *
      * <p>
      * Idempotent: logout with a {@code null} / blank / already-revoked token is a no-op.

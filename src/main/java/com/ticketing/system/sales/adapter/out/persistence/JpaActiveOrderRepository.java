@@ -21,7 +21,7 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code ActiveOrder}'s
  * {@code @Version}. The guest→member cart-merge that previously relied on the double-lock in
- * {@code AuthenticationService.handleCartOnPromotion} therefore runs optimistically — the merge is
+ * {@code CartRestorationAdapter.mergeGuestCartOnPromotion} therefore runs optimistically — the merge is
  * re-runnable (re-read the cart, re-attach, save), so it survives as a {@code @Version} retry once the
  * service-level {@code @Retryable} lands (C1, #359).
  *
