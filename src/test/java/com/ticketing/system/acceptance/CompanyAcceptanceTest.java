@@ -33,7 +33,7 @@ import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
+import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.Event;

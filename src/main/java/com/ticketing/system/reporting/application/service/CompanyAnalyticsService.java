@@ -1,4 +1,5 @@
-package com.ticketing.system.organization.application.service;
+package com.ticketing.system.reporting.application.service;
+// CompanyRatings/CompanyManagementService live in organization; reporting reads them (downward, allowed).
 import com.ticketing.system.organization.application.service.CompanyRatings;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 

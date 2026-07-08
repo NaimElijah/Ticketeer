@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.dto.CompanyDashboardDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
+import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.Event;

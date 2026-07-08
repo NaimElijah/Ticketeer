@@ -1,6 +1,5 @@
 package com.ticketing.system.organization.application.service;
 import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
 
 import java.util.Collection;
 

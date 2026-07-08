@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.shared.dto.CompanyDashboardDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
-import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
+import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 
