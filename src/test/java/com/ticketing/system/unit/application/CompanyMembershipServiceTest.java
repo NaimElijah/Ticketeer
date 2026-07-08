@@ -13,10 +13,10 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
@@ -27,7 +27,7 @@ import com.ticketing.system.identity.domain.User;
 class CompanyMembershipServiceTest {
 
     private UserRepository userRepository;
-    private IProductionCompanyRepository companyRepository;
+    private ProductionCompanyRepository companyRepository;
     private IEventRepository eventRepository;
     private CompanyManagementService service;
 
@@ -37,7 +37,7 @@ class CompanyMembershipServiceTest {
     @BeforeEach
     void setUp() {
         userRepository = mock(UserRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
         eventRepository = mock(IEventRepository.class);
         service = new CompanyManagementService(
                 companyRepository,

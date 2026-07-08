@@ -1,4 +1,5 @@
 package com.ticketing.system.unit.application;
+import com.ticketing.system.organization.application.service.CompanyRatings;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,9 +26,9 @@ import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.services.CatalogService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.EventStatus;
@@ -52,7 +53,7 @@ class CatalogServiceTest {
 
     private SessionManager mockSessionManager;
     private IEventRepository mockEventRepository;
-    private IProductionCompanyRepository mockCompanyRepository;
+    private ProductionCompanyRepository mockCompanyRepository;
     private ITicketRepository mockTicketRepository;
     private CatalogService catalogService;
 
@@ -64,7 +65,7 @@ class CatalogServiceTest {
     void setUp() {
         mockSessionManager = mock(SessionManager.class);
         mockEventRepository = mock(IEventRepository.class);
-        mockCompanyRepository = mock(IProductionCompanyRepository.class);
+        mockCompanyRepository = mock(ProductionCompanyRepository.class);
         mockTicketRepository = mock(ITicketRepository.class);
         catalogService = new CatalogService(
                 mockSessionManager,

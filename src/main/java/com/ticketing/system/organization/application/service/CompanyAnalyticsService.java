@@ -1,4 +1,6 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.organization.application.service;
+import com.ticketing.system.organization.application.service.CompanyRatings;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -14,7 +16,7 @@ import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
@@ -44,7 +46,7 @@ public class CompanyAnalyticsService {
     private final IOrderReceiptRepository orderReceiptRepository;
     private final IConversationRepository conversationRepository;
     private final ITicketRepository ticketRepository;
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
 
     public CompanyAnalyticsService(
@@ -52,7 +54,7 @@ public class CompanyAnalyticsService {
             IOrderReceiptRepository orderReceiptRepository,
             IConversationRepository conversationRepository,
             ITicketRepository ticketRepository,
-            IProductionCompanyRepository companyRepository,
+            ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         this.eventRepository = eventRepository;
         this.orderReceiptRepository = orderReceiptRepository;

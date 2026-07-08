@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 
 import java.util.List;
 

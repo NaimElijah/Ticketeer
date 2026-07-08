@@ -25,7 +25,7 @@ import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
 import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;

@@ -56,8 +56,8 @@ import com.ticketing.system.Core.Domain.orders.ReceiptLine;
 import com.ticketing.system.Core.Domain.orders.TransactionRecord;
 import com.ticketing.system.Core.Domain.policies.purchase.PurchaseContext;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.domain.User;
 
 @Service
@@ -73,7 +73,7 @@ public class CheckoutService {
     private final INotificationService notificationService;
     private final SessionManager sessionManager;
     private final UserRepository userRepository;
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final SystemAdminService systemAdminService;
     // Programmatic transactions for the checkout's Phase-3 DB work. Checkout cannot be a single
     // @Transactional method because the WSEP charge + issue (Phase 2, 20s HTTP timeouts) must run
@@ -107,7 +107,7 @@ public class CheckoutService {
             INotificationService notificationService,
             SessionManager sessionManager,
             UserRepository userRepository,
-            IProductionCompanyRepository companyRepository,
+            ProductionCompanyRepository companyRepository,
             SystemAdminService systemAdminService,
             PlatformTransactionManager transactionManager) {
         this.activeOrderRepository = activeOrderRepository;

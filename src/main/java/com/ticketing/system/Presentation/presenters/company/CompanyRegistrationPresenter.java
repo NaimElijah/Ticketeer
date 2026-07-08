@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
 import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Presentation.session.AuthSession;
 import com.ticketing.system.Presentation.session.CurrentCompanies;
 

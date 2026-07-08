@@ -10,7 +10,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.services.CompanyRatings;
+import com.ticketing.system.organization.application.service.CompanyRatings;
 import com.ticketing.system.Core.Domain.events.Event;
 
 /** A company's rating is the mean of its events' (non-null) ratings, 1-decimal, or null if none. */

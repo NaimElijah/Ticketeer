@@ -22,7 +22,7 @@ import org.mockito.ArgumentCaptor;
 import com.ticketing.system.Core.Application.dto.ConversationDTO;
 import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
 import com.ticketing.system.Core.Application.dto.SendMessageRequestDTO;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.Presentation.presenters.messaging.CompanyInquiryInboxPresenter;

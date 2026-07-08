@@ -39,7 +39,7 @@ import org.mockito.ArgumentCaptor;
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.events.DiscountPolicy;
 import com.ticketing.system.Core.Domain.events.EventCategory;
@@ -92,7 +92,7 @@ public class ReservationServiceTest {
                 activeOrderRepository,
                 sessionManager,
                 notificationService,
-                mock(IProductionCompanyRepository.class),
+                mock(ProductionCompanyRepository.class),
                 mock(UserRepository.class),
                 systemAdminService,
                 mock(ISystemMetrics.class)

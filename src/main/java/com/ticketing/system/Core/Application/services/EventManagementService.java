@@ -38,8 +38,8 @@ import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.EventCategory;
@@ -71,7 +71,7 @@ import com.ticketing.system.Core.Domain.policies.purchase.MinTicketsPurchasePoli
 public class EventManagementService {
 
     private final IEventRepository eventRepository;
-    private final IProductionCompanyRepository companyRepository;
+    private final ProductionCompanyRepository companyRepository;
     private final ITicketRepository ticketRepository;
     private final SessionManager sessionManager;
     private final IOrderReceiptRepository orderReceiptRepository;
@@ -82,7 +82,7 @@ public class EventManagementService {
 
     public EventManagementService(
             IEventRepository eventRepository,
-            IProductionCompanyRepository companyRepository,
+            ProductionCompanyRepository companyRepository,
             ITicketRepository ticketRepository,
             SessionManager sessionManager,
             IOrderReceiptRepository orderReceiptRepository,
