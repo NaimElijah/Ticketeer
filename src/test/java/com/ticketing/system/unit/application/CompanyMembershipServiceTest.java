@@ -11,7 +11,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.CompanyStatus;
@@ -46,7 +46,7 @@ class CompanyMembershipServiceTest {
                 mock(SessionManager.class),
                 mock(TicketRepository.class),
                 eventRepository,
-                mock(INotificationService.class));
+                mock(ApplicationEventPublisher.class));
     }
 
     @Test

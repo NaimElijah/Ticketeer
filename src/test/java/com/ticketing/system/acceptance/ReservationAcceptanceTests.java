@@ -3,7 +3,7 @@ import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
@@ -47,7 +47,7 @@ public class ReservationAcceptanceTests {
     private EventRepository eventRepository;
     private ActiveOrderRepository activeOrderRepository;
     private SessionManager sessionManager;
-    private INotificationService notificationService;
+    private ApplicationEventPublisher eventPublisher;
 
     private Event event;
     private InventoryZone zone;
@@ -58,7 +58,7 @@ public class ReservationAcceptanceTests {
         eventRepository = mock(EventRepository.class);
         activeOrderRepository = mock(ActiveOrderRepository.class);
         sessionManager = mock(SessionManager.class);
-        notificationService = mock(INotificationService.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
 
         SystemAdminService systemAdminService = mock(SystemAdminService.class);
         when(systemAdminService.isMarketOpen()).thenReturn(true);
@@ -67,7 +67,7 @@ public class ReservationAcceptanceTests {
                 eventRepository,
                 activeOrderRepository,
                 sessionManager,
-                notificationService,
+                eventPublisher,
                 mock(ProductionCompanyRepository.class),
                 mock(UserRepository.class),
                 systemAdminService,

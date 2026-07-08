@@ -23,7 +23,8 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
@@ -71,7 +72,7 @@ class EventManagementServiceTest {
         private OrderReceiptRepository orderReceiptRepository;
         private PaymentGateway paymentGateway;
         private UserRepository userRepository;
-        private INotificationService notificationService;
+        private ApplicationEventPublisher eventPublisher;
 
         private final String OWNER_TOKEN = "owner-token";
         private final String MANAGER_TOKEN = "manager-token";                 // CONFIGURE_VENUE manager
@@ -106,7 +107,7 @@ class EventManagementServiceTest {
                 orderReceiptRepository = mock(OrderReceiptRepository.class);
                 paymentGateway = mock(PaymentGateway.class);
                 userRepository = mock(UserRepository.class);
-                notificationService = mock(INotificationService.class);
+                eventPublisher = mock(ApplicationEventPublisher.class);
 
                 eventService = new EventManagementService(
                                 mockEventRepo,
@@ -116,7 +117,7 @@ class EventManagementServiceTest {
                                 orderReceiptRepository,
                                 paymentGateway,
                                 userRepository,
-                                notificationService);
+                                eventPublisher);
 
                 company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
                                 COMPANY_1_DESCRIPTION, 4.5);
@@ -233,7 +234,7 @@ class EventManagementServiceTest {
 
                 eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
 
-                verify(notificationService).notifyEventCancelled(eq(OWNER_ID), eq(EVENT_ID), eq("Concert"));
+                verify(eventPublisher).publishEvent(new EventCancelledNotice(OWNER_ID, EVENT_ID, "Concert"));
         }
 
         @Test

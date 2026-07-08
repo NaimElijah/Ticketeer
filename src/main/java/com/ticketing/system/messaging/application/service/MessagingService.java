@@ -19,7 +19,8 @@ import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.shared.dto.StartConversationRequestDTO;
 import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.messaging.application.dtoMappers.ConversationMapper;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.NewMessageNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
@@ -62,7 +63,9 @@ public class MessagingService {
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
-    private final INotificationService notificationService;
+    // Publisher for cross-context integration events (NewMessageNotice); the notifications
+    // context listens for these instead of messaging calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
 
     public MessagingService(
             ConversationRepository conversationRepository,
@@ -70,14 +73,14 @@ public class MessagingService {
             AdminRepository adminRepository,
             UserRepository userRepository,
             ProductionCompanyRepository companyRepository,
-            INotificationService notificationService
+            ApplicationEventPublisher eventPublisher
     ) {
         this.conversationRepository = conversationRepository;
         this.sessionManager = sessionManager;
         this.adminRepository = adminRepository;
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
-        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
     // Which side of a conversation the authenticated caller is acting as.
@@ -495,8 +498,9 @@ public class MessagingService {
     private void safeNotify(int recipientUserId, String conversationId, String senderLabel,
             String subject, String body) {
         try {
-            notificationService.notifyNewMessage(recipientUserId, conversationId, senderLabel,
-                    subject, snippet(body));
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new NewMessageNotice(recipientUserId, conversationId, senderLabel,
+                    subject, snippet(body)));
         } catch (RuntimeException e) {
             log.warn("Message persisted but notification failed for recipient {} (conversation {})",
                     recipientUserId, conversationId, e);

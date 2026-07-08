@@ -20,7 +20,9 @@ import com.ticketing.system.shared.dto.IssuanceRequestDTO;
 import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.PurchaseCompletedNotice;
+import com.ticketing.system.shared.event.PurchaseFailedNotice;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
@@ -71,7 +73,9 @@ public class CheckoutService {
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketIssuer ticketIssuer;
     private final PaymentGateway paymentGateway;
-    private final INotificationService notificationService;
+    // Publisher for cross-context integration events (e.g. PurchaseCompletedNotice); the
+    // notifications context listens for these instead of sales calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
     private final SessionManager sessionManager;
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
@@ -105,7 +109,7 @@ public class CheckoutService {
             OrderReceiptRepository orderReceiptRepository,
             TicketIssuer ticketIssuer,
             PaymentGateway paymentGateway,
-            INotificationService notificationService,
+            ApplicationEventPublisher eventPublisher,
             SessionManager sessionManager,
             UserRepository userRepository,
             ProductionCompanyRepository companyRepository,
@@ -117,7 +121,7 @@ public class CheckoutService {
         this.orderReceiptRepository = orderReceiptRepository;
         this.ticketIssuer = ticketIssuer;
         this.paymentGateway = paymentGateway;
-        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
         this.sessionManager = sessionManager;
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
@@ -1138,12 +1142,13 @@ public class CheckoutService {
     // notifications or what information we include in the notification without
     // affecting the main checkout flow.
     private void notifyPurchaseCompleted(int userId, double totalPrice, List<ReceiptLine> receiptLines) {
-        notificationService.notifyPurchaseCompleted(
+        // Publish a cross-context integration event; the notifications listener delivers it in-line.
+        eventPublisher.publishEvent(new PurchaseCompletedNotice(
                 userId,
                 totalPrice,
                 receiptLines.stream()
                         .map(ReceiptLine::getTicketId)
-                        .toList());
+                        .toList()));
     }
 
     // We handle checkout failures by logging the error with relevant information
@@ -1192,7 +1197,8 @@ public class CheckoutService {
 
         if (userId > 0) {
             try {
-                notificationService.notifyPurchaseFailed(userId, "Checkout failed.");
+                // Publish a cross-context integration event; the notifications listener delivers it in-line.
+                eventPublisher.publishEvent(new PurchaseFailedNotice(userId, "Checkout failed."));
             } catch (RuntimeException notificationFailure) {
                 log.warn("Checkout failed and failure-notification also failed for userId={}", userId,
                         notificationFailure);

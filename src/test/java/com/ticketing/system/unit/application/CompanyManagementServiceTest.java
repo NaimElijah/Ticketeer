@@ -20,7 +20,7 @@ import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeD
 import com.ticketing.system.organization.application.dto.PermissionEditDTO;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.organization.application.service.CompanyManagementService;
@@ -51,7 +51,7 @@ public class CompanyManagementServiceTest {
         private CompanyManagementService companyService;
         private TicketRepository ticketRepository;
         private EventRepository eventRepository;
-        private INotificationService notificationService;
+        private ApplicationEventPublisher eventPublisher;
 
         private final String OWNER_TOKEN = "owner-token";
         private final String TARGET_TOKEN = "target-token";
@@ -74,7 +74,7 @@ public class CompanyManagementServiceTest {
                 sessionManager = mock(SessionManager.class);
                 ticketRepository = mock(TicketRepository.class);
                 eventRepository = mock(EventRepository.class);
-                notificationService = mock(INotificationService.class);
+                eventPublisher = mock(ApplicationEventPublisher.class);
 
                 companyService = new CompanyManagementService(
                                 mockCompanyRepo,
@@ -83,7 +83,7 @@ public class CompanyManagementServiceTest {
                                 sessionManager,
                                 ticketRepository,
                                 eventRepository,
-                                notificationService);
+                                eventPublisher);
 
                 defaultPermissions = new ArrayList<>();
                 defaultPermissions.add(Permission.CONFIGURE_VENUE);

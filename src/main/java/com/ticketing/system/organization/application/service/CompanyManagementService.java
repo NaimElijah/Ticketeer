@@ -46,7 +46,10 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ManagerRevokedNotice;
+import com.ticketing.system.shared.event.OwnerAppointmentPendingNotice;
+import com.ticketing.system.shared.event.RoleChangedNotice;
 
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
@@ -72,19 +75,21 @@ public class CompanyManagementService {
     private final SessionManager sessionManager;
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
-    private final INotificationService notificationService;
+    // Publisher for cross-context integration events (role-change / appointment notices); the
+    // notifications context listens for these instead of organization calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
 
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
             OrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
             TicketRepository ticketRepository, EventRepository eventRepository,
-            INotificationService notificationService) {
+            ApplicationEventPublisher eventPublisher) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.orderReceiptRepository = orderReceiptRepository;
         this.sessionManager = sessionManager;
         this.ticketRepository = ticketRepository;
         this.eventRepository = eventRepository;
-        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
     // UC-23 — Owner appoints another Member as co-Owner (PENDING).
@@ -116,8 +121,9 @@ public class CompanyManagementService {
         // Notify target user
         try {
             ProductionCompany company = companyRepository.getCompanyById(request.companyId());
-            notificationService.notifyOwnerAppointmentPending(request.targetUserId(), request.companyId(),
-                    company.getName());
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new OwnerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
+                    company.getName()));
         } catch (Exception e) {
             log.warn("Owner appointment created but notification failed for userId={}", request.targetUserId(), e);
         }
@@ -144,8 +150,9 @@ public class CompanyManagementService {
         // Notify target user
         try {
             ProductionCompany company = companyRepository.getCompanyById(request.companyId());
-            notificationService.notifyRoleChanged(request.targetUserId(), request.companyId(), company.getName(),
-                    "MANAGER");
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new RoleChangedNotice(request.targetUserId(), request.companyId(),
+                    company.getName(), "MANAGER"));
         } catch (Exception e) {
             log.warn("Manager appointment created but notification failed for userId={}", request.targetUserId(), e);
         }
@@ -181,8 +188,9 @@ public class CompanyManagementService {
 
             // Notify of role change to final role
             try {
-                notificationService.notifyRoleChanged(userId, response.companyId(), company.getName(),
-                        appointment.getRole().name());
+                // Publish a cross-context integration event; the notifications listener delivers it in-line.
+                eventPublisher.publishEvent(new RoleChangedNotice(userId, response.companyId(), company.getName(),
+                        appointment.getRole().name()));
             } catch (Exception e) {
                 log.warn("Appointment accepted but notification failed for userId={}", userId, e);
             }
@@ -220,8 +228,9 @@ public class CompanyManagementService {
         // Notify manager of permission change
         try {
             ProductionCompany company = companyRepository.getCompanyById(edit.companyId());
-            notificationService.notifyRoleChanged(edit.targetUserId(), edit.companyId(), company.getName(),
-                    "MANAGER (permissions updated)");
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new RoleChangedNotice(edit.targetUserId(), edit.companyId(),
+                    company.getName(), "MANAGER (permissions updated)"));
         } catch (Exception e) {
             log.warn("Manager permissions updated but notification failed for userId={}", edit.targetUserId(), e);
         }
@@ -250,8 +259,9 @@ public class CompanyManagementService {
 
         // Notify user of revocation
         try {
-            notificationService.notifyManagerRevoked(revokeRequest.targetUserId(), revokeRequest.companyId(),
-                    company.getName());
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new ManagerRevokedNotice(revokeRequest.targetUserId(),
+                    revokeRequest.companyId(), company.getName()));
         } catch (Exception e) {
             log.warn("Role revoked but notification failed for userId={}", revokeRequest.targetUserId(), e);
         }

@@ -34,7 +34,8 @@ import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;
@@ -77,7 +78,9 @@ public class EventManagementService {
     private final OrderReceiptRepository orderReceiptRepository;
     private final PaymentGateway paymentGateway;
     private final UserRepository userRepository;
-    private final INotificationService notificationService;
+    // Publisher for cross-context integration events (EventCancelledNotice); the notifications
+    // context listens for these instead of catalog calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
     private int currentVenueMapIdCounter;
 
     public EventManagementService(
@@ -88,7 +91,7 @@ public class EventManagementService {
             OrderReceiptRepository orderReceiptRepository,
             PaymentGateway paymentGateway,
             UserRepository userRepository,
-            INotificationService notificationService) {
+            ApplicationEventPublisher eventPublisher) {
         this.eventRepository = eventRepository;
         this.companyRepository = companyRepository;
         this.ticketRepository = ticketRepository;
@@ -96,7 +99,7 @@ public class EventManagementService {
         this.orderReceiptRepository = orderReceiptRepository;
         this.paymentGateway = paymentGateway;
         this.userRepository = userRepository;
-        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
         this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
                                            // here for now.
     }
@@ -934,7 +937,8 @@ public class EventManagementService {
 
         for (Integer userId : memberUserIds) {
             try {
-                notificationService.notifyEventCancelled(userId, eventId, eventName);
+                // Publish a cross-context integration event; the notifications listener delivers it in-line.
+                eventPublisher.publishEvent(new EventCancelledNotice(userId, eventId, eventName));
             } catch (Exception e) {
                 log.warn("Failed to send cancellation notification to userId={} for eventId={}", userId, eventId, e);
             }

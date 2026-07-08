@@ -38,7 +38,7 @@ import com.ticketing.system.shared.dto.IssuanceRequestDTO;
 import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
@@ -85,7 +85,7 @@ class CheckoutServiceTest {
     private OrderReceiptRepository mockOrderReceiptRepo;
     private TicketIssuer mockTicketIssuer;
     private PaymentGateway mockPaymentGateway;
-    private INotificationService mockNotificationService;
+    private ApplicationEventPublisher mockEventPublisher;
     private SessionManager mockiSessionManager;
     private UserRepository mockUserRepository;
     private SystemAdminService mockSystemAdminService;
@@ -135,7 +135,7 @@ class CheckoutServiceTest {
 
         mockTicketIssuer = mock(TicketIssuer.class);
         mockPaymentGateway = mock(PaymentGateway.class);
-        mockNotificationService = mock(INotificationService.class);
+        mockEventPublisher = mock(ApplicationEventPublisher.class);
         mockiSessionManager = mock(SessionManager.class);
         mockUserRepository = mock(UserRepository.class);
         User mockUser = mock(User.class);
@@ -153,7 +153,7 @@ class CheckoutServiceTest {
                 mockOrderReceiptRepo,
                 mockTicketIssuer,
                 mockPaymentGateway,
-                mockNotificationService,
+                mockEventPublisher,
                 mockiSessionManager,
                 mockUserRepository,
                 mock(ProductionCompanyRepository.class),

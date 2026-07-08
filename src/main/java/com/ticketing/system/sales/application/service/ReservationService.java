@@ -16,7 +16,11 @@ import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ReservationRemovalFailedNotice;
+import com.ticketing.system.shared.event.ReservationRemovalSucceededNotice;
+import com.ticketing.system.shared.event.TicketReservationFailedNotice;
+import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
@@ -42,7 +46,9 @@ public class ReservationService {
     private final EventRepository eventRepository;
     private final ActiveOrderRepository activeOrderRepository;
     private final SessionManager iSessionManager;
-    private final INotificationService notificationService;
+    // Publisher for cross-context integration events (reservation success/failure notices); the
+    // notifications context listens for these instead of sales calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final SystemAdminService systemAdminService;
@@ -55,7 +61,7 @@ public class ReservationService {
             EventRepository eventRepository,
             ActiveOrderRepository activeOrderRepository,
             SessionManager iSessionManager,
-            INotificationService notificationService,
+            ApplicationEventPublisher eventPublisher,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
             SystemAdminService systemAdminService,
@@ -63,7 +69,7 @@ public class ReservationService {
         this.eventRepository = eventRepository;
         this.activeOrderRepository = activeOrderRepository;
         this.iSessionManager = iSessionManager;
-        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.systemAdminService = systemAdminService;
@@ -651,25 +657,29 @@ public class ReservationService {
 
     private void notifyReservationSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            notificationService.notifyTicketReservationSuccess(buyer.userId(), eventId, zoneId, quantity);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            notificationService.notifyTicketReservationFailure(buyer.userId(), eventId, zoneId, reason);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new TicketReservationFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
 
     private void notifyRemoveSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            notificationService.notifyRemoveTicketReservationSuccess(buyer.userId(), eventId, zoneId, quantity);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new ReservationRemovalSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyRemoveFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            notificationService.notifyRemoveTicketReservationFailure(buyer.userId(), eventId, zoneId, reason);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new ReservationRemovalFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
 

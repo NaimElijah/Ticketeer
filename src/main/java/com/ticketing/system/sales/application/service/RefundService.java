@@ -1,5 +1,4 @@
 package com.ticketing.system.sales.application.service;
-import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.catalog.application.service.EventManagementService;

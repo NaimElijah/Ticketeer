@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.PurchaseCompletedNotice;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
@@ -48,7 +49,7 @@ public class CheckoutServiceAcceptanceTest {
     private OrderReceiptRepository orderReceiptRepository;
     private TicketIssuer ticketIssuer;
     private PaymentGateway paymentGateway;
-    private INotificationService notificationService;
+    private ApplicationEventPublisher eventPublisher;
     private SessionManager sessionManager;
     private UserRepository userRepository;
 
@@ -110,7 +111,7 @@ public class CheckoutServiceAcceptanceTest {
 
         ticketIssuer = mock(TicketIssuer.class);
         paymentGateway = mock(PaymentGateway.class);
-        notificationService = mock(INotificationService.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
         sessionManager = mock(SessionManager.class);
 
         systemAdminService = mock(SystemAdminService.class);
@@ -123,7 +124,7 @@ public class CheckoutServiceAcceptanceTest {
                 orderReceiptRepository,
                 ticketIssuer,
                 paymentGateway,
-                notificationService,
+                eventPublisher,
                 sessionManager,
                 userRepository,
                 companyRepository,
@@ -686,8 +687,8 @@ public class CheckoutServiceAcceptanceTest {
         validPaymentAndIssuance(1);
 
         doThrow(new RuntimeException("notify failed"))
-                .when(notificationService)
-                .notifyPurchaseCompleted(anyInt(), anyDouble(), anyList());
+                .when(eventPublisher)
+                .publishEvent(any(PurchaseCompletedNotice.class));
 
         RuntimeException exception = assertThrows(RuntimeException.class,
                 () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
@@ -902,7 +903,7 @@ public class CheckoutServiceAcceptanceTest {
         doAnswer(invocation -> {
             userNotified.set(true);
             return null;
-        }).when(notificationService).notifyPurchaseCompleted(anyInt(), anyDouble(), anyList());
+        }).when(eventPublisher).publishEvent(any(PurchaseCompletedNotice.class));
 
         ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
@@ -931,7 +932,7 @@ public class CheckoutServiceAcceptanceTest {
                 orderReceiptRepository,
                 ticketIssuer,
                 paymentGateway,
-                notificationService,
+                eventPublisher,
                 sessionManager,
                 userRepository,
                 companyRepository,
