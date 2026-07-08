@@ -2,7 +2,7 @@ package com.ticketing.system.unit.domain;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.support.BaseDomainTest;
 
 import java.time.LocalDateTime;

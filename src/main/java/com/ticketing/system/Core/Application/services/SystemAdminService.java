@@ -1,4 +1,6 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.sales.application.service.CheckoutService;
+import com.ticketing.system.sales.application.service.ReservationService;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -12,12 +14,12 @@ import com.ticketing.system.Core.Application.dto.MarketStateDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
+import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -27,7 +29,7 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.MissingDefaultAdminException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 
 import lombok.extern.slf4j.Slf4j;
 // Owns platform-bootstrap, market-lifecycle, and global admin queries.
@@ -42,13 +44,13 @@ public class SystemAdminService {
 
     private final SessionManager sessionManager;
     private final AdminRepository adminRepository;
-    private final IOrderReceiptRepository orderReceiptRepository;
-    private final ITicketRepository ticketRepository;
+    private final OrderReceiptRepository orderReceiptRepository;
+    private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
-    private final List<IPaymentGateway> paymentGateways;
-    private final List<ITicketIssuer> ticketIssuers;
+    private final List<PaymentGateway> paymentGateways;
+    private final List<TicketIssuer> ticketIssuers;
     private final PasswordHasher passwordHasher;
     private final SystemIntegrityVerifier integrityVerifier;
 
@@ -68,13 +70,13 @@ public class SystemAdminService {
     public SystemAdminService(
             SessionManager sessionManager,
             AdminRepository adminRepository,
-            IOrderReceiptRepository orderReceiptRepository,
-            ITicketRepository ticketRepository,
+            OrderReceiptRepository orderReceiptRepository,
+            TicketRepository ticketRepository,
             EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
-            List<IPaymentGateway> paymentGateways,
-            List<ITicketIssuer> ticketIssuers,
+            List<PaymentGateway> paymentGateways,
+            List<TicketIssuer> ticketIssuers,
             PasswordHasher passwordHasher,
             SystemIntegrityVerifier integrityVerifier,
             @Value("${platform.admin.username}") String defaultAdminUsername,
@@ -299,7 +301,7 @@ public class SystemAdminService {
     // *HELPER METHODS* — UC-1 I.1.2/I.1.3 reachability probe (maps to the WSEP `handshake`).
     // A thrown verification (e.g. a real HTTP adapter timing out) is treated as "unreachable"
     // so a flaky provider can never crash bootstrap — it just doesn't count toward the quorum.
-    private boolean isReachable(IPaymentGateway gateway) {
+    private boolean isReachable(PaymentGateway gateway) {
         try {
             boolean ok = gateway.verifyConnection();
             if (!ok) {
@@ -312,7 +314,7 @@ public class SystemAdminService {
         }
     }
 
-    private boolean isReachable(ITicketIssuer issuer) {
+    private boolean isReachable(TicketIssuer issuer) {
         try {
             boolean ok = issuer.verifyConnection();
             if (!ok) {

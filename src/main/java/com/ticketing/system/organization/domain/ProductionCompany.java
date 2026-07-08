@@ -7,10 +7,10 @@ import java.util.List;
 
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.InvariantChecked;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicyJsonConverter;
+import com.ticketing.system.sales.domain.AndPurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicyJsonConverter;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;

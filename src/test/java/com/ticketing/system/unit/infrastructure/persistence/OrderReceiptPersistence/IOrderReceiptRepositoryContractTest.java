@@ -14,23 +14,23 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord.TransactionType;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
+import com.ticketing.system.sales.domain.TransactionRecord.TransactionType;
 
 /**
- * Contract every {@link IOrderReceiptRepository} implementation must satisfy. The Memory and JPA
+ * Contract every {@link OrderReceiptRepository} implementation must satisfy. The Memory and JPA
  * adapters each subclass this with their own {@link #newRepository()} factory; the tests are reused.
  * The lines/transactions test pins the acceptance: the owned value lists survive save/reload on both
  * adapters.
  */
 abstract class IOrderReceiptRepositoryContractTest {
 
-    protected abstract IOrderReceiptRepository newRepository();
+    protected abstract OrderReceiptRepository newRepository();
 
-    private IOrderReceiptRepository repo;
+    private OrderReceiptRepository repo;
 
     @BeforeEach
     void setUp() {

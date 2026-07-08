@@ -35,9 +35,9 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.NotificationDispatchService;
-import com.ticketing.system.Core.Application.services.ReservationService;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.AccountLockedException;
@@ -62,7 +62,7 @@ class AuthenticationServiceTest {
     private PasswordHasher mockHasher;
     private SessionManager mockSessionManager;
     private SessionRepository mockSessionRepo;
-    private IActiveOrderRepository mockActiveOrderRepo;
+    private ActiveOrderRepository mockActiveOrderRepo;
     private AdminRepository mockAdminRepo;
     private Clock fixedClock;
     private AuthenticationService service;
@@ -77,7 +77,7 @@ class AuthenticationServiceTest {
         mockNotification = mock(NotificationDispatchService.class);
         mockReservation = mock(ReservationService.class);
         mockSessionRepo = mock(SessionRepository.class);
-        mockActiveOrderRepo = mock(IActiveOrderRepository.class);
+        mockActiveOrderRepo = mock(ActiveOrderRepository.class);
         mockAdminRepo = mock(AdminRepository.class);
         fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new AuthenticationService(

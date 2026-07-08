@@ -25,7 +25,7 @@ import com.ticketing.system.Core.Application.dto.SearchResultDTO;
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
@@ -54,7 +54,7 @@ class CatalogServiceTest {
     private SessionManager mockSessionManager;
     private EventRepository mockEventRepository;
     private ProductionCompanyRepository mockCompanyRepository;
-    private ITicketRepository mockTicketRepository;
+    private TicketRepository mockTicketRepository;
     private CatalogService catalogService;
 
     private static final String VALID_TOKEN = "valid-token";
@@ -66,7 +66,7 @@ class CatalogServiceTest {
         mockSessionManager = mock(SessionManager.class);
         mockEventRepository = mock(EventRepository.class);
         mockCompanyRepository = mock(ProductionCompanyRepository.class);
-        mockTicketRepository = mock(ITicketRepository.class);
+        mockTicketRepository = mock(TicketRepository.class);
         catalogService = new CatalogService(
                 mockSessionManager,
                 mockEventRepository,

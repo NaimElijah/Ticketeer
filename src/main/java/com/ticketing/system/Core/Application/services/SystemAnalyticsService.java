@@ -20,8 +20,8 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,7 +44,7 @@ public class SystemAnalyticsService {
     private static final int REVENUE_WINDOW_DAYS = 30;
 
     private final ISystemMetrics metrics;
-    private final IOrderReceiptRepository orderReceiptRepository;
+    private final OrderReceiptRepository orderReceiptRepository;
     private final ProductionCompanyRepository companyRepository;
     private final EventRepository eventRepository;
     private final IConversationRepository conversationRepository;
@@ -53,7 +53,7 @@ public class SystemAnalyticsService {
 
     public SystemAnalyticsService(
             ISystemMetrics metrics,
-            IOrderReceiptRepository orderReceiptRepository,
+            OrderReceiptRepository orderReceiptRepository,
             ProductionCompanyRepository companyRepository,
             EventRepository eventRepository,
             IConversationRepository conversationRepository,

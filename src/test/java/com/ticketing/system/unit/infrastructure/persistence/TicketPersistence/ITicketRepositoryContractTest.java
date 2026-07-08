@@ -12,12 +12,12 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.sales.domain.TicketStatus;
 
 /**
- * Contract every {@link ITicketRepository} implementation must satisfy. The Memory and
+ * Contract every {@link TicketRepository} implementation must satisfy. The Memory and
  * JPA adapters each subclass this with their own {@link #newRepository()} factory; the
  * tests are reused. Keys are {@code int} end-to-end (the former String/int mismatch on
  * the port is fixed).
@@ -28,9 +28,9 @@ import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
  */
 abstract class ITicketRepositoryContractTest {
 
-    protected abstract ITicketRepository newRepository();
+    protected abstract TicketRepository newRepository();
 
-    private ITicketRepository repo;
+    private TicketRepository repo;
 
     @BeforeEach
     void setUp() {

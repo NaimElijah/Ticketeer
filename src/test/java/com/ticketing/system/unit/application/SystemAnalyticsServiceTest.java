@@ -28,8 +28,8 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.Conversation;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
 
 /**
  * Unit tests for {@link SystemAnalyticsService} (UC-46 / #43, #279). The metrics
@@ -42,7 +42,7 @@ class SystemAnalyticsServiceTest {
     private static final int WINDOW = 5;
 
     private ISystemMetrics metrics;
-    private IOrderReceiptRepository orderReceiptRepository;
+    private OrderReceiptRepository orderReceiptRepository;
     private ProductionCompanyRepository companyRepository;
     private EventRepository eventRepository;
     private IConversationRepository conversationRepository;
@@ -51,7 +51,7 @@ class SystemAnalyticsServiceTest {
     @BeforeEach
     void setUp() {
         metrics = mock(ISystemMetrics.class);
-        orderReceiptRepository = mock(IOrderReceiptRepository.class);
+        orderReceiptRepository = mock(OrderReceiptRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         eventRepository = mock(EventRepository.class);
         conversationRepository = mock(IConversationRepository.class);

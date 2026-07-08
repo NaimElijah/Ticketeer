@@ -15,11 +15,11 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicyJsonConverter;
+import com.ticketing.system.sales.domain.AgePurchasePolicy;
+import com.ticketing.system.sales.domain.AndPurchasePolicy;
+import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicyJsonConverter;
 
 /**
  * Contract every {@link ProductionCompanyRepository} implementation must satisfy. The Memory and

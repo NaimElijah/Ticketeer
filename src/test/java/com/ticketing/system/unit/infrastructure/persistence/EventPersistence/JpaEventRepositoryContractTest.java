@@ -24,11 +24,11 @@ import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicyJsonConverter;
+import com.ticketing.system.sales.domain.AgePurchasePolicy;
+import com.ticketing.system.sales.domain.AndPurchasePolicy;
+import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicyJsonConverter;
 import com.ticketing.system.catalog.adapter.out.persistence.JpaEventRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 

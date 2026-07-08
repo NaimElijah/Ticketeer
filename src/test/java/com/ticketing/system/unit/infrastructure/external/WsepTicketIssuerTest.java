@@ -22,7 +22,7 @@ import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.Infrastructure.external.WsepCommunicationException;
 import com.ticketing.system.Infrastructure.external.WsepHttpClient;
-import com.ticketing.system.Infrastructure.external.WsepTicketIssuer;
+import com.ticketing.system.sales.adapter.out.wsep.WsepTicketIssuer;
 
 class WsepTicketIssuerTest {
 

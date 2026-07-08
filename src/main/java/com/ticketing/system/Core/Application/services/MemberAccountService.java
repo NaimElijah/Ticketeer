@@ -6,13 +6,13 @@ import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,14 +33,14 @@ public class MemberAccountService {
 
     private final AuthenticationService authenticationService; // For user identity verification, if needed for future
                                                                // methods.
-    private final IOrderReceiptRepository orderReceiptRepository;
-    private final ITicketRepository ticketRepository;
+    private final OrderReceiptRepository orderReceiptRepository;
+    private final TicketRepository ticketRepository;
     private final EventRepository eventRepository; // For event name lookups in history records.
 
     public MemberAccountService(
             AuthenticationService authenticationService,
-            IOrderReceiptRepository orderReceiptRepository,
-            ITicketRepository ticketRepository,
+            OrderReceiptRepository orderReceiptRepository,
+            TicketRepository ticketRepository,
             EventRepository eventRepository) {
         this.authenticationService = authenticationService;
         this.orderReceiptRepository = orderReceiptRepository;

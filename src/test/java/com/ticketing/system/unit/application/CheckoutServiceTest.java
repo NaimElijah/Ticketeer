@@ -39,17 +39,17 @@ import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
 import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
 import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
-import com.ticketing.system.Core.Application.services.CheckoutService;
+import com.ticketing.system.sales.application.port.out.TicketIssuer;
+import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
@@ -64,27 +64,27 @@ import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MinTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.OrPurchasePolicy;
+import com.ticketing.system.sales.domain.AgePurchasePolicy;
+import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.AndPurchasePolicy;
+import com.ticketing.system.sales.domain.OrPurchasePolicy;
 
 class CheckoutServiceTest {
 
-    private IActiveOrderRepository mockActiveOrderRepo;
+    private ActiveOrderRepository mockActiveOrderRepo;
     private EventRepository mockEventRepo;
-    private ITicketRepository mockTicketRepo;
-    private IOrderReceiptRepository mockOrderReceiptRepo;
-    private ITicketIssuer mockTicketIssuer;
-    private IPaymentGateway mockPaymentGateway;
+    private TicketRepository mockTicketRepo;
+    private OrderReceiptRepository mockOrderReceiptRepo;
+    private TicketIssuer mockTicketIssuer;
+    private PaymentGateway mockPaymentGateway;
     private INotificationService mockNotificationService;
     private SessionManager mockiSessionManager;
     private UserRepository mockUserRepository;
@@ -125,16 +125,16 @@ class CheckoutServiceTest {
 
     @BeforeEach
     void setUp() {
-        mockActiveOrderRepo = mock(IActiveOrderRepository.class);
+        mockActiveOrderRepo = mock(ActiveOrderRepository.class);
         mockEventRepo = mock(EventRepository.class);
-        mockTicketRepo = mock(ITicketRepository.class);
+        mockTicketRepo = mock(TicketRepository.class);
         
-        mockOrderReceiptRepo = mock(IOrderReceiptRepository.class);
+        mockOrderReceiptRepo = mock(OrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);
         when(mockOrderReceiptRepo.nextId()).thenAnswer(invocation -> receiptIds.getAndIncrement());
 
-        mockTicketIssuer = mock(ITicketIssuer.class);
-        mockPaymentGateway = mock(IPaymentGateway.class);
+        mockTicketIssuer = mock(TicketIssuer.class);
+        mockPaymentGateway = mock(PaymentGateway.class);
         mockNotificationService = mock(INotificationService.class);
         mockiSessionManager = mock(SessionManager.class);
         mockUserRepository = mock(UserRepository.class);

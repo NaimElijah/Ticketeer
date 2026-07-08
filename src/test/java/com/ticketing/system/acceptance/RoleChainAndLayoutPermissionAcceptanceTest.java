@@ -35,10 +35,10 @@ import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO.ZoneConfigDTO
 import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.Core.Application.services.CheckoutService;
+import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.Core.Application.services.ReservationService;
+import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.EventCategory;

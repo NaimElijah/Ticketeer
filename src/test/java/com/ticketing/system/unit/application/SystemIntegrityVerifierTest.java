@@ -14,9 +14,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.services.SystemIntegrityVerifier;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
@@ -31,7 +31,7 @@ import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 
@@ -43,7 +43,7 @@ class SystemIntegrityVerifierTest {
     private final UserRepository userRepository = mock(UserRepository.class);
     private final ProductionCompanyRepository companyRepository = mock(ProductionCompanyRepository.class);
     private final EventRepository eventRepository = mock(EventRepository.class);
-    private final IActiveOrderRepository activeOrderRepository = mock(IActiveOrderRepository.class);
+    private final ActiveOrderRepository activeOrderRepository = mock(ActiveOrderRepository.class);
     private final SystemIntegrityVerifier verifier = new SystemIntegrityVerifier(
             userRepository, companyRepository, eventRepository, activeOrderRepository);
 

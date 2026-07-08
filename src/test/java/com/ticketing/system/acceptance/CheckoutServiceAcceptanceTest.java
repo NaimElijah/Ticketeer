@@ -1,22 +1,27 @@
 package com.ticketing.system.acceptance;
+import com.ticketing.system.sales.application.port.out.TicketIssuer;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.Core.Application.dto.*;
 import com.ticketing.system.Core.Application.interfaces.*;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.CheckoutService;
+import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.ActiveOrder.*;
-import com.ticketing.system.Core.Domain.Tickets.*;
+import com.ticketing.system.sales.domain.*;
+import com.ticketing.system.sales.domain.*;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.*;
-import com.ticketing.system.Core.Domain.orders.*;
+import com.ticketing.system.sales.domain.*;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.MemoryActiveOrderRepository;
+import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
 import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -36,12 +41,12 @@ import static org.mockito.Mockito.*;
 
 public class CheckoutServiceAcceptanceTest {
 
-    private IActiveOrderRepository activeOrderRepository;
+    private ActiveOrderRepository activeOrderRepository;
     private EventRepository eventRepository;
-    private ITicketRepository ticketRepository;
-    private IOrderReceiptRepository orderReceiptRepository;
-    private ITicketIssuer ticketIssuer;
-    private IPaymentGateway paymentGateway;
+    private TicketRepository ticketRepository;
+    private OrderReceiptRepository orderReceiptRepository;
+    private TicketIssuer ticketIssuer;
+    private PaymentGateway paymentGateway;
     private INotificationService notificationService;
     private SessionManager sessionManager;
     private UserRepository userRepository;
@@ -54,8 +59,8 @@ public class CheckoutServiceAcceptanceTest {
     @Autowired private EventManagementService eventManagementService;
     private ProductionCompanyRepository companyRepository;
     @Autowired private EventRepository eventRepository1;
-    @Autowired private ITicketRepository ticketRepository1;
-    @Autowired private IOrderReceiptRepository orderReceiptRepository1;
+    @Autowired private TicketRepository ticketRepository1;
+    @Autowired private OrderReceiptRepository orderReceiptRepository1;
 
 
     private AuthTokenDTO registerAndLoginMember(String name) {
@@ -92,18 +97,18 @@ public class CheckoutServiceAcceptanceTest {
 
     @BeforeEach
     void setUp() {
-        activeOrderRepository = mock(IActiveOrderRepository.class);
+        activeOrderRepository = mock(ActiveOrderRepository.class);
         eventRepository = mock(EventRepository.class);
-        ticketRepository = mock(ITicketRepository.class);
+        ticketRepository = mock(TicketRepository.class);
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
 
-        orderReceiptRepository = mock(IOrderReceiptRepository.class);
+        orderReceiptRepository = mock(OrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);
         when(orderReceiptRepository.nextId()).thenAnswer(invocation -> receiptIds.getAndIncrement());
 
-        ticketIssuer = mock(ITicketIssuer.class);
-        paymentGateway = mock(IPaymentGateway.class);
+        ticketIssuer = mock(TicketIssuer.class);
+        paymentGateway = mock(PaymentGateway.class);
         notificationService = mock(INotificationService.class);
         sessionManager = mock(SessionManager.class);
 
@@ -917,7 +922,7 @@ public class CheckoutServiceAcceptanceTest {
     // These use a REAL MemoryActiveOrderRepository so delete-vs-save is observable across lookups —
     // the mock-based suites cannot catch this (their save/delete are no-ops).
 
-    private CheckoutService checkoutServiceWith(IActiveOrderRepository realRepo) {
+    private CheckoutService checkoutServiceWith(ActiveOrderRepository realRepo) {
         return new CheckoutService(
                 realRepo,
                 eventRepository,

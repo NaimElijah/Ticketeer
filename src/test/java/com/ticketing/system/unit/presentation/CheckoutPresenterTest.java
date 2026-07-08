@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.services.CheckoutService;
-import com.ticketing.system.Core.Application.services.ReservationService;
+import com.ticketing.system.sales.application.service.CheckoutService;
+import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.Presentation.presenters.order.CheckoutPresenter;

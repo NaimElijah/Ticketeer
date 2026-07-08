@@ -21,14 +21,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
@@ -43,10 +43,10 @@ import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.Core.Application.dto.RefundResultDTO;
 import com.ticketing.system.Core.Application.dto.ZoneDetailDTO;
 import com.ticketing.system.Core.Application.dto.VenueLayoutDTO;
@@ -65,11 +65,11 @@ class EventManagementServiceTest {
 
         private EventRepository mockEventRepo;
         private ProductionCompanyRepository mockCompanyRepo;
-        private ITicketRepository mockTicketRepo;
+        private TicketRepository mockTicketRepo;
         private SessionManager sessionManager;
         private EventManagementService eventService;
-        private IOrderReceiptRepository orderReceiptRepository;
-        private IPaymentGateway paymentGateway;
+        private OrderReceiptRepository orderReceiptRepository;
+        private PaymentGateway paymentGateway;
         private UserRepository userRepository;
         private INotificationService notificationService;
 
@@ -101,10 +101,10 @@ class EventManagementServiceTest {
         public void setUp() {
                 mockEventRepo = mock(EventRepository.class);
                 mockCompanyRepo = mock(ProductionCompanyRepository.class);
-                mockTicketRepo = mock(ITicketRepository.class);
+                mockTicketRepo = mock(TicketRepository.class);
                 sessionManager = mock(SessionManager.class);
-                orderReceiptRepository = mock(IOrderReceiptRepository.class);
-                paymentGateway = mock(IPaymentGateway.class);
+                orderReceiptRepository = mock(OrderReceiptRepository.class);
+                paymentGateway = mock(PaymentGateway.class);
                 userRepository = mock(UserRepository.class);
                 notificationService = mock(INotificationService.class);
 

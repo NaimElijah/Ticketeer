@@ -3,7 +3,7 @@ package com.ticketing.system.Presentation.presenters.order;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Application.services.ReservationService;
+import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.Presentation.session.SessionIdentity;
 
 import lombok.extern.slf4j.Slf4j;

@@ -16,16 +16,16 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.Conversation;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 
 class CompanyAnalyticsServiceTest {
@@ -37,9 +37,9 @@ class CompanyAnalyticsServiceTest {
     private static final int OTHER_COMPANY_EVENT = 999;
 
     private EventRepository eventRepository;
-    private IOrderReceiptRepository orderReceiptRepository;
+    private OrderReceiptRepository orderReceiptRepository;
     private IConversationRepository conversationRepository;
-    private  ITicketRepository ticketRepository;
+    private  TicketRepository ticketRepository;
     private  ProductionCompanyRepository companyRepository;
     private  UserRepository userRepository;
     private CompanyAnalyticsService service;
@@ -47,9 +47,9 @@ class CompanyAnalyticsServiceTest {
     @BeforeEach
     void setUp() {
         eventRepository = mock(EventRepository.class);
-        orderReceiptRepository = mock(IOrderReceiptRepository.class);
+        orderReceiptRepository = mock(OrderReceiptRepository.class);
         conversationRepository = mock(IConversationRepository.class);
-        ticketRepository = mock(ITicketRepository.class);
+        ticketRepository = mock(TicketRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
         service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository);

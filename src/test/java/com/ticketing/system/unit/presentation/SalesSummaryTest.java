@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.TicketRecordDTO;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.Presentation.views.admin.SalesSummary;
 
 /** Refund-aware headline figures for the Company Sales page (pure; no Vaadin). */

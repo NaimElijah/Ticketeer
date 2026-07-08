@@ -24,9 +24,9 @@ import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.Presentation.presenters.company.CompanySalesPresenter;
 
 /**
@@ -48,7 +48,7 @@ class CompanySalesReportAcceptanceTest {
     @Autowired
     private EventManagementService eventManagementService;
     @Autowired
-    private IOrderReceiptRepository orderReceiptRepository;
+    private OrderReceiptRepository orderReceiptRepository;
     @Autowired
     private CompanySalesPresenter presenter;
 

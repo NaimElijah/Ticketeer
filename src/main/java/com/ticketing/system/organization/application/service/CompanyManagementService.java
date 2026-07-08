@@ -33,12 +33,12 @@ import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.Core.Domain.users.AppointmentStatus;
 import com.ticketing.system.Core.Domain.users.CompanyAppointment;
 import com.ticketing.system.Core.Domain.users.CompanyRole;
@@ -52,13 +52,13 @@ import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
 import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;
 
 import com.ticketing.system.Core.Application.dto.PurchasePolicyDTO;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.OrPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MinTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.AgePurchasePolicy;
+import com.ticketing.system.sales.domain.AndPurchasePolicy;
+import com.ticketing.system.sales.domain.OrPurchasePolicy;
+import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,15 +68,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class CompanyManagementService {
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
-    private final IOrderReceiptRepository orderReceiptRepository;
+    private final OrderReceiptRepository orderReceiptRepository;
     private final SessionManager sessionManager;
-    private final ITicketRepository ticketRepository;
+    private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
     private final INotificationService notificationService;
 
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
-            IOrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
-            ITicketRepository ticketRepository, EventRepository eventRepository,
+            OrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
+            TicketRepository ticketRepository, EventRepository eventRepository,
             INotificationService notificationService) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
