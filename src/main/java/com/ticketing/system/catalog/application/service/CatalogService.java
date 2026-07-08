@@ -27,7 +27,6 @@ import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.catalog.application.dtoMappers.VenueMapMapper;
 import com.ticketing.system.catalog.application.dtoMappers.EventMapper;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
@@ -48,18 +47,15 @@ public class CatalogService {
     private final SessionManager sessionManager;
     private final EventRepository eventRepository;
     private final ProductionCompanyRepository productionCompanyRepository;
-    private final TicketRepository ticketRepository;
 
     public CatalogService(
             SessionManager sessionManager,
             EventRepository eventRepository,
-            ProductionCompanyRepository productionCompanyRepository,
-            TicketRepository ticketRepository
+            ProductionCompanyRepository productionCompanyRepository
     ) {
-        this.sessionManager = sessionManager;
-        this.eventRepository = eventRepository;
-        this.productionCompanyRepository = productionCompanyRepository;
-        this.ticketRepository = ticketRepository;
+        this.sessionManager = sessionManager;                                   // read-side session/credential validation
+        this.eventRepository = eventRepository;                                 // catalog event queries
+        this.productionCompanyRepository = productionCompanyRepository;         // company visibility/rating lookups
     }
 
 
