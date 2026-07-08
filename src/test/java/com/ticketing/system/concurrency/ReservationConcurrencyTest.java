@@ -23,9 +23,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.DiscountPolicy;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventCategory;
@@ -41,7 +41,7 @@ import com.ticketing.system.Core.Domain.events.VenueMap;
 import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
 import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.SpringDataActiveOrderRepository;
 import com.ticketing.system.Infrastructure.persistence.EventPersistence.SpringDataEventRepository;
-import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.SpringDataProductionCompanyRepository;
+import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 
 /**
  * No-double-sell concurrency proof (V3-TX-03 / #361), run on the real JPA stack.
@@ -78,7 +78,7 @@ class ReservationConcurrencyTest {
     @Autowired
     private IEventRepository eventRepository;
     @Autowired
-    private IProductionCompanyRepository companyRepository;
+    private ProductionCompanyRepository companyRepository;
 
     // SpringData handles for an empty-schema reset between tests.
     @Autowired

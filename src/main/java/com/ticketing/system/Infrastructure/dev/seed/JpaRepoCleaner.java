@@ -9,7 +9,7 @@ import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.S
 import com.ticketing.system.Infrastructure.persistence.EventPersistence.SpringDataEventRepository;
 import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.SpringDataNotificationRepository;
 import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.SpringDataOrderReceiptRepository;
-import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.SpringDataProductionCompanyRepository;
+import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 import com.ticketing.system.identity.adapter.out.persistence.SpringDataSessionRepository;
 import com.ticketing.system.Infrastructure.persistence.TicketPersistence.SpringDataTicketRepository;
 import com.ticketing.system.identity.adapter.out.persistence.SpringDataUserRepository;

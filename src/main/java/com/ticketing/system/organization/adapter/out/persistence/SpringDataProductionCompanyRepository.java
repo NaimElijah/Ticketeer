@@ -1,4 +1,5 @@
-package com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence;
+package com.ticketing.system.organization.adapter.out.persistence;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -6,13 +7,13 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.domain.ProductionCompany;
 
 /**
  * Spring Data JPA repository for {@link ProductionCompany} — the auto-implemented SQL backing
  * {@link JpaProductionCompanyRepository}. The application layer never sees this type; it depends
- * only on the {@code IProductionCompanyRepository} domain port. Owner/manager id lists persist as
+ * only on the {@code ProductionCompanyRepository} domain port. Owner/manager id lists persist as
  * {@code @ElementCollection} side-tables and the purchase policy as a JSON column, all by cascade
  * with the company.
  */

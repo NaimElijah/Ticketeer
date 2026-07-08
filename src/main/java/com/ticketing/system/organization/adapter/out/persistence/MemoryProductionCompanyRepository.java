@@ -1,4 +1,5 @@
-package com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence;
+package com.ticketing.system.organization.adapter.out.persistence;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
 import java.util.ArrayList;
@@ -11,19 +12,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 
 /**
- * In-memory {@link IProductionCompanyRepository}. Lets Spring wire
+ * In-memory {@link ProductionCompanyRepository}. Lets Spring wire
  * CatalogService / CompanyManagementService / EventManagementService.
  * {@code @Profile("!jpa")}: the {@code jpa} run/dev profile swaps in
  * {@link JpaProductionCompanyRepository} instead.
  */
 @Repository
 @Profile("!jpa")
-public class MemoryProductionCompanyRepository implements IProductionCompanyRepository {
+public class MemoryProductionCompanyRepository implements ProductionCompanyRepository {
 
     private final Map<Integer, ProductionCompany> companiesById = new ConcurrentHashMap<>();
     private final AtomicInteger idSequence = new AtomicInteger(1);

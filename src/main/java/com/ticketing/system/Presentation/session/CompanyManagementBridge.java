@@ -3,7 +3,7 @@ package com.ticketing.system.Presentation.session;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 
 /**
  * Spring bridge so static helpers ({@link com.ticketing.system.Presentation.security.Capabilities})

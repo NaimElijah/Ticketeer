@@ -6,7 +6,7 @@ import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.M
 import com.ticketing.system.Infrastructure.persistence.EventPersistence.MemoryEventRepository;
 import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.MemoryNotificationRepository;
 import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.MemoryOrderReceiptRepository;
-import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.MemoryProductionCompanyRepository;
+import com.ticketing.system.organization.adapter.out.persistence.MemoryProductionCompanyRepository;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.Infrastructure.persistence.TicketPersistence.MemoryTicketRepository;
 import com.ticketing.system.identity.adapter.out.persistence.MemoryUserRepository;

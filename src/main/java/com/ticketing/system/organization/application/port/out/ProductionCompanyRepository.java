@@ -1,4 +1,5 @@
-package com.ticketing.system.Core.Domain.company;
+package com.ticketing.system.organization.application.port.out;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.domain.Admin;
 
 import java.util.List;
@@ -7,7 +8,7 @@ import java.util.Optional;
 import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the ProductionCompany aggregate.
-public interface IProductionCompanyRepository extends IRepository<ProductionCompany, Integer> {
+public interface ProductionCompanyRepository extends IRepository<ProductionCompany, Integer> {
 
     ProductionCompany getCompanyById(int companyId);
 

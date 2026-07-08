@@ -20,8 +20,8 @@ import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
 import com.ticketing.system.Core.Application.services.SystemAnalyticsService;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.EventStatus;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
@@ -43,7 +43,7 @@ class SystemAnalyticsServiceTest {
 
     private ISystemMetrics metrics;
     private IOrderReceiptRepository orderReceiptRepository;
-    private IProductionCompanyRepository companyRepository;
+    private ProductionCompanyRepository companyRepository;
     private IEventRepository eventRepository;
     private IConversationRepository conversationRepository;
     private SystemAnalyticsService service;
@@ -52,7 +52,7 @@ class SystemAnalyticsServiceTest {
     void setUp() {
         metrics = mock(ISystemMetrics.class);
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
         eventRepository = mock(IEventRepository.class);
         conversationRepository = mock(IConversationRepository.class);
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);

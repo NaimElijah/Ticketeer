@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Domain.policies.purchase;
+import com.ticketing.system.organization.domain.ProductionCompany;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -17,7 +18,7 @@ import jakarta.persistence.Converter;
  * existing getters and dispatches on a small {@code "type"} tag, so there is no reflection or
  * polymorphic-deserialization magic; reconstruction calls the same public constructors recursively.
  *
- * <p>Shared by both policy owners — {@link com.ticketing.system.Core.Domain.company.ProductionCompany}
+ * <p>Shared by both policy owners — {@link com.ticketing.system.organization.domain.ProductionCompany}
  * (B5) and Event (B9). JPA instantiates the converter itself (it is not a Spring bean), so it holds
  * its own {@link ObjectMapper}. Lives next to the policies it serializes — a domain-to-domain
  * reference, not a downward one.

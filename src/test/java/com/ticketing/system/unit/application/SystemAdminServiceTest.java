@@ -37,7 +37,7 @@ import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.shared.exception.InitializationIntegrityException;
@@ -59,7 +59,7 @@ class SystemAdminServiceTest {
     private IOrderReceiptRepository orderReceiptRepository;
     private ITicketRepository ticketRepository;
     private IEventRepository eventRepository;
-    private IProductionCompanyRepository companyRepository;
+    private ProductionCompanyRepository companyRepository;
     private UserRepository userRepository;
     private PasswordHasher passwordHasher;
     private SystemIntegrityVerifier integrityVerifier;
@@ -73,7 +73,7 @@ class SystemAdminServiceTest {
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
         ticketRepository = mock(ITicketRepository.class);
         eventRepository = mock(IEventRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
         passwordHasher = mock(PasswordHasher.class);
         integrityVerifier = mock(SystemIntegrityVerifier.class);
