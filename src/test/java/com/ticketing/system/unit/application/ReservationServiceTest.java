@@ -2,7 +2,7 @@ package com.ticketing.system.unit.application;
 
 import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.services.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
@@ -40,7 +40,7 @@ import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
 import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.events.DiscountPolicy;
 import com.ticketing.system.Core.Domain.events.EventCategory;
 import com.ticketing.system.Core.Domain.events.EventStatus;
@@ -57,7 +57,7 @@ public class ReservationServiceTest {
 
     private IEventRepository eventRepository;
     private IActiveOrderRepository activeOrderRepository;
-    private ISessionManager sessionManager;
+    private SessionManager sessionManager;
     private INotificationService notificationService;
     private SystemAdminService systemAdminService;
 
@@ -77,7 +77,7 @@ public class ReservationServiceTest {
     void setUp() {
         eventRepository = mock(IEventRepository.class);
         activeOrderRepository = mock(IActiveOrderRepository.class);
-        sessionManager = mock(ISessionManager.class);
+        sessionManager = mock(SessionManager.class);
         notificationService = mock(INotificationService.class);
 
         event = mock(Event.class, RETURNS_DEEP_STUBS);
@@ -93,7 +93,7 @@ public class ReservationServiceTest {
                 sessionManager,
                 notificationService,
                 mock(IProductionCompanyRepository.class),
-                mock(IUserRepository.class),
+                mock(UserRepository.class),
                 systemAdminService,
                 mock(ISystemMetrics.class)
         );

@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.UserPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
 
 import java.util.List;
 import java.util.Optional;
@@ -9,13 +9,13 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 
 /**
- * JPA-backed {@link IUserRepository} — active only in the {@code jpa} run/dev profile. Adapts the
+ * JPA-backed {@link UserRepository} — active only in the {@code jpa} run/dev profile. Adapts the
  * domain port onto Spring Data ({@link SpringDataUserRepository}); the application layer depends
- * only on {@code IUserRepository}, never on Spring Data. Owned {@code companyAppointments} and
+ * only on {@code UserRepository}, never on Spring Data. Owned {@code companyAppointments} and
  * their {@code permissions} persist by cascade with the user.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code User}'s
@@ -30,7 +30,7 @@ import com.ticketing.system.Core.Domain.users.User;
  */
 @Repository
 @Profile("jpa")
-public class JpaUserRepository implements IUserRepository {
+public class JpaUserRepository implements UserRepository {
 
     private final SpringDataUserRepository data;
     private final AtomicInteger idSequence = new AtomicInteger(0);

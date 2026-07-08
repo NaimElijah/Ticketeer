@@ -25,20 +25,20 @@ import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
 import com.ticketing.system.Core.Application.dto.MarketStateDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Application.services.SystemIntegrityVerifier;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
 import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.shared.exception.InitializationIntegrityException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -54,28 +54,28 @@ class SystemAdminServiceTest {
     private static final String ADMIN_TOKEN = "admin-token";
     private static final int ADMIN_USER_ID = 1;
 
-    private ISessionManager sessionManager;
-    private IAdminRepository adminRepository;
+    private SessionManager sessionManager;
+    private AdminRepository adminRepository;
     private IOrderReceiptRepository orderReceiptRepository;
     private ITicketRepository ticketRepository;
     private IEventRepository eventRepository;
     private IProductionCompanyRepository companyRepository;
-    private IUserRepository userRepository;
-    private IPasswordHasher passwordHasher;
+    private UserRepository userRepository;
+    private PasswordHasher passwordHasher;
     private SystemIntegrityVerifier integrityVerifier;
     private SystemAdminService service;
 
 
     @BeforeEach
     void setUp() {
-        sessionManager = mock(ISessionManager.class);
-        adminRepository = mock(IAdminRepository.class);
+        sessionManager = mock(SessionManager.class);
+        adminRepository = mock(AdminRepository.class);
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
         ticketRepository = mock(ITicketRepository.class);
         eventRepository = mock(IEventRepository.class);
         companyRepository = mock(IProductionCompanyRepository.class);
-        userRepository = mock(IUserRepository.class);
-        passwordHasher = mock(IPasswordHasher.class);
+        userRepository = mock(UserRepository.class);
+        passwordHasher = mock(PasswordHasher.class);
         integrityVerifier = mock(SystemIntegrityVerifier.class);
         when(passwordHasher.hash(anyString())).thenReturn("hashed-password");
         service = new SystemAdminService(

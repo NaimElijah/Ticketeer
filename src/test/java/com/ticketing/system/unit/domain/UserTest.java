@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Domain.users.CompanyAppointment;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.support.BaseDomainTest;
 
 public class UserTest extends BaseDomainTest {

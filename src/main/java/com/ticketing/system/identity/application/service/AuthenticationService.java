@@ -1,4 +1,6 @@
-package com.ticketing.system.Core.Application.services;
+package com.ticketing.system.identity.application.service;
+import com.ticketing.system.Core.Application.services.NotificationDispatchService; // transitional: cross-context call, to be rewired via an inbound port later
+import com.ticketing.system.Core.Application.services.ReservationService; // transitional: cross-context call, to be rewired via an inbound port later
 
 import java.util.List;
 import java.time.Clock;
@@ -24,25 +26,25 @@ import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
 import com.ticketing.system.Core.Application.dto.NotificationDTO;
 import com.ticketing.system.Core.Application.dto.RefreshTokenRequestDTO;
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.AccountLockedException;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.Session;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.MemoryActiveOrderRepository;
 
 
@@ -63,12 +65,12 @@ public class AuthenticationService {
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
-    private final IUserRepository userRepository;
-    private final IPasswordHasher passwordHasher;
-    private final ISessionManager sessionManager;
+    private final UserRepository userRepository;
+    private final PasswordHasher passwordHasher;
+    private final SessionManager sessionManager;
     private final ReservationService reservationService; // for UC-13 order restoration
     private final NotificationDispatchService notificationDispatchService; // for UC-37 notification flush
-    private final ISessionRepository sessionRepository;
+    private final SessionRepository sessionRepository;
     private final IActiveOrderRepository activeOrderRepository;
     private final ISystemMetrics systemMetrics;
     private final Clock clock;
@@ -76,7 +78,7 @@ public class AuthenticationService {
     private final long memberTtlMinutes;
 
     // Admin sign-in (#290).
-    private final IAdminRepository adminRepository;
+    private final AdminRepository adminRepository;
     // Brute-force lockout (SLR.2 / #148) — shared by member AND admin sign-in. In-memory for
     // V1/V2 (a restart clears it). Keys are namespaced by pool ("m:"/"a:") so the two forms are
     // rate-limited independently.
@@ -85,16 +87,16 @@ public class AuthenticationService {
     private final ConcurrentMap<String, LoginAttempts> loginAttempts = new ConcurrentHashMap<>();
 
     public AuthenticationService(
-            IUserRepository userRepository,
-            IPasswordHasher passwordHasher,
-            ISessionManager sessionManager,
+            UserRepository userRepository,
+            PasswordHasher passwordHasher,
+            SessionManager sessionManager,
             ReservationService reservationService,
             NotificationDispatchService notificationDispatchService,
-            ISessionRepository sessionRepository,
+            SessionRepository sessionRepository,
             IActiveOrderRepository activeOrderRepository,
             ISystemMetrics systemMetrics,
             Clock clock,
-            IAdminRepository adminRepository,
+            AdminRepository adminRepository,
             @Value("${session.guest-idle-timeout-minutes}") long guestIdleMinutes,
             @Value("${session.member-ttl-minutes}") long memberTtlMinutes,
             @Value("${auth.lockout.max-attempts:5}") int lockoutMaxAttempts,
@@ -115,13 +117,13 @@ public class AuthenticationService {
         this.lockoutLockMinutes = lockoutLockMinutes;
     }
 
-    /** Delegates to {@link ISessionManager#extractUserId}. */
+    /** Delegates to {@link SessionManager#extractUserId}. */
     @Transactional(readOnly = true)
     public int extractUserId(String token) {
         return sessionManager.extractUserId(token);
     }
 
-    /** Delegates to {@link ISessionManager#validateToken}. */
+    /** Delegates to {@link SessionManager#validateToken}. */
     @Transactional(readOnly = true)
     public boolean validateToken(String token) {
         return sessionManager.validateToken(token);
@@ -428,7 +430,7 @@ public class AuthenticationService {
 
     /**
      * Terminates the authenticated session by deleting the underlying
-     * Session row (via {@link ISessionManager#invalidate}). UC-14 / D8 (L1).
+     * Session row (via {@link SessionManager#invalidate}). UC-14 / D8 (L1).
      *
      * <p>
      * Per II.3.1 the session state downgrades back to Guest-Visitor — to act again the

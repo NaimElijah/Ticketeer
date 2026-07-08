@@ -21,17 +21,17 @@ import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
 import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
 import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
 import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.Session;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.User;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -40,9 +40,9 @@ class AuthAcceptanceTest {
     @Autowired
     private AuthenticationService authService;
     @Autowired
-    private IUserRepository userRepository;
+    private UserRepository userRepository;
     @Autowired
-    private ISessionRepository sessionRepository;
+    private SessionRepository sessionRepository;
     @Autowired
     private IActiveOrderRepository activeOrderRepository;
 

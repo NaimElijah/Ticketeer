@@ -1,8 +1,9 @@
 package com.ticketing.system.acceptance;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.Core.Application.dto.*;
 import com.ticketing.system.Core.Application.interfaces.*;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CheckoutService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.EventManagementService;
@@ -12,8 +13,8 @@ import com.ticketing.system.Core.Domain.Tickets.*;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
 import com.ticketing.system.Core.Domain.events.*;
 import com.ticketing.system.Core.Domain.orders.*;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.MemoryActiveOrderRepository;
 import com.ticketing.system.testutil.TestTransactions;
 
@@ -41,8 +42,8 @@ public class CheckoutServiceAcceptanceTest {
     private ITicketIssuer ticketIssuer;
     private IPaymentGateway paymentGateway;
     private INotificationService notificationService;
-    private ISessionManager sessionManager;
-    private IUserRepository userRepository;
+    private SessionManager sessionManager;
+    private UserRepository userRepository;
 
     private CheckoutService checkoutService;
     private SystemAdminService systemAdminService;
@@ -93,7 +94,7 @@ public class CheckoutServiceAcceptanceTest {
         activeOrderRepository = mock(IActiveOrderRepository.class);
         eventRepository = mock(IEventRepository.class);
         ticketRepository = mock(ITicketRepository.class);
-        userRepository = mock(IUserRepository.class);
+        userRepository = mock(UserRepository.class);
         companyRepository = mock(IProductionCompanyRepository.class);
 
         orderReceiptRepository = mock(IOrderReceiptRepository.class);
@@ -103,7 +104,7 @@ public class CheckoutServiceAcceptanceTest {
         ticketIssuer = mock(ITicketIssuer.class);
         paymentGateway = mock(IPaymentGateway.class);
         notificationService = mock(INotificationService.class);
-        sessionManager = mock(ISessionManager.class);
+        sessionManager = mock(SessionManager.class);
 
         systemAdminService = mock(SystemAdminService.class);
         when(systemAdminService.isMarketOpen()).thenReturn(true);

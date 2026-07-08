@@ -6,9 +6,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Infrastructure.persistence.UserPersistence.JpaUserRepository;
-import com.ticketing.system.Infrastructure.persistence.UserPersistence.SpringDataUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.adapter.out.persistence.JpaUserRepository;
+import com.ticketing.system.identity.adapter.out.persistence.SpringDataUserRepository;
 
 /**
  * Runs the {@link IUserRepositoryContractTest} suite against the JPA adapter on an embedded H2
@@ -35,7 +35,7 @@ class JpaUserRepositoryContractTest extends IUserRepositoryContractTest {
     }
 
     @Override
-    protected IUserRepository newRepository() {
+    protected UserRepository newRepository() {
         return repository;
     }
 }

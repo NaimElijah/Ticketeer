@@ -15,10 +15,10 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.Session;
-import com.ticketing.system.Infrastructure.persistence.SessionPersistence.MemorySessionRepository;
-import com.ticketing.system.Infrastructure.security.JwtSessionManager;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
+import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 
 class JwtSessionManagerTest {
 
@@ -26,7 +26,7 @@ class JwtSessionManagerTest {
         "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
 
     private Clock clock;
-    private ISessionRepository sessions;
+    private SessionRepository sessions;
     private JwtSessionManager manager;
 
     @BeforeEach
@@ -76,7 +76,7 @@ class JwtSessionManagerTest {
     void validateToken_throwsSessionExpiredForExpiredToken() {
         // Negative expiration → token is issued already past its exp claim.
         Clock expiredClock = Clock.systemUTC();
-        ISessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
+        SessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
         JwtSessionManager expiredManager = new JwtSessionManager(SECRET, -1, expiredSessions, expiredClock);
         String token = expiredManager.generateToken(42, "alice");
         assertThrows(SessionExpiredException.class, () -> expiredManager.validateToken(token));

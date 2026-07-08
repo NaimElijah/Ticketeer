@@ -1,4 +1,5 @@
 package com.ticketing.system.unit.domain;
+import com.ticketing.system.identity.domain.User;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -11,7 +12,7 @@ import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.support.BaseDomainTest;
 
 class SessionTest extends BaseDomainTest {

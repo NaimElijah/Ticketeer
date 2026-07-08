@@ -10,7 +10,7 @@ import com.ticketing.system.Core.Application.dto.EventPolicyConfigDTO;
 import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
 import com.ticketing.system.Core.Application.dto.PurchasePolicyDTO;
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
 import com.ticketing.system.Core.Application.services.EventManagementService;
 import com.ticketing.system.Core.Application.services.ReservationService;

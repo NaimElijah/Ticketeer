@@ -1,15 +1,17 @@
-package com.ticketing.system.Core.Application.interfaces;
+package com.ticketing.system.identity.application.port.out;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.identity.domain.Admin;
 
 import java.util.Optional;
 
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.domain.Session;
 
 /**
  * Port for session / token management. Implemented in Infrastructure by
  * {@code JwtSessionManager}. Used by {@code AuthenticationService} (UC-12/14)
  * and {@code NotificationDispatchService} (UC-35/36 — online check).
  */
-public interface ISessionManager {
+public interface SessionManager {
 
     /** Issues a token after successful login. UC-12. */
     String generateToken(int userId, String username);

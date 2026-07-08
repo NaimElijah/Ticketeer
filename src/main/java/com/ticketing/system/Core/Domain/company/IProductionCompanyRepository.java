@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Domain.company;
+import com.ticketing.system.identity.domain.Admin;
 
 import java.util.List;
 import java.util.Optional;

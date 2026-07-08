@@ -11,16 +11,16 @@ import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
 import com.ticketing.system.Core.Application.dto.MarketStateDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.shared.exception.InitializationIntegrityException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -40,16 +40,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class SystemAdminService {
 
-    private final ISessionManager sessionManager;
-    private final IAdminRepository adminRepository;
+    private final SessionManager sessionManager;
+    private final AdminRepository adminRepository;
     private final IOrderReceiptRepository orderReceiptRepository;
     private final ITicketRepository ticketRepository;
     private final IEventRepository eventRepository;
     private final IProductionCompanyRepository companyRepository;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
     private final List<IPaymentGateway> paymentGateways;
     private final List<ITicketIssuer> ticketIssuers;
-    private final IPasswordHasher passwordHasher;
+    private final PasswordHasher passwordHasher;
     private final SystemIntegrityVerifier integrityVerifier;
 
     // UC-1 / I.1.4 — default System Admin credentials. Bound from platform.admin.* in
@@ -66,16 +66,16 @@ public class SystemAdminService {
     private volatile LocalDateTime lastOpenedAt;
 
     public SystemAdminService(
-            ISessionManager sessionManager,
-            IAdminRepository adminRepository,
+            SessionManager sessionManager,
+            AdminRepository adminRepository,
             IOrderReceiptRepository orderReceiptRepository,
             ITicketRepository ticketRepository,
             IEventRepository eventRepository,
             IProductionCompanyRepository companyRepository,
-            IUserRepository userRepository,
+            UserRepository userRepository,
             List<IPaymentGateway> paymentGateways,
             List<ITicketIssuer> ticketIssuers,
-            IPasswordHasher passwordHasher,
+            PasswordHasher passwordHasher,
             SystemIntegrityVerifier integrityVerifier,
             @Value("${platform.admin.username}") String defaultAdminUsername,
             @Value("${platform.admin.password}") String defaultAdminPassword

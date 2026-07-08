@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.services.CompanyManagementService;
 import com.ticketing.system.Core.Domain.company.CompanyStatus;
 import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
@@ -20,13 +20,13 @@ import com.ticketing.system.Core.Domain.company.ProductionCompany;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 
 class CompanyMembershipServiceTest {
 
-    private IUserRepository userRepository;
+    private UserRepository userRepository;
     private IProductionCompanyRepository companyRepository;
     private IEventRepository eventRepository;
     private CompanyManagementService service;
@@ -36,14 +36,14 @@ class CompanyMembershipServiceTest {
 
     @BeforeEach
     void setUp() {
-        userRepository = mock(IUserRepository.class);
+        userRepository = mock(UserRepository.class);
         companyRepository = mock(IProductionCompanyRepository.class);
         eventRepository = mock(IEventRepository.class);
         service = new CompanyManagementService(
                 companyRepository,
                 userRepository,
                 mock(IOrderReceiptRepository.class),
-                mock(ISessionManager.class),
+                mock(SessionManager.class),
                 mock(ITicketRepository.class),
                 eventRepository,
                 mock(INotificationService.class));

@@ -33,7 +33,7 @@ import com.ticketing.system.Core.Application.dtoMappers.EventMapper;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
 import com.ticketing.system.Core.Application.dto.ZoneDetailDTO;
 import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
 import com.ticketing.system.Core.Domain.Tickets.Ticket;
@@ -52,8 +52,8 @@ import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
 import com.ticketing.system.Core.Domain.orders.OrderReceipt;
 import com.ticketing.system.Core.Domain.orders.ReceiptLine;
 import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.Core.Domain.events.Seat;
 import com.ticketing.system.Core.Domain.events.SeatedZone;
@@ -73,10 +73,10 @@ public class EventManagementService {
     private final IEventRepository eventRepository;
     private final IProductionCompanyRepository companyRepository;
     private final ITicketRepository ticketRepository;
-    private final ISessionManager sessionManager;
+    private final SessionManager sessionManager;
     private final IOrderReceiptRepository orderReceiptRepository;
     private final IPaymentGateway paymentGateway;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
     private final INotificationService notificationService;
     private int currentVenueMapIdCounter;
 
@@ -84,10 +84,10 @@ public class EventManagementService {
             IEventRepository eventRepository,
             IProductionCompanyRepository companyRepository,
             ITicketRepository ticketRepository,
-            ISessionManager sessionManager,
+            SessionManager sessionManager,
             IOrderReceiptRepository orderReceiptRepository,
             IPaymentGateway paymentGateway,
-            IUserRepository userRepository,
+            UserRepository userRepository,
             INotificationService notificationService) {
         this.eventRepository = eventRepository;
         this.companyRepository = companyRepository;

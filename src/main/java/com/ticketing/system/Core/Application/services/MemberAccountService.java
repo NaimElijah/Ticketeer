@@ -1,4 +1,6 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;

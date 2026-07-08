@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.identity.domain.Admin;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,8 +22,8 @@ import com.ticketing.system.Core.Domain.events.InventoryZone;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.InvariantChecked;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -78,12 +79,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SystemIntegrityVerifier {
 
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
     private final IProductionCompanyRepository companyRepository;
     private final IEventRepository eventRepository;
     private final IActiveOrderRepository activeOrderRepository;
 
-    public SystemIntegrityVerifier(IUserRepository userRepository,
+    public SystemIntegrityVerifier(UserRepository userRepository,
                                    IProductionCompanyRepository companyRepository,
                                    IEventRepository eventRepository,
                                    IActiveOrderRepository activeOrderRepository) {

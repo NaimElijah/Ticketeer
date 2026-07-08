@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import java.time.Instant;
 

@@ -23,8 +23,8 @@ import com.ticketing.system.Core.Domain.events.Event;
 import com.ticketing.system.Core.Domain.events.IEventRepository;
 import com.ticketing.system.Core.Domain.events.InventorySelection;
 import com.ticketing.system.shared.exception.EventNotFoundException;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
 
 /**
  * UC-2 sweeper: scans for expired Sessions and ActiveOrders and releases
@@ -54,7 +54,7 @@ import com.ticketing.system.Core.Domain.users.Session;
 @Slf4j
 public class SessionAndOrderSweeper {
 
-    private final ISessionRepository sessionRepository;
+    private final SessionRepository sessionRepository;
     private final IActiveOrderRepository activeOrderRepository;
     private final IEventRepository eventRepository;
     private final Clock clock;
@@ -62,7 +62,7 @@ public class SessionAndOrderSweeper {
     private final ISystemMetrics systemMetrics;
 
     public SessionAndOrderSweeper(
-            ISessionRepository sessionRepository,
+            SessionRepository sessionRepository,
             IActiveOrderRepository activeOrderRepository,
             IEventRepository eventRepository,
             Clock clock,

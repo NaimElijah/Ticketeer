@@ -6,9 +6,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
-import com.ticketing.system.Infrastructure.persistence.AdminPersistence.JpaAdminRepository;
-import com.ticketing.system.Infrastructure.persistence.AdminPersistence.SpringDataAdminRepository;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.identity.adapter.out.persistence.JpaAdminRepository;
+import com.ticketing.system.identity.adapter.out.persistence.SpringDataAdminRepository;
 
 /**
  * Runs the {@link IAdminRepositoryContractTest} suite against the JPA adapter on an
@@ -36,7 +36,7 @@ class JpaAdminRepositoryTest extends IAdminRepositoryContractTest {
     }
 
     @Override
-    protected IAdminRepository newRepository() {
+    protected AdminRepository newRepository() {
         return repository;
     }
 }

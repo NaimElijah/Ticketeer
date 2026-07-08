@@ -1,4 +1,5 @@
-package com.ticketing.system.Infrastructure.security;
+package com.ticketing.system.identity.adapter.out.security;
+import com.ticketing.system.identity.domain.Admin;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -13,11 +14,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -26,13 +27,13 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 /**
- * jjwt-backed implementation of {@link ISessionManager}. UC-12 / UC-14.
+ * jjwt-backed implementation of {@link SessionManager}. UC-12 / UC-14.
  *
  * <p>Tokens are HS256-signed using {@code jwt.secret} from configuration and
  * expire after {@code session.member-ttl-minutes} (the JWT's exp claim and
  * the Session row's expiresAt are always kept in sync by construction).
  * Revocation (UC-14) is recorded by deleting the corresponding {@link Session}
- * row through {@link ISessionRepository}; revoked tokens fail every reader
+ * row through {@link SessionRepository}; revoked tokens fail every reader
  * because the Session existence check lives inside the central
  * {@link #parseClaims} helper.
  *
@@ -43,7 +44,7 @@ import io.jsonwebtoken.security.Keys;
  */
 @Component
 @Slf4j
-public class JwtSessionManager implements ISessionManager {
+public class JwtSessionManager implements SessionManager {
 
     private static final String CLAIM_USERNAME = "username";
     private static final String CLAIM_SID = "sid";
@@ -53,13 +54,13 @@ public class JwtSessionManager implements ISessionManager {
 
     private final SecretKey signingKey;
     private final long expirationMillis;
-    private final ISessionRepository sessions;
+    private final SessionRepository sessions;
     private final Clock clock;
 
     public JwtSessionManager(
             @Value("${jwt.secret}") String secret,
             @Value("${session.member-ttl-minutes}") long expirationMinutes,
-            ISessionRepository sessions,
+            SessionRepository sessions,
             Clock clock) {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMillis = expirationMinutes * 60 * 1000;

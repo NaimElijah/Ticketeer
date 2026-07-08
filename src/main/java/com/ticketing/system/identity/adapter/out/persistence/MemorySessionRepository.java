@@ -1,4 +1,4 @@
-package com.ticketing.system.Infrastructure.persistence.SessionPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
 
 import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
 import java.time.Clock;
@@ -12,11 +12,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
 
 /**
- * In-memory {@link ISessionRepository}.
+ * In-memory {@link SessionRepository}.
  *
  * <p>Storage is a thread-safe {@code ConcurrentHashMap} keyed by sessionId.
  * Mirrors {@code MemoryUserRepository}'s shape. {@code @Profile("!jpa")}: the
@@ -27,7 +27,7 @@ import com.ticketing.system.Core.Domain.users.Session;
  */
 @Repository
 @Profile("!jpa")
-public class MemorySessionRepository implements ISessionRepository {
+public class MemorySessionRepository implements SessionRepository {
 
     private final Map<String, Session> sessionsById = new ConcurrentHashMap<>();
     private final RepositoryLocks<String> locks = new RepositoryLocks<>();

@@ -1,4 +1,5 @@
-package com.ticketing.system.Infrastructure.persistence.UserPersistence;
+package com.ticketing.system.identity.adapter.out.persistence;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -7,12 +8,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 
 /**
  * Spring Data JPA repository for {@link User} — the auto-implemented SQL backing
  * {@link JpaUserRepository}. The application layer never sees this type; it depends only on
- * the {@code IUserRepository} domain port. Owned {@code companyAppointments} (and their
+ * the {@code UserRepository} domain port. Owned {@code companyAppointments} (and their
  * {@code permissions}) persist by cascade with the user.
  */
 public interface SpringDataUserRepository extends JpaRepository<User, Integer> {

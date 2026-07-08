@@ -17,17 +17,17 @@ import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.Core.Domain.users.AppointmentStatus;
 import com.ticketing.system.Core.Domain.users.CompanyAppointment;
 import com.ticketing.system.Core.Domain.users.CompanyRole;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.identity.domain.User;
 
-// Contract tests every IUserRepository implementation must satisfy. Future JPA-backed
+// Contract tests every UserRepository implementation must satisfy. Future JPA-backed
 // adapter will subclass this with its own newRepository() factory; tests are reused.
 abstract class IUserRepositoryContractTest {
 
-    protected abstract IUserRepository newRepository();
+    protected abstract UserRepository newRepository();
 
-    private IUserRepository repo;
+    private UserRepository repo;
 
     @BeforeEach
     void setUp() {
