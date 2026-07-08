@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.session;
 import com.ticketing.system.identity.domain.Session;
 
-import com.ticketing.system.Core.Application.dto.NotificationDTO;
+import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.ui.components.NotificationBellComponent;
 import com.vaadin.flow.server.VaadinSession;
 

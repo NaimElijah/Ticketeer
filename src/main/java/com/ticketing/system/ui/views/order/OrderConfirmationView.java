@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.views.order;
 
-import com.ticketing.system.Core.Application.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBtn;

@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.components.admin;
 
-import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.organization.domain.Permission;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

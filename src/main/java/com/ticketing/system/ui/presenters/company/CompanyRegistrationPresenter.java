@@ -2,8 +2,8 @@ package com.ticketing.system.ui.presenters.company;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;

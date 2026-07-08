@@ -10,8 +10,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.users.CompanyAppointment;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.CompanyAppointment;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.support.BaseDomainTest;
 

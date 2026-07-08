@@ -15,8 +15,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
-import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
+import com.ticketing.system.shared.dto.AdminOverviewDTO;
+import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;

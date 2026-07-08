@@ -11,9 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
-import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
-import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
+import com.ticketing.system.shared.dto.AdminOverviewDTO;
+import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;

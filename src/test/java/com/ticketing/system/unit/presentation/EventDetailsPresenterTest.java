@@ -12,10 +12,10 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
-import com.ticketing.system.Core.Application.dto.LocationDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
+import com.ticketing.system.shared.dto.LocationDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;

@@ -1,8 +1,8 @@
 package com.ticketing.system.unit.presentation;
 
-import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
+import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventStatus;

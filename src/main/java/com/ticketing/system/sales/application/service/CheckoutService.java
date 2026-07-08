@@ -14,12 +14,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.ticketing.system.Core.Application.dto.CardDetailsDTO;
-import com.ticketing.system.Core.Application.dto.CheckoutResultDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
-import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
+import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.IssuanceRequestDTO;
+import com.ticketing.system.shared.dto.IssuanceResultDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
+import com.ticketing.system.shared.dto.PaymentResultDTO;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;

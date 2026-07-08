@@ -14,11 +14,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.Core.Domain.users.AppointmentStatus;
-import com.ticketing.system.Core.Domain.users.CompanyAppointment;
-import com.ticketing.system.Core.Domain.users.CompanyRole;
+import com.ticketing.system.organization.domain.AppointmentStatus;
+import com.ticketing.system.organization.domain.CompanyAppointment;
+import com.ticketing.system.organization.domain.CompanyRole;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
 // Contract tests every UserRepository implementation must satisfy. Future JPA-backed

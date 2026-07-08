@@ -12,9 +12,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.BarcodeDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
+import com.ticketing.system.shared.dto.BarcodeDTO;
+import com.ticketing.system.shared.dto.IssuanceRequestDTO;
+import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 

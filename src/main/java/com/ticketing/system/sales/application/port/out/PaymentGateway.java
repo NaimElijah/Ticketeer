@@ -1,8 +1,8 @@
 package com.ticketing.system.sales.application.port.out;
 
-import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
+import com.ticketing.system.shared.dto.PaymentResultDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
 
 // Port for external payment processing. Multi-provider support (I.3.2) is realized
 // in Infrastructure by injecting List<PaymentGateway>; this interface stays single.

@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.presenters.auth;
 
-import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;

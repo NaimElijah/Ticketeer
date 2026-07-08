@@ -15,8 +15,8 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.Core.Domain.users.CompanyAppointment;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.CompanyAppointment;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.support.BaseDomainTest;
 

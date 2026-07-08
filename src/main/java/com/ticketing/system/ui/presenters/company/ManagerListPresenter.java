@@ -5,13 +5,13 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.AppointmentInfoDTO;
-import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
-import com.ticketing.system.Core.Application.dto.PermissionEditDTO;
-import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
+import com.ticketing.system.shared.dto.AppointmentInfoDTO;
+import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
+import com.ticketing.system.organization.application.dto.PermissionEditDTO;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 
 /**
  * MVP presenter for {@code ManagerListView}. Holds no Vaadin imports so the

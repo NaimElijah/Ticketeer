@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.views.company;
 
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;

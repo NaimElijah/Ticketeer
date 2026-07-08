@@ -20,7 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.organization.domain.CompanyStatus;

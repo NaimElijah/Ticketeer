@@ -13,21 +13,21 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 
-import com.ticketing.system.Core.Application.dto.AppointmentInfoDTO;
-import com.ticketing.system.Core.Application.dto.InvitationDTO;
-import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
-import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
-import com.ticketing.system.Core.Application.dto.PermissionEditDTO;
-import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.shared.dto.AppointmentInfoDTO;
+import com.ticketing.system.shared.dto.InvitationDTO;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.organization.application.dto.PermissionEditDTO;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.organization.application.service.CompanyManagementService;
-import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
-import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;
+import com.ticketing.system.shared.dto.AppointmentResponseDTO;
+import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.domain.CompanyStatus;
@@ -39,7 +39,7 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
 public class CompanyManagementServiceTest {

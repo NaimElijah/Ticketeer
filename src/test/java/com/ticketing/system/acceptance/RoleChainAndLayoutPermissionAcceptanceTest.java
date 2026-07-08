@@ -15,24 +15,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.dto.CardDetailsDTO;
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.EventCreationDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.EventPolicyConfigDTO;
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
-import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;
-import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
-import com.ticketing.system.Core.Application.dto.OwnerAppointmentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PurchasePolicyDTO;
-import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO.ZoneConfigDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapDTO;
+import com.ticketing.system.shared.dto.AppointmentResponseDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.catalog.application.dto.EventCreationDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
+import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.sales.application.service.CheckoutService;
@@ -45,7 +45,7 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 
 /**
  * Eval points 8 & 11 — role hierarchy and the layout-vs-policy permission boundary.
@@ -181,7 +181,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
         return eventId;
     }
 
-    private com.ticketing.system.Core.Application.dto.InventoryZoneDTO standingZone(String token, int eventId) {
+    private com.ticketing.system.shared.dto.InventoryZoneDTO standingZone(String token, int eventId) {
         VenueMapDTO map = catalogService.getEventVenueMap(token, eventId);
         return map.inventoryZones().stream()
                 .filter(z -> "STANDING".equals(z.getZoneType()))

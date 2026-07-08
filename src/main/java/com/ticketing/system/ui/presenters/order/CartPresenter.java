@@ -7,8 +7,8 @@ import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.ui.components.Money;

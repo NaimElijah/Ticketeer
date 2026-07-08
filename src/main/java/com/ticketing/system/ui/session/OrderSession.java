@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.session;
 import com.ticketing.system.identity.domain.Session;
 
-import com.ticketing.system.Core.Application.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.vaadin.flow.server.VaadinSession;
 
 /**

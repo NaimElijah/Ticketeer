@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.components;
 
-import com.ticketing.system.Core.Application.dto.NotificationDTO;
+import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkNotifPanel;
 import com.ticketing.system.ui.components.kit.LkPopover;

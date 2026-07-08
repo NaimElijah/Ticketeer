@@ -8,10 +8,10 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapDTO;
-import com.ticketing.system.Core.Application.dtoMappers.VenueMapMapper;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
+import com.ticketing.system.catalog.application.dtoMappers.VenueMapMapper;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;

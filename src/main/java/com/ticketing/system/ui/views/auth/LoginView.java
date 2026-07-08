@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.auth;
 import com.ticketing.system.identity.domain.Admin;
 
-import com.ticketing.system.Core.Application.dto.LoginDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
 import com.ticketing.system.ui.components.kit.LkCheckRow;

@@ -8,11 +8,11 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.CompanyPolicyConfigDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.EventPolicyConfigDTO;
-import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
-import com.ticketing.system.Core.Application.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;

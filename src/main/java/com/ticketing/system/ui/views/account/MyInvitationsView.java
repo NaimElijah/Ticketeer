@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.views.account;
 
-import com.ticketing.system.Core.Application.dto.InvitationDTO;
+import com.ticketing.system.shared.dto.InvitationDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;

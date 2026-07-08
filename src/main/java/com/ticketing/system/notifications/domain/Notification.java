@@ -2,7 +2,7 @@ package com.ticketing.system.notifications.domain;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.identity.domain.User;
 
-import com.ticketing.system.Core.Application.dto.NotificationDTO;
+import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.shared.InvariantChecked;
 
 import java.time.LocalDateTime;

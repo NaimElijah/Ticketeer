@@ -1,6 +1,6 @@
 package com.ticketing.system.unit.application;
 
-import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
+import com.ticketing.system.shared.dto.ReservationResultDTO;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
@@ -36,8 +36,8 @@ import java.util.List;
 
 import org.mockito.ArgumentCaptor;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;

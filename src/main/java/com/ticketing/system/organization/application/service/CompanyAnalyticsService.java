@@ -12,9 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
+import com.ticketing.system.shared.dto.CompanyDashboardDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.sales.application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;

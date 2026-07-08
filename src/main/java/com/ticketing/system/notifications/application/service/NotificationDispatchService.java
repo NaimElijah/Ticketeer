@@ -3,7 +3,7 @@ package com.ticketing.system.notifications.application.service;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.Core.Application.dto.NotificationDTO;
+import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.notifications.application.port.out.PushNotificationService;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.domain.Notification;

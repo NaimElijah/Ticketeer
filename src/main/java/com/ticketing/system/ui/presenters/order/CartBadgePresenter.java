@@ -2,7 +2,7 @@ package com.ticketing.system.ui.presenters.order;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.ui.session.SessionIdentity;
 

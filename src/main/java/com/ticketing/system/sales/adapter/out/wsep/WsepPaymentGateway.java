@@ -9,10 +9,10 @@ import java.util.List;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.CardDetailsDTO;
-import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
+import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
+import com.ticketing.system.shared.dto.PaymentResultDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;

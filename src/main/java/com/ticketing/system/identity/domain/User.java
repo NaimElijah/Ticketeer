@@ -1,10 +1,10 @@
 package com.ticketing.system.identity.domain;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Admin;
-import com.ticketing.system.Core.Domain.users.AppointmentStatus; // transitional: organization type still in the legacy users package (relocated in Step 3)
-import com.ticketing.system.Core.Domain.users.CompanyRole; // transitional: organization type still in the legacy users package (relocated in Step 3)
-import com.ticketing.system.Core.Domain.users.Permission; // transitional: organization type still in the legacy users package (relocated in Step 3)
-import com.ticketing.system.Core.Domain.users.CompanyAppointment; // transitional: organization type still in the legacy users package (relocated in Step 3)
+import com.ticketing.system.organization.domain.AppointmentStatus; // transitional: organization type still in the legacy users package (relocated in Step 3)
+import com.ticketing.system.organization.domain.CompanyRole; // transitional: organization type still in the legacy users package (relocated in Step 3)
+import com.ticketing.system.organization.domain.Permission; // transitional: organization type still in the legacy users package (relocated in Step 3)
+import com.ticketing.system.organization.domain.CompanyAppointment; // transitional: organization type still in the legacy users package (relocated in Step 3)
 
 import java.util.EnumSet;
 import java.util.ArrayList;

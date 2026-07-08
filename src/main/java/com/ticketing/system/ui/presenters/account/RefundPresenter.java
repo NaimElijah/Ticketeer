@@ -2,7 +2,7 @@ package com.ticketing.system.ui.presenters.account;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.sales.application.service.RefundService;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;

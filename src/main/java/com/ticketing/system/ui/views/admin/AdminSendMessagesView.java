@@ -2,7 +2,7 @@ package com.ticketing.system.ui.views.admin;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
 
-import com.ticketing.system.Core.Application.dto.MemberSearchResultDTO;
+import com.ticketing.system.shared.dto.MemberSearchResultDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;

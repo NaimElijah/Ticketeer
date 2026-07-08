@@ -2,10 +2,10 @@ package com.ticketing.system.identity.application.service;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.domain.User;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
-import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EntityNotFoundException;

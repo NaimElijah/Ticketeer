@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.governance.application.service.SystemAdminService;

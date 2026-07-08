@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
+import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 
 /**

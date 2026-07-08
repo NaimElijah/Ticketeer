@@ -21,10 +21,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
-import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
-import com.ticketing.system.Core.Application.dto.MarketStateDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.MarketStateDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;

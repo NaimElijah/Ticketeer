@@ -3,9 +3,9 @@ package com.ticketing.system.ui.presenters.company;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.VenueLayoutDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.VenueLayoutDTO;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 

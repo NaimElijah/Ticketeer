@@ -8,7 +8,8 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
-import com.ticketing.system.Core.Application.dto.*;
+import com.ticketing.system.shared.dto.*;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;

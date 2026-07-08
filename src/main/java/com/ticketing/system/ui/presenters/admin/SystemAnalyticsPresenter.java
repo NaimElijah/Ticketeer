@@ -4,9 +4,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
-import com.ticketing.system.Core.Application.dto.MarketStateDTO;
-import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
+import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.MarketStateDTO;
+import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;

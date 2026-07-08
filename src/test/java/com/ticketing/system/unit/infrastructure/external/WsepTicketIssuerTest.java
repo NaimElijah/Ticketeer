@@ -17,8 +17,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
+import com.ticketing.system.shared.dto.IssuanceRequestDTO;
+import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.shared.external.WsepCommunicationException;
 import com.ticketing.system.shared.external.WsepHttpClient;

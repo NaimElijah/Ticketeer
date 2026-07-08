@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
+import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.ui.presenters.admin.AdminDashboardPresenter;
 

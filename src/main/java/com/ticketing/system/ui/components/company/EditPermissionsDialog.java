@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.components.company;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkCheckRow;

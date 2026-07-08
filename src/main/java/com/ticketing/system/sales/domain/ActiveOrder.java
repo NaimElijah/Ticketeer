@@ -10,7 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.shared.InvariantChecked;
 

@@ -21,7 +21,7 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
 class CompanyMembershipServiceTest {

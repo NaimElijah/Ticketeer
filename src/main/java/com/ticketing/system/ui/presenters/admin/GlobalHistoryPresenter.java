@@ -4,8 +4,8 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.ui.session.AuthSession;
 

@@ -1,6 +1,6 @@
 package com.ticketing.system.Infrastructure.dev.seed.scenario;
 
-import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.catalog.application.service.CatalogService;

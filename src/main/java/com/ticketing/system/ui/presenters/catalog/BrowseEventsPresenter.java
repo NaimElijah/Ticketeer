@@ -4,8 +4,8 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
+import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
+import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 
 import lombok.extern.slf4j.Slf4j;

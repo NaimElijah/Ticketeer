@@ -4,8 +4,8 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.OwnerAppointmentRequestDTO;
-import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
+import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UserNotFoundException;

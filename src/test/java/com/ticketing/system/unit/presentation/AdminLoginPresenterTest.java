@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;

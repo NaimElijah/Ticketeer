@@ -31,6 +31,6 @@ public interface SpringDataUserRepository extends JpaRepository<User, Integer> {
     /** Users holding a PENDING appointment in the given company (queries the owned children). */
     @Query("select distinct u from User u join u.companyAppointments a "
             + "where a.companyId = :companyId "
-            + "and a.status = com.ticketing.system.Core.Domain.users.AppointmentStatus.PENDING")
+            + "and a.status = com.ticketing.system.organization.domain.AppointmentStatus.PENDING")
     List<User> findUsersWithPendingAppointmentForCompany(@Param("companyId") int companyId);
 }

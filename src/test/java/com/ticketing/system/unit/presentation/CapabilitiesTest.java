@@ -1,6 +1,6 @@
 package com.ticketing.system.unit.presentation;
 
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import org.junit.jupiter.api.Test;

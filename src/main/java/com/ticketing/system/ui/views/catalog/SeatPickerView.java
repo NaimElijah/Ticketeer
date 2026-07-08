@@ -2,7 +2,7 @@ package com.ticketing.system.ui.views.catalog;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.domain.ZoneType;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;

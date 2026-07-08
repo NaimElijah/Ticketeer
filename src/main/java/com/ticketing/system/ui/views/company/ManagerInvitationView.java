@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.company;
 import com.ticketing.system.identity.domain.User;
 
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;

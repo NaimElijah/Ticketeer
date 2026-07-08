@@ -4,7 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.SearchResultDTO;
+import com.ticketing.system.shared.dto.SearchResultDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.ui.session.RecentSearches;
 

@@ -47,18 +47,18 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
-import com.ticketing.system.Core.Application.dto.ZoneDetailDTO;
-import com.ticketing.system.Core.Application.dto.VenueLayoutDTO;
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.EventUpdateDTO;
-import com.ticketing.system.Core.Application.dto.LocationDTO;
-import com.ticketing.system.Core.Application.dto.ShowDateDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
+import com.ticketing.system.shared.dto.ZoneDetailDTO;
+import com.ticketing.system.shared.dto.VenueLayoutDTO;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.EventUpdateDTO;
+import com.ticketing.system.shared.dto.LocationDTO;
+import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
 class EventManagementServiceTest {

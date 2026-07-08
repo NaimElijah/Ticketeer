@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.components.venue;
 
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.vaadin.flow.component.html.Div;
 
 import java.util.ArrayList;

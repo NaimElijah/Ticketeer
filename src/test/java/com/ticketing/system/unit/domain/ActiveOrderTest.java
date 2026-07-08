@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.sales.domain.CartLineItem;
 
 // Unit tests for the ActiveOrder aggregate.

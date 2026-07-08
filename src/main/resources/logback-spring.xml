@@ -40,7 +40,6 @@
         </root>
         <logger name="com.ticketing.system" level="INFO"/>
         <!-- Domain warnings/errors always reach the file -->
-        <logger name="com.ticketing.system.Core.Domain" level="WARN"/>
         <!-- AOP entry/exit tracing off in prod by default -->
         <logger name="com.ticketing.system.shared.logging" level="INFO"/>
     </springProfile>
@@ -52,7 +51,6 @@
             <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
-        <logger name="com.ticketing.system.Core.Domain" level="DEBUG"/>
         <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
     </springProfile>
 
@@ -65,7 +63,6 @@
             <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="INFO"/>
-        <logger name="com.ticketing.system.Core.Domain" level="WARN"/>
         <logger name="com.ticketing.system.shared.logging" level="INFO"/>
     </springProfile>
 
@@ -75,7 +72,6 @@
             <appender-ref ref="CONSOLE"/>
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
-        <logger name="com.ticketing.system.Core.Domain" level="DEBUG"/>
         <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
     </springProfile>
 
@@ -86,7 +82,6 @@
             <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
-        <logger name="com.ticketing.system.Core.Domain" level="DEBUG"/>
         <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
     </springProfile>
 
