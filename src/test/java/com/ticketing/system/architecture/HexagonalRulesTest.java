@@ -1,7 +1,9 @@
 package com.ticketing.system.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -75,6 +77,22 @@ class HexagonalRulesTest {
                         "com.ticketing.system.messaging..", "com.ticketing.system.notifications..",
                         "com.ticketing.system.governance..", "com.ticketing.system.shared..")
                 .should().dependOnClassesThat().resideInAPackage("com.ticketing.system.ui..")
+                .check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * The bounded contexts must form a directed acyclic graph: no two top-level modules may depend on
+     * each other, directly or transitively. This is the substantive guarantee that Spring Modulith's
+     * {@code verify()} would give for cycles — enforced here with ArchUnit slices because it analyses
+     * real bytecode package dependencies, independent of Modulith's module-encapsulation model (under
+     * which OPEN modules are exempt from cycle checks).
+     */
+    @Disabled("Enabled once the deferred behavioural rewiring makes the bounded-context graph acyclic")
+    @Test
+    void bounded_contexts_are_acyclic() {
+        slices()
+                .matching("com.ticketing.system.(*)..")   // one slice per top-level module (catalog, sales, ...)
+                .should().beFreeOfCycles()
                 .check(PRODUCTION_CLASSES);
     }
 }
