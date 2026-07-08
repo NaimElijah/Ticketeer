@@ -13,4 +13,5 @@
  * ({@code MarketOpener}, {@code MarketSelfHealScheduler}, {@code PlatformInitializationRunner}).
  * Module-boundary verification is switched on at Step 10.
  */
+@org.springframework.modulith.ApplicationModule(displayName = "Platform Governance")
 package com.ticketing.system.governance;

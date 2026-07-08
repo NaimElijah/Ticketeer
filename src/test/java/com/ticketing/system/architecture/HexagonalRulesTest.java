@@ -9,7 +9,7 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 
 /**
- * ArchUnit hexagonal-layering rules, executed as plain JUnit 5 tests.
+ * ArchUnit hexagonal-layering rules for the bounded-context modules.
  *
  * <p>The rules are driven through the Jupiter engine (importing production classes with
  * {@link ClassFileImporter} and calling {@code check(...)}) rather than ArchUnit's {@code @ArchTest}
@@ -17,9 +17,11 @@ import com.tngtech.archunit.core.importer.ImportOption;
  * rules silently reported zero executed tests and a deliberately-failing rule did not fail the build.
  * Plain {@code @Test} methods are guaranteed to run under Surefire and to fail on a violation.
  *
- * <p>During the migration this holds only invariants already true of the legacy
- * {@code Core}/{@code Infrastructure}/{@code Presentation} layout; the full per-context port/adapter
- * rules are added as each context is relaid out and finalised at Step 10.
+ * <p>These are the <em>cycle-independent</em> hexagonal invariants that hold across the relocated
+ * modules today. Strict Spring Modulith {@code verify()} (cycle-freedom + minimal module dependencies)
+ * is enabled once the deferred behavioural rewiring — inventory-ownership port, event-driven
+ * notifications, governance market-gate port — breaks the intentional transitional cross-context
+ * couplings.
  */
 class HexagonalRulesTest {
 
@@ -29,15 +31,50 @@ class HexagonalRulesTest {
             .importPackages("com.ticketing.system");
 
     /**
-     * The domain is the innermost hexagon: it must never depend outward on the infrastructure or
-     * presentation adapters (adapters depend inward onto the domain, never the reverse). This holds
-     * today and must be preserved by every migration step.
+     * The domain is the innermost hexagon: a context's {@code domain} package must not depend on the
+     * Spring or Vaadin frameworks, nor outward on the {@code application} or {@code adapter} layers.
+     * {@code jakarta.persistence} is deliberately allowed — the aggregates are the JPA entities
+     * (the "persistence-annotated domain" decision), which is a spec dependency, not a framework one.
      */
     @Test
-    void domain_does_not_depend_on_outer_layers() {
+    void domain_is_free_of_framework_and_outer_layers() {
         noClasses()
-                .that().resideInAPackage("..Core.Domain..")
-                .should().dependOnClassesThat().resideInAnyPackage("..Infrastructure..", "..Presentation..")
-                .check(PRODUCTION_CLASSES); // fails the test on any violation
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.springframework..",   // no Spring in the domain
+                        "com.vaadin..",             // no Vaadin in the domain
+                        "..application..",           // domain must not reach up into the application layer
+                        "..adapter..")               // domain must not reach out into adapters
+                .check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * The application layer (use-case services + ports) drives the domain through ports; it must never
+     * depend on a concrete {@code adapter} (adapters implement the outbound ports and are injected by
+     * Spring — the dependency arrow points inward, from adapter to application, never the reverse).
+     */
+    @Test
+    void application_does_not_depend_on_adapters() {
+        noClasses()
+                .that().resideInAPackage("..application..")
+                .should().dependOnClassesThat().resideInAPackage("..adapter..")
+                .check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * The Vaadin {@code ui} module is the single driving (inbound) adapter: it may depend on the
+     * backend contexts' application APIs, but no backend context may depend back on {@code ui}. This
+     * is the invariant that keeps the UI a leaf of the dependency graph.
+     */
+    @Test
+    void no_backend_context_depends_on_the_ui() {
+        noClasses()
+                .that().resideInAnyPackage(
+                        "com.ticketing.system.identity..", "com.ticketing.system.organization..",
+                        "com.ticketing.system.catalog..", "com.ticketing.system.sales..",
+                        "com.ticketing.system.messaging..", "com.ticketing.system.notifications..",
+                        "com.ticketing.system.governance..", "com.ticketing.system.shared..")
+                .should().dependOnClassesThat().resideInAPackage("com.ticketing.system.ui..")
+                .check(PRODUCTION_CLASSES);
     }
 }

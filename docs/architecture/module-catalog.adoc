@@ -1,0 +1,13 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.catalog`
+|Bean references
+|* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+* `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
+* `c.t.s.s.application.port.out.TicketRepository` (in Sales & Ticketing)
+* `c.t.s.s.application.port.out.OrderReceiptRepository` (in Sales & Ticketing)
+* `c.t.s.s.application.port.out.PaymentGateway` (in Sales & Ticketing)
+* `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
+* `c.t.s.n.application.port.in.INotificationService` (in Notifications)
+|===

@@ -1,0 +1,11 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.messaging`
+|Bean references
+|* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+* `c.t.s.i.application.port.out.AdminRepository` (in Identity & Access)
+* `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
+* `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
+* `c.t.s.n.application.port.in.INotificationService` (in Notifications)
+|===

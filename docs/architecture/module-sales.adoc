@@ -1,0 +1,15 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.sales`
+|Bean references
+|* `c.t.s.I.external.WsepHttpClient` (in Infrastructure)
+* `c.t.s.c.application.port.out.EventRepository` (in Catalog & Events)
+* `c.t.s.n.application.port.in.INotificationService` (in Notifications)
+* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+* `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
+* `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
+* `c.t.s.g.application.service.SystemAdminService` (in Platform Governance)
+* `c.t.s.i.application.service.AuthenticationService` (in Identity & Access)
+* `c.t.s.C.Application.interfaces.ISystemMetrics` (in Core)
+|===

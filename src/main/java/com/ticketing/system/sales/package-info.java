@@ -15,4 +15,5 @@
  * market gate via {@code SystemAdminService} (&rarr; a governance port), and notifies synchronously
  * (&rarr; domain events). Module-boundary verification is switched on at Step 10.
  */
+@org.springframework.modulith.ApplicationModule(displayName = "Sales & Ticketing")
 package com.ticketing.system.sales;
