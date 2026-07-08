@@ -4,14 +4,14 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.SpringDataActiveOrderRepository;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataActiveOrderRepository;
 import com.ticketing.system.Infrastructure.persistence.ConversationPersistence.SpringDataConversationRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 import com.ticketing.system.Infrastructure.persistence.NotificationPersistence.SpringDataNotificationRepository;
-import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.SpringDataOrderReceiptRepository;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataOrderReceiptRepository;
 import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 import com.ticketing.system.identity.adapter.out.persistence.SpringDataSessionRepository;
-import com.ticketing.system.Infrastructure.persistence.TicketPersistence.SpringDataTicketRepository;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataTicketRepository;
 import com.ticketing.system.identity.adapter.out.persistence.SpringDataUserRepository;
 
 import lombok.extern.slf4j.Slf4j;

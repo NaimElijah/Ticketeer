@@ -20,7 +20,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.exception.RefundFailedException;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord;
+import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.Core.Application.dto.EventCreationDTO;
 import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.Core.Application.dto.EventDetailDTO;
@@ -32,12 +32,12 @@ import com.ticketing.system.Core.Application.dto.VenueLayoutDTO;
 import com.ticketing.system.Core.Application.dtoMappers.EventMapper;
 import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
 import com.ticketing.system.Core.Application.dto.ZoneDetailDTO;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
@@ -48,9 +48,9 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
@@ -58,13 +58,13 @@ import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.OrPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MinTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.OrPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
+import com.ticketing.system.sales.domain.AgePurchasePolicy;
+import com.ticketing.system.sales.domain.AndPurchasePolicy;
+import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
 
 @Service
 @Slf4j
@@ -72,10 +72,10 @@ public class EventManagementService {
 
     private final EventRepository eventRepository;
     private final ProductionCompanyRepository companyRepository;
-    private final ITicketRepository ticketRepository;
+    private final TicketRepository ticketRepository;
     private final SessionManager sessionManager;
-    private final IOrderReceiptRepository orderReceiptRepository;
-    private final IPaymentGateway paymentGateway;
+    private final OrderReceiptRepository orderReceiptRepository;
+    private final PaymentGateway paymentGateway;
     private final UserRepository userRepository;
     private final INotificationService notificationService;
     private int currentVenueMapIdCounter;
@@ -83,10 +83,10 @@ public class EventManagementService {
     public EventManagementService(
             EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
-            ITicketRepository ticketRepository,
+            TicketRepository ticketRepository,
             SessionManager sessionManager,
-            IOrderReceiptRepository orderReceiptRepository,
-            IPaymentGateway paymentGateway,
+            OrderReceiptRepository orderReceiptRepository,
+            PaymentGateway paymentGateway,
             UserRepository userRepository,
             INotificationService notificationService) {
         this.eventRepository = eventRepository;

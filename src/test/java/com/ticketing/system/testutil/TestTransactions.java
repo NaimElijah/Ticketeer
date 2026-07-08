@@ -1,4 +1,5 @@
 package com.ticketing.system.testutil;
+import com.ticketing.system.sales.application.service.CheckoutService;
 
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;

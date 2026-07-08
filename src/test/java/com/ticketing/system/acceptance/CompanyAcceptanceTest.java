@@ -42,9 +42,9 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.identity.domain.User;
@@ -67,7 +67,7 @@ class CompanyAcceptanceTest {
         private CompanyAnalyticsService companyAnalyticsService;
 
         @Autowired
-        private IOrderReceiptRepository orderReceiptRepository;
+        private OrderReceiptRepository orderReceiptRepository;
 
         private AuthTokenDTO registerAndLoginMember(String name) {
                 String sid = authService.startGuestSession().sessionId();

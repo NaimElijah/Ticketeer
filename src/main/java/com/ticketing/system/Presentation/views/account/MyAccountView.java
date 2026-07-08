@@ -3,7 +3,7 @@ package com.ticketing.system.Presentation.views.account;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.TicketRecordDTO;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.Presentation.components.Toasts;
 import com.ticketing.system.Presentation.components.buyer.BzRefundDialog;
 import com.ticketing.system.Presentation.components.buyer.BzTicketDialog;

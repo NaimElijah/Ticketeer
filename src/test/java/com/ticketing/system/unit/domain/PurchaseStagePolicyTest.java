@@ -6,11 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MinTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchaseContext;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchaseStage;
+import com.ticketing.system.sales.domain.AgePurchasePolicy;
+import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchaseContext;
+import com.ticketing.system.sales.domain.PurchaseStage;
 
 /**
  * V2-POL-05 (#220): purchase-policy rules must behave differently at the RESERVE

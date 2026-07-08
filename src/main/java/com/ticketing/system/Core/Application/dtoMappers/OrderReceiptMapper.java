@@ -8,17 +8,17 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventoryZone;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 
@@ -35,7 +35,7 @@ public class OrderReceiptMapper {
 
     /** Full receipt → record (member history / unfiltered global history). */
     public PurchaseHistoryDTO.PurchaseRecordDTO toPurchaseRecordDTO(OrderReceipt receipt,
-            ITicketRepository ticketRepository,
+            TicketRepository ticketRepository,
             EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
@@ -59,7 +59,7 @@ public class OrderReceiptMapper {
     /** UC-31 global history: include only tickets matching the event filter; all transactions. */
     public PurchaseHistoryDTO.PurchaseRecordDTO toFilteredPurchaseRecordDTO(OrderReceipt receipt,
             Set<Integer> selectedEventIds,
-            ITicketRepository ticketRepository,
+            TicketRepository ticketRepository,
             EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {

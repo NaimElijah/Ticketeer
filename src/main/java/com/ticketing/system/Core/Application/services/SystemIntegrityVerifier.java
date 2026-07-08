@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.services;
+import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.identity.domain.Admin;
 
 import java.util.ArrayList;
@@ -11,9 +12,9 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
@@ -82,12 +83,12 @@ public class SystemIntegrityVerifier {
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
     private final EventRepository eventRepository;
-    private final IActiveOrderRepository activeOrderRepository;
+    private final ActiveOrderRepository activeOrderRepository;
 
     public SystemIntegrityVerifier(UserRepository userRepository,
                                    ProductionCompanyRepository companyRepository,
                                    EventRepository eventRepository,
-                                   IActiveOrderRepository activeOrderRepository) {
+                                   ActiveOrderRepository activeOrderRepository) {
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
         this.eventRepository = eventRepository;

@@ -22,8 +22,8 @@ import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
 import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
 import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
@@ -44,7 +44,7 @@ class AuthAcceptanceTest {
     @Autowired
     private SessionRepository sessionRepository;
     @Autowired
-    private IActiveOrderRepository activeOrderRepository;
+    private ActiveOrderRepository activeOrderRepository;
 
     // ------------------------------------------------------------------
     // Guest session lifecycle

@@ -1,4 +1,6 @@
 package com.ticketing.system.Infrastructure.scheduling;
+import com.ticketing.system.sales.application.service.CheckoutService;
+import com.ticketing.system.sales.application.service.ReservationService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -16,9 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketing.system.Core.Application.events.OrderExpiredEvent;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventorySelection;
@@ -55,7 +57,7 @@ import com.ticketing.system.identity.domain.Session;
 public class SessionAndOrderSweeper {
 
     private final SessionRepository sessionRepository;
-    private final IActiveOrderRepository activeOrderRepository;
+    private final ActiveOrderRepository activeOrderRepository;
     private final EventRepository eventRepository;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
@@ -63,7 +65,7 @@ public class SessionAndOrderSweeper {
 
     public SessionAndOrderSweeper(
             SessionRepository sessionRepository,
-            IActiveOrderRepository activeOrderRepository,
+            ActiveOrderRepository activeOrderRepository,
             EventRepository eventRepository,
             Clock clock,
             ApplicationEventPublisher eventPublisher,

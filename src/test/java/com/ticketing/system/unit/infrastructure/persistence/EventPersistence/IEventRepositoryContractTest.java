@@ -18,7 +18,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.catalog.domain.EventCategory;

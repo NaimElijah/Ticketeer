@@ -6,7 +6,7 @@ import com.ticketing.system.Core.Application.dto.BuyerContextDTO;
 import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
 import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.ReservationService;
+import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.Presentation.components.kit.LkBadge;
 import com.ticketing.system.Presentation.security.Capabilities;

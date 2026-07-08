@@ -23,8 +23,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
@@ -41,20 +41,20 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
 
 class SessionAndOrderSweeperTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
 
     private SessionRepository sessionRepo;
-    private IActiveOrderRepository orderRepo;
+    private ActiveOrderRepository orderRepo;
     private EventRepository eventRepo;
     private Clock fixedClock;
     private ApplicationEventPublisher eventPublisher;
@@ -64,7 +64,7 @@ class SessionAndOrderSweeperTest {
     @BeforeEach
     void setUp() {
         sessionRepo    = mock(SessionRepository.class);
-        orderRepo      = mock(IActiveOrderRepository.class);
+        orderRepo      = mock(ActiveOrderRepository.class);
         eventRepo      = mock(EventRepository.class);
         fixedClock     = Clock.fixed(T0, ZoneOffset.UTC);
         eventPublisher = mock(ApplicationEventPublisher.class);

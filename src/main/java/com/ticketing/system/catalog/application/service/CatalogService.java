@@ -27,7 +27,7 @@ import com.ticketing.system.Core.Application.dto.VenueMapDTO;
 import com.ticketing.system.Core.Application.dtoMappers.VenueMapMapper;
 import com.ticketing.system.Core.Application.dtoMappers.EventMapper;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
@@ -48,13 +48,13 @@ public class CatalogService {
     private final SessionManager sessionManager;
     private final EventRepository eventRepository;
     private final ProductionCompanyRepository productionCompanyRepository;
-    private final ITicketRepository ticketRepository;
+    private final TicketRepository ticketRepository;
 
     public CatalogService(
             SessionManager sessionManager,
             EventRepository eventRepository,
             ProductionCompanyRepository productionCompanyRepository,
-            ITicketRepository ticketRepository
+            TicketRepository ticketRepository
     ) {
         this.sessionManager = sessionManager;
         this.eventRepository = eventRepository;

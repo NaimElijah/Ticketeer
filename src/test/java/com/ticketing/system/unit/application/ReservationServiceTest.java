@@ -4,11 +4,11 @@ import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
 import com.ticketing.system.Core.Application.interfaces.INotificationService;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.services.ReservationService;
+import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventorySelection;
@@ -38,7 +38,7 @@ import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
+import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
@@ -50,13 +50,13 @@ import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
 
 public class ReservationServiceTest {
 
     private EventRepository eventRepository;
-    private IActiveOrderRepository activeOrderRepository;
+    private ActiveOrderRepository activeOrderRepository;
     private SessionManager sessionManager;
     private INotificationService notificationService;
     private SystemAdminService systemAdminService;
@@ -76,7 +76,7 @@ public class ReservationServiceTest {
     @BeforeEach
     void setUp() {
         eventRepository = mock(EventRepository.class);
-        activeOrderRepository = mock(IActiveOrderRepository.class);
+        activeOrderRepository = mock(ActiveOrderRepository.class);
         sessionManager = mock(SessionManager.class);
         notificationService = mock(INotificationService.class);
 

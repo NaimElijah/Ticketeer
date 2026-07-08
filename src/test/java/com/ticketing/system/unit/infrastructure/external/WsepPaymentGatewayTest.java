@@ -24,7 +24,7 @@ import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.Infrastructure.external.WsepCommunicationException;
 import com.ticketing.system.Infrastructure.external.WsepHttpClient;
-import com.ticketing.system.Infrastructure.external.WsepPaymentGateway;
+import com.ticketing.system.sales.adapter.out.wsep.WsepPaymentGateway;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;

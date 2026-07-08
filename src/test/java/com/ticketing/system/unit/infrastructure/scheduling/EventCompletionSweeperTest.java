@@ -28,8 +28,8 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.EventNotFoundException;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.domain.PurchasePolicy;
 import com.ticketing.system.Infrastructure.scheduling.EventCompletionSweeper;
 
 /**

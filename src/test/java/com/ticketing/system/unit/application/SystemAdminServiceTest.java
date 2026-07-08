@@ -26,15 +26,15 @@ import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
 import com.ticketing.system.Core.Application.dto.MarketStateDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
+import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.Core.Application.services.SystemIntegrityVerifier;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -45,9 +45,9 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.MissingDefaultAdminException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 
 class SystemAdminServiceTest {
 
@@ -56,8 +56,8 @@ class SystemAdminServiceTest {
 
     private SessionManager sessionManager;
     private AdminRepository adminRepository;
-    private IOrderReceiptRepository orderReceiptRepository;
-    private ITicketRepository ticketRepository;
+    private OrderReceiptRepository orderReceiptRepository;
+    private TicketRepository ticketRepository;
     private EventRepository eventRepository;
     private ProductionCompanyRepository companyRepository;
     private UserRepository userRepository;
@@ -70,8 +70,8 @@ class SystemAdminServiceTest {
     void setUp() {
         sessionManager = mock(SessionManager.class);
         adminRepository = mock(AdminRepository.class);
-        orderReceiptRepository = mock(IOrderReceiptRepository.class);
-        ticketRepository = mock(ITicketRepository.class);
+        orderReceiptRepository = mock(OrderReceiptRepository.class);
+        ticketRepository = mock(TicketRepository.class);
         eventRepository = mock(EventRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
@@ -164,7 +164,7 @@ class SystemAdminServiceTest {
     @Test
     void givenPaymentDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady() {
         when(adminRepository.existsAny()).thenReturn(true);
-        IPaymentGateway gateway = reachablePayment();
+        PaymentGateway gateway = reachablePayment();
         SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
         svc.initializePlatform();                          // READY
         when(gateway.verifyConnection()).thenReturn(false); // gateway drops before open
@@ -175,7 +175,7 @@ class SystemAdminServiceTest {
     @Test
     void givenIssuerDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady() {
         when(adminRepository.existsAny()).thenReturn(true);
-        ITicketIssuer issuer = reachableIssuer();
+        TicketIssuer issuer = reachableIssuer();
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(issuer));
         svc.initializePlatform();                          // READY
         when(issuer.verifyConnection()).thenReturn(false);  // issuer drops before open
@@ -266,7 +266,7 @@ class SystemAdminServiceTest {
     @Test
     void givenServicesDownThenUp_whenEnsureMarketOpenTwice_thenSelfHealsToOpen() {
         when(adminRepository.existsAny()).thenReturn(true);
-        IPaymentGateway gateway = mock(IPaymentGateway.class);
+        PaymentGateway gateway = mock(PaymentGateway.class);
         when(gateway.verifyConnection()).thenReturn(false);   // WSEP cold / unreachable at boot
         SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
 
@@ -431,7 +431,7 @@ class SystemAdminServiceTest {
         return new MarketControlRequestDTO("CLOSE", "test close", ADMIN_TOKEN);
     }
 
-    private SystemAdminService serviceWith(List<IPaymentGateway> gateways, List<ITicketIssuer> issuers) {
+    private SystemAdminService serviceWith(List<PaymentGateway> gateways, List<TicketIssuer> issuers) {
         return new SystemAdminService(
                 sessionManager, adminRepository, orderReceiptRepository,
                 ticketRepository, eventRepository, companyRepository, userRepository,
@@ -439,14 +439,14 @@ class SystemAdminServiceTest {
                 integrityVerifier, "admin", "admin");
     }
 
-    private IPaymentGateway reachablePayment() {
-        IPaymentGateway gateway = mock(IPaymentGateway.class);
+    private PaymentGateway reachablePayment() {
+        PaymentGateway gateway = mock(PaymentGateway.class);
         when(gateway.verifyConnection()).thenReturn(true);
         return gateway;
     }
 
-    private ITicketIssuer reachableIssuer() {
-        ITicketIssuer issuer = mock(ITicketIssuer.class);
+    private TicketIssuer reachableIssuer() {
+        TicketIssuer issuer = mock(TicketIssuer.class);
         when(issuer.verifyConnection()).thenReturn(true);
         return issuer;
     }

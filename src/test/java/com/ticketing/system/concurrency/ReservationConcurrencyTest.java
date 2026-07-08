@@ -21,7 +21,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.Core.Application.services.ReservationService;
+import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.Core.Application.services.SystemAdminService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -38,8 +38,8 @@ import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.SpringDataActiveOrderRepository;
+import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataActiveOrderRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 

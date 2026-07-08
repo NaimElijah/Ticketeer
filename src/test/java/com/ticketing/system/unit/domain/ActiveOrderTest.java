@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
+import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.support.BaseDomainTest;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
 import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
+import com.ticketing.system.sales.domain.CartLineItem;
 
 // Unit tests for the ActiveOrder aggregate.
 class ActiveOrderTest extends BaseDomainTest {

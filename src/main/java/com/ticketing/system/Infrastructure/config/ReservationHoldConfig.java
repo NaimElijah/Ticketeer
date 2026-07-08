@@ -5,7 +5,7 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
+import com.ticketing.system.sales.domain.CartLineItem;
 
 import jakarta.annotation.PostConstruct;
 

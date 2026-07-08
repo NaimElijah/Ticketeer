@@ -11,8 +11,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.Core.Domain.users.CompanyAppointment;

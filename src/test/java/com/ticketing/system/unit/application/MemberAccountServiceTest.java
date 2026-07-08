@@ -6,19 +6,19 @@ import static org.assertj.core.api.Assertions.*;
 import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.Core.Application.services.MemberAccountService;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,8 +34,8 @@ import java.util.Optional;
 class MemberAccountServiceTest {
 
     @Mock AuthenticationService authenticationService;
-    @Mock IOrderReceiptRepository orderReceiptRepository;
-    @Mock ITicketRepository ticketRepository;
+    @Mock OrderReceiptRepository orderReceiptRepository;
+    @Mock TicketRepository ticketRepository;
     @Mock EventRepository eventRepository;
     @Mock OrderReceipt receipt;
     @Mock Ticket ticket;

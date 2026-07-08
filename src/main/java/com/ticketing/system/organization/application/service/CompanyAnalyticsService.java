@@ -15,14 +15,14 @@ import lombok.extern.slf4j.Slf4j;
 import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
 import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.Core.Domain.messaging.ConversationType;
 import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 
 /**
@@ -43,17 +43,17 @@ public class CompanyAnalyticsService {
     private static final int WINDOW_DAYS = 30;
 
     private final EventRepository eventRepository;
-    private final IOrderReceiptRepository orderReceiptRepository;
+    private final OrderReceiptRepository orderReceiptRepository;
     private final IConversationRepository conversationRepository;
-    private final ITicketRepository ticketRepository;
+    private final TicketRepository ticketRepository;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
 
     public CompanyAnalyticsService(
             EventRepository eventRepository,
-            IOrderReceiptRepository orderReceiptRepository,
+            OrderReceiptRepository orderReceiptRepository,
             IConversationRepository conversationRepository,
-            ITicketRepository ticketRepository,
+            TicketRepository ticketRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         this.eventRepository = eventRepository;

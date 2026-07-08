@@ -1,4 +1,5 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.sales.application.service.ReservationService;
 
 import java.util.List;
 

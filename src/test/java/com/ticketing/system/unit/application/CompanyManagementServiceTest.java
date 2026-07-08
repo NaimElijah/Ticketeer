@@ -28,16 +28,16 @@ import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
 import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
 import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
 import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.Core.Domain.users.Permission;
 import com.ticketing.system.identity.domain.User;
@@ -46,10 +46,10 @@ public class CompanyManagementServiceTest {
 
         private ProductionCompanyRepository mockCompanyRepo;
         private UserRepository mockUserRepo;
-        private IOrderReceiptRepository mockOrderReceiptRepo;
+        private OrderReceiptRepository mockOrderReceiptRepo;
         private SessionManager sessionManager;
         private CompanyManagementService companyService;
-        private ITicketRepository ticketRepository;
+        private TicketRepository ticketRepository;
         private EventRepository eventRepository;
         private INotificationService notificationService;
 
@@ -70,9 +70,9 @@ public class CompanyManagementServiceTest {
         public void setUp() {
                 mockCompanyRepo = mock(ProductionCompanyRepository.class);
                 mockUserRepo = mock(UserRepository.class);
-                mockOrderReceiptRepo = mock(IOrderReceiptRepository.class);
+                mockOrderReceiptRepo = mock(OrderReceiptRepository.class);
                 sessionManager = mock(SessionManager.class);
-                ticketRepository = mock(ITicketRepository.class);
+                ticketRepository = mock(TicketRepository.class);
                 eventRepository = mock(EventRepository.class);
                 notificationService = mock(INotificationService.class);
 

@@ -1,6 +1,6 @@
 package com.ticketing.system.identity.application.service;
 import com.ticketing.system.Core.Application.services.NotificationDispatchService; // transitional: cross-context call, to be rewired via an inbound port later
-import com.ticketing.system.Core.Application.services.ReservationService; // transitional: cross-context call, to be rewired via an inbound port later
+import com.ticketing.system.sales.application.service.ReservationService; // transitional: cross-context call, to be rewired via an inbound port later
 
 import java.util.List;
 import java.time.Clock;
@@ -30,8 +30,8 @@ import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
 import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.identity.domain.Admin;
@@ -45,7 +45,7 @@ import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.MemoryActiveOrderRepository;
+import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
 
 
 /**
@@ -71,7 +71,7 @@ public class AuthenticationService {
     private final ReservationService reservationService; // for UC-13 order restoration
     private final NotificationDispatchService notificationDispatchService; // for UC-37 notification flush
     private final SessionRepository sessionRepository;
-    private final IActiveOrderRepository activeOrderRepository;
+    private final ActiveOrderRepository activeOrderRepository;
     private final ISystemMetrics systemMetrics;
     private final Clock clock;
     private final long guestIdleMinutes;
@@ -93,7 +93,7 @@ public class AuthenticationService {
             ReservationService reservationService,
             NotificationDispatchService notificationDispatchService,
             SessionRepository sessionRepository,
-            IActiveOrderRepository activeOrderRepository,
+            ActiveOrderRepository activeOrderRepository,
             ISystemMetrics systemMetrics,
             Clock clock,
             AdminRepository adminRepository,

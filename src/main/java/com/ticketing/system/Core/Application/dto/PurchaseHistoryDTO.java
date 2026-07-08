@@ -1,6 +1,6 @@
 package com.ticketing.system.Core.Application.dto;
 
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.domain.TicketStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;

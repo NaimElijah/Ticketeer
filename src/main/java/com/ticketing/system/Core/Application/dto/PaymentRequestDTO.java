@@ -1,6 +1,7 @@
 package com.ticketing.system.Core.Application.dto;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 
-// Input to IPaymentGateway.charge() (UC-33).
+// Input to PaymentGateway.charge() (UC-33).
 // 'idempotencyKey' is critical — if the gateway response is lost, retry must not double-charge.
 //
 // buyerUserId / buyerEmail are dual identity for Member vs Guest purchases:

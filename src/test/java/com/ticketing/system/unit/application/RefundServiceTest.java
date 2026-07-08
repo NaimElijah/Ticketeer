@@ -22,12 +22,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
 import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
 import com.ticketing.system.Core.Application.dto.RefundResultDTO;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.Core.Application.services.RefundService;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
+import com.ticketing.system.sales.application.service.RefundService;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
@@ -35,20 +35,20 @@ import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord;
-import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.MemoryOrderReceiptRepository;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
+import com.ticketing.system.sales.adapter.out.persistence.MemoryOrderReceiptRepository;
 import com.ticketing.system.testutil.TestTransactions;
 
 @ExtendWith(MockitoExtension.class)
 class RefundServiceTest {
 
     @Mock AuthenticationService authenticationService;
-    @Mock IOrderReceiptRepository orderReceiptRepository;
-    @Mock ITicketRepository ticketRepository;
-    @Mock IPaymentGateway paymentGateway;
+    @Mock OrderReceiptRepository orderReceiptRepository;
+    @Mock TicketRepository ticketRepository;
+    @Mock PaymentGateway paymentGateway;
     @Mock EventRepository eventRepository;
     @Mock Ticket ticket;
     @Mock Event event;
@@ -232,12 +232,12 @@ class RefundServiceTest {
     // one throws BusinessRuleViolationException) regardless of thread timing.
     @Test
     void givenConcurrentRefundRequests_whenRequestRefund_thenGatewayRefundsExactlyOnce() throws Exception {
-        IOrderReceiptRepository realReceiptRepo = new MemoryOrderReceiptRepository();
+        OrderReceiptRepository realReceiptRepo = new MemoryOrderReceiptRepository();
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         realReceiptRepo.save(receipt); // id == ORDER_ID
 
         AtomicInteger refundCalls = new AtomicInteger();
-        IPaymentGateway countingGateway = new IPaymentGateway() {
+        PaymentGateway countingGateway = new PaymentGateway() {
             @Override public String getId() { return "stub"; }
             @Override public boolean verifyConnection() { return true; }
             @Override public PaymentResultDTO charge(PaymentRequestDTO r) { throw new UnsupportedOperationException(); }
@@ -250,7 +250,7 @@ class RefundServiceTest {
         AuthenticationService auth = Mockito.mock(AuthenticationService.class);
         Mockito.when(auth.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(auth.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        ITicketRepository ticketRepo = Mockito.mock(ITicketRepository.class);
+        TicketRepository ticketRepo = Mockito.mock(TicketRepository.class);
         Mockito.when(ticketRepo.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of());
         EventRepository eventRepo = Mockito.mock(EventRepository.class);
 
