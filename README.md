@@ -1,78 +1,226 @@
-> This project is an extended and upgraded version of [event-ticket-system](https://github.com/AdamSimkinbgu/event-ticket-system), 
+> This project is an extended and upgraded version of [event-ticket-system](https://github.com/AdamSimkinbgu/event-ticket-system),
 > originally built by me and collaborators as a university project at Ben-Gurion University.
 > Being extended and enhanced by me in this repository.
 
-# Events Ticketing System
+<div align="center">
 
-An event management and ticketing platform that provides an infrastructure for trading event
-tickets between producers and buyers. Users can visit the platform to purchase tickets, as well as
-to create and manage events.
+# 🎟️ Events Ticketing System
+
+**An event management & ticketing platform where producers create and run events, and buyers browse and purchase tickets — built as a verified, enforced DDD + hexagonal modular monolith.**
+
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F)
+![Vaadin](https://img.shields.io/badge/Vaadin%20Flow-24.7-00B4F0)
+![Spring Modulith](https://img.shields.io/badge/Spring%20Modulith-1.4-6DB33F)
+![ArchUnit](https://img.shields.io/badge/ArchUnit-enforced-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL%20%2F%20H2-JPA-336791)
+
+</div>
+
+---
+
+## What this is
+
+An event trading platform. **Producers** register production companies, appoint owners and managers
+with granular permissions, and create, configure, publish, and cancel events. **Buyers** (registered
+members and anonymous guests) browse the open market, reserve seats against a timed hold, and check
+out through a real external payment gateway and ticket issuer. A **platform admin** initializes the
+system, opens and closes the market, and watches live analytics and integrity checks.
+
+Under the hood it is a **Spring Boot 3.5 / Vaadin Flow 24.7 monolith on Java 21**, deployable on
+PostgreSQL (Supabase) and runnable end-to-end locally on in-memory H2 with a seeded demo dataset. The
+distinguishing feature is its architecture: **eleven bounded-context modules arranged as a build-verified
+acyclic graph**, each following a canonical hexagonal (ports-and-adapters) layout, with boundary and
+layering violations failing the build.
+
+### Highlights
+
+- 🏛️ **DDD + hexagonal modular monolith** — 11 Spring Modulith modules; cross-context calls go only through **ports and events**, never by reaching into another context's internals.
+- ✅ **Enforced architecture** — ArchUnit proves the bounded-context graph is a **DAG** and that hexagonal layers hold; the build fails on any violation. Spring Modulith regenerates C4 diagrams on every test run.
+- 🔌 **Dual persistence, one port** — every aggregate has a domain repository port with two adapters (in-memory `ConcurrentHashMap` and JPA/Spring Data), swapped purely by Spring profile.
+- 🔒 **Transactions & optimistic concurrency** — `@Transactional` at the application-service layer, `@Version` optimistic locking, commit-time lock failures re-typed into domain exceptions via an AOP aspect.
+- 🔁 **Event-driven decoupling** — refunds, notifications, and cross-context reactions flow through domain/integration events rather than direct service calls.
+- 🚦 **Deterministic platform lifecycle** — a `UNINITIALIZED → READY → OPEN ↔ CLOSED` state machine gated on an external-service quorum and a System Admin.
+- 🌱 **Reproducible dev environment** — boot into a known state by replaying real use-case operations from an editable `.scenario` file; a rich demo dataset seeds automatically under the `dev` profile.
+
+---
 
 ## Architecture
 
-The codebase follows a clean, layered architecture:
+A **DDD + hexagonal modular monolith**. Each top-level package under `com.ticketing.system` is a
+Spring Modulith `@ApplicationModule` (a bounded context). The contexts form a **verified acyclic
+dependency graph**, and every cross-context interaction crosses the boundary through a **port** (an
+interface owned by one side) or an **event** — never through another context's domain or adapters.
 
-| Layer | Package | Responsibility |
-|---|---|---|
-| Domain | `Core/Domain` | Aggregates, entities, value objects, domain rules and the `IXxxRepository` ports |
-| Application | `Core/Application` | Use-case services, DTOs, application-level interfaces (ports) |
-| Infrastructure | `Infrastructure` | JPA/in-memory repository adapters, security (JWT), scheduling, external WSEP clients, dev seeding |
-| Presentation | `Presentation` | Vaadin views, presenters (MVP), UI components |
+### The modules
 
-**V3 — Persistence & Robustness.** The in-memory repositories are being replaced by JPA-backed
-adapters behind the unchanged `IXxxRepository` ports, every use-case runs inside a database
-transaction (`@Transactional` at the application layer, not the domain), external WSEP calls are
-kept outside the DB transaction, and the platform is deployable on PostgreSQL (Supabase). The same
-`jpa` profile runs against H2 locally and PostgreSQL on the deploy target — a config-only switch.
+| Module | Responsibility |
+|---|---|
+| `shared` | **Shared kernel:** the `DomainException` hierarchy, the base `IRepository`/`InvariantChecked` contracts, cross-cutting technical infra (AOP aspects, `RepositoryLocks`, `WsepHttpClient`, security config, metrics), published-language DTOs, the cross-context purchase-policy domain, and integration-event records (`shared/event`). |
+| `identity` | User, Session, Admin, authentication. The most foundational context. |
+| `organization` | `ProductionCompany` + the `CompanyAppointment` aggregate (company membership, roles, permissions), each with its own repository. |
+| `catalog` | Event, venue maps, zones, seats, and **inventory** — owns reserve/release/confirm via `InventoryCommandPort`. |
+| `sales` | `ActiveOrder`, `OrderReceipt`, `Ticket`, checkout, reservations, refunds, and purchase policies. The transactional core. |
+| `messaging` | Conversations, support inquiries, complaints, and admin outreach. |
+| `notifications` | A pure sink: consumes `shared/event` integration events via a synchronous `@EventListener` adapter and depends on nothing but the kernel. |
+| `governance` | Platform lifecycle, market state, system analytics, and integrity verification. A top-level consumer (the market gate is inverted through a sales-owned `MarketGate` port). |
+| `reporting` | The CQRS read side: cross-context read services (member purchase history, company dashboards). Consumed only by the UI. |
+| `ui` | The single Vaadin driving adapter — `@Route` views + MVP presenters. No backend module depends on it. |
+| `bootstrap` | The composition root: lifecycle runners, `@Scheduled` sweepers, and the dev seed / `.scenario` engine. A pure sink that wires the contexts together. |
 
-## Build & run
+### Dependency graph (a DAG)
 
-Prerequisites: JDK 21 and the bundled Maven wrapper (`./mvnw`).
+`shared ← identity ← organization ← {catalog, messaging} ← sales`; `governance` and `reporting` are
+top-level consumers; `ui` and `bootstrap` are sinks; `notifications` is a pure event sink. No two
+modules depend on each other, directly or transitively.
 
-```bash
-# Production / staging path: jpa profile against PostgreSQL (see DB_* env vars below)
-./mvnw spring-boot:run
+```mermaid
+flowchart TD
+    bootstrap --> ui
+    ui --> sales
+    ui --> reporting
+    ui --> governance
+    governance -.->|implements MarketGate| sales
+    reporting --> sales
+    sales --> catalog
+    sales --> messaging
+    catalog --> organization
+    messaging --> organization
+    organization --> identity
+    identity --> shared
+    notifications --> shared
 
-# Local development: H2 in-memory DB, auto-opened market, and the demo scenario seed
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+    classDef kernel fill:#6DB33F,stroke:#333,color:#fff;
+    classDef sink fill:#00B4F0,stroke:#333,color:#fff;
+    class shared kernel;
+    class ui,bootstrap,notifications sink;
 ```
 
-The app serves the Vaadin UI on `http://localhost:8080`. The Maven `production` profile
-(`./mvnw -Pproduction ...`) bundles the optimized Vaadin frontend for deployment.
+*(An arrow means "depends on." `governance` implementing sales' `MarketGate` port is how the market
+gate is inverted so `governance` stays a top consumer without creating a cycle.)*
 
-## How initialization works (UC-1 / UC-32)
+### Per-context hexagonal layout
 
-The platform comes up through a deterministic boot sequence, then waits for an admin to open the
-market before any money can move.
+Each backend context uses the canonical ports-and-adapters structure. The single inbound driving
+adapter is the shared `ui` module, so contexts hold domain + application + outbound adapters:
 
-1. **`PlatformInitializationRunner`** (`@Order(0)`, skipped under the `test` profile) calls
-   `SystemAdminService.initializePlatform()`.
-2. **`initializePlatform()`** (UC-1) runs the I.1 post-conditions in order:
-   - **I.1.2 / I.1.3** — external-service quorum: at least one payment gateway *and* one ticket
-     issuer must answer a WSEP `handshake` (`requireExternalServicesReachable()`), else
-     `ExternalServiceUnavailableException`.
-   - **I.1.4** — guarantee a System Admin: `createDefaultAdminIfMissing()` auto-creates the default
-     admin from `platform.admin.*` if none exists, else `MissingDefaultAdminException`.
-   - **I.1.1 gate** — re-assert the post-conditions (`verifyInitializationInvariants()`) and the
-     structural correctness scan (`SystemIntegrityVerifier.verify()`), else
-     `InitializationIntegrityException`. The platform transitions to **READY**.
-3. The market stays **CLOSED** until an admin calls **`openMarket()`** (UC-32), which re-verifies the
-   external services (I.2.2) and structural invariants (I.2.1) before flipping to **OPEN**. Sales
-   (`ReservationService` / `CheckoutService`) are gated on `isMarketOpen()`.
-4. Under the `dev` profile, **`DevMarketOpener`** (`@Order(1)`) opens the market automatically so the
-   seeded scenario can transact.
+```
+com.ticketing.system.sales
+├── domain/                  # aggregates, value objects, domain events (keep @Entity — jakarta.persistence allowed)
+├── application/
+│   ├── port/in/             # inbound use-case / query ports
+│   ├── port/out/            # outbound driven ports (repositories, gateways, cross-context ports)
+│   └── service/             # @Transactional application services implementing the inbound ports
+└── adapter/
+    └── out/
+        ├── persistence/     # Jpa* / Memory* repositories (+ SpringData*) selected by profile
+        └── wsep/            # external-system adapters (payment gateway, ticket issuer)
+```
 
-The lifecycle is a small state machine: `UNINITIALIZED → READY → OPEN ↔ CLOSED`.
+### The central pattern — repository ports with dual adapters
 
-> Initialization failures are logged but currently do not abort the JVM (the process boots, the
-> market just can't open). A hard boot-validity check that fails startup on invalid init is tracked
-> in **#367 (V3-INIT-02)** and not yet wired.
+Every aggregate has a domain repository port (e.g. `EventRepository`, `UserRepository`,
+`ActiveOrderRepository`) extending the base `IRepository<T, ID>`. **Two** adapters implement it,
+selected by Spring profile — application code depends only on the port, never on a concrete repository:
 
-## Config-file format
+- `MemoryXxxRepository` — `@Profile("!jpa")`, `ConcurrentHashMap`-backed. The default.
+- `JpaXxxRepository` — `@Profile("jpa")`, adapts the port onto a Spring Data `SpringDataXxxRepository`. The application layer never sees Spring Data types.
 
-Runtime configuration lives in `src/main/resources/application.yml` (all values are env-var
-overridable, shown as `${ENV:default}`). The `dev` profile overlay is
-`src/main/resources/application-dev.yml`.
+One abstract `IXxxRepositoryContractTest` with `Memory…` and `Jpa…` subclasses verifies **both**
+backends against the same behavioral contract.
+
+### Transactions & concurrency
+
+- `@Transactional` lives at the **application-service** layer — not in the domain, not in the adapters. External WSEP calls are kept *outside* the DB transaction.
+- Concurrency under `jpa` is **optimistic locking** via JPA `@Version` (the Memory adapters' explicit `lockForUpdate`/`unlock` become no-ops). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the transactional advice) re-types a commit-time `OptimisticLockingFailureException` into the domain's `ConcurrentReservationException`.
+- `LoggingAspect` traces every public application-service method (entry/exit/throw), logging argument *counts*, never values.
+
+### Enforcement — the architecture is the test
+
+Both gates run on every `./mvnw test` and fail the build on violation:
+
+| Gate | What it proves |
+|---|---|
+| **`HexagonalRulesTest`** (ArchUnit) | Domain is free of Spring/Vaadin and the outer layers; the application layer never depends on adapters; no backend context depends on `ui`; and **`bounded_contexts_are_acyclic()`** proves the module graph is a DAG (ArchUnit slices — the same cycle engine Modulith uses, run without the open-module exemption, so it is the substantive cycle guarantee). |
+| **`ModularityTests`** (Spring Modulith) | `ApplicationModules.verify()` validates the module model, and `Documenter` regenerates the C4 / PlantUML component diagrams and per-module canvases (committed under `docs/architecture/`). |
+
+> Modules are declared *open*, so Modulith validates the model while ArchUnit provides the substantive
+> cycle teeth. Closing modules to expose only named-interface ports (type-level encapsulation) is
+> documented future work, not a correctness gap.
+
+---
+
+## Tech stack
+
+| Area | Choice |
+|---|---|
+| Language / build | Java 21, Maven (wrapper: `./mvnw`) |
+| Framework | Spring Boot 3.5, Spring Data JPA, Spring AOP, Spring Actuator |
+| UI | Vaadin Flow 24.7 (server-side, MVP presenters) |
+| Architecture enforcement | Spring Modulith 1.4, ArchUnit 1.4 |
+| Persistence | PostgreSQL / Supabase (prod), H2 in-memory (dev & contract tests), in-memory maps (default/test) |
+| Auth | JWT (jjwt 0.12.6), BCrypt password hashing |
+| External systems | WSEP payment gateway + ticket issuer over HTTP |
+
+---
+
+## Getting started
+
+**Prerequisites:** JDK 21 and the bundled Maven wrapper (`./mvnw`, or `mvnw.cmd` on Windows).
+
+```bash
+# Local development — H2 in-memory DB, market auto-opened, demo dataset seeded. Use this by default.
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+
+# Production / staging path — jpa profile against PostgreSQL (needs the DB_* env vars below)
+./mvnw spring-boot:run
+```
+
+The Vaadin UI serves at **`http://localhost:8080`**. The Maven `production` profile
+(`./mvnw -Pproduction ...`) bundles the optimized, minified Vaadin frontend for deployment.
+
+### Tests
+
+```bash
+./mvnw test                                             # full suite
+./mvnw test -Dtest=ReservationServiceTest               # one class
+./mvnw test -Dtest=ReservationServiceTest#reservesSeatedZone   # one method
+```
+
+> **Windows caveat:** Vaadin 24.7.0's `prepare-frontend` goal can NPE on Windows. The `-Pno-vaadin`
+> profile skips it (`./mvnw -Pno-vaadin test`) — use it for **test runs only**, since the app then
+> won't serve Vaadin views.
+
+### Reset / replay the dev dataset
+
+```bash
+# Wipe the in-memory repos and re-seed the demo graph
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--seed.mode=wipe
+
+# Replay a specific initial-state file (see "Initial-state files" below)
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
+    -Dspring-boot.run.arguments="--seed.scenario=file:/abs/path/your.scenario --seed.mode=wipe"
+```
+
+---
+
+## Profiles
+
+| Profile | Effect |
+|---|---|
+| *(default)* | Production: JPA repositories on PostgreSQL via `DB_*` env vars. |
+| `dev` | Activates `jpa`; H2 in-memory (`create-drop`), demo seeding, market auto-opened. |
+| `test` | Used by the suite; disables `PlatformInitializationRunner` so tests drive init. |
+| `jpa` | Swaps Memory adapters for Jpa adapters (auto-activated by `dev` and `supabase`). |
+| `supabase` | `jpa` against remote Supabase Postgres, env-only credentials (`application-supabase.yml`). |
+| `production` / `no-vaadin` | Maven **build** profiles (bundle frontend / skip Vaadin prepare). |
+
+---
+
+## Configuration
+
+All runtime configuration lives in `src/main/resources/application.yml`; every value is env-var
+overridable (shown as `${ENV:default}`). Overlays: `application-dev.yml` and `application-supabase.yml`.
 
 ### `application.yml`
 
@@ -80,8 +228,8 @@ overridable, shown as `${ENV:default}`). The `dev` profile overlay is
 |---|---|---|
 | `spring.datasource.url` | `jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketing}` | DB connection (env: `DB_HOST`/`DB_PORT`/`DB_NAME`) |
 | `spring.datasource.username` / `password` | `${DB_USER:postgres}` / `${DB_PASSWORD:postgres}` | DB credentials |
-| `spring.jpa.hibernate.ddl-auto` | `update` | Schema strategy (prod). Hibernate auto-detects the dialect per connection |
-| `spring.profiles.group.dev` | `jpa` | Activating `dev` also activates `jpa` |
+| `spring.jpa.hibernate.ddl-auto` | `update` | Schema strategy (prod); Hibernate auto-detects the dialect per connection |
+| `spring.profiles.group.dev` / `.supabase` | `jpa` | Activating `dev` or `supabase` also activates `jpa` |
 | `jwt.secret` | `${JWT_SECRET:…}` | JWT signing secret — **must** be supplied via env in production |
 | `session.member-ttl-minutes` | `1440` | Absolute member-session lifetime |
 | `session.guest-idle-timeout-minutes` | `30` | Idle timeout for guest sessions |
@@ -93,10 +241,11 @@ overridable, shown as `${ENV:default}`). The `dev` profile overlay is
 | `analytics.refresh-interval-ms` | `5000` | Dashboard auto-refresh (`0` disables) |
 | `management.endpoints.web.exposure.include` | `health,info` | Exposed Actuator endpoints |
 | `vaadin.launch-browser` | `false` | Don't auto-open a browser on run |
-| `vaadin.allowed-packages` | `com.ticketing.system.Presentation` | Restrict Vaadin component scan |
-| `platform.admin.username` | `${PLATFORM_ADMIN_USERNAME:admin}` | **UC-1 / I.1.4** default admin username |
-| `platform.admin.password` | `${PLATFORM_ADMIN_PASSWORD:admin}` | Default admin password — **override in production** |
+| `vaadin.allowed-packages` | `com.ticketing.system.ui` | Restrict Vaadin component/route scan |
+| `platform.admin.username` / `password` | `${PLATFORM_ADMIN_USERNAME:admin}` / `${…:admin}` | **UC-1 / I.1.4** default admin — **override in production** |
 | `wsep.base-url` | `${WSEP_BASE_URL:https://…koyeb.app/}` | WSEP payment/issuance endpoint |
+| `wsep.handshake-attempts` / `handshake-backoff-ms` | `3` / `1000` | Retried, idempotent reachability handshake (`pay`/`issue`/`refund` are never retried) |
+| `market.self-heal-delay-ms` | `30000` | Interval on which `MarketSelfHealScheduler` re-attempts an open after a transient outage |
 
 ### `application-dev.yml`
 
@@ -108,32 +257,61 @@ overridable, shown as `${ENV:default}`). The `dev` profile overlay is
 | `seed.mode` | `idempotent` | `off` · `wipe` · anything else runs it |
 | `seed.fail-fast` | `false` | `true` stops at the first unexpected failure |
 
-> Per-environment `ddl-auto` (`validate`/migrations for the Supabase deploy, `create-drop` for
-> tests) and seeding/reset safety against a persisted DB are tracked in **#366 (V3-INIT-01)**.
+---
 
-## Initial-state-file format
+## Platform lifecycle (UC-1 / UC-32)
 
-The platform can be booted into a known state from an editable text file that **replays a sequence
-of use-case operations through the real application services** (one operation per line). This is the
-in-repo realization of the "initialize from a file" deliverable (#368). Two sample files ship under
-`src/main/resources/scenarios/`: `demo.scenario` (rich dataset) and `review.scenario` (minimal TA
-baseline). The runner (`Infrastructure/dev/seed/scenario/ScenarioRunner`) is `@Profile("dev")`, so
-it never runs in production.
+The platform comes up through a deterministic boot sequence, then waits for an admin to open the
+market before any money can move. It is a small state machine:
+
+```
+UNINITIALIZED → READY → OPEN ↔ CLOSED
+```
+
+1. **`PlatformInitializationRunner`** (`@Order(0)`, skipped under `test`) calls `SystemAdminService.initializePlatform()`.
+2. **`initializePlatform()`** (UC-1) runs the I.1 post-conditions in order:
+   - **I.1.2 / I.1.3 — external-service quorum:** at least one payment gateway *and* one ticket issuer must answer a WSEP `handshake` (retried, idempotent), else `ExternalServiceUnavailableException`.
+   - **I.1.4 — guarantee a System Admin:** `createDefaultAdminIfMissing()` auto-creates the default admin from `platform.admin.*` if none exists, else `MissingDefaultAdminException`.
+   - **I.1.1 gate:** re-assert the post-conditions and run the structural integrity scan (`SystemIntegrityVerifier.verify()`), else `InitializationIntegrityException`. The platform transitions to **READY**.
+3. The market stays **CLOSED** until an admin calls **`openMarket()`** (UC-32), which re-verifies the external services and structural invariants before flipping to **OPEN**. `ReservationService` / `CheckoutService` are gated on `isMarketOpen()` (via the sales-owned `MarketGate` port).
+4. Under `dev`, **`DevMarketOpener`** (`@Order(1)`) opens the market automatically so the seeded scenario can transact. If a transient outage leaves it closed, `MarketSelfHealScheduler` re-attempts the open on `market.self-heal-delay-ms` until it succeeds — no restart needed.
+
+> Initialization failures are logged but do not currently abort the JVM (the process boots; the market
+> just can't open). A hard boot-validity check that fails startup on invalid init is tracked in
+> **#367 (V3-INIT-02)**.
+
+---
+
+## Persistent cart (UC-13)
+
+A member's Active Order (cart) persists by `userId` across logout and is restored on re-authentication
+within the reservation window. On login, `AuthenticationService` re-attaches the persisted cart (or
+promotes a guest cart) via the identity→sales `CartRestorationPort`, and `ReservationService`
+rehydrates it with the remaining timer (II.3.0.2 / UC-13). Expired carts are released back to inventory
+by the scheduled `SessionAndOrderSweeper` (II.3.0.3) and are not restored.
+
+---
+
+## Initial-state files (`.scenario`)
+
+The platform can boot into a known state from an editable text file that **replays a sequence of
+use-case operations through the real application services** — one operation per line. Two samples ship
+under `src/main/resources/scenarios/`: `demo.scenario` (rich dataset) and `review.scenario` (minimal
+baseline). The engine (`bootstrap/dev/seed/scenario/ScenarioRunner`) is `@Profile("dev")`, so it never
+runs in production.
 
 ### Syntax
 
 - One operation per line; blank lines and lines starting with `#` are ignored.
 - Tokens are whitespace-separated; wrap values containing spaces in `"double quotes"`.
-- The first token is the operation; remaining bare tokens are **positional** args; tokens of the
-  form `key=value` are **named** args.
-- Refer to users/companies/events by short **aliases** (`u1`, `p1`, `e1`); the engine maps each
-  alias to the real id the service mints.
+- The first token is the operation; remaining bare tokens are **positional** args; `key=value` tokens are **named** args.
+- Refer to users/companies/events by short **aliases** (`u1`, `p1`, `e1`); the engine maps each alias to the real id the service mints.
 
 ### Operations
 
-Each operation dispatches to a real application-service method (`Infrastructure/dev/seed/scenario/ScenarioOps`):
+Each operation dispatches to a real application-service method (`bootstrap/dev/seed/scenario/ScenarioOps`):
 
-| Operation | Application service call |
+| Operation | Application-service call |
 |---|---|
 | `register <alias> <password> <email> <age>` | `AuthenticationService.register` |
 | `login <alias>` | `AuthenticationService.login` |
@@ -144,7 +322,7 @@ Each operation dispatches to a real application-service method (`Infrastructure/
 | `appoint-owner <by> <company> <target>` | `CompanyManagementService.appointOwner` |
 | `appoint-manager <by> <company> <target> perms=A,B,C` | `CompanyManagementService.appointManager` |
 | `confirm <alias> <company>` | `CompanyManagementService.respondToAppointment` |
-| `add-event <by> <company> <eventAlias> <zone>… [name= category= city= days= publish=]` | `EventManagementService.addEvent` + `configureVenueMap` (+ `publishEvent` if `publish=true`) |
+| `add-event <by> <company> <eventAlias> <zone>… [name= category= city= days= publish=]` | `EventManagementService.addEvent` + `configureVenueMap` (+ `publishEvent`) |
 | `publish <by> <company> <event>` | `EventManagementService.publishEvent` |
 | `reserve <buyer> <event> <zoneRef> qty=<n> \| seats=A1,A2` | `ReservationService.reserveForMember` / `reserveForGuest` |
 | `checkout <buyer> [email= age=]` | `CheckoutService.checkoutMember` / `checkoutGuest` |
@@ -154,12 +332,10 @@ Each operation dispatches to a real application-service method (`Infrastructure/
 | `announce <admin> title= body= [audience=BROADCAST_MEMBERS\|BROADCAST_PRODUCERS]` | `MessagingService.sendOutreach` |
 | `assert-status <event> <STATUS> by=<owner>` | read-only assertion via `EventManagementService.getEventDetail` |
 | `expect-error <op> <args…>` | negative test — passes only if the wrapped op throws |
-| `add-coupon …` | recognized but `SKIPPED` (no coupon feature) |
 
-Permissions for `appoint-manager perms=` are any of: `CONFIGURE_VENUE`, `MANAGE_INVENTORY`,
-`EDIT_POLICIES`, `VIEW_SALES`, `RESPOND_TO_INQUIRIES`. Zone specs for `add-event` are
-`standing:<capacity>@<price>` or `seated:<rows>x<cols>@<price>` (e.g. `standing:30@50`,
-`seated:10x10@100`).
+Manager permissions (`perms=`) are any of `CONFIGURE_VENUE`, `MANAGE_INVENTORY`, `EDIT_POLICIES`,
+`VIEW_SALES`, `RESPOND_TO_INQUIRIES`. Zone specs for `add-event` are `standing:<capacity>@<price>` or
+`seated:<rows>x<cols>@<price>` (e.g. `standing:30@50`, `seated:10x10@100`).
 
 ### Example (`review.scenario`)
 
@@ -177,28 +353,37 @@ add-event u2 p1 e1 standing:30@50 seated:10x10@100 name="e1"
 logout-all
 ```
 
-### Running a state file
-
-```bash
-# Use a specific file, wiping the in-memory repos first
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
-    -Dspring-boot.run.arguments="--seed.scenario=file:/abs/path/to/your.scenario --seed.mode=wipe"
-```
-
-Each line is classified `PASS` / `SKIPPED` / `FAIL` / `BLOCKED` and a summary report is logged at the
+Each line is classified `PASS` / `SKIPPED` / `FAIL` / `BLOCKED`, and a summary report is logged at the
 end. With `seed.fail-fast=true` the run aborts (and reports) on the first unexpected failure, which
 satisfies the "init fails if any step fails" requirement.
 
-## Persistent cart (UC-13)
+---
 
-A member's Active Order (cart) persists by `userId` across logout and is restored on re-authentication
-within the reservation window: `AuthenticationService.handleCartOnPromotion` re-attaches the persisted
-cart (or promotes a guest cart) on login, and `ReservationService.restoreActiveOrder` rehydrates it
-with the remaining timer (II.3.0.2 / UC-13). Expired carts are released back to inventory by the
-scheduled `SessionAndOrderSweeper` (II.3.0.3) and are not restored.
+## Testing
 
-## Further docs
+`src/test/.../` mirrors the production layout:
 
-- `docs/use-cases-v3.md` — V3 use-case notes (UC-1, UC-32, UC-13).
-- `docs/version-3-requirements.html` — V3 requirements page (SLR.5/6/7, I.2.x, II.3.0.x).
-- `SEED.md` — the `dev` demo dataset (users, companies, events) and `seed.mode` behavior.
+| Suite | Scope |
+|---|---|
+| `unit/domain`, `unit/application`, `unit/infrastructure` | Fast, isolated unit tests (`@ActiveProfiles("test")`, Memory repos) |
+| `acceptance/` | Full `@SpringBootTest` use-case flows |
+| `integration/` | `@DataJpaTest` / JPA against H2 (contract tests run both Memory and Jpa backends) |
+| `concurrency/` | Optimistic-locking / oversell guards under contention |
+| `architecture/` | `HexagonalRulesTest` + `ModularityTests` — the enforced boundary and layering gates |
+
+`*IT` classes are integration tests against a real local Postgres.
+
+---
+
+## Requirement traceability
+
+Code and Javadoc reference requirement / use-case IDs (`UC-1`, `I.1.4`, `SLR.6`, `II.3.0.x`) and open
+tickets (`#367`, `V3-INIT-02`). These references are preserved when editing and cited when adding
+behavior tied to a requirement.
+
+---
+
+## Further reading
+
+- **`docs/architecture/`** — the committed Spring Modulith C4 / PlantUML component diagrams and per-module canvases (regenerated on every `./mvnw test`). Start with `docs/architecture/README.md`.
+- **`SEED.md`** — the `dev` demo dataset (users, companies, events), seeded credentials, and `seed.mode` behavior.
