@@ -31,6 +31,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
@@ -63,6 +64,8 @@ class MessagingServiceTest {
     private AdminRepository adminRepository;
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
+    // Mocked membership service — "acts for company" now resolves via it (by userId), task #20.
+    private CompanyMembershipService membershipService;
     private ApplicationEventPublisher eventPublisher;
     private MessagingService service;
 
@@ -73,9 +76,10 @@ class MessagingServiceTest {
         adminRepository = mock(AdminRepository.class);
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
+        membershipService = mock(CompanyMembershipService.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new MessagingService(conversationRepository, sessionManager, adminRepository,
-                userRepository, companyRepository, eventPublisher);
+                userRepository, companyRepository, membershipService, eventPublisher);
 
         stubToken(MEMBER_TOKEN, MEMBER_ID);
         stubToken(MEMBER2_TOKEN, MEMBER2_ID);
@@ -96,6 +100,8 @@ class MessagingServiceTest {
 
         User owner = ownerUser(OWNER_ID, COMPANY_ID);
         when(userRepository.getUserById(OWNER_ID)).thenReturn(owner);
+        // The owner "acts for" its company — the membership gate answers true for that (userId, companyId).
+        when(membershipService.isOwnerInCompany(OWNER_ID, COMPANY_ID)).thenReturn(true);
 
         User outsider = plainUser(OUTSIDER_ID);
         when(userRepository.getUserById(OUTSIDER_ID)).thenReturn(outsider);
@@ -446,7 +452,6 @@ class MessagingServiceTest {
     private User ownerUser(int userId, int companyId) {
         User u = mock(User.class);
         when(u.getUserId()).thenReturn(userId);
-        when(u.isOwnerInCompany(companyId)).thenReturn(true);
         return u;
     }
 

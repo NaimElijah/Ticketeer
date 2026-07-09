@@ -28,6 +28,8 @@ import com.ticketing.system.catalog.application.port.out.EventSalesHistoryPort;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
@@ -65,6 +67,9 @@ class EventManagementServiceTest {
         private EventManagementService eventService;
         private EventSalesHistoryPort eventSalesHistoryPort;
         private UserRepository userRepository;
+        // Real membership service over an in-memory appointment repo — seeds/answers company-membership
+        // permission checks now that appointments live off the User aggregate (task #20).
+        private CompanyMembershipService membershipService;
         private ApplicationEventPublisher eventPublisher;
 
         private final String OWNER_TOKEN = "owner-token";
@@ -99,6 +104,7 @@ class EventManagementServiceTest {
                 eventSalesHistoryPort = mock(EventSalesHistoryPort.class);
                 userRepository = mock(UserRepository.class);
                 eventPublisher = mock(ApplicationEventPublisher.class);
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
 
                 eventService = new EventManagementService(
                                 mockEventRepo,
@@ -106,6 +112,7 @@ class EventManagementServiceTest {
                                 sessionManager,
                                 eventSalesHistoryPort,
                                 userRepository,
+                                membershipService,
                                 eventPublisher);
 
                 company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
@@ -126,15 +133,16 @@ class EventManagementServiceTest {
                                 null,
                                 new DiscountPolicy(0));
                 ownerUser = new User(OWNER_ID, "Owner Name", "owner@example.com", "hashedpassword", 50);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 managerUser = new User(MANAGER_ID, "Manager Name", "manager@example.com", "hashedpassword", 40);
-                managerUser.receiveManagerAppointment(COMPANY_ID, OWNER_ID, List.of(Permission.CONFIGURE_VENUE));
-                managerUser.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(MANAGER_ID, COMPANY_ID, OWNER_ID,
+                                List.of(Permission.CONFIGURE_VENUE));
+                membershipService.acceptInvitation(MANAGER_ID, COMPANY_ID);
                 inventoryManagerUser = new User(INVENTORY_MANAGER_ID, "Inventory Manager",
                                 "inventory@example.com", "hashedpassword", 40);
-                inventoryManagerUser.receiveManagerAppointment(COMPANY_ID, OWNER_ID,
+                membershipService.receiveManagerAppointment(INVENTORY_MANAGER_ID, COMPANY_ID, OWNER_ID,
                                 List.of(Permission.MANAGE_INVENTORY));
-                inventoryManagerUser.acceptInvitation(COMPANY_ID);
+                membershipService.acceptInvitation(INVENTORY_MANAGER_ID, COMPANY_ID);
         }
 
         // Catalog-only happy path for cancelEventAndRefund: valid owner, event, and company. The
@@ -1078,7 +1086,9 @@ class EventManagementServiceTest {
         @Test
         void GivenManagerWithoutConfigureVenuePermission_WhenGetEventZones_ThenThrowsException() {
                 String LIMITED_MANAGER_TOKEN = "limited-manager-token";
-                int LIMITED_MANAGER_ID = 3;
+                // Distinct id (INVENTORY_MANAGER_ID=3 is already seeded in setUp; appointments are now
+                // keyed by userId in a shared repo, so reusing 3 would clash with that active appointment).
+                int LIMITED_MANAGER_ID = 77;
 
                 User limitedManager = new User(
                                 LIMITED_MANAGER_ID,
@@ -1087,11 +1097,12 @@ class EventManagementServiceTest {
                                 "hashedpassword",
                                 30);
 
-                limitedManager.receiveManagerAppointment(
+                membershipService.receiveManagerAppointment(
+                                LIMITED_MANAGER_ID,
                                 COMPANY_ID,
                                 OWNER_ID,
                                 List.of(Permission.MANAGE_INVENTORY));
-                limitedManager.acceptInvitation(COMPANY_ID);
+                membershipService.acceptInvitation(LIMITED_MANAGER_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(LIMITED_MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(LIMITED_MANAGER_TOKEN)).thenReturn(LIMITED_MANAGER_ID);

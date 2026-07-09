@@ -24,6 +24,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationNotFoundException;
@@ -62,6 +63,9 @@ public class MessagingService {
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
+    // Company-membership/authorization checks (moved off the User aggregate, task #20) used to decide
+    // whether a caller may act for a company; messaging already depends on organization.
+    private final CompanyMembershipService companyMembershipService;
     // Publisher for cross-context integration events (NewMessageNotice); the notifications
     // context listens for these instead of messaging calling it directly.
     private final ApplicationEventPublisher eventPublisher;
@@ -72,6 +76,7 @@ public class MessagingService {
             AdminRepository adminRepository,
             UserRepository userRepository,
             ProductionCompanyRepository companyRepository,
+            CompanyMembershipService companyMembershipService,
             ApplicationEventPublisher eventPublisher
     ) {
         this.conversationRepository = conversationRepository;
@@ -79,6 +84,7 @@ public class MessagingService {
         this.adminRepository = adminRepository;
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
+        this.companyMembershipService = companyMembershipService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -434,9 +440,11 @@ public class MessagingService {
 
     private boolean callerActsForCompany(int callerId, int companyId) {
         try {
-            User user = userRepository.getUserById(callerId);
-            return user.isOwnerInCompany(companyId)
-                    || user.hasPermissionInCompany(companyId, Permission.RESPOND_TO_INQUIRIES);
+            // Owner of, or holder of RESPOND_TO_INQUIRIES on, the company — resolved by userId now that
+            // appointments live on the CompanyAppointment aggregate (task #20).
+            return companyMembershipService.isOwnerInCompany(callerId, companyId)
+                    || companyMembershipService.hasPermissionInCompany(callerId, companyId,
+                            Permission.RESPOND_TO_INQUIRIES);
         } catch (UserNotFoundException e) {
             return false;
         }

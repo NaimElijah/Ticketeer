@@ -3,6 +3,7 @@ package com.ticketing.system.reporting.application.service;
 // organization; reporting reads both downward, which is allowed.
 import com.ticketing.system.catalog.application.service.CompanyRatings;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -59,6 +60,9 @@ public class CompanyAnalyticsService {
     private final TicketRepository ticketRepository;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
+    // Company-membership/authorization checks moved off the User aggregate (task #20); reporting
+    // already depends on organization.
+    private final CompanyMembershipService companyMembershipService;
     // Session/token port — needed by the token-authenticated viewSalesHistory read (UC-22).
     private final SessionManager sessionManager;
 
@@ -69,6 +73,7 @@ public class CompanyAnalyticsService {
             TicketRepository ticketRepository,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
+            CompanyMembershipService companyMembershipService,
             SessionManager sessionManager) {
         this.eventRepository = eventRepository;
         this.orderReceiptRepository = orderReceiptRepository;
@@ -76,6 +81,7 @@ public class CompanyAnalyticsService {
         this.ticketRepository = ticketRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
+        this.companyMembershipService = companyMembershipService;
         this.sessionManager = sessionManager;
     }
 
@@ -161,7 +167,7 @@ public class CompanyAnalyticsService {
             log.warn("User {} not found", requesterId);
             throw new UserNotFoundException();
         }
-        if (!currUser.hasPermissionInCompany(companyId, Permission.VIEW_SALES)) { // authorization gate
+        if (!companyMembershipService.hasPermissionInCompany(requesterId, companyId, Permission.VIEW_SALES)) { // authorization gate
             log.warn("User {} does not have permission to view sales history for company {}", requesterId, companyId);
             throw new UnauthorizedActionException("view this company's data");
         }

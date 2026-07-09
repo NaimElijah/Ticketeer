@@ -35,6 +35,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
@@ -56,6 +57,8 @@ class CompanyAcceptanceTest {
         private AuthenticationService authService;
         @Autowired
         private CompanyManagementService companyService;
+        @Autowired
+        private CompanyMembershipService companyMembershipService;
         @Autowired
         private EventManagementService eventManagementService;
         @Autowired
@@ -301,11 +304,10 @@ class CompanyAcceptanceTest {
                 companyService.appointManager(owner.token(),
                                 new ManagerAppointmentRequestDTO(companyId, manager.userId(), permissions));
 
-                User managerUser = userRepository.getUserById(manager.userId());
-
-                assertNotEquals(null, managerUser.getPendingCompanyAppointment(companyId));
-                assertEquals(permissions, managerUser.getPendingCompanyAppointment(companyId).getPermissions().stream()
-                                .toList());
+                assertNotEquals(null, companyMembershipService.getPendingCompanyAppointment(manager.userId(), companyId));
+                assertEquals(permissions,
+                                companyMembershipService.getPendingCompanyAppointment(manager.userId(), companyId)
+                                                .getPermissions().stream().toList());
         }
 
         @Test
@@ -329,10 +331,9 @@ class CompanyAcceptanceTest {
                 companyService.editManagerPermissions(owner.token(),
                                 new PermissionEditDTO(companyId, manager.userId(), updated));
 
-                User managerUser = userRepository.getUserById(manager.userId());
-
                 assertEquals(updated,
-                                managerUser.getActiveCompanyAppointment(companyId).getPermissions().stream().toList());
+                                companyMembershipService.getActiveCompanyAppointment(manager.userId(), companyId)
+                                                .getPermissions().stream().toList());
         }
 
         @Test
@@ -356,9 +357,9 @@ class CompanyAcceptanceTest {
                                 other.token(),
                                 new PermissionEditDTO(companyId, manager.userId(), List.of(Permission.EDIT_POLICIES))));
 
-                User managerUser = userRepository.getUserById(manager.userId());
                 assertEquals(original,
-                                managerUser.getActiveCompanyAppointment(companyId).getPermissions().stream().toList());
+                                companyMembershipService.getActiveCompanyAppointment(manager.userId(), companyId)
+                                                .getPermissions().stream().toList());
         }
 
         @Test
@@ -381,9 +382,7 @@ class CompanyAcceptanceTest {
                                 owner.token(),
                                 new AppointmentRevokeDTO(companyId, manager.userId()));
 
-                User managerUser = userRepository.getUserById(manager.userId());
-
-                assertNull(managerUser.getActiveCompanyAppointment(companyId));
+                assertNull(companyMembershipService.getActiveCompanyAppointment(manager.userId(), companyId));
         }
 
         // UC-25

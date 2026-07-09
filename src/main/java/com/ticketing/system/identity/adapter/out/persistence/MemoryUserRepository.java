@@ -67,13 +67,6 @@ public class MemoryUserRepository implements UserRepository {
     }
 
     @Override
-    public List<User> findUsersWithPendingAppointmentForCompany(int companyId) {
-        return usersById.values().stream()
-                .filter(u -> u.getPendingCompanyAppointment(companyId) != null)
-                .toList();
-    }
-
-    @Override
     public Optional<User> findByEmail(String email) {
         return usersById.values().stream()
                 .filter(u -> email.equals(u.getEmail()))

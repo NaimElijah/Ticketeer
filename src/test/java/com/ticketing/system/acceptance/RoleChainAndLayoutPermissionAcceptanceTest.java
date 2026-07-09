@@ -37,6 +37,7 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.governance.application.service.SystemAdminService;
@@ -65,6 +66,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
 
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
+    @Autowired private CompanyMembershipService companyMembershipService;
     @Autowired private EventManagementService eventManagementService;
     @Autowired private ReservationService reservationService;
     @Autowired private CheckoutService checkoutService;
@@ -92,9 +94,9 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
                 "u1 is the founder");
         assertTrue(companyRepository.getCompanyById(c.companyId).isOwner(c.u2Id),
                 "u2 (appointed by u1) is an owner");
-        assertTrue(userRepository.getUserById(c.u3Id).hasPermissionInCompany(c.companyId, Permission.CONFIGURE_VENUE),
+        assertTrue(companyMembershipService.hasPermissionInCompany(c.u3Id, c.companyId, Permission.CONFIGURE_VENUE),
                 "u3 (appointed by u2) has the granted CONFIGURE_VENUE permission");
-        assertFalse(userRepository.getUserById(c.u3Id).hasPermissionInCompany(c.companyId, Permission.EDIT_POLICIES),
+        assertFalse(companyMembershipService.hasPermissionInCompany(c.u3Id, c.companyId, Permission.EDIT_POLICIES),
                 "u3 was NOT granted EDIT_POLICIES");
     }
 

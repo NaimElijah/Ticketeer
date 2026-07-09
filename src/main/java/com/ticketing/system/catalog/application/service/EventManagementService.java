@@ -34,6 +34,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.catalog.domain.event.EventCancelledEvent;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -70,6 +71,9 @@ public class EventManagementService {
     // orphaning sales records — keeps catalog free of any sales import.
     private final EventSalesHistoryPort eventSalesHistoryPort;
     private final UserRepository userRepository;
+    // Company-membership/authorization checks moved off the User aggregate (task #20); catalog already
+    // depends on organization, so this downward edge is allowed.
+    private final CompanyMembershipService companyMembershipService;
     // Publisher for cross-context domain/integration events. On cancel it emits an
     // EventCancelledEvent that the sales context's listener turns into the refund flow, and the
     // notifications context ultimately raises holder notices — catalog never calls either directly.
@@ -82,12 +86,14 @@ public class EventManagementService {
             SessionManager sessionManager,
             EventSalesHistoryPort eventSalesHistoryPort,
             UserRepository userRepository,
+            CompanyMembershipService companyMembershipService,
             ApplicationEventPublisher eventPublisher) {
         this.eventRepository = eventRepository;                 // catalog event persistence/locking
         this.companyRepository = companyRepository;             // company lookups for auth/ownership
         this.sessionManager = sessionManager;                   // token validation/user-id extraction
         this.eventSalesHistoryPort = eventSalesHistoryPort;     // sales-history guard for deleteEvent
-        this.userRepository = userRepository;                   // permission checks
+        this.userRepository = userRepository;                   // caller existence checks
+        this.companyMembershipService = companyMembershipService; // company-membership permission checks
         this.eventPublisher = eventPublisher;                   // cross-context event publishing
         this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
                                            // here for now.
@@ -125,7 +131,7 @@ public class EventManagementService {
         }
 
         User user = userRepository.getUserById(ownerId);
-        user.requirePermissionInCompany(request.companyId(), Permission.MANAGE_INVENTORY);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),request.companyId(), Permission.MANAGE_INVENTORY);
 
         int newEventId = eventRepository.nextId();
         VenueMap venueMap = new VenueMap(eventRepository.nextVenueMapId(), request.location(), List.of());
@@ -182,7 +188,7 @@ public class EventManagementService {
         // it (so e.g. a venue/sales manager can reach the per-event venue editor); the per-event
         // mutations (configure venue, edit details, policies, cancel) stay gated by their own
         // permission at their own service entry points.
-        user.requireMemberInCompany(companyId);
+        companyMembershipService.requireMemberInCompany(user.getUserId(),companyId);
 
         EventMapper mapper = new EventMapper();
         return eventRepository.searchByCompanyAll(companyId, filters.withoutCompanyRating()).stream()
@@ -201,7 +207,7 @@ public class EventManagementService {
         if (user == null) {
             throw new UserNotFoundException();
         }
-        user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
         ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
         if (company == null) {
             throw new CompanyNotFoundException();
@@ -240,7 +246,7 @@ public class EventManagementService {
         if (event == null) {
             throw new EventNotFoundException();
         }
-        user.requirePermissionInCompany(event.getCompanyId(), Permission.CONFIGURE_VENUE);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.CONFIGURE_VENUE);
 
         VenueMap map = event.getVenueMap();
         if (map == null) {
@@ -298,7 +304,7 @@ public class EventManagementService {
             log.info("Configuring venue map for company {}, event {}, by user {}", companyId, config.eventId(), userId);
 
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(companyId, Permission.CONFIGURE_VENUE);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.CONFIGURE_VENUE);
 
             Event event = eventRepository.findById(eventId);
 
@@ -381,7 +387,7 @@ public class EventManagementService {
             Event event = eventRepository.findById(eventId);
 
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
 
             EventCategory newCategory = null;
             if (update.category() != null && !update.category().isBlank()) {
@@ -641,7 +647,7 @@ public class EventManagementService {
             throw new CompanyNotFoundException();
         }
 
-        user.requirePermissionInCompany(companyId, Permission.CONFIGURE_VENUE);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.CONFIGURE_VENUE);
 
         Event event;
         try {
@@ -721,7 +727,7 @@ public class EventManagementService {
         // Read-only detail: any active member may load it. The pages that reach this (event-detail
         // editor, venue editor) are each route-gated by their own capability, so this serves both a
         // MANAGE_INVENTORY metadata editor and a CONFIGURE_VENUE venue editor.
-        user.requireMemberInCompany(event.getCompanyId());
+        companyMembershipService.requireMemberInCompany(user.getUserId(),event.getCompanyId());
 
         return new EventMapper().toEventDetailDTO(event, company.getName());
     }
@@ -743,7 +749,7 @@ public class EventManagementService {
             }
 
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(companyId, Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.MANAGE_INVENTORY);
 
             event.transitionToOnSale(); // SCHEDULED -> ON_SALE (idempotent if already ON_SALE)
             eventRepository.save(event);
@@ -761,7 +767,7 @@ public class EventManagementService {
         try {
             Event event = eventRepository.findById(eventId);
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
             if (event.getStatus() != EventStatus.CANCELED) {
                 throw new InvalidStateTransitionException("Only CANCELED events can be deleted");
             }
@@ -787,7 +793,7 @@ public class EventManagementService {
         try {
             Event event = eventRepository.findById(eventId);
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
             switch (targetStatus) {
                 case SCHEDULED -> event.transitionToScheduled();
                 case ON_SALE -> event.transitionToOnSale();
@@ -815,7 +821,7 @@ public class EventManagementService {
         try {
             Event event = eventRepository.findById(eventId); // throws if not found, which is what we want here.
             User user = userRepository.getUserById(ownerId);                   // load caller for permission check
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
 
             if (event.getStatus() == EventStatus.CANCELED) {                   // idempotent: already cancelled
                 return;
@@ -883,7 +889,7 @@ public class EventManagementService {
             if (user == null) {
                 throw new UserNotFoundException();
             }
-            user.requirePermissionInCompany(config.companyId(), Permission.EDIT_POLICIES);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),config.companyId(), Permission.EDIT_POLICIES);
 
             Event event = eventRepository.findById(config.eventId());
             if (event == null) {
@@ -1001,7 +1007,7 @@ public class EventManagementService {
         User user = userRepository.getUserById(userId);
         if (user == null)
             throw new UserNotFoundException();
-        user.requirePermissionInCompany(companyId, Permission.EDIT_POLICIES);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.EDIT_POLICIES);
         Event event = eventRepository.findById(eventId);
         if (event == null)
             throw new EventNotFoundException();

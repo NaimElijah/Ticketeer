@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.shared.dto.CompanyDashboardDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -61,6 +62,9 @@ class CompanyAnalyticsServiceTest {
     private  TicketRepository ticketRepository;
     private  ProductionCompanyRepository companyRepository;
     private  UserRepository userRepository;
+    // Mocked membership service — the viewSalesHistory authorization gate now asks it (by userId)
+    // instead of calling User.hasPermissionInCompany (task #20).
+    private CompanyMembershipService membershipService;
     // Session/token port used by viewSalesHistory's token authentication.
     private SessionManager sessionManager;
     private CompanyAnalyticsService service;
@@ -73,8 +77,9 @@ class CompanyAnalyticsServiceTest {
         ticketRepository = mock(TicketRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
+        membershipService = mock(CompanyMembershipService.class);
         sessionManager = mock(SessionManager.class);
-        service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, sessionManager);
+        service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, membershipService, sessionManager);
     }
 
     private static ReceiptLine line(int ticketId, double price, int eventId) {
@@ -287,7 +292,7 @@ class CompanyAnalyticsServiceTest {
         when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
         when(userRepository.getUserById(OWNER_ID)).thenReturn(requester);
-        when(requester.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(false); // denied
+        when(membershipService.hasPermissionInCompany(OWNER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(false); // denied
 
         assertThrows(RuntimeException.class, () -> service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
     }
@@ -303,7 +308,7 @@ class CompanyAnalyticsServiceTest {
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(new ArrayList<>()); // company has no events
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
         when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-        when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
+        when(membershipService.hasPermissionInCompany(OWNER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
 
         List<PurchaseHistoryDTO> result = service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
 
@@ -324,7 +329,7 @@ class CompanyAnalyticsServiceTest {
         when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
         when(userRepository.getUserById(TARGET_USER_ID)).thenReturn(managerUser);
-        when(managerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
+        when(membershipService.hasPermissionInCompany(TARGET_USER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
 
         when(mockReceipt.getId()).thenReturn(42);
         when(mockReceipt.getPurchaseTime()).thenReturn(LocalDateTime.now());
@@ -361,7 +366,7 @@ class CompanyAnalyticsServiceTest {
         when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
         when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-        when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
+        when(membershipService.hasPermissionInCompany(OWNER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
 
         when(mockEvent.getName()).thenReturn("Summer Festival");
 
