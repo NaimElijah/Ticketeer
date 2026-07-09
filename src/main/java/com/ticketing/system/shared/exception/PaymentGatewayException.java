@@ -1,5 +1,4 @@
 package com.ticketing.system.shared.exception;
-import com.ticketing.system.sales.application.service.CheckoutService;
 
 // Thrown when an external payment-gateway call fails (decline, timeout, unavailable).
 // CheckoutService catches and either retries (timeout/unavailable) or aborts checkout (decline).

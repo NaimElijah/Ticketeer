@@ -1,5 +1,4 @@
 package com.ticketing.system.acceptance;
-import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.shared.dto.ReservationResultDTO;

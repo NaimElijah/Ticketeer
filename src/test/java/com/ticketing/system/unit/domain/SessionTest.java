@@ -1,5 +1,4 @@
 package com.ticketing.system.unit.domain;
-import com.ticketing.system.identity.domain.User;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;

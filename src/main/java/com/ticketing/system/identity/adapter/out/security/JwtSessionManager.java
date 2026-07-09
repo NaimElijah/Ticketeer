@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.adapter.out.security;
-import com.ticketing.system.identity.domain.Admin;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;

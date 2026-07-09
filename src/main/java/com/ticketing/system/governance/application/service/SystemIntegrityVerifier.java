@@ -1,7 +1,4 @@
 package com.ticketing.system.governance.application.service;
-import com.ticketing.system.governance.application.service.SystemAdminService;
-import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.identity.domain.Admin;
 
 import java.util.ArrayList;
 import java.util.HashMap;

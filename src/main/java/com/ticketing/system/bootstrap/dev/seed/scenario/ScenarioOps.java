@@ -1,5 +1,4 @@
 package com.ticketing.system.bootstrap.dev.seed.scenario;
-import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.shared.dto.OutreachRequestDTO;
 import com.ticketing.system.shared.dto.AppointmentResponseDTO;

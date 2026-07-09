@@ -1,7 +1,6 @@
 package com.ticketing.system.notifications.application.port.out;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.Notification;
-import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 
 import java.util.List;
 

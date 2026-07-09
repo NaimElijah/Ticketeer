@@ -1,7 +1,4 @@
 package com.ticketing.system.notifications.application.port.in;
-import com.ticketing.system.notifications.application.service.NotificationDispatchService;
-import com.ticketing.system.notifications.application.service.NotificationService;
-import com.ticketing.system.notifications.application.port.out.PushNotificationService;
 
 import java.util.List;
 

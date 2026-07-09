@@ -1,6 +1,4 @@
 package com.ticketing.system.sales.domain;
-import com.ticketing.system.sales.application.port.out.TicketIssuer;
-import com.ticketing.system.sales.application.port.out.PaymentGateway;
 
 import java.time.LocalDateTime;
 

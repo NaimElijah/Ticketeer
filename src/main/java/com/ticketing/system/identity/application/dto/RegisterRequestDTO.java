@@ -1,6 +1,4 @@
 package com.ticketing.system.identity.application.dto;
-import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.identity.domain.User;
 
 // Input to AuthenticationService.register() (UC-11).
 // Raw password — hashed in the application service before reaching the User entity.

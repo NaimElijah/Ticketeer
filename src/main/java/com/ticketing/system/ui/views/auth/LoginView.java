@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.views.auth;
-import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.ui.components.Toasts;

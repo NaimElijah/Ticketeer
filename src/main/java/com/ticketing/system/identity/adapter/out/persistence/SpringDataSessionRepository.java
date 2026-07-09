@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.adapter.out.persistence;
-import com.ticketing.system.identity.application.port.out.SessionRepository;
 import java.time.Instant;
 import java.util.List;
 

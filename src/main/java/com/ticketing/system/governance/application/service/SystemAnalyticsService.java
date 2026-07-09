@@ -1,6 +1,4 @@
 package com.ticketing.system.governance.application.service;
-import com.ticketing.system.governance.application.service.SystemAdminService;
-import com.ticketing.system.identity.domain.Admin;
 
 import java.time.Clock;
 import java.time.Duration;

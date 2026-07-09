@@ -1,5 +1,4 @@
 package com.ticketing.system.messaging.adapter.out.persistence;
-import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 
 import java.util.List;
 

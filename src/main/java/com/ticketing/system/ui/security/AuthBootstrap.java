@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.security;
-import com.ticketing.system.identity.domain.Session;
 
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.session.AuthSession;

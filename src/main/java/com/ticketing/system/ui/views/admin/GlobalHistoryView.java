@@ -1,6 +1,4 @@
 package com.ticketing.system.ui.views.admin;
-import com.ticketing.system.identity.domain.Admin;
-import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;

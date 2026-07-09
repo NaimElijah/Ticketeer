@@ -48,7 +48,6 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
-import com.ticketing.system.identity.domain.User;
 
 @SpringBootTest
 @ActiveProfiles("test")

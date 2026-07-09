@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.application.port.out;
-import com.ticketing.system.identity.application.service.AuthenticationService;
 
 // Port for password hashing. Implemented in Infrastructure by BcryptPasswordHasher
 // (lecture 2's recommended BCrypt approach). Used by AuthenticationService.

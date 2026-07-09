@@ -1,6 +1,4 @@
 package com.ticketing.system.ui.views.admin;
-import com.ticketing.system.messaging.application.service.MessagingService;
-import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;

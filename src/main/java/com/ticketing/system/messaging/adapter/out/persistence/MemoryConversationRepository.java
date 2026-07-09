@@ -1,5 +1,4 @@
 package com.ticketing.system.messaging.adapter.out.persistence;
-import com.ticketing.system.messaging.application.service.MessagingService;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.ArrayList;

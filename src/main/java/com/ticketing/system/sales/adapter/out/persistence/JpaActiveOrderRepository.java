@@ -1,5 +1,4 @@
 package com.ticketing.system.sales.adapter.out.persistence;
-import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import java.time.LocalDateTime;
 import java.util.List;

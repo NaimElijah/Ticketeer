@@ -1,5 +1,4 @@
 package com.ticketing.system.sales.adapter.out.persistence;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
 import java.util.List;
 
 import org.springframework.data.domain.Limit;

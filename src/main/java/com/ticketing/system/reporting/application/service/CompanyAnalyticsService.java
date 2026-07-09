@@ -2,7 +2,6 @@ package com.ticketing.system.reporting.application.service;
 // CompanyRatings lives in catalog (rating is derived from catalog Events); CompanyManagementService in
 // organization; reporting reads both downward, which is allowed.
 import com.ticketing.system.catalog.application.service.CompanyRatings;
-import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 
 import java.time.LocalDateTime;

@@ -1,5 +1,4 @@
 package com.ticketing.system.unit.presentation;
-import com.ticketing.system.sales.application.service.CheckoutService;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

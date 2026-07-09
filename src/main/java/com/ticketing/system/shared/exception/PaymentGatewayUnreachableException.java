@@ -1,5 +1,4 @@
 package com.ticketing.system.shared.exception;
-import com.ticketing.system.sales.application.port.out.PaymentGateway;
 
 // Thrown when the payment gateway could NOT be reached at all (transport timeout / no response /
 // connection error) — distinct from a real decline, which stays

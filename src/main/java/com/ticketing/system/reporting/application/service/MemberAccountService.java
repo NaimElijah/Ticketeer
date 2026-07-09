@@ -1,7 +1,6 @@
 package com.ticketing.system.reporting.application.service;
 // AuthenticationService lives in identity; reporting reads it (a downward, allowed dependency).
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;

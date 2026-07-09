@@ -1,6 +1,5 @@
 package com.ticketing.system.organization.domain;
 import com.ticketing.system.organization.domain.CompanyStatus;
-import com.ticketing.system.identity.domain.User;
 
 import java.util.ArrayList;
 import java.util.List;

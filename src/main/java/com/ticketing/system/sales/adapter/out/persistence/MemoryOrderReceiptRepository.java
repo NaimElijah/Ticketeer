@@ -1,6 +1,4 @@
 package com.ticketing.system.sales.adapter.out.persistence;
-import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.List;

@@ -1,6 +1,5 @@
 package com.ticketing.system.sales.application.service;
 import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
-import com.ticketing.system.sales.application.service.CheckoutService;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;

@@ -1,7 +1,4 @@
 package com.ticketing.system.sales.domain;
-import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.identity.domain.Admin;
 
 
 import com.ticketing.system.shared.exception.TicketNotAvailableException;

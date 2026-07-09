@@ -35,11 +35,11 @@ layering violations failing the build.
 
 ### Highlights
 
-- 🏛️ **DDD + hexagonal modular monolith** — 11 Spring Modulith modules; cross-context calls go only through **ports and events**, never by reaching into another context's internals.
+- 🏛️ **DDD + hexagonal modular monolith** — 11 Spring Modulith modules; cross-context calls go through **ports and events** rather than reaching into another context's internals (one transitional direct call, `identity → notifications`, remains and is flagged in-code for extraction behind a port).
 - ✅ **Enforced architecture** — ArchUnit proves the bounded-context graph is a **DAG** and that hexagonal layers hold; the build fails on any violation. Spring Modulith regenerates C4 diagrams on every test run.
 - 🔌 **Dual persistence, one port** — every aggregate has a domain repository port with two adapters (in-memory `ConcurrentHashMap` and JPA/Spring Data), swapped purely by Spring profile.
 - 🔒 **Transactions & optimistic concurrency** — `@Transactional` at the application-service layer, `@Version` optimistic locking, commit-time lock failures re-typed into domain exceptions via an AOP aspect.
-- 🔁 **Event-driven decoupling** — refunds, notifications, and cross-context reactions flow through domain/integration events rather than direct service calls.
+- 🔁 **Event-driven decoupling** — refunds, event cancellation, and most cross-context reactions flow through domain/integration events (a synchronous `@EventListener`) rather than direct service calls.
 - 🚦 **Deterministic platform lifecycle** — a `UNINITIALIZED → READY → OPEN ↔ CLOSED` state machine gated on an external-service quorum and a System Admin.
 - 🌱 **Reproducible dev environment** — boot into a known state by replaying real use-case operations from an editable `.scenario` file; a rich demo dataset seeds automatically under the `dev` profile.
 
@@ -49,8 +49,10 @@ layering violations failing the build.
 
 A **DDD + hexagonal modular monolith**. Each top-level package under `com.ticketing.system` is a
 Spring Modulith `@ApplicationModule` (a bounded context). The contexts form a **verified acyclic
-dependency graph**, and every cross-context interaction crosses the boundary through a **port** (an
-interface owned by one side) or an **event** — never through another context's domain or adapters.
+dependency graph**, and cross-context interaction crosses the boundary through a **port** (an interface
+owned by one side) or an **event** rather than by reaching into another context's domain or adapters.
+One transitional exception remains today: `identity` calls `notifications`' `NotificationDispatchService`
+directly (flagged in-code to move behind an inbound port).
 
 ### The modules
 
@@ -62,17 +64,20 @@ interface owned by one side) or an **event** — never through another context's
 | `catalog` | Event, venue maps, zones, seats, and **inventory** — owns reserve/release/confirm via `InventoryCommandPort`. |
 | `sales` | `ActiveOrder`, `OrderReceipt`, `Ticket`, checkout, reservations, refunds, and purchase policies. The transactional core. |
 | `messaging` | Conversations, support inquiries, complaints, and admin outreach. |
-| `notifications` | A pure sink: consumes `shared/event` integration events via a synchronous `@EventListener` adapter and depends on nothing but the kernel. |
+| `notifications` | Consumes `shared/event` integration events via a synchronous `@EventListener` adapter; its own dependencies are only the kernel. Still receives one transitional **direct** call (`NotificationDispatchService`) from `identity`/`bootstrap`, pending an inbound port. |
 | `governance` | Platform lifecycle, market state, system analytics, and integrity verification. A top-level consumer (the market gate is inverted through a sales-owned `MarketGate` port). |
 | `reporting` | The CQRS read side: cross-context read services (member purchase history, company dashboards). Consumed only by the UI. |
-| `ui` | The single Vaadin driving adapter — `@Route` views + MVP presenters. No backend module depends on it. |
+| `ui` | The single Vaadin driving adapter — `@Route` views + MVP presenters. No backend bounded context depends on it; only the `bootstrap` composition root references it (wiring). |
 | `bootstrap` | The composition root: lifecycle runners, `@Scheduled` sweepers, and the dev seed / `.scenario` engine. A pure sink that wires the contexts together. |
 
 ### Dependency graph (a DAG)
 
-`shared ← identity ← organization ← {catalog, messaging} ← sales`; `governance` and `reporting` are
-top-level consumers; `ui` and `bootstrap` are sinks; `notifications` is a pure event sink. No two
-modules depend on each other, directly or transitively.
+This is the **principal dependency spine** — a simplified topological view; the full edge set has more
+direct dependencies (e.g. from `bootstrap`/`ui`, and the transitional `identity → notifications`):
+`shared ← identity ← organization ← {catalog, messaging} ← sales`, with `governance` and `reporting` as
+top-level consumers and `ui`/`bootstrap` as sinks. The graph is acyclic — no two modules depend on each
+other, directly or transitively. The authoritative, complete graph is the Modulith-generated
+[`docs/architecture/components.puml`](docs/architecture/components.puml).
 
 ```mermaid
 flowchart TD
@@ -88,12 +93,13 @@ flowchart TD
     messaging --> organization
     organization --> identity
     identity --> shared
+    identity -.->|transitional direct call| notifications
     notifications --> shared
 
     classDef kernel fill:#6DB33F,stroke:#333,color:#fff;
     classDef sink fill:#00B4F0,stroke:#333,color:#fff;
     class shared kernel;
-    class ui,bootstrap,notifications sink;
+    class ui,bootstrap sink;
 ```
 
 *(An arrow means "depends on." `governance` implementing sales' `MarketGate` port is how the market
@@ -172,8 +178,9 @@ Both gates run on every `./mvnw test` and fail the build on violation:
 # Local development — H2 in-memory DB, market auto-opened, demo dataset seeded. Use this by default.
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 
-# Production / staging path — jpa profile against PostgreSQL (needs the DB_* env vars below)
-./mvnw spring-boot:run
+# Production / staging path — activate the jpa profile against PostgreSQL (needs the DB_* env vars below).
+# A bare `spring-boot:run` with no active profile selects the in-memory Memory* adapters (@Profile("!jpa")).
+SPRING_PROFILES_ACTIVE=jpa ./mvnw spring-boot:run
 ```
 
 The Vaadin UI serves at **`http://localhost:8080`**. The Maven `production` profile
@@ -216,7 +223,7 @@ seeded dataset.
 
 | Profile | Effect |
 |---|---|
-| *(default)* | Production: JPA repositories on PostgreSQL via `DB_*` env vars. |
+| *(default, no profile)* | Selects the in-memory `Memory*` adapters (`@Profile("!jpa")`). The production config in `application.yml` (PostgreSQL via `DB_*`) applies once `jpa`/`supabase` is activated (e.g. `SPRING_PROFILES_ACTIVE=jpa`). |
 | `dev` | Activates `jpa`; H2 in-memory (`create-drop`), demo seeding, market auto-opened. |
 | `test` | Used by the suite; disables `PlatformInitializationRunner` so tests drive init. |
 | `jpa` | Swaps Memory adapters for Jpa adapters (auto-activated by `dev` and `supabase`). |
@@ -237,7 +244,7 @@ overridable (shown as `${ENV:default}`). Overlays: `application-dev.yml` and `ap
 | `spring.datasource.url` | `jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketing}` | DB connection (env: `DB_HOST`/`DB_PORT`/`DB_NAME`) |
 | `spring.datasource.username` / `password` | `${DB_USER:postgres}` / `${DB_PASSWORD:postgres}` | DB credentials |
 | `spring.jpa.hibernate.ddl-auto` | `update` | Schema strategy (prod); Hibernate auto-detects the dialect per connection |
-| `spring.profiles.group.dev` / `.supabase` | `jpa` | Activating `dev` or `supabase` also activates `jpa` |
+| `spring.profiles.group.dev` / `spring.profiles.group.supabase` | `jpa` | Activating `dev` or `supabase` also activates `jpa` |
 | `jwt.secret` | `${JWT_SECRET:…}` | JWT signing secret — **must** be supplied via env in production |
 | `session.member-ttl-minutes` | `1440` | Absolute member-session lifetime |
 | `session.guest-idle-timeout-minutes` | `30` | Idle timeout for guest sessions |
@@ -250,7 +257,7 @@ overridable (shown as `${ENV:default}`). Overlays: `application-dev.yml` and `ap
 | `management.endpoints.web.exposure.include` | `health,info` | Exposed Actuator endpoints |
 | `vaadin.launch-browser` | `false` | Don't auto-open a browser on run |
 | `vaadin.allowed-packages` | `com.ticketing.system.ui` | Restrict Vaadin component/route scan |
-| `platform.admin.username` / `password` | `${PLATFORM_ADMIN_USERNAME:admin}` / `${…:admin}` | **UC-1 / I.1.4** default admin — **override in production** |
+| `platform.admin.username` / `password` | `${PLATFORM_ADMIN_USERNAME:admin}` / `${PLATFORM_ADMIN_PASSWORD:admin}` | **UC-1 / I.1.4** default admin — **override in production** |
 | `wsep.base-url` | `${WSEP_BASE_URL:https://…koyeb.app/}` | WSEP payment/issuance endpoint |
 | `wsep.handshake-attempts` / `handshake-backoff-ms` | `3` / `1000` | Retried, idempotent reachability handshake (`pay`/`issue`/`refund` are never retried) |
 | `market.self-heal-delay-ms` | `30000` | Interval on which `MarketSelfHealScheduler` re-attempts an open after a transient outage |
@@ -306,8 +313,8 @@ The platform can boot into a known state from an editable text file that **repla
 use-case operations through the real application services** — one operation per line. Two samples ship
 under `src/main/resources/scenarios/`: `demo.scenario` (rich dataset) and `review.scenario` (minimal
 baseline). The engine (`bootstrap/dev/seed/scenario/ScenarioRunner`) is present on every non-`test`
-profile but **inert unless `seed.mode` is set** (default `off`), so it never touches prod/cloud unless
-explicitly asked; `dev` sets `seed.mode=reseed`.
+profile but **inert unless `seed.mode` is set to something other than `off`** (`off` is the default), so
+it never touches prod/cloud unless explicitly asked; `dev` sets `seed.mode=reseed`.
 
 ### Syntax
 

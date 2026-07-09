@@ -1,6 +1,5 @@
 package com.ticketing.system.organization.application.port.out;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.identity.domain.Admin;
 
 import java.util.List;
 import java.util.Optional;

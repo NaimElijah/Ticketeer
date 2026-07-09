@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.views.admin;
-import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.shared.dto.MarketStateDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;

@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.session;
-import com.ticketing.system.identity.domain.Session;
 
 import java.util.ArrayList;
 import java.util.List;
