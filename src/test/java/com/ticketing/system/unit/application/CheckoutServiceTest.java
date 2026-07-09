@@ -55,6 +55,7 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
@@ -146,9 +147,14 @@ class CheckoutServiceTest {
         mockMarketGate = mock(MarketGate.class);
         when(mockMarketGate.isOpen()).thenReturn(true);
 
+        // Catalog owns inventory mutation behind InventoryCommandPort. Wire the REAL InventoryService
+        // onto the SAME mock event store (and a mock company port for policy), so the existing
+        // event/zone/seat stubs still drive confirm/validate/price/policy one layer down. CheckoutService
+        // keeps mockEventRepo for the Phase-3 buyer-lock.
         checkoutService = new CheckoutService(
                 mockActiveOrderRepo,
                 mockEventRepo,
+                new InventoryService(mockEventRepo, mock(ProductionCompanyRepository.class)),
                 mockTicketRepo,
                 mockOrderReceiptRepo,
                 mockTicketIssuer,
@@ -156,7 +162,6 @@ class CheckoutServiceTest {
                 mockEventPublisher,
                 mockiSessionManager,
                 mockUserRepository,
-                mock(ProductionCompanyRepository.class),
                 mockMarketGate,
                 TestTransactions.noOpManager()
         );

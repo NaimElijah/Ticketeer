@@ -12,6 +12,7 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -88,12 +91,17 @@ public class ReservationServiceTest {
         marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
 
+        // Catalog now owns inventory mutation behind InventoryCommandPort. We wire the REAL
+        // InventoryService onto the SAME mock event store (and a mock company port for policy), so every
+        // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
+        // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
+        InventoryService inventoryService = new InventoryService(
+                eventRepository, mock(ProductionCompanyRepository.class));
         reservationService = new ReservationService(
-                eventRepository,
+                inventoryService,
                 activeOrderRepository,
                 sessionManager,
                 eventPublisher,
-                mock(ProductionCompanyRepository.class),
                 mock(UserRepository.class),
                 marketGate,
                 mock(ISystemMetrics.class)
@@ -195,7 +203,7 @@ public class ReservationServiceTest {
 
         doThrow(new IllegalArgumentException("Active order does not contain this event"))
                 .when(activeOrder)
-                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), any(InventorySelection.class));
+                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), anyInt(), anyList());
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -213,7 +221,7 @@ public class ReservationServiceTest {
 
         doThrow(new IllegalArgumentException("Not enough reserved tickets to remove"))
                 .when(activeOrder)
-                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), any(InventorySelection.class));
+                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), anyInt(), anyList());
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));

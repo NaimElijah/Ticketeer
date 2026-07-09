@@ -28,6 +28,7 @@ import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
@@ -57,6 +58,7 @@ class CompanyAnalyticsServiceTest {
     private static final String COMPANY_1_DESCRIPTION = "A test production company1";
 
     private EventRepository eventRepository;
+    private CatalogEventDisplayPort eventDisplayPort;
     private OrderReceiptRepository orderReceiptRepository;
     private ConversationRepository conversationRepository;
     private  TicketRepository ticketRepository;
@@ -72,6 +74,7 @@ class CompanyAnalyticsServiceTest {
     @BeforeEach
     void setUp() {
         eventRepository = mock(EventRepository.class);
+        eventDisplayPort = mock(CatalogEventDisplayPort.class);
         orderReceiptRepository = mock(OrderReceiptRepository.class);
         conversationRepository = mock(ConversationRepository.class);
         ticketRepository = mock(TicketRepository.class);
@@ -79,7 +82,7 @@ class CompanyAnalyticsServiceTest {
         userRepository = mock(UserRepository.class);
         membershipService = mock(CompanyMembershipService.class);
         sessionManager = mock(SessionManager.class);
-        service = new CompanyAnalyticsService(eventRepository, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, membershipService, sessionManager);
+        service = new CompanyAnalyticsService(eventRepository, eventDisplayPort, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, membershipService, sessionManager);
     }
 
     private static ReceiptLine line(int ticketId, double price, int eventId) {

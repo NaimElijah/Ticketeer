@@ -8,7 +8,7 @@ import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -36,17 +36,17 @@ public class MemberAccountService {
                                                                // methods.
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketRepository ticketRepository;
-    private final EventRepository eventRepository; // For event name lookups in history records.
+    private final CatalogEventDisplayPort eventDisplayPort; // For event/zone name lookups in history records.
 
     public MemberAccountService(
             AuthenticationService authenticationService,
             OrderReceiptRepository orderReceiptRepository,
             TicketRepository ticketRepository,
-            EventRepository eventRepository) {
+            CatalogEventDisplayPort eventDisplayPort) {
         this.authenticationService = authenticationService;
         this.orderReceiptRepository = orderReceiptRepository;
         this.ticketRepository = ticketRepository;
-        this.eventRepository = eventRepository;
+        this.eventDisplayPort = eventDisplayPort;
     }
 
     // UC-16: comprehensive personal purchase history + real-time status of upcoming
@@ -69,7 +69,7 @@ public class MemberAccountService {
                 // Resolve event + zone names via eventRepository; buyer is the member
                 // themselves and company is not shown on the account view, so pass null.
                 purchaseRecords.add(receiptMapper.toPurchaseRecordDTO(
-                        receipt, ticketRepository, eventRepository, null, null));
+                        receipt, ticketRepository, eventDisplayPort, null, null));
             }
 
             log.info("Successfully retrieved purchase history for userId={}, recordsCount={}", userId,
@@ -113,7 +113,7 @@ public class MemberAccountService {
         // those repos (the mapper yields null for the unresolved names — see
         // OrderReceiptMapper).
         return new OrderReceiptMapper().toPurchaseRecordDTO(
-                receipt, ticketRepository, eventRepository, null, null);
+                receipt, ticketRepository, eventDisplayPort, null, null);
     }
 
 }

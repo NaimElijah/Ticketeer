@@ -31,20 +31,16 @@ import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.domain.EventStatus;
+// Catalog inbound port + its sales-safe line DTO: catalog now owns event pricing, policy validation,
+// on-sale checks, and inventory confirm/release — so CheckoutService imports no catalog.domain type.
+// EventRepository (a catalog outbound port taking int ids) is retained solely for the Phase-3 event
+// buyer-lock, which must span the whole validate -> persist -> confirm critical section in sales.
+import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
+import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.catalog.domain.InventorySelection;
-import com.ticketing.system.catalog.domain.InventoryZone;
-import com.ticketing.system.catalog.domain.Seat;
-import com.ticketing.system.catalog.domain.SeatStatus;
-import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
-import com.ticketing.system.shared.exception.EventNotFoundException;
-import com.ticketing.system.shared.exception.EventNotOnSaleException;
 import com.ticketing.system.shared.exception.IdempotencyConflictException;
-import com.ticketing.system.shared.exception.InsufficientInventoryException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
@@ -57,10 +53,7 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
-import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.domain.User;
 
 @Service
@@ -68,7 +61,14 @@ import com.ticketing.system.identity.domain.User;
 public class CheckoutService {
 
     private final ActiveOrderRepository activeOrderRepository;
+    // Retained ONLY for the Phase-3 event buyer-lock (lockEvents/unlockEvents): the lock must be held in
+    // sales across the whole validate -> persist -> confirm section, spanning several port calls plus
+    // sales' own ticket/receipt persistence, so it can't move inside a single port method. Takes int ids.
     private final EventRepository eventRepository;
+    // Catalog inbound port: owns event pricing, purchase-policy validation, on-sale checks, and the
+    // inventory confirm/release mutations. Its confirm/validate/release methods are CALLER-LOCKED — this
+    // service holds the event buyer-lock around them (see InventoryCommandPort's locking contract).
+    private final InventoryCommandPort inventoryPort;
     private final TicketRepository ticketRepository;
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketIssuer ticketIssuer;
@@ -78,7 +78,6 @@ public class CheckoutService {
     private final ApplicationEventPublisher eventPublisher;
     private final SessionManager sessionManager;
     private final UserRepository userRepository;
-    private final ProductionCompanyRepository companyRepository;
     private final MarketGate marketGate; // queried to enforce the UC-32 market-open gate (dependency-inverted away from governance)
     // Programmatic transactions for the checkout's Phase-3 DB work. Checkout cannot be a single
     // @Transactional method because the WSEP charge + issue (Phase 2, 20s HTTP timeouts) must run
@@ -105,6 +104,7 @@ public class CheckoutService {
     public CheckoutService(
             ActiveOrderRepository activeOrderRepository,
             EventRepository eventRepository,
+            InventoryCommandPort inventoryPort,
             TicketRepository ticketRepository,
             OrderReceiptRepository orderReceiptRepository,
             TicketIssuer ticketIssuer,
@@ -112,11 +112,11 @@ public class CheckoutService {
             ApplicationEventPublisher eventPublisher,
             SessionManager sessionManager,
             UserRepository userRepository,
-            ProductionCompanyRepository companyRepository,
             MarketGate marketGate,
             PlatformTransactionManager transactionManager) {
         this.activeOrderRepository = activeOrderRepository;
         this.eventRepository = eventRepository;
+        this.inventoryPort = inventoryPort;
         this.ticketRepository = ticketRepository;
         this.orderReceiptRepository = orderReceiptRepository;
         this.ticketIssuer = ticketIssuer;
@@ -124,7 +124,6 @@ public class CheckoutService {
         this.eventPublisher = eventPublisher;
         this.sessionManager = sessionManager;
         this.userRepository = userRepository;
-        this.companyRepository = companyRepository;
         this.marketGate = marketGate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -589,23 +588,9 @@ public class CheckoutService {
     }
 
     private void validateEventsStillOnSale(List<CartLineItem> boughtItems) {
-        List<Integer> eventIds = extractSortedEventIds(boughtItems);
-
-        for (Integer eventId : eventIds) {
-            Event event = eventRepository.findById(eventId);
-
-            if (event == null) {
-                throw new EventNotFoundException("Event not found: " + eventId);
-            }
-
-            // SOLD_OUT is allowed: an event that sold out while these tickets were reserved must still
-            // let the holders complete their purchase (mirrors Event.validateCanConfirmSale). Rejecting
-            // it here blocked the sale of the last tickets of any event.
-            if (event.getStatus() != EventStatus.ON_SALE && event.getStatus() != EventStatus.SOLD_OUT) {
-                throw new EventNotOnSaleException(
-                        eventId, "" + event.getStatus());
-            }
-        }
+        // Existence + sellable-status (ON_SALE or SOLD_OUT) checks now live in the catalog inventory
+        // port, which owns the Event aggregate. Runs under the Phase-3 event buyer-locks held by sales.
+        inventoryPort.validateEventsOnSale(extractSortedEventIds(boughtItems));
     }
 
     // We price all items at once before processing payment to ensure that the total
@@ -623,14 +608,12 @@ public class CheckoutService {
         List<PricedCartLine> pricedItems = new ArrayList<>();
 
         for (CartLineItem item : boughtItems) {
-            Event event = eventRepository.findById(item.geteventId());
-            if (event == null) {
-                throw new EventNotFoundException("Event not found: " + item.geteventId());
-            }
-
             int eventQuantity = quantityByEvent.get(item.geteventId()).intValue();
 
-            double finalPrice = event.calculatePriceforoneticket(
+            // The event's discount-policy pricing runs inside the catalog inventory port (Phase 2, no
+            // locks). It throws if the event no longer exists — same failure surfaced as before.
+            double finalPrice = inventoryPort.priceTicket(
+                    item.geteventId(),
                     eventQuantity,
                     item.getPriceAtReservation(),
                     pricingTime);
@@ -719,14 +702,13 @@ public class CheckoutService {
     private IssuanceResultDTO issueTickets(Integer buyerUserId, String buyerEmail, List<CartLineItem> boughtItems) {
         List<IssuanceRequestDTO.TicketIssuanceItemDTO> issuanceItems = boughtItems.stream()
                 .map(item -> {
-                    Event event = eventRepository.findById(item.geteventId());
-                    if (event == null) {
-                        throw new EventNotFoundException("Event not found: " + item.geteventId());
-                    }
+                    // Resolve the event name through the catalog inventory port (Phase 2, no locks); it
+                    // throws if the event no longer exists — same failure surfaced as before.
+                    String eventName = inventoryPort.eventName(item.geteventId());
 
                     return new IssuanceRequestDTO.TicketIssuanceItemDTO(
                             item.geteventId(),
-                            event.getName(),
+                            eventName,
                             item.getzoneId(),
                             item.getSeatNumber());
                 })
@@ -834,59 +816,11 @@ public class CheckoutService {
     // (payment/issuance), we re-verify that our reservations were not stolen by
     // expiry/cleanup before we confirm them as SOLD.
     private void validateCanConfirmInventorySale(List<CartLineItem> boughtItems, String orderKey) {
-        Map<Integer, Map<Integer, List<CartLineItem>>> grouped = groupItemsByEventAndZone(boughtItems);
-
-        for (Map.Entry<Integer, Map<Integer, List<CartLineItem>>> eventEntry : grouped.entrySet()) {
-            Event event = eventRepository.findById(eventEntry.getKey());
-            if (event == null) {
-                throw new EventNotFoundException("Event not found: " + eventEntry.getKey());
-            }
-
-            for (Map.Entry<Integer, List<CartLineItem>> zoneEntry : eventEntry.getValue().entrySet()) {
-                int zoneId = zoneEntry.getKey();
-                List<CartLineItem> zoneItems = zoneEntry.getValue();
-
-                InventoryZone zone = event.getVenueMap().getZone(zoneId);
-
-                List<String> seatNumbers = extractSeatNumbers(zoneItems);
-
-                if (seatNumbers.isEmpty()) {
-                    if (zone.isSeated()) {
-                        throw new InsufficientInventoryException("Seated cart item is missing seat numbers");
-                    }
-
-                    if (zone.getReservedAmount() < zoneItems.size()) {
-                        throw new InsufficientInventoryException(
-                                "Not enough reserved standing tickets to confirm sale");
-                    }
-                } else {
-                    if (zone.isStanding()) {
-                        throw new InsufficientInventoryException("Standing cart item cannot contain seat numbers");
-                    }
-
-                    if (!(zone instanceof SeatedZone seatedZone)) {
-                        throw new InsufficientInventoryException("Zone is not a seated zone");
-                    }
-
-                    for (String seatNumber : seatNumbers) {
-                        if (seatedZone.getSeatStatus(seatNumber) != SeatStatus.RESERVED) {
-                            throw new ConcurrentReservationException(
-                                    "Seat " + seatNumber + " is no longer RESERVED — reservation may have expired");
-                        }
-                        // Ownership check: ensure this checkout's order still holds the seat.
-                        // Skip when the seat was reserved without an explicit order key (e.g. test
-                        // setups that call seatedZone.reserve() directly without an orderKey — those
-                        // reservations are stored under the anonymous sentinel and carry no ownership).
-                        Seat seat = seatedZone.getSeatByLabel(seatNumber); // ? Note: ownership check below.
-                        String seatOwner = seat.getReservedByOrderKey();
-                        if (orderKey != null && !orderKey.equals(seatOwner)) {
-                            throw new ConcurrentReservationException(
-                                    "Seat " + seatNumber + " is held by a different order — cannot confirm sale");
-                        }
-                    }
-                }
-            }
-        }
+        // The read-only ownership/status check (seat still RESERVED and owned by this order, enough
+        // reserved standing stock) now lives in the catalog inventory port. It is CALLER-LOCKED: sales
+        // holds the Phase-3 event buyer-locks across this check and the subsequent confirm, so the two
+        // are atomic against structural edits.
+        inventoryPort.validateCanConfirmSale(toInventoryLines(boughtItems), orderKey);
     }
 
     // We confirm the inventory sale for the items being purchased by calling
@@ -894,51 +828,10 @@ public class CheckoutService {
     // passing the orderKey so each zone can verify that it still holds these
     // reservations before marking them SOLD.
     private void confirmInventorySale(List<CartLineItem> boughtItems, String orderKey) {
-        Map<Integer, Map<Integer, List<CartLineItem>>> grouped = groupItemsByEventAndZone(boughtItems);
-
-        // Confirming across multiple events/zones is not a single atomic step. Track each confirmed unit
-        // so a mid-loop failure can be compensated (SOLD -> AVAILABLE): we must never leave a partial SOLD
-        // end-state, so the normal !inventorySaleConfirmed rollback + refund stays correct (C3).
-        List<ConfirmedUnit> confirmed = new ArrayList<>();
-        try {
-            for (Map.Entry<Integer, Map<Integer, List<CartLineItem>>> eventEntry : grouped.entrySet()) {
-                Event event = eventRepository.findById(eventEntry.getKey());
-
-                for (Map.Entry<Integer, List<CartLineItem>> zoneEntry : eventEntry.getValue().entrySet()) {
-                    int zoneId = zoneEntry.getKey();
-                    List<CartLineItem> zoneItems = zoneEntry.getValue();
-
-                    List<String> seatNumbers = extractSeatNumbers(zoneItems);
-                    InventorySelection selection = seatNumbers.isEmpty()
-                            ? InventorySelection.standing(zoneItems.size(), orderKey)
-                            : InventorySelection.seated(seatNumbers, orderKey);
-
-                    event.confirmInventorySale(zoneId, selection);
-                    confirmed.add(new ConfirmedUnit(event, zoneId, selection));
-                }
-
-                eventRepository.save(event);
-            }
-        } catch (RuntimeException confirmFailure) {
-            compensateConfirmedSales(confirmed);
-            throw confirmFailure;
-        }
-    }
-
-    // Best-effort reversal (SOLD -> AVAILABLE) of units already confirmed when a multi-event confirm
-    // fails partway, so no inventory is stranded SOLD. Runs under the event locks already held in Phase 3.
-    // Failures are logged, not propagated — we are already on the failure path.
-    private void compensateConfirmedSales(List<ConfirmedUnit> confirmed) {
-        for (int i = confirmed.size() - 1; i >= 0; i--) {
-            ConfirmedUnit unit = confirmed.get(i);
-            try {
-                unit.event().returnSoldToStock(unit.zoneId(), unit.selection());
-                eventRepository.save(unit.event());
-            } catch (RuntimeException compensationFailure) {
-                log.error("Failed to compensate a confirmed sale during checkout rollback. zoneId={}",
-                        unit.zoneId(), compensationFailure);
-            }
-        }
+        // The RESERVED -> SOLD confirm (grouping, per-event save, and the partial-failure compensation
+        // back to AVAILABLE) now lives in the catalog inventory port. It is CALLER-LOCKED: sales holds
+        // the Phase-3 event buyer-locks around it, and it runs inside sales' Phase-3 DB transaction.
+        inventoryPort.confirmSale(toInventoryLines(boughtItems), orderKey);
     }
 
     // Consume the cart after a committed sale: buy() empties it, delete removes it. Best-effort — a
@@ -959,24 +852,12 @@ public class CheckoutService {
     // inventory status or confirm the sale. The resulting data structure is a
     // nested map where the first key is the event ID, the second key is the zone
     // ID, and the value is a list of cart line items for that event and zone.
-    private Map<Integer, Map<Integer, List<CartLineItem>>> groupItemsByEventAndZone(List<CartLineItem> items) {
+    // Converts sales' cart line items into the sales-safe flat inventory lines the catalog inventory
+    // port consumes for confirm/validate/release. A null seat label denotes one standing unit; the port
+    // groups these by event and zone and translates them into domain selections at the boundary.
+    private List<InventoryLineDTO> toInventoryLines(List<CartLineItem> items) {
         return items.stream()
-                .collect(Collectors.groupingBy(
-                        CartLineItem::geteventId,
-                        Collectors.groupingBy(CartLineItem::getzoneId)));
-    }
-
-    // We extract the seat numbers from a list of cart line items for a specific
-    // zone. If the zone is a standing zone, there should be no seat numbers and we
-    // will return an empty list. If the zone is a seated zone, we will return the
-    // list of seat numbers that are associated with the cart line items. This
-    // helper method simplifies the logic in the inventory validation and
-    // confirmation steps by providing a clear way to get the seat numbers for a
-    // group of items in the same zone.
-    private List<String> extractSeatNumbers(List<CartLineItem> zoneItems) {
-        return zoneItems.stream()
-                .map(CartLineItem::getSeatNumber)
-                .filter(seatNumber -> seatNumber != null)
+                .map(item -> new InventoryLineDTO(item.geteventId(), item.getzoneId(), item.getSeatNumber()))
                 .toList();
     }
 
@@ -1325,51 +1206,11 @@ public class CheckoutService {
     // already been sold or where there might be other complications in the
     // inventory state.
     private void returnTicketsToStock(ActiveOrder order) {
-        List<CartLineItem> returnToStock = order.getItems();
-        String orderKey = order.getOrderKey();
-
-        Map<Integer, Map<Integer, List<CartLineItem>>> grouped = groupItemsByEventAndZone(returnToStock);
-
-        for (Map.Entry<Integer, Map<Integer, List<CartLineItem>>> eventEntry : grouped.entrySet()) {
-            int eventId = eventEntry.getKey();
-            Event event = eventRepository.findById(eventId);
-
-            if (event == null) {
-                continue;
-            }
-
-            // Release each (event, zone) independently: a single zone that can no longer be
-            // released (e.g. its reservation was already confirmed/expired) must not abort
-            // the
-            // rollback for the remaining zones and events. We log and continue, then save
-            // the
-            // event if anything in it was actually released.
-            boolean anyReleased = false;
-            for (Map.Entry<Integer, List<CartLineItem>> zoneEntry : eventEntry.getValue().entrySet()) {
-                int zoneId = zoneEntry.getKey();
-                List<CartLineItem> zoneItems = zoneEntry.getValue();
-
-                List<String> seatNumbers = extractSeatNumbers(zoneItems);
-
-                try {
-                    if (seatNumbers.isEmpty()) {
-                        event.releaseInventory(zoneId, InventorySelection.standing(zoneItems.size(), orderKey));
-                    } else {
-                        event.releaseInventory(zoneId, InventorySelection.seated(seatNumbers, orderKey));
-                    }
-                    anyReleased = true;
-                } catch (RuntimeException zoneReleaseFailure) {
-                    log.warn(
-                            "Could not release inventory during checkout rollback. eventId={}, zoneId={}, orderKey={}",
-                            eventId, zoneId, orderKey, zoneReleaseFailure);
-                }
-            }
-
-            if (anyReleased) {
-                eventRepository.save(event);
-            }
-        }
-
+        // Release the still-held (RESERVED) lines back to AVAILABLE through the catalog inventory port
+        // (grouping, per-zone best-effort release, and per-event save moved there). CALLER-LOCKED: this
+        // runs inside rollbackReservedInventoryAtomically, which holds the event buyer-locks. The cart
+        // clear stays here — the order is a sales aggregate.
+        inventoryPort.releaseHeld(toInventoryLines(order.getItems()), order.getOrderKey());
         safelyClearCart(order);
     }
 
@@ -1484,32 +1325,17 @@ public class CheckoutService {
         Map<Integer, Long> quantityByEvent = boughtItems.stream()
                 .collect(Collectors.groupingBy(CartLineItem::geteventId, Collectors.counting()));
 
+        // Buyer id for the policy context: -1 for a guest, else the member id.
+        int buyerId = (userId == null) ? -1 : userId;
+
         for (Map.Entry<Integer, Long> entry : quantityByEvent.entrySet()) {
             int eventId = entry.getKey();
             int quantity = entry.getValue().intValue();
 
-            Event event = eventRepository.findById(eventId);
-
-            if (event == null) {
-                throw new EventNotFoundException(eventId);
-            }
-
-            int buyerId;
-            if (userId == null) {
-                buyerId = -1;
-            } else {
-                buyerId = userId;
-            }
-
-            PurchaseContext context = new PurchaseContext(
-                    buyerId,
-                    buyerAge,
-                    event.getId(),
-                    event.getCompanyId(),
-                    quantity);
-
-            ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
-            event.validateEffectivePolicy(company == null ? null : company.getPurchasePolicy(), context);
+            // The effective policy (company AND event, CHECKOUT stage) is validated inside the catalog
+            // inventory port, which owns the event + resolves the company policy. Runs in Phase 2 (no
+            // locks); throws EventNotFoundException / a policy violation exactly as before.
+            inventoryPort.validatePurchasePolicy(eventId, buyerId, buyerAge, quantity);
         }
     }
 
@@ -1532,14 +1358,6 @@ public class CheckoutService {
     private record PricedCartLine(
             CartLineItem item,
             double finalPrice) {
-    }
-
-    // A single (event, zone, selection) that was confirmed SOLD during confirmInventorySale — kept so a
-    // partial-confirm failure can be compensated back to AVAILABLE (C3).
-    private record ConfirmedUnit(
-            Event event,
-            int zoneId,
-            InventorySelection selection) {
     }
 
     // This is the value stored in the idempotency cache. It includes the buyerKey

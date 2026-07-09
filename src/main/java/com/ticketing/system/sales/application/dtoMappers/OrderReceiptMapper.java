@@ -13,9 +13,10 @@ import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.catalog.domain.InventoryZone;
+// Catalog inbound display port + its sales-safe projection: the mapper resolves event/zone/venue/
+// company display fields through this port, so it imports no catalog.domain type.
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
+import com.ticketing.system.catalog.application.port.in.EventDisplayInfoDTO;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
@@ -26,21 +27,23 @@ import com.ticketing.system.identity.domain.User;
  * Maps {@link OrderReceipt} to {@link PurchaseHistoryDTO} read models.
  *
  * <p>The receipt is the immutable purchase snapshot; tickets are loaded to
- * enrich with current status. The optional {@code eventRepository} /
+ * enrich with current status. The optional {@code eventDisplay} /
  * {@code companyRepository} / {@code userRepository} let the mapper resolve
  * human-readable names (event, zone, company, buyer) — pass {@code null} for
  * any a caller doesn't need; the corresponding DTO field is then {@code null}.
+ * Event/zone/venue display data comes from the catalog {@link CatalogEventDisplayPort}
+ * so the mapper never touches a {@code catalog.domain} type.
  */
 public class OrderReceiptMapper {
 
     /** Full receipt → record (member history / unfiltered global history). */
     public PurchaseHistoryDTO.PurchaseRecordDTO toPurchaseRecordDTO(OrderReceipt receipt,
             TicketRepository ticketRepository,
-            EventRepository eventRepository,
+            CatalogEventDisplayPort eventDisplay,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receipt.getId());
-        return map(receipt, safeList(tickets), false, true, eventRepository, companyRepository, userRepository);
+        return map(receipt, safeList(tickets), false, true, eventDisplay, companyRepository, userRepository);
     }
 
     /**
@@ -50,17 +53,17 @@ public class OrderReceiptMapper {
      */
     public PurchaseHistoryDTO.PurchaseRecordDTO toPurchaseRecordDTO(OrderReceipt receipt,
             List<Ticket> selectedTickets,
-            EventRepository eventRepository,
+            CatalogEventDisplayPort eventDisplay,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
-        return map(receipt, safeList(selectedTickets), true, false, eventRepository, companyRepository, userRepository);
+        return map(receipt, safeList(selectedTickets), true, false, eventDisplay, companyRepository, userRepository);
     }
 
     /** UC-31 global history: include only tickets matching the event filter; all transactions. */
     public PurchaseHistoryDTO.PurchaseRecordDTO toFilteredPurchaseRecordDTO(OrderReceipt receipt,
             Set<Integer> selectedEventIds,
             TicketRepository ticketRepository,
-            EventRepository eventRepository,
+            CatalogEventDisplayPort eventDisplay,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receipt.getId());
@@ -73,7 +76,7 @@ public class OrderReceiptMapper {
         double totalPaid = linesToMap.stream().mapToDouble(ReceiptLine::getPriceAtReservation).sum();
 
         List<PurchaseHistoryDTO.TicketRecordDTO> ticketRecords = linesToMap.stream()
-                .map(line -> toTicketRecordDTO(receipt, line, ticketsById, eventRepository, companyRepository))
+                .map(line -> toTicketRecordDTO(receipt, line, ticketsById, eventDisplay, companyRepository))
                 .toList();
 
         List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos = receipt.getTransactionRecords().stream()
@@ -86,7 +89,7 @@ public class OrderReceiptMapper {
     // Actual mapping work, with options to include only selected tickets and to include/exclude transactions.
     private PurchaseHistoryDTO.PurchaseRecordDTO map(OrderReceipt receipt, List<Ticket> tickets,
             boolean selectedTicketsOnly, boolean includeTransactions,
-            EventRepository eventRepository, ProductionCompanyRepository companyRepository,
+            CatalogEventDisplayPort eventDisplay, ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         Map<Integer, Ticket> ticketsById = byId(tickets);
 
@@ -103,7 +106,7 @@ public class OrderReceiptMapper {
                 : receipt.getTotalAmount();
 
         List<PurchaseHistoryDTO.TicketRecordDTO> ticketRecords = linesToMap.stream()
-                .map(line -> toTicketRecordDTO(receipt, line, ticketsById, eventRepository, companyRepository))
+                .map(line -> toTicketRecordDTO(receipt, line, ticketsById, eventDisplay, companyRepository))
                 .toList();
 
         List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos = includeTransactions
@@ -130,19 +133,19 @@ public class OrderReceiptMapper {
     }
 
     private PurchaseHistoryDTO.TicketRecordDTO toTicketRecordDTO(OrderReceipt receipt, ReceiptLine line,
-            Map<Integer, Ticket> ticketsById, EventRepository eventRepository,
+            Map<Integer, Ticket> ticketsById, CatalogEventDisplayPort eventDisplay,
             ProductionCompanyRepository companyRepository) {
         Ticket ticket = ticketsById.get(line.getTicketId());
         TicketStatus currentStatus = ticket != null ? ticket.getStatus() : fallbackStatus(receipt);
 
-        Event event = findEvent(eventRepository, line.getEventId());
-        String eventName = event == null ? null : event.getName();
+        // One display projection per line (null when the event is unknown / a null port was passed).
+        EventDisplayInfoDTO event = describeEvent(eventDisplay, line.getEventId());
+        String eventName = event == null ? null : event.eventName();
         String zoneName = resolveZoneName(event, line.getZoneId());
         String companyName = resolveCompanyName(event, companyRepository);
-        String category = (event == null || event.getCategory() == null) ? null : event.getCategory().toString();
-        LocalDateTime eventStartsAt = resolveEventStart(event);
-        String venue = (event == null || event.getVenueMap() == null || event.getVenueMap().getLocation() == null)
-                ? null : event.getVenueMap().getLocation().toString();
+        String category = event == null ? null : event.category();
+        LocalDateTime eventStartsAt = event == null ? null : event.eventStartsAt();
+        String venue = event == null ? null : event.venueLocation();
         String barcode = ticket == null ? null : ticket.getBarcode();
 
         return new PurchaseHistoryDTO.TicketRecordDTO(
@@ -162,34 +165,29 @@ public class OrderReceiptMapper {
                 barcode);
     }
 
-    private static LocalDateTime resolveEventStart(Event event) {
-        if (event == null || event.getShowDates() == null || event.getShowDates().isEmpty()) return null;
-        return event.getShowDates().get(0).getStartTime();
-    }
+    // ---- name resolution (all null-safe; a null port/repo yields a null name) ----
 
-    // ---- name resolution (all null-safe; a null repo yields a null name) ----
-
-    private static Event findEvent(EventRepository eventRepository, int eventId) {
-        if (eventRepository == null) return null;
+    private static EventDisplayInfoDTO describeEvent(CatalogEventDisplayPort eventDisplay, int eventId) {
+        if (eventDisplay == null) return null;
         try {
-            return eventRepository.findById(eventId);
+            return eventDisplay.describeEvent(eventId);
         } catch (RuntimeException e) {
             return null;
         }
     }
 
-    private static String resolveZoneName(Event event, int zoneId) {
-        if (event == null || event.getVenueMap() == null) return null;
-        for (InventoryZone zone : event.getVenueMap().getInventoryZones()) {
-            if (zone.getId() == zoneId) return zone.getName();
+    private static String resolveZoneName(EventDisplayInfoDTO event, int zoneId) {
+        if (event == null || event.zones() == null) return null;
+        for (EventDisplayInfoDTO.ZoneNameDTO zone : event.zones()) {
+            if (zone.zoneId() == zoneId) return zone.name();
         }
         return null;
     }
 
-    private static String resolveCompanyName(Event event, ProductionCompanyRepository companyRepository) {
+    private static String resolveCompanyName(EventDisplayInfoDTO event, ProductionCompanyRepository companyRepository) {
         if (event == null || companyRepository == null) return null;
         try {
-            ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
+            ProductionCompany company = companyRepository.getCompanyById(event.companyId());
             return company == null ? null : company.getName();
         } catch (RuntimeException e) {
             return null;

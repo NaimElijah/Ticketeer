@@ -334,6 +334,34 @@ public class ActiveOrder implements InvariantChecked {
         }
     }
 
+    /**
+     * Primitive-argument variant of {@link #validateContainsReservation(InventorySelection)} — an empty
+     * {@code seatNumbers} means a standing selection of {@code quantity}, otherwise a seated selection of
+     * the given seats. Lets sales' application services validate a cart before releasing inventory
+     * without constructing a {@code catalog.domain.InventorySelection}; behaviour is identical.
+     *
+     * @param eventId     the event the reservation must belong to
+     * @param zoneId      the zone the reservation must belong to
+     * @param quantity    the standing quantity to validate (used only when {@code seatNumbers} is empty)
+     * @param seatNumbers the seated seat labels to validate (empty for a standing selection)
+     */
+    public void validateContainsReservation(int eventId, int zoneId, int quantity, List<String> seatNumbers) {
+        synchronized (itemsLock) {
+            if (!hasReservationForEventWithoutLock(eventId)) {
+                throw new IllegalArgumentException("Active order does not contain this event");
+            }
+
+            if (seatNumbers == null || seatNumbers.isEmpty()) {
+                int existingTickets = countStandingTicketsWithoutLock(eventId, zoneId); // standing count (incl. expired)
+                if (existingTickets < quantity) {
+                    throw new IllegalArgumentException("Not enough reserved tickets to remove");
+                }
+            } else {
+                validateContainsSeats(eventId, zoneId, seatNumbers);
+            }
+        }
+    }
+
 
 
 

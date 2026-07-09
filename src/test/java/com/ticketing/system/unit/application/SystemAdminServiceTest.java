@@ -36,6 +36,7 @@ import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -59,6 +60,7 @@ class SystemAdminServiceTest {
     private OrderReceiptRepository orderReceiptRepository;
     private TicketRepository ticketRepository;
     private EventRepository eventRepository;
+    private CatalogEventDisplayPort eventDisplayPort;
     private ProductionCompanyRepository companyRepository;
     private UserRepository userRepository;
     private PasswordHasher passwordHasher;
@@ -73,6 +75,7 @@ class SystemAdminServiceTest {
         orderReceiptRepository = mock(OrderReceiptRepository.class);
         ticketRepository = mock(TicketRepository.class);
         eventRepository = mock(EventRepository.class);
+        eventDisplayPort = mock(CatalogEventDisplayPort.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         userRepository = mock(UserRepository.class);
         passwordHasher = mock(PasswordHasher.class);
@@ -84,6 +87,7 @@ class SystemAdminServiceTest {
                 orderReceiptRepository,
                 ticketRepository,
                 eventRepository,
+                eventDisplayPort,
                 companyRepository,
                 userRepository,
                 List.of(),
@@ -434,7 +438,7 @@ class SystemAdminServiceTest {
     private SystemAdminService serviceWith(List<PaymentGateway> gateways, List<TicketIssuer> issuers) {
         return new SystemAdminService(
                 sessionManager, adminRepository, orderReceiptRepository,
-                ticketRepository, eventRepository, companyRepository, userRepository,
+                ticketRepository, eventRepository, eventDisplayPort, companyRepository, userRepository,
                 gateways, issuers, passwordHasher,
                 integrityVerifier, "admin", "admin");
     }

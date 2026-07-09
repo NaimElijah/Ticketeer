@@ -13,6 +13,7 @@ import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Seat;
@@ -63,12 +64,15 @@ public class ReservationAcceptanceTests {
         MarketGate marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
 
+        // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
+        // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
+        InventoryService inventoryService = new InventoryService(
+                eventRepository, mock(ProductionCompanyRepository.class));
         reservationService = new ReservationService(
-                eventRepository,
+                inventoryService,
                 activeOrderRepository,
                 sessionManager,
                 eventPublisher,
-                mock(ProductionCompanyRepository.class),
                 mock(UserRepository.class),
                 marketGate,
                 mock(ISystemMetrics.class)

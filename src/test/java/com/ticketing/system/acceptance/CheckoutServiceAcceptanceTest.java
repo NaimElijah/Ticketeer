@@ -15,6 +15,7 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
+import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.sales.domain.*;
 import com.ticketing.system.sales.domain.*;
@@ -117,9 +118,14 @@ public class CheckoutServiceAcceptanceTest {
         marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
 
+        // Catalog owns inventory mutation behind InventoryCommandPort. Wire the real InventoryService
+        // onto the same mock event store (+ mock company port) so the existing event/zone/seat stubs
+        // drive confirm/validate/price/policy a layer down; CheckoutService keeps eventRepository for
+        // the Phase-3 buyer-lock.
         checkoutService = new CheckoutService(
                 activeOrderRepository,
                 eventRepository,
+                new InventoryService(eventRepository, companyRepository),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
@@ -127,7 +133,6 @@ public class CheckoutServiceAcceptanceTest {
                 eventPublisher,
                 sessionManager,
                 userRepository,
-                companyRepository,
                 marketGate,
                 TestTransactions.noOpManager()
         );
@@ -928,6 +933,7 @@ public class CheckoutServiceAcceptanceTest {
         return new CheckoutService(
                 realRepo,
                 eventRepository,
+                new InventoryService(eventRepository, companyRepository),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
@@ -935,7 +941,6 @@ public class CheckoutServiceAcceptanceTest {
                 eventPublisher,
                 sessionManager,
                 userRepository,
-                companyRepository,
                 marketGate,
                 TestTransactions.noOpManager()
         );

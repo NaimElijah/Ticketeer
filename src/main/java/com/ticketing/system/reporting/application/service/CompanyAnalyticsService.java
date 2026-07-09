@@ -21,6 +21,7 @@ import com.ticketing.system.sales.application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
@@ -55,6 +56,8 @@ public class CompanyAnalyticsService {
     private static final int WINDOW_DAYS = 30;
 
     private final EventRepository eventRepository;
+    // Catalog display port for resolving event/zone names in sales-history records (via OrderReceiptMapper).
+    private final CatalogEventDisplayPort eventDisplayPort;
     private final OrderReceiptRepository orderReceiptRepository;
     private final ConversationRepository conversationRepository;
     private final TicketRepository ticketRepository;
@@ -68,6 +71,7 @@ public class CompanyAnalyticsService {
 
     public CompanyAnalyticsService(
             EventRepository eventRepository,
+            CatalogEventDisplayPort eventDisplayPort,
             OrderReceiptRepository orderReceiptRepository,
             ConversationRepository conversationRepository,
             TicketRepository ticketRepository,
@@ -76,6 +80,7 @@ public class CompanyAnalyticsService {
             CompanyMembershipService companyMembershipService,
             SessionManager sessionManager) {
         this.eventRepository = eventRepository;
+        this.eventDisplayPort = eventDisplayPort;
         this.orderReceiptRepository = orderReceiptRepository;
         this.conversationRepository = conversationRepository;
         this.ticketRepository = ticketRepository;
@@ -134,7 +139,7 @@ public class CompanyAnalyticsService {
                 .stream()
                 .map(r -> mapper.toFilteredPurchaseRecordDTO(
                         r, companyEventIds,
-                        ticketRepository, eventRepository, companyRepository, userRepository))
+                        ticketRepository, eventDisplayPort, companyRepository, userRepository))
                 .toList();
         return new PurchaseHistoryDTO(records);
     }
@@ -188,7 +193,7 @@ public class CompanyAnalyticsService {
                             .filter(ticket -> companyEventIdSet.contains(ticket.getEventId())) // keep only this company's
                             .toList();
                     return new PurchaseHistoryDTO(List.of(mapper.toPurchaseRecordDTO(
-                            receipt, companyTickets, eventRepository, companyRepository, userRepository)));
+                            receipt, companyTickets, eventDisplayPort, companyRepository, userRepository)));
                 }).toList();
 
         log.info("Successfully retrieved sales history for company {}", companyId);

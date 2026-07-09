@@ -12,8 +12,7 @@ import com.ticketing.system.reporting.application.service.MemberAccountService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -36,10 +35,9 @@ class MemberAccountServiceTest {
     @Mock AuthenticationService authenticationService;
     @Mock OrderReceiptRepository orderReceiptRepository;
     @Mock TicketRepository ticketRepository;
-    @Mock EventRepository eventRepository;
+    @Mock CatalogEventDisplayPort eventDisplayPort;
     @Mock OrderReceipt receipt;
     @Mock Ticket ticket;
-    @Mock Event event;
 
     MemberAccountService service;
 
@@ -53,7 +51,7 @@ class MemberAccountServiceTest {
                 authenticationService,
                 orderReceiptRepository,
                 ticketRepository,
-                eventRepository
+                eventDisplayPort
         );
     }
 
@@ -70,13 +68,11 @@ class MemberAccountServiceTest {
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(receipts);
-        Mockito.when(eventRepository.findById(eventId)).thenReturn(event);
         Mockito.when(ticketRepository.findByOrderReceiptId(receiptId)).thenReturn(tickets);
         Mockito.when(receipt.getId()).thenReturn(receiptId);
         // Mockito.when(receipt.geteventId()).thenReturn(eventId);
         Mockito.when(receipt.getPurchaseTime()).thenReturn(purchaseTime);
         Mockito.when(receipt.getTotalAmount()).thenReturn(150.00);
-        Mockito.when(event.getName()).thenReturn("Rock Concert");
         // these 4 below lines recently added
         Mockito.when(receipt.getReceiptLines()).thenReturn(List.of(new ReceiptLine(101, 150.00, 2, 1, "15", purchaseTime)));
         Mockito.when(receipt.getTransactionRecords()).thenReturn(List.of());
@@ -114,7 +110,7 @@ class MemberAccountServiceTest {
         Mockito.verify(authenticationService).validateToken(INVALID_TOKEN);
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(Mockito.anyInt());
         Mockito.verify(ticketRepository, Mockito.never()).findByOrderReceiptId(Mockito.anyInt());
-        Mockito.verify(eventRepository, Mockito.never()).findById(Mockito.anyInt());
+        Mockito.verify(eventDisplayPort, Mockito.never()).describeEvent(Mockito.anyInt());
     }
 
     @Test @Disabled("UC-16 + II.3.5.2: history reflects price-at-purchase, not current price")
@@ -139,7 +135,7 @@ class MemberAccountServiceTest {
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(Optional.of(own));
         Mockito.when(ticketRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(List.of());
-        Mockito.when(eventRepository.findById(2)).thenReturn(null);
+        Mockito.when(eventDisplayPort.describeEvent(2)).thenReturn(null);
 
         PurchaseRecordDTO record = service.viewMyReceipt(VALID_TOKEN, RECEIPT_ID);
 
