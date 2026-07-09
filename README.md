@@ -193,14 +193,22 @@ The Vaadin UI serves at **`http://localhost:8080`**. The Maven `production` prof
 
 ### Reset / replay the dev dataset
 
+A normal `dev` boot already reseeds — H2 is `create-drop`, so the schema starts empty and
+`seed.mode=reseed` replays the demo scenario each run. To force a full wipe + reseed (destructive; needs
+the explicit opt-in), or to replay a different initial-state file:
+
 ```bash
-# Wipe the in-memory repos and re-seed the demo graph
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--seed.mode=wipe
+# Full wipe + reseed (keeps the platform admin). Mainly for a persistent DB — dev's H2 starts empty anyway.
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
+    -Dspring-boot.run.arguments="--seed.mode=reset --seed.assume-yes=true"
 
 # Replay a specific initial-state file (see "Initial-state files" below)
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
-    -Dspring-boot.run.arguments="--seed.scenario=file:/abs/path/your.scenario --seed.mode=wipe"
+    -Dspring-boot.run.arguments="--seed.mode=reseed --seed.scenario=file:/abs/path/your.scenario"
 ```
+
+See [`SEED.md`](SEED.md) for the full `seed.mode` reference (`off · reseed · wipe · reset · ask`) and the
+seeded dataset.
 
 ---
 
@@ -254,7 +262,7 @@ overridable (shown as `${ENV:default}`). Overlays: `application-dev.yml` and `ap
 | `spring.datasource.url` | `jdbc:h2:mem:devdb;…` | In-memory H2 (no Postgres/Docker needed locally) |
 | `spring.jpa.hibernate.ddl-auto` | `create-drop` | Drop + recreate schema each boot |
 | `seed.scenario` | `classpath:scenarios/demo.scenario` | Initial-state file to replay (see below) |
-| `seed.mode` | `idempotent` | `off` · `wipe` · anything else runs it |
+| `seed.mode` | `reseed` | `off` · `reseed` · `wipe` · `reset` · `ask` (`wipe`/`reset` need `seed.assume-yes=true`) |
 | `seed.fail-fast` | `false` | `true` stops at the first unexpected failure |
 
 ---
@@ -297,8 +305,9 @@ by the scheduled `SessionAndOrderSweeper` (II.3.0.3) and are not restored.
 The platform can boot into a known state from an editable text file that **replays a sequence of
 use-case operations through the real application services** — one operation per line. Two samples ship
 under `src/main/resources/scenarios/`: `demo.scenario` (rich dataset) and `review.scenario` (minimal
-baseline). The engine (`bootstrap/dev/seed/scenario/ScenarioRunner`) is `@Profile("dev")`, so it never
-runs in production.
+baseline). The engine (`bootstrap/dev/seed/scenario/ScenarioRunner`) is present on every non-`test`
+profile but **inert unless `seed.mode` is set** (default `off`), so it never touches prod/cloud unless
+explicitly asked; `dev` sets `seed.mode=reseed`.
 
 ### Syntax
 
