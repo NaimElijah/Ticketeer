@@ -3,8 +3,6 @@ import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.domain.ConversationStatus;
 import com.ticketing.system.messaging.domain.Conversation;
-import com.ticketing.system.identity.domain.Admin;
-import com.ticketing.system.identity.domain.User;
 
 import java.util.List;
 import java.util.Optional;

@@ -1,6 +1,4 @@
 package com.ticketing.system.catalog.application.dtoMappers;
-import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.catalog.application.service.EventManagementService;
 
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.EventSummaryDTO;

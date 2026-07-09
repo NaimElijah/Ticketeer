@@ -1,5 +1,4 @@
 package com.ticketing.system.catalog.application.service;
-import com.ticketing.system.catalog.application.service.EventManagementService;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;

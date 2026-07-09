@@ -1,5 +1,4 @@
 package com.ticketing.system.notifications.adapter.out.persistence;
-import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 
 import java.util.List;
 

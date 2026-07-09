@@ -1,5 +1,4 @@
 package com.ticketing.system.shared.metrics;
-import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 
 import java.time.Duration;
 

@@ -1,5 +1,4 @@
 package com.ticketing.system.shared.exception;
-import com.ticketing.system.organization.domain.ProductionCompany;
 
 // Thrown when an appointment would create a cycle in the company's appointment tree.
 // II.4.8.3 — UC-23 (Appoint Co-Owner). Enforced by ProductionCompany.canAppoint(...).

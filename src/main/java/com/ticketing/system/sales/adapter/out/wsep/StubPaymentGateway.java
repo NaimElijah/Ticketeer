@@ -1,5 +1,4 @@
 package com.ticketing.system.sales.adapter.out.wsep;
-import com.ticketing.system.sales.application.service.CheckoutService;
 
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;

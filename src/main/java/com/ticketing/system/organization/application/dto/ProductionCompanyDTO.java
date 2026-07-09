@@ -1,5 +1,4 @@
 package com.ticketing.system.organization.application.dto;
-import com.ticketing.system.organization.domain.CompanyStatus;
 
 // General Production Company view.
 // Used in catalog browse output (alongside EventSummaryDTO), org-tree responses,

@@ -65,8 +65,14 @@ class HexagonalRulesTest {
 
     /**
      * The Vaadin {@code ui} module is the single driving (inbound) adapter: it may depend on the
-     * backend contexts' application APIs, but no backend context may depend back on {@code ui}. This
-     * is the invariant that keeps the UI a leaf of the dependency graph.
+     * backend contexts' application APIs, but no backend <em>bounded context</em> may depend back on
+     * {@code ui}. This is the invariant that keeps the UI a leaf of the dependency graph.
+     *
+     * <p>The rule lists the backend bounded contexts explicitly rather than "everything but ui" on
+     * purpose: {@code bootstrap} (the composition-root sink) is deliberately allowed to reference
+     * {@code ui} — it wires the app together, e.g. the notification polling scheduler drives a UI
+     * session — and {@code reporting} is a read-side consumer that never touches {@code ui}. Only the
+     * eight true backend contexts below are gated here.
      */
     @Test
     void no_backend_context_depends_on_the_ui() {

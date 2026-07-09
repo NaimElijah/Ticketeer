@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.layouts;
-import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.ui.components.NotificationBellComponent;
 import com.ticketing.system.ui.presenters.notifications.NotificationBellPresenter;

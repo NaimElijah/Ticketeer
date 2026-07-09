@@ -1,5 +1,4 @@
 package com.ticketing.system.shared.exception;
-import com.ticketing.system.identity.domain.Session;
 
 // Thrown when a JWT token is well-formed but past its expiration.
 // Distinct from AuthenticationFailedException (login flow): this is for an

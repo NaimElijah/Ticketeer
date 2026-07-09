@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.application.dto;
-import com.ticketing.system.identity.domain.User;
 
 /**
  * Contact info a Guest provides when checking out (D5 reversed). The Guest

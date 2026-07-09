@@ -1,7 +1,5 @@
 package com.ticketing.system.sales.application.port.out;
 import com.ticketing.system.sales.domain.ActiveOrder;
-import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.sales.application.service.ReservationService;
 
 import java.util.List;
 import java.util.Optional;

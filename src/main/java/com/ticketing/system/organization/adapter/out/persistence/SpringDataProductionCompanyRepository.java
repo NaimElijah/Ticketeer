@@ -1,5 +1,4 @@
 package com.ticketing.system.organization.adapter.out.persistence;
-import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 
 import java.util.List;
 import java.util.Optional;

@@ -1,7 +1,4 @@
 package com.ticketing.system.messaging.domain;
-import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.identity.domain.Admin;
-import com.ticketing.system.identity.domain.User;
 
 // What kind of entity is sending or receiving in a Conversation.
 //   MEMBER      - a specific User (memberId)

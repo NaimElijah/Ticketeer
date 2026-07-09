@@ -1,6 +1,4 @@
 package com.ticketing.system.bootstrap.scheduling;
-import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.sales.application.service.ReservationService;
 
 import java.time.Clock;
 import java.time.Instant;

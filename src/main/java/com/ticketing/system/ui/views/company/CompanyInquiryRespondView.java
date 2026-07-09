@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.views.company;
-import com.ticketing.system.messaging.application.service.MessagingService;
 
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;

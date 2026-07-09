@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.views.account;
-import com.ticketing.system.identity.domain.User;
 
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;

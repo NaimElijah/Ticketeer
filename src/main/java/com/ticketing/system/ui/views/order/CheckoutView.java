@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.views.order;
-import com.ticketing.system.sales.application.service.CheckoutService;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;

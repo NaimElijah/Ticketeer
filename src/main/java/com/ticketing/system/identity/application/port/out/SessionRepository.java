@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.application.port.out;
-import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.domain.Session;
 
 import java.time.Instant;

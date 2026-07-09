@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.security;
-import com.ticketing.system.identity.domain.Session;
 
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.LogoutRequestDTO;

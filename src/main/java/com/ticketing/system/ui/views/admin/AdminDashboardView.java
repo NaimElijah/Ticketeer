@@ -1,5 +1,4 @@
 package com.ticketing.system.ui.views.admin;
-import com.ticketing.system.identity.domain.Admin;
 
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.ui.components.kit.LkCard;

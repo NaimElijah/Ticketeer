@@ -1,5 +1,4 @@
 package com.ticketing.system.catalog.domain;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
 
 import java.util.List;
 

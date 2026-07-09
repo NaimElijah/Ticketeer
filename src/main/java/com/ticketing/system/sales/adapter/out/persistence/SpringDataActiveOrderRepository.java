@@ -1,5 +1,4 @@
 package com.ticketing.system.sales.adapter.out.persistence;
-import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;

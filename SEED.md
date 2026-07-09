@@ -7,7 +7,7 @@ so the seed doubles as an end-to-end smoke test. Two pieces cooperate at startup
 | Component | Profile / order | Role |
 |---|---|---|
 | `ui/dev/DevUserSeeder` | `@Profile("dev")`, `@Order(1)` | Registers the single `dev.member` DevPanel persona via the real auth path. Idempotent. |
-| `bootstrap/dev/seed/scenario/ScenarioRunner` | `@Profile("!test")`, `@Order(2)` | Replays a `.scenario` file line-by-line through the application services, classifying every step in a `SeedReport`. Present on every non-`test` profile but **inert unless `seed.mode` is set** (default `off`) — it never touches prod/cloud unless explicitly asked. |
+| `bootstrap/dev/seed/scenario/ScenarioRunner` | `@Profile("!test")`, `@Order(2)` | Replays a `.scenario` file line-by-line through the application services, classifying every step in a `SeedReport`. Present on every non-`test` profile but **inert unless `seed.mode` is set to something other than `off`** (`off` is the default) — it never touches prod/cloud unless explicitly asked. |
 
 Run the seeded dev app:
 
@@ -49,7 +49,7 @@ The default dataset boots a small but complete marketplace:
 | Guest | 1 | `g1` — an anonymous guest session that completes a purchase |
 | Companies | 2 | **Live Nation Israel** (owner `alice`) · **Habima Theatre** (owner `carol`) |
 | Appointments | 1 | `bob` accepted as a **manager** at Live Nation (`CONFIGURE_VENUE`, `VIEW_SALES`) |
-| Events | 6 | 5 published/on-sale + 1 left unpublished (`SCHEDULED`); see below |
+| Events | 6 | 5 published (varied states — on sale, one SOLD_OUT, one CANCELED) + 1 left unpublished (`SCHEDULED`); see below |
 | Completed orders + tickets | 5 | Real reserve → checkout flow through the stub payment gateway |
 | Active reservation (pending cart) | 1 | `erin` holds 2 standing tickets for Coldplay on first load |
 | Conversations | 2 | 1 buyer→company inquiry + 1 open complaint |
@@ -59,12 +59,12 @@ The default dataset boots a small but complete marketplace:
 
 | Event | Company | Category | Zones | State |
 |---|---|---|---|---|
-| Coldplay | Live Nation | CONCERT | 2 seated + 1 standing | On sale |
-| Beyonce | Live Nation | CONCERT | 2 standing | On sale |
-| Othello | Habima | THEATER | 2 seated | On sale |
-| Indie Night | Live Nation | CONCERT | 1 standing (cap 6) | **SOLD_OUT** (bought out) |
-| Postponed Gala | Habima | OTHER | 1 standing (cap 50) | **CANCELED** (+ refunded) |
-| Not On Sale Yet | Live Nation | — | 1 standing | **SCHEDULED** (unpublished; a negative `expect-error` check reserves against it and must fail) |
+| Coldplay | Live Nation Israel | CONCERT | 2 seated + 1 standing | On sale |
+| Beyonce | Live Nation Israel | CONCERT | 2 standing | On sale |
+| Othello | Habima Theatre | THEATER | 2 seated | On sale |
+| Indie Night | Live Nation Israel | CONCERT | 1 standing (cap 6) | **SOLD_OUT** (bought out) |
+| Postponed Gala | Habima Theatre | OTHER | 1 standing (cap 50) | **CANCELED** (+ refunded) |
+| Not On Sale Yet | Live Nation Israel | CONCERT (the `add-event` default when `category` is omitted) | 1 standing | **SCHEDULED** (unpublished; a negative `expect-error` check reserves against it and must fail) |
 
 Event dates are relative to boot (`days=` offsets), so they are always in the future.
 
@@ -95,7 +95,7 @@ Set via the `seed.mode` Spring property (env: `SEED_MODE`). `dev` defaults to `r
 | `reseed` | Open the market and run the scenario (creates what's missing). **dev's default.** |
 | `wipe` | Delete **all business data** (keeping the platform admin), then stop. *Destructive.* |
 | `reset` | `wipe`, then reseed (`DevUserSeeder` + scenario). *Destructive.* |
-| `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. With no terminal it falls back to `off`. |
+| `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. If stdin yields EOF/empty input (or an `IOException`), each prompt falls back to its default (`off` for the mode). |
 
 **Destructive modes are gated by an explicit opt-in**, not a console prompt: `wipe`/`reset` only proceed
 when `seed.assume-yes=true` (env: `SEED_ASSUME_YES=true`). Without it they log exactly what *would* be
@@ -110,8 +110,10 @@ deleted and refuse — so a stray `SEED_MODE=reset` can never wipe a database on
 
 The wipe is implemented per persistence backend: `JpaRepoCleaner` (`@Profile("jpa")`, deletes through the
 Spring Data repositories — H2 and Postgres alike) and `MemoryRepoCleaner` (`@Profile("!jpa")`, clears the
-in-memory maps). Both deliberately keep the `admins` row, since a reset needs an admin to re-open the
-market for the reseed's checkouts.
+in-memory maps via reflection). `JpaRepoCleaner` deliberately keeps the `admins` row so a reset still has
+an admin to re-open the market for the reseed's checkouts (`PlatformInitializationRunner` re-creates it
+regardless). `MemoryRepoCleaner` clears every in-memory repo including `MemoryAdminRepository`, so on the
+in-memory backend the admin is re-seeded by init on the next cycle rather than preserved.
 
 ## Choosing / replaying a different scenario
 

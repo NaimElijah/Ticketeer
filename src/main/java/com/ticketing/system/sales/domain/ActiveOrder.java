@@ -1,7 +1,4 @@
 package com.ticketing.system.sales.domain;
-import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.identity.domain.Session;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

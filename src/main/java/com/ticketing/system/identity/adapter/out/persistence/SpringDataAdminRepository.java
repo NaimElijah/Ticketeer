@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.adapter.out.persistence;
-import com.ticketing.system.identity.application.port.out.AdminRepository;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;

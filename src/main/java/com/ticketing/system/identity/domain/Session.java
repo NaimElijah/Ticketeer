@@ -1,6 +1,4 @@
 package com.ticketing.system.identity.domain;
-import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.identity.domain.User;
 
 import java.time.Instant;
 

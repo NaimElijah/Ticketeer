@@ -1,5 +1,4 @@
 package com.ticketing.system.integration;
-import com.ticketing.system.identity.domain.Session;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;

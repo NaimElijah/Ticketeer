@@ -1,5 +1,4 @@
 package com.ticketing.system.catalog.domain;
-import com.ticketing.system.catalog.application.service.EventManagementService;
 
 /**
  * Canonical seat-row label helpers.
