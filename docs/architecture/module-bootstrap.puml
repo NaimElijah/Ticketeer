@@ -1,6 +1,6 @@
 @startuml
 set separator none
-title Platform Governance
+title Bootstrap & Composition
 
 top to bottom direction
 
@@ -10,7 +10,10 @@ top to bottom direction
 
 Container_Boundary("EventTicketSystemApplication.EventTicketSystemApplication_boundary", "EventTicketSystemApplication", $tags="") {
   Component(EventTicketSystemApplication.EventTicketSystemApplication.PlatformGovernance, "Platform Governance", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, "UI (Vaadin driving adapter)", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, "Bootstrap & Composition", $techn="Module", $descr="", $tags="", $link="")
   Component(EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "Shared Kernel", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "Notifications", $techn="Module", $descr="", $tags="", $link="")
   Component(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "Identity & Access", $techn="Module", $descr="", $tags="", $link="")
   Component(EventTicketSystemApplication.EventTicketSystemApplication.Organization, "Organization", $techn="Module", $descr="", $tags="", $link="")
   Component(EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "Catalog & Events", $techn="Module", $descr="", $tags="", $link="")
@@ -35,9 +38,29 @@ Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, Ev
 Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "uses", $techn="", $tags="", $link="")
 Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
 Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.Organization, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "uses", $techn="", $tags="", $link="")
 Rel(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.PlatformGovernance, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.Organization, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.MessagingSupport, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.BootstrapComposition, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "listens to", $techn="", $tags="", $link="")
 Rel(EventTicketSystemApplication.EventTicketSystemApplication.Organization, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
 Rel(EventTicketSystemApplication.EventTicketSystemApplication.Organization, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, "listens to", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.Organization, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.PlatformGovernance, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.MessagingSupport, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.UIVaadindrivingadapter, EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 @enduml

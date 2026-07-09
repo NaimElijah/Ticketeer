@@ -2,10 +2,22 @@
 |===
 |Base package
 |`com.ticketing.system.messaging`
+|Spring components
+|_Services_
+
+* `c.t.s.m.application.service.MessagingService`
+
+_Repositories_
+
+* `c.t.s.m.application.port.out.ConversationRepository` (via `c.t.s.m.adapter.out.persistence.JpaConversationRepository`)
+* `c.t.s.m.application.port.out.ConversationRepository` (via `c.t.s.m.adapter.out.persistence.MemoryConversationRepository`)
+* `c.t.s.m.adapter.out.persistence.SpringDataConversationRepository`
 |Bean references
 |* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
 * `c.t.s.i.application.port.out.AdminRepository` (in Identity & Access)
 * `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
 * `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
-* `c.t.s.n.application.port.in.INotificationService` (in Notifications)
+* `c.t.s.o.application.service.CompanyMembershipService` (in Organization)
+|Aggregate roots
+|* `c.t.s.m.domain.Conversation`
 |===

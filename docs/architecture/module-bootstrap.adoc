@@ -1,9 +1,19 @@
 [%autowidth.stretch, cols="h,a"]
 |===
 |Base package
-|`com.ticketing.system.Infrastructure`
+|`com.ticketing.system.bootstrap`
 |Spring components
-|* `c.t.s.I.PlatformInitializationRunner`
+|* `c.t.s.b.PlatformInitializationRunner`
+* `c.t.s.b.dev.seed.RepoCleaner` (via `c.t.s.b.dev.seed.JpaRepoCleaner`)
+* `c.t.s.b.dev.seed.RepoCleaner` (via `c.t.s.b.dev.seed.MemoryRepoCleaner`)
+* `c.t.s.b.dev.seed.scenario.ScenarioRunner`
+* `c.t.s.b.scheduling.ActiveUiRegistry`
+* `c.t.s.b.scheduling.EventCompletionSweeper`
+* `c.t.s.b.scheduling.MarketOpener`
+* `c.t.s.b.scheduling.MarketSelfHealScheduler`
+* `c.t.s.b.scheduling.NotificationPollingScheduler`
+* `c.t.s.b.scheduling.SchedulingConfig`
+* `c.t.s.b.scheduling.SessionAndOrderSweeper`
 |Bean references
 |* `c.t.s.g.application.service.SystemAdminService` (in Platform Governance)
 * `c.t.s.s.adapter.out.persistence.SpringDataTicketRepository` (in Sales & Ticketing)
@@ -28,5 +38,5 @@
 * `c.t.s.n.application.service.NotificationDispatchService` (in Notifications)
 * `c.t.s.i.application.port.out.SessionRepository` (in Identity & Access)
 * `c.t.s.s.application.port.out.ActiveOrderRepository` (in Sales & Ticketing)
-* `c.t.s.C.Application.interfaces.ISystemMetrics` (in Core)
+* `c.t.s.s.metrics.ISystemMetrics` (in Shared Kernel)
 |===

@@ -2,4 +2,37 @@
 |===
 |Base package
 |`com.ticketing.system.notifications`
+|Spring components
+|_Services_
+
+* `c.t.s.n.application.service.NotificationDispatchService`
+* `c.t.s.n.application.port.in.INotificationService` (via `c.t.s.n.application.service.NotificationService`)
+
+_Repositories_
+
+* `c.t.s.n.application.port.out.NotificationRepository` (via `c.t.s.n.adapter.out.persistence.JpaNotificationRepository`)
+* `c.t.s.n.application.port.out.NotificationRepository` (via `c.t.s.n.adapter.out.persistence.MemoryNotificationRepository`)
+* `c.t.s.n.adapter.out.persistence.SpringDataNotificationRepository`
+
+_Event listeners_
+
+* `c.t.s.n.adapter.in.event.NotificationEventListener`
+
+_Others_
+
+* `c.t.s.n.application.port.out.PushNotificationService` (via `c.t.s.n.adapter.out.push.InMemoryNotificationService`)
+|Aggregate roots
+|* `c.t.s.n.domain.Notification`
+|Events listened to
+|* `c.t.s.s.event.EventCancelledNotice` 
+* `c.t.s.s.event.ManagerRevokedNotice` 
+* `c.t.s.s.event.TicketReservationFailedNotice` 
+* `c.t.s.s.event.NewMessageNotice` 
+* `c.t.s.s.event.PurchaseFailedNotice` 
+* `c.t.s.s.event.RoleChangedNotice` 
+* `c.t.s.s.event.ReservationRemovalSucceededNotice` 
+* `c.t.s.s.event.ReservationRemovalFailedNotice` 
+* `c.t.s.s.event.OwnerAppointmentPendingNotice` 
+* `c.t.s.s.event.PurchaseCompletedNotice` 
+* `c.t.s.s.event.TicketReservationSucceededNotice` 
 |===

@@ -10,5 +10,5 @@
  * identity, organization, and notification types directly (transitional); module-boundary
  * verification is switched on at Step 10.
  */
-@org.springframework.modulith.ApplicationModule(displayName = "Messaging & Support")
+@org.springframework.modulith.ApplicationModule(displayName = "Messaging & Support", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.messaging;

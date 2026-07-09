@@ -12,5 +12,5 @@
  * <p>The Vaadin route/component scan is pinned to this package via {@code vaadin.allowed-packages} in
  * {@code application.yml}.
  */
-@org.springframework.modulith.ApplicationModule(displayName = "UI (Vaadin driving adapter)")
+@org.springframework.modulith.ApplicationModule(displayName = "UI (Vaadin driving adapter)", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.ui;

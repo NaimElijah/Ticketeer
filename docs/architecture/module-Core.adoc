@@ -1,5 +1,0 @@
-[%autowidth.stretch, cols="h,a"]
-|===
-|Base package
-|`com.ticketing.system.Core`
-|===

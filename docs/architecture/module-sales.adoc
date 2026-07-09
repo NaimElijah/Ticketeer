@@ -2,14 +2,50 @@
 |===
 |Base package
 |`com.ticketing.system.sales`
+|Spring components
+|_Services_
+
+* `c.t.s.s.application.service.CheckoutService`
+* `c.t.s.s.application.service.RefundService`
+* `c.t.s.s.application.service.ReservationService`
+
+_Repositories_
+
+* `c.t.s.s.application.port.out.ActiveOrderRepository` (via `c.t.s.s.adapter.out.persistence.JpaActiveOrderRepository`)
+* `c.t.s.s.application.port.out.OrderReceiptRepository` (via `c.t.s.s.adapter.out.persistence.JpaOrderReceiptRepository`)
+* `c.t.s.s.application.port.out.TicketRepository` (via `c.t.s.s.adapter.out.persistence.JpaTicketRepository`)
+* `c.t.s.s.application.port.out.ActiveOrderRepository` (via `c.t.s.s.adapter.out.persistence.MemoryActiveOrderRepository`)
+* `c.t.s.s.application.port.out.OrderReceiptRepository` (via `c.t.s.s.adapter.out.persistence.MemoryOrderReceiptRepository`)
+* `c.t.s.s.application.port.out.TicketRepository` (via `c.t.s.s.adapter.out.persistence.MemoryTicketRepository`)
+* `c.t.s.s.adapter.out.persistence.SpringDataActiveOrderRepository`
+* `c.t.s.s.adapter.out.persistence.SpringDataOrderReceiptRepository`
+* `c.t.s.s.adapter.out.persistence.SpringDataTicketRepository`
+
+_Event listeners_
+
+* `c.t.s.s.adapter.in.event.EventCancellationRefundListener`
+
+_Others_
+
+* `c.t.s.s.adapter.out.catalog.EventSalesHistoryAdapter`
+* `c.t.s.s.adapter.out.identity.CartRestorationAdapter`
+* `c.t.s.s.application.port.out.PaymentGateway` (via `c.t.s.s.adapter.out.wsep.StubPaymentGateway`)
+* `c.t.s.s.application.port.out.TicketIssuer` (via `c.t.s.s.adapter.out.wsep.StubTicketIssuer`)
+* `c.t.s.s.application.port.out.PaymentGateway` (via `c.t.s.s.adapter.out.wsep.WsepPaymentGateway`)
+* `c.t.s.s.application.port.out.TicketIssuer` (via `c.t.s.s.adapter.out.wsep.WsepTicketIssuer`)
+* `c.t.s.s.config.ReservationHoldConfig`
 |Bean references
-|* `c.t.s.I.external.WsepHttpClient` (in Infrastructure)
+|* `c.t.s.s.external.WsepHttpClient` (in Shared Kernel)
 * `c.t.s.c.application.port.out.EventRepository` (in Catalog & Events)
-* `c.t.s.n.application.port.in.INotificationService` (in Notifications)
 * `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
 * `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
 * `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
-* `c.t.s.g.application.service.SystemAdminService` (in Platform Governance)
 * `c.t.s.i.application.service.AuthenticationService` (in Identity & Access)
-* `c.t.s.C.Application.interfaces.ISystemMetrics` (in Core)
+* `c.t.s.s.metrics.ISystemMetrics` (in Shared Kernel)
+|Aggregate roots
+|* `c.t.s.s.domain.ActiveOrder`
+* `c.t.s.s.domain.OrderReceipt`
+* `c.t.s.s.domain.Ticket`
+|Events listened to
+|* `c.t.s.c.domain.event.EventCancelledEvent` 
 |===

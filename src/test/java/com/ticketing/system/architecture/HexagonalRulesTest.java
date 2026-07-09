@@ -19,11 +19,11 @@ import com.tngtech.archunit.core.importer.ImportOption;
  * rules silently reported zero executed tests and a deliberately-failing rule did not fail the build.
  * Plain {@code @Test} methods are guaranteed to run under Surefire and to fail on a violation.
  *
- * <p>These are the <em>cycle-independent</em> hexagonal invariants that hold across the relocated
- * modules today. Strict Spring Modulith {@code verify()} (cycle-freedom + minimal module dependencies)
- * is enabled once the deferred behavioural rewiring — inventory-ownership port, event-driven
- * notifications, governance market-gate port — breaks the intentional transitional cross-context
- * couplings.
+ * <p>Alongside the hexagonal-layering invariants, {@link #bounded_contexts_are_acyclic()} enforces
+     * that the bounded-context modules form a directed acyclic graph. This is the substantive cycle
+     * guarantee: it uses ArchUnit slices (the same cycle engine Spring Modulith uses) run directly here,
+     * so it applies even though the modules are declared <em>open</em> (open modules are exempt from
+     * Modulith's own cycle check).
  */
 class HexagonalRulesTest {
 
@@ -87,7 +87,7 @@ class HexagonalRulesTest {
      * real bytecode package dependencies, independent of Modulith's module-encapsulation model (under
      * which OPEN modules are exempt from cycle checks).
      */
-    @Disabled("Enabled once the deferred behavioural rewiring makes the bounded-context graph acyclic")
+    
     @Test
     void bounded_contexts_are_acyclic() {
         slices()

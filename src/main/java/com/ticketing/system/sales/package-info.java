@@ -16,5 +16,5 @@
  * {@code MarketGate} outbound port, which governance implements — sales no longer imports governance.
  * Module-boundary verification is switched on at Step 10.
  */
-@org.springframework.modulith.ApplicationModule(displayName = "Sales & Ticketing")
+@org.springframework.modulith.ApplicationModule(displayName = "Sales & Ticketing", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.sales;

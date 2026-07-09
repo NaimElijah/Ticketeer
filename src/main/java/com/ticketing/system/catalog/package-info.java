@@ -11,5 +11,5 @@
  * The inbound inventory command port (catalog owns reserve/release) is introduced with the sales
  * rewiring in Step 5; module-boundary verification is switched on at Step 10.
  */
-@org.springframework.modulith.ApplicationModule(displayName = "Catalog & Events")
+@org.springframework.modulith.ApplicationModule(displayName = "Catalog & Events", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.catalog;
