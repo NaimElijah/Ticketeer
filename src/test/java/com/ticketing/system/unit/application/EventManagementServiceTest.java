@@ -21,15 +21,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.catalog.domain.event.EventCancelledEvent;
+import com.ticketing.system.catalog.application.port.out.EventSalesHistoryPort;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.sales.domain.Ticket;
-import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
@@ -43,35 +43,34 @@ import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
-import com.ticketing.system.Core.Application.dto.ZoneDetailDTO;
-import com.ticketing.system.Core.Application.dto.VenueLayoutDTO;
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.EventUpdateDTO;
-import com.ticketing.system.Core.Application.dto.LocationDTO;
-import com.ticketing.system.Core.Application.dto.ShowDateDTO;
+import com.ticketing.system.shared.dto.ZoneDetailDTO;
+import com.ticketing.system.shared.dto.VenueLayoutDTO;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.EventUpdateDTO;
+import com.ticketing.system.shared.dto.LocationDTO;
+import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
 class EventManagementServiceTest {
 
         private EventRepository mockEventRepo;
         private ProductionCompanyRepository mockCompanyRepo;
-        private TicketRepository mockTicketRepo;
         private SessionManager sessionManager;
         private EventManagementService eventService;
-        private OrderReceiptRepository orderReceiptRepository;
-        private PaymentGateway paymentGateway;
+        private EventSalesHistoryPort eventSalesHistoryPort;
         private UserRepository userRepository;
-        private INotificationService notificationService;
+        // Real membership service over an in-memory appointment repo — seeds/answers company-membership
+        // permission checks now that appointments live off the User aggregate (task #20).
+        private CompanyMembershipService membershipService;
+        private ApplicationEventPublisher eventPublisher;
 
         private final String OWNER_TOKEN = "owner-token";
         private final String MANAGER_TOKEN = "manager-token";                 // CONFIGURE_VENUE manager
@@ -101,22 +100,20 @@ class EventManagementServiceTest {
         public void setUp() {
                 mockEventRepo = mock(EventRepository.class);
                 mockCompanyRepo = mock(ProductionCompanyRepository.class);
-                mockTicketRepo = mock(TicketRepository.class);
                 sessionManager = mock(SessionManager.class);
-                orderReceiptRepository = mock(OrderReceiptRepository.class);
-                paymentGateway = mock(PaymentGateway.class);
+                eventSalesHistoryPort = mock(EventSalesHistoryPort.class);
                 userRepository = mock(UserRepository.class);
-                notificationService = mock(INotificationService.class);
+                eventPublisher = mock(ApplicationEventPublisher.class);
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
 
                 eventService = new EventManagementService(
                                 mockEventRepo,
                                 mockCompanyRepo,
-                                mockTicketRepo,
                                 sessionManager,
-                                orderReceiptRepository,
-                                paymentGateway,
+                                eventSalesHistoryPort,
                                 userRepository,
-                                notificationService);
+                                membershipService,
+                                eventPublisher);
 
                 company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
                                 COMPANY_1_DESCRIPTION, 4.5);
@@ -136,17 +133,21 @@ class EventManagementServiceTest {
                                 null,
                                 new DiscountPolicy(0));
                 ownerUser = new User(OWNER_ID, "Owner Name", "owner@example.com", "hashedpassword", 50);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 managerUser = new User(MANAGER_ID, "Manager Name", "manager@example.com", "hashedpassword", 40);
-                managerUser.receiveManagerAppointment(COMPANY_ID, OWNER_ID, List.of(Permission.CONFIGURE_VENUE));
-                managerUser.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(MANAGER_ID, COMPANY_ID, OWNER_ID,
+                                List.of(Permission.CONFIGURE_VENUE));
+                membershipService.acceptInvitation(MANAGER_ID, COMPANY_ID);
                 inventoryManagerUser = new User(INVENTORY_MANAGER_ID, "Inventory Manager",
                                 "inventory@example.com", "hashedpassword", 40);
-                inventoryManagerUser.receiveManagerAppointment(COMPANY_ID, OWNER_ID,
+                membershipService.receiveManagerAppointment(INVENTORY_MANAGER_ID, COMPANY_ID, OWNER_ID,
                                 List.of(Permission.MANAGE_INVENTORY));
-                inventoryManagerUser.acceptInvitation(COMPANY_ID);
+                membershipService.acceptInvitation(INVENTORY_MANAGER_ID, COMPANY_ID);
         }
 
+        // Catalog-only happy path for cancelEventAndRefund: valid owner, event, and company. The
+        // refund/ticket/notification work now lives in the sales listener, so this no longer stubs any
+        // sales port. A real OrderReceipt is still built and returned so idempotency tests can assert on it.
         private OrderReceipt setupStateBasedHappyPath() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -159,15 +160,6 @@ class EventManagementServiceTest {
                 realReceipt.addTransaction(
                                 TransactionRecord.paymentCharge(42, "test-gateway", 100.0, "ILS",
                                                 java.time.LocalDateTime.now()));
-
-                when(paymentGateway.getId()).thenReturn("test-gateway");
-                when(paymentGateway.refund(anyInt(), anyDouble())).thenReturn(
-                                new RefundResultDTO("refund-tx-1", "99", 100.0, java.time.LocalDateTime.now(),
-                                                List.of(), List.of()));
-                when(mockTicketRepo.findByEventId(EVENT_ID)).thenReturn(List.of());
-
-                when(orderReceiptRepository.findByEventId(EVENT_ID))
-                                .thenReturn(List.of(realReceipt));
 
                 return realReceipt;
         }
@@ -218,83 +210,16 @@ class EventManagementServiceTest {
                 assertTrue(event.getStatus() == EventStatus.CANCELED);
         }
 
+        // Catalog now owns only the cancellation + hand-off: on a successful cancel it must publish an
+        // EventCancelledEvent so the sales listener runs the refund/ticket-void/notification flow. The
+        // refund/ticket/notification BEHAVIOUR is asserted in EventCancellationRefundListenerTest.
         @Test
-        public void GivenValidRequest_WhenCancelEventAndRefund_ThenReceiptStateIsMarkedRefunded() {
-                OrderReceipt realReceipt = setupStateBasedHappyPath();
-
-                eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
-
-                assertTrue(realReceipt.wasRefunded());
-        }
-
-        @Test
-        public void GivenMemberReceipts_WhenCancelEventAndRefund_ThenTicketHoldersAreNotified() {
+        public void GivenValidRequest_WhenCancelEventAndRefund_ThenEventCancelledEventIsPublished() {
                 setupStateBasedHappyPath();
 
                 eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
 
-                verify(notificationService).notifyEventCancelled(eq(OWNER_ID), eq(EVENT_ID), eq("Concert"));
-        }
-
-        @Test
-        public void GivenPaidTicket_WhenCancelEventAndRefund_ThenTicketStatusIsMarkedRefunded() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
-                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(orderReceiptRepository.findByEventId(EVENT_ID)).thenReturn(List.of());
-
-                Ticket paidTicket = new Ticket(EVENT_ID, ZONE_ID, ORDER_RECEIPT_ID, null, 100.0, 1, "BARCODE123");
-                // paidTicket.markPaid();
-                when(mockTicketRepo.findByEventId(EVENT_ID)).thenReturn(List.of(paidTicket));
-
-                eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
-
-                assertEquals(TicketStatus.REFUNDED, paidTicket.getStatus());
-        }
-
-        @Test
-        public void GivenIssuedTicket_WhenCancelEventAndRefund_ThenTicketStatusIsMarkedRefunded() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
-                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(orderReceiptRepository.findByEventId(EVENT_ID)).thenReturn(List.of());
-
-                Ticket issuedTicket = new Ticket(EVENT_ID, ZONE_ID, ORDER_RECEIPT_ID, null, 100.0, 1, "BARCODE123");
-
-                issuedTicket.markIssued("BARCODE123");
-
-                when(mockTicketRepo.findByEventId(EVENT_ID)).thenReturn(List.of(issuedTicket));
-
-                eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
-
-                assertEquals(TicketStatus.REFUNDED, issuedTicket.getStatus());
-        }
-
-        @Test
-        public void GivenAvailableTicket_WhenCancelEventAndRefund_ThenTicketStatusRemainsUnchanged() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
-                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(orderReceiptRepository.findByEventId(EVENT_ID)).thenReturn(List.of());
-
-                Ticket availableTicket = new Ticket(EVENT_ID, ZONE_ID, ORDER_RECEIPT_ID, null, 100.0, 1, "BARCODE123");
-
-                availableTicket.release();
-
-                when(mockTicketRepo.findByEventId(EVENT_ID)).thenReturn(List.of(availableTicket));
-
-                eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
-
-                assertEquals(TicketStatus.VOIDED, availableTicket.getStatus());
+                verify(eventPublisher).publishEvent(new EventCancelledEvent(EVENT_ID, "Concert"));
         }
 
         // -- UC-19: owner publishes event (SCHEDULED -> ON_SALE) -------------
@@ -591,8 +516,6 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(INVENTORY_MANAGER_ID)).thenReturn(inventoryManagerUser);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(orderReceiptRepository.findByEventId(EVENT_ID)).thenReturn(List.of());
-                when(mockTicketRepo.findByEventId(EVENT_ID)).thenReturn(List.of());
 
                 eventService.cancelEventAndRefund(MANAGE_INVENTORY_TOKEN, EVENT_ID);
 
@@ -1163,7 +1086,9 @@ class EventManagementServiceTest {
         @Test
         void GivenManagerWithoutConfigureVenuePermission_WhenGetEventZones_ThenThrowsException() {
                 String LIMITED_MANAGER_TOKEN = "limited-manager-token";
-                int LIMITED_MANAGER_ID = 3;
+                // Distinct id (INVENTORY_MANAGER_ID=3 is already seeded in setUp; appointments are now
+                // keyed by userId in a shared repo, so reusing 3 would clash with that active appointment).
+                int LIMITED_MANAGER_ID = 77;
 
                 User limitedManager = new User(
                                 LIMITED_MANAGER_ID,
@@ -1172,11 +1097,12 @@ class EventManagementServiceTest {
                                 "hashedpassword",
                                 30);
 
-                limitedManager.receiveManagerAppointment(
+                membershipService.receiveManagerAppointment(
+                                LIMITED_MANAGER_ID,
                                 COMPANY_ID,
                                 OWNER_ID,
                                 List.of(Permission.MANAGE_INVENTORY));
-                limitedManager.acceptInvitation(COMPANY_ID);
+                membershipService.acceptInvitation(LIMITED_MANAGER_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(LIMITED_MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(LIMITED_MANAGER_TOKEN)).thenReturn(LIMITED_MANAGER_ID);

@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.landing;
 
-import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
-import com.ticketing.system.Core.Application.dto.ShowDateDTO;
+import com.ticketing.system.shared.dto.EventSummaryDTO;
+import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.ui.components.buyer.BzPoster;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkIcon;

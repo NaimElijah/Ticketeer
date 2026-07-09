@@ -12,13 +12,6 @@ public interface UserRepository extends IRepository<User, Integer> {
     /** @throws com.ticketing.system.shared.exception.UserNotFoundException if no user with that id exists */
     User getUserById(int targetId);
 
-    /**
-     * Users holding a PENDING appointment (manager invitation or owner offer) in the
-     * given company. Pending appointments live on the User aggregate rather than the
-     * company, so this query backs the owner-side "pending invitations" roster (#264).
-     */
-    List<User> findUsersWithPendingAppointmentForCompany(int companyId);
-
     /** Persists changes to an existing User. */
     void updateUser(User targetUser);
 

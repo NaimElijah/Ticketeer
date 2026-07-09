@@ -10,8 +10,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
-import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
+import com.ticketing.system.shared.dto.GuestSessionDTO;
+import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.vaadin.flow.server.VaadinSession;

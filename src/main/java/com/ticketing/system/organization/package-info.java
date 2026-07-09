@@ -11,5 +11,5 @@
  * organization aggregate is a dedicated later step. This context still calls into identity and other
  * not-yet-migrated contexts directly; module-boundary verification is switched on at Step 10.
  */
-@org.springframework.modulith.ApplicationModule(displayName = "Organization")
+@org.springframework.modulith.ApplicationModule(displayName = "Organization", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.organization;

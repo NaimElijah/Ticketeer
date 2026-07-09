@@ -1,9 +1,9 @@
 package com.ticketing.system.sales.adapter.out.wsep;
 import com.ticketing.system.sales.application.service.CheckoutService;
 
-import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
+import com.ticketing.system.shared.dto.PaymentResultDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.shared.exception.IdempotencyConflictException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;

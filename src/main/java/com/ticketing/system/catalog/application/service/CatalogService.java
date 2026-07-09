@@ -1,6 +1,5 @@
 package com.ticketing.system.catalog.application.service;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.organization.application.service.CompanyRatings;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -18,16 +17,15 @@ import com.ticketing.system.shared.exception.*;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Application.dto.CompanySummaryDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
-import com.ticketing.system.Core.Application.dto.SearchResultDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapDTO;
-import com.ticketing.system.Core.Application.dtoMappers.VenueMapMapper;
-import com.ticketing.system.Core.Application.dtoMappers.EventMapper;
+import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
+import com.ticketing.system.shared.dto.CompanySummaryDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.EventSummaryDTO;
+import com.ticketing.system.shared.dto.SearchResultDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
+import com.ticketing.system.catalog.application.dtoMappers.VenueMapMapper;
+import com.ticketing.system.catalog.application.dtoMappers.EventMapper;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
@@ -48,18 +46,15 @@ public class CatalogService {
     private final SessionManager sessionManager;
     private final EventRepository eventRepository;
     private final ProductionCompanyRepository productionCompanyRepository;
-    private final TicketRepository ticketRepository;
 
     public CatalogService(
             SessionManager sessionManager,
             EventRepository eventRepository,
-            ProductionCompanyRepository productionCompanyRepository,
-            TicketRepository ticketRepository
+            ProductionCompanyRepository productionCompanyRepository
     ) {
-        this.sessionManager = sessionManager;
-        this.eventRepository = eventRepository;
-        this.productionCompanyRepository = productionCompanyRepository;
-        this.ticketRepository = ticketRepository;
+        this.sessionManager = sessionManager;                                   // read-side session/credential validation
+        this.eventRepository = eventRepository;                                 // catalog event queries
+        this.productionCompanyRepository = productionCompanyRepository;         // company visibility/rating lookups
     }
 
 

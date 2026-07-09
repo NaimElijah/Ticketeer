@@ -29,11 +29,11 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventorySelection;
-import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.interfaces.MetricType;
+import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
-import com.ticketing.system.Infrastructure.scheduling.SessionAndOrderSweeper;
+import com.ticketing.system.bootstrap.scheduling.SessionAndOrderSweeper;
 
 
 import com.ticketing.system.catalog.domain.DiscountPolicy;
@@ -41,13 +41,13 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
-import com.ticketing.system.sales.domain.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 
 class SessionAndOrderSweeperTest {
 

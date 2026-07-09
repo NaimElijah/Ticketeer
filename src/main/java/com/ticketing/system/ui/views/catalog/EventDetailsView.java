@@ -1,8 +1,8 @@
 package com.ticketing.system.ui.views.catalog;
 
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;

@@ -15,11 +15,9 @@ import com.ticketing.system.EventTicketSystemApplication;
  * lives under {@code docs/architecture}. It works regardless of the current cross-context cycles
  * (it documents the model as-is).
  *
- * <p>{@link #verifiesModuleBoundaries()} is disabled: the deliberately-preserved transitional
- * couplings (e.g. catalog&harr;sales) form dependency cycles that Modulith {@code verify()} rejects,
- * and cycles cannot be waived by declaring allowed dependencies. It is enabled once the deferred
- * behavioural rewiring — inventory-ownership port, event-driven notifications, governance market-gate
- * port — breaks those cycles.
+ * <p>{@link #verifiesModuleBoundaries()} is enabled: the bounded-context graph is acyclic. Because the
+ * modules are modelled as open, Modulith validates the module model and its cycle check here; the
+ * substantive, non-exempt cycle guarantee lives in {@code HexagonalRulesTest#bounded_contexts_are_acyclic}.
  */
 class ModularityTests {
 
@@ -32,8 +30,14 @@ class ModularityTests {
         new Documenter(modules).writeDocumentation(); // emits AsciiDoc + PlantUML under target/spring-modulith-docs
     }
 
-    /** Strict boundary verification — fails on illegal cross-module access or dependency cycles. */
-    @Disabled("Enabled after the deferred behavioural rewiring breaks the transitional cross-context cycles")
+    /**
+     * Spring Modulith boundary verification. The bounded contexts are modelled as <em>open</em>
+     * modules, so this validates the module model and the absence of cross-module cycles at the
+     * Modulith level. The substantive, non-exempt cycle guarantee is enforced separately by
+     * {@code HexagonalRulesTest#bounded_contexts_are_acyclic} (ArchUnit slices — the same engine
+     * Modulith uses, run without the open-module exemption). Full type-level encapsulation
+     * (closed modules exposing only named-interface ports) is documented future work.
+     */
     @Test
     void verifiesModuleBoundaries() {
         modules.verify();

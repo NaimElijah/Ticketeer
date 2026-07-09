@@ -10,5 +10,5 @@
  * Spring Modulith module (depended on by everyone, depending on nothing) once boundary verification
  * is switched on at Step 10.
  */
-@org.springframework.modulith.ApplicationModule(displayName = "Shared Kernel")
+@org.springframework.modulith.ApplicationModule(displayName = "Shared Kernel", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.shared;

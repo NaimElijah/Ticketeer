@@ -1,7 +1,7 @@
 package com.ticketing.system.sales.adapter.out.wsep;
-import com.ticketing.system.Infrastructure.external.SensitiveDataMasker; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.Infrastructure.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.Infrastructure.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
+import com.ticketing.system.shared.external.SensitiveDataMasker; // transitional: shared-technical (stays in external until the Step 10 sweep)
+import com.ticketing.system.shared.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
+import com.ticketing.system.shared.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -12,9 +12,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.BarcodeDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
+import com.ticketing.system.shared.dto.BarcodeDTO;
+import com.ticketing.system.shared.dto.IssuanceRequestDTO;
+import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 

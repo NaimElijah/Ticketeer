@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.PurchaseCompletedNotice;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
@@ -8,13 +9,14 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
-import com.ticketing.system.Core.Application.dto.*;
-import com.ticketing.system.Core.Application.interfaces.*;
+import com.ticketing.system.shared.dto.*;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.catalog.application.service.InventoryService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.sales.domain.*;
 import com.ticketing.system.sales.domain.*;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -48,12 +50,12 @@ public class CheckoutServiceAcceptanceTest {
     private OrderReceiptRepository orderReceiptRepository;
     private TicketIssuer ticketIssuer;
     private PaymentGateway paymentGateway;
-    private INotificationService notificationService;
+    private ApplicationEventPublisher eventPublisher;
     private SessionManager sessionManager;
     private UserRepository userRepository;
 
     private CheckoutService checkoutService;
-    private SystemAdminService systemAdminService;
+    private MarketGate marketGate;
 
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
@@ -110,24 +112,28 @@ public class CheckoutServiceAcceptanceTest {
 
         ticketIssuer = mock(TicketIssuer.class);
         paymentGateway = mock(PaymentGateway.class);
-        notificationService = mock(INotificationService.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
         sessionManager = mock(SessionManager.class);
 
-        systemAdminService = mock(SystemAdminService.class);
-        when(systemAdminService.isMarketOpen()).thenReturn(true);
+        marketGate = mock(MarketGate.class);
+        when(marketGate.isOpen()).thenReturn(true);
 
+        // Catalog owns inventory mutation behind InventoryCommandPort. Wire the real InventoryService
+        // onto the same mock event store (+ mock company port) so the existing event/zone/seat stubs
+        // drive confirm/validate/price/policy a layer down; CheckoutService keeps eventRepository for
+        // the Phase-3 buyer-lock.
         checkoutService = new CheckoutService(
                 activeOrderRepository,
                 eventRepository,
+                new InventoryService(eventRepository, companyRepository),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
                 paymentGateway,
-                notificationService,
+                eventPublisher,
                 sessionManager,
                 userRepository,
-                companyRepository,
-                systemAdminService,
+                marketGate,
                 TestTransactions.noOpManager()
         );
 
@@ -686,8 +692,8 @@ public class CheckoutServiceAcceptanceTest {
         validPaymentAndIssuance(1);
 
         doThrow(new RuntimeException("notify failed"))
-                .when(notificationService)
-                .notifyPurchaseCompleted(anyInt(), anyDouble(), anyList());
+                .when(eventPublisher)
+                .publishEvent(any(PurchaseCompletedNotice.class));
 
         RuntimeException exception = assertThrows(RuntimeException.class,
                 () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
@@ -902,7 +908,7 @@ public class CheckoutServiceAcceptanceTest {
         doAnswer(invocation -> {
             userNotified.set(true);
             return null;
-        }).when(notificationService).notifyPurchaseCompleted(anyInt(), anyDouble(), anyList());
+        }).when(eventPublisher).publishEvent(any(PurchaseCompletedNotice.class));
 
         ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
@@ -927,15 +933,15 @@ public class CheckoutServiceAcceptanceTest {
         return new CheckoutService(
                 realRepo,
                 eventRepository,
+                new InventoryService(eventRepository, companyRepository),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
                 paymentGateway,
-                notificationService,
+                eventPublisher,
                 sessionManager,
                 userRepository,
-                companyRepository,
-                systemAdminService,
+                marketGate,
                 TestTransactions.noOpManager()
         );
     }

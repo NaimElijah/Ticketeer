@@ -4,8 +4,8 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import java.util.Comparator;
 import java.util.List;
 
-import com.ticketing.system.Core.Application.dto.MemberDTO;
-import com.ticketing.system.Core.Application.dto.MemberSearchResultDTO;
+import com.ticketing.system.shared.dto.MemberDTO;
+import com.ticketing.system.shared.dto.MemberSearchResultDTO;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import org.springframework.stereotype.Service;

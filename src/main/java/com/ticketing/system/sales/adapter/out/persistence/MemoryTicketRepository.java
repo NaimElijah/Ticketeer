@@ -1,10 +1,9 @@
 package com.ticketing.system.sales.adapter.out.persistence;
-import com.ticketing.system.identity.application.service.MemberAccountService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

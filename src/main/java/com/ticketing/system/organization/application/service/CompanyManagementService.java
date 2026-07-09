@@ -7,23 +7,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
-import com.ticketing.system.Core.Application.dto.AppointmentInfoDTO;
-import com.ticketing.system.Core.Application.dto.InvitationDTO;
-import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
-import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
-import com.ticketing.system.Core.Application.dto.OwnerAppointmentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PermissionEditDTO;
-import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
-import com.ticketing.system.Core.Application.dto.CompanyPolicyConfigDTO;
-import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.dtoMappers.AppointmentInfoMapper;
-import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
+import com.ticketing.system.shared.dto.AppointmentInfoDTO;
+import com.ticketing.system.shared.dto.InvitationDTO;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
+import com.ticketing.system.organization.application.dto.PermissionEditDTO;
+import com.ticketing.system.shared.dto.AppointmentResponseDTO;
+import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
+import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
+import com.ticketing.system.organization.application.dtoMappers.AppointmentInfoMapper;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -33,32 +30,30 @@ import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.sales.domain.Ticket;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.domain.EventStatus;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
-import com.ticketing.system.Core.Domain.users.AppointmentStatus;
-import com.ticketing.system.Core.Domain.users.CompanyAppointment;
-import com.ticketing.system.Core.Domain.users.CompanyRole;
+import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
+import com.ticketing.system.organization.domain.AppointmentStatus;
+import com.ticketing.system.organization.domain.CompanyAppointment;
+import com.ticketing.system.organization.domain.CompanyRole;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ManagerRevokedNotice;
+import com.ticketing.system.shared.event.OwnerAppointmentPendingNotice;
+import com.ticketing.system.shared.event.RoleChangedNotice;
 
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 
-import com.ticketing.system.Core.Application.dto.PurchasePolicyDTO;
-import com.ticketing.system.sales.domain.PurchasePolicy;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
-import com.ticketing.system.sales.domain.AgePurchasePolicy;
-import com.ticketing.system.sales.domain.AndPurchasePolicy;
-import com.ticketing.system.sales.domain.OrPurchasePolicy;
-import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
-import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,23 +63,27 @@ import org.springframework.transaction.annotation.Transactional;
 public class CompanyManagementService {
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
-    private final OrderReceiptRepository orderReceiptRepository;
     private final SessionManager sessionManager;
-    private final TicketRepository ticketRepository;
-    private final EventRepository eventRepository;
-    private final INotificationService notificationService;
+    // Outbound port to catalog's active-event count — organization asks through this port instead of
+    // importing any catalog type (keeps organization strictly below catalog in the dependency graph).
+    private final CompanyEventStatsPort companyEventStatsPort;
+    // Owns the appointment (company-membership) lifecycle since it was promoted off the User aggregate
+    // (task #20). All appointment reads/writes below delegate here instead of walking user.companyAppointments.
+    private final CompanyMembershipService companyMembershipService;
+    // Publisher for cross-context integration events (role-change / appointment notices); the
+    // notifications context listens for these instead of organization calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
 
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
-            OrderReceiptRepository orderReceiptRepository, SessionManager sessionManager,
-            TicketRepository ticketRepository, EventRepository eventRepository,
-            INotificationService notificationService) {
+            SessionManager sessionManager, CompanyEventStatsPort companyEventStatsPort,
+            CompanyMembershipService companyMembershipService,
+            ApplicationEventPublisher eventPublisher) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
-        this.orderReceiptRepository = orderReceiptRepository;
         this.sessionManager = sessionManager;
-        this.ticketRepository = ticketRepository;
-        this.eventRepository = eventRepository;
-        this.notificationService = notificationService;
+        this.companyEventStatsPort = companyEventStatsPort;
+        this.companyMembershipService = companyMembershipService;
+        this.eventPublisher = eventPublisher;
     }
 
     // UC-23 — Owner appoints another Member as co-Owner (PENDING).
@@ -106,18 +105,19 @@ public class CompanyManagementService {
             throw e;
         }
 
-        appointer.requireOwnerInCompany(request.companyId()); // check if appointer has permissions
-        targetUser.receiveOwnerAppointment(request.companyId(), appointerId); // target user receives pending owner
-                                                                              // appointment, here we'll do logic
-                                                                              // checks.
-
-        userRepository.updateUser(targetUser); // update target user with new appointment
+        companyMembershipService.requireOwnerInCompany(appointerId, request.companyId()); // appointer must be an owner
+        if (appointer == null || targetUser == null) { // appointee/appointer must be real users
+            throw new UserNotFoundException();
+        }
+        // Target user receives a pending owner appointment (all logic checks + persistence happen inside).
+        companyMembershipService.receiveOwnerAppointment(request.targetUserId(), request.companyId(), appointerId);
 
         // Notify target user
         try {
             ProductionCompany company = companyRepository.getCompanyById(request.companyId());
-            notificationService.notifyOwnerAppointmentPending(request.targetUserId(), request.companyId(),
-                    company.getName());
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new OwnerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
+                    company.getName()));
         } catch (Exception e) {
             log.warn("Owner appointment created but notification failed for userId={}", request.targetUserId(), e);
         }
@@ -136,16 +136,21 @@ public class CompanyManagementService {
         int ownerId = authenticate(token);
         User owner = userRepository.getUserById(ownerId);
         User targetUser = userRepository.getUserById(request.targetUserId());
-        owner.requireOwnerInCompany(request.companyId());
+        companyMembershipService.requireOwnerInCompany(ownerId, request.companyId()); // appointer must be an owner
+        if (owner == null || targetUser == null) { // appointee/appointer must be real users
+            throw new UserNotFoundException();
+        }
 
-        targetUser.receiveManagerAppointment(request.companyId(), ownerId, request.permissions());
-        userRepository.updateUser(targetUser);
+        // Target user receives a pending manager appointment (checks + persistence happen inside).
+        companyMembershipService.receiveManagerAppointment(
+                request.targetUserId(), request.companyId(), ownerId, request.permissions());
 
         // Notify target user
         try {
             ProductionCompany company = companyRepository.getCompanyById(request.companyId());
-            notificationService.notifyRoleChanged(request.targetUserId(), request.companyId(), company.getName(),
-                    "MANAGER");
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new RoleChangedNotice(request.targetUserId(), request.companyId(),
+                    company.getName(), "MANAGER"));
         } catch (Exception e) {
             log.warn("Manager appointment created but notification failed for userId={}", request.targetUserId(), e);
         }
@@ -165,13 +170,19 @@ public class CompanyManagementService {
 
         int userId = authenticate(token);
         User user = userRepository.getUserById(userId);
+        if (user == null) { // caller must be a real user
+            throw new UserNotFoundException();
+        }
         ProductionCompany company = companyRepository.getCompanyById(response.companyId());
+        if (company == null) { // the company must exist
+            throw new CompanyNotFoundException();
+        }
 
         CompanyAppointment appointment;
 
         if (response.accept()) {
-            appointment = user.acceptInvitation(response.companyId()); // transitions the pending appointment to
-                                                                       // accepted state
+            // Transitions the pending appointment to ACTIVE (and persists it via the appointment repo).
+            appointment = companyMembershipService.acceptInvitation(userId, response.companyId());
             if (appointment.getRole() == CompanyRole.Owner) {
                 company.addOwner(appointment.getInviterId(), userId);
             } else if (appointment.getRole() == CompanyRole.Manager) {
@@ -181,17 +192,18 @@ public class CompanyManagementService {
 
             // Notify of role change to final role
             try {
-                notificationService.notifyRoleChanged(userId, response.companyId(), company.getName(),
-                        appointment.getRole().name());
+                // Publish a cross-context integration event; the notifications listener delivers it in-line.
+                eventPublisher.publishEvent(new RoleChangedNotice(userId, response.companyId(), company.getName(),
+                        appointment.getRole().name()));
             } catch (Exception e) {
                 log.warn("Appointment accepted but notification failed for userId={}", userId, e);
             }
         } else {
-            user.rejectInvitation(response.companyId()); // transitions the pending appointment to rejected state,
-                                                         // status-based lookups will no longer return it.
+            // Transitions the pending appointment to REJECTED (persisted via the appointment repo);
+            // status-based lookups will no longer return it.
+            companyMembershipService.rejectInvitation(userId, response.companyId());
             log.info("Appointment rejected: userId={}, companyId={}", userId, response.companyId());
         }
-        userRepository.updateUser(user);
         companyRepository.updateCompany(company);
     }
 
@@ -207,21 +219,25 @@ public class CompanyManagementService {
             log.warn("Manager not found during permission edit: {}", e.getMessage());
             throw e;
         }
+        if (manager == null) { // target manager must be a real user
+            throw new UserNotFoundException();
+        }
 
         if (edit.newPermissions() == null || edit.newPermissions().isEmpty()) {
             log.warn("Invalid permission edit: newPermissions list cannot be null or empty");
             throw new IllegalArgumentException("Manager role must have at least one permission");
         }
 
-        manager.ModifyManagerPermissions(edit.companyId(), ownerId, edit.newPermissions()); // checks done in here.
-
-        userRepository.updateUser(manager);
+        // Only the original appointer may edit; role/status checks + persistence happen inside.
+        companyMembershipService.modifyManagerPermissions(edit.targetUserId(), edit.companyId(), ownerId,
+                edit.newPermissions());
 
         // Notify manager of permission change
         try {
             ProductionCompany company = companyRepository.getCompanyById(edit.companyId());
-            notificationService.notifyRoleChanged(edit.targetUserId(), edit.companyId(), company.getName(),
-                    "MANAGER (permissions updated)");
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new RoleChangedNotice(edit.targetUserId(), edit.companyId(),
+                    company.getName(), "MANAGER (permissions updated)"));
         } catch (Exception e) {
             log.warn("Manager permissions updated but notification failed for userId={}", edit.targetUserId(), e);
         }
@@ -234,7 +250,7 @@ public class CompanyManagementService {
     public void RevokeAppointment(String token, AppointmentRevokeDTO revokeRequest) {
         int ownerId = authenticate(token);
         ProductionCompany company = companyRepository.getCompanyById(revokeRequest.companyId());
-        User targetUser = userRepository.getUserById(revokeRequest.targetUserId());
+        userRepository.getUserById(revokeRequest.targetUserId()); // existence check (throws if the target is unknown)
 
         if (company.getFounderId() == revokeRequest.targetUserId()) {
             log.warn("Cannot revoke appointment: target user {} is the founder of company {}",
@@ -242,16 +258,17 @@ public class CompanyManagementService {
             throw new UnauthorizedActionException("revoke the appointment of a company founder");
         }
 
-        targetUser.revokeAppointment(revokeRequest.companyId(), ownerId); // checks done in here.
+        // Revoke the target's active appointment (revoke-rights checks + persistence happen inside).
+        companyMembershipService.revokeAppointment(revokeRequest.targetUserId(), revokeRequest.companyId(), ownerId);
         company.RevokeAppointment(revokeRequest.targetUserId());
 
-        userRepository.updateUser(targetUser);
         companyRepository.updateCompany(company);
 
         // Notify user of revocation
         try {
-            notificationService.notifyManagerRevoked(revokeRequest.targetUserId(), revokeRequest.companyId(),
-                    company.getName());
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new ManagerRevokedNotice(revokeRequest.targetUserId(),
+                    revokeRequest.companyId(), company.getName()));
         } catch (Exception e) {
             log.warn("Role revoked but notification failed for userId={}", revokeRequest.targetUserId(), e);
         }
@@ -292,13 +309,13 @@ public class CompanyManagementService {
         if (requester == null) {
             throw new UserNotFoundException();
         }
-        requester.requireOwnerInCompany(companyId);
+        companyMembershipService.requireOwnerInCompany(requesterId, companyId);
 
         AppointmentInfoMapper mapper = new AppointmentInfoMapper();
         List<AppointmentInfoDTO> managers = new ArrayList<>();
         for (Integer managerId : company.getManagers()) {
             User manager = userRepository.getUserById(managerId);
-            CompanyAppointment appt = manager.getActiveCompanyAppointment(companyId);
+            CompanyAppointment appt = companyMembershipService.getActiveCompanyAppointment(managerId, companyId);
             if (appt != null) {
                 managers.add(mapper.toDTO(appt, manager.getUsername(), company.getName()));
             }
@@ -319,15 +336,13 @@ public class CompanyManagementService {
         if (requester == null) {
             throw new UserNotFoundException();
         }
-        requester.requireOwnerInCompany(companyId);
+        companyMembershipService.requireOwnerInCompany(requesterId, companyId);
 
         AppointmentInfoMapper mapper = new AppointmentInfoMapper();
         List<AppointmentInfoDTO> pending = new ArrayList<>();
-        for (User invitee : userRepository.findUsersWithPendingAppointmentForCompany(companyId)) {
-            CompanyAppointment appt = invitee.getPendingCompanyAppointment(companyId);
-            if (appt != null) {
-                pending.add(mapper.toDTO(appt, invitee.getUsername(), company.getName()));
-            }
+        for (CompanyAppointment appt : companyMembershipService.findPendingAppointmentsForCompany(companyId)) {
+            User invitee = userRepository.getUserById(appt.getTargetId());
+            pending.add(mapper.toDTO(appt, invitee.getUsername(), company.getName()));
         }
         log.info("Listed {} pending invitations for company {}", pending.size(), companyId);
         return pending;
@@ -346,7 +361,7 @@ public class CompanyManagementService {
         }
 
         List<ProductionCompanyDTO> owned = new ArrayList<>();
-        for (CompanyAppointment appt : user.getAllCompanyAppointments()) {
+        for (CompanyAppointment appt : companyMembershipService.getAllCompanyAppointments(userId)) {
             if (appt.getRole() == CompanyRole.Owner && appt.getStatus() == AppointmentStatus.ACTIVE) {
                 ProductionCompany company = companyRepository.getCompanyById(appt.getCompanyId());
                 if (company != null) {
@@ -380,7 +395,7 @@ public class CompanyManagementService {
         }
 
         List<MyCompanyDTO> companies = new ArrayList<>();
-        for (CompanyAppointment appt : user.getAllCompanyAppointments()) {
+        for (CompanyAppointment appt : companyMembershipService.getAllCompanyAppointments(userId)) {
             if (appt.getStatus() != AppointmentStatus.ACTIVE) {
                 continue;
             }
@@ -416,7 +431,7 @@ public class CompanyManagementService {
         }
 
         List<InvitationDTO> invitations = new ArrayList<>();
-        for (CompanyAppointment appt : user.getAllCompanyAppointments()) {
+        for (CompanyAppointment appt : companyMembershipService.getAllCompanyAppointments(userId)) {
             ProductionCompany company = companyRepository.getCompanyById(appt.getCompanyId());
             String companyName = company != null ? company.getName() : "(unknown company)";
             // getUserById throws (never returns null) when the inviter no longer
@@ -452,9 +467,7 @@ public class CompanyManagementService {
     @Transactional
     public ProductionCompanyDTO registerCompany(String token, CompanyRegistrationDTO request) {
         int userId = authenticate(token);
-        User user = userRepository.getUserById(userId);
-
-     
+        userRepository.getUserById(userId); // existence check (throws if the caller is unknown)
 
         // CompanyRegistrationDTO is a class with get* accessors, not a record.
         if (request.getName() == null || request.getName().trim().isEmpty() ||
@@ -482,8 +495,8 @@ public class CompanyManagementService {
             // ProductionCompanyRepository.save returns void; the new instance IS the saved
             // one.
             companyRepository.save(newProductionCompany);
-            user.addFounderAppointment(companyId);
-            userRepository.updateUser(user);
+            // Founder receives an immediately-active owner appointment (created + persisted here).
+            companyMembershipService.addFounderAppointment(userId, companyId);
             log.info("Successfully registered new company: '{}' by userId: {}", newProductionCompany.getName(), userId);
 
             return new ProductionCompanyDTO(
@@ -516,72 +529,11 @@ public class CompanyManagementService {
         if (user == null) {
             throw new UserNotFoundException();
         }
-        user.requirePermissionInCompany(config.companyId(), Permission.EDIT_POLICIES);
+        companyMembershipService.requirePermissionInCompany(userId, config.companyId(), Permission.EDIT_POLICIES);
         PurchasePolicy policy = buildPurchasePolicyFromDTO(config.defaultPurchasePolicy());
         company.setPurchasePolicy(policy);
         companyRepository.save(company);
         log.info("Purchase policy updated for company {} by user {}", config.companyId(), userId);
-    }
-
-    // UC-22 — Owner-side flat list of company sales.
-    // this function returns a list of PurchaseHistoryDTO, each containing a single
-    // PurchaseRecordDTO, which represents a single OrderReceipt that has
-    // at least one ticket for an event of this company. The PurchaseRecordDTO
-    // contains a list of TicketRecordDTOs, but only those that are
-    // for events of this company (the rest are filtered out). This way we return
-    // the full receipt details for each relevant purchase, but only
-    // include the tickets that are relevant to this company's sales history.
-    @Transactional(readOnly = true)
-    public List<PurchaseHistoryDTO> viewSalesHistory(String token, int companyId) {
-        log.info("Attempting to view sales history for company {}", companyId);
-
-        int requesterId = authenticate(token);
-        ProductionCompany company = companyRepository.getCompanyById(companyId);
-        if (company == null) {
-            log.warn("Company {} not found", companyId);
-            throw new CompanyNotFoundException();
-        }
-
-        User currUser = userRepository.getUserById(requesterId);
-        if (currUser == null) {
-            log.warn("User {} not found", requesterId);
-            throw new UserNotFoundException();
-        }
-        if (!currUser.hasPermissionInCompany(companyId, Permission.VIEW_SALES)) {
-            log.warn("User {} does not have permission to view sales history for company {}", requesterId, companyId);
-            throw new UnauthorizedActionException("view this company's data");
-        }
-
-        List<Integer> companyEventIds = eventRepository.findIdsByCompany(companyId);
-
-        if (companyEventIds == null || companyEventIds.isEmpty()) {
-            return List.of();
-        }
-
-        Set<Integer> companyEventIdSet = Set.copyOf(companyEventIds);
-        OrderReceiptMapper mapper = new OrderReceiptMapper();
-
-        // The repository method finds all receipts that have at least one ticket for
-        // the company's events.
-        List<PurchaseHistoryDTO> salesHistory = this.orderReceiptRepository.findByEventIds(companyEventIds).stream()
-                .map(receipt -> {
-                    List<Ticket> companyTickets = ticketRepository.findByOrderReceiptId(receipt.getId()).stream()
-                            .filter(ticket -> companyEventIdSet.contains(ticket.getEventId()))
-                            .toList();
-
-                    return new PurchaseHistoryDTO(List.of(mapper.toPurchaseRecordDTO(
-                            receipt, companyTickets, eventRepository, companyRepository, userRepository)));
-                    // use overloaded mapper to pass the filtered list of tickets for richer DTO
-                    // construction without bloating service logic
-                }).toList();
-
-        // This is the correct responsibility split.
-        // The repository finds receipts related to company events.
-        // The service filters the tickets to only this company’s events.
-        // The mapper maps the receipt and the selected tickets into DTOs.
-
-        log.info("Successfully retrieved sales history for company {}", companyId);
-        return salesHistory;
     }
 
     // UC-25 — recursive organizational tree (Owners only per II.4.15).
@@ -601,7 +553,7 @@ public class CompanyManagementService {
             log.warn("User {} not found", requesterId);
             throw new UserNotFoundException();
         }
-        if (!currUser.isOwnerInCompany(companyId)) {
+        if (!companyMembershipService.isOwnerInCompany(requesterId, companyId)) {
             log.warn("User {} does not have permission to view organizational tree for company {}, he's not an owner",
                     requesterId,
                     companyId);
@@ -662,7 +614,7 @@ public class CompanyManagementService {
         // children yet.
         for (Integer memberId : members) {
             User memberUser = userRepository.getUserById(memberId);
-            CompanyAppointment appt = memberUser.getActiveCompanyAppointment(companyId);
+            CompanyAppointment appt = companyMembershipService.getActiveCompanyAppointment(memberId, companyId);
 
             OrganizationalTreeNodeDTO node = new OrganizationalTreeNodeDTO(
                     memberId,
@@ -680,8 +632,7 @@ public class CompanyManagementService {
         for (Integer memberId : members) {
             if (memberId == founderId)
                 continue; // skip founder, they have no appointer
-            User memberUser = userRepository.getUserById(memberId);
-            CompanyAppointment appt = memberUser.getActiveCompanyAppointment(companyId);
+            CompanyAppointment appt = companyMembershipService.getActiveCompanyAppointment(memberId, companyId);
             OrganizationalTreeNodeDTO node = userIdToNodeMap.get(memberId);
             OrganizationalTreeNodeDTO inviterNode = userIdToNodeMap.get(appt.getInviterId());
             inviterNode.appointedByThisUser().add(node);
@@ -698,7 +649,7 @@ public class CompanyManagementService {
             throw new UserNotFoundException();
         }
         List<UserCompanyDTO> memberships = new ArrayList<>();
-        for (CompanyAppointment appointment : user.getAllCompanyAppointments()) {
+        for (CompanyAppointment appointment : companyMembershipService.getAllCompanyAppointments(userId)) {
             if (appointment.getStatus() != AppointmentStatus.ACTIVE) {
                 continue;
             }
@@ -720,7 +671,7 @@ public class CompanyManagementService {
         if (user == null) {
             throw new UserNotFoundException();
         }
-        CompanyAppointment appointment = user.getActiveCompanyAppointment(companyId);
+        CompanyAppointment appointment = companyMembershipService.getActiveCompanyAppointment(userId, companyId);
         return appointment != null && appointment.getRole() == CompanyRole.Owner;
     }
 
@@ -736,7 +687,8 @@ public class CompanyManagementService {
                 displayRole(userId, appointment, company),
                 company.getStatus().name(),
                 company.getOwnersIds().size() + company.getManagers().size(),
-                countActiveEvents(company.getCompanyId()),
+                // Active-event count comes from catalog via the outbound port (no catalog import here).
+                companyEventStatsPort.countActiveEvents(company.getCompanyId()),
                 managerPermissions);
     }
 
@@ -748,17 +700,6 @@ public class CompanyManagementService {
         if (appointment.getRole() == CompanyRole.Manager)
             return "Manager";
         return appointment.getRole().name();
-    }
-
-    private int countActiveEvents(int companyId) {
-        int count = 0;
-        for (Event event : eventRepository.findByCompanyId(companyId)) {
-            EventStatus status = event.getStatus();
-            if (status == EventStatus.ON_SALE || status == EventStatus.SCHEDULED || status == EventStatus.SOLD_OUT) {
-                count++;
-            }
-        }
-        return count;
     }
 
     private int authenticate(String token) {
@@ -816,7 +757,7 @@ public class CompanyManagementService {
         User user = userRepository.getUserById(userId);
         if (user == null)
             throw new UserNotFoundException();
-        user.requirePermissionInCompany(companyId, Permission.EDIT_POLICIES);
+        companyMembershipService.requirePermissionInCompany(userId, companyId, Permission.EDIT_POLICIES);
         return policyToDTO(company.getPurchasePolicy());
     }
 

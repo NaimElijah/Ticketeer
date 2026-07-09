@@ -1,5 +1,4 @@
 package com.ticketing.system.unit.domain;
-import com.ticketing.system.organization.application.service.CompanyRatings;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -15,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.support.BaseDomainTest;
 
 class ProductionCompanyTest extends BaseDomainTest {

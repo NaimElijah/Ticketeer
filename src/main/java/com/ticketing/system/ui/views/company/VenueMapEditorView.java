@@ -1,8 +1,8 @@
 package com.ticketing.system.ui.views.company;
 
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Application.dto.ZoneDetailDTO;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO;
+import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.catalog.domain.SeatLabels;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;

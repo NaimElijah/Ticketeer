@@ -2,6 +2,16 @@
 |===
 |Base package
 |`com.ticketing.system.governance`
+|Spring components
+|_Services_
+
+* `c.t.s.g.application.service.SystemAdminService`
+* `c.t.s.g.application.service.SystemAnalyticsService`
+* `c.t.s.g.application.service.SystemIntegrityVerifier`
+
+_Others_
+
+* `c.t.s.g.adapter.out.MarketGateAdapter`
 |Bean references
 |* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
 * `c.t.s.i.application.port.out.AdminRepository` (in Identity & Access)
@@ -11,7 +21,7 @@
 * `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
 * `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
 * `c.t.s.i.application.port.out.PasswordHasher` (in Identity & Access)
-* `c.t.s.C.Application.interfaces.ISystemMetrics` (in Core)
+* `c.t.s.s.metrics.ISystemMetrics` (in Shared Kernel)
 * `c.t.s.m.application.port.out.ConversationRepository` (in Messaging & Support)
 * `c.t.s.s.application.port.out.ActiveOrderRepository` (in Sales & Ticketing)
 |===

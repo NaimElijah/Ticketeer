@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.TicketRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 
 /**
  * Refund-aware headline figures for the Company Sales History page, derived from the order

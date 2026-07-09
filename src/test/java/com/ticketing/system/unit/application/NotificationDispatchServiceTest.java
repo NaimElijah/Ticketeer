@@ -17,7 +17,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.NotificationDTO;
+import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.notifications.application.port.out.PushNotificationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;

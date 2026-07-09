@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.security;
 
-import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
+import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.session.GuestSession;
 import com.vaadin.flow.server.ServiceInitEvent;

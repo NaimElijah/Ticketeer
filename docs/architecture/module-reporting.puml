@@ -1,0 +1,43 @@
+@startuml
+set separator none
+title Reporting & Analytics
+
+top to bottom direction
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+Container_Boundary("EventTicketSystemApplication.EventTicketSystemApplication_boundary", "EventTicketSystemApplication", $tags="") {
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.ReportingAnalytics, "Reporting & Analytics", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "Shared Kernel", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "Identity & Access", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.Organization, "Organization", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "Catalog & Events", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.MessagingSupport, "Messaging & Support", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, "Sales & Ticketing", $techn="Module", $descr="", $tags="", $link="")
+}
+
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, EventTicketSystemApplication.EventTicketSystemApplication.Organization, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.MessagingSupport, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.MessagingSupport, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.MessagingSupport, EventTicketSystemApplication.EventTicketSystemApplication.Organization, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "listens to", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, EventTicketSystemApplication.EventTicketSystemApplication.Organization, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Organization, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Organization, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.ReportingAnalytics, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "depends on", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.ReportingAnalytics, EventTicketSystemApplication.EventTicketSystemApplication.CatalogEvents, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.ReportingAnalytics, EventTicketSystemApplication.EventTicketSystemApplication.SalesTicketing, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.ReportingAnalytics, EventTicketSystemApplication.EventTicketSystemApplication.MessagingSupport, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.ReportingAnalytics, EventTicketSystemApplication.EventTicketSystemApplication.Organization, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.ReportingAnalytics, EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "uses", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+@enduml

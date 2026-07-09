@@ -4,7 +4,7 @@ import com.ticketing.system.catalog.domain.Event;
 
 import java.util.List;
 
-import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
+import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.shared.IRepository;
 
 // Aggregate-root entry point for the Event aggregate.

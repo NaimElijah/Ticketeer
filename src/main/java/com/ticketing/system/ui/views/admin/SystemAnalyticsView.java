@@ -1,8 +1,8 @@
 package com.ticketing.system.ui.views.admin;
 import com.ticketing.system.identity.domain.Admin;
 
-import com.ticketing.system.Core.Application.dto.MarketStateDTO;
-import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
+import com.ticketing.system.shared.dto.MarketStateDTO;
+import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;

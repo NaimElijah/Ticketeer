@@ -1,16 +1,18 @@
 package com.ticketing.system.unit.application;
 
-import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.shared.dto.ReservationResultDTO;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
+import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
@@ -25,6 +27,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -36,8 +40,8 @@ import java.util.List;
 
 import org.mockito.ArgumentCaptor;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -50,16 +54,16 @@ import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
-import com.ticketing.system.sales.domain.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 
 public class ReservationServiceTest {
 
     private EventRepository eventRepository;
     private ActiveOrderRepository activeOrderRepository;
     private SessionManager sessionManager;
-    private INotificationService notificationService;
-    private SystemAdminService systemAdminService;
+    private ApplicationEventPublisher eventPublisher;
+    private MarketGate marketGate;
 
     private ReservationService reservationService;
 
@@ -78,23 +82,28 @@ public class ReservationServiceTest {
         eventRepository = mock(EventRepository.class);
         activeOrderRepository = mock(ActiveOrderRepository.class);
         sessionManager = mock(SessionManager.class);
-        notificationService = mock(INotificationService.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
 
         event = mock(Event.class, RETURNS_DEEP_STUBS);
         zone = mock(InventoryZone.class);
         activeOrder = mock(ActiveOrder.class);
 
-        systemAdminService = mock(SystemAdminService.class);
-        when(systemAdminService.isMarketOpen()).thenReturn(true);
+        marketGate = mock(MarketGate.class);
+        when(marketGate.isOpen()).thenReturn(true);
 
+        // Catalog now owns inventory mutation behind InventoryCommandPort. We wire the REAL
+        // InventoryService onto the SAME mock event store (and a mock company port for policy), so every
+        // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
+        // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
+        InventoryService inventoryService = new InventoryService(
+                eventRepository, mock(ProductionCompanyRepository.class));
         reservationService = new ReservationService(
-                eventRepository,
+                inventoryService,
                 activeOrderRepository,
                 sessionManager,
-                notificationService,
-                mock(ProductionCompanyRepository.class),
+                eventPublisher,
                 mock(UserRepository.class),
-                systemAdminService,
+                marketGate,
                 mock(ISystemMetrics.class)
         );
     }
@@ -105,7 +114,7 @@ public class ReservationServiceTest {
     void GivenMarketClosed_WhenReserveForMember_ThenThrows() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(systemAdminService.isMarketOpen()).thenReturn(false);
+        when(marketGate.isOpen()).thenReturn(false);
 
         assertThrows(MarketNotOpenException.class,
                 () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
@@ -194,7 +203,7 @@ public class ReservationServiceTest {
 
         doThrow(new IllegalArgumentException("Active order does not contain this event"))
                 .when(activeOrder)
-                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), any(InventorySelection.class));
+                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), anyInt(), anyList());
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -212,7 +221,7 @@ public class ReservationServiceTest {
 
         doThrow(new IllegalArgumentException("Not enough reserved tickets to remove"))
                 .when(activeOrder)
-                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), any(InventorySelection.class));
+                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), anyInt(), anyList());
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -1034,12 +1043,12 @@ public class ReservationServiceTest {
                 ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
 
-        org.mockito.InOrder inOrder = inOrder(eventRepository, activeOrderRepository, notificationService);
+        org.mockito.InOrder inOrder = inOrder(eventRepository, activeOrderRepository, eventPublisher);
 
         inOrder.verify(eventRepository).unlockBuyerOperation(EVENT_ID);
         inOrder.verify(activeOrderRepository).unlock("user:" + USER_ID);
-        inOrder.verify(notificationService)
-                .notifyTicketReservationSuccess(USER_ID, EVENT_ID, ZONE_ID, QUANTITY);
+        inOrder.verify(eventPublisher)
+                .publishEvent(new TicketReservationSucceededNotice(USER_ID, EVENT_ID, ZONE_ID, QUANTITY));
     }
 
     // ---------------------------------------------------------------------

@@ -3,8 +3,8 @@ package com.ticketing.system.ui.presenters.messaging;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 

@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.MarketStateDTO;
-import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
+import com.ticketing.system.shared.dto.MarketStateDTO;
+import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;

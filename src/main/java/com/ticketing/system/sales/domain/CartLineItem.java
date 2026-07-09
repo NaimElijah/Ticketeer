@@ -1,6 +1,6 @@
 package com.ticketing.system.sales.domain;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO.CartLineDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO.CartLineDTO;
 import com.ticketing.system.shared.InvariantChecked;
 
 import java.time.LocalDateTime;

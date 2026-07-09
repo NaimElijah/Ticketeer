@@ -7,8 +7,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.TicketRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.ui.views.admin.SalesSummary;
 

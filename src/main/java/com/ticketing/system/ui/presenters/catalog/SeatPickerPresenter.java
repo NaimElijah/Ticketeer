@@ -10,10 +10,10 @@ import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
-import com.ticketing.system.Core.Application.dto.SeatDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
+import com.ticketing.system.shared.dto.SeatDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.catalog.domain.ZoneType;

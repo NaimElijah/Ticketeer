@@ -11,24 +11,34 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
+/**
+ * Exercises {@link CompanyManagementService}'s membership read paths ({@code listForUser},
+ * {@code isOwnerOf}). Since appointments were promoted off {@code User} (task #20), the appointment
+ * state is seeded through a real {@link CompanyMembershipService} (backed by an in-memory appointment
+ * repository) rather than on the {@code User} object, and the service under test resolves membership
+ * through that same instance.
+ */
 class CompanyMembershipServiceTest {
 
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
-    private EventRepository eventRepository;
+    // Outbound port to catalog's active-event count (replaces the former direct EventRepository read).
+    private CompanyEventStatsPort companyEventStatsPort;
+    // Real membership service over an in-memory appointment repo — seeds and answers appointment queries.
+    private CompanyMembershipService membershipService;
     private CompanyManagementService service;
 
     private static final int USER_ID = 7;
@@ -38,28 +48,29 @@ class CompanyMembershipServiceTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
-        eventRepository = mock(EventRepository.class);
+        companyEventStatsPort = mock(CompanyEventStatsPort.class);
+        membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
         service = new CompanyManagementService(
                 companyRepository,
                 userRepository,
-                mock(OrderReceiptRepository.class),
                 mock(SessionManager.class),
-                mock(TicketRepository.class),
-                eventRepository,
-                mock(INotificationService.class));
+                companyEventStatsPort,
+                membershipService,
+                mock(ApplicationEventPublisher.class));
     }
 
     @Test
     void givenFounderAppointment_whenListForUser_thenReturnsFounderMembership() {
         User user = new User(USER_ID, "founder", "founder@test.com", "hash", 30);
-        user.addFounderAppointment(COMPANY_ID);
+        membershipService.addFounderAppointment(USER_ID, COMPANY_ID);
 
         ProductionCompany company = new ProductionCompany(
                 COMPANY_ID, USER_ID, "Acme Events", CompanyStatus.ACTIVE, "Desc", 4.5);
 
         when(userRepository.getUserById(USER_ID)).thenReturn(user);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(eventRepository.findByCompanyId(COMPANY_ID)).thenReturn(List.of());
+        // Company has no active events — the outbound port answers 0 (was: eventRepository stub).
+        when(companyEventStatsPort.countActiveEvents(COMPANY_ID)).thenReturn(0);
 
         var memberships = service.listForUser(USER_ID);
 
@@ -72,8 +83,8 @@ class CompanyMembershipServiceTest {
     @Test
     void givenManagerAppointment_whenListForUser_thenReturnsManagerPermissions() {
         User user = new User(USER_ID, "manager", "manager@test.com", "hash", 30);
-        user.receiveManagerAppointment(COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
-        user.acceptInvitation(COMPANY_ID);
+        membershipService.receiveManagerAppointment(USER_ID, COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
+        membershipService.acceptInvitation(USER_ID, COMPANY_ID);
 
         ProductionCompany company = new ProductionCompany(
                 COMPANY_ID, 1, "Acme Events", CompanyStatus.ACTIVE, "Desc", 4.5);
@@ -81,7 +92,8 @@ class CompanyMembershipServiceTest {
 
         when(userRepository.getUserById(USER_ID)).thenReturn(user);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(eventRepository.findByCompanyId(COMPANY_ID)).thenReturn(List.of());
+        // Company has no active events — the outbound port answers 0 (was: eventRepository stub).
+        when(companyEventStatsPort.countActiveEvents(COMPANY_ID)).thenReturn(0);
 
         var memberships = service.listForUser(USER_ID);
 
@@ -94,8 +106,8 @@ class CompanyMembershipServiceTest {
     @Test
     void givenOwnerAppointment_whenIsOwnerOf_thenTrueForCoOwner() {
         User user = new User(USER_ID, "owner", "owner@test.com", "hash", 30);
-        user.receiveOwnerAppointment(COMPANY_ID, 1);
-        user.acceptInvitation(COMPANY_ID);
+        membershipService.receiveOwnerAppointment(USER_ID, COMPANY_ID, 1);
+        membershipService.acceptInvitation(USER_ID, COMPANY_ID);
 
         when(userRepository.getUserById(USER_ID)).thenReturn(user);
 
@@ -105,8 +117,8 @@ class CompanyMembershipServiceTest {
     @Test
     void givenManagerAppointment_whenIsOwnerOf_thenFalse() {
         User user = new User(USER_ID, "manager", "manager@test.com", "hash", 30);
-        user.receiveManagerAppointment(COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
-        user.acceptInvitation(COMPANY_ID);
+        membershipService.receiveManagerAppointment(USER_ID, COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
+        membershipService.acceptInvitation(USER_ID, COMPANY_ID);
 
         when(userRepository.getUserById(USER_ID)).thenReturn(user);
 

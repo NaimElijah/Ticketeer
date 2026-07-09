@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.company;
 
-import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;

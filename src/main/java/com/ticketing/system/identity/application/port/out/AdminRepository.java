@@ -1,5 +1,4 @@
 package com.ticketing.system.identity.application.port.out;
-import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.domain.Admin;
 
 import java.util.List;

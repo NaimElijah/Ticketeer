@@ -4,7 +4,7 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -15,20 +16,22 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.ComplaintFilterDTO;
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.OutreachRequestDTO;
-import com.ticketing.system.Core.Application.dto.OutreachResultDTO;
-import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
-import com.ticketing.system.Core.Application.dto.SendMessageRequestDTO;
-import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
-import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.shared.dto.ComplaintFilterDTO;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.OutreachRequestDTO;
+import com.ticketing.system.shared.dto.OutreachResultDTO;
+import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
+import com.ticketing.system.shared.dto.SendMessageRequestDTO;
+import com.ticketing.system.shared.dto.StartConversationRequestDTO;
+import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.NewMessageNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
@@ -61,7 +64,9 @@ class MessagingServiceTest {
     private AdminRepository adminRepository;
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
-    private INotificationService notificationService;
+    // Mocked membership service — "acts for company" now resolves via it (by userId), task #20.
+    private CompanyMembershipService membershipService;
+    private ApplicationEventPublisher eventPublisher;
     private MessagingService service;
 
     @BeforeEach
@@ -71,9 +76,10 @@ class MessagingServiceTest {
         adminRepository = mock(AdminRepository.class);
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
-        notificationService = mock(INotificationService.class);
+        membershipService = mock(CompanyMembershipService.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
         service = new MessagingService(conversationRepository, sessionManager, adminRepository,
-                userRepository, companyRepository, notificationService);
+                userRepository, companyRepository, membershipService, eventPublisher);
 
         stubToken(MEMBER_TOKEN, MEMBER_ID);
         stubToken(MEMBER2_TOKEN, MEMBER2_ID);
@@ -94,12 +100,25 @@ class MessagingServiceTest {
 
         User owner = ownerUser(OWNER_ID, COMPANY_ID);
         when(userRepository.getUserById(OWNER_ID)).thenReturn(owner);
+        // The owner "acts for" its company — the membership gate answers true for that (userId, companyId).
+        when(membershipService.isOwnerInCompany(OWNER_ID, COMPANY_ID)).thenReturn(true);
 
         User outsider = plainUser(OUTSIDER_ID);
         when(userRepository.getUserById(OUTSIDER_ID)).thenReturn(outsider);
 
         User member = plainUser(MEMBER_ID);
         when(userRepository.getUserById(MEMBER_ID)).thenReturn(member);
+    }
+
+    // Mockito matcher for a NewMessageNotice published to the given recipient, optionally
+    // constraining conversationId and subject (null = don't care). Mirrors the old
+    // notifyNewMessage(eq(recipient), eq(conversationId)?, anyString(), eq(subject)?, anyString())
+    // matchers now that messaging publishes an event instead of calling the facade directly.
+    private static Object publishedNewMessageTo(int recipientUserId, String conversationId, String subject) {
+        return argThat((Object event) -> event instanceof NewMessageNotice notice // right event type
+                && notice.recipientUserId() == recipientUserId                     // targeted recipient
+                && (conversationId == null || conversationId.equals(notice.conversationId())) // optional convo id
+                && (subject == null || subject.equals(notice.subject())));         // optional subject
     }
 
     // --- startConversation (II.3.10) ---
@@ -113,8 +132,7 @@ class MessagingServiceTest {
         assertEquals(COMPANY_ID, dto.counterpartyId());
         assertEquals(1, dto.messages().size());
         assertTrue(conversationRepository.findById(dto.conversationId()).isPresent());
-        verify(notificationService).notifyNewMessage(eq(OWNER_ID), eq(dto.conversationId()),
-                anyString(), eq("Parking?"), anyString());
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(OWNER_ID, dto.conversationId(), "Parking?"));
     }
 
     // --- sendMessage ---
@@ -130,8 +148,7 @@ class MessagingServiceTest {
         assertEquals(2, conv.getMessages().size());
         assertEquals(ConversationStatus.RESPONDED, conv.getStatus());
         // The notification bridge: the member is notified of the producer's reply.
-        verify(notificationService).notifyNewMessage(eq(MEMBER_ID), eq(created.conversationId()),
-                anyString(), anyString(), anyString());
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER_ID, created.conversationId(), null));
     }
 
     @Test
@@ -151,8 +168,7 @@ class MessagingServiceTest {
 
         assertEquals("COMPLAINT", dto.type());
         assertEquals("ADMIN_GROUP", dto.counterpartyType());
-        verify(notificationService).notifyNewMessage(eq(ADMIN_ID), eq(dto.conversationId()),
-                anyString(), eq("Refund"), anyString());
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(ADMIN_ID, dto.conversationId(), "Refund"));
     }
 
     // --- respondToComplaint (II.6.3.1) ---
@@ -169,8 +185,7 @@ class MessagingServiceTest {
         var conv = conversationRepository.findById(complaint.conversationId()).orElseThrow();
         assertEquals(ConversationStatus.RESOLVED, conv.getStatus());
         assertEquals(2, conv.getMessages().size());
-        verify(notificationService).notifyNewMessage(eq(MEMBER_ID), eq(complaint.conversationId()),
-                anyString(), anyString(), anyString());
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER_ID, complaint.conversationId(), null));
     }
 
     @Test
@@ -220,8 +235,8 @@ class MessagingServiceTest {
 
         assertEquals(2, result.recipientCount());
         assertEquals(2, conversationRepository.findByType(ConversationType.DIRECT).size());
-        verify(notificationService).notifyNewMessage(eq(MEMBER_ID), anyString(), anyString(), eq("Notice"), anyString());
-        verify(notificationService).notifyNewMessage(eq(MEMBER2_ID), anyString(), anyString(), eq("Notice"), anyString());
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER_ID, null, "Notice"));
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER2_ID, null, "Notice"));
     }
 
     @Test
@@ -234,7 +249,7 @@ class MessagingServiceTest {
         assertEquals(1, convs.size());
         assertEquals(ParticipantType.MEMBER, convs.get(0).getCounterpartyType());
         assertEquals(MEMBER2_ID, convs.get(0).getCounterpartyId());
-        verify(notificationService).notifyNewMessage(eq(MEMBER2_ID), anyString(), anyString(), anyString(), anyString());
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER2_ID, null, null));
     }
 
     @Test
@@ -251,7 +266,7 @@ class MessagingServiceTest {
         // Producers resolve to the owners' member accounts — the thread targets a MEMBER, not a COMPANY.
         assertEquals(ParticipantType.MEMBER, convs.get(0).getCounterpartyType());
         assertEquals(OWNER_ID, convs.get(0).getCounterpartyId());
-        verify(notificationService).notifyNewMessage(eq(OWNER_ID), anyString(), anyString(), anyString(), anyString());
+        verify(eventPublisher).publishEvent(publishedNewMessageTo(OWNER_ID, null, null));
     }
 
     @Test
@@ -437,7 +452,6 @@ class MessagingServiceTest {
     private User ownerUser(int userId, int companyId) {
         User u = mock(User.class);
         when(u.getUserId()).thenReturn(userId);
-        when(u.isOwnerInCompany(companyId)).thenReturn(true);
         return u;
     }
 

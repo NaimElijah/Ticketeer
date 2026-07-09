@@ -9,7 +9,7 @@ import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
-import com.ticketing.system.Infrastructure.persistence.OptimisticLockTranslationAspect;
+import com.ticketing.system.shared.persistence.OptimisticLockTranslationAspect;
 
 /**
  * Unit test for {@link OptimisticLockTranslationAspect}.

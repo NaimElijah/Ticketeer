@@ -6,7 +6,7 @@
 
     Application services use Lombok @Slf4j for SLF4J injection.
     Cross-cutting entry/exit tracing is handled by LoggingAspect (DEBUG level on the
-    "com.ticketing.system.Infrastructure.logging" logger).
+    "com.ticketing.system.shared.logging" logger).
     Domain code may also use @Slf4j for WARN/ERROR; everything funnels to the same file.
 -->
 <configuration>
@@ -40,9 +40,8 @@
         </root>
         <logger name="com.ticketing.system" level="INFO"/>
         <!-- Domain warnings/errors always reach the file -->
-        <logger name="com.ticketing.system.Core.Domain" level="WARN"/>
         <!-- AOP entry/exit tracing off in prod by default -->
-        <logger name="com.ticketing.system.Infrastructure.logging" level="INFO"/>
+        <logger name="com.ticketing.system.shared.logging" level="INFO"/>
     </springProfile>
 
     <!-- Dev profile: local run with Memory* repos + demo seed (no DB). Console + rolling file. -->
@@ -52,8 +51,7 @@
             <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
-        <logger name="com.ticketing.system.Core.Domain" level="DEBUG"/>
-        <logger name="com.ticketing.system.Infrastructure.logging" level="DEBUG"/>
+        <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
     </springProfile>
 
     <!-- JPA run profiles (supabase / plain `jpa` deploy) — but NOT dev, which has its own block
@@ -65,8 +63,7 @@
             <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="INFO"/>
-        <logger name="com.ticketing.system.Core.Domain" level="WARN"/>
-        <logger name="com.ticketing.system.Infrastructure.logging" level="INFO"/>
+        <logger name="com.ticketing.system.shared.logging" level="INFO"/>
     </springProfile>
 
     <!-- Test profile: DEBUG for our code, console only. -->
@@ -75,8 +72,7 @@
             <appender-ref ref="CONSOLE"/>
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
-        <logger name="com.ticketing.system.Core.Domain" level="DEBUG"/>
-        <logger name="com.ticketing.system.Infrastructure.logging" level="DEBUG"/>
+        <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
     </springProfile>
 
     <!-- Acceptance profile: INFO, console + file. -->
@@ -86,8 +82,7 @@
             <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
-        <logger name="com.ticketing.system.Core.Domain" level="DEBUG"/>
-        <logger name="com.ticketing.system.Infrastructure.logging" level="DEBUG"/>
+        <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
     </springProfile>
 
 </configuration>

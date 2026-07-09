@@ -3,7 +3,7 @@ package com.ticketing.system.ui.presenters.admin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
+import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 
 /**

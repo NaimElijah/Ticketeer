@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.company;
 
-import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
-import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
+import com.ticketing.system.shared.dto.CompanyDashboardDTO;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;

@@ -15,12 +15,12 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.dto.LoginDTO;
-import com.ticketing.system.Core.Application.dto.GuestSessionDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
-import com.ticketing.system.Core.Application.dto.LogoutRequestDTO;
-import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.shared.dto.GuestSessionDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.LogoutRequestDTO;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;

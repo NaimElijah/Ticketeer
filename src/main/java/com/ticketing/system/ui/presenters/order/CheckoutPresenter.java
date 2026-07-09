@@ -9,10 +9,10 @@ import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Application.dto.CardDetailsDTO;
-import com.ticketing.system.Core.Application.dto.CheckoutResultDTO;
-import com.ticketing.system.Core.Application.events.OrderExpiredEvent;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.sales.application.event.OrderExpiredEvent;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.DomainException;

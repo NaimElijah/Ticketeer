@@ -5,9 +5,9 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.CompanyDashboardDTO;
-import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
-import com.ticketing.system.organization.application.service.CompanyAnalyticsService;
+import com.ticketing.system.shared.dto.CompanyDashboardDTO;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 

@@ -1,8 +1,8 @@
 package com.ticketing.system.ui.views.account;
 
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.TicketRecordDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO.TransactionRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TransactionRecordDTO;
 import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.buyer.BzRefundDialog;

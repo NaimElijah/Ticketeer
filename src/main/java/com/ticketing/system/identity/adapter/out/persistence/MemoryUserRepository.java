@@ -1,6 +1,6 @@
 package com.ticketing.system.identity.adapter.out.persistence;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,13 +64,6 @@ public class MemoryUserRepository implements UserRepository {
         return usersById.values().stream()
                 .filter(u -> username.equals(u.getUsername()))
                 .findFirst();
-    }
-
-    @Override
-    public List<User> findUsersWithPendingAppointmentForCompany(int companyId) {
-        return usersById.values().stream()
-                .filter(u -> u.getPendingCompanyAppointment(companyId) != null)
-                .toList();
     }
 
     @Override

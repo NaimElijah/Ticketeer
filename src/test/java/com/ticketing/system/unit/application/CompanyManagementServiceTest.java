@@ -11,47 +11,42 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.time.LocalDateTime;
-
-import com.ticketing.system.Core.Application.dto.AppointmentInfoDTO;
-import com.ticketing.system.Core.Application.dto.InvitationDTO;
-import com.ticketing.system.Core.Application.dto.MyCompanyDTO;
-import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
-import com.ticketing.system.Core.Application.dto.PermissionEditDTO;
-import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.shared.dto.AppointmentInfoDTO;
+import com.ticketing.system.shared.dto.InvitationDTO;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.organization.application.dto.PermissionEditDTO;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
+import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
+import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
-import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
-import com.ticketing.system.Core.Application.dto.AppointmentRevokeDTO;
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.ManagerAppointmentRequestDTO;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
+import com.ticketing.system.shared.dto.AppointmentResponseDTO;
+import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
-import com.ticketing.system.sales.domain.OrderReceipt;
-import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
 public class CompanyManagementServiceTest {
 
         private ProductionCompanyRepository mockCompanyRepo;
         private UserRepository mockUserRepo;
-        private OrderReceiptRepository mockOrderReceiptRepo;
         private SessionManager sessionManager;
         private CompanyManagementService companyService;
-        private TicketRepository ticketRepository;
-        private EventRepository eventRepository;
-        private INotificationService notificationService;
+        // Real membership service over an in-memory appointment repo — appointments were promoted off the
+        // User aggregate (task #20), so seeding and appointment queries go through this instead of User.
+        private CompanyMembershipService membershipService;
+        // Outbound port to catalog's active-event count (replaces the former direct EventRepository read).
+        private CompanyEventStatsPort companyEventStatsPort;
+        private ApplicationEventPublisher eventPublisher;
 
         private final String OWNER_TOKEN = "owner-token";
         private final String TARGET_TOKEN = "target-token";
@@ -59,7 +54,6 @@ public class CompanyManagementServiceTest {
 
         private final int COMPANY_ID = 100;
         private final int OWNER_ID = 1;
-        private final int ORDER_RECEIPT_ID = 11;
         private final String COMPANY_1_NAME = "Company1";
         private final String COMPANY_1_DESCRIPTION = "A test production company1";
 
@@ -70,20 +64,18 @@ public class CompanyManagementServiceTest {
         public void setUp() {
                 mockCompanyRepo = mock(ProductionCompanyRepository.class);
                 mockUserRepo = mock(UserRepository.class);
-                mockOrderReceiptRepo = mock(OrderReceiptRepository.class);
                 sessionManager = mock(SessionManager.class);
-                ticketRepository = mock(TicketRepository.class);
-                eventRepository = mock(EventRepository.class);
-                notificationService = mock(INotificationService.class);
+                companyEventStatsPort = mock(CompanyEventStatsPort.class);
+                eventPublisher = mock(ApplicationEventPublisher.class);
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
 
                 companyService = new CompanyManagementService(
                                 mockCompanyRepo,
                                 mockUserRepo,
-                                mockOrderReceiptRepo,
                                 sessionManager,
-                                ticketRepository,
-                                eventRepository,
-                                notificationService);
+                                companyEventStatsPort,
+                                membershipService,
+                                eventPublisher);
 
                 defaultPermissions = new ArrayList<>();
                 defaultPermissions.add(Permission.CONFIGURE_VENUE);
@@ -96,7 +88,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 19);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -109,7 +101,7 @@ public class CompanyManagementServiceTest {
                 companyService.appointManager(OWNER_TOKEN, new ManagerAppointmentRequestDTO(
                                 COMPANY_ID, TARGET_USER_ID, defaultPermissions));
 
-                assertNotEquals(null, targetUser.getPendingCompanyAppointment(COMPANY_ID));
+                assertNotEquals(null, membershipService.getPendingCompanyAppointment(TARGET_USER_ID, COMPANY_ID));
         }
 
         @Test
@@ -117,7 +109,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 19);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -148,7 +140,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -174,7 +166,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 19);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -196,7 +188,7 @@ public class CompanyManagementServiceTest {
 
                 companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, false));
 
-                assertTrue(targetUser.getPendingCompanyAppointment(COMPANY_ID) == null);
+                assertTrue(membershipService.getPendingCompanyAppointment(TARGET_USER_ID, COMPANY_ID) == null);
         }
 
         @Test
@@ -204,7 +196,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -234,7 +226,7 @@ public class CompanyManagementServiceTest {
                                 new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, newPermissions));
 
                 for (Permission perm : newPermissions) {
-                        assertTrue(targetUser.hasPermissionInCompany(COMPANY_ID, perm));
+                        assertTrue(membershipService.hasPermissionInCompany(TARGET_USER_ID, COMPANY_ID, perm));
                 }
         }
 
@@ -243,7 +235,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -321,7 +313,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -342,7 +334,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -466,7 +458,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -528,7 +520,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -560,7 +552,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -682,145 +674,8 @@ public class CompanyManagementServiceTest {
                 assertEquals("Database connection lost", exception.getCause().getMessage());
         }
 
-        @Test
-        public void GivenInvalidToken_WhenViewSalesHistory_ThenThrowException() {
-                when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(INVALID_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenCompanyNotFound_WhenViewSalesHistory_ThenThrowException() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenUserNotFound_WhenViewSalesHistory_ThenThrowException() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(null);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenUserWithNoPermission_WhenViewSalesHistory_ThenThrowException() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User requester = mock(User.class);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(requester);
-                when(requester.isOwnerInCompany(COMPANY_ID)).thenReturn(false);
-                when(requester.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(false);
-
-                assertThrows(RuntimeException.class, () -> companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-        }
-
-        @Test
-        public void GivenOwnerWithNoSales_WhenViewSalesHistory_ThenReturnEmptyList() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User ownerUser = mock(User.class);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(new ArrayList<>());
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-                // when(mockOrderReceiptRepo.findByCompanyId(COMPANY_ID)).thenReturn(new
-                // ArrayList<>());
-
-                List<PurchaseHistoryDTO> result = companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
-
-                assertNotNull(result);
-                assertTrue(result.isEmpty());
-        }
-
-        @Test
-        public void GivenManagerWithViewSalesPermission_WhenViewSalesHistory_ThenReturnSalesHistory() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User managerUser = mock(User.class);
-                OrderReceipt mockReceipt = mock(OrderReceipt.class);
-                Ticket ticket = new Ticket(1, 1, ORDER_RECEIPT_ID, null, 50.0, 10, "BARCODE-001");
-                Event mockEvent = mock(Event.class);
-
-                when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(managerUser);
-                when(managerUser.isOwnerInCompany(COMPANY_ID)).thenReturn(false);
-                when(managerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-
-                when(mockReceipt.getId()).thenReturn(42);
-                when(mockReceipt.getPurchaseTime()).thenReturn(LocalDateTime.now());
-                ReceiptLine mockLine = mock(ReceiptLine.class);
-                when(mockLine.getTicketId()).thenReturn(10);
-                when(mockLine.getPriceAtReservation()).thenReturn(50.0);
-                when(mockReceipt.getReceiptLines()).thenReturn(List.of(mockLine));
-                when(ticketRepository.findByOrderReceiptId(42)).thenReturn(List.of(ticket));
-                when(eventRepository.findById(1)).thenReturn(mockEvent);
-                when(mockEvent.getName()).thenReturn("Rock Concert");
-                when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(1));
-                when(mockOrderReceiptRepo.findByEventIds(List.of(1))).thenReturn(List.of(mockReceipt));
-
-                List<PurchaseHistoryDTO> result = companyService.viewSalesHistory(TARGET_TOKEN, COMPANY_ID);
-
-                assertNotNull(result);
-                assertEquals(1, result.size());
-                PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
-                assertEquals(42, record.orderReceiptId());
-                // assertEquals(1, record.eventId());
-                // assertEquals("Rock Concert", record.eventName());
-                assertEquals(50.0, record.totalPaid());
-                assertEquals(1, record.tickets().size());
-        }
-
-        @Test
-        public void GivenOwnerWithMultipleSales_WhenViewSalesHistory_ThenReturnAllRecords() {
-                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-                User ownerUser = mock(User.class);
-                OrderReceipt mockReceipt1 = mock(OrderReceipt.class);
-                OrderReceipt mockReceipt2 = mock(OrderReceipt.class);
-                Event mockEvent = mock(Event.class);
-
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(ownerUser.hasPermissionInCompany(COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-
-                when(mockEvent.getName()).thenReturn("Summer Festival");
-
-                when(mockReceipt1.getId()).thenReturn(1);
-                when(mockReceipt1.getPurchaseTime()).thenReturn(LocalDateTime.now());
-                when(ticketRepository.findByOrderReceiptId(1)).thenReturn(new ArrayList<>());
-                when(eventRepository.findById(10)).thenReturn(mockEvent);
-
-                when(mockReceipt2.getId()).thenReturn(2);
-                when(mockReceipt2.getPurchaseTime()).thenReturn(LocalDateTime.now());
-                when(ticketRepository.findByOrderReceiptId(2)).thenReturn(new ArrayList<>());
-                when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(10));
-                when(mockOrderReceiptRepo.findByEventIds(List.of(10))).thenReturn(List.of(mockReceipt1, mockReceipt2));
-
-                List<PurchaseHistoryDTO> result = companyService.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
-
-                assertNotNull(result);
-                assertEquals(2, result.size());
-        }
+        // NOTE: the viewSalesHistory tests moved with the method to CompanyAnalyticsServiceTest
+        // (reporting) — organization no longer owns that cross-context sales read.
 
         @Test
         public void GivenInvalidToken_WhenViewOrganizationalTree_ThenThrowException() {
@@ -864,7 +719,7 @@ public class CompanyManagementServiceTest {
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(nonOwnerUser);
-                when(nonOwnerUser.isOwnerInCompany(COMPANY_ID)).thenReturn(false);
+                // No appointment is seeded for OWNER_ID, so the membership service reports "not an owner".
 
                 assertThrows(RuntimeException.class,
                                 () -> companyService.viewOrganizationalTree(OWNER_TOKEN, COMPANY_ID));
@@ -878,7 +733,7 @@ public class CompanyManagementServiceTest {
                 when(company.getOwnersIds()).thenReturn(List.of(OWNER_ID));
 
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 30);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -907,11 +762,11 @@ public class CompanyManagementServiceTest {
                 when(company.getOwnersIds()).thenReturn(List.of(OWNER_ID));
 
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 30);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
 
                 User managerUser = new User(TARGET_USER_ID, "managerUser", "user@test.com", "password", 85);
-                managerUser.receiveManagerAppointment(COMPANY_ID, OWNER_ID, defaultPermissions);
-                managerUser.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
+                membershipService.acceptInvitation(TARGET_USER_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -949,15 +804,15 @@ public class CompanyManagementServiceTest {
                 when(company.getOwnersIds()).thenReturn(List.of(OWNER_ID));
 
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 30);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
 
                 User manager1 = new User(MANAGER1_ID, "manager1", "user@test.com", "password", 101);
-                manager1.receiveManagerAppointment(COMPANY_ID, OWNER_ID, defaultPermissions);
-                manager1.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(MANAGER1_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
+                membershipService.acceptInvitation(MANAGER1_ID, COMPANY_ID);
 
                 User manager2 = new User(MANAGER2_ID, "manager2", "user@test.com", "password", 102);
-                manager2.receiveManagerAppointment(COMPANY_ID, OWNER_ID, List.of(Permission.VIEW_SALES));
-                manager2.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(MANAGER2_ID, COMPANY_ID, OWNER_ID, List.of(Permission.VIEW_SALES));
+                membershipService.acceptInvitation(MANAGER2_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -999,17 +854,17 @@ public class CompanyManagementServiceTest {
                 when(company.getOwnersIds()).thenReturn(List.of(OWNER_ID));
 
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 30);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
 
                 // manager1 was appointed by the owner
                 User manager1 = new User(MANAGER1_ID, "manager1", "user@test.com", "password", 101);
-                manager1.receiveManagerAppointment(COMPANY_ID, OWNER_ID, defaultPermissions);
-                manager1.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(MANAGER1_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
+                membershipService.acceptInvitation(MANAGER1_ID, COMPANY_ID);
 
                 // manager2 was appointed by manager1, not by the owner
                 User manager2 = new User(MANAGER2_ID, "manager2", "user@test.com", "password", 152);
-                manager2.receiveManagerAppointment(COMPANY_ID, MANAGER1_ID, List.of(Permission.MANAGE_INVENTORY));
-                manager2.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(MANAGER2_ID, COMPANY_ID, MANAGER1_ID, List.of(Permission.MANAGE_INVENTORY));
+                membershipService.acceptInvitation(MANAGER2_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -1047,7 +902,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "owner@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "target@test.com", "password", 20);
 
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -1091,14 +946,14 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "owner@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User invitee = new User(TARGET_USER_ID, "invitee", "invitee@test.com", "password", 25);
-                invitee.receiveManagerAppointment(COMPANY_ID, OWNER_ID, defaultPermissions);
+                membershipService.receiveManagerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
 
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(mockUserRepo.findUsersWithPendingAppointmentForCompany(COMPANY_ID))
-                                .thenReturn(List.of(invitee));
+                // listPendingInvitations now resolves the invitee's username by targetId via getUserById.
+                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(invitee);
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
 
@@ -1115,7 +970,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "owner@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
 
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -1136,7 +991,7 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "owner@test.com", "password", 22);
-                ownerUser.addFounderAppointment(COMPANY_ID);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
 
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -1158,8 +1013,8 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User coOwner = new User(TARGET_USER_ID, "coOwner", "co@test.com", "password", 30);
-                coOwner.receiveOwnerAppointment(COMPANY_ID, OWNER_ID);
-                coOwner.acceptInvitation(COMPANY_ID);
+                membershipService.receiveOwnerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID);
+                membershipService.acceptInvitation(TARGET_USER_ID, COMPANY_ID);
 
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(coOwner);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -1177,8 +1032,8 @@ public class CompanyManagementServiceTest {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User manager = new User(TARGET_USER_ID, "managerUser", "mgr@test.com", "password", 28);
-                manager.receiveManagerAppointment(COMPANY_ID, OWNER_ID, defaultPermissions);
-                manager.acceptInvitation(COMPANY_ID);
+                membershipService.receiveManagerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
+                membershipService.acceptInvitation(TARGET_USER_ID, COMPANY_ID);
 
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(manager);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
@@ -1194,7 +1049,7 @@ public class CompanyManagementServiceTest {
         @Test
         public void GivenOnlyPendingAppointment_WhenFindMyCompanies_ThenExcluded() {
                 User invitee = new User(TARGET_USER_ID, "pendingUser", "p@test.com", "password", 28);
-                invitee.receiveManagerAppointment(COMPANY_ID, OWNER_ID, defaultPermissions); // PENDING, not accepted
+                membershipService.receiveManagerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions); // PENDING, not accepted
 
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(invitee);
                 when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);

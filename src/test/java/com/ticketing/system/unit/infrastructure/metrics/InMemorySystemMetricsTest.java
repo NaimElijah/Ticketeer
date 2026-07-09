@@ -10,8 +10,8 @@ import java.time.ZoneOffset;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.Infrastructure.metrics.InMemorySystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
+import com.ticketing.system.shared.metrics.InMemorySystemMetrics;
 
 /**
  * Unit tests for the in-memory {@link InMemorySystemMetrics} adapter (UC-46).

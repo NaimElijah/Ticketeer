@@ -1,5 +1,5 @@
 package com.ticketing.system.sales.application.service;
-import com.ticketing.system.governance.application.service.SystemAdminService; // transitional: market-gate check, to be rewired via a governance inbound port later
+import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
 import com.ticketing.system.sales.application.service.CheckoutService;
 
 import java.time.LocalDateTime;
@@ -12,26 +12,25 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
-import com.ticketing.system.Core.Application.dto.BuyerContextDTO;
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.ReservationResultDTO;
+import com.ticketing.system.shared.dto.BuyerContextDTO;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ReservationRemovalFailedNotice;
+import com.ticketing.system.shared.event.ReservationRemovalSucceededNotice;
+import com.ticketing.system.shared.event.TicketReservationFailedNotice;
+import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
+// Catalog inbound port: catalog now owns all Event/InventoryZone inventory mutation, so sales'
+// application layer no longer imports any catalog.domain type — it drives inventory through this port.
+import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.sales.domain.PurchaseContext;
-import com.ticketing.system.sales.domain.PurchaseStage;
-import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 
@@ -39,34 +38,36 @@ import com.ticketing.system.shared.exception.MarketNotOpenException;
 @Service
 @Slf4j
 public class ReservationService {
-    private final EventRepository eventRepository;
+    // Catalog inbound port: owns event lock/load, purchase-policy validation, and inventory
+    // reserve/release/restore. Sales locks the ACTIVE ORDER before every port call; the port acquires
+    // the EVENT buyer-lock internally — preserving the global order-before-event acquisition order.
+    private final InventoryCommandPort inventoryPort;
     private final ActiveOrderRepository activeOrderRepository;
     private final SessionManager iSessionManager;
-    private final INotificationService notificationService;
-    private final ProductionCompanyRepository companyRepository;
+    // Publisher for cross-context integration events (reservation success/failure notices); the
+    // notifications context listens for these instead of sales calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
     private final UserRepository userRepository;
-    private final SystemAdminService systemAdminService;
+    private final MarketGate marketGate; // queried to enforce the UC-32 market-open gate (dependency-inverted away from governance)
     private final ISystemMetrics systemMetrics;
 
     @Value("${constants.ticket-reservation-duration}")
     private int reservationTimeoutMinutes;
 
     public ReservationService(
-            EventRepository eventRepository,
+            InventoryCommandPort inventoryPort,
             ActiveOrderRepository activeOrderRepository,
             SessionManager iSessionManager,
-            INotificationService notificationService,
-            ProductionCompanyRepository companyRepository,
+            ApplicationEventPublisher eventPublisher,
             UserRepository userRepository,
-            SystemAdminService systemAdminService,
+            MarketGate marketGate,
             ISystemMetrics systemMetrics) {
-        this.eventRepository = eventRepository;
+        this.inventoryPort = inventoryPort;
         this.activeOrderRepository = activeOrderRepository;
         this.iSessionManager = iSessionManager;
-        this.notificationService = notificationService;
-        this.companyRepository = companyRepository;
+        this.eventPublisher = eventPublisher;
         this.userRepository = userRepository;
-        this.systemAdminService = systemAdminService;
+        this.marketGate = marketGate;
         this.systemMetrics = systemMetrics;
     }
 
@@ -77,32 +78,32 @@ public class ReservationService {
     @Transactional
     public ReservationResultDTO reserveForMember(String token, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
-        return reserve(authenticateMember(token), eventId, zoneId, toDomainSelection(selectionDto));
+        return reserve(authenticateMember(token), eventId, zoneId, requireSelection(selectionDto));
     }
 
     @Transactional
     public ReservationResultDTO reserveForGuest(String sessionId, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
-        return reserve(authenticateGuest(sessionId), eventId, zoneId, toDomainSelection(selectionDto));
+        return reserve(authenticateGuest(sessionId), eventId, zoneId, requireSelection(selectionDto));
     }
 
     @Transactional
     public ReservationResultDTO removeForMember(String token, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
-        return remove(authenticateMember(token), eventId, zoneId, toDomainSelection(selectionDto));
+        return remove(authenticateMember(token), eventId, zoneId, requireSelection(selectionDto));
     }
 
     @Transactional
     public ReservationResultDTO removeForGuest(String sessionId, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
-        return remove(authenticateGuest(sessionId), eventId, zoneId, toDomainSelection(selectionDto));
+        return remove(authenticateGuest(sessionId), eventId, zoneId, requireSelection(selectionDto));
     }
 
     // ---------------------------------------------------------------------
     // Unified flows of reserve & remove
     // ---------------------------------------------------------------------
 
-    private ReservationResultDTO reserve(BuyerContextDTO buyer, int eventId, int zoneId, InventorySelection selection) {
+    private ReservationResultDTO reserve(BuyerContextDTO buyer, int eventId, int zoneId, InventorySelectionDTO selection) {
         log.info("Entered reserve: buyerType={}, eventId={}, zoneId={}, quantity={}, seats={}",
                 buyer.isMember() ? "MEMBER" : "GUEST",
                 eventId,
@@ -115,11 +116,10 @@ public class ReservationService {
         // UC-32 / I.2.1 — no tickets may be held while the trading market is closed.
         // Checked before any locks are acquired. (Removing items from an existing
         // cart is intentionally NOT gated.)
-        if (!systemAdminService.isMarketOpen()) {
+        if (!marketGate.isOpen()) {
             throw new MarketNotOpenException();
         }
 
-        Event event = null;
         ActiveOrder activeOrder = null;
         boolean inventoryReserved = false;
         boolean orderModified = false;
@@ -132,19 +132,14 @@ public class ReservationService {
                 ? "user:" + buyer.userId()
                 : "sess:" + buyer.sessionId();
 
-        //* locks activeOrder before event. Good — no deadlock risk between them. Just keep this rule in mind for any future service that touches both.
-        // active-order lock remains per buyer/session
+        //* Locks the ACTIVE ORDER before invoking the inventory port. The port acquires the EVENT
+        // buyer-lock internally, so the global order-before-event acquisition order is preserved and
+        // there is no deadlock risk between the two locks. Keep this ordering for any future service.
         activeOrderRepository.lockForUpdate(orderLockKey);
-        // many buyers can reserve unrelated inventory in the same event concurrently:
-        // StandingZone.inventoryLock protects standing counters & SeatedZone.seatLocks protect individual seats
-        // structural event edits still block buyers because they use write lock. event lock becomes shared buyer lifecycle lock.
-        // zone/seat locks help concurrency.
-        eventRepository.lockForBuyerOperation(eventId);
 
         try {
-            // Validate event and zone exist before doing anything else (e.g. before creating an active order if needed, before checking inventory, etc.) to fail fast on invalid input and avoid doing unnecessary work or creating entities that we will not use if the event/zone is invalid. This also ensures that we do not create an active order for a buyer if the event or zone they are trying to reserve does not exist, which keeps our data cleaner and avoids having orphaned active orders that are not associated with any valid events or zones.
-            event = getEventOrThrow(eventId);
-            InventoryZone zone = getZoneOrThrow(event, zoneId);
+            // Get-or-create the buyer's active order and reject reserve attempts while checkout holds it.
+            // (The order is only saved on success below, so a later port failure leaves no orphan order.)
             activeOrder = getOrCreateActiveOrder(buyer);
 
             // CheckoutService now marks orders as CHECKOUT_IN_PROGRESS and releases the order lock during Phase 2. ReservationService should reject reserve attempts against an order in that state; otherwise a concurrent reservation can mutate the cart while checkout is pricing/charging based on a snapshot, causing inconsistencies.
@@ -154,26 +149,25 @@ public class ReservationService {
                 throw new IllegalStateException("Cannot modify active order during checkout");
             }
 
-            // Effective purchase policy (company AND event) at the RESERVE stage: max + (member)
-            // age are enforced; minimum and unknown (guest) age are deferred to checkout. Quantity
-            // is the buyer's cart total for this event after this add, so MAX caps the whole order.
-            validateReservePurchasePolicy(buyer, event, selection, activeOrder);
+            // Policy inputs computed from the order and the buyer's identity. The effective purchase
+            // policy itself (company AND event, RESERVE stage) is enforced INSIDE the inventory port —
+            // catalog owns the event + the company policy — so sales no longer touches catalog.domain.
+            int totalQuantity = existingForEvent(activeOrder, eventId) + selection.getQuantity();
+            Integer buyerAge = buyer.isMember() ? resolveMemberAge(buyer.userId()) : null;
+            int buyerId = buyer.isMember() ? buyer.userId() : -1;
 
-            double pricePerTicket = zone.getprice();
-
-            // Bind the selection to this order's key so the zone records which order holds the reservation.
-            // This enables the 3-phase checkout to verify ownership in Phase 3 without holding event locks during payment/issuance.
-            InventorySelection selectionWithKey = selectionWithOrderKey(selection, activeOrder.getOrderKey());
-
-            // Reserve inventory first before modifying the active order, so that if we fail to reserve inventory (e.g. not enough tickets available), we do not end up with an active order that has reservations that were not successfully made. This also ensures that we only modify the active order if we are able to successfully reserve the requested tickets, which keeps our data consistent and avoids having active orders that reflect reservations that do not actually exist.
-            event.reserveInventory(zoneId, selectionWithKey);
+            // Reserve inventory through the port: it acquires the event buyer-lock, validates the policy,
+            // reserves the (ownership-stamped) selection, saves the event, and releases the lock — then
+            // returns the unit price to record on the cart line. Done before mutating the active order so
+            // a reserve failure (e.g. not enough availability) leaves the cart untouched.
+            double pricePerTicket = inventoryPort.reserve(
+                    eventId, zoneId, selection, activeOrder.getOrderKey(), buyerId, buyerAge, totalQuantity);
             inventoryReserved = true;
-            
+
             // Now that we have successfully reserved the inventory, we can safely modify the active order to reflect the new reservation. If any of the validations for modifying the active order fail (e.g. trying to reserve more tickets than allowed by purchase policy, etc.), we will throw an exception and roll back the inventory reservation in the catch block, ensuring that we do not end up with an active order that has reservations that were not successfully made.
-            activeOrder.addReservation(eventId, zoneId, selection, pricePerTicket, LocalDateTime.now());
+            addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket);
             orderModified = true;
 
-            eventRepository.save(event);
             activeOrderRepository.save(activeOrder);
             // Notify the member of the successful reservation. For guests, we do not have a user ID to send notifications to, so we skip this step for guests. The notification can be used to trigger email notifications, app push notifications, etc. to inform the member of their successful reservation and any details they may need (e.g. event name, zone, quantity reserved, etc.).
             notifySuccessAfterUnlock = true;
@@ -183,7 +177,7 @@ public class ReservationService {
 
         } catch (RuntimeException e) {
             // If any exception occurs during the reservation process, we need to roll back any actions that were taken to keep our data consistent. This includes releasing any inventory that was reserved and removing any reservations that were added to the active order. We also log the error for monitoring and debugging purposes, and rethrow the exception to indicate that the reservation failed. The frontend can catch this exception and show an appropriate error message to the user (e.g. "Failed to reserve tickets: not enough availability", "Failed to reserve tickets: event not found", "Failed to reserve tickets: invalid input", etc.).
-            rollbackReservationIfNeeded(event, activeOrder, eventId, zoneId, selection, inventoryReserved,
+            rollbackReservationIfNeeded(activeOrder, eventId, zoneId, selection, inventoryReserved,
                     orderModified);
 
             notifyFailureAfterUnlock = true;
@@ -199,11 +193,9 @@ public class ReservationService {
             throw e;
 
         } finally {
-            try {
-                eventRepository.unlockBuyerOperation(eventId);
-            } finally {
-                activeOrderRepository.unlock(orderLockKey);
-            }
+            // Only the ACTIVE ORDER lock is released here — the EVENT buyer-lock was acquired and
+            // released inside the inventory port, so there is nothing to unlock for the event.
+            activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
                 try {
@@ -233,7 +225,7 @@ public class ReservationService {
 
     }
 
-    private ReservationResultDTO remove(BuyerContextDTO buyer, int eventId, int zoneId, InventorySelection selection) {
+    private ReservationResultDTO remove(BuyerContextDTO buyer, int eventId, int zoneId, InventorySelectionDTO selection) {
         log.info("Entered remove: buyerType={}, eventId={}, zoneId={}, quantity={}, seats={}",
                 buyer.isMember() ? "MEMBER" : "GUEST",
                 eventId,
@@ -243,7 +235,6 @@ public class ReservationService {
         // Validate input arguments before doing anything else to fail fast on invalid input and avoid doing unnecessary work. This also ensures that we do not attempt to remove reservations for an event or zone that does not exist, which keeps our data consistent and avoids having active orders that reflect removals for events or zones that do not actually exist.
         validateReservationArguments(eventId, zoneId, selection);
 
-        Event event = null;
         ActiveOrder activeOrder = null;
         boolean orderModified = false;
         boolean inventoryReleased = false;
@@ -258,32 +249,15 @@ public class ReservationService {
                 : "sess:" + buyer.sessionId();
 
         /*
-        * Lock order first, then event.
-        * This must stay consistent with reserve(...) and checkout-related flows
-        * to avoid deadlocks.
+        * Lock the ACTIVE ORDER first; the EVENT buyer-lock is acquired inside the inventory port.
+        * This keeps the global order-before-event acquisition order consistent with reserve(...) and
+        * checkout to avoid deadlocks. The event buyer-lock (a shared read lock) blocks structural event
+        * edits while allowing concurrent buyer operations; inventory correctness is protected by the
+        * zone/seat locks inside the domain (StandingZone counter lock, SeatedZone seat locks).
         */
         activeOrderRepository.lockForUpdate(orderLockKey);
 
-        /*
-        * Use buyer-operation lock, NOT full update/write lock.
-        *
-        * remove(...) is like reserve(...): it is a buyer inventory operation.
-        * It does not structurally edit the event, venue map, zones, rows, seats, price,
-        * status, or policies.
-        *
-        * The event buyer-operation lock blocks structural event edits while allowing
-        * multiple buyers to reserve/remove different inventory concurrently.
-        * The actual inventory correctness is protected inside the zones:
-        * - StandingZone uses its inventory lock.
-        * - SeatedZone uses layout/read lock + sorted seat locks.
-        */
-        eventRepository.lockForBuyerOperation(eventId);
-
         try {
-            // Validate event and zone exist before doing anything else (e.g. before checking the active order, etc.) to fail fast on invalid input and avoid doing unnecessary work or creating entities that we will not use if the event/zone is invalid. This also ensures that we do not attempt to remove reservations for an event or zone that does not exist, which keeps our data consistent and avoids having active orders that reflect removals for events or zones that do not actually exist.
-            event = getEventOrThrow(eventId);
-            InventoryZone zone = getZoneOrThrow(event, zoneId); // validates venue map + zone exists before touching the order
-            removedPricePerTicket = zone.getprice();
             activeOrder = getActiveOrderOrThrow(buyer);
 
             // CheckoutService marks orders CHECKOUT_IN_PROGRESS and releases the order lock during Phase 2.
@@ -297,19 +271,18 @@ public class ReservationService {
             }
 
             // Validate first so we do not release inventory for tickets that are not in the active order.
-            activeOrder.validateContainsReservation(eventId, zoneId, selection);
-            // Bind the selection to this order's key so the zone can verify ownership when releasing.
-            InventorySelection selectionWithKey = selectionWithOrderKey(selection, activeOrder.getOrderKey());
+            validateOrderContainsReservation(activeOrder, eventId, zoneId, selection);
 
             /*
-            * Release inventory first.
+            * Release inventory through the port first (it acquires the event buyer-lock, releases the
+            * ownership-stamped selection, saves the event, and returns the unit price).
             *
             * Why this order?
             * If inventory release fails, the cart was not changed yet.
-            * If inventory release succeeds but cart removal/save fails, the catch block
-            * re-reserves the inventory.
+            * If inventory release succeeds but cart removal/save fails, the catch block re-reserves
+            * the inventory (using the captured price to rebuild the cart line).
             */
-            event.releaseInventory(zoneId, selectionWithKey);
+            removedPricePerTicket = inventoryPort.release(eventId, zoneId, selection, activeOrder.getOrderKey());
             inventoryReleased = true;
 
             /*
@@ -317,10 +290,9 @@ public class ReservationService {
             * If this fails after inventory was released, rollbackRemoveIfNeeded(...)
             * will re-reserve the inventory.
             */
-            activeOrder.removeReservation(eventId, zoneId, selection);
+            removeOrderReservation(activeOrder, eventId, zoneId, selection);
             orderModified = true;
 
-            eventRepository.save(event);
             activeOrderRepository.save(activeOrder);
 
             // Notify the member of the successful removal. For guests, we do not have a user ID to send notifications to, so we skip this step for guests. The notification can be used to trigger email notifications, app push notifications, etc. to inform the member of their successful reservation removal and any details they may need (e.g. event name, zone, quantity removed, etc.).
@@ -332,7 +304,6 @@ public class ReservationService {
         } catch (RuntimeException e) {
             // If any exception occurs during the removal process, we need to roll back any actions that were taken to keep our data consistent. This includes re-reserving any inventory that was released and re-adding any reservations that were removed from the active order. We also log the error for monitoring and debugging purposes, and rethrow the exception to indicate that the removal failed. The frontend can catch this exception and show an appropriate error message to the user (e.g. "Failed to remove reservation: reservation not found in active order", "Failed to remove reservation: event not found", "Failed to remove reservation: invalid input", etc.).
             rollbackRemoveIfNeeded(
-                    event,
                     activeOrder,
                     eventId,
                     zoneId,
@@ -353,11 +324,8 @@ public class ReservationService {
             throw e;
 
         } finally {
-            try {
-                eventRepository.unlockBuyerOperation(eventId);
-            } finally {
-                activeOrderRepository.unlock(orderLockKey);
-            }
+            // Only the ACTIVE ORDER lock is released here — the EVENT buyer-lock is owned by the port.
+            activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
                 try {
@@ -387,24 +355,49 @@ public class ReservationService {
 
     }
 
-    // Helper method to convert the InventorySelectionDTO from the API layer to the InventorySelection domain object that is used in the service layer and domain layer.
-    private InventorySelection toDomainSelection(InventorySelectionDTO selectionDto) {
+    // Guards that a selection DTO was supplied. The DTO stays sales-safe (no catalog.domain type): the
+    // inventory port translates it into the domain value object at the catalog boundary.
+    private InventorySelectionDTO requireSelection(InventorySelectionDTO selectionDto) {
         if (selectionDto == null) {
             throw new IllegalArgumentException("Inventory selection is required");
         }
-        return selectionDto.toDomainSelection();
+        return selectionDto;
     }
 
-    /**
-     * Returns a copy of the given selection that carries the provided {@code orderKey}.
-     * Used to stamp every reserve/release call with the owning order's identity.
-     */
-    private InventorySelection selectionWithOrderKey(InventorySelection selection, String orderKey) {
+    // Adds the reserved selection to the active order via ActiveOrder's primitive (non-catalog.domain)
+    // entry points, branching standing vs seated here so sales never handles a catalog InventorySelection.
+    private void addOrderReservation(ActiveOrder order, int eventId, int zoneId, InventorySelectionDTO selection,
+            double price) {
+        LocalDateTime addedAt = LocalDateTime.now();
         if (selection.isStandingSelection()) {
-            return InventorySelection.standing(selection.getQuantity(), orderKey);
+            order.addStandingReservation(eventId, zoneId, selection.getQuantity(), price, addedAt);
         } else {
-            return InventorySelection.seated(selection.getSeatNumbers(), orderKey);
+            order.addSeatedReservation(eventId, zoneId, selection.getSeatNumbers(), price, addedAt);
         }
+    }
+
+    // Removes the selection from the active order via ActiveOrder's primitive entry points (see above).
+    private void removeOrderReservation(ActiveOrder order, int eventId, int zoneId, InventorySelectionDTO selection) {
+        if (selection.isStandingSelection()) {
+            order.removeStandingSpots(eventId, zoneId, selection.getQuantity());
+        } else {
+            order.removeSeats(eventId, zoneId, selection.getSeatNumbers());
+        }
+    }
+
+    // Validates (before releasing inventory) that the active order actually holds the selection, using
+    // ActiveOrder's primitive validate overload so sales avoids the catalog InventorySelection type.
+    private void validateOrderContainsReservation(ActiveOrder order, int eventId, int zoneId,
+            InventorySelectionDTO selection) {
+        order.validateContainsReservation(eventId, zoneId, selection.getQuantity(), selection.getSeatNumbers());
+    }
+
+    // The buyer's existing cart quantity for this event — fed into the RESERVE-stage policy MAX check.
+    private int existingForEvent(ActiveOrder activeOrder, int eventId) {
+        var existingItems = activeOrder.getItems();
+        long existingForEvent = existingItems == null ? 0L
+                : existingItems.stream().filter(item -> item.geteventId() == eventId).count();
+        return (int) existingForEvent;
     }
 
     // ---------------------------------------------------------------------
@@ -450,25 +443,9 @@ public class ReservationService {
         }
     }
 
-    // Validation of the main input arguments for both reserve and remove flows. This method is called at the beginning of both flows to ensure that the input is valid before we do any work. This helps us fail fast on invalid input and avoid doing unnecessary work or creating entities that we will not use if the input is invalid. It also ensures that we do not attempt to reserve or remove inventory for an event or zone that does not exist, which keeps our data consistent and avoids having active orders that reflect reservations or removals for events or zones that do not actually exist.
-    private void validateReservePurchasePolicy(BuyerContextDTO buyer, Event event,
-            InventorySelection selection, ActiveOrder activeOrder) {
-        int eventId = event.getId();
-        var existingItems = activeOrder.getItems();
-        long existingForEvent = existingItems == null ? 0L
-                : existingItems.stream().filter(item -> item.geteventId() == eventId).count();
-        int totalQuantity = (int) existingForEvent + selection.getQuantity();
-
-        Integer buyerAge = buyer.isMember() ? resolveMemberAge(buyer.userId()) : null;
-        int buyerId = buyer.isMember() ? buyer.userId() : -1;
-
-        PurchaseContext context = new PurchaseContext(
-                buyerId, buyerAge, eventId, event.getCompanyId(), totalQuantity, PurchaseStage.RESERVE);
-
-        ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
-        event.validateEffectivePolicy(company == null ? null : company.getPurchasePolicy(), context);
-    }
-
+    // Resolves a member's age for the purchase-policy context. Kept in sales because buyer identity is
+    // a sales/identity concern; the age is passed as a primitive into the inventory port, which owns the
+    // effective-policy validation against the event + company policy.
     private Integer resolveMemberAge(int userId) {
         try {
             User user = userRepository.getUserById(userId);
@@ -478,7 +455,7 @@ public class ReservationService {
         }
     }
 
-    private void validateReservationArguments(int eventId, int zoneId, InventorySelection selection) {
+    private void validateReservationArguments(int eventId, int zoneId, InventorySelectionDTO selection) {
         if (eventId <= 0) {
             throw new IllegalArgumentException("eventId must be positive");
         }
@@ -508,39 +485,8 @@ public class ReservationService {
     // helper functions - these are not part of the main flows but are used by multiple public methods, so they help keep the main flows clean and avoid code duplication.
     // ---------------------------------------------------------------------
 
-    // Helper method to get the event from the repository and validate that it exists. This is used in both reserve and remove flows to ensure that we are working with a valid event before we attempt to reserve or remove inventory, which keeps our data consistent and avoids having active orders that reflect reservations or removals for events that do not actually exist. By centralizing this logic in a helper method, we also avoid code duplication and keep the main flows cleaner and more focused on the reservation and removal logic rather than the details of how we look up events from the repository.
-    private Event getEventOrThrow(int eventId) {
-        Event event = eventRepository.findById(eventId);
-
-        if (event == null) {
-            log.warn("Request rejected: event not found. eventId={}", eventId);
-            throw new IllegalArgumentException("Event not found: " + eventId);
-        }
-
-        return event;
-    }
-
-    // Helper method to get the inventory zone from the event's venue map and validate that it exists. This is used in both reserve and remove flows to ensure that we are working with a valid event and zone before we attempt to reserve or remove inventory, which keeps our data consistent and avoids having active orders that reflect reservations or removals for events or zones that do not actually exist. By centralizing this logic in a helper method, we also avoid code duplication and keep the main flows cleaner and more focused on the reservation and removal logic rather than the details of how we look up zones from events.
-    private InventoryZone getZoneOrThrow(Event event, int zoneId) {
-        if (event.getVenueMap() == null) {
-            throw new IllegalStateException("Venue map is not configured for event: " + event.getId());
-        }
-        InventoryZone zone;
-        try {
-            zone = event.getVenueMap().getZone(zoneId);
-        } catch (IllegalArgumentException e) {
-            log.warn("Request rejected: zone not found. eventId={}, zoneId={}", event.getId(), zoneId);
-            throw new IllegalArgumentException("Zone not found: " + zoneId);
-        }
-        if (zone == null) {
-            log.warn("Request rejected: zone not found. eventId={}, zoneId={}", event.getId(), zoneId);
-            throw new IllegalArgumentException("Zone not found: " + zoneId);
-        }
-        return zone;
-    }
-
-    //getZone inconsistency — ReservationService.getZoneOrThrow (line 320) catches IllegalArgumentException and checks for null. Means VenueMap.getZone 
-    // sometimes throws and sometimes returns null. Worth tightening that contract to one or the other so callers don't need to handle both.
+    // Event/zone existence checks and the price read now live inside the catalog inventory port
+    // (InventoryService), which owns the Event aggregate — so ReservationService no longer loads events.
 
     // For members, we get or create an active order based on their user ID. For guests, we get or create an active order based on their session ID. This method abstracts away the logic of determining whether to use user ID or session ID and ensures that we always have an active order to work with in the main flows, which simplifies the logic in those flows and keeps them focused on the reservation and removal logic rather than the details of how we manage active orders for different types of buyers.
     private ActiveOrder getOrCreateActiveOrder(BuyerContextDTO buyer) {
@@ -579,8 +525,8 @@ public class ReservationService {
     // ---------------------------------------------------------------------
 
     // Helper method to roll back any changes made during the reservation or removal process if an exception occurs, in order to keep our data consistent. This includes releasing any inventory that was reserved and re-adding any reservations that were removed from the active order. We also log any exceptions that occur during the rollback process for monitoring and debugging purposes, but we do not rethrow those exceptions since we want to ensure that the original exception from the reservation or removal process is what gets propagated to indicate the failure of the operation, while still making a best effort to roll back any changes to keep our data consistent.
-    private void rollbackReservationIfNeeded(Event event, ActiveOrder activeOrder, int eventId, int zoneId,
-            InventorySelection selection, boolean inventoryReserved, boolean orderModified) {
+    private void rollbackReservationIfNeeded(ActiveOrder activeOrder, int eventId, int zoneId,
+            InventorySelectionDTO selection, boolean inventoryReserved, boolean orderModified) {
 
         if (!inventoryReserved) {
             return;
@@ -588,7 +534,7 @@ public class ReservationService {
 
         try {
             if (orderModified && activeOrder != null) {
-                activeOrder.removeReservation(eventId, zoneId, selection);
+                removeOrderReservation(activeOrder, eventId, zoneId, selection);
                 activeOrderRepository.save(activeOrder);
             }
         } catch (RuntimeException ignored) {
@@ -596,13 +542,10 @@ public class ReservationService {
         }
 
         try {
-            if (event != null) {
-                // Pass the orderKey so the zone can verify ownership during rollback release.
-                InventorySelection selectionWithKey = activeOrder != null
-                        ? selectionWithOrderKey(selection, activeOrder.getOrderKey())
-                        : selection;
-                event.releaseInventory(zoneId, selectionWithKey);
-                eventRepository.save(event);
+            if (activeOrder != null) {
+                // Release the just-reserved inventory through the port (it re-acquires the event
+                // buyer-lock and verifies ownership via the order key). The order lock is still held.
+                inventoryPort.release(eventId, zoneId, selection, activeOrder.getOrderKey());
             }
         } catch (RuntimeException ignored) {
             // best-effort rollback; the main exception is rethrown by caller
@@ -610,21 +553,20 @@ public class ReservationService {
     }
 
     // rollback the cart if inventory release fails, and rollback inventory if the later cart/save flow fails
-    private void rollbackRemoveIfNeeded(Event event, ActiveOrder activeOrder, int eventId, int zoneId,
-            InventorySelection selection, boolean orderModified,
+    private void rollbackRemoveIfNeeded(ActiveOrder activeOrder, int eventId, int zoneId,
+            InventorySelectionDTO selection, boolean orderModified,
             boolean inventoryReleased, double pricePerTicket) {
         if (!inventoryReleased && !orderModified) {
             return;
         }
 
         /*
-        * If inventory was released, put it back under the same order ownership key.
+        * If inventory was released, put it back under the same order ownership key. restore(...)
+        * re-reserves WITHOUT re-running the purchase policy (this is a compensating action).
         */
         try {
-            if (inventoryReleased && event != null && activeOrder != null) {
-                InventorySelection selectionWithKey = selectionWithOrderKey(selection, activeOrder.getOrderKey());
-                event.reserveInventory(zoneId, selectionWithKey);
-                eventRepository.save(event);
+            if (inventoryReleased && activeOrder != null) {
+                inventoryPort.restore(eventId, zoneId, selection, activeOrder.getOrderKey());
             }
         } catch (RuntimeException rollbackFailure) {
             log.error("Rollback failed while re-reserving inventory after remove failure. eventId={}, zoneId={}",
@@ -638,7 +580,7 @@ public class ReservationService {
         */
         try {
             if (orderModified && activeOrder != null) {
-                activeOrder.addReservation(eventId, zoneId, selection, pricePerTicket, LocalDateTime.now());
+                addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket);
                 activeOrderRepository.save(activeOrder);
             }
         } catch (RuntimeException rollbackFailure) {
@@ -651,30 +593,34 @@ public class ReservationService {
 
     private void notifyReservationSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            notificationService.notifyTicketReservationSuccess(buyer.userId(), eventId, zoneId, quantity);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            notificationService.notifyTicketReservationFailure(buyer.userId(), eventId, zoneId, reason);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new TicketReservationFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
 
     private void notifyRemoveSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            notificationService.notifyRemoveTicketReservationSuccess(buyer.userId(), eventId, zoneId, quantity);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new ReservationRemovalSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyRemoveFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            notificationService.notifyRemoveTicketReservationFailure(buyer.userId(), eventId, zoneId, reason);
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new ReservationRemovalFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
 
     // Helper method to build the reservation result DTO that is returned by the reserve and remove methods, which includes details about the reservation such as event ID, zone ID, quantity reserved/removed, seat numbers if applicable, and the expiration time of the reservation (based on the current time plus the configured reservation timeout). This information can be used by the frontend to show the user their current reservations and how long they have before they expire, etc.
-    private ReservationResultDTO buildReservationResult(int eventId, int zoneId, InventorySelection selection) {
+    private ReservationResultDTO buildReservationResult(int eventId, int zoneId, InventorySelectionDTO selection) {
         return new ReservationResultDTO(
                 eventId,
                 zoneId,
@@ -740,8 +686,7 @@ public class ReservationService {
     /** Best-effort event name for cart-line enrichment — a since-deleted event must not break restore. */
     private String eventNameFor(int eventId) {
         try {
-            Event event = eventRepository.findById(eventId);
-            return (event != null) ? event.getName() : "Unknown Event";
+            return inventoryPort.eventName(eventId);
         } catch (EventNotFoundException e) {
             return "Unknown Event";
         }
@@ -801,12 +746,13 @@ public class ReservationService {
                 ? "user:" + buyer.userId()
                 : "sess:" + buyer.sessionId();
 
-        List<Integer> lockedEventIds = new ArrayList<>();
-        // Lock the active order for update to prevent concurrent modifications while we are abandoning it. This ensures that
+        // Lock the ACTIVE ORDER for update while we abandon it. Each per-line inventory release acquires
+        // the EVENT buyer-lock INSIDE the inventory port (order-before-event ordering preserved); the
+        // port owns the load/release/save under that lock.
         activeOrderRepository.lockForUpdate(orderLockKey);
 
         try {
-            // For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. 
+            // For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID.
             ActiveOrder activeOrder = buyer.isMember()
                     ? activeOrderRepository.getByUserId(buyer.userId())
                     : activeOrderRepository.getBySessionId(buyer.sessionId()).orElse(null);
@@ -824,49 +770,22 @@ public class ReservationService {
                 throw new IllegalStateException("Cannot abandon active order while checkout is in progress");
             }
 
-            // Release any reserved inventory back to the events before deleting the active order. 
-            // We need to lock each event for update to prevent concurrent modifications while we are releasing inventory. This ensures that we
-            // do not accidentally oversell tickets or release inventory that is being modified by another process.
+            // Release any reserved inventory back to the events before deleting the active order.
             String orderKey = activeOrder.getOrderKey();
             List<ActiveOrderDTO.CartLineDTO> lines = activeOrder.toDTO().lines();
 
-            // Get the distinct event IDs from the active order lines to avoid locking the same event multiple times. 
-            // We sort the event IDs to ensure a consistent locking order, which helps prevent deadlocks when multiple 
-            // threads are trying to lock events in different orders.
-            List<Integer> eventIds = lines.stream()
-                    .map(ActiveOrderDTO.CartLineDTO::eventId)
-                    .distinct()
-                    .sorted()
-                    .toList();
-
-            // Lock each event for update to prevent concurrent modifications while we are releasing inventory. 
-            // This ensures that we do not accidentally oversell tickets or release inventory that is being modified by another process. 
-            // We also keep track of the locked event IDs so we can unlock them in reverse order after we are done releasing inventory 
-            // and deleting the active order.
-            for (Integer eventId : eventIds) {
-                eventRepository.lockForUpdate(eventId);
-                lockedEventIds.add(eventId);
-            }
-
-            // Release the reserved inventory for each line in the active order back to the corresponding event.
+            // Release each reserved line back to its event through the inventory port (the port acquires
+            // the event buyer-lock, releases the ownership-stamped selection, and saves). Best-effort per
+            // line: a failure (e.g. a since-deleted event) is logged and does not abort the abandon.
             for (ActiveOrderDTO.CartLineDTO line : lines) {
                 try {
-                    Event event = eventRepository.findById(line.eventId());
+                    // Seat label -> a seated selection; no seat -> one standing unit. The order key is
+                    // passed separately so the port can verify ownership when releasing.
+                    InventorySelectionDTO selection = (line.seatNumber() != null)
+                            ? InventorySelectionDTO.seated(List.of(line.seatNumber()))
+                            : InventorySelectionDTO.standing(1);
 
-                    if (event == null) {
-                        log.warn("Event {} not found while abandoning active order. Skipping inventory release.",
-                                line.eventId());
-                        continue;
-                    }
-                    // Create an InventorySelection for the line item. If the line has a seat number, we create a seated selection with that seat number. 
-                    // If the line does not have a seat number, we create a standing selection with quantity 1. 
-                    // We also pass the order key to the selection so that the event can verify ownership of the reservation when releasing inventory.
-                    InventorySelection selection = (line.seatNumber() != null)
-                            ? InventorySelection.seated(List.of(line.seatNumber()), orderKey)
-                            : InventorySelection.standing(1, orderKey);
-
-                    event.releaseInventory(line.zoneId(), selection);
-                    eventRepository.save(event);
+                    inventoryPort.release(line.eventId(), line.zoneId(), selection, orderKey);
                 } catch (RuntimeException e) {
                     log.warn(
                             "Failed to release inventory while abandoning active order. eventId={}, zoneId={}, seatNumber={}, reason={}",
@@ -883,10 +802,6 @@ public class ReservationService {
             }
 
         } finally {
-            for (int i = lockedEventIds.size() - 1; i >= 0; i--) {
-                eventRepository.unlock(lockedEventIds.get(i));
-            }
-
             activeOrderRepository.unlock(orderLockKey);
         }
     }

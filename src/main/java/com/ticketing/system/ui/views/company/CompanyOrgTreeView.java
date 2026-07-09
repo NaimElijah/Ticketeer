@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.company;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 
-import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
 import com.ticketing.system.ui.components.admin.OrgTreeLegend;
 import com.ticketing.system.ui.components.admin.OrgTreeRenderer;
 import com.ticketing.system.ui.components.kit.Lk;

@@ -2,10 +2,64 @@
 |===
 |Base package
 |`com.ticketing.system.ui`
+|Spring components
+|_Event listeners_
+
+* `c.t.s.u.presenters.order.CheckoutPresenter`
+
+_Others_
+
+* `c.t.s.u.dev.DevPanelInitializer`
+* `c.t.s.u.dev.DevUserSeeder`
+* `c.t.s.u.presenters.account.MyAccountPresenter`
+* `c.t.s.u.presenters.account.MyInvitationsPresenter`
+* `c.t.s.u.presenters.account.MyProfilePresenter`
+* `c.t.s.u.presenters.account.ReceiptPresenter`
+* `c.t.s.u.presenters.account.RefundPresenter`
+* `c.t.s.u.presenters.admin.AdminDashboardPresenter`
+* `c.t.s.u.presenters.admin.GlobalHistoryPresenter`
+* `c.t.s.u.presenters.admin.OrgTreePresenter`
+* `c.t.s.u.presenters.admin.SystemAnalyticsPresenter`
+* `c.t.s.u.presenters.auth.AdminLoginPresenter`
+* `c.t.s.u.presenters.auth.LoginPresenter`
+* `c.t.s.u.presenters.auth.RegisterPresenter`
+* `c.t.s.u.presenters.auth.UsernameAvailabilityPresenter`
+* `c.t.s.u.presenters.catalog.BrowseEventsPresenter`
+* `c.t.s.u.presenters.catalog.EventDetailsPresenter`
+* `c.t.s.u.presenters.catalog.SearchPresenter`
+* `c.t.s.u.presenters.catalog.SeatPickerPresenter`
+* `c.t.s.u.presenters.company.CompanyEventListPresenter`
+* `c.t.s.u.presenters.company.CompanyRegistrationPresenter`
+* `c.t.s.u.presenters.company.CompanySalesPresenter`
+* `c.t.s.u.presenters.company.EventManagementPresenter`
+* `c.t.s.u.presenters.company.ManagerInvitationPresenter`
+* `c.t.s.u.presenters.company.ManagerListPresenter`
+* `c.t.s.u.presenters.company.MyCompaniesPresenter`
+* `c.t.s.u.presenters.company.OwnerDashboardPresenter`
+* `c.t.s.u.presenters.company.PurchasePolicyEditorPresenter`
+* `c.t.s.u.presenters.company.VenueMapPresenter`
+* `c.t.s.u.presenters.landing.LandingPresenter`
+* `c.t.s.u.presenters.messaging.AdminComplaintQueuePresenter`
+* `c.t.s.u.presenters.messaging.AdminInboxPresenter`
+* `c.t.s.u.presenters.messaging.AdminSendMessagesPresenter`
+* `c.t.s.u.presenters.messaging.CompanyInquiryInboxPresenter`
+* `c.t.s.u.presenters.messaging.NewInquiryPresenter`
+* `c.t.s.u.presenters.messaging.SubmitComplaintPresenter`
+* `c.t.s.u.presenters.messaging.SupportInboxPresenter`
+* `c.t.s.u.presenters.notifications.NotificationBellPresenter`
+* `c.t.s.u.presenters.order.CartBadgePresenter`
+* `c.t.s.u.presenters.order.CartPresenter`
+* `c.t.s.u.security.AuthBootstrap`
+* `c.t.s.u.security.GlobalUiErrorHandler`
+* `c.t.s.u.security.GuestSessionBootstrap`
+* `c.t.s.u.security.NotificationSessionListener`
+* `c.t.s.u.security.SignOutFlow`
+* `c.t.s.u.session.CompanyManagementBridge`
+* `c.t.s.u.session.SessionIdentity`
 |Bean references
 |* `c.t.s.s.application.service.ReservationService` (in Sales & Ticketing)
 * `c.t.s.i.application.service.AuthenticationService` (in Identity & Access)
-* `c.t.s.i.application.service.MemberAccountService` (in Identity & Access)
+* `c.t.s.r.application.service.MemberAccountService` (in Reporting & Analytics)
 * `c.t.s.o.application.service.CompanyManagementService` (in Organization)
 * `c.t.s.i.application.service.MemberQueryService` (in Identity & Access)
 * `c.t.s.s.application.service.RefundService` (in Sales & Ticketing)
@@ -13,9 +67,11 @@
 * `c.t.s.g.application.service.SystemAdminService` (in Platform Governance)
 * `c.t.s.c.application.service.CatalogService` (in Catalog & Events)
 * `c.t.s.c.application.service.EventManagementService` (in Catalog & Events)
-* `c.t.s.o.application.service.CompanyAnalyticsService` (in Organization)
+* `c.t.s.r.application.service.CompanyAnalyticsService` (in Reporting & Analytics)
 * `c.t.s.m.application.service.MessagingService` (in Messaging & Support)
 * `c.t.s.n.application.port.in.INotificationService` (in Notifications)
 * `c.t.s.s.application.service.CheckoutService` (in Sales & Ticketing)
 * `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+|Events listened to
+|* `c.t.s.s.application.event.OrderExpiredEvent` 
 |===

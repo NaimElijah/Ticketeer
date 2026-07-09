@@ -1,7 +1,7 @@
 package com.ticketing.system.sales.application.port.out;
 
-import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
+import com.ticketing.system.shared.dto.IssuanceRequestDTO;
+import com.ticketing.system.shared.dto.IssuanceResultDTO;
 
 // Port for external ticket-issuance / barcode-generation services.
 // Multi-provider support (I.4.2) realized via Spring DI of List<TicketIssuer>.

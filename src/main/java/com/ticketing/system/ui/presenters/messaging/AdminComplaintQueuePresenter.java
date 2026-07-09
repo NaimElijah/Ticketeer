@@ -5,9 +5,9 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.ComplaintFilterDTO;
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
+import com.ticketing.system.shared.dto.ComplaintFilterDTO;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 

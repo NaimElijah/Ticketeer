@@ -1,8 +1,8 @@
 package com.ticketing.system.sales.adapter.out.wsep;
 
-import com.ticketing.system.Core.Application.dto.BarcodeDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
+import com.ticketing.system.shared.dto.BarcodeDTO;
+import com.ticketing.system.shared.dto.IssuanceRequestDTO;
+import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 

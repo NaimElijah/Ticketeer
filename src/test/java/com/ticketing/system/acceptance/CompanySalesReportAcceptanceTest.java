@@ -12,12 +12,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.EventCreationDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
-import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.catalog.application.dto.EventCreationDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;

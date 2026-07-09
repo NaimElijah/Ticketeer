@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.views.company;
 
-import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter.Outcome;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;

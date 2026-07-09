@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
@@ -20,51 +19,46 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.exception.RefundFailedException;
-import com.ticketing.system.sales.domain.TransactionRecord;
-import com.ticketing.system.Core.Application.dto.EventCreationDTO;
-import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.EventPolicyConfigDTO;
-import com.ticketing.system.Core.Application.dto.EventUpdateDTO;
-import com.ticketing.system.Core.Application.dto.PurchasePolicyDTO;
-import com.ticketing.system.Core.Application.dto.GridPlacementDTO;
-import com.ticketing.system.Core.Application.dto.VenueLayoutDTO;
-import com.ticketing.system.Core.Application.dtoMappers.EventMapper;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Application.dto.ZoneDetailDTO;
-import com.ticketing.system.sales.application.port.out.PaymentGateway;
+import com.ticketing.system.catalog.application.dto.EventCreationDTO;
+import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
+import com.ticketing.system.shared.dto.EventUpdateDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.VenueLayoutDTO;
+import com.ticketing.system.catalog.application.dtoMappers.EventMapper;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO;
+import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.sales.domain.Ticket;
-import com.ticketing.system.sales.domain.TicketStatus;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.catalog.domain.event.EventCancelledEvent;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.port.out.EventSalesHistoryPort;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
-import com.ticketing.system.sales.domain.OrderReceipt;
-import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.sales.domain.NoPurchasePolicy;
-import com.ticketing.system.sales.domain.OrPurchasePolicy;
-import com.ticketing.system.sales.domain.PurchasePolicy;
-import com.ticketing.system.sales.domain.AgePurchasePolicy;
-import com.ticketing.system.sales.domain.AndPurchasePolicy;
-import com.ticketing.system.sales.domain.MaxTicketsPurchasePolicy;
-import com.ticketing.system.sales.domain.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
 
 @Service
 @Slf4j
@@ -72,31 +66,35 @@ public class EventManagementService {
 
     private final EventRepository eventRepository;
     private final ProductionCompanyRepository companyRepository;
-    private final TicketRepository ticketRepository;
     private final SessionManager sessionManager;
-    private final OrderReceiptRepository orderReceiptRepository;
-    private final PaymentGateway paymentGateway;
+    // Catalog-owned port (implemented by a sales adapter) used only to guard deleteEvent against
+    // orphaning sales records — keeps catalog free of any sales import.
+    private final EventSalesHistoryPort eventSalesHistoryPort;
     private final UserRepository userRepository;
-    private final INotificationService notificationService;
+    // Company-membership/authorization checks moved off the User aggregate (task #20); catalog already
+    // depends on organization, so this downward edge is allowed.
+    private final CompanyMembershipService companyMembershipService;
+    // Publisher for cross-context domain/integration events. On cancel it emits an
+    // EventCancelledEvent that the sales context's listener turns into the refund flow, and the
+    // notifications context ultimately raises holder notices — catalog never calls either directly.
+    private final ApplicationEventPublisher eventPublisher;
     private int currentVenueMapIdCounter;
 
     public EventManagementService(
             EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
-            TicketRepository ticketRepository,
             SessionManager sessionManager,
-            OrderReceiptRepository orderReceiptRepository,
-            PaymentGateway paymentGateway,
+            EventSalesHistoryPort eventSalesHistoryPort,
             UserRepository userRepository,
-            INotificationService notificationService) {
-        this.eventRepository = eventRepository;
-        this.companyRepository = companyRepository;
-        this.ticketRepository = ticketRepository;
-        this.sessionManager = sessionManager;
-        this.orderReceiptRepository = orderReceiptRepository;
-        this.paymentGateway = paymentGateway;
-        this.userRepository = userRepository;
-        this.notificationService = notificationService;
+            CompanyMembershipService companyMembershipService,
+            ApplicationEventPublisher eventPublisher) {
+        this.eventRepository = eventRepository;                 // catalog event persistence/locking
+        this.companyRepository = companyRepository;             // company lookups for auth/ownership
+        this.sessionManager = sessionManager;                   // token validation/user-id extraction
+        this.eventSalesHistoryPort = eventSalesHistoryPort;     // sales-history guard for deleteEvent
+        this.userRepository = userRepository;                   // caller existence checks
+        this.companyMembershipService = companyMembershipService; // company-membership permission checks
+        this.eventPublisher = eventPublisher;                   // cross-context event publishing
         this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
                                            // here for now.
     }
@@ -133,7 +131,7 @@ public class EventManagementService {
         }
 
         User user = userRepository.getUserById(ownerId);
-        user.requirePermissionInCompany(request.companyId(), Permission.MANAGE_INVENTORY);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),request.companyId(), Permission.MANAGE_INVENTORY);
 
         int newEventId = eventRepository.nextId();
         VenueMap venueMap = new VenueMap(eventRepository.nextVenueMapId(), request.location(), List.of());
@@ -190,7 +188,7 @@ public class EventManagementService {
         // it (so e.g. a venue/sales manager can reach the per-event venue editor); the per-event
         // mutations (configure venue, edit details, policies, cancel) stay gated by their own
         // permission at their own service entry points.
-        user.requireMemberInCompany(companyId);
+        companyMembershipService.requireMemberInCompany(user.getUserId(),companyId);
 
         EventMapper mapper = new EventMapper();
         return eventRepository.searchByCompanyAll(companyId, filters.withoutCompanyRating()).stream()
@@ -209,7 +207,7 @@ public class EventManagementService {
         if (user == null) {
             throw new UserNotFoundException();
         }
-        user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
         ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
         if (company == null) {
             throw new CompanyNotFoundException();
@@ -248,7 +246,7 @@ public class EventManagementService {
         if (event == null) {
             throw new EventNotFoundException();
         }
-        user.requirePermissionInCompany(event.getCompanyId(), Permission.CONFIGURE_VENUE);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.CONFIGURE_VENUE);
 
         VenueMap map = event.getVenueMap();
         if (map == null) {
@@ -306,7 +304,7 @@ public class EventManagementService {
             log.info("Configuring venue map for company {}, event {}, by user {}", companyId, config.eventId(), userId);
 
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(companyId, Permission.CONFIGURE_VENUE);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.CONFIGURE_VENUE);
 
             Event event = eventRepository.findById(eventId);
 
@@ -389,7 +387,7 @@ public class EventManagementService {
             Event event = eventRepository.findById(eventId);
 
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
 
             EventCategory newCategory = null;
             if (update.category() != null && !update.category().isBlank()) {
@@ -649,7 +647,7 @@ public class EventManagementService {
             throw new CompanyNotFoundException();
         }
 
-        user.requirePermissionInCompany(companyId, Permission.CONFIGURE_VENUE);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.CONFIGURE_VENUE);
 
         Event event;
         try {
@@ -729,7 +727,7 @@ public class EventManagementService {
         // Read-only detail: any active member may load it. The pages that reach this (event-detail
         // editor, venue editor) are each route-gated by their own capability, so this serves both a
         // MANAGE_INVENTORY metadata editor and a CONFIGURE_VENUE venue editor.
-        user.requireMemberInCompany(event.getCompanyId());
+        companyMembershipService.requireMemberInCompany(user.getUserId(),event.getCompanyId());
 
         return new EventMapper().toEventDetailDTO(event, company.getName());
     }
@@ -751,7 +749,7 @@ public class EventManagementService {
             }
 
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(companyId, Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.MANAGE_INVENTORY);
 
             event.transitionToOnSale(); // SCHEDULED -> ON_SALE (idempotent if already ON_SALE)
             eventRepository.save(event);
@@ -769,14 +767,15 @@ public class EventManagementService {
         try {
             Event event = eventRepository.findById(eventId);
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
             if (event.getStatus() != EventStatus.CANCELED) {
                 throw new InvalidStateTransitionException("Only CANCELED events can be deleted");
             }
             // Soft-cancel keeps events "for historical and reporting purposes": refuse to
             // permanently delete one that still has purchase history, which would orphan its
-            // OrderReceipt/Ticket records (referenced by eventId, no cascade).
-            if (!orderReceiptRepository.findByEventId(eventId).isEmpty()) {
+            // OrderReceipt/Ticket records (referenced by eventId, no cascade). The sales-history
+            // check goes through a catalog port (sales-implemented) so catalog imports no sales type.
+            if (eventSalesHistoryPort.hasSalesHistory(eventId)) {
                 throw new BusinessRuleViolationException("Can't delete an event with sales history");
             }
             eventRepository.delete(eventId);
@@ -794,7 +793,7 @@ public class EventManagementService {
         try {
             Event event = eventRepository.findById(eventId);
             User user = userRepository.getUserById(userId);
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
             switch (targetStatus) {
                 case SCHEDULED -> event.transitionToScheduled();
                 case ON_SALE -> event.transitionToOnSale();
@@ -807,159 +806,50 @@ public class EventManagementService {
         }
     }
 
-    // UC-19 — soft cancel; fires EventCancelled domain event for UC-4 refund
-    // pipeline.
-    // Intentionally NOT @Transactional: this calls the external payment gateway (refund) mid-flow,
-    // so its transaction boundary is restructured separately (externals outside the tx) in V3-TX-02.
+    // UC-19 — soft cancel. Catalog owns ONLY the lifecycle transition here: it cancels the event and
+    // publishes an EventCancelledEvent. The sales context's EventCancellationRefundListener consumes
+    // that event and performs the refund / ticket-void / holder-notification flow, so catalog touches
+    // no sales type.
+    // Intentionally NOT @Transactional at this layer: the sales listener fires synchronously within
+    // publishEvent and owns its own refund transaction boundary (externals outside the tx) per V3-TX-02.
     public void cancelEventAndRefund(String token, int eventId) {
-        int ownerId = validateTokenAndGetUserId(token);
+        int ownerId = validateTokenAndGetUserId(token);                        // authenticate + resolve caller
         // We lock the event for update to prevent concurrent modifications during the
-        // cancellation and refund process. This ensures that we have a consistent view
-        // of the event's state
+        // cancellation process. This ensures that we have a consistent view of the event's state.
         eventRepository.lockForUpdate(eventId);
 
         try {
             Event event = eventRepository.findById(eventId); // throws if not found, which is what we want here.
-            User user = userRepository.getUserById(ownerId);
-            user.requirePermissionInCompany(event.getCompanyId(), Permission.MANAGE_INVENTORY);
+            User user = userRepository.getUserById(ownerId);                   // load caller for permission check
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
 
-            if (event.getStatus() == EventStatus.CANCELED) {
+            if (event.getStatus() == EventStatus.CANCELED) {                   // idempotent: already cancelled
                 return;
             }
 
-            List<OrderReceipt> orderReceipts = orderReceiptRepository.findByEventId(eventId);
-            // For each receipt, we calculate the total refund amount for the lines related
-            // to the canceled event, call the payment gateway to process the refund,
-            // validate the refund result, and then update our domain state accordingly
-            // (marking the receipt as refunded and updating ticket statuses). We also
-            // handle various edge cases and potential errors along the way to ensure a
-            // robust refund process.
-            for (OrderReceipt receipt : orderReceipts) {
-                double totalRefundForReceipt = receipt.getReceiptLines().stream()
-                        .filter(line -> line.getEventId() == eventId)
-                        .mapToDouble(ReceiptLine::getPriceAtReservation)
-                        .sum();
-
-                if (totalRefundForReceipt <= 0) {
-                    continue;
-                }
-                // Extract the payment transaction ID from the receipt's transaction records.
-                // This is necessary to tell the payment gateway which transaction we want to
-                // refund. If we can't find a valid payment transaction ID, we throw an
-                // exception and skip this receipt since we don't want to risk refunding without
-                // a valid reference to the original charge.
-                int paymentTransactionId = receipt.getPaymentTransactionId()
-                        .orElseThrow(() -> new RefundFailedException(
-                                receipt.getId(),
-                                "receipt does not contain a payment transaction"));
-                // Call the payment gateway to process the refund. This is a critical step that
-                // must succeed before we make any changes to our domain state (e.g. marking
-                // tickets as refunded or canceling the event) since we want to avoid
-                // inconsistencies where we think we've refunded a customer but the payment
-                // gateway disagrees.
-                RefundResultDTO refundResult = paymentGateway.refund(
-                        paymentTransactionId,
-                        totalRefundForReceipt);
-                // Validate the refund result before proceeding. If the refund failed for some
-                // reason, we want to throw an exception and avoid making any changes to our
-                // domain state (e.g. marking tickets as refunded or canceling the event) since
-                // that could lead to inconsistencies.
-                validateRefundResult(receipt.getId(), totalRefundForReceipt, refundResult);
-
-                // If we reach this point, the refund was successful and we can update our
-                // domain state accordingly.
-                receipt.markRefunded(TransactionRecord.refund(
-                        refundResult.refundTransactionId(),
-                        paymentGateway.getId(),
-                        refundResult.totalRefunded(),
-                        receipt.getPaymentCurrency(),
-                        refundResult.refundedAt()));
-
-                orderReceiptRepository.save(receipt);
-            }
-            // After processing refunds for all receipts, we need to update the status of
-            // all tickets for the event. For simplicity, we assume that if a ticket was
-            // PAID or ISSUED, it should be marked as REFUNDED; otherwise, it can be marked
-            // as VOIDED. In a real system, we might want to handle this more robustly (e.g.
-            // consider different ticket statuses, handle partial refunds, etc.).
-            List<Ticket> tickets = ticketRepository.findByEventId(eventId);
-            // Note: we update ticket statuses after processing refunds to avoid
-            // complications where we mark tickets as refunded but then encounter an error
-            // during the refund process. By only updating ticket statuses after we've
-            // successfully processed refunds, we can ensure that our domain state remains
-            // consistent with the actual refund status of each order receipt.
-            for (Ticket ticket : tickets) {
-                if (ticket.getStatus() == TicketStatus.PAID || ticket.getStatus() == TicketStatus.ISSUED) {
-                    ticket.markRefunded();
-                } else {
-                    ticket.markVoided();
-                }
-                ticketRepository.save(ticket);
-            }
-            // Finally, we mark the event as canceled. This is a soft cancel that allows us
-            // to keep the event in our system for historical and reporting purposes while
-            // preventing any future purchases or interactions with it. The event's status
-            // will be used in various parts of the system (e.g. purchase flow, event
-            // listings) to enforce the fact that it's canceled and should not be available
-            // for purchase.
+            // Soft cancel: keep the event for history/reporting while blocking future purchases.
             event.transitionToCanceled("Event canceled by owner");
-            eventRepository.save(event);
+            eventRepository.save(event);                                       // persist the CANCELED state
 
-            // Notify all ticket holders
-            notifyTicketHoldersOfCancellation(eventId, event.getName(), orderReceipts);
+            // Hand the sales-side work (refunds, ticket voiding, holder notifications) to the sales
+            // context via a domain event. The synchronous listener runs inline, so a RefundFailedException
+            // it raises still surfaces here and aborts the flow exactly as the former inline loop did.
+            eventPublisher.publishEvent(new EventCancelledEvent(eventId, event.getName()));
 
-            log.info("Event {} canceled and refund flow completed", eventId);
+            log.info("Event {} canceled and cancellation event published", eventId);
 
         } catch (EventNotFoundException e) {
             log.warn("Event {} not found for cancellation", eventId);
             throw e;
         } catch (RefundFailedException e) {
+            // Surfaced synchronously from the sales refund listener during publishEvent above.
             log.error("Refund failed during cancellation of event {}: {}", eventId, e.getMessage());
             throw e;
         } catch (RuntimeException e) {
             log.error("Unexpected error during cancellation of event {}: {}", eventId, e.getMessage());
             throw e;
         } finally {
-            eventRepository.unlock(eventId);
-        }
-    }
-
-    private void notifyTicketHoldersOfCancellation(int eventId, String eventName, List<OrderReceipt> receipts) {
-        // Collect unique user IDs to avoid duplicate notifications per receipt
-        java.util.Set<Integer> memberUserIds = receipts.stream()
-                .filter(OrderReceipt::isMemberReceipt)
-                .map(OrderReceipt::getHolderUserId)
-                .filter(id -> id != null && id > 0)
-                .collect(java.util.stream.Collectors.toSet());
-
-        for (Integer userId : memberUserIds) {
-            try {
-                notificationService.notifyEventCancelled(userId, eventId, eventName);
-            } catch (Exception e) {
-                log.warn("Failed to send cancellation notification to userId={} for eventId={}", userId, eventId, e);
-            }
-        }
-    }
-
-    // helper function for cancelEventAndRefund to validate refund results from the
-    // payment gateway and throw domain-specific exceptions if something looks
-    // wrong. This keeps the main flow cleaner and centralizes refund validation
-    // logic.
-    private void validateRefundResult(int receiptId, double expectedRefundAmount, RefundResultDTO refundResult) {
-        if (refundResult == null) {
-            throw new RefundFailedException(receiptId, "payment gateway returned null refund result");
-        }
-
-        if (refundResult.refundTransactionId() == null || refundResult.refundTransactionId().isBlank()) {
-            throw new RefundFailedException(receiptId, "refund transaction id is missing");
-        }
-
-        if (Math.abs(refundResult.totalRefunded() - expectedRefundAmount) > 0.0001) {
-            throw new RefundFailedException(receiptId, "refund amount mismatch");
-        }
-
-        if (refundResult.refundedAt() == null) {
-            throw new RefundFailedException(receiptId, "refund timestamp is missing");
+            eventRepository.unlock(eventId);                                   // always release the lock
         }
     }
 
@@ -999,7 +889,7 @@ public class EventManagementService {
             if (user == null) {
                 throw new UserNotFoundException();
             }
-            user.requirePermissionInCompany(config.companyId(), Permission.EDIT_POLICIES);
+            companyMembershipService.requirePermissionInCompany(user.getUserId(),config.companyId(), Permission.EDIT_POLICIES);
 
             Event event = eventRepository.findById(config.eventId());
             if (event == null) {
@@ -1117,7 +1007,7 @@ public class EventManagementService {
         User user = userRepository.getUserById(userId);
         if (user == null)
             throw new UserNotFoundException();
-        user.requirePermissionInCompany(companyId, Permission.EDIT_POLICIES);
+        companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.EDIT_POLICIES);
         Event event = eventRepository.findById(eventId);
         if (event == null)
             throw new EventNotFoundException();

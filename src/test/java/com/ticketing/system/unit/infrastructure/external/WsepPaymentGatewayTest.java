@@ -15,15 +15,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 
-import com.ticketing.system.Core.Application.dto.CardDetailsDTO;
-import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
+import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
+import com.ticketing.system.shared.dto.PaymentResultDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundFailedException;
-import com.ticketing.system.Infrastructure.external.WsepCommunicationException;
-import com.ticketing.system.Infrastructure.external.WsepHttpClient;
+import com.ticketing.system.shared.external.WsepCommunicationException;
+import com.ticketing.system.shared.external.WsepHttpClient;
 import com.ticketing.system.sales.adapter.out.wsep.WsepPaymentGateway;
 
 import ch.qos.logback.classic.Level;

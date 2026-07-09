@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.presenters.admin;
 
-import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
-import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,13 +1,13 @@
 package com.ticketing.system.ui.dev;
 import com.ticketing.system.identity.domain.Admin;
 
-import com.ticketing.system.Core.Application.dto.ActiveOrderDTO;
-import com.ticketing.system.Core.Application.dto.BuyerContextDTO;
-import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.BuyerContextDTO;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;

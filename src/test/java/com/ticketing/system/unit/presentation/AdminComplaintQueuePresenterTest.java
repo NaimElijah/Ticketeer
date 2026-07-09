@@ -20,9 +20,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import com.ticketing.system.Core.Application.dto.ComplaintFilterDTO;
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
+import com.ticketing.system.shared.dto.ComplaintFilterDTO;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;

@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.messaging;
 import com.ticketing.system.messaging.application.service.MessagingService;
 
-import com.ticketing.system.Core.Application.dto.CompanySummaryDTO;
+import com.ticketing.system.shared.dto.CompanySummaryDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;

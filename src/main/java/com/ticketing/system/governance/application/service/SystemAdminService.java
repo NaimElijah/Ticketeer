@@ -9,11 +9,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
-import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
-import com.ticketing.system.Core.Application.dto.MarketStateDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.dtoMappers.OrderReceiptMapper;
+import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.MarketStateDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.sales.application.dtoMappers.OrderReceiptMapper;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -22,6 +22,7 @@ import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
@@ -48,6 +49,8 @@ public class SystemAdminService {
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
+    // Catalog display port for resolving event/zone names in global-history records (via OrderReceiptMapper).
+    private final CatalogEventDisplayPort eventDisplayPort;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final List<PaymentGateway> paymentGateways;
@@ -74,6 +77,7 @@ public class SystemAdminService {
             OrderReceiptRepository orderReceiptRepository,
             TicketRepository ticketRepository,
             EventRepository eventRepository,
+            CatalogEventDisplayPort eventDisplayPort,
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
             List<PaymentGateway> paymentGateways,
@@ -88,6 +92,7 @@ public class SystemAdminService {
         this.orderReceiptRepository = orderReceiptRepository;
         this.ticketRepository = ticketRepository;
         this.eventRepository = eventRepository;
+        this.eventDisplayPort = eventDisplayPort;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.paymentGateways = paymentGateways;
@@ -349,11 +354,11 @@ public class SystemAdminService {
                 .map(receipt -> {
                     if (selectedEventIds == null) {
                         return mapper.toPurchaseRecordDTO(
-                                receipt, ticketRepository, eventRepository, companyRepository, userRepository);
+                                receipt, ticketRepository, eventDisplayPort, companyRepository, userRepository);
                     }
 
                     return mapper.toFilteredPurchaseRecordDTO(
-                            receipt, selectedEventIds, ticketRepository, eventRepository, companyRepository, userRepository);
+                            receipt, selectedEventIds, ticketRepository, eventDisplayPort, companyRepository, userRepository);
                 })
                 .filter(record -> !record.tickets().isEmpty())
                 .toList();

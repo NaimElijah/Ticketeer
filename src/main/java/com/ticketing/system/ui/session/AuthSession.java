@@ -3,7 +3,7 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.domain.Session;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.vaadin.flow.server.VaadinSession;
 
 import java.util.Set;

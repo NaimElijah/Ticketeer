@@ -15,8 +15,8 @@ import com.ticketing.system.identity.domain.User;
 /**
  * JPA-backed {@link UserRepository} — active only in the {@code jpa} run/dev profile. Adapts the
  * domain port onto Spring Data ({@link SpringDataUserRepository}); the application layer depends
- * only on {@code UserRepository}, never on Spring Data. Owned {@code companyAppointments} and
- * their {@code permissions} persist by cascade with the user.
+ * only on {@code UserRepository}, never on Spring Data. Company appointments are no longer owned by
+ * the user (task #20) — they persist through the separate {@code CompanyAppointmentRepository}.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code User}'s
  * {@code @Version} optimistic lock. {@code save}/{@code updateUser} both delegate to
@@ -98,11 +98,6 @@ public class JpaUserRepository implements UserRepository {
     @Override
     public List<User> findAll() {
         return data.findAll();
-    }
-
-    @Override
-    public List<User> findUsersWithPendingAppointmentForCompany(int companyId) {
-        return data.findUsersWithPendingAppointmentForCompany(companyId);
     }
 
     @Override

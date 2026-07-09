@@ -1,8 +1,8 @@
 package com.ticketing.system.ui.security;
 
-import com.ticketing.system.Core.Application.dto.UserCompanyDTO;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;

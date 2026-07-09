@@ -1,6 +1,6 @@
 package com.ticketing.system.ui.views.company;
 
-import com.ticketing.system.Core.Application.dto.AppointmentInfoDTO;
+import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.company.EditPermissionsDialog;
 import com.ticketing.system.ui.components.kit.Lk;

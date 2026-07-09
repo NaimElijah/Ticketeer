@@ -1,5 +1,4 @@
 package com.ticketing.system.messaging.application.service;
-import com.ticketing.system.governance.application.service.SystemAdminService;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -10,20 +9,22 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketing.system.Core.Application.dto.ComplaintFilterDTO;
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.OutreachRequestDTO;
-import com.ticketing.system.Core.Application.dto.OutreachResultDTO;
-import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
-import com.ticketing.system.Core.Application.dto.SendMessageRequestDTO;
-import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
-import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
-import com.ticketing.system.Core.Application.dtoMappers.ConversationMapper;
-import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.shared.dto.ComplaintFilterDTO;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.OutreachRequestDTO;
+import com.ticketing.system.shared.dto.OutreachResultDTO;
+import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
+import com.ticketing.system.shared.dto.SendMessageRequestDTO;
+import com.ticketing.system.shared.dto.StartConversationRequestDTO;
+import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
+import com.ticketing.system.messaging.application.dtoMappers.ConversationMapper;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.NewMessageNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationNotFoundException;
@@ -36,7 +37,7 @@ import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +63,12 @@ public class MessagingService {
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
-    private final INotificationService notificationService;
+    // Company-membership/authorization checks (moved off the User aggregate, task #20) used to decide
+    // whether a caller may act for a company; messaging already depends on organization.
+    private final CompanyMembershipService companyMembershipService;
+    // Publisher for cross-context integration events (NewMessageNotice); the notifications
+    // context listens for these instead of messaging calling it directly.
+    private final ApplicationEventPublisher eventPublisher;
 
     public MessagingService(
             ConversationRepository conversationRepository,
@@ -70,14 +76,16 @@ public class MessagingService {
             AdminRepository adminRepository,
             UserRepository userRepository,
             ProductionCompanyRepository companyRepository,
-            INotificationService notificationService
+            CompanyMembershipService companyMembershipService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.conversationRepository = conversationRepository;
         this.sessionManager = sessionManager;
         this.adminRepository = adminRepository;
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
-        this.notificationService = notificationService;
+        this.companyMembershipService = companyMembershipService;
+        this.eventPublisher = eventPublisher;
     }
 
     // Which side of a conversation the authenticated caller is acting as.
@@ -432,9 +440,11 @@ public class MessagingService {
 
     private boolean callerActsForCompany(int callerId, int companyId) {
         try {
-            User user = userRepository.getUserById(callerId);
-            return user.isOwnerInCompany(companyId)
-                    || user.hasPermissionInCompany(companyId, Permission.RESPOND_TO_INQUIRIES);
+            // Owner of, or holder of RESPOND_TO_INQUIRIES on, the company — resolved by userId now that
+            // appointments live on the CompanyAppointment aggregate (task #20).
+            return companyMembershipService.isOwnerInCompany(callerId, companyId)
+                    || companyMembershipService.hasPermissionInCompany(callerId, companyId,
+                            Permission.RESPOND_TO_INQUIRIES);
         } catch (UserNotFoundException e) {
             return false;
         }
@@ -495,8 +505,9 @@ public class MessagingService {
     private void safeNotify(int recipientUserId, String conversationId, String senderLabel,
             String subject, String body) {
         try {
-            notificationService.notifyNewMessage(recipientUserId, conversationId, senderLabel,
-                    subject, snippet(body));
+            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            eventPublisher.publishEvent(new NewMessageNotice(recipientUserId, conversationId, senderLabel,
+                    subject, snippet(body)));
         } catch (RuntimeException e) {
             log.warn("Message persisted but notification failed for recipient {} (conversation {})",
                     recipientUserId, conversationId, e);

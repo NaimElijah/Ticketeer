@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.presenters.auth;
 
-import com.ticketing.system.Core.Application.dto.LoginDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;

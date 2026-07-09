@@ -1,6 +1,6 @@
 package com.ticketing.system.notifications.adapter.out.persistence;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;

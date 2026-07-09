@@ -1,10 +1,8 @@
 package com.ticketing.system.sales.adapter.out.persistence;
-import com.ticketing.system.identity.application.service.MemberAccountService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.identity.domain.Admin;
 
-import com.ticketing.system.Infrastructure.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.RepositoryLocks;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -15,7 +13,7 @@ import java.util.stream.Collectors;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
-import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 

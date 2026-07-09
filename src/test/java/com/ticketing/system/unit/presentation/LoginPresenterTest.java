@@ -8,9 +8,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.dto.LoginDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;

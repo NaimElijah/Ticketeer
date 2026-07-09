@@ -2,7 +2,7 @@ package com.ticketing.system.ui.presenters.account;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.Core.Application.dto.MemberDTO;
+import com.ticketing.system.shared.dto.MemberDTO;
 import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.ui.session.AuthSession;
 

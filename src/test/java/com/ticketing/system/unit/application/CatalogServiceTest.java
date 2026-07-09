@@ -1,5 +1,5 @@
 package com.ticketing.system.unit.application;
-import com.ticketing.system.organization.application.service.CompanyRatings;
+import com.ticketing.system.catalog.application.service.CompanyRatings;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,14 +18,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.CatalogSearchFiltersDTO;
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.EventSummaryDTO;
-import com.ticketing.system.Core.Application.dto.SearchResultDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapDTO;
+import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.EventSummaryDTO;
+import com.ticketing.system.shared.dto.SearchResultDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
@@ -44,8 +43,8 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
 
-import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
-import com.ticketing.system.Core.Application.dto.SeatDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
+import com.ticketing.system.shared.dto.SeatDTO;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
 
@@ -54,7 +53,6 @@ class CatalogServiceTest {
     private SessionManager mockSessionManager;
     private EventRepository mockEventRepository;
     private ProductionCompanyRepository mockCompanyRepository;
-    private TicketRepository mockTicketRepository;
     private CatalogService catalogService;
 
     private static final String VALID_TOKEN = "valid-token";
@@ -66,12 +64,10 @@ class CatalogServiceTest {
         mockSessionManager = mock(SessionManager.class);
         mockEventRepository = mock(EventRepository.class);
         mockCompanyRepository = mock(ProductionCompanyRepository.class);
-        mockTicketRepository = mock(TicketRepository.class);
         catalogService = new CatalogService(
                 mockSessionManager,
                 mockEventRepository,
-                mockCompanyRepository,
-                mockTicketRepository);
+                mockCompanyRepository);
     }
 
     @Test

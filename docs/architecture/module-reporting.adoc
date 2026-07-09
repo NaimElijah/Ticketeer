@@ -1,0 +1,20 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.reporting`
+|Spring components
+|_Services_
+
+* `c.t.s.r.application.service.CompanyAnalyticsService`
+* `c.t.s.r.application.service.MemberAccountService`
+|Bean references
+|* `c.t.s.c.application.port.out.EventRepository` (in Catalog & Events)
+* `c.t.s.s.application.port.out.OrderReceiptRepository` (in Sales & Ticketing)
+* `c.t.s.m.application.port.out.ConversationRepository` (in Messaging & Support)
+* `c.t.s.s.application.port.out.TicketRepository` (in Sales & Ticketing)
+* `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
+* `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
+* `c.t.s.o.application.service.CompanyMembershipService` (in Organization)
+* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+* `c.t.s.i.application.service.AuthenticationService` (in Identity & Access)
+|===

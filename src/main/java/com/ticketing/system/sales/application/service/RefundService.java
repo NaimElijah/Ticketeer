@@ -1,27 +1,25 @@
 package com.ticketing.system.sales.application.service;
-import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;
-import com.ticketing.system.catalog.domain.Event;
-import com.ticketing.system.catalog.application.port.out.EventRepository;
-import com.ticketing.system.catalog.domain.InventorySelection;
+// Catalog inbound port: catalog owns the SOLD -> AVAILABLE inventory return, so RefundService no
+// longer imports any catalog.domain type — it hands the refunded lines to the port.
+import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
+import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -55,7 +53,8 @@ public class RefundService {
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketRepository ticketRepository;
     private final PaymentGateway paymentGateway;
-    private final EventRepository eventRepository;
+    // Catalog inbound port that owns returning refunded (SOLD) inventory to AVAILABLE stock.
+    private final InventoryCommandPort inventoryPort;
     // Programmatic transaction for the refund critical section: it must hold a real row lock on the
     // receipt (SELECT … FOR UPDATE) across the eligibility check + gateway refund + receipt flip so a
     // double-click can't refund twice (#410). The gateway-first call runs inside it by design.
@@ -66,13 +65,13 @@ public class RefundService {
             OrderReceiptRepository orderReceiptRepository,
             TicketRepository ticketRepository,
             PaymentGateway paymentGateway,
-            EventRepository eventRepository,
+            InventoryCommandPort inventoryPort,
             PlatformTransactionManager transactionManager) {
         this.authenticationService = authenticationService;
         this.orderReceiptRepository = orderReceiptRepository;
         this.ticketRepository = ticketRepository;
         this.paymentGateway = paymentGateway;
-        this.eventRepository = eventRepository;
+        this.inventoryPort = inventoryPort;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -163,58 +162,29 @@ public class RefundService {
         return refundResult;
     }
 
-    /** Returns each refunded ticket's seat/place to AVAILABLE, grouped by event then zone. */
+    /**
+     * Returns each refunded ticket's seat/place to AVAILABLE stock through the catalog inventory port.
+     * The port groups the flat lines by event then zone, holds each event's buyer-lock across
+     * load -> mutate -> save, and is fully best-effort: a stock-return hiccup is logged and swallowed
+     * (the gateway refund and receipt/ticket flips have already committed, so it must never fail the
+     * refund). Behaviour is preserved verbatim — only the ownership of the mutation moved into catalog.
+     */
     private void returnRefundedInventoryToStock(List<Ticket> refundedTickets) {
-        Map<Integer, Map<Integer, List<Ticket>>> byEventThenZone = new LinkedHashMap<>();
+        // One flat line per refunded ticket: a seated ticket carries its seat label; a standing ticket
+        // has a null seat label (one standing unit). The port turns these back into domain selections.
+        List<InventoryLineDTO> lines = new ArrayList<>();
         for (Ticket t : refundedTickets) {
-            byEventThenZone
-                    .computeIfAbsent(t.getEventId(), e -> new LinkedHashMap<>())
-                    .computeIfAbsent(t.getZoneId(), z -> new ArrayList<>())
-                    .add(t);
+            String seatNumber = t.isSeatedTicket() ? t.getSeatNumber() : null;
+            lines.add(new InventoryLineDTO(t.getEventId(), t.getZoneId(), seatNumber));
         }
-
-        for (Map.Entry<Integer, Map<Integer, List<Ticket>>> eventEntry : byEventThenZone.entrySet()) {
-            int eventId = eventEntry.getKey();
-            // Hold the buyer lock around load -> mutate -> save (MemoryEventRepository.save requires the
-            // caller to hold the event lock — same pattern as ReservationService.reserve /
-            // CheckoutService.returnTicketsToStock). The whole per-event block is best-effort: any failure
-            // is logged and swallowed, because the gateway refund and the receipt/ticket flips have already
-            // committed — an inventory-return hiccup must never make the refund report failure.
-            try {
-                eventRepository.lockForBuyerOperation(eventId);
-                try {
-                    Event event = eventRepository.findById(eventId);
-                    boolean anyReturned = false;
-                    for (Map.Entry<Integer, List<Ticket>> zoneEntry : eventEntry.getValue().entrySet()) {
-                        int zoneId = zoneEntry.getKey();
-                        try {
-                            event.returnSoldToStock(zoneId, toSelection(zoneEntry.getValue()));
-                            anyReturned = true;
-                        } catch (RuntimeException e) {
-                            log.warn("Refund: failed to return zone {} of event {} to stock", zoneId, eventId, e);
-                        }
-                    }
-                    if (anyReturned) {
-                        eventRepository.save(event);
-                    }
-                } finally {
-                    eventRepository.unlockBuyerOperation(eventId);
-                }
-            } catch (RuntimeException e) {
-                log.warn("Refund: failed to return event {} inventory to stock", eventId, e);
-            }
+        // Best-effort at the sales boundary too: the gateway refund and the receipt/ticket flips have
+        // already committed, so an inventory-return failure must never make the refund report failure.
+        // (The port is itself best-effort per event; this catch also guards a misbehaving implementation.)
+        try {
+            inventoryPort.returnSoldToStock(lines);
+        } catch (RuntimeException e) {
+            log.warn("Refund: returning inventory to stock failed; the refund has already committed", e);
         }
-    }
-
-    /** Seated tickets → a seat-label selection; standing tickets → a quantity selection. */
-    private static InventorySelection toSelection(List<Ticket> zoneTickets) {
-        List<String> seatNumbers = zoneTickets.stream()
-                .filter(Ticket::isSeatedTicket)
-                .map(Ticket::getSeatNumber)
-                .toList();
-        return seatNumbers.isEmpty()
-                ? InventorySelection.standing(zoneTickets.size())
-                : InventorySelection.seated(seatNumbers);
     }
 
     private void validateRefundResult(int receiptId, double expectedRefundAmount, RefundResultDTO refundResult) {
