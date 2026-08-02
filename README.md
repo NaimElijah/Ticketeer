@@ -1,6 +1,6 @@
 > This project is an extended and upgraded version of [event-ticket-system](https://github.com/AdamSimkinbgu/event-ticket-system),
 > originally built by me and collaborators as a university project at Ben-Gurion University.
-> Being extended and enhanced by me in this repository.
+> Currently being extended and enhanced by me in this repository.
 
 <div align="center">
 
