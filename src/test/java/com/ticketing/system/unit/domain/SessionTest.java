@@ -11,7 +11,7 @@ import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.support.BaseDomainTest;
 
 class SessionTest extends BaseDomainTest {

@@ -1,10 +1,10 @@
 package com.ticketing.system.unit.presentation;
 
-import com.ticketing.system.Core.Application.dto.OrganizationalTreeNodeDTO;
-import com.ticketing.system.Core.Application.dto.ProductionCompanyDTO;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.admin.OrgTreePresenter;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

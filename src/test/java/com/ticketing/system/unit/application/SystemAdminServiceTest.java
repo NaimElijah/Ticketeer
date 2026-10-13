@@ -21,61 +21,64 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.GlobalHistoryFiltersDTO;
-import com.ticketing.system.Core.Application.dto.MarketControlRequestDTO;
-import com.ticketing.system.Core.Application.dto.MarketStateDTO;
-import com.ticketing.system.Core.Application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
-import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Application.services.SystemIntegrityVerifier;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.exceptions.ExternalServiceUnavailableException;
-import com.ticketing.system.Core.Domain.exceptions.InitializationIntegrityException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidStateTransitionException;
-import com.ticketing.system.Core.Domain.exceptions.MarketNotOpenException;
-import com.ticketing.system.Core.Domain.exceptions.MissingDefaultAdminException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
+import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.MarketStateDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.sales.application.port.out.TicketIssuer;
+import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.governance.application.service.SystemIntegrityVerifier;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
+import com.ticketing.system.shared.exception.InitializationIntegrityException;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.MissingDefaultAdminException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 
 class SystemAdminServiceTest {
 
     private static final String ADMIN_TOKEN = "admin-token";
     private static final int ADMIN_USER_ID = 1;
 
-    private ISessionManager sessionManager;
-    private IAdminRepository adminRepository;
-    private IOrderReceiptRepository orderReceiptRepository;
-    private ITicketRepository ticketRepository;
-    private IEventRepository eventRepository;
-    private IProductionCompanyRepository companyRepository;
-    private IUserRepository userRepository;
-    private IPasswordHasher passwordHasher;
+    private SessionManager sessionManager;
+    private AdminRepository adminRepository;
+    private OrderReceiptRepository orderReceiptRepository;
+    private TicketRepository ticketRepository;
+    private EventRepository eventRepository;
+    private CatalogEventDisplayPort eventDisplayPort;
+    private ProductionCompanyRepository companyRepository;
+    private UserRepository userRepository;
+    private PasswordHasher passwordHasher;
     private SystemIntegrityVerifier integrityVerifier;
     private SystemAdminService service;
 
 
     @BeforeEach
     void setUp() {
-        sessionManager = mock(ISessionManager.class);
-        adminRepository = mock(IAdminRepository.class);
-        orderReceiptRepository = mock(IOrderReceiptRepository.class);
-        ticketRepository = mock(ITicketRepository.class);
-        eventRepository = mock(IEventRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
-        userRepository = mock(IUserRepository.class);
-        passwordHasher = mock(IPasswordHasher.class);
+        sessionManager = mock(SessionManager.class);
+        adminRepository = mock(AdminRepository.class);
+        orderReceiptRepository = mock(OrderReceiptRepository.class);
+        ticketRepository = mock(TicketRepository.class);
+        eventRepository = mock(EventRepository.class);
+        eventDisplayPort = mock(CatalogEventDisplayPort.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
+        userRepository = mock(UserRepository.class);
+        passwordHasher = mock(PasswordHasher.class);
         integrityVerifier = mock(SystemIntegrityVerifier.class);
         when(passwordHasher.hash(anyString())).thenReturn("hashed-password");
         service = new SystemAdminService(
@@ -84,6 +87,7 @@ class SystemAdminServiceTest {
                 orderReceiptRepository,
                 ticketRepository,
                 eventRepository,
+                eventDisplayPort,
                 companyRepository,
                 userRepository,
                 List.of(),
@@ -164,7 +168,7 @@ class SystemAdminServiceTest {
     @Test
     void givenPaymentDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady() {
         when(adminRepository.existsAny()).thenReturn(true);
-        IPaymentGateway gateway = reachablePayment();
+        PaymentGateway gateway = reachablePayment();
         SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
         svc.initializePlatform();                          // READY
         when(gateway.verifyConnection()).thenReturn(false); // gateway drops before open
@@ -175,7 +179,7 @@ class SystemAdminServiceTest {
     @Test
     void givenIssuerDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady() {
         when(adminRepository.existsAny()).thenReturn(true);
-        ITicketIssuer issuer = reachableIssuer();
+        TicketIssuer issuer = reachableIssuer();
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(issuer));
         svc.initializePlatform();                          // READY
         when(issuer.verifyConnection()).thenReturn(false);  // issuer drops before open
@@ -266,7 +270,7 @@ class SystemAdminServiceTest {
     @Test
     void givenServicesDownThenUp_whenEnsureMarketOpenTwice_thenSelfHealsToOpen() {
         when(adminRepository.existsAny()).thenReturn(true);
-        IPaymentGateway gateway = mock(IPaymentGateway.class);
+        PaymentGateway gateway = mock(PaymentGateway.class);
         when(gateway.verifyConnection()).thenReturn(false);   // WSEP cold / unreachable at boot
         SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
 
@@ -431,22 +435,22 @@ class SystemAdminServiceTest {
         return new MarketControlRequestDTO("CLOSE", "test close", ADMIN_TOKEN);
     }
 
-    private SystemAdminService serviceWith(List<IPaymentGateway> gateways, List<ITicketIssuer> issuers) {
+    private SystemAdminService serviceWith(List<PaymentGateway> gateways, List<TicketIssuer> issuers) {
         return new SystemAdminService(
                 sessionManager, adminRepository, orderReceiptRepository,
-                ticketRepository, eventRepository, companyRepository, userRepository,
+                ticketRepository, eventRepository, eventDisplayPort, companyRepository, userRepository,
                 gateways, issuers, passwordHasher,
                 integrityVerifier, "admin", "admin");
     }
 
-    private IPaymentGateway reachablePayment() {
-        IPaymentGateway gateway = mock(IPaymentGateway.class);
+    private PaymentGateway reachablePayment() {
+        PaymentGateway gateway = mock(PaymentGateway.class);
         when(gateway.verifyConnection()).thenReturn(true);
         return gateway;
     }
 
-    private ITicketIssuer reachableIssuer() {
-        ITicketIssuer issuer = mock(ITicketIssuer.class);
+    private TicketIssuer reachableIssuer() {
+        TicketIssuer issuer = mock(TicketIssuer.class);
         when(issuer.verifyConnection()).thenReturn(true);
         return issuer;
     }

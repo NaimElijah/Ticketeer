@@ -19,15 +19,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.MemberSearchResultDTO;
-import com.ticketing.system.Core.Application.dto.MessageDTO;
-import com.ticketing.system.Core.Application.dto.OutreachRequestDTO;
-import com.ticketing.system.Core.Application.dto.OutreachResultDTO;
-import com.ticketing.system.Core.Application.services.MemberQueryService;
-import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.messaging.AdminSendMessagesPresenter;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.MemberSearchResultDTO;
+import com.ticketing.system.shared.dto.MessageDTO;
+import com.ticketing.system.shared.dto.OutreachRequestDTO;
+import com.ticketing.system.shared.dto.OutreachResultDTO;
+import com.ticketing.system.identity.application.service.MemberQueryService;
+import com.ticketing.system.messaging.application.service.MessagingService;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 
 class AdminSendMessagesPresenterTest {
 

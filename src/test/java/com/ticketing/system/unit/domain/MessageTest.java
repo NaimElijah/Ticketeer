@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.messaging.Message;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.messaging.domain.Message;
+import com.ticketing.system.messaging.domain.ParticipantType;
 
 // Unit tests for the Message sub-entity of the Conversation aggregate.
 class MessageTest {

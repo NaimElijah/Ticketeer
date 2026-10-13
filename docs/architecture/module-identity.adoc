@@ -1,0 +1,34 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.identity`
+|Spring components
+|_Services_
+
+* `c.t.s.i.application.service.AuthenticationService`
+* `c.t.s.i.application.service.MemberQueryService`
+
+_Repositories_
+
+* `c.t.s.i.application.port.out.AdminRepository` (via `c.t.s.i.adapter.out.persistence.JpaAdminRepository`)
+* `c.t.s.i.application.port.out.SessionRepository` (via `c.t.s.i.adapter.out.persistence.JpaSessionRepository`)
+* `c.t.s.i.application.port.out.UserRepository` (via `c.t.s.i.adapter.out.persistence.JpaUserRepository`)
+* `c.t.s.i.application.port.out.AdminRepository` (via `c.t.s.i.adapter.out.persistence.MemoryAdminRepository`)
+* `c.t.s.i.application.port.out.SessionRepository` (via `c.t.s.i.adapter.out.persistence.MemorySessionRepository`)
+* `c.t.s.i.application.port.out.UserRepository` (via `c.t.s.i.adapter.out.persistence.MemoryUserRepository`)
+* `c.t.s.i.adapter.out.persistence.SpringDataAdminRepository`
+* `c.t.s.i.adapter.out.persistence.SpringDataSessionRepository`
+* `c.t.s.i.adapter.out.persistence.SpringDataUserRepository`
+
+_Others_
+
+* `c.t.s.i.application.port.out.PasswordHasher` (via `c.t.s.i.adapter.out.security.BcryptPasswordHasher`)
+* `c.t.s.i.application.port.out.SessionManager` (via `c.t.s.i.adapter.out.security.JwtSessionManager`)
+|Bean references
+|* `c.t.s.n.application.service.NotificationDispatchService` (in Notifications)
+* `c.t.s.s.metrics.ISystemMetrics` (in Shared Kernel)
+|Aggregate roots
+|* `c.t.s.i.domain.Admin`
+* `c.t.s.i.domain.Session`
+* `c.t.s.i.domain.User`
+|===

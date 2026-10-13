@@ -11,13 +11,13 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
-import com.ticketing.system.Core.Application.services.RefundService;
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.exceptions.EntityNotFoundException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
-import com.ticketing.system.Presentation.presenters.account.RefundPresenter;
+import com.ticketing.system.shared.dto.RefundResultDTO;
+import com.ticketing.system.sales.application.service.RefundService;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.EntityNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.ui.presenters.account.RefundPresenter;
 
 class RefundPresenterTest {
 

@@ -2,7 +2,7 @@ package com.ticketing.system.unit.domain;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.events.SeatLabels;
+import com.ticketing.system.catalog.domain.SeatLabels;
 
 import static org.junit.jupiter.api.Assertions.*;
 

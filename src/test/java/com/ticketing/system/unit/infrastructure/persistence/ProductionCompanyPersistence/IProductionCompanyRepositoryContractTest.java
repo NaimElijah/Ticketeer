@@ -12,26 +12,26 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicyJsonConverter;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicyJsonConverter;
 
 /**
- * Contract every {@link IProductionCompanyRepository} implementation must satisfy. The Memory and
+ * Contract every {@link ProductionCompanyRepository} implementation must satisfy. The Memory and
  * JPA adapters each subclass this with their own {@link #newRepository()} factory; the tests are
  * reused. The owner/manager and policy round-trip tests pin the acceptance: the two id lists and the
  * purchase-policy tree survive save/reload on both adapters.
  */
 abstract class IProductionCompanyRepositoryContractTest {
 
-    protected abstract IProductionCompanyRepository newRepository();
+    protected abstract ProductionCompanyRepository newRepository();
 
-    private IProductionCompanyRepository repo;
+    private ProductionCompanyRepository repo;
 
     @BeforeEach
     void setUp() {

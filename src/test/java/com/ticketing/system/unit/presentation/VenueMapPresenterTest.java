@@ -1,11 +1,11 @@
 package com.ticketing.system.unit.presentation;
 
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapConfigDTO;
-import com.ticketing.system.Core.Application.services.EventManagementService;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.company.VenueMapPresenter;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.VenueMapConfigDTO;
+import com.ticketing.system.catalog.application.service.EventManagementService;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.presenters.company.VenueMapPresenter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

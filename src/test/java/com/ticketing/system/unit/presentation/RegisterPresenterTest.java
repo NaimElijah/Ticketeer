@@ -9,14 +9,14 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
-import com.ticketing.system.Core.Domain.exceptions.DuplicateEmailException;
-import com.ticketing.system.Core.Domain.exceptions.DuplicateUsernameException;
-import com.ticketing.system.Core.Domain.exceptions.GuestSessionRequiredException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidEmailFormatException;
-import com.ticketing.system.Core.Domain.exceptions.WeakPasswordException;
-import com.ticketing.system.Presentation.presenters.auth.RegisterPresenter;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.shared.exception.DuplicateEmailException;
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
+import com.ticketing.system.shared.exception.GuestSessionRequiredException;
+import com.ticketing.system.shared.exception.InvalidEmailFormatException;
+import com.ticketing.system.shared.exception.WeakPasswordException;
+import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

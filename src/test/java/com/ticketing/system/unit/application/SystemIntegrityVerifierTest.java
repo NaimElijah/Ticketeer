@@ -13,37 +13,37 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.services.SystemIntegrityVerifier;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
-import com.ticketing.system.Core.Domain.exceptions.SystemIntegrityViolationException;
-import com.ticketing.system.Core.Domain.exceptions.UserNotFoundException;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
+import com.ticketing.system.governance.application.service.SystemIntegrityVerifier;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
+import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
 
 class SystemIntegrityVerifierTest {
 
     private static final LocalDateTime FUTURE_START = LocalDateTime.of(2099, 6, 1, 18, 0);
     private static final LocalDateTime FUTURE_END = LocalDateTime.of(2099, 6, 1, 22, 0);
 
-    private final IUserRepository userRepository = mock(IUserRepository.class);
-    private final IProductionCompanyRepository companyRepository = mock(IProductionCompanyRepository.class);
-    private final IEventRepository eventRepository = mock(IEventRepository.class);
-    private final IActiveOrderRepository activeOrderRepository = mock(IActiveOrderRepository.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
+    private final ProductionCompanyRepository companyRepository = mock(ProductionCompanyRepository.class);
+    private final EventRepository eventRepository = mock(EventRepository.class);
+    private final ActiveOrderRepository activeOrderRepository = mock(ActiveOrderRepository.class);
     private final SystemIntegrityVerifier verifier = new SystemIntegrityVerifier(
             userRepository, companyRepository, eventRepository, activeOrderRepository);
 

@@ -18,11 +18,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.SendMessageRequestDTO;
-import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Presentation.presenters.messaging.SupportInboxPresenter;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.SendMessageRequestDTO;
+import com.ticketing.system.messaging.application.service.MessagingService;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
 
 class SupportInboxPresenterTest {
 

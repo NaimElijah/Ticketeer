@@ -8,20 +8,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 
 /**
- * Behavioural contract every {@link IAdminRepository} implementation must satisfy.
+ * Behavioural contract every {@link AdminRepository} implementation must satisfy.
  * The Memory and JPA adapters each subclass this with their own {@code newRepository()}
  * factory, so the identical tests run against both — the V3 "validate the swap behind
  * the unchanged port" safety net.
  */
 abstract class IAdminRepositoryContractTest {
 
-    protected abstract IAdminRepository newRepository();
+    protected abstract AdminRepository newRepository();
 
-    private IAdminRepository repo;
+    private AdminRepository repo;
 
     @BeforeEach
     void setUp() {

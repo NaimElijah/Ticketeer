@@ -1,0 +1,25 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.organization`
+|Spring components
+|_Services_
+
+* `c.t.s.o.application.service.CompanyManagementService`
+* `c.t.s.o.application.service.CompanyMembershipService`
+
+_Repositories_
+
+* `c.t.s.o.application.port.out.CompanyAppointmentRepository` (via `c.t.s.o.adapter.out.persistence.JpaCompanyAppointmentRepository`)
+* `c.t.s.o.application.port.out.ProductionCompanyRepository` (via `c.t.s.o.adapter.out.persistence.JpaProductionCompanyRepository`)
+* `c.t.s.o.application.port.out.CompanyAppointmentRepository` (via `c.t.s.o.adapter.out.persistence.MemoryCompanyAppointmentRepository`)
+* `c.t.s.o.application.port.out.ProductionCompanyRepository` (via `c.t.s.o.adapter.out.persistence.MemoryProductionCompanyRepository`)
+* `c.t.s.o.adapter.out.persistence.SpringDataCompanyAppointmentRepository`
+* `c.t.s.o.adapter.out.persistence.SpringDataProductionCompanyRepository`
+|Bean references
+|* `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
+* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+|Aggregate roots
+|* `c.t.s.o.domain.CompanyAppointment`
+* `c.t.s.o.domain.ProductionCompany`
+|===

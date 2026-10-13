@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Infrastructure.security.BcryptPasswordHasher;
+import com.ticketing.system.identity.adapter.out.security.BcryptPasswordHasher;
 
 class BcryptPasswordHasherTest {
 

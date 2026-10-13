@@ -20,28 +20,28 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.Core.Application.services.ReservationService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.SpringDataActiveOrderRepository;
-import com.ticketing.system.Infrastructure.persistence.EventPersistence.SpringDataEventRepository;
-import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.SpringDataProductionCompanyRepository;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataActiveOrderRepository;
+import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
+import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 
 /**
  * No-double-sell concurrency proof (V3-TX-03 / #361), run on the real JPA stack.
@@ -76,9 +76,9 @@ class ReservationConcurrencyTest {
     @Autowired
     private ReservationService reservationService;
     @Autowired
-    private IEventRepository eventRepository;
+    private EventRepository eventRepository;
     @Autowired
-    private IProductionCompanyRepository companyRepository;
+    private ProductionCompanyRepository companyRepository;
 
     // SpringData handles for an empty-schema reset between tests.
     @Autowired

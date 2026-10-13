@@ -12,19 +12,19 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.EventDetailDTO;
-import com.ticketing.system.Core.Application.dto.InventoryZoneDTO;
-import com.ticketing.system.Core.Application.dto.LocationDTO;
-import com.ticketing.system.Core.Application.dto.VenueMapDTO;
-import com.ticketing.system.Core.Application.services.CatalogService;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.exceptions.CompanyClosedException;
-import com.ticketing.system.Core.Domain.exceptions.EventNotFoundException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Core.Domain.exceptions.NullVenueMapException;
-import com.ticketing.system.Presentation.presenters.catalog.EventDetailsPresenter;
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
+import com.ticketing.system.shared.dto.LocationDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
+import com.ticketing.system.catalog.application.service.CatalogService;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.shared.exception.CompanyClosedException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.NullVenueMapException;
+import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 
 class EventDetailsPresenterTest {
 

@@ -6,9 +6,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.JpaActiveOrderRepository;
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.SpringDataActiveOrderRepository;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.sales.adapter.out.persistence.JpaActiveOrderRepository;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataActiveOrderRepository;
 
 /**
  * Runs the {@link IActiveOrderRepositoryContractTest} suite against the JPA adapter on an embedded H2
@@ -34,7 +34,7 @@ class JpaActiveOrderRepositoryContractTest extends IActiveOrderRepositoryContrac
     }
 
     @Override
-    protected IActiveOrderRepository newRepository() {
+    protected ActiveOrderRepository newRepository() {
         return repository;
     }
 }

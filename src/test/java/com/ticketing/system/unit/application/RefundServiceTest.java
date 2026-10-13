@@ -15,43 +15,43 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
-import com.ticketing.system.Core.Application.services.RefundService;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.Tickets.TicketStatus;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.exceptions.EntityNotFoundException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidTokenException;
-import com.ticketing.system.Core.Domain.exceptions.RefundFailedException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord;
-import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.MemoryOrderReceiptRepository;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
+import com.ticketing.system.shared.dto.PaymentResultDTO;
+import com.ticketing.system.shared.dto.RefundResultDTO;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.sales.application.service.RefundService;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.sales.domain.TicketStatus;
+import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
+import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.EntityNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
+import com.ticketing.system.sales.adapter.out.persistence.MemoryOrderReceiptRepository;
 import com.ticketing.system.testutil.TestTransactions;
 
 @ExtendWith(MockitoExtension.class)
 class RefundServiceTest {
 
     @Mock AuthenticationService authenticationService;
-    @Mock IOrderReceiptRepository orderReceiptRepository;
-    @Mock ITicketRepository ticketRepository;
-    @Mock IPaymentGateway paymentGateway;
-    @Mock IEventRepository eventRepository;
+    @Mock OrderReceiptRepository orderReceiptRepository;
+    @Mock TicketRepository ticketRepository;
+    @Mock PaymentGateway paymentGateway;
+    @Mock InventoryCommandPort inventoryPort;
     @Mock Ticket ticket;
-    @Mock Event event;
 
     RefundService service;
 
@@ -69,7 +69,7 @@ class RefundServiceTest {
     @BeforeEach
     void setUp() {
         service = new RefundService(authenticationService, orderReceiptRepository, ticketRepository,
-                paymentGateway, eventRepository, TestTransactions.noOpManager());
+                paymentGateway, inventoryPort, TestTransactions.noOpManager());
     }
 
     private static OrderReceipt memberReceiptWithCharge(int userId) {
@@ -119,24 +119,25 @@ class RefundServiceTest {
         Mockito.when(ticket.getZoneId()).thenReturn(ZONE_ID);
         Mockito.when(ticket.isSeatedTicket()).thenReturn(true);
         Mockito.when(ticket.getSeatNumber()).thenReturn("A9");
-        Mockito.when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
         service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
 
         Mockito.verify(ticket).markRefunded();
-        // The refunded seat is returned to the event's stock, and the event is persisted...
-        Mockito.verify(event).returnSoldToStock(Mockito.eq(ZONE_ID), Mockito.any());
-        Mockito.verify(eventRepository).save(event);
-        // ...under the buyer lock (MemoryEventRepository.save requires the caller to hold it).
-        Mockito.verify(eventRepository).lockForBuyerOperation(EVENT_ID);
-        Mockito.verify(eventRepository).unlockBuyerOperation(EVENT_ID);
+        // The refunded seat is handed to the catalog inventory port as a flat line (event, zone, seat).
+        // The port owns the buyer-lock / returnSoldToStock / save (now verified in InventoryServiceTest).
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<InventoryLineDTO>> linesCaptor = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(inventoryPort).returnSoldToStock(linesCaptor.capture());
+        assertThat(linesCaptor.getValue())
+                .containsExactly(new InventoryLineDTO(EVENT_ID, ZONE_ID, "A9"));
     }
 
     @Test
     void givenInventoryReturnFails_whenRequestRefund_thenRefundStillSucceeds() {
-        // Regression: a failure while returning inventory to stock (e.g. the event-lock guard, as in
-        // issue's "Event must be locked before saving") must NOT propagate — the gateway refund and the
-        // receipt/ticket flips have already committed, so the refund must still report success.
+        // Regression: a failure while returning inventory to stock must NOT propagate — the gateway
+        // refund and the receipt/ticket flips have already committed, so the refund must still report
+        // success. The inventory return is now owned by the catalog port; RefundService guards the call
+        // at the sales boundary so even a throwing port cannot turn a committed refund into a failure.
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         RefundResultDTO result = gatewayResult();
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
@@ -150,17 +151,16 @@ class RefundServiceTest {
         Mockito.when(ticket.getZoneId()).thenReturn(ZONE_ID);
         Mockito.when(ticket.isSeatedTicket()).thenReturn(true);
         Mockito.when(ticket.getSeatNumber()).thenReturn("A9");
-        Mockito.when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         Mockito.doThrow(new IllegalStateException("Event " + EVENT_ID + " must be locked before saving"))
-                .when(eventRepository).save(event);
+                .when(inventoryPort).returnSoldToStock(Mockito.anyList());
 
         RefundResultDTO returned = service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
 
         assertThat(returned).isSameAs(result);
         assertThat(receipt.wasRefunded()).isTrue();
         Mockito.verify(ticket).markRefunded();
-        // Even though the save blew up, the lock was still released.
-        Mockito.verify(eventRepository).unlockBuyerOperation(EVENT_ID);
+        // The port was invoked (and its failure swallowed) after the refund committed.
+        Mockito.verify(inventoryPort).returnSoldToStock(Mockito.anyList());
     }
 
     @Test
@@ -232,12 +232,12 @@ class RefundServiceTest {
     // one throws BusinessRuleViolationException) regardless of thread timing.
     @Test
     void givenConcurrentRefundRequests_whenRequestRefund_thenGatewayRefundsExactlyOnce() throws Exception {
-        IOrderReceiptRepository realReceiptRepo = new MemoryOrderReceiptRepository();
+        OrderReceiptRepository realReceiptRepo = new MemoryOrderReceiptRepository();
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         realReceiptRepo.save(receipt); // id == ORDER_ID
 
         AtomicInteger refundCalls = new AtomicInteger();
-        IPaymentGateway countingGateway = new IPaymentGateway() {
+        PaymentGateway countingGateway = new PaymentGateway() {
             @Override public String getId() { return "stub"; }
             @Override public boolean verifyConnection() { return true; }
             @Override public PaymentResultDTO charge(PaymentRequestDTO r) { throw new UnsupportedOperationException(); }
@@ -250,11 +250,11 @@ class RefundServiceTest {
         AuthenticationService auth = Mockito.mock(AuthenticationService.class);
         Mockito.when(auth.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(auth.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        ITicketRepository ticketRepo = Mockito.mock(ITicketRepository.class);
+        TicketRepository ticketRepo = Mockito.mock(TicketRepository.class);
         Mockito.when(ticketRepo.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of());
-        IEventRepository eventRepo = Mockito.mock(IEventRepository.class);
+        InventoryCommandPort inventoryPortMock = Mockito.mock(InventoryCommandPort.class);
 
-        RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, eventRepo, TestTransactions.noOpManager());
+        RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, inventoryPortMock, TestTransactions.noOpManager());
 
         int threads = 2;
         CyclicBarrier barrier = new CyclicBarrier(threads);

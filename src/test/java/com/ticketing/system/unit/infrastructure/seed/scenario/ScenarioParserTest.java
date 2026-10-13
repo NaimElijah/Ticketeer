@@ -1,7 +1,7 @@
 package com.ticketing.system.unit.infrastructure.seed.scenario;
 
-import com.ticketing.system.Infrastructure.dev.seed.scenario.ScenarioCommand;
-import com.ticketing.system.Infrastructure.dev.seed.scenario.ScenarioParser;
+import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioCommand;
+import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioParser;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

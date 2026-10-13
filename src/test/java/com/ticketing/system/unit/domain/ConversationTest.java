@@ -7,15 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.exceptions.ConversationClosedException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidParticipantException;
-import com.ticketing.system.Core.Domain.exceptions.InvalidStateTransitionException;
-import com.ticketing.system.Core.Domain.exceptions.MessageNotFoundException;
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.ConversationClosedException;
+import com.ticketing.system.shared.exception.InvalidParticipantException;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.MessageNotFoundException;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.support.BaseDomainTest;
 
 // Unit tests for the centralized messaging Conversation aggregate.

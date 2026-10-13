@@ -1,20 +1,28 @@
 package com.ticketing.system.acceptance;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.PurchaseCompletedNotice;
+import com.ticketing.system.sales.application.port.out.TicketIssuer;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 
-import com.ticketing.system.Core.Application.dto.*;
-import com.ticketing.system.Core.Application.interfaces.*;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
-import com.ticketing.system.Core.Application.services.CheckoutService;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Application.services.EventManagementService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.ActiveOrder.*;
-import com.ticketing.system.Core.Domain.Tickets.*;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.events.*;
-import com.ticketing.system.Core.Domain.orders.*;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
-import com.ticketing.system.Infrastructure.persistence.ActiveOrderPersistence.MemoryActiveOrderRepository;
+import com.ticketing.system.shared.dto.*;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.sales.application.service.CheckoutService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.catalog.application.service.EventManagementService;
+import com.ticketing.system.catalog.application.service.InventoryService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
+import com.ticketing.system.sales.domain.*;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.catalog.domain.*;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
 import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -34,26 +42,26 @@ import static org.mockito.Mockito.*;
 
 public class CheckoutServiceAcceptanceTest {
 
-    private IActiveOrderRepository activeOrderRepository;
-    private IEventRepository eventRepository;
-    private ITicketRepository ticketRepository;
-    private IOrderReceiptRepository orderReceiptRepository;
-    private ITicketIssuer ticketIssuer;
-    private IPaymentGateway paymentGateway;
-    private INotificationService notificationService;
-    private ISessionManager sessionManager;
-    private IUserRepository userRepository;
+    private ActiveOrderRepository activeOrderRepository;
+    private EventRepository eventRepository;
+    private TicketRepository ticketRepository;
+    private OrderReceiptRepository orderReceiptRepository;
+    private TicketIssuer ticketIssuer;
+    private PaymentGateway paymentGateway;
+    private ApplicationEventPublisher eventPublisher;
+    private SessionManager sessionManager;
+    private UserRepository userRepository;
 
     private CheckoutService checkoutService;
-    private SystemAdminService systemAdminService;
+    private MarketGate marketGate;
 
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
     @Autowired private EventManagementService eventManagementService;
-    private IProductionCompanyRepository companyRepository;
-    @Autowired private IEventRepository eventRepository1;
-    @Autowired private ITicketRepository ticketRepository1;
-    @Autowired private IOrderReceiptRepository orderReceiptRepository1;
+    private ProductionCompanyRepository companyRepository;
+    @Autowired private EventRepository eventRepository1;
+    @Autowired private TicketRepository ticketRepository1;
+    @Autowired private OrderReceiptRepository orderReceiptRepository1;
 
 
     private AuthTokenDTO registerAndLoginMember(String name) {
@@ -90,36 +98,40 @@ public class CheckoutServiceAcceptanceTest {
 
     @BeforeEach
     void setUp() {
-        activeOrderRepository = mock(IActiveOrderRepository.class);
-        eventRepository = mock(IEventRepository.class);
-        ticketRepository = mock(ITicketRepository.class);
-        userRepository = mock(IUserRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
+        activeOrderRepository = mock(ActiveOrderRepository.class);
+        eventRepository = mock(EventRepository.class);
+        ticketRepository = mock(TicketRepository.class);
+        userRepository = mock(UserRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
 
-        orderReceiptRepository = mock(IOrderReceiptRepository.class);
+        orderReceiptRepository = mock(OrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);
         when(orderReceiptRepository.nextId()).thenAnswer(invocation -> receiptIds.getAndIncrement());
 
-        ticketIssuer = mock(ITicketIssuer.class);
-        paymentGateway = mock(IPaymentGateway.class);
-        notificationService = mock(INotificationService.class);
-        sessionManager = mock(ISessionManager.class);
+        ticketIssuer = mock(TicketIssuer.class);
+        paymentGateway = mock(PaymentGateway.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        sessionManager = mock(SessionManager.class);
 
-        systemAdminService = mock(SystemAdminService.class);
-        when(systemAdminService.isMarketOpen()).thenReturn(true);
+        marketGate = mock(MarketGate.class);
+        when(marketGate.isOpen()).thenReturn(true);
 
+        // Catalog owns inventory mutation behind InventoryCommandPort. Wire the real InventoryService
+        // onto the same mock event store (+ mock company port) so the existing event/zone/seat stubs
+        // drive confirm/validate/price/policy a layer down; CheckoutService keeps eventRepository for
+        // the Phase-3 buyer-lock.
         checkoutService = new CheckoutService(
                 activeOrderRepository,
                 eventRepository,
+                new InventoryService(eventRepository, companyRepository),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
                 paymentGateway,
-                notificationService,
+                eventPublisher,
                 sessionManager,
                 userRepository,
-                companyRepository,
-                systemAdminService,
+                marketGate,
                 TestTransactions.noOpManager()
         );
 
@@ -678,8 +690,8 @@ public class CheckoutServiceAcceptanceTest {
         validPaymentAndIssuance(1);
 
         doThrow(new RuntimeException("notify failed"))
-                .when(notificationService)
-                .notifyPurchaseCompleted(anyInt(), anyDouble(), anyList());
+                .when(eventPublisher)
+                .publishEvent(any(PurchaseCompletedNotice.class));
 
         RuntimeException exception = assertThrows(RuntimeException.class,
                 () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
@@ -894,7 +906,7 @@ public class CheckoutServiceAcceptanceTest {
         doAnswer(invocation -> {
             userNotified.set(true);
             return null;
-        }).when(notificationService).notifyPurchaseCompleted(anyInt(), anyDouble(), anyList());
+        }).when(eventPublisher).publishEvent(any(PurchaseCompletedNotice.class));
 
         ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
@@ -915,19 +927,19 @@ public class CheckoutServiceAcceptanceTest {
     // These use a REAL MemoryActiveOrderRepository so delete-vs-save is observable across lookups —
     // the mock-based suites cannot catch this (their save/delete are no-ops).
 
-    private CheckoutService checkoutServiceWith(IActiveOrderRepository realRepo) {
+    private CheckoutService checkoutServiceWith(ActiveOrderRepository realRepo) {
         return new CheckoutService(
                 realRepo,
                 eventRepository,
+                new InventoryService(eventRepository, companyRepository),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
                 paymentGateway,
-                notificationService,
+                eventPublisher,
                 sessionManager,
                 userRepository,
-                companyRepository,
-                systemAdminService,
+                marketGate,
                 TestTransactions.noOpManager()
         );
     }

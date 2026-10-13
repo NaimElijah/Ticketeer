@@ -1,0 +1,27 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.ticketing.system.catalog`
+|Spring components
+|_Services_
+
+* `c.t.s.c.application.service.CatalogService`
+* `c.t.s.c.application.service.EventManagementService`
+
+_Repositories_
+
+* `c.t.s.c.application.port.out.EventRepository` (via `c.t.s.c.adapter.out.persistence.JpaEventRepository`)
+* `c.t.s.c.application.port.out.EventRepository` (via `c.t.s.c.adapter.out.persistence.MemoryEventRepository`)
+* `c.t.s.c.adapter.out.persistence.SpringDataEventRepository`
+
+_Others_
+
+* `c.t.s.c.adapter.out.organization.CompanyEventStatsAdapter`
+|Bean references
+|* `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
+* `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
+* `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
+* `c.t.s.o.application.service.CompanyMembershipService` (in Organization)
+|Aggregate roots
+|* `c.t.s.c.domain.Event`
+|===

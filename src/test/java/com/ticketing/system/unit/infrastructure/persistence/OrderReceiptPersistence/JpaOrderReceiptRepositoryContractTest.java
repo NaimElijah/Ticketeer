@@ -6,9 +6,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.JpaOrderReceiptRepository;
-import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.SpringDataOrderReceiptRepository;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.adapter.out.persistence.JpaOrderReceiptRepository;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataOrderReceiptRepository;
 
 /**
  * Runs the {@link IOrderReceiptRepositoryContractTest} suite against the JPA adapter on an embedded
@@ -34,7 +34,7 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     }
 
     @Override
-    protected IOrderReceiptRepository newRepository() {
+    protected OrderReceiptRepository newRepository() {
         return repository;
     }
 }

@@ -13,25 +13,25 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.ConversationDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
-import com.ticketing.system.Core.Application.dto.OutreachRequestDTO;
-import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.dto.RespondToComplaintRequestDTO;
-import com.ticketing.system.Core.Application.dto.SendMessageRequestDTO;
-import com.ticketing.system.Core.Application.dto.StartConversationRequestDTO;
-import com.ticketing.system.Core.Application.dto.SubmitComplaintRequestDTO;
-import com.ticketing.system.Core.Application.interfaces.IPasswordHasher;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Application.services.MessagingService;
-import com.ticketing.system.Core.Domain.Admin.Admin;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.exceptions.ConversationClosedException;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.OutreachRequestDTO;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
+import com.ticketing.system.shared.dto.SendMessageRequestDTO;
+import com.ticketing.system.shared.dto.StartConversationRequestDTO;
+import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
+import com.ticketing.system.identity.application.port.out.PasswordHasher;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.messaging.application.service.MessagingService;
+import com.ticketing.system.identity.domain.Admin;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.ConversationClosedException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 // End-to-end acceptance tests for the messaging subsystem, exercised through the real
 // Spring "test" context (AuthenticationService → CompanyManagementService → MessagingService).
@@ -60,8 +60,8 @@ class MessagingAcceptanceTest {
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
     @Autowired private MessagingService messagingService;
-    @Autowired private IAdminRepository adminRepository;
-    @Autowired private IPasswordHasher passwordHasher;
+    @Autowired private AdminRepository adminRepository;
+    @Autowired private PasswordHasher passwordHasher;
 
     // II.3.10 — Member contacts Company
     @Test

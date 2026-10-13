@@ -11,11 +11,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.Admin.IAdminRepository;
-import com.ticketing.system.Core.Domain.exceptions.ExternalServiceUnavailableException;
-import com.ticketing.system.Infrastructure.external.StubPaymentGateway;
-import com.ticketing.system.Infrastructure.external.StubTicketIssuer;
+import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
+import com.ticketing.system.sales.adapter.out.wsep.StubPaymentGateway;
+import com.ticketing.system.sales.adapter.out.wsep.StubTicketIssuer;
 
 // Fresh context per method so each test starts UNINITIALIZED, with reachable stubs and an
 // empty admin repo (the demo seeders are @Profile("dev"), so "test" boots with no admin).
@@ -25,7 +25,7 @@ import com.ticketing.system.Infrastructure.external.StubTicketIssuer;
 class AdminAcceptanceTest {
 
     @Autowired SystemAdminService systemAdminService;
-    @Autowired IAdminRepository adminRepository;
+    @Autowired AdminRepository adminRepository;
     @Autowired StubPaymentGateway stubPaymentGateway;
     @Autowired StubTicketIssuer stubTicketIssuer;
 

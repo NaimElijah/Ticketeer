@@ -11,20 +11,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Application.dto.AuthTokenDTO;
-import com.ticketing.system.Core.Application.dto.AppointmentResponseDTO;
-import com.ticketing.system.Core.Application.dto.CompanyRegistrationDTO;
-import com.ticketing.system.Core.Application.dto.LoginDTO;
-import com.ticketing.system.Core.Application.dto.LoginRequestDTO;
-import com.ticketing.system.Core.Application.dto.NotificationDTO;
-import com.ticketing.system.Core.Application.dto.OwnerAppointmentRequestDTO;
-import com.ticketing.system.Core.Application.dto.RegisterRequestDTO;
-import com.ticketing.system.Core.Application.services.AuthenticationService;
-import com.ticketing.system.Core.Application.services.CompanyManagementService;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.AppointmentResponseDTO;
+import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.NotificationDTO;
+import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
+import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 /**
  * Eval point 2 — delayed (offline) notifications.
@@ -41,9 +41,9 @@ class DelayedAppointmentNotificationAcceptanceTest {
 
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
-    @Autowired private INotificationRepository notificationRepository;
-    @Autowired private IProductionCompanyRepository companyRepository;
-    @Autowired private IUserRepository userRepository;
+    @Autowired private NotificationRepository notificationRepository;
+    @Autowired private ProductionCompanyRepository companyRepository;
+    @Autowired private UserRepository userRepository;
 
     @Test
     void GivenOfflineAppointee_WhenTheyLogIn_ThenSeeAppointmentNotificationAndCanConfirm() {

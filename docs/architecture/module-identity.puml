@@ -1,0 +1,22 @@
+@startuml
+set separator none
+title Identity & Access
+
+top to bottom direction
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+Container_Boundary("EventTicketSystemApplication.EventTicketSystemApplication_boundary", "EventTicketSystemApplication", $tags="") {
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "Shared Kernel", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "Notifications", $techn="Module", $descr="", $tags="", $link="")
+  Component(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, "Identity & Access", $techn="Module", $descr="", $tags="", $link="")
+}
+
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, EventTicketSystemApplication.EventTicketSystemApplication.Notifications, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.IdentityAccess, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "uses", $techn="", $tags="", $link="")
+Rel(EventTicketSystemApplication.EventTicketSystemApplication.Notifications, EventTicketSystemApplication.EventTicketSystemApplication.SharedKernel, "listens to", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+@enduml

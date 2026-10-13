@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Infrastructure.external.SensitiveDataMasker;
+import com.ticketing.system.shared.external.SensitiveDataMasker;
 
 class SensitiveDataMaskerTest {
 

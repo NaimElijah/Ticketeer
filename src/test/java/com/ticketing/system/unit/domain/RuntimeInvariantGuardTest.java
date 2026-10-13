@@ -11,19 +11,19 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.users.CompanyAppointment;
-import com.ticketing.system.Core.Domain.users.Permission;
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.organization.domain.CompanyAppointment;
+import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.support.BaseDomainTest;
 
 /**
  * Regression coverage for the "invariants hold at runtime, not just at construction"
  * work: every state-mutating method re-asserts {@link
- * com.ticketing.system.Core.Domain.shared.InvariantChecked#checkInvariants()}, and
+ * com.ticketing.system.shared.InvariantChecked#checkInvariants()}, and
  * collection getters hand back defensive copies so external code cannot corrupt an
  * aggregate behind its own back.
  *

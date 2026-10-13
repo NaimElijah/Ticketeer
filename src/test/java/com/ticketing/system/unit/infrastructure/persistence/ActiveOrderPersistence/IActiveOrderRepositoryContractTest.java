@@ -11,17 +11,17 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 
-// Contract tests every IActiveOrderRepository implementation must satisfy. Future
+// Contract tests every ActiveOrderRepository implementation must satisfy. Future
 // JPA-backed adapter will subclass this with its own newRepository() factory;
 // tests are reused.
 abstract class IActiveOrderRepositoryContractTest {
 
-    protected abstract IActiveOrderRepository newRepository();
+    protected abstract ActiveOrderRepository newRepository();
 
-    private IActiveOrderRepository repo;
+    private ActiveOrderRepository repo;
 
     @BeforeEach
     void setUp() {

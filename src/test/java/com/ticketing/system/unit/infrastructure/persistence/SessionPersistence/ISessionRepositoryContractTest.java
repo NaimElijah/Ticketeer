@@ -12,17 +12,17 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Core.Domain.users.Session;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
 
-// Contract tests every ISessionRepository implementation must satisfy. Future
+// Contract tests every SessionRepository implementation must satisfy. Future
 // JPA-backed adapter will subclass this with its own newRepository() factory;
 // tests are reused.
 abstract class ISessionRepositoryContractTest {
 
-    protected abstract ISessionRepository newRepository();
+    protected abstract SessionRepository newRepository();
 
-    private ISessionRepository repo;
+    private SessionRepository repo;
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
     private static final Instant T_FAR_FUTURE = Instant.parse("2027-01-01T00:00:00Z");

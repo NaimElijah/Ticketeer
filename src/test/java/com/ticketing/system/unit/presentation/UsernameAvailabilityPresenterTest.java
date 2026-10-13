@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.ticketing.system.Core.Application.services.MemberQueryService;
-import com.ticketing.system.Presentation.presenters.auth.UsernameAvailabilityPresenter;
-import com.ticketing.system.Presentation.presenters.auth.UsernameAvailabilityPresenter.Outcome;
+import com.ticketing.system.identity.application.service.MemberQueryService;
+import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
+import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter.Outcome;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

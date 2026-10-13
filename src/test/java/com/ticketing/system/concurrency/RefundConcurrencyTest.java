@@ -24,16 +24,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import com.ticketing.system.Core.Application.dto.RefundResultDTO;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.services.RefundService;
-import com.ticketing.system.Core.Domain.exceptions.BusinessRuleViolationException;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.orders.ReceiptLine;
-import com.ticketing.system.Core.Domain.orders.TransactionRecord;
-import com.ticketing.system.Infrastructure.persistence.OrderReceiptPersistence.SpringDataOrderReceiptRepository;
-import com.ticketing.system.Infrastructure.security.JwtSessionManager;
+import com.ticketing.system.shared.dto.RefundResultDTO;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
+import com.ticketing.system.sales.application.service.RefundService;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
+import com.ticketing.system.sales.adapter.out.persistence.SpringDataOrderReceiptRepository;
+import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 
 /**
  * No-double-refund concurrency proof (#410), run on the real JPA stack.
@@ -64,14 +64,14 @@ class RefundConcurrencyTest {
     @Autowired
     private RefundService refundService;
     @Autowired
-    private IOrderReceiptRepository orderReceiptRepository;
+    private OrderReceiptRepository orderReceiptRepository;
     @Autowired
     private JwtSessionManager jwtSessionManager;
     @Autowired
     private SpringDataOrderReceiptRepository receiptData;
 
     @MockitoBean
-    private IPaymentGateway paymentGateway;
+    private PaymentGateway paymentGateway;
 
     private String buyerToken;
 

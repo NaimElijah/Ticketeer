@@ -30,65 +30,66 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
-import com.ticketing.system.Core.Application.dto.BarcodeDTO;
+import com.ticketing.system.shared.dto.BarcodeDTO;
 import com.ticketing.system.testutil.TestTransactions;
-import com.ticketing.system.Core.Application.dto.CardDetailsDTO;
-import com.ticketing.system.Core.Application.dto.CheckoutResultDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceRequestDTO;
-import com.ticketing.system.Core.Application.dto.IssuanceResultDTO;
-import com.ticketing.system.Core.Application.dto.PaymentRequestDTO;
-import com.ticketing.system.Core.Application.dto.PaymentResultDTO;
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.IPaymentGateway;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
-import com.ticketing.system.Core.Application.interfaces.ITicketIssuer;
-import com.ticketing.system.Core.Application.services.CheckoutService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.exceptions.MarketNotOpenException;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.Tickets.ITicketRepository;
-import com.ticketing.system.Core.Domain.Tickets.Ticket;
-import com.ticketing.system.Core.Domain.events.DiscountPolicy;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventCategory;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Location;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.events.ShowDate;
-import com.ticketing.system.Core.Domain.events.StandingZone;
-import com.ticketing.system.Core.Domain.events.VenueMap;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
-import com.ticketing.system.Core.Domain.policies.purchase.NoPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.PurchasePolicy;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
-import com.ticketing.system.Core.Domain.users.User;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.policies.purchase.AgePurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MaxTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.MinTicketsPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.AndPurchasePolicy;
-import com.ticketing.system.Core.Domain.policies.purchase.OrPurchasePolicy;
+import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.IssuanceRequestDTO;
+import com.ticketing.system.shared.dto.IssuanceResultDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
+import com.ticketing.system.shared.dto.PaymentResultDTO;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.sales.application.port.out.TicketIssuer;
+import com.ticketing.system.sales.application.service.CheckoutService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
+import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.service.InventoryService;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.catalog.domain.VenueMap;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
 
 class CheckoutServiceTest {
 
-    private IActiveOrderRepository mockActiveOrderRepo;
-    private IEventRepository mockEventRepo;
-    private ITicketRepository mockTicketRepo;
-    private IOrderReceiptRepository mockOrderReceiptRepo;
-    private ITicketIssuer mockTicketIssuer;
-    private IPaymentGateway mockPaymentGateway;
-    private INotificationService mockNotificationService;
-    private ISessionManager mockiSessionManager;
-    private IUserRepository mockUserRepository;
-    private SystemAdminService mockSystemAdminService;
+    private ActiveOrderRepository mockActiveOrderRepo;
+    private EventRepository mockEventRepo;
+    private TicketRepository mockTicketRepo;
+    private OrderReceiptRepository mockOrderReceiptRepo;
+    private TicketIssuer mockTicketIssuer;
+    private PaymentGateway mockPaymentGateway;
+    private ApplicationEventPublisher mockEventPublisher;
+    private SessionManager mockiSessionManager;
+    private UserRepository mockUserRepository;
+    private MarketGate mockMarketGate;
 
     private CheckoutService checkoutService;
 
@@ -125,39 +126,43 @@ class CheckoutServiceTest {
 
     @BeforeEach
     void setUp() {
-        mockActiveOrderRepo = mock(IActiveOrderRepository.class);
-        mockEventRepo = mock(IEventRepository.class);
-        mockTicketRepo = mock(ITicketRepository.class);
+        mockActiveOrderRepo = mock(ActiveOrderRepository.class);
+        mockEventRepo = mock(EventRepository.class);
+        mockTicketRepo = mock(TicketRepository.class);
         
-        mockOrderReceiptRepo = mock(IOrderReceiptRepository.class);
+        mockOrderReceiptRepo = mock(OrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);
         when(mockOrderReceiptRepo.nextId()).thenAnswer(invocation -> receiptIds.getAndIncrement());
 
-        mockTicketIssuer = mock(ITicketIssuer.class);
-        mockPaymentGateway = mock(IPaymentGateway.class);
-        mockNotificationService = mock(INotificationService.class);
-        mockiSessionManager = mock(ISessionManager.class);
-        mockUserRepository = mock(IUserRepository.class);
+        mockTicketIssuer = mock(TicketIssuer.class);
+        mockPaymentGateway = mock(PaymentGateway.class);
+        mockEventPublisher = mock(ApplicationEventPublisher.class);
+        mockiSessionManager = mock(SessionManager.class);
+        mockUserRepository = mock(UserRepository.class);
         User mockUser = mock(User.class);
         when(mockUser.getAge()).thenReturn(20);
           when(mockUserRepository.getUserById(USER_ID)).thenReturn(mockUser); 
         
 
-        mockSystemAdminService = mock(SystemAdminService.class);
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(true);
+        mockMarketGate = mock(MarketGate.class);
+        when(mockMarketGate.isOpen()).thenReturn(true);
 
+        // Catalog owns inventory mutation behind InventoryCommandPort. Wire the REAL InventoryService
+        // onto the SAME mock event store (and a mock company port for policy), so the existing
+        // event/zone/seat stubs still drive confirm/validate/price/policy one layer down. CheckoutService
+        // keeps mockEventRepo for the Phase-3 buyer-lock.
         checkoutService = new CheckoutService(
                 mockActiveOrderRepo,
                 mockEventRepo,
+                new InventoryService(mockEventRepo, mock(ProductionCompanyRepository.class)),
                 mockTicketRepo,
                 mockOrderReceiptRepo,
                 mockTicketIssuer,
                 mockPaymentGateway,
-                mockNotificationService,
+                mockEventPublisher,
                 mockiSessionManager,
                 mockUserRepository,
-                mock(IProductionCompanyRepository.class),
-                mockSystemAdminService,
+                mockMarketGate,
                 TestTransactions.noOpManager()
         );
 
@@ -208,7 +213,7 @@ class CheckoutServiceTest {
     void GivenMarketClosed_WhenCheckoutMember_ThenThrowsAndNoCharge() {
         // Events are ON_SALE (see setUp) and the order is valid — the closed market
         // is the only thing blocking the sale, and it blocks before any charge.
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(false);
+        when(mockMarketGate.isOpen()).thenReturn(false);
         assertThrows(MarketNotOpenException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
         verify(mockPaymentGateway, never()).charge(any());
@@ -216,7 +221,7 @@ class CheckoutServiceTest {
 
     @Test
     void GivenMarketClosed_WhenCheckoutGuest_ThenThrowsAndNoCharge() {
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(false);
+        when(mockMarketGate.isOpen()).thenReturn(false);
         assertThrows(MarketNotOpenException.class, () ->
                 checkoutService.checkoutGuest("guest-session", "guest@test.com",
                         IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, 30));
@@ -2622,7 +2627,7 @@ private AtomicBoolean trackReceiptSave() {
                 PAYMENT_METHOD_TOKEN);
 
         // The market closes after the purchase completed.
-        when(mockSystemAdminService.isMarketOpen()).thenReturn(false);
+        when(mockMarketGate.isOpen()).thenReturn(false);
 
         // The idempotent retry must still return the cached receipt, not throw MarketNotOpenException.
         CheckoutResultDTO retry = checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY,

@@ -7,9 +7,9 @@ import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
-import com.ticketing.system.Core.Domain.notifications.NotificationType;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.notifications.domain.NotificationType;
 import com.ticketing.system.support.BaseDomainTest;
 
 // Unit tests for the Notification aggregate (UC-35/36/37).

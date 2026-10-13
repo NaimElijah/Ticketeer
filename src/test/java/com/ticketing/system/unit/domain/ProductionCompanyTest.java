@@ -11,10 +11,10 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.company.CompanyStatus;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.exceptions.UnauthorizedActionException;
-import com.ticketing.system.Core.Domain.users.Permission;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.support.BaseDomainTest;
 
 class ProductionCompanyTest extends BaseDomainTest {

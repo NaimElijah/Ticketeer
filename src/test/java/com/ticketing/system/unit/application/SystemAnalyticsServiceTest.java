@@ -15,21 +15,21 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Application.dto.AdminOverviewDTO;
-import com.ticketing.system.Core.Application.dto.SystemAnalyticsDTO;
-import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.interfaces.MetricType;
-import com.ticketing.system.Core.Application.services.SystemAnalyticsService;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.company.ProductionCompany;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.EventStatus;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.orders.IOrderReceiptRepository;
-import com.ticketing.system.Core.Domain.orders.OrderReceipt;
+import com.ticketing.system.shared.dto.AdminOverviewDTO;
+import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
+import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
+import com.ticketing.system.governance.application.service.SystemAnalyticsService;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
 
 /**
  * Unit tests for {@link SystemAnalyticsService} (UC-46 / #43, #279). The metrics
@@ -42,19 +42,19 @@ class SystemAnalyticsServiceTest {
     private static final int WINDOW = 5;
 
     private ISystemMetrics metrics;
-    private IOrderReceiptRepository orderReceiptRepository;
-    private IProductionCompanyRepository companyRepository;
-    private IEventRepository eventRepository;
-    private IConversationRepository conversationRepository;
+    private OrderReceiptRepository orderReceiptRepository;
+    private ProductionCompanyRepository companyRepository;
+    private EventRepository eventRepository;
+    private ConversationRepository conversationRepository;
     private SystemAnalyticsService service;
 
     @BeforeEach
     void setUp() {
         metrics = mock(ISystemMetrics.class);
-        orderReceiptRepository = mock(IOrderReceiptRepository.class);
-        companyRepository = mock(IProductionCompanyRepository.class);
-        eventRepository = mock(IEventRepository.class);
-        conversationRepository = mock(IConversationRepository.class);
+        orderReceiptRepository = mock(OrderReceiptRepository.class);
+        companyRepository = mock(ProductionCompanyRepository.class);
+        eventRepository = mock(EventRepository.class);
+        conversationRepository = mock(ConversationRepository.class);
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new SystemAnalyticsService(metrics, orderReceiptRepository, companyRepository,
                 eventRepository, conversationRepository, clock, WINDOW);

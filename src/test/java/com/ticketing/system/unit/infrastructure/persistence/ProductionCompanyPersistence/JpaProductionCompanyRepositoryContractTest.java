@@ -6,9 +6,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.JpaProductionCompanyRepository;
-import com.ticketing.system.Infrastructure.persistence.ProductionCompanyPersistence.SpringDataProductionCompanyRepository;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.adapter.out.persistence.JpaProductionCompanyRepository;
+import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 
 /**
  * Runs the {@link IProductionCompanyRepositoryContractTest} suite against the JPA adapter on an
@@ -35,7 +35,7 @@ class JpaProductionCompanyRepositoryContractTest extends IProductionCompanyRepos
     }
 
     @Override
-    protected IProductionCompanyRepository newRepository() {
+    protected ProductionCompanyRepository newRepository() {
         return repository;
     }
 }

@@ -11,14 +11,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import com.ticketing.system.Core.Application.dto.NotificationDTO;
+import com.ticketing.system.shared.dto.NotificationDTO;
 import java.util.List;
 
-import com.ticketing.system.Core.Domain.notifications.INotificationRepository;
-import com.ticketing.system.Core.Application.services.NotificationDispatchService;
-import com.ticketing.system.Core.Domain.notifications.Notification;
-import com.ticketing.system.Core.Domain.notifications.NotificationStatus;
-import com.ticketing.system.Core.Domain.notifications.NotificationType;
+import com.ticketing.system.notifications.application.port.out.NotificationRepository;
+import com.ticketing.system.notifications.application.service.NotificationDispatchService;
+import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.notifications.domain.NotificationType;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -28,7 +28,7 @@ class NotificationAcceptanceTest {
     private NotificationDispatchService notificationDispatchService;
 
     @Autowired
-    private INotificationRepository notificationRepository;
+    private NotificationRepository notificationRepository;
 
     // UC-35
     @Test

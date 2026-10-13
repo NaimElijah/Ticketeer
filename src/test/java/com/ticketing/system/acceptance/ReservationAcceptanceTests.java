@@ -1,24 +1,25 @@
 package com.ticketing.system.acceptance;
 
-import com.ticketing.system.Core.Application.dto.InventorySelectionDTO;
-import com.ticketing.system.Core.Application.dto.ReservationResultDTO;
-import com.ticketing.system.Core.Application.interfaces.INotificationService;
-import com.ticketing.system.Core.Application.interfaces.ISessionManager;
-import com.ticketing.system.Core.Application.interfaces.ISystemMetrics;
-import com.ticketing.system.Core.Application.services.ReservationService;
-import com.ticketing.system.Core.Application.services.SystemAdminService;
-import com.ticketing.system.Core.Domain.ActiveOrder.ActiveOrder;
-import com.ticketing.system.Core.Domain.ActiveOrder.CartLineItem;
-import com.ticketing.system.Core.Domain.ActiveOrder.IActiveOrderRepository;
-import com.ticketing.system.Core.Domain.events.Event;
-import com.ticketing.system.Core.Domain.events.IEventRepository;
-import com.ticketing.system.Core.Domain.events.InventorySelection;
-import com.ticketing.system.Core.Domain.events.InventoryZone;
-import com.ticketing.system.Core.Domain.events.Seat;
-import com.ticketing.system.Core.Domain.events.SeatStatus;
-import com.ticketing.system.Core.Domain.events.SeatedZone;
-import com.ticketing.system.Core.Domain.company.IProductionCompanyRepository;
-import com.ticketing.system.Core.Domain.users.IUserRepository;
+import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.shared.dto.ReservationResultDTO;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
+import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.application.service.InventoryService;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.identity.application.port.out.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,10 +44,10 @@ public class ReservationAcceptanceTests {
 
     private ReservationService reservationService;
 
-    private IEventRepository eventRepository;
-    private IActiveOrderRepository activeOrderRepository;
-    private ISessionManager sessionManager;
-    private INotificationService notificationService;
+    private EventRepository eventRepository;
+    private ActiveOrderRepository activeOrderRepository;
+    private SessionManager sessionManager;
+    private ApplicationEventPublisher eventPublisher;
 
     private Event event;
     private InventoryZone zone;
@@ -54,22 +55,25 @@ public class ReservationAcceptanceTests {
 
     @BeforeEach
     void setUp() {
-        eventRepository = mock(IEventRepository.class);
-        activeOrderRepository = mock(IActiveOrderRepository.class);
-        sessionManager = mock(ISessionManager.class);
-        notificationService = mock(INotificationService.class);
+        eventRepository = mock(EventRepository.class);
+        activeOrderRepository = mock(ActiveOrderRepository.class);
+        sessionManager = mock(SessionManager.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
 
-        SystemAdminService systemAdminService = mock(SystemAdminService.class);
-        when(systemAdminService.isMarketOpen()).thenReturn(true);
+        MarketGate marketGate = mock(MarketGate.class);
+        when(marketGate.isOpen()).thenReturn(true);
 
+        // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
+        // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
+        InventoryService inventoryService = new InventoryService(
+                eventRepository, mock(ProductionCompanyRepository.class));
         reservationService = new ReservationService(
-                eventRepository,
+                inventoryService,
                 activeOrderRepository,
                 sessionManager,
-                notificationService,
-                mock(IProductionCompanyRepository.class),
-                mock(IUserRepository.class),
-                systemAdminService,
+                eventPublisher,
+                mock(UserRepository.class),
+                marketGate,
                 mock(ISystemMetrics.class)
         );
 

@@ -11,24 +11,24 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ticketing.system.Core.Domain.messaging.Conversation;
-import com.ticketing.system.Core.Domain.messaging.ConversationStatus;
-import com.ticketing.system.Core.Domain.messaging.ConversationType;
-import com.ticketing.system.Core.Domain.messaging.IConversationRepository;
-import com.ticketing.system.Core.Domain.messaging.Message;
-import com.ticketing.system.Core.Domain.messaging.ParticipantType;
+import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ConversationStatus;
+import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.application.port.out.ConversationRepository;
+import com.ticketing.system.messaging.domain.Message;
+import com.ticketing.system.messaging.domain.ParticipantType;
 
 /**
- * Contract every {@link IConversationRepository} implementation must satisfy. The Memory and JPA
+ * Contract every {@link ConversationRepository} implementation must satisfy. The Memory and JPA
  * adapters each subclass this with their own {@link #newRepository()} factory; the tests are reused.
  * The messages/read-state/unread-count tests pin the acceptance: the ordered message thread, the
  * per-message read flag, and the derived unread count survive save/reload on both adapters.
  */
 abstract class IConversationRepositoryContractTest {
 
-    protected abstract IConversationRepository newRepository();
+    protected abstract ConversationRepository newRepository();
 
-    private IConversationRepository repo;
+    private ConversationRepository repo;
 
     @BeforeEach
     void setUp() {

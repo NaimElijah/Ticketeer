@@ -10,9 +10,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.ticketing.system.Core.Domain.users.ISessionRepository;
-import com.ticketing.system.Infrastructure.persistence.SessionPersistence.JpaSessionRepository;
-import com.ticketing.system.Infrastructure.persistence.SessionPersistence.SpringDataSessionRepository;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.adapter.out.persistence.JpaSessionRepository;
+import com.ticketing.system.identity.adapter.out.persistence.SpringDataSessionRepository;
 
 /**
  * Runs the {@link ISessionRepositoryContractTest} suite against the JPA adapter on an
@@ -42,7 +42,7 @@ class JpaSessionRepositoryContractTest extends ISessionRepositoryContractTest {
     }
 
     @Override
-    protected ISessionRepository newRepository() {
+    protected SessionRepository newRepository() {
         return repository;
     }
 
