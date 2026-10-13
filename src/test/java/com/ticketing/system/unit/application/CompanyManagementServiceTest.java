@@ -674,9 +674,6 @@ public class CompanyManagementServiceTest {
                 assertEquals("Database connection lost", exception.getCause().getMessage());
         }
 
-        // NOTE: the viewSalesHistory tests moved with the method to CompanyAnalyticsServiceTest
-        // (reporting) — organization no longer owns that cross-context sales read.
-
         @Test
         public void GivenInvalidToken_WhenViewOrganizationalTree_ThenThrowException() {
                 when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);

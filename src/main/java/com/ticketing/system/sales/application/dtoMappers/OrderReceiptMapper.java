@@ -43,20 +43,7 @@ public class OrderReceiptMapper {
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receipt.getId());
-        return map(receipt, safeList(tickets), false, true, eventDisplay, companyRepository, userRepository);
-    }
-
-    /**
-     * Maps only the selected tickets of a receipt (company sales history).
-     * Transactions are omitted so a company can't see payment data for tickets
-     * from another company that shared the same order.
-     */
-    public PurchaseHistoryDTO.PurchaseRecordDTO toPurchaseRecordDTO(OrderReceipt receipt,
-            List<Ticket> selectedTickets,
-            CatalogEventDisplayPort eventDisplay,
-            ProductionCompanyRepository companyRepository,
-            UserRepository userRepository) {
-        return map(receipt, safeList(selectedTickets), true, false, eventDisplay, companyRepository, userRepository);
+        return map(receipt, safeList(tickets), eventDisplay, companyRepository, userRepository);
     }
 
     /** UC-31 global history: include only tickets matching the event filter; all transactions. */
@@ -86,34 +73,21 @@ public class OrderReceiptMapper {
         return buildRecord(receipt, totalPaid, transactionDtos, ticketRecords, userRepository);
     }
 
-    // Actual mapping work, with options to include only selected tickets and to include/exclude transactions.
+    // Maps every line of the receipt (enriched with current ticket status) and all its transactions.
     private PurchaseHistoryDTO.PurchaseRecordDTO map(OrderReceipt receipt, List<Ticket> tickets,
-            boolean selectedTicketsOnly, boolean includeTransactions,
             CatalogEventDisplayPort eventDisplay, ProductionCompanyRepository companyRepository,
             UserRepository userRepository) {
         Map<Integer, Ticket> ticketsById = byId(tickets);
 
-        List<ReceiptLine> linesToMap = receipt.getReceiptLines();
-        if (selectedTicketsOnly) {
-            Set<Integer> selectedTicketIds = ticketsById.keySet();
-            linesToMap = linesToMap.stream()
-                    .filter(line -> selectedTicketIds.contains(line.getTicketId()))
-                    .toList();
-        }
-
-        double totalPaid = selectedTicketsOnly
-                ? linesToMap.stream().mapToDouble(ReceiptLine::getPriceAtReservation).sum()
-                : receipt.getTotalAmount();
-
-        List<PurchaseHistoryDTO.TicketRecordDTO> ticketRecords = linesToMap.stream()
+        List<PurchaseHistoryDTO.TicketRecordDTO> ticketRecords = receipt.getReceiptLines().stream()
                 .map(line -> toTicketRecordDTO(receipt, line, ticketsById, eventDisplay, companyRepository))
                 .toList();
 
-        List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos = includeTransactions
-                ? receipt.getTransactionRecords().stream().map(this::toTransactionRecordDTO).toList()
-                : List.of();
+        List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos = receipt.getTransactionRecords().stream()
+                .map(this::toTransactionRecordDTO)
+                .toList();
 
-        return buildRecord(receipt, totalPaid, transactionDtos, ticketRecords, userRepository);
+        return buildRecord(receipt, receipt.getTotalAmount(), transactionDtos, ticketRecords, userRepository);
     }
 
     private PurchaseHistoryDTO.PurchaseRecordDTO buildRecord(OrderReceipt receipt, double totalPaid,
