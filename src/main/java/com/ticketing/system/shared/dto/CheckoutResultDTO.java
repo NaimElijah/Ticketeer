@@ -10,10 +10,10 @@ public record CheckoutResultDTO(
     int paymentTransactionId,
     List<IssuedTicketDTO> issuedTickets
 ) {
-    // One issued ticket: the issuer-assigned id plus the barcode VALUE the payment/
-    // issuance provider actually returned (the real WSEP TIX code, or the stub's
-    // code) — so the confirmation can show the true barcode instead of fabricating
-    // one from the id.
+    // One issued ticket: the persisted ticket id (minted by TicketRepository.nextId) plus
+    // the barcode VALUE the issuance provider actually returned (the real WSEP TIX code,
+    // or the stub's code) — so the confirmation can show the true barcode instead of
+    // fabricating one from the id.
     public record IssuedTicketDTO(int ticketId, String barcode) {}
 
     // Convenience for callers/tests that only need the ids.

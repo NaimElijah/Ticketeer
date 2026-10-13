@@ -18,8 +18,10 @@ import jakarta.persistence.Version;
  * <p>V3: mapped to JPA as a flat row — the four references ({@code eventId},
  * {@code zoneid}, {@code orderReceiptId}, {@code holderUserId}) are plain by-id
  * columns, never {@code @ManyToOne} (the cross-aggregate reference rule). The
- * {@code ticketId} {@code @Id} is ASSIGNED by the issuer (the barcode/ticketId the
- * ticket issuer returns), never {@code @GeneratedValue}. {@code status} is stored by
+ * {@code ticketId} {@code @Id} is ASSIGNED by the application from
+ * {@code TicketRepository.nextId()} (seeded from {@code max(ticketId)} on JPA so it survives
+ * restarts, #19), never {@code @GeneratedValue} and never by the ticket issuer, whose barcode
+ * is stored separately. {@code status} is stored by
  * name ({@code @Enumerated(STRING)}) so the column is stable against enum reordering,
  * and {@code @Version} drives optimistic locking. A protected no-arg constructor lets
  * Hibernate hydrate instances; the public constructor still enforces the invariants.

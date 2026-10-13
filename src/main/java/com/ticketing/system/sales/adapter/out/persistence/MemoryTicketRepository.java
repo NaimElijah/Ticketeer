@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
@@ -27,6 +28,7 @@ public class MemoryTicketRepository implements TicketRepository {
 
     private final Map<Integer, Ticket> ticketsById = new ConcurrentHashMap<>();
     private final RepositoryLocks<Integer> locks = new RepositoryLocks<>();
+    private final AtomicInteger idSequence = new AtomicInteger(1);
 
     @Override
     public void lockForUpdate(Integer id) { locks.lock(id); }
@@ -38,6 +40,11 @@ public class MemoryTicketRepository implements TicketRepository {
     public boolean save(Ticket ticket) {
         ticketsById.put(ticket.getId(), ticket);
         return true;
+    }
+
+    @Override
+    public int nextId() {
+        return idSequence.getAndIncrement();
     }
 
     @Override

@@ -59,8 +59,8 @@ class WsepTicketIssuerTest {
         assertEquals(2, result.barcodes().size());
         assertEquals("TIX-aaaa-1111", result.barcodes().get(0).barcodeValue());
         assertEquals("TIX-bbbb-2222", result.barcodes().get(1).barcodeValue());
-        assertTrue(result.barcodes().get(0).ticketId() > 0);
-        assertTrue(result.barcodes().get(1).ticketId() > 0);
+        assertEquals("QR", result.barcodes().get(0).format());
+        assertEquals("QR", result.barcodes().get(1).format());
 
         ArgumentCaptor<WsepHttpClient.Form> captor = ArgumentCaptor.forClass(WsepHttpClient.Form.class);
         verify(http, times(2)).post(captor.capture());

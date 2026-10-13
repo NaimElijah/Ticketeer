@@ -178,4 +178,15 @@ abstract class ITicketRepositoryContractTest {
         assertNotNull(repo.findById(3));
         assertEquals(Set.of(1, 2), ids(repo.findByEventId(10)));
     }
+
+    // --- nextId (#19) ----------------------------------------------------------
+
+    @Test
+    void GivenRepository_WhenNextIdCalledTwice_ThenIdsArePositiveDistinctAndIncreasing() {
+        int first = repo.nextId();
+        int second = repo.nextId();
+
+        assertTrue(first > 0);
+        assertTrue(second > first);
+    }
 }

@@ -129,9 +129,15 @@ public class CheckoutService {
     }
 
     // Result of the atomic Phase-3 persistence unit, surfaced to the orchestrator once the
-    // transaction has committed: the receipt id feeds the result DTO, the lines feed the
-    // post-unlock purchase notification.
-    private record Phase3Persisted(int orderReceiptId, List<ReceiptLine> receiptLines) {
+    // transaction has committed: the receipt id and the persisted tickets feed the result DTO,
+    // the lines feed the post-unlock purchase notification.
+    private record Phase3Persisted(int orderReceiptId, List<ReceiptLine> receiptLines,
+            List<CheckoutResultDTO.IssuedTicketDTO> issuedTickets) {
+    }
+
+    // The tickets saved for one order: their receipt lines plus the id/barcode pairs shown to the buyer.
+    private record SavedTickets(List<ReceiptLine> receiptLines,
+            List<CheckoutResultDTO.IssuedTicketDTO> issuedTickets) {
     }
 
     // UC-32 / I.2.1 — no money moves while the trading market is closed. This is a
@@ -267,13 +273,14 @@ public class CheckoutService {
                 validateCanConfirmInventorySale(snapshotItems, orderKey);
 
                 int receiptId = orderReceiptRepository.nextId();
-                List<ReceiptLine> lines = saveTicketsAndBuildReceiptLines(capturedUserId, receiptId, pricedItems,
+                SavedTickets saved = saveTicketsAndBuildReceiptLines(capturedUserId, receiptId, pricedItems,
                         issuanceResult);
-                saveMemberReceipt(capturedUserId, receiptId, capturedTotalPrice, lines, capturedPaymentResult, issuanceResult);
+                saveMemberReceipt(capturedUserId, receiptId, capturedTotalPrice, saved.receiptLines(),
+                        capturedPaymentResult, issuanceResult);
 
                 // Point of no return: commit the sale last, once everything fallible has succeeded.
                 confirmInventorySale(snapshotItems, orderKey);
-                return new Phase3Persisted(receiptId, lines);
+                return new Phase3Persisted(receiptId, saved.receiptLines(), saved.issuedTickets());
             });
             inventorySaleConfirmed = true;
             int orderReceiptId = persisted.orderReceiptId();
@@ -286,7 +293,8 @@ public class CheckoutService {
             // buyer's next reservation.
             finalizeConsumedOrder(order);
 
-            CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult, issuanceResult);
+            CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult,
+                    persisted.issuedTickets());
             cacheCheckoutResult(idempotencyKey, buyerKey, result);
 
             receiptLinesToNotifyAfterUnlock = receiptLines;
@@ -421,13 +429,13 @@ public class CheckoutService {
                 validateCanConfirmInventorySale(snapshotItems, orderKey);
 
                 int receiptId = orderReceiptRepository.nextId();
-                List<ReceiptLine> lines = saveTicketsAndBuildReceiptLines(null, receiptId, pricedItems, issuanceResult);
-                saveGuestReceipt(guestEmail, guestSessionId, receiptId, capturedTotalPrice, lines, capturedPaymentResult,
-                        issuanceResult);
+                SavedTickets saved = saveTicketsAndBuildReceiptLines(null, receiptId, pricedItems, issuanceResult);
+                saveGuestReceipt(guestEmail, guestSessionId, receiptId, capturedTotalPrice, saved.receiptLines(),
+                        capturedPaymentResult, issuanceResult);
 
                 // Point of no return: commit the sale last, once everything fallible has succeeded.
                 confirmInventorySale(snapshotItems, orderKey);
-                return new Phase3Persisted(receiptId, lines);
+                return new Phase3Persisted(receiptId, saved.receiptLines(), saved.issuedTickets());
             });
             inventorySaleConfirmed = true;
             int orderReceiptId = persisted.orderReceiptId();
@@ -439,7 +447,8 @@ public class CheckoutService {
             // buyer's next reservation.
             finalizeConsumedOrder(order);
 
-            CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult, issuanceResult);
+            CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult,
+                    persisted.issuedTickets());
             cacheCheckoutResult(idempotencyKey, buyerKey, result);
 
             return result;
@@ -697,7 +706,7 @@ public class CheckoutService {
     // any exceptions or errors that might occur during the ticket issuance process
     // in a consistent way. The result from the ticket issuer will be validated to
     // ensure that the tickets were issued successfully and that we have all the
-    // necessary information (e.g. ticket IDs, barcodes) to proceed with saving
+    // necessary information (one barcode per item) to proceed with saving
     // receipts and confirming inventory sale.
     private IssuanceResultDTO issueTickets(Integer buyerUserId, String buyerEmail, List<CartLineItem> boughtItems) {
         List<IssuanceRequestDTO.TicketIssuanceItemDTO> issuanceItems = boughtItems.stream()
@@ -726,8 +735,8 @@ public class CheckoutService {
     // not null, that it contains a valid issuance transaction ID, that the issuer
     // name is present, that the issuance time is present, and that the list of
     // issued barcodes matches the number of items we attempted to purchase. We also
-    // validate each issued barcode to ensure that it contains a valid ticket ID and
-    // a non-blank barcode value. This ensures that we only proceed with successful
+    // validate each issued barcode to ensure that it carries a non-blank barcode
+    // value. This ensures that we only proceed with successful
     // ticket issuances that match our expected values and that we can handle any
     // discrepancies or errors in the issuance result appropriately. If any of these
     // validations fail, we throw an exception to prevent the checkout from
@@ -761,10 +770,6 @@ public class CheckoutService {
         }
 
         for (var barcode : issuanceResult.barcodes()) {
-            if (barcode.ticketId() <= 0) {
-                throw new TicketIssuanceFailedException("Issued ticket id must be positive");
-            }
-
             if (barcode.barcodeValue() == null || barcode.barcodeValue().isBlank()) {
                 throw new TicketIssuanceFailedException("Issued barcode value must not be blank");
             }
@@ -863,22 +868,25 @@ public class CheckoutService {
 
     // We save the issued tickets to the database and build the receipt lines for
     // the order receipt. For each priced cart line, we create a corresponding
-    // Ticket entity with the information from the cart line and the issuance result
-    // (e.g. ticket ID, barcode). We then save each ticket to the database and
-    // create a ReceiptLine for it that will be included in the order receipt. This
-    // method encapsulates the logic for persisting the issued tickets and preparing
-    // the data needed for the receipt in one place.
-    private List<ReceiptLine> saveTicketsAndBuildReceiptLines(
+    // Ticket entity with the information from the cart line and the barcode the
+    // issuer returned for it. The ticket's id is minted by the ticket repository,
+    // never taken from the issuer: issuer-side counters restart with the process
+    // and would collide with tickets persisted by an earlier boot (#19). We then
+    // save each ticket and create a ReceiptLine for it that will be included in
+    // the order receipt.
+    private SavedTickets saveTicketsAndBuildReceiptLines(
             Integer holderUserId,
             int orderReceiptId,
             List<PricedCartLine> pricedItems,
             IssuanceResultDTO issuanceResult) {
         List<ReceiptLine> receiptLines = new ArrayList<>();
+        List<CheckoutResultDTO.IssuedTicketDTO> issuedTickets = new ArrayList<>();
 
         for (int i = 0; i < pricedItems.size(); i++) {
             PricedCartLine pricedItem = pricedItems.get(i);
             CartLineItem item = pricedItem.item();
             var barcode = issuanceResult.barcodes().get(i);
+            int ticketId = ticketRepository.nextId();
 
             Ticket ticket = new Ticket(
                     item.geteventId(),
@@ -886,7 +894,7 @@ public class CheckoutService {
                     orderReceiptId,
                     item.getSeatNumber(),
                     pricedItem.finalPrice(),
-                    barcode.ticketId(),
+                    ticketId,
                     barcode.barcodeValue());
 
             if (holderUserId != null) {
@@ -899,7 +907,7 @@ public class CheckoutService {
             ticketRepository.save(ticket);
 
             ReceiptLine line = new ReceiptLine(
-                    barcode.ticketId(),
+                    ticketId,
                     pricedItem.finalPrice(),
                     item.geteventId(),
                     item.getzoneId(),
@@ -908,9 +916,10 @@ public class CheckoutService {
 
             line.checkInvariants();
             receiptLines.add(line);
+            issuedTickets.add(new CheckoutResultDTO.IssuedTicketDTO(ticketId, barcode.barcodeValue()));
         }
 
-        return receiptLines;
+        return new SavedTickets(receiptLines, issuedTickets);
     }
 
     // We save the order receipt for a member by creating an OrderReceipt entity
@@ -994,7 +1003,7 @@ public class CheckoutService {
 
     // We build the checkout result DTO that will be returned to the caller of the
     // checkout method. This DTO contains the total price, the order receipt ID, the
-    // payment transaction ID, and the list of issued ticket IDs. This allows the
+    // payment transaction ID, and the persisted tickets (id + barcode). This allows the
     // caller to have all the relevant information about the completed checkout in a
     // single object. By encapsulating this logic in a helper method, we can easily
     // modify what information we include in the checkout result without affecting
@@ -1003,16 +1012,12 @@ public class CheckoutService {
             double totalPrice,
             int orderReceiptId,
             PaymentResultDTO paymentResult,
-            IssuanceResultDTO issuanceResult) {
+            List<CheckoutResultDTO.IssuedTicketDTO> issuedTickets) {
         return new CheckoutResultDTO(
                 totalPrice,
                 orderReceiptId,
                 paymentResult.paymentTransactionId(),
-                issuanceResult.barcodes()
-                        .stream()
-                        .map(barcode -> new CheckoutResultDTO.IssuedTicketDTO(
-                                barcode.ticketId(), barcode.barcodeValue()))
-                        .toList());
+                issuedTickets);
     }
 
     // We notify the user of the completed purchase by sending a notification with

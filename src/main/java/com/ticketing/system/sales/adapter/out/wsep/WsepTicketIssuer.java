@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -28,10 +27,10 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>WSEP {@code issue_ticket} returns ONE ticket code per call, while a
  * purchase needs one barcode per ticket, so this issues one ticket per item
- * (GA, {@code quantity=1}) and assembles the list. A per-ticket positive id is
- * synthesized locally (WSEP returns only the {@code TIX-…} code), matching the
- * stub's contract. Any {@code "-1"} reply fails the whole issuance, which drives
- * the checkout's refund/rollback path.
+ * (GA, {@code quantity=1}) and assembles the list, one {@code TIX-…} code per item in
+ * request order. Ticket ids are minted by the ticket repository, not here (#19). Any
+ * {@code "-1"} reply fails the whole issuance, which drives the checkout's
+ * refund/rollback path.
  */
 @Component
 @Profile("!test")
@@ -42,7 +41,6 @@ public class WsepTicketIssuer implements TicketIssuer {
     private static final String FAILURE = "-1";
 
     private final WsepHttpClient http;
-    private final AtomicInteger ticketIds = new AtomicInteger(1);
 
     public WsepTicketIssuer(WsepHttpClient http) {
         this.http = http;
@@ -95,7 +93,7 @@ public class WsepTicketIssuer implements TicketIssuer {
                 throw new TicketIssuanceFailedException("ticket issuance rejected by WSEP for event " + item.eventId());
             }
 
-            barcodes.add(new BarcodeDTO(ticketIds.getAndIncrement(), code, "QR"));
+            barcodes.add(new BarcodeDTO(code, "QR"));
         }
 
         log.debug("wsep issue_ticket ok: count={} firstCode={} ({} ms)",
