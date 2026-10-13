@@ -76,10 +76,10 @@ class CompanySalesPresenterTest {
     }
 
     @Test
-    void GivenExpiredToken_WhenLoad_ThenNotAuthenticated() {
+    void GivenSessionRevokedAfterCompanyLookup_WhenLoad_ThenNotAuthenticated() {
         when(companyManagementService.findMyCompanies(TOKEN))
             .thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder")));
-        when(companyAnalyticsService.salesHistory(TOKEN, 7)).thenThrow(new InvalidTokenException("expired"));
+        when(companyAnalyticsService.salesHistory(TOKEN, 7)).thenThrow(new InvalidTokenException("session not found"));
 
         CompanySalesPresenter.Outcome outcome = presenter.load(TOKEN, null);
 

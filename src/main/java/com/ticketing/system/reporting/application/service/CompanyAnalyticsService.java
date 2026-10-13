@@ -31,6 +31,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 
@@ -98,6 +99,7 @@ public class CompanyAnalyticsService {
      * @param companyId the company to summarise
      * @return the dashboard counters visible to the caller
      * @throws InvalidTokenException       if the token is not valid
+     * @throws SessionExpiredException     if the token's session has expired
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UserNotFoundException       if the token's user no longer exists
      * @throws UnauthorizedActionException if the caller holds no active appointment in the company
@@ -159,6 +161,7 @@ public class CompanyAnalyticsService {
      * @param companyId the company whose sales are requested
      * @return the company's sales records (empty when the company has no events)
      * @throws InvalidTokenException       if the token is not valid
+     * @throws SessionExpiredException     if the token's session has expired
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UserNotFoundException       if the token's user no longer exists
      * @throws UnauthorizedActionException if the caller is not a member holding {@link Permission#VIEW_SALES}
@@ -186,6 +189,7 @@ public class CompanyAnalyticsService {
      *
      * @return the caller's user id
      * @throws InvalidTokenException       if the token is not valid
+     * @throws SessionExpiredException     if the token's session has expired
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UserNotFoundException       if the token's user no longer exists
      * @throws UnauthorizedActionException if the caller is not an active member of the company
