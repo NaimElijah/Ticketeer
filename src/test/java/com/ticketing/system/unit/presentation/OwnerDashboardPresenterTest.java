@@ -19,6 +19,7 @@ import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
 
 class OwnerDashboardPresenterTest {
@@ -46,7 +47,7 @@ class OwnerDashboardPresenterTest {
 
         assertInstanceOf(OwnerDashboardPresenter.Outcome.NotAuthenticated.class, outcome);
         verify(companyManagementService, never()).findMyCompanies(anyString());
-        verify(companyAnalyticsService, never()).dashboard(anyInt());
+        verify(companyAnalyticsService, never()).dashboard(anyString(), anyInt());
     }
 
     @Test
@@ -56,7 +57,7 @@ class OwnerDashboardPresenterTest {
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
 
         assertInstanceOf(OwnerDashboardPresenter.Outcome.NoCompany.class, outcome);
-        verify(companyAnalyticsService, never()).dashboard(anyInt());
+        verify(companyAnalyticsService, never()).dashboard(anyString(), anyInt());
     }
 
     @Test
@@ -64,7 +65,7 @@ class OwnerDashboardPresenterTest {
         MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Founder");
         MyCompanyDTO second = new MyCompanyDTO(9, "Globex", "Manager");
         when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first, second));
-        when(companyAnalyticsService.dashboard(7)).thenReturn(stats());
+        when(companyAnalyticsService.dashboard(TOKEN, 7)).thenReturn(stats());
 
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
 
@@ -72,7 +73,7 @@ class OwnerDashboardPresenterTest {
             assertInstanceOf(OwnerDashboardPresenter.Outcome.Success.class, outcome);
         assertEquals(first, ok.selected());
         assertEquals(List.of(first, second), ok.companies());
-        verify(companyAnalyticsService).dashboard(7);
+        verify(companyAnalyticsService).dashboard(TOKEN, 7);
     }
 
     @Test
@@ -80,14 +81,14 @@ class OwnerDashboardPresenterTest {
         MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Founder");
         MyCompanyDTO second = new MyCompanyDTO(9, "Globex", "Manager");
         when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first, second));
-        when(companyAnalyticsService.dashboard(9)).thenReturn(stats());
+        when(companyAnalyticsService.dashboard(TOKEN, 9)).thenReturn(stats());
 
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, 9);
 
         OwnerDashboardPresenter.Outcome.Success ok =
             assertInstanceOf(OwnerDashboardPresenter.Outcome.Success.class, outcome);
         assertEquals(second, ok.selected());
-        verify(companyAnalyticsService).dashboard(9);
+        verify(companyAnalyticsService).dashboard(TOKEN, 9);
     }
 
     @Test
@@ -97,6 +98,18 @@ class OwnerDashboardPresenterTest {
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
 
         assertInstanceOf(OwnerDashboardPresenter.Outcome.NotAuthenticated.class, outcome);
+    }
+
+    @Test
+    void GivenCallerNoLongerMember_WhenLoadFor_ThenReturnsFailure() {
+        MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Manager");
+        when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first));
+        when(companyAnalyticsService.dashboard(TOKEN, 7))
+            .thenThrow(new UnauthorizedActionException("view this company's data"));
+
+        OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
+
+        assertInstanceOf(OwnerDashboardPresenter.Outcome.Failure.class, outcome);
     }
 
     @Test

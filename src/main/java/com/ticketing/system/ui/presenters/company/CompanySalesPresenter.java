@@ -37,7 +37,7 @@ public class CompanySalesPresenter {
                     .orElse(companies.get(0));
             // The view derives all headline figures from the order records (refund-aware, honoring
             // the date filter), so the fixed 30-day dashboard() snapshot is no longer fetched here.
-            PurchaseHistoryDTO sales = companyAnalyticsService.salesHistory(selected.companyId());
+            PurchaseHistoryDTO sales = companyAnalyticsService.salesHistory(token, selected.companyId());
             return new Outcome.Success(selected.name(), sales);
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();

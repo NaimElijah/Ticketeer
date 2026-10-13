@@ -38,14 +38,14 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 
 /**
- * Read-side aggregator for the owner-workspace dashboard counters (V2-WIRE-OWNER-DASH).
+ * Read side for company analytics: the owner-workspace dashboard counters (V2-WIRE-OWNER-DASH)
+ * and the company sales history (UC-22).
  *
- * <p>Pure query service: it takes an already-authorized {@code companyId} (the caller — the
- * presenter — resolves the signed-in member's companies via
- * {@code CompanyManagementService.findMyCompanies} first) and assembles the four dashboard
- * figures from the event, order-receipt, and conversation repositories. Sales figures are the
- * company's own share of each receipt (a receipt can mix events from several companies), over
- * the trailing 30 days, excluding refunded receipts.
+ * <p>Every read is company-scoped and authorizes the caller itself (#22): it validates the
+ * session token, requires an active appointment in the company, and checks the organization
+ * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. Sales
+ * figures are the company's own share of each receipt (a receipt can mix events from several
+ * companies), over the trailing 30 days, excluding refunded receipts.
  */
 @Service
 @Slf4j
@@ -65,7 +65,7 @@ public class CompanyAnalyticsService {
     // Company-membership/authorization checks moved off the User aggregate (task #20); reporting
     // already depends on organization.
     private final CompanyMembershipService companyMembershipService;
-    // Session/token port — needed by the token-authenticated viewSalesHistory read (UC-22).
+    // Session/token port — every company-scoped read authenticates its caller (#22).
     private final SessionManager sessionManager;
 
     public CompanyAnalyticsService(
@@ -89,8 +89,29 @@ public class CompanyAnalyticsService {
         this.sessionManager = sessionManager;
     }
 
-    /** Live dashboard counters for one company. Returns zeros for a fresh company with no events. */
-    public CompanyDashboardDTO dashboard(int companyId) {
+    /**
+     * Live dashboard counters for one company, as seen by the calling member. Returns zeros for a
+     * fresh company with no events.
+     *
+     * <p>Figures the caller may not see are withheld as {@code null}: revenue
+     * needs {@link Permission#VIEW_SALES} and open inquiries need
+     * {@link Permission#RESPOND_TO_INQUIRIES}. Owners hold both implicitly.
+     *
+     * @param token     the caller's session token
+     * @param companyId the company to summarise
+     * @return the dashboard counters visible to the caller
+     * @throws InvalidTokenException       if the token is not valid
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the token's user no longer exists
+     * @throws UnauthorizedActionException if the caller holds no active appointment in the company
+     */
+    public CompanyDashboardDTO dashboard(String token, int companyId) {
+        int requesterId = authorizeMember(token, companyId);
+        boolean canViewSales = companyMembershipService
+                .hasPermissionInCompany(requesterId, companyId, Permission.VIEW_SALES);
+        boolean canViewInquiries = companyMembershipService
+                .hasPermissionInCompany(requesterId, companyId, Permission.RESPOND_TO_INQUIRIES);
+
         int activeEvents = eventRepository.findActiveByCompany(companyId).size();
 
         int ticketsSold = 0;
@@ -116,19 +137,39 @@ public class CompanyAnalyticsService {
             }
         }
 
-        int openInquiries = (int) conversationRepository.findByCompanyAsCounterparty(companyId).stream()
-                .filter(c -> c.getType() == ConversationType.INQUIRY && !c.isClosed())
-                .count();
+        Integer openInquiries = canViewInquiries ? countOpenInquiries(companyId) : null;
 
         // Company rating is derived: the mean of this company's events' ratings (null if none rated).
         Double rating = CompanyRatings.fromEvents(eventRepository.findByCompanyId(companyId));
 
         log.debug("Dashboard for company {}: {} active events, {} tickets/30d, {} revenue/30d, {} open inquiries, rating {}",
                 companyId, activeEvents, ticketsSold, revenue, openInquiries, rating);
-        return new CompanyDashboardDTO(activeEvents, ticketsSold, revenue, openInquiries, rating);
+        return new CompanyDashboardDTO(activeEvents, ticketsSold, canViewSales ? revenue : null,
+                openInquiries, rating);
     }
 
-    public PurchaseHistoryDTO salesHistory(int companyId) {
+    private int countOpenInquiries(int companyId) {
+        return (int) conversationRepository.findByCompanyAsCounterparty(companyId).stream()
+                .filter(c -> c.getType() == ConversationType.INQUIRY && !c.isClosed())
+                .count();
+    }
+
+    /**
+     * UC-22 — the company's sales history: one record per receipt that holds at least one ticket
+     * for the company's events, carrying only that company's lines and revenue.
+     *
+     * @param token     the caller's session token
+     * @param companyId the company whose sales are requested
+     * @return the company's sales records (empty when the company has no events)
+     * @throws InvalidTokenException       if the token is not valid
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the token's user no longer exists
+     * @throws UnauthorizedActionException if the caller is not a member holding {@link Permission#VIEW_SALES}
+     */
+    public PurchaseHistoryDTO salesHistory(String token, int companyId) {
+        int requesterId = authorizeMember(token, companyId);
+        requirePermission(requesterId, companyId, Permission.VIEW_SALES);
+
         List<Integer> eventIds = eventRepository.findIdsByCompany(companyId);
         if (eventIds.isEmpty()) return new PurchaseHistoryDTO(List.of());
         Set<Integer> companyEventIds = new HashSet<>(eventIds);
@@ -197,6 +238,39 @@ public class CompanyAnalyticsService {
 
         log.info("Successfully retrieved sales history for company {}", companyId);
         return salesHistory;
+    }
+
+    /**
+     * Authenticates the caller and requires an active appointment in the company.
+     *
+     * @return the caller's user id
+     * @throws InvalidTokenException       if the token is not valid
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the token's user no longer exists
+     * @throws UnauthorizedActionException if the caller is not an active member of the company
+     */
+    private int authorizeMember(String token, int companyId) {
+        int requesterId = authenticate(token);
+        if (companyRepository.getCompanyById(companyId) == null) {
+            log.warn("Company {} not found", companyId);
+            throw new CompanyNotFoundException();
+        }
+        if (userRepository.getUserById(requesterId) == null) {
+            log.warn("User {} not found", requesterId);
+            throw new UserNotFoundException();
+        }
+        if (!companyMembershipService.isMemberInCompany(requesterId, companyId)) {
+            log.warn("User {} is not a member of company {}", requesterId, companyId);
+            throw new UnauthorizedActionException("view this company's data");
+        }
+        return requesterId;
+    }
+
+    private void requirePermission(int requesterId, int companyId, Permission permission) {
+        if (!companyMembershipService.hasPermissionInCompany(requesterId, companyId, permission)) {
+            log.warn("User {} lacks {} in company {}", requesterId, permission, companyId);
+            throw new UnauthorizedActionException("view this company's data");
+        }
     }
 
     /**
