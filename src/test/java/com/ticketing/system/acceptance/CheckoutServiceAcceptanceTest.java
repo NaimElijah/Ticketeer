@@ -101,6 +101,8 @@ public class CheckoutServiceAcceptanceTest {
         activeOrderRepository = mock(ActiveOrderRepository.class);
         eventRepository = mock(EventRepository.class);
         ticketRepository = mock(TicketRepository.class);
+        AtomicInteger ticketIds = new AtomicInteger(1);
+        when(ticketRepository.nextId()).thenAnswer(invocation -> ticketIds.getAndIncrement());
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
 
@@ -213,7 +215,7 @@ public class CheckoutServiceAcceptanceTest {
         List<BarcodeDTO> barcodes = new java.util.ArrayList<>();
 
         for (int i = 1; i <= count; i++) {
-            barcodes.add(new BarcodeDTO(i, "barcode-" + i, "QR"));
+            barcodes.add(new BarcodeDTO("barcode-" + i, "QR"));
         }
 
         return new IssuanceResultDTO(

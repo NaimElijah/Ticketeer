@@ -12,7 +12,8 @@ public interface TicketIssuer {
     // UC-1 / I.1.3 startup verification.
     boolean verifyConnection();
 
-    // UC-34 — submit a batch of tickets for issuance, receive barcodes.
+    // UC-34 — submit a batch of tickets for issuance, receive one barcode per requested item, in
+    // request order. Ticket ids are not the issuer's concern (TicketRepository.nextId mints them).
     // Throws TicketIssuanceFailedException on failure (triggers UC-4 refund pipeline).
     IssuanceResultDTO issue(IssuanceRequestDTO request);
 }

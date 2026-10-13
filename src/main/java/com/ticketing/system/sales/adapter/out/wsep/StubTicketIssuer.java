@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 // In-process ticket issuer for TESTS ONLY (@Profile("test")). Every real run
 // (default/prod + the dev profile) uses WsepTicketIssuer instead.
@@ -22,8 +21,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StubTicketIssuer implements TicketIssuer {
     //* can change to be however wanted, this is a stub so we can do what we need with it */
     private static final String ISSUER_ID = "stub-ticket-issuer";
-
-    private final AtomicInteger ticketIds = new AtomicInteger(1);
 
     @Override
     public String getId() {
@@ -50,12 +47,7 @@ public class StubTicketIssuer implements TicketIssuer {
         List<BarcodeDTO> barcodes = new ArrayList<>();
 
         for (int i = 0; i < request.items().size(); i++) {
-            int ticketId = ticketIds.getAndIncrement();
-
-            barcodes.add(new BarcodeDTO(
-                    ticketId,
-                    "QR-" + ticketId + "-" + UUID.randomUUID(),
-                    "QR"));
+            barcodes.add(new BarcodeDTO("QR-" + UUID.randomUUID(), "QR"));
         }
 
         return new IssuanceResultDTO(

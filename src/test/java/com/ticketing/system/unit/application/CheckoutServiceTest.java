@@ -67,6 +67,7 @@ import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -107,7 +108,6 @@ class CheckoutServiceTest {
 
     private final int TICKET_ID_1 = 101;
     private final int TICKET_ID_2 = 102;
-    private final int TICKET_ID_3 = 103;
 
     private final int PAYMENT_TRANSACTION_ID = 201;
     private final String ISSUANCE_TRANSACTION_ID = "issue-tx-1";
@@ -129,6 +129,9 @@ class CheckoutServiceTest {
         mockActiveOrderRepo = mock(ActiveOrderRepository.class);
         mockEventRepo = mock(EventRepository.class);
         mockTicketRepo = mock(TicketRepository.class);
+        // Ticket ids are minted by the repository (#19), starting at TICKET_ID_1 for each test.
+        AtomicInteger ticketIds = new AtomicInteger(TICKET_ID_1);
+        when(mockTicketRepo.nextId()).thenAnswer(invocation -> ticketIds.getAndIncrement());
         
         mockOrderReceiptRepo = mock(OrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);
@@ -506,6 +509,8 @@ void GivenTicketIssuanceFailsAfterPayment_WhenCheckout_ThenClearCartAndReturnTic
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1));
     assertEquals(5, zone.getAvailableAmount());
     assertEquals(0, zone.getReservedAmount());
+    // Ticket ids are minted only inside the Phase-3 persistence unit (#19).
+    verify(mockTicketRepo, never()).nextId();
 }
 
    @Test
@@ -662,7 +667,7 @@ void GivenMultipleTicketsButIssuerReturnsLessBarcodes_WhenCheckout_ThenClearCart
             ISSUANCE_TRANSACTION_ID,
             "issuer",
             LocalDateTime.now(),
-            List.of(new BarcodeDTO(TICKET_ID_1, "barcode-1", "QR"))
+            List.of(new BarcodeDTO("barcode-1", "QR"))
     );
 
     when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
@@ -839,7 +844,7 @@ void GivenValidCheckout_WhenCheckout_ThenReturnCheckoutResultAndSaveTicketAndRec
             ISSUANCE_TRANSACTION_ID,
             "issuer",
             LocalDateTime.now(),
-            List.of(new BarcodeDTO(TICKET_ID_1, "barcode-value-1", "QR"))
+            List.of(new BarcodeDTO("barcode-value-1", "QR"))
     );
 
     when(mockOrder.validateCanCheckout()).thenReturn(true);
@@ -911,7 +916,7 @@ void GivenValidCheckoutWithCalculatedPrice_WhenCheckout_ThenReturnCalculatedTota
             ISSUANCE_TRANSACTION_ID,
             "issuer",
             LocalDateTime.now(),
-            List.of(new BarcodeDTO(TICKET_ID_2, "barcode-value-2", "QR"))
+            List.of(new BarcodeDTO("barcode-value-2", "QR"))
     );
 
     when(mockOrder.validateCanCheckout()).thenReturn(true);
@@ -948,7 +953,7 @@ void GivenValidCheckoutWithCalculatedPrice_WhenCheckout_ThenReturnCalculatedTota
 
     Ticket savedTicket = ticketCaptor.getValue();
 
-    assertEquals(TICKET_ID_2, savedTicket.getId());
+    assertEquals(TICKET_ID_1, savedTicket.getId());
     assertEquals(EVENT_ID_1, savedTicket.getEventId());
     assertEquals(ZONE_ID_2, savedTicket.getZoneId());
 
@@ -977,8 +982,8 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
             "issuer",
             LocalDateTime.now(),
             List.of(
-                    new BarcodeDTO(TICKET_ID_1, "barcode-zone-1", "QR"),
-                    new BarcodeDTO(TICKET_ID_2, "barcode-zone-2", "QR")
+                    new BarcodeDTO("barcode-zone-1", "QR"),
+                    new BarcodeDTO("barcode-zone-2", "QR")
             )
     );
 
@@ -1050,6 +1055,46 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
     assertEquals(250.0, savedReceipt.getTotalAmount());
     
 }
+    // #19: ticket identity comes from the repository, never from the issuer's barcodes.
+    @Test
+    void GivenRepositoryMintsTicketIds_WhenCheckout_ThenTicketsReceiptLinesAndResultCarryThoseIds() {
+        when(mockTicketRepo.nextId()).thenReturn(500, 501);
+        PaymentResultDTO paymentResult = new PaymentResultDTO(
+                PAYMENT_TRANSACTION_ID, "gateway", 250.0, "ILS", LocalDateTime.now());
+        IssuanceResultDTO issuanceResult = new IssuanceResultDTO(
+                ISSUANCE_TRANSACTION_ID, "issuer", LocalDateTime.now(),
+                List.of(new BarcodeDTO("barcode-zone-1", "QR"), new BarcodeDTO("barcode-zone-2", "QR")));
+        when(mockOrder.validateCanCheckout()).thenReturn(true);
+        when(mockOrder.getItems()).thenReturn(List.of(itemEvent1Zone1, itemEvent1Zone2));
+        when(mockOrder.buy()).thenReturn(List.of(itemEvent1Zone1, itemEvent1Zone2));
+        when(event1.calculatePrice(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(250.0);
+        when(event1.calculatePriceforoneticket(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(125.0);
+        when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult);
+        when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(issuanceResult);
+        StandingZone zone1 = new StandingZone(ZONE_ID_1, "General", 100, 100.0);
+        zone1.reserve(InventorySelection.standing(1));
+        when(event1.getVenueMap().getZone(ZONE_ID_1)).thenReturn(zone1);
+        StandingZone zone2 = new StandingZone(ZONE_ID_2, "General", 100, 150.0);
+        zone2.reserve(InventorySelection.standing(1));
+        when(event1.getVenueMap().getZone(ZONE_ID_2)).thenReturn(zone2);
+
+        CheckoutResultDTO result = checkoutService.checkoutMember(
+                VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+        assertEquals(List.of(
+                new CheckoutResultDTO.IssuedTicketDTO(500, "barcode-zone-1"),
+                new CheckoutResultDTO.IssuedTicketDTO(501, "barcode-zone-2")), result.issuedTickets());
+        ArgumentCaptor<Ticket> ticketCaptor = ArgumentCaptor.forClass(Ticket.class);
+        verify(mockTicketRepo, times(2)).save(ticketCaptor.capture());
+        assertEquals(List.of(500, 501), ticketCaptor.getAllValues().stream().map(Ticket::getId).toList());
+        assertEquals(List.of("barcode-zone-1", "barcode-zone-2"),
+                ticketCaptor.getAllValues().stream().map(Ticket::getBarcode).toList());
+        ArgumentCaptor<OrderReceipt> receiptCaptor = ArgumentCaptor.forClass(OrderReceipt.class);
+        verify(mockOrderReceiptRepo).save(receiptCaptor.capture());
+        assertEquals(List.of(500, 501),
+                receiptCaptor.getValue().getReceiptLines().stream().map(ReceiptLine::getTicketId).toList());
+    }
+
    @Test
    void GivenTicketsFromDifferentEvents_WhenCheckout_ThenBuyAllTicketsAndSaveTicketsAndReceipt() {
            PaymentResultDTO paymentResult = new PaymentResultDTO(
@@ -1064,8 +1109,8 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                            "issuer",
                            LocalDateTime.now(),
                            List.of(
-                                           new BarcodeDTO(TICKET_ID_1, "barcode-event-1", "QR"),
-                                           new BarcodeDTO(TICKET_ID_3, "barcode-event-2", "QR")));
+                                           new BarcodeDTO("barcode-event-1", "QR"),
+                                           new BarcodeDTO("barcode-event-2", "QR")));
 
            when(mockOrder.validateCanCheckout()).thenReturn(true);
            when(mockOrder.getItems()).thenReturn(List.of(itemEvent1Zone1, itemEvent2Zone3));
@@ -1109,7 +1154,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                                            PAYMENT_TRANSACTION_ID,
                                            List.of(
                                                    new CheckoutResultDTO.IssuedTicketDTO(TICKET_ID_1, "barcode-event-1"),
-                                                   new CheckoutResultDTO.IssuedTicketDTO(TICKET_ID_3, "barcode-event-2"))),
+                                                   new CheckoutResultDTO.IssuedTicketDTO(TICKET_ID_2, "barcode-event-2"))),
                            result);
 
            ArgumentCaptor<Ticket> ticketCaptor = ArgumentCaptor.forClass(Ticket.class);
@@ -1123,7 +1168,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
            assertEquals(EVENT_ID_1, savedTickets.get(0).getEventId());
            assertEquals(ZONE_ID_1, savedTickets.get(0).getZoneId());
 
-           assertEquals(TICKET_ID_3, savedTickets.get(1).getId());
+           assertEquals(TICKET_ID_2, savedTickets.get(1).getId());
            assertEquals(EVENT_ID_2, savedTickets.get(1).getEventId());
            assertEquals(ZONE_ID_3, savedTickets.get(1).getZoneId());
 
@@ -1166,7 +1211,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                                 ISSUANCE_TRANSACTION_ID,
                                 "issuer",
                                 LocalDateTime.now(),
-                                List.of(new BarcodeDTO(TICKET_ID_1, "barcode-A1", "QR")));
+                                List.of(new BarcodeDTO("barcode-A1", "QR")));
 
                 when(mockOrder.validateCanCheckout()).thenReturn(true);
                 when(mockOrder.getItems()).thenReturn(List.of(seatedItem));
@@ -1221,7 +1266,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                                 ISSUANCE_TRANSACTION_ID,
                                 "issuer",
                                 LocalDateTime.now(),
-                                List.of(new BarcodeDTO(TICKET_ID_1, "barcode-standing", "QR")));
+                                List.of(new BarcodeDTO("barcode-standing", "QR")));
 
                 when(itemEvent1Zone1.getSeatNumber()).thenReturn(null);
 
@@ -1282,7 +1327,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                                 ISSUANCE_TRANSACTION_ID,
                                 "issuer",
                                 LocalDateTime.now(),
-                                List.of(new BarcodeDTO(TICKET_ID_1, "barcode-A1", "QR")));
+                                List.of(new BarcodeDTO("barcode-A1", "QR")));
 
                 when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
                 when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(realEvent);
@@ -1365,8 +1410,8 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                         "issuer",
                         LocalDateTime.now(),
                         List.of(
-                                new BarcodeDTO(TICKET_ID_1, "barcode-standing", "QR"),
-                                new BarcodeDTO(TICKET_ID_2, "barcode-B7", "QR")
+                                new BarcodeDTO("barcode-standing", "QR"),
+                                new BarcodeDTO("barcode-B7", "QR")
                         )
                 );
 
@@ -1443,7 +1488,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                                 ISSUANCE_TRANSACTION_ID,
                                 "issuer",
                                 LocalDateTime.now(),
-                                List.of(new BarcodeDTO(TICKET_ID_1, "barcode-A1", "QR")));
+                                List.of(new BarcodeDTO("barcode-A1", "QR")));
                                 
                 when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
                 when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(realEvent);
@@ -2134,7 +2179,7 @@ private AtomicBoolean givenSuccessfulPaymentAndIssuanceWithFlag(int ticketCount)
     List<BarcodeDTO> barcodes = new java.util.ArrayList<>();
 
     for (int i = 1; i <= ticketCount; i = i + 1) {
-        barcodes.add(new BarcodeDTO(1000 + i, "barcode-policy-" + i, "QR"));
+        barcodes.add(new BarcodeDTO("barcode-policy-" + i, "QR"));
     }
 
     when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(
@@ -2239,7 +2284,7 @@ private AtomicBoolean trackReceiptSave() {
         });
         List<BarcodeDTO> barcodes = new java.util.ArrayList<>();
         for (int i = 1; i <= ticketCount; i++) {
-            barcodes.add(new BarcodeDTO(1000 + i, "barcode-guest-" + i, "QR"));
+            barcodes.add(new BarcodeDTO("barcode-guest-" + i, "QR"));
         }
         when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(
                 new IssuanceResultDTO("issue-guest-tx", "issuer", LocalDateTime.now(), barcodes));
@@ -2549,7 +2594,7 @@ private AtomicBoolean trackReceiptSave() {
         when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult);
         when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(new IssuanceResultDTO(
                 ISSUANCE_TRANSACTION_ID, "issuer", LocalDateTime.now(),
-                List.of(new BarcodeDTO(TICKET_ID_1, "b1", "QR"), new BarcodeDTO(TICKET_ID_3, "b2", "QR"))));
+                List.of(new BarcodeDTO("b1", "QR"), new BarcodeDTO("b2", "QR"))));
 
         // First confirm (whichever event the grouping visits first) commits SOLD; the second throws.
         AtomicInteger confirmCalls = new AtomicInteger();
@@ -2611,7 +2656,7 @@ private AtomicBoolean trackReceiptSave() {
         PaymentResultDTO paymentResult = new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", 100.0, "ILS",
                 LocalDateTime.now());
         IssuanceResultDTO issuanceResult = new IssuanceResultDTO(ISSUANCE_TRANSACTION_ID, "issuer",
-                LocalDateTime.now(), List.of(new BarcodeDTO(TICKET_ID_1, "barcode-value-1", "QR")));
+                LocalDateTime.now(), List.of(new BarcodeDTO("barcode-value-1", "QR")));
 
         when(mockOrder.validateCanCheckout()).thenReturn(true);
         when(mockOrder.getItems()).thenReturn(List.of(itemEvent1Zone1));
