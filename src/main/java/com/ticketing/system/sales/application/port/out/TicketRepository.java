@@ -12,6 +12,16 @@ public interface TicketRepository extends IRepository<Ticket, Integer> {
 
     boolean save(Ticket ticket);
 
+    /**
+     * Mints the id for a new ticket (#19). Ticket identity is assigned by the system, never by
+     * the ticket issuer, and must never repeat an id already persisted — including ids written
+     * before the current process started. Every creation path (checkout today, UC-20
+     * pre-generation via {@link #saveAll} once it exists) takes its ids from here.
+     *
+     * @return a positive id, strictly greater than every id previously minted or persisted
+     */
+    int nextId();
+
     // UC-8 / UC-22 — render venue map / list company sales.
     // Keys are int: Ticket stores eventId/zoneId as int, so the port uses int end-to-end.
     List<Ticket> findByEventId(int eventId);

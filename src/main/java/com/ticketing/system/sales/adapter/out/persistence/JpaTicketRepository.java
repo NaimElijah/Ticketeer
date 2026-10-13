@@ -1,5 +1,6 @@
 package com.ticketing.system.sales.adapter.out.persistence;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Limit;
@@ -19,10 +20,12 @@ import com.ticketing.system.sales.domain.Ticket;
  * (per the {@code IRepository} contract — JPA replaces the in-memory write-lock with
  * version checks).
  *
- * <p>{@link #save} delegates to {@code data.save}: a fresh ticket (issuer-assigned id,
+ * <p>{@link #save} delegates to {@code data.save}: a fresh ticket (id from {@link #nextId},
  * version {@code null}) is inserted, a loaded-then-mutated ticket (reserve / markPaid /
  * markIssued / ...) is updated under its {@code @Version} check — the only two flows
- * tickets ever see (unique issuer ids mean a fresh instance never reuses a live id).
+ * tickets ever see. {@link #nextId} seeds its sequence from {@code max(ticketId)} on first
+ * use, so a restarted process never reissues an id a previous boot persisted (#19). Like the
+ * other aggregates' sequences it assumes a single application instance per database.
  * {@link #saveAll} delegates to {@code data.saveAll} for UC-20 bulk pre-generation. The
  * writes are {@code @Transactional} so the adapter is self-sufficient before the service
  * layer gains transactions (#359); reads inherit Spring Data's read-only tx.
@@ -32,6 +35,8 @@ import com.ticketing.system.sales.domain.Ticket;
 public class JpaTicketRepository implements TicketRepository {
 
     private final SpringDataTicketRepository data;
+    private final AtomicInteger idSequence = new AtomicInteger(0);
+    private volatile boolean seeded = false;
 
     public JpaTicketRepository(SpringDataTicketRepository data) {
         this.data = data;
@@ -48,6 +53,23 @@ public class JpaTicketRepository implements TicketRepository {
     public boolean save(Ticket ticket) {
         data.save(ticket);
         return true;
+    }
+
+    @Override
+    public int nextId() {
+        ensureSeeded();
+        return idSequence.incrementAndGet();
+    }
+
+    private void ensureSeeded() {
+        if (!seeded) {
+            synchronized (this) {
+                if (!seeded) {
+                    idSequence.set(data.findMaxTicketId());
+                    seeded = true;
+                }
+            }
+        }
     }
 
     @Override
