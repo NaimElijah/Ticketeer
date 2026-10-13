@@ -192,14 +192,9 @@ public class CompanyAnalyticsService {
      */
     private int authorizeMember(String token, int companyId) {
         int requesterId = authenticate(token);
-        if (companyRepository.getCompanyById(companyId) == null) {
-            log.warn("Company {} not found", companyId);
-            throw new CompanyNotFoundException();
-        }
-        if (userRepository.getUserById(requesterId) == null) {
-            log.warn("User {} not found", requesterId);
-            throw new UserNotFoundException();
-        }
+        // Both repository lookups throw the typed not-found exception per their port contract.
+        companyRepository.getCompanyById(companyId);
+        userRepository.getUserById(requesterId);
         if (!companyMembershipService.isMemberInCompany(requesterId, companyId)) {
             log.warn("User {} is not a member of company {}", requesterId, companyId);
             throw new UnauthorizedActionException("view this company's data");

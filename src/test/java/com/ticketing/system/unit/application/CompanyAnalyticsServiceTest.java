@@ -229,9 +229,17 @@ class CompanyAnalyticsServiceTest {
     void GivenUnknownCompany_WhenDashboard_ThenThrowsCompanyNotFoundException() {
         when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(null);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
 
         assertThrows(CompanyNotFoundException.class, () -> service.dashboard(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenDeletedUser_WhenDashboard_ThenThrowsUserNotFoundException() {
+        givenOwner();
+        when(userRepository.getUserById(OWNER_ID)).thenThrow(new UserNotFoundException(OWNER_ID));
+
+        assertThrows(UserNotFoundException.class, () -> service.dashboard(OWNER_TOKEN, COMPANY_ID));
     }
 
     @Test
@@ -286,7 +294,7 @@ class CompanyAnalyticsServiceTest {
     void GivenUnknownCompany_WhenSalesHistory_ThenThrowsCompanyNotFoundException() {
         when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(null);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
 
         assertThrows(CompanyNotFoundException.class, () -> service.salesHistory(OWNER_TOKEN, COMPANY_ID));
     }
@@ -294,7 +302,7 @@ class CompanyAnalyticsServiceTest {
     @Test
     void GivenDeletedUser_WhenSalesHistory_ThenThrowsUserNotFoundException() {
         givenOwner();
-        when(userRepository.getUserById(OWNER_ID)).thenReturn(null);
+        when(userRepository.getUserById(OWNER_ID)).thenThrow(new UserNotFoundException(OWNER_ID));
 
         assertThrows(UserNotFoundException.class, () -> service.salesHistory(OWNER_TOKEN, COMPANY_ID));
     }
