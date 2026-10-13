@@ -1,16 +1,17 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +22,6 @@ import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
-import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.organization.domain.CompanyStatus;
@@ -38,6 +38,10 @@ import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
 
 class CompanyAnalyticsServiceTest {
 
@@ -47,13 +51,12 @@ class CompanyAnalyticsServiceTest {
     private static final int EVENT_B = 101;
     private static final int OTHER_COMPANY_EVENT = 999;
 
-    // Fixtures for the relocated viewSalesHistory tests (UC-22, moved here from CompanyManagementServiceTest).
+    // Caller fixtures for the token-authorized reads (#22).
     private static final String OWNER_TOKEN = "owner-token";
     private static final String TARGET_TOKEN = "target-token";
     private static final String INVALID_TOKEN = "invalid-token";
     private static final int OWNER_ID = 1;
     private static final int TARGET_USER_ID = 2;
-    private static final int ORDER_RECEIPT_ID = 11;
     private static final String COMPANY_1_NAME = "Company1";
     private static final String COMPANY_1_DESCRIPTION = "A test production company1";
 
@@ -64,10 +67,9 @@ class CompanyAnalyticsServiceTest {
     private  TicketRepository ticketRepository;
     private  ProductionCompanyRepository companyRepository;
     private  UserRepository userRepository;
-    // Mocked membership service — the viewSalesHistory authorization gate now asks it (by userId)
-    // instead of calling User.hasPermissionInCompany (task #20).
+    // Mocked membership service — the authorization gate asks it by userId.
     private CompanyMembershipService membershipService;
-    // Session/token port used by viewSalesHistory's token authentication.
+    // Session/token port used to authenticate the caller.
     private SessionManager sessionManager;
     private CompanyAnalyticsService service;
 
@@ -83,6 +85,28 @@ class CompanyAnalyticsServiceTest {
         membershipService = mock(CompanyMembershipService.class);
         sessionManager = mock(SessionManager.class);
         service = new CompanyAnalyticsService(eventRepository, eventDisplayPort, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, membershipService, sessionManager);
+    }
+
+    private static ProductionCompany company() {
+        return new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+    }
+
+    // An authenticated, active member of COMPANY_ID holding exactly the given permissions.
+    private void givenMember(String token, int userId, Permission... permissions) {
+        when(sessionManager.validateToken(token)).thenReturn(true);
+        when(sessionManager.extractUserId(token)).thenReturn(userId);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company());
+        when(userRepository.getUserById(userId)).thenReturn(mock(User.class));
+        when(membershipService.isMemberInCompany(userId, COMPANY_ID)).thenReturn(true);
+        for (Permission permission : permissions) {
+            when(membershipService.hasPermissionInCompany(userId, COMPANY_ID, permission)).thenReturn(true);
+        }
+    }
+
+    // Owners implicitly hold every permission (CompanyAppointment.hasPermission).
+    private void givenOwner() {
+        givenMember(OWNER_TOKEN, OWNER_ID, Permission.values());
     }
 
     private static ReceiptLine line(int ticketId, double price, int eventId) {
@@ -126,6 +150,7 @@ class CompanyAnalyticsServiceTest {
 
     @Test
     void dashboard_aggregatesLiveCountersForTheCompany() {
+        givenOwner();
         LocalDateTime now = LocalDateTime.now();
 
         when(eventRepository.findActiveByCompany(COMPANY_ID))
@@ -150,7 +175,7 @@ class CompanyAnalyticsServiceTest {
         when(conversationRepository.findByCompanyAsCounterparty(COMPANY_ID))
             .thenReturn(List.of(openInquiry, closedInquiry, complaint));
 
-        CompanyDashboardDTO stats = service.dashboard(COMPANY_ID);
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
 
         assertEquals(2, stats.activeEvents());
         assertEquals(3, stats.ticketsSold30d());           // 1 (mixed) + 2 (twoTickets)
@@ -160,11 +185,12 @@ class CompanyAnalyticsServiceTest {
 
     @Test
     void dashboard_freshCompanyWithNoEvents_returnsZeros() {
+        givenOwner();
         when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of());
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
         when(conversationRepository.findByCompanyAsCounterparty(COMPANY_ID)).thenReturn(List.of());
 
-        CompanyDashboardDTO stats = service.dashboard(COMPANY_ID);
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
 
         assertEquals(0, stats.activeEvents());
         assertEquals(0, stats.ticketsSold30d());
@@ -175,6 +201,7 @@ class CompanyAnalyticsServiceTest {
 
     @Test
     void dashboard_derivesRatingAsMeanOfCompanyEventRatings() {
+        givenOwner();
         when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of());
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
         when(conversationRepository.findByCompanyAsCounterparty(COMPANY_ID)).thenReturn(List.of());
@@ -184,33 +211,157 @@ class CompanyAnalyticsServiceTest {
         Event unrated = ratedEvent(null);
         when(eventRepository.findByCompanyId(COMPANY_ID)).thenReturn(List.of(r1, r2, unrated));
 
-        assertEquals(4.9, service.dashboard(COMPANY_ID).rating(), 0.0001);
+        assertEquals(4.9, service.dashboard(OWNER_TOKEN, COMPANY_ID).rating(), 0.0001);
     }
 
+
+    // ─── dashboard authorization (#22) ────────────────────────────────────────────
+
+    @Test
+    void GivenInvalidToken_WhenDashboard_ThenThrowsInvalidTokenException() {
+        when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
+
+        assertThrows(InvalidTokenException.class, () -> service.dashboard(INVALID_TOKEN, COMPANY_ID));
+        verify(eventRepository, never()).findActiveByCompany(anyInt());
+    }
+
+    @Test
+    void GivenUnknownCompany_WhenDashboard_ThenThrowsCompanyNotFoundException() {
+        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
+
+        assertThrows(CompanyNotFoundException.class, () -> service.dashboard(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenDeletedUser_WhenDashboard_ThenThrowsUserNotFoundException() {
+        givenOwner();
+        when(userRepository.getUserById(OWNER_ID)).thenThrow(new UserNotFoundException(OWNER_ID));
+
+        assertThrows(UserNotFoundException.class, () -> service.dashboard(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenNonMember_WhenDashboard_ThenThrowsUnauthorizedActionException() {
+        givenMember(TARGET_TOKEN, TARGET_USER_ID);
+        when(membershipService.isMemberInCompany(TARGET_USER_ID, COMPANY_ID)).thenReturn(false);
+
+        assertThrows(UnauthorizedActionException.class, () -> service.dashboard(TARGET_TOKEN, COMPANY_ID));
+        verify(orderReceiptRepository, never()).findByEventIds(anyList());
+    }
+
+    @Test
+    void GivenMemberWithoutViewSales_WhenDashboard_ThenRevenueIsWithheld() {
+        givenMember(TARGET_TOKEN, TARGET_USER_ID, Permission.RESPOND_TO_INQUIRIES);
+        when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of(mock(Event.class)));
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt sale = receipt(false, LocalDateTime.now().minusDays(1), List.of(line(1, 50.0, EVENT_A)));
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(sale));
+        when(conversationRepository.findByCompanyAsCounterparty(COMPANY_ID)).thenReturn(List.of());
+
+        CompanyDashboardDTO stats = service.dashboard(TARGET_TOKEN, COMPANY_ID);
+
+        assertNull(stats.revenue30d());
+        assertEquals(1, stats.activeEvents());
+        assertEquals(1, stats.ticketsSold30d());
+        assertEquals(0, stats.openInquiries());
+    }
+
+    @Test
+    void GivenMemberWithoutRespondToInquiries_WhenDashboard_ThenOpenInquiriesAreWithheld() {
+        givenMember(TARGET_TOKEN, TARGET_USER_ID, Permission.VIEW_SALES);
+        when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of());
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
+
+        CompanyDashboardDTO stats = service.dashboard(TARGET_TOKEN, COMPANY_ID);
+
+        assertNull(stats.openInquiries());
+        assertEquals(0.0, stats.revenue30d());
+        verify(conversationRepository, never()).findByCompanyAsCounterparty(anyInt());
+    }
+
+    // ─── salesHistory authorization (#22, UC-22) ──────────────────────────────────
+
+    @Test
+    void GivenInvalidToken_WhenSalesHistory_ThenThrowsInvalidTokenException() {
+        when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
+
+        assertThrows(InvalidTokenException.class, () -> service.salesHistory(INVALID_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenUnknownCompany_WhenSalesHistory_ThenThrowsCompanyNotFoundException() {
+        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
+
+        assertThrows(CompanyNotFoundException.class, () -> service.salesHistory(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenDeletedUser_WhenSalesHistory_ThenThrowsUserNotFoundException() {
+        givenOwner();
+        when(userRepository.getUserById(OWNER_ID)).thenThrow(new UserNotFoundException(OWNER_ID));
+
+        assertThrows(UserNotFoundException.class, () -> service.salesHistory(OWNER_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenNonMember_WhenSalesHistory_ThenThrowsUnauthorizedActionException() {
+        givenMember(TARGET_TOKEN, TARGET_USER_ID);
+        when(membershipService.isMemberInCompany(TARGET_USER_ID, COMPANY_ID)).thenReturn(false);
+
+        assertThrows(UnauthorizedActionException.class, () -> service.salesHistory(TARGET_TOKEN, COMPANY_ID));
+    }
+
+    @Test
+    void GivenMemberWithoutViewSales_WhenSalesHistory_ThenThrowsUnauthorizedActionException() {
+        givenMember(TARGET_TOKEN, TARGET_USER_ID, Permission.MANAGE_INVENTORY);
+
+        assertThrows(UnauthorizedActionException.class, () -> service.salesHistory(TARGET_TOKEN, COMPANY_ID));
+        verify(orderReceiptRepository, never()).findByEventIds(anyList());
+    }
+
+    @Test
+    void GivenManagerWithViewSales_WhenSalesHistory_ThenReturnsCompanySales() {
+        givenMember(TARGET_TOKEN, TARGET_USER_ID, Permission.VIEW_SALES);
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt r = fullReceipt(false, LocalDateTime.now().minusDays(1), List.of(line(1, 40.0, EVENT_A)), 1);
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
+        when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
+
+        PurchaseHistoryDTO result = service.salesHistory(TARGET_TOKEN, COMPANY_ID);
+
+        assertEquals(1, result.records().size());
+    }
 
     // ─── salesHistory unit tests ──────────────────────────────────────────────────
 
     @Test
     void salesHistory_noEventsForCompany_returnsEmptyHistory() {
+        givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
 
-        PurchaseHistoryDTO result = service.salesHistory(COMPANY_ID);
+        PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
         assertTrue(result.records().isEmpty());
     }
 
     @Test
     void salesHistory_eventsExistButNoReceipts_returnsEmptyHistory() {
+        givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A, EVENT_B));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A, EVENT_B))).thenReturn(List.of());
 
-        PurchaseHistoryDTO result = service.salesHistory(COMPANY_ID);
+        PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
         assertTrue(result.records().isEmpty());
     }
 
     @Test
     void salesHistory_twoReceipts_returnsTwoRecords() {
+        givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         OrderReceipt r1 = fullReceipt(false, LocalDateTime.now().minusDays(1),
                 List.of(line(1, 50.0, EVENT_A)), 1);
@@ -219,20 +370,21 @@ class CompanyAnalyticsServiceTest {
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r1, r2));
         when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
 
-        PurchaseHistoryDTO result = service.salesHistory(COMPANY_ID);
+        PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
         assertEquals(2, result.records().size());
     }
 
     @Test
     void salesHistory_refundedReceiptIsIncluded() {
+        givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         OrderReceipt r = fullReceipt(true, LocalDateTime.now().minusDays(3),
                 List.of(line(1, 40.0, EVENT_A)), 1);
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
         when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
 
-        PurchaseHistoryDTO result = service.salesHistory(COMPANY_ID);
+        PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
         assertEquals(1, result.records().size());
         assertTrue(result.records().get(0).refunded());
@@ -240,6 +392,7 @@ class CompanyAnalyticsServiceTest {
 
     @Test
     void salesHistory_linesFromOtherCompanyEventsAreExcluded() {
+        givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         // receipt contains one line for EVENT_A and one for a different company's event
         OrderReceipt r = fullReceipt(false, LocalDateTime.now().minusDays(1),
@@ -247,146 +400,10 @@ class CompanyAnalyticsServiceTest {
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
         when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
 
-        PurchaseHistoryDTO result = service.salesHistory(COMPANY_ID);
+        PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
         assertEquals(1, result.records().size());
         assertEquals(1,     result.records().get(0).tickets().size()); // only EVENT_A ticket
         assertEquals(100.0, result.records().get(0).totalPaid());      // only EVENT_A revenue
-    }
-
-    // ─── viewSalesHistory (UC-22) unit tests, relocated from CompanyManagementServiceTest ─────────
-
-    @Test
-    void GivenInvalidToken_WhenViewSalesHistory_ThenThrowException() {
-        when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false); // token fails validation
-
-        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(INVALID_TOKEN, COMPANY_ID));
-    }
-
-    @Test
-    void GivenCompanyNotFound_WhenViewSalesHistory_ThenThrowException() {
-        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(null); // unknown company
-
-        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-    }
-
-    @Test
-    void GivenUserNotFound_WhenViewSalesHistory_ThenThrowException() {
-        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-
-        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(userRepository.getUserById(OWNER_ID)).thenReturn(null); // caller no longer exists
-
-        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-    }
-
-    @Test
-    void GivenUserWithNoPermission_WhenViewSalesHistory_ThenThrowException() {
-        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-        User requester = mock(User.class);
-
-        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(userRepository.getUserById(OWNER_ID)).thenReturn(requester);
-        when(membershipService.hasPermissionInCompany(OWNER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(false); // denied
-
-        assertThrows(RuntimeException.class, () -> service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID));
-    }
-
-    @Test
-    void GivenOwnerWithNoSales_WhenViewSalesHistory_ThenReturnEmptyList() {
-        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-        User ownerUser = mock(User.class);
-
-        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(new ArrayList<>()); // company has no events
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-        when(membershipService.hasPermissionInCompany(OWNER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-
-        List<PurchaseHistoryDTO> result = service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
-
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void GivenManagerWithViewSalesPermission_WhenViewSalesHistory_ThenReturnSalesHistory() {
-        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-        User managerUser = mock(User.class);
-        OrderReceipt mockReceipt = mock(OrderReceipt.class);
-        Ticket ticket = new Ticket(1, 1, ORDER_RECEIPT_ID, null, 50.0, 10, "BARCODE-001");
-        Event mockEvent = mock(Event.class);
-
-        when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(userRepository.getUserById(TARGET_USER_ID)).thenReturn(managerUser);
-        when(membershipService.hasPermissionInCompany(TARGET_USER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-
-        when(mockReceipt.getId()).thenReturn(42);
-        when(mockReceipt.getPurchaseTime()).thenReturn(LocalDateTime.now());
-        ReceiptLine mockLine = mock(ReceiptLine.class);
-        when(mockLine.getTicketId()).thenReturn(10);
-        when(mockLine.getPriceAtReservation()).thenReturn(50.0);
-        when(mockReceipt.getReceiptLines()).thenReturn(List.of(mockLine));
-        when(ticketRepository.findByOrderReceiptId(42)).thenReturn(List.of(ticket));
-        when(eventRepository.findById(1)).thenReturn(mockEvent);
-        when(mockEvent.getName()).thenReturn("Rock Concert");
-        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(1));
-        when(orderReceiptRepository.findByEventIds(List.of(1))).thenReturn(List.of(mockReceipt));
-
-        List<PurchaseHistoryDTO> result = service.viewSalesHistory(TARGET_TOKEN, COMPANY_ID);
-
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
-        assertEquals(42, record.orderReceiptId());
-        assertEquals(50.0, record.totalPaid());
-        assertEquals(1, record.tickets().size());
-    }
-
-    @Test
-    void GivenOwnerWithMultipleSales_WhenViewSalesHistory_ThenReturnAllRecords() {
-        ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
-                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
-        User ownerUser = mock(User.class);
-        OrderReceipt mockReceipt1 = mock(OrderReceipt.class);
-        OrderReceipt mockReceipt2 = mock(OrderReceipt.class);
-        Event mockEvent = mock(Event.class);
-
-        when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-        when(membershipService.hasPermissionInCompany(OWNER_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
-
-        when(mockEvent.getName()).thenReturn("Summer Festival");
-
-        when(mockReceipt1.getId()).thenReturn(1);
-        when(mockReceipt1.getPurchaseTime()).thenReturn(LocalDateTime.now());
-        when(ticketRepository.findByOrderReceiptId(1)).thenReturn(new ArrayList<>());
-        when(eventRepository.findById(10)).thenReturn(mockEvent);
-
-        when(mockReceipt2.getId()).thenReturn(2);
-        when(mockReceipt2.getPurchaseTime()).thenReturn(LocalDateTime.now());
-        when(ticketRepository.findByOrderReceiptId(2)).thenReturn(new ArrayList<>());
-        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(10));
-        when(orderReceiptRepository.findByEventIds(List.of(10))).thenReturn(List.of(mockReceipt1, mockReceipt2));
-
-        List<PurchaseHistoryDTO> result = service.viewSalesHistory(OWNER_TOKEN, COMPANY_ID);
-
-        assertNotNull(result);
-        assertEquals(2, result.size());
     }
 }

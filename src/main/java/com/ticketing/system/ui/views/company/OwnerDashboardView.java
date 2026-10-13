@@ -125,14 +125,12 @@ public class OwnerDashboardView extends LkPage {
             new LkStat("Live events",        String.valueOf(stats.activeEvents())),
             new LkStat("Tickets sold · 30d",  String.format("%,d", stats.ticketsSold30d()))
         );
-        // Revenue is sales data — only members with VIEW_SALES (VIEW_COMPANY_SALES) see it, matching
-        // the "Sales History" tile gate below and the VIEW_COMPANY_SALES-gated sales page.
-        if (Capabilities.has(Capability.VIEW_COMPANY_SALES)) {
+        // The service withholds revenue (VIEW_SALES) and open inquiries (RESPOND_TO_INQUIRIES) as
+        // null for members without the permission (#22), so the server decides what is shown.
+        if (stats.revenue30d() != null) {
             row.add(new LkStat("Revenue · 30d", "$" + String.format("%,.0f", stats.revenue30d())));
         }
-        // Open inquiries is inquiry-handling data — only members with RESPOND_TO_INQUIRIES
-        // (RESPOND_INQUIRIES) see it, matching the "Customer Inquiries" tile gate below.
-        if (Capabilities.has(Capability.RESPOND_INQUIRIES)) {
+        if (stats.openInquiries() != null) {
             LkStat inquiries = new LkStat("Open inquiries", String.valueOf(stats.openInquiries()));
             if (stats.openInquiries() > 0) {
                 inquiries.delta("needs reply", LkStat.Tone.warn);

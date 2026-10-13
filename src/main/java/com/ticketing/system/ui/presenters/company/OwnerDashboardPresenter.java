@@ -53,7 +53,7 @@ public class OwnerDashboardPresenter {
                 .filter(c -> companyId != null && c.companyId() == companyId)
                 .findFirst()
                 .orElse(companies.get(0));
-            CompanyDashboardDTO stats = companyAnalyticsService.dashboard(selected.companyId());
+            CompanyDashboardDTO stats = companyAnalyticsService.dashboard(token, selected.companyId());
             return new Outcome.Success(companies, selected, stats);
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
