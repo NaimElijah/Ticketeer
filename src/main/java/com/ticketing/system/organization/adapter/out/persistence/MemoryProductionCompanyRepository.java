@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.organization.domain.ProductionCompany;
 
 /**
@@ -52,7 +53,7 @@ public class MemoryProductionCompanyRepository implements ProductionCompanyRepos
     @Override
     public ProductionCompany getCompanyById(int companyId) {
         if (!companiesById.containsKey(companyId)) {
-            throw new RuntimeException("Company with ID " + companyId + " not found");
+            throw new CompanyNotFoundException(companyId);
         }
         return companiesById.get(companyId);
     }

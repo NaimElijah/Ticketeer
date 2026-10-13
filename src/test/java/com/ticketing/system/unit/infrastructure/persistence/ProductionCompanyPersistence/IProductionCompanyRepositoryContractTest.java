@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
 import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
@@ -54,7 +55,7 @@ abstract class IProductionCompanyRepositoryContractTest {
 
     @Test
     void getCompanyById_throwsWhenMissing() {
-        assertThrows(RuntimeException.class, () -> repo.getCompanyById(9999));
+        assertThrows(CompanyNotFoundException.class, () -> repo.getCompanyById(9999));
     }
 
     @Test

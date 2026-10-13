@@ -35,4 +35,8 @@ public interface SpringDataTicketRepository extends JpaRepository<Ticket, Intege
     @Query("select count(t) from Ticket t where t.eventId = :eventId and t.zoneid = :zoneId "
             + "and t.status = com.ticketing.system.sales.domain.TicketStatus.AVAILABLE")
     long countAvailableInZone(@Param("eventId") int eventId, @Param("zoneId") int zoneId);
+
+    /** Highest existing ticketId (0 when empty) — seeds the assigned-id sequence across restarts. */
+    @Query("select coalesce(max(t.ticketId), 0) from Ticket t")
+    int findMaxTicketId();
 }

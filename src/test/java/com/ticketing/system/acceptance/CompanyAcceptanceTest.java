@@ -18,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.ticketing.system.shared.dto.AppointmentResponseDTO;
 import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CompanyDashboardDTO;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -48,6 +49,7 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -165,7 +167,7 @@ class CompanyAcceptanceTest {
         int companyId = companyService.registerCompany(
                 owner.token(), new CompanyRegistrationDTO("SalesCo1", "desc")).companyId();
 
-        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(companyId);
+        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
         assertTrue(result.records().isEmpty());
         }
@@ -183,7 +185,7 @@ class CompanyAcceptanceTest {
                 List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
                 null));
 
-        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(companyId);
+        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
         assertTrue(result.records().isEmpty());
         }
@@ -208,7 +210,7 @@ class CompanyAcceptanceTest {
                 List.of(new ReceiptLine(1, 80.0, eventId, 1, null, LocalDateTime.now())));
         orderReceiptRepository.save(receipt);
 
-        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(companyId);
+        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
         assertEquals(1, result.records().size());
         assertEquals(80.0, result.records().get(0).totalPaid());
@@ -235,7 +237,7 @@ class CompanyAcceptanceTest {
                 orderReceiptRepository.nextId(), owner.userId(), 30.0,
                 List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now()))));
 
-        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(companyId);
+        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
         assertEquals(2, result.records().size());
         }
@@ -261,10 +263,68 @@ class CompanyAcceptanceTest {
         receipt.markRefunded();
         orderReceiptRepository.save(receipt);
 
-        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(companyId);
+        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
         assertEquals(1, result.records().size());
         assertTrue(result.records().get(0).refunded());
+        }
+
+        // #22: company analytics enforce permission at the service boundary, not only in the UI.
+        private int companyWithActiveManager(String prefix, List<Permission> managerPermissions,
+                        AuthTokenDTO owner, AuthTokenDTO manager) {
+                int companyId = companyService.registerCompany(
+                                owner.token(), new CompanyRegistrationDTO(prefix + "Co", "desc")).companyId();
+                companyService.appointManager(owner.token(),
+                                new ManagerAppointmentRequestDTO(companyId, manager.userId(), managerPermissions));
+                companyService.respondToAppointment(manager.token(), new AppointmentResponseDTO(companyId, true));
+                return companyId;
+        }
+
+        @Test
+        void GivenManagerWithoutViewSales_WhenViewSalesHistory_ThenRejected() {
+                AuthTokenDTO owner = registerAndLoginMember("authzOwner1");
+                AuthTokenDTO manager = registerAndLoginMember("authzManager1");
+                int companyId = companyWithActiveManager("authz1", List.of(Permission.MANAGE_INVENTORY), owner, manager);
+
+                assertThrows(UnauthorizedActionException.class,
+                                () -> companyAnalyticsService.salesHistory(manager.token(), companyId));
+        }
+
+        @Test
+        void GivenManagerWithViewSales_WhenViewSalesHistory_ThenAllowed() {
+                AuthTokenDTO owner = registerAndLoginMember("authzOwner2");
+                AuthTokenDTO manager = registerAndLoginMember("authzManager2");
+                int companyId = companyWithActiveManager("authz2", List.of(Permission.VIEW_SALES), owner, manager);
+
+                PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(manager.token(), companyId);
+
+                assertTrue(result.records().isEmpty());
+        }
+
+        @Test
+        void GivenNonMember_WhenViewDashboard_ThenRejected() {
+                AuthTokenDTO owner = registerAndLoginMember("authzOwner3");
+                AuthTokenDTO outsider = registerAndLoginMember("authzOutsider3");
+                int companyId = companyService.registerCompany(
+                                owner.token(), new CompanyRegistrationDTO("authz3Co", "desc")).companyId();
+
+                assertThrows(UnauthorizedActionException.class,
+                                () -> companyAnalyticsService.dashboard(outsider.token(), companyId));
+        }
+
+        @Test
+        void GivenManagerWithoutViewSales_WhenViewDashboard_ThenRevenueWithheld() {
+                AuthTokenDTO owner = registerAndLoginMember("authzOwner4");
+                AuthTokenDTO manager = registerAndLoginMember("authzManager4");
+                int companyId = companyWithActiveManager("authz4", List.of(Permission.MANAGE_INVENTORY), owner, manager);
+
+                CompanyDashboardDTO managerView = companyAnalyticsService.dashboard(manager.token(), companyId);
+                CompanyDashboardDTO ownerView = companyAnalyticsService.dashboard(owner.token(), companyId);
+
+                assertNull(managerView.revenue30d());
+                assertNull(managerView.openInquiries());
+                assertEquals(0.0, ownerView.revenue30d());
+                assertEquals(0, ownerView.openInquiries());
         }
 
 

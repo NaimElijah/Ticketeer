@@ -26,26 +26,24 @@ import com.ticketing.system.messaging.application.port.out.ConversationRepositor
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
-import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.identity.domain.User;
-import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 
 /**
- * Read-side aggregator for the owner-workspace dashboard counters (V2-WIRE-OWNER-DASH).
+ * Read side for company analytics: the owner-workspace dashboard counters (V2-WIRE-OWNER-DASH)
+ * and the company sales history (UC-22).
  *
- * <p>Pure query service: it takes an already-authorized {@code companyId} (the caller — the
- * presenter — resolves the signed-in member's companies via
- * {@code CompanyManagementService.findMyCompanies} first) and assembles the four dashboard
- * figures from the event, order-receipt, and conversation repositories. Sales figures are the
- * company's own share of each receipt (a receipt can mix events from several companies), over
- * the trailing 30 days, excluding refunded receipts.
+ * <p>Every read is company-scoped and authorizes the caller itself (#22): it validates the
+ * session token, requires an active appointment in the company, and checks the organization
+ * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. Sales
+ * figures are the company's own share of each receipt (a receipt can mix events from several
+ * companies), over the trailing 30 days, excluding refunded receipts.
  */
 @Service
 @Slf4j
@@ -65,7 +63,7 @@ public class CompanyAnalyticsService {
     // Company-membership/authorization checks moved off the User aggregate (task #20); reporting
     // already depends on organization.
     private final CompanyMembershipService companyMembershipService;
-    // Session/token port — needed by the token-authenticated viewSalesHistory read (UC-22).
+    // Session/token port — every company-scoped read authenticates its caller (#22).
     private final SessionManager sessionManager;
 
     public CompanyAnalyticsService(
@@ -89,8 +87,30 @@ public class CompanyAnalyticsService {
         this.sessionManager = sessionManager;
     }
 
-    /** Live dashboard counters for one company. Returns zeros for a fresh company with no events. */
-    public CompanyDashboardDTO dashboard(int companyId) {
+    /**
+     * Live dashboard counters for one company, as seen by the calling member. Returns zeros for a
+     * fresh company with no events.
+     *
+     * <p>Figures the caller may not see are withheld as {@code null}: revenue
+     * needs {@link Permission#VIEW_SALES} and open inquiries need
+     * {@link Permission#RESPOND_TO_INQUIRIES}. Owners hold both implicitly.
+     *
+     * @param token     the caller's session token
+     * @param companyId the company to summarise
+     * @return the dashboard counters visible to the caller
+     * @throws InvalidTokenException       if the token is not valid
+     * @throws SessionExpiredException     if the token's session has expired
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the token's user no longer exists
+     * @throws UnauthorizedActionException if the caller holds no active appointment in the company
+     */
+    public CompanyDashboardDTO dashboard(String token, int companyId) {
+        int requesterId = authorizeMember(token, companyId);
+        boolean canViewSales = companyMembershipService
+                .hasPermissionInCompany(requesterId, companyId, Permission.VIEW_SALES);
+        boolean canViewInquiries = companyMembershipService
+                .hasPermissionInCompany(requesterId, companyId, Permission.RESPOND_TO_INQUIRIES);
+
         int activeEvents = eventRepository.findActiveByCompany(companyId).size();
 
         int ticketsSold = 0;
@@ -116,19 +136,40 @@ public class CompanyAnalyticsService {
             }
         }
 
-        int openInquiries = (int) conversationRepository.findByCompanyAsCounterparty(companyId).stream()
-                .filter(c -> c.getType() == ConversationType.INQUIRY && !c.isClosed())
-                .count();
+        Integer openInquiries = canViewInquiries ? countOpenInquiries(companyId) : null;
 
         // Company rating is derived: the mean of this company's events' ratings (null if none rated).
         Double rating = CompanyRatings.fromEvents(eventRepository.findByCompanyId(companyId));
 
         log.debug("Dashboard for company {}: {} active events, {} tickets/30d, {} revenue/30d, {} open inquiries, rating {}",
                 companyId, activeEvents, ticketsSold, revenue, openInquiries, rating);
-        return new CompanyDashboardDTO(activeEvents, ticketsSold, revenue, openInquiries, rating);
+        return new CompanyDashboardDTO(activeEvents, ticketsSold, canViewSales ? revenue : null,
+                openInquiries, rating);
     }
 
-    public PurchaseHistoryDTO salesHistory(int companyId) {
+    private int countOpenInquiries(int companyId) {
+        return (int) conversationRepository.findByCompanyAsCounterparty(companyId).stream()
+                .filter(c -> c.getType() == ConversationType.INQUIRY && !c.isClosed())
+                .count();
+    }
+
+    /**
+     * UC-22 — the company's sales history: one record per receipt that holds at least one ticket
+     * for the company's events, carrying only that company's lines and revenue.
+     *
+     * @param token     the caller's session token
+     * @param companyId the company whose sales are requested
+     * @return the company's sales records (empty when the company has no events)
+     * @throws InvalidTokenException       if the token is not valid
+     * @throws SessionExpiredException     if the token's session has expired
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the token's user no longer exists
+     * @throws UnauthorizedActionException if the caller is not a member holding {@link Permission#VIEW_SALES}
+     */
+    public PurchaseHistoryDTO salesHistory(String token, int companyId) {
+        int requesterId = authorizeMember(token, companyId);
+        requirePermission(requesterId, companyId, Permission.VIEW_SALES);
+
         List<Integer> eventIds = eventRepository.findIdsByCompany(companyId);
         if (eventIds.isEmpty()) return new PurchaseHistoryDTO(List.of());
         Set<Integer> companyEventIds = new HashSet<>(eventIds);
@@ -144,59 +185,32 @@ public class CompanyAnalyticsService {
     }
 
     /**
-     * UC-22 — token-authenticated, owner/manager-side flat list of a company's sales history
-     * (relocated here from {@code organization.CompanyManagementService.viewSalesHistory}: it is a
-     * cross-context reporting read, so it belongs in reporting, not organization). Each returned
-     * {@link PurchaseHistoryDTO} wraps a single receipt that has at least one ticket for one of the
-     * company's events, carrying only that company's tickets (other companies' tickets on a shared
-     * receipt are filtered out). Validates the session token and requires the
-     * {@link Permission#VIEW_SALES} permission for the company. Behaviour preserved verbatim.
+     * Authenticates the caller and requires an active appointment in the company.
      *
-     * @param token     the caller's session token
-     * @param companyId the company whose sales history is requested
-     * @return one purchase-history entry per relevant receipt (empty list when the company has no events)
+     * @return the caller's user id
+     * @throws InvalidTokenException       if the token is not valid
+     * @throws SessionExpiredException     if the token's session has expired
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the token's user no longer exists
+     * @throws UnauthorizedActionException if the caller is not an active member of the company
      */
-    public List<PurchaseHistoryDTO> viewSalesHistory(String token, int companyId) {
-        log.info("Attempting to view sales history for company {}", companyId);
-
-        int requesterId = authenticate(token);                        // validate token → caller's userId
-        ProductionCompany company = companyRepository.getCompanyById(companyId); // resolve the company
-        if (company == null) {                                        // unknown company → not-found failure
-            log.warn("Company {} not found", companyId);
-            throw new CompanyNotFoundException();
-        }
-
-        User currUser = userRepository.getUserById(requesterId);      // resolve the calling user
-        if (currUser == null) {                                       // caller no longer exists → not-found failure
-            log.warn("User {} not found", requesterId);
-            throw new UserNotFoundException();
-        }
-        if (!companyMembershipService.hasPermissionInCompany(requesterId, companyId, Permission.VIEW_SALES)) { // authorization gate
-            log.warn("User {} does not have permission to view sales history for company {}", requesterId, companyId);
+    private int authorizeMember(String token, int companyId) {
+        int requesterId = authenticate(token);
+        // Both repository lookups throw the typed not-found exception per their port contract.
+        companyRepository.getCompanyById(companyId);
+        userRepository.getUserById(requesterId);
+        if (!companyMembershipService.isMemberInCompany(requesterId, companyId)) {
+            log.warn("User {} is not a member of company {}", requesterId, companyId);
             throw new UnauthorizedActionException("view this company's data");
         }
+        return requesterId;
+    }
 
-        List<Integer> companyEventIds = eventRepository.findIdsByCompany(companyId); // this company's event ids
-        if (companyEventIds == null || companyEventIds.isEmpty()) {   // no events → nothing to report
-            return List.of();
+    private void requirePermission(int requesterId, int companyId, Permission permission) {
+        if (!companyMembershipService.hasPermissionInCompany(requesterId, companyId, permission)) {
+            log.warn("User {} lacks {} in company {}", requesterId, permission, companyId);
+            throw new UnauthorizedActionException("view this company's data");
         }
-
-        Set<Integer> companyEventIdSet = Set.copyOf(companyEventIds); // fast membership test for ticket filtering
-        OrderReceiptMapper mapper = new OrderReceiptMapper();         // stateless mapper for receipt → DTO
-
-        // Each receipt that touches a company event becomes one PurchaseHistoryDTO carrying only the
-        // tickets for this company's events (the rest are filtered out).
-        List<PurchaseHistoryDTO> salesHistory = orderReceiptRepository.findByEventIds(companyEventIds).stream()
-                .map(receipt -> {
-                    List<Ticket> companyTickets = ticketRepository.findByOrderReceiptId(receipt.getId()).stream()
-                            .filter(ticket -> companyEventIdSet.contains(ticket.getEventId())) // keep only this company's
-                            .toList();
-                    return new PurchaseHistoryDTO(List.of(mapper.toPurchaseRecordDTO(
-                            receipt, companyTickets, eventDisplayPort, companyRepository, userRepository)));
-                }).toList();
-
-        log.info("Successfully retrieved sales history for company {}", companyId);
-        return salesHistory;
     }
 
     /**
