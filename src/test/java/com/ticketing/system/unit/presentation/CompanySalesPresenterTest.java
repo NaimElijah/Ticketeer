@@ -2,11 +2,9 @@ package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -42,8 +40,7 @@ class CompanySalesPresenterTest {
         CompanySalesPresenter.Outcome outcome = presenter.load(null, null);
 
         assertInstanceOf(CompanySalesPresenter.Outcome.NotAuthenticated.class, outcome);
-        verify(companyManagementService, never()).findMyCompanies(anyString());
-        verify(companyAnalyticsService, never()).salesHistory(anyString(), anyInt());
+        verifyNoInteractions(companyManagementService, companyAnalyticsService);
     }
 
     @Test

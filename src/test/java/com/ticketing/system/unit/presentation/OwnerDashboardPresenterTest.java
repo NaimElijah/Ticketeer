@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -46,8 +47,7 @@ class OwnerDashboardPresenterTest {
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(null, null);
 
         assertInstanceOf(OwnerDashboardPresenter.Outcome.NotAuthenticated.class, outcome);
-        verify(companyManagementService, never()).findMyCompanies(anyString());
-        verify(companyAnalyticsService, never()).dashboard(anyString(), anyInt());
+        verifyNoInteractions(companyManagementService, companyAnalyticsService);
     }
 
     @Test
