@@ -281,7 +281,7 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 | SLR.1 | Consistency and concurrency: every action keeps the platform valid; reserving and purchasing are atomic; no seat is ever sold twice. | Partial: event-cancellation refunds can stop halfway (#20) | Optimistic locking, `OptimisticLockTranslationAspect` · `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `OptimisticLockTranslationAspectTest` |
 | SLR.2 | Privacy and security: identifying data is neither exposed nor recoverable; passwords are stored hashed; requests after login carry a token; passwords are masked in the UI. | Partial: session-id rotation #75, default secrets #34, admin credentials #77 | `BcryptPasswordHasher`, `JwtSessionManager` · `AuthenticationServiceTest`, `JwtSessionManagerTest` |
 | SLR.3 | User experience: 3.1 response time holds under load; 3.2 help with common errors; 3.3 a convenient UI; 3.4 each role sees only the actions it may perform; 3.5 the UI explains successes and failures (V2). | Partial: 3.4 depends on a mock capability resolver (#59); accessibility #110; for 3.3, browse filters kept in the URL #70 | `AuthBootstrap`, `RequireCapability`, `Capability` |
-| SLR.4 | Load, stress and availability: unlimited visitors, companies and events; spikes when sales open; continuous availability. | TODO: no targets set. Load test #108; waiting queue #71 | — |
+| SLR.4 | Load, stress and availability: unlimited visitors, companies and events; spikes when sales open; continuous availability. | TODO: no targets set ([OQ-11](#open-questions)). Load test #108; waiting queue #71 | — |
 | SLR.5 | Robustness: keep working under load, network failures and the loss of an external service. | Partial: external-call timeouts and handshake retries are built; cancellation refunds cannot resume (#20) | `WsepHttpClient` · `WsepHttpClientRetryTest` |
 | SLR.6 | Recovery: return to normal operation after a fault, for example resume automatically when the database comes back. | Built; not run in CI (#32) | Connection-pool settings in `application-supabase.yml`, `MarketSelfHealScheduler` · `DbOutageRecoveryLocalPgIT`, `MarketSelfHealSchedulerTest` |
 | SLR.7 | Persistence: state survives a planned or unplanned shutdown. V3: a remote database is supported, and switching databases is a configuration change only. | Partial: built under the `jpa` profile; no schema migrations (#31); market state (#24), idempotency keys (#25) and login lockouts (#39) are held in memory | The JPA repository adapters and their contract tests · `TicketIdRestartJpaTest` |
@@ -294,11 +294,11 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 | V2 3.a | Report test coverage automatically, for example with JaCoCo. | Deferred (#45); exempted under V2 Tier B in the course project | — |
 | V3 2.a.i | Initialize from external configuration files; database connection details live in configuration, not code. | Partial: every value in `application.yml` can be overridden from the environment; values are not validated (#27) | `application.yml` |
 | V3 2.a.ii | Optionally initialize from an initial-state file that replays use cases through the application layer. If any step fails, initialization fails. | Partial: the `.scenario` engine runs in every profile except `test` when `seed.mode` is set, but a failing step does not stop startup by default (#27) | `ScenarioRunner`, `ScenarioOps` |
-| V3 2.b | Connect to the real external payment and ticket-issuing systems. | Built (WSEP); Stripe replaces WSEP payments in #98 | `WsepPaymentGateway`, `WsepTicketIssuer` |
+| V3 2.b | Connect to the real external payment and ticket-issuing systems. | Built (WSEP); Stripe replaces WSEP payments in #98 | `WsepPaymentGateway`, `WsepTicketIssuer` · `WsepPaymentGatewayTest`, `WsepTicketIssuerTest` |
 | V3 4.a | Resilience tests cover the external systems and the database. | Built | `WsepHttpClientRetryTest`, `DbOutageRecoveryLocalPgIT` |
 | V3 4.b | Tests prove the system does not start after an invalid initialization. | Deferred (#27) | — |
-| V3 4.c | Tests use a dedicated configuration and never reach the real external systems or the production database. | Built: the `test` profile and `application-test.yml` swap in stub gateways | `application-test.yml` |
-| V3 appendix 3 | Use the ORM's built-in cache. | TODO: evaluated in #33 | — |
+| V3 4.c | Tests use a dedicated configuration and never reach the real external systems or the production database. | Built: the `test` profile and `application-test.yml` swap in stub gateways | `application-test.yml` · every test that runs under the `test` profile |
+| V3 appendix 3 | Use the ORM's built-in cache. | TODO: [OQ-12](#open-questions), evaluated in #33 | — |
 | V3 appendix 4 | Each use case runs as one transaction. | Partial: most application services are one `@Transactional` method; checkout and refunds deliberately call the external services outside the transaction and commit afterwards (ADR pending, #44); cancellation refunds are not atomic (#20) | `CheckoutService`, `RefundService` |
 
 ## Non-goals
@@ -308,7 +308,7 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 - **Persisting waiting-queue state.** Queues are transient (V3).
 - **Designing the database independently of the domain.** The ORM maps the domain model onto
   tables, never the reverse (V3).
-- TODO(@NaimElijah): no other non-goals have been decided yet.
+- No other non-goals have been decided. Propose one under [Open questions](#open-questions).
 
 ## Open questions
 
@@ -326,3 +326,5 @@ Every question is owned by @NaimElijah, the project owner.
 | OQ-8 | **Rules found only in code.** Confirm or change them: a password has at least 8 characters with a letter and a digit; 5 failed logins lock the account for 15 minutes; a member session lasts 24 hours, a guest session ends after 30 idle minutes; usernames are 3–32 characters, checked only in the UI (#76); company and event purchase policies both apply; a member's refund covers the whole order; a manager can be promoted to owner only by their own appointer. | `AuthenticationService`, `application.yml` |
 | OQ-9 | **Payment data on shared orders** (#121). An order can hold tickets from several companies. What may each company see of its payment: nothing, or its own share? | `CompanyAnalyticsService.salesHistory` |
 | OQ-10 | **Anti-scalping** (§3 #5). Is a per-buyer ticket limit enough, or are identity checks or resale rules required? | `MaxTicketsPurchasePolicy` |
+| OQ-11 | **Load and availability targets** (SLR.4). The course asks for "unlimited" visitors and continuous availability, with no numbers. What peak concurrency, response time and availability must launch meet? Feeds #108. | — |
+| OQ-12 | **ORM cache** (V3 appendix 3). Is Hibernate's second-level cache required for catalog reads? Evaluated in #33. | — |
