@@ -172,7 +172,7 @@ cites; "a buyer has an active order" and "at most one per event" are one item (�
 
 | # | Rule | Enforced by · tested by |
 |---|---|---|
-| 1 | A member's username is unique. | `AuthenticationService.register` · `AuthenticationServiceTest` |
+| 1 | A member's username is unique. | `AuthenticationService.register`; scanned by `SystemIntegrityVerifier` · `AuthenticationServiceTest`, `SystemIntegrityVerifierTest` |
 | 2 | At least one system admin exists. | `SystemAdminService.initializePlatform` · `SystemAdminServiceTest` |
 | 3 | Every system admin is a member. | **Not upheld.** Admins are a separate pool, not members (`SystemIntegrityVerifier`). The deviation still needs its ADR (#44). |
 | 4 | Company owners and managers are members. | `CompanyManagementService.appointOwner`, `SystemIntegrityVerifier` · `SystemIntegrityVerifierTest` |
@@ -183,7 +183,7 @@ cites; "a buyer has an active order" and "at most one per event" are one item (�
 | 9 | Adding a ticket to an active order locks it for a fixed time (for example 10 minutes). | `ReservationHoldConfig` reads `constants.ticket-reservation-duration` · `ReservationServiceTest` |
 | 10 | An order not completed within that time is cancelled and its tickets return to stock. | `SessionAndOrderSweeper` · `SessionAndOrderSweeperTest` |
 | 11 | An active order belongs to its buyer; nobody else can change it before it expires. | `ReservationService`, `CheckoutService` · `ReservationServiceTest` |
-| 12 | An event never sells more tickets than its inventory holds. | `StandingZone`, `SeatedZone`, `Ticket.reserve`, optimistic locking · `ReservationConcurrencyTest` |
+| 12 | An event never sells more tickets than its inventory holds. | `StandingZone`, `SeatedZone`, `Ticket.reserve`, optimistic locking; scanned by `SystemIntegrityVerifier` · `ReservationConcurrencyTest`, `SystemIntegrityVerifierTest` |
 
 ### §2 External integrations
 
