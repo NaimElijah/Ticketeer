@@ -176,7 +176,7 @@ cites; "a buyer has an active order" and "at most one per event" are one item (#
 | 5 | Only users who are currently visiting can act. | A valid session token on every write (`SessionManager`) · `JwtSessionManagerTest` |
 | 6 | An active company has at least one owner. | The Founder can be neither removed nor resign (`ProductionCompany`, `CompanyManagementService.RevokeAppointment`; no test covers these guards); scanned by `SystemIntegrityVerifier` · `SystemIntegrityVerifierTest` |
 | 7 | Every company and event has purchase and discount policies, defaulting to "no restrictions". | By construction: `NoPurchasePolicy` is the default |
-| 8 | A buyer has one active order collecting their tickets, and at most one per event at any time. | `ActiveOrder` · `ActiveOrderTest` |
+| 8 | A buyer has one active order collecting their tickets, and at most one per event at any time. | Saving a second cart for the same buyer replaces the first (`ActiveOrderRepository`); scanned by `SystemIntegrityVerifier` · `IActiveOrderRepositoryContractTest`, `SystemIntegrityVerifierTest` |
 | 9 | Adding a ticket to an active order locks it for a fixed time (for example 10 minutes). | `ReservationHoldConfig` reads `constants.ticket-reservation-duration` · `ReservationServiceTest` |
 | 10 | An order not completed within that time is cancelled and its tickets return to stock. | `SessionAndOrderSweeper` · `SessionAndOrderSweeperTest` |
 | 11 | An active order belongs to its buyer; nobody else can change it before it expires. | `ReservationService`, `CheckoutService` · `ReservationServiceTest` |
