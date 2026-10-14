@@ -54,7 +54,7 @@ public class OrderReceiptMapper {
      * <p>{@code receipt}, {@code selectedEventIds} and {@code ticketRepository} must be non-null;
      * the other ports may be null, as described on the class.
      */
-    public PurchaseHistoryDTO.PurchaseRecordDTO toFilteredPurchaseRecordDTO(OrderReceipt receipt,
+    public PurchaseHistoryDTO.PurchaseRecordDTO toAdminFilteredPurchaseRecordDTO(OrderReceipt receipt,
             Set<Integer> selectedEventIds,
             TicketRepository ticketRepository,
             CatalogEventDisplayPort eventDisplay,
