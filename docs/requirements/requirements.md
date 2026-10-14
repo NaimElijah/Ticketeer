@@ -275,7 +275,7 @@ The course states #3 and #4 as one bullet; the code cites them separately.
 
 | ID | Requirement | Status | Enforced by · tested by |
 |---|---|---|---|
-| SLR.1 | Consistency and concurrency: every action keeps the platform valid; reserving and purchasing are atomic; no seat is ever sold twice. | Built | Optimistic locking, `OptimisticLockTranslationAspect` · `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `OptimisticLockTranslationAspectTest` |
+| SLR.1 | Consistency and concurrency: every action keeps the platform valid; reserving and purchasing are atomic; no seat is ever sold twice. | Partial: event-cancellation refunds can stop halfway (#20) | Optimistic locking, `OptimisticLockTranslationAspect` · `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `OptimisticLockTranslationAspectTest` |
 | SLR.2 | Privacy and security: identifying data is neither exposed nor recoverable; passwords are stored hashed; requests after login carry a token; passwords are masked in the UI. | Partial: session-id rotation #75, default secrets #34, admin credentials #77 | `BcryptPasswordHasher`, `JwtSessionManager` · `AuthenticationServiceTest`, `JwtSessionManagerTest` |
 | SLR.3 | User experience: 3.1 response time holds under load; 3.2 help with common errors; 3.3 a convenient UI; 3.4 each role sees only the actions it may perform; 3.5 the UI explains successes and failures (V2). | Partial: 3.4 depends on a mock capability resolver (#59); accessibility #110 | `AuthBootstrap`, `RequireCapability`, `Capability` |
 | SLR.4 | Load, stress and availability: unlimited visitors, companies and events; spikes when sales open; continuous availability. | TODO: no targets set. Load test #108; waiting queue #71 | — |
@@ -295,7 +295,7 @@ The course states #3 and #4 as one bullet; the code cites them separately.
 | V3 4.b | Tests prove the system does not start after an invalid initialization. | Deferred (#27) | — |
 | V3 4.c | Tests use a dedicated configuration and never reach the real external systems or the production database. | Built: the `test` profile and `application-test.yml` swap in stub gateways | `application-test.yml` |
 | V3 appendix 3 | Use the ORM's built-in cache. | TODO: evaluated in #33 | — |
-| V3 appendix 4 | Each use case runs as one transaction. | Built: `@Transactional` on the application services | — |
+| V3 appendix 4 | Each use case runs as one transaction. | Partial: most application services are one `@Transactional` method; checkout and refunds deliberately call the external services outside the transaction and commit afterwards (ADR pending, #44); cancellation refunds are not atomic (#20) | `CheckoutService`, `RefundService` |
 
 ## Non-goals
 
