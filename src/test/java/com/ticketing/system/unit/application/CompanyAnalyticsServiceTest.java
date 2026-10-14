@@ -58,6 +58,7 @@ class CompanyAnalyticsServiceTest {
     private static final String INVALID_TOKEN = "invalid-token";
     private static final int OWNER_ID = 1;
     private static final int TARGET_USER_ID = 2;
+    private static final int BUYER_ID = 7;
     private static final String COMPANY_1_NAME = "Company1";
     private static final String COMPANY_1_DESCRIPTION = "A test production company1";
 
@@ -415,11 +416,10 @@ class CompanyAnalyticsServiceTest {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         LocalDateTime purchasedAt = LocalDateTime.of(2026, 1, 15, 20, 0);
-        OrderReceipt r = fullReceipt(false, purchasedAt,
-                List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)), 1);
-        when(r.getTransactionRecords()).thenReturn(List.of(
-                TransactionRecord.paymentCharge(42, "test-gateway", 300.0, "ILS", purchasedAt),
-                TransactionRecord.ticketIssuance("ISS-42", "test-issuer", purchasedAt)));
+        OrderReceipt r = OrderReceipt.forMember(1, BUYER_ID, 300.0,
+                List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)),
+                List.of(TransactionRecord.paymentCharge(42, "test-gateway", 300.0, "ILS", purchasedAt),
+                        TransactionRecord.ticketIssuance("ISS-42", "test-issuer", purchasedAt)));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
         when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
 
