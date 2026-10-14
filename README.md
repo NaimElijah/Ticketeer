@@ -397,9 +397,14 @@ Code and Javadoc reference requirement / use-case IDs (`UC-1`, `I.1.4`, `SLR.6`,
 tickets (`#367`, `V3-INIT-02`). These references are preserved when editing and cited when adding
 behavior tied to a requirement.
 
+[`docs/requirements/requirements.md`](docs/requirements/requirements.md) states what the system must
+do. It maps every ID scheme above to the course requirements, gives each requirement a status
+(built, partial, deferred to an issue, or open), and names the class and test that enforce it.
+
 ---
 
 ## Further reading
 
+- **`docs/requirements/requirements.md`** — what the system must do: functional and service-level requirements with their status, business rules, non-goals and open questions.
 - **`docs/architecture/`** — the committed Spring Modulith C4 / PlantUML component diagrams and per-module canvases (regenerated on every `./mvnw test`). Start with `docs/architecture/README.md`.
 - **`SEED.md`** — the `dev` demo dataset (users, companies, events), seeded credentials, and `seed.mode` behavior.
