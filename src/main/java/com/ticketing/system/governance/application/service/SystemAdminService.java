@@ -355,7 +355,7 @@ public class SystemAdminService {
                                 receipt, ticketRepository, eventDisplayPort, companyRepository, userRepository);
                     }
 
-                    return mapper.toFilteredPurchaseRecordDTO(
+                    return mapper.toAdminFilteredPurchaseRecordDTO(
                             receipt, selectedEventIds, ticketRepository, eventDisplayPort, companyRepository, userRepository);
                 })
                 .filter(record -> !record.tickets().isEmpty())

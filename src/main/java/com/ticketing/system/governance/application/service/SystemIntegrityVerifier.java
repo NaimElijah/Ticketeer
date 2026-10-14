@@ -31,18 +31,19 @@ import lombok.extern.slf4j.Slf4j;
  * {@code SystemAdminService.initializePlatform()} after the I.1 post-conditions hold.
  *
  * <p>This javadoc is the single coverage map for <i>every</i> correctness/integrity requirement
- * in {@code requirements.md} (§1 correctness constraints, §2 integrations, §3 commercial rules,
- * and the relevant SLRs). Only <b>scannable structural state</b> is checked in this class;
- * connection rules are checked at initialization, and behavioural / transaction rules are
- * enforced at their call sites — cited below so nothing is silently dropped.
+ * in {@code docs/requirements/requirements.md} (§1 correctness constraints, §2 integrations,
+ * §3 commercial rules, and the relevant SLRs). Only <b>scannable structural state</b> is checked
+ * in this class; connection rules are checked at initialization, and behavioural / transaction
+ * rules are enforced at their call sites — cited below so nothing is silently dropped.
  *
  * <h3>Scanned here (structural state)</h3>
  * <ul>
  *   <li><b>§1 #6 active company has ≥1 Owner — VERIFIED.</b></li>
  *   <li><b>§1 #4 producer (owner/manager) is a registered user — VERIFIED.</b></li>
- *   <li>§1 #1 unique username, #8 ≤1 active order/buyer/event, #12 sellable ≤ inventory, and the
- *       II.4.8.3 appointment tree (single appointer, no ownership cycles) — all structural but
- *       need aggregate enumeration the V1 repos do not expose → V3 scan.</li>
+ *   <li><b>§1 #1 unique username, #8 ≤1 active order/buyer/event, #12 sellable ≤ inventory —
+ *       VERIFIED.</b></li>
+ *   <li>The II.4.8.3 appointment tree (single appointer, no ownership cycles) is structural but
+ *       not scanned, and owner revocation can currently break it (#126).</li>
  * </ul>
  *
  * <h3>Checked at initialization (connection rules)</h3>
@@ -53,8 +54,9 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <h3>Enforced at their call sites (behavioural / transaction rules — not scannable state)</h3>
  * <ul>
- *   <li>§1 #5 auth-on-write, #9 reservation lock, #10 atomic checkout, #11 exclusive order
- *       ownership — per-operation guards in the reservation/checkout services.</li>
+ *   <li>§1 #5 auth-on-write, #9 reservation lock, #11 exclusive order ownership — per-operation
+ *       guards in the reservation/checkout services; #10 an order unfinished when its hold expires
+ *       is cancelled — {@code SessionAndOrderSweeper}.</li>
  *   <li>§3 #1 charge only after the transaction confirms, #2 funds only as a result of a purchase,
  *       #3 purchase succeeds only after BOTH payment AND issuance, #4 auto-refund + notify on a
  *       broken atomic checkout — {@code CheckoutService} + the UC-4 refund pipeline.</li>
