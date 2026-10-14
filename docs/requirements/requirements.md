@@ -249,8 +249,9 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   (II.3.5, II.4.5). Receipts store the price at purchase (`OrderReceipt`, `ReceiptLine`).
 - A company's sales history shows only its own tickets and the revenue from them. An order's
   payment transactions cover the whole order, which may hold other companies' tickets, so no
-  company sees them; only the admin global history (II.6.4) does (#121;
-  `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`, `CompanyAcceptanceTest`).
+  company sees them on any order. The buyer's own history (II.3.5) and the admin global history
+  (II.6.4) do (#121; `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`,
+  `CompanyAcceptanceTest`).
 
 ### Purchase policies and discounts
 
@@ -326,7 +327,7 @@ Every question is owned by @NaimElijah, the project owner.
 | OQ-6 | **Buyer age.** Age policies need it, but guests have no stored age. The code defers the check to checkout and refuses an unknown age (`AgePurchasePolicy`). Is that the rule? | `AgePurchasePolicy` |
 | OQ-7 | **Lottery and queue parameters** (#71, #72): draw method, number of winners, code lifetime; a per-event or system-wide threshold; admission rate. | — |
 | OQ-8 | **Rules found only in code.** Confirm or change them: a password has at least 8 characters with a letter and a digit; 5 failed logins lock the account for 15 minutes; a member session lasts 24 hours, a guest session ends after 30 idle minutes; usernames are 3–32 characters, checked only in the UI (#76); company and event purchase policies both apply; a member's refund covers the whole order; a manager can be promoted to owner only by their own appointer. | `AuthenticationService`, `application.yml` |
-| OQ-9 | **Resolved (#121).** A company sees none of a shared order's payment transactions, only its own tickets and revenue; see [Purchase flow](#purchase-flow). | `OrderReceiptMapper.toCompanySalesRecordDTO` |
+| OQ-9 | **Resolved (#121).** A company sees no payment transactions on any order, only its own tickets and revenue; see [Purchase flow](#purchase-flow). | `OrderReceiptMapper.toCompanySalesRecordDTO` |
 | OQ-10 | **Anti-scalping** (§3 #5). Is a per-buyer ticket limit enough, or are identity checks or resale rules required? | `MaxTicketsPurchasePolicy` |
 | OQ-11 | **Load and availability targets** (SLR.4). The course asks for "unlimited" visitors and continuous availability, with no numbers. What peak concurrency, response time and availability must launch meet? Feeds #108. | — |
 | OQ-12 | **ORM cache** (V3 appendix 3). Is Hibernate's second-level cache required for catalog reads? Evaluated in #33. | — |
