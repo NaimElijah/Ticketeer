@@ -224,8 +224,8 @@ The course states #3 and #4 as one bullet; the code cites them separately.
   - `AppointmentCycleException` is never thrown, and the acceptance test for cycles is disabled
     (#52).
 - Each manager has exactly one appointer, an owner, and only that appointer may change or remove
-  the manager (`CompanyAppointment`, `CompanyMembershipService` ·
-  `CompanyMembershipServiceLifecycleTest`).
+  the manager (`CompanyAppointment.revoke`, `CompanyMembershipService`). Editing by another owner
+  is rejected in `CompanyAcceptanceTest`; removal by another owner has no test.
 - The Founder can neither resign nor be removed (`ProductionCompany`).
 
 ### Company lifecycle (Deferred, #62 and #66)
