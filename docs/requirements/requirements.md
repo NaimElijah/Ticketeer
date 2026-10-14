@@ -84,7 +84,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | I.4 | UC-34 | Issue tickets through an external service, with support for more than one. | Partial: one issuing adapter (in-house issuing: #100) | `TicketIssuer`, `WsepTicketIssuer` · `WsepTicketIssuerTest` |
 | I.5 | UC-35 | Real-time alerts. Producers: sold out, company closed, role changes. Buyers: purchase completed, event cancelled or moved, order about to expire. All members: messages from admins or producers. | Partial: delivered by polling, not push (#61); several declared types are never sent (#63) | `NotificationDispatchService` · `NotificationDispatchServiceTest` |
 | I.6 | UC-36, UC-37 | Delayed alerts: keep alerts for offline members and show them at their next login. | Built | `NotificationDispatchService.dispatch`, `NotificationDispatchService.deliverPending` · `NotificationDispatchServiceTest`, `DelayedAppointmentNotificationAcceptanceTest` |
-| I.7 | — | Load management: above an event's threshold, send visitors to a virtual waiting room and admit them in batches. | Deferred (#71) | — |
+| I.7 | — | Load management: above a load threshold, for the whole system or for one event, send visitors to a virtual waiting room and admit them in batches. | Deferred (#71) | — |
 
 ### II.1 Guest visitor
 
@@ -270,9 +270,9 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 
 - **Lottery.** It applies only where the company enables it. Members register in advance, and only
   winners get an alert and a unique, time-limited code to reserve when sales open.
-- **Queue.** It starts above a per-event load threshold and admits visitors in batches, with
-  time-boxed access once admitted. Admins can change the rate or clear a queue. Queue state is
-  never persisted (V3).
+- **Queue.** It starts above a load threshold, set for the whole system or per event
+  ([OQ-7](#open-questions)), and admits visitors in batches, with time-boxed access once admitted.
+  Admins can change the rate or clear a queue. Queue state is never persisted (V3).
 
 ## Non-functional requirements
 
