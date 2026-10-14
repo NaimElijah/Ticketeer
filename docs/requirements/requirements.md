@@ -251,7 +251,8 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   payment transactions cover the whole order, which may hold other companies' tickets, so no
   company sees them on any order. The buyer's own history (II.3.5) and the admin global history
   (II.6.4) do (#121; `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`,
-  `CompanyAcceptanceTest`).
+  `CompanyAcceptanceTest`). Revisit if payments are ever allocated per line, for example for
+  per-company payouts: only then can a company be shown its own share of a payment.
 
 ### Purchase policies and discounts
 
