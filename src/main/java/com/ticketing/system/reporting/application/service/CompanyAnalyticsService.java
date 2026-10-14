@@ -155,7 +155,9 @@ public class CompanyAnalyticsService {
 
     /**
      * UC-22 — the company's sales history: one record per receipt that holds at least one ticket
-     * for the company's events, carrying only that company's lines and revenue.
+     * for the company's events, carrying only that company's lines and revenue. Payment
+     * transactions are never included: they cover the whole order, which may hold other
+     * companies' tickets (#121); the admin global history (UC-31) shows them.
      *
      * @param token     the caller's session token
      * @param companyId the company whose sales are requested
@@ -177,7 +179,7 @@ public class CompanyAnalyticsService {
         List<PurchaseHistoryDTO.PurchaseRecordDTO> records = orderReceiptRepository
                 .findByEventIds(eventIds)
                 .stream()
-                .map(r -> mapper.toFilteredPurchaseRecordDTO(
+                .map(r -> mapper.toCompanySalesRecordDTO(
                         r, companyEventIds,
                         ticketRepository, eventDisplayPort, companyRepository, userRepository))
                 .toList();

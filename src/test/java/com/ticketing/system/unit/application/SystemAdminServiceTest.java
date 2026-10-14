@@ -49,6 +49,7 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
 
 class SystemAdminServiceTest {
 
@@ -413,6 +414,28 @@ class SystemAdminServiceTest {
         PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
         assertEquals(75.0, record.totalPaid());
         assertEquals(2, record.tickets().size());
+    }
+
+    // #121 — company sales history hides payment transactions; the admin view must keep them,
+    // even when filtered to one event of an order that spans several.
+    @Test
+    void GivenEventFilteredGlobalHistory_WhenViewGlobalHistory_ThenEveryTransactionIsListed() {
+        LocalDateTime purchasedAt = LocalDateTime.of(2026, 1, 15, 20, 0);
+        ReceiptLine filteredEventLine = new ReceiptLine(1, 100.0, 25, 1, null, purchasedAt);
+        ReceiptLine otherEventLine = new ReceiptLine(2, 200.0, 3, 1, "A2", purchasedAt);
+        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 300.0, List.of(filteredEventLine, otherEventLine),
+                List.of(TransactionRecord.paymentCharge(42, "test-gateway", 300.0, "ILS", purchasedAt),
+                        TransactionRecord.ticketIssuance("ISS-42", "test-issuer", purchasedAt)));
+
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, List.of(25), null, null);
+        when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt));
+        when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
+
+        PurchaseHistoryDTO.PurchaseRecordDTO record =
+                service.viewGlobalHistory(ADMIN_TOKEN, filters).get(0).records().get(0);
+
+        assertEquals(1, record.tickets().size());
+        assertEquals(2, record.transactions().size());
     }
 
 
