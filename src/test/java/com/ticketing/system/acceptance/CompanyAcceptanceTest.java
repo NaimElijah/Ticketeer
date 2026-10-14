@@ -47,6 +47,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -267,6 +268,47 @@ class CompanyAcceptanceTest {
 
         assertEquals(1, result.records().size());
         assertTrue(result.records().get(0).refunded());
+        }
+
+        // #121 — the order's payment transactions cover both companies' tickets, so neither company
+        // may see them in its sales history.
+        @Test
+        void GivenReceiptSharedWithAnotherCompany_WhenViewSalesHistory_ThenOnlyOwnLinesAndNoTransactions() {
+        AuthTokenDTO owner = registerAndLoginMember("sharedOwnerA");
+        AuthTokenDTO otherOwner = registerAndLoginMember("sharedOwnerB");
+        AuthTokenDTO buyer = registerAndLoginMember("sharedBuyer");
+        int companyId = companyService.registerCompany(
+                owner.token(), new CompanyRegistrationDTO("SharedCoA", "desc")).companyId();
+        int otherCompanyId = companyService.registerCompany(
+                otherOwner.token(), new CompanyRegistrationDTO("SharedCoB", "desc")).companyId();
+        int eventId = addConcert(owner, companyId, "Shared Order Event A");
+        int otherEventId = addConcert(otherOwner, otherCompanyId, "Shared Order Event B");
+
+        LocalDateTime purchasedAt = LocalDateTime.of(2026, 1, 15, 20, 0);
+        orderReceiptRepository.save(OrderReceipt.forMember(
+                orderReceiptRepository.nextId(), buyer.userId(), 300.0,
+                List.of(new ReceiptLine(1, 100.0, eventId, 1, null, purchasedAt),
+                        new ReceiptLine(2, 200.0, otherEventId, 1, null, purchasedAt)),
+                List.of(TransactionRecord.paymentCharge(4242, "test-gateway", 300.0, "ILS", purchasedAt),
+                        TransactionRecord.ticketIssuance("ISS-4242", "test-issuer", purchasedAt))));
+
+        PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
+
+        assertEquals(1, result.records().size());
+        PurchaseHistoryDTO.PurchaseRecordDTO record = result.records().get(0);
+        assertEquals(1, record.tickets().size());
+        assertEquals(100.0, record.totalPaid());
+        assertTrue(record.transactions().isEmpty());
+        }
+
+        private int addConcert(AuthTokenDTO owner, int companyId, String name) {
+        EventDetailDTO event = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
+                companyId, name, "desc", List.of("Artist"),
+                EventCategory.CONCERT, 4.5,
+                new Location("Israel", "Tel Aviv"),
+                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                null));
+        return Integer.parseInt(event.eventId());
         }
 
         // #22: company analytics enforce permission at the service boundary, not only in the UI.

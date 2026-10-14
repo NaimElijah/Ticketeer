@@ -46,9 +46,40 @@ public class OrderReceiptMapper {
         return map(receipt, safeList(tickets), eventDisplay, companyRepository, userRepository);
     }
 
-    /** UC-31 global history: include only tickets matching the event filter; all transactions. */
+    /**
+     * UC-31 admin global history filtered by event: only the lines for {@code selectedEventIds},
+     * with {@code totalPaid} as their sum, and every transaction of the receipt. Admin-only, since
+     * a receipt's transactions also cover lines outside the filter.
+     */
     public PurchaseHistoryDTO.PurchaseRecordDTO toFilteredPurchaseRecordDTO(OrderReceipt receipt,
             Set<Integer> selectedEventIds,
+            TicketRepository ticketRepository,
+            CatalogEventDisplayPort eventDisplay,
+            ProductionCompanyRepository companyRepository,
+            UserRepository userRepository) {
+        return mapSelectedEvents(receipt, selectedEventIds, toTransactionRecordDTOs(receipt),
+                ticketRepository, eventDisplay, companyRepository, userRepository);
+    }
+
+    /**
+     * UC-22 company sales history: only the lines for the company's events, with {@code totalPaid}
+     * as their sum, and no transactions. A transaction covers the whole order and names no line or
+     * company, so on an order shared with another company it would expose that company's payment
+     * data (#121).
+     */
+    public PurchaseHistoryDTO.PurchaseRecordDTO toCompanySalesRecordDTO(OrderReceipt receipt,
+            Set<Integer> companyEventIds,
+            TicketRepository ticketRepository,
+            CatalogEventDisplayPort eventDisplay,
+            ProductionCompanyRepository companyRepository,
+            UserRepository userRepository) {
+        return mapSelectedEvents(receipt, companyEventIds, List.of(),
+                ticketRepository, eventDisplay, companyRepository, userRepository);
+    }
+
+    private PurchaseHistoryDTO.PurchaseRecordDTO mapSelectedEvents(OrderReceipt receipt,
+            Set<Integer> selectedEventIds,
+            List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos,
             TicketRepository ticketRepository,
             CatalogEventDisplayPort eventDisplay,
             ProductionCompanyRepository companyRepository,
@@ -66,10 +97,6 @@ public class OrderReceiptMapper {
                 .map(line -> toTicketRecordDTO(receipt, line, ticketsById, eventDisplay, companyRepository))
                 .toList();
 
-        List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos = receipt.getTransactionRecords().stream()
-                .map(this::toTransactionRecordDTO)
-                .toList();
-
         return buildRecord(receipt, totalPaid, transactionDtos, ticketRecords, userRepository);
     }
 
@@ -83,11 +110,14 @@ public class OrderReceiptMapper {
                 .map(line -> toTicketRecordDTO(receipt, line, ticketsById, eventDisplay, companyRepository))
                 .toList();
 
-        List<PurchaseHistoryDTO.TransactionRecordDTO> transactionDtos = receipt.getTransactionRecords().stream()
+        return buildRecord(receipt, receipt.getTotalAmount(), toTransactionRecordDTOs(receipt), ticketRecords,
+                userRepository);
+    }
+
+    private List<PurchaseHistoryDTO.TransactionRecordDTO> toTransactionRecordDTOs(OrderReceipt receipt) {
+        return receipt.getTransactionRecords().stream()
                 .map(this::toTransactionRecordDTO)
                 .toList();
-
-        return buildRecord(receipt, receipt.getTotalAmount(), transactionDtos, ticketRecords, userRepository);
     }
 
     private PurchaseHistoryDTO.PurchaseRecordDTO buildRecord(OrderReceipt receipt, double totalPaid,

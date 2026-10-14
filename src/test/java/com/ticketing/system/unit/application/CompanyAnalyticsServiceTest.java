@@ -35,6 +35,7 @@ import com.ticketing.system.messaging.application.port.out.ConversationRepositor
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.domain.User;
@@ -405,5 +406,26 @@ class CompanyAnalyticsServiceTest {
         assertEquals(1, result.records().size());
         assertEquals(1,     result.records().get(0).tickets().size()); // only EVENT_A ticket
         assertEquals(100.0, result.records().get(0).totalPaid());      // only EVENT_A revenue
+    }
+
+    // ─── salesHistory payment data on shared orders (#121, UC-22) ─────────────────
+
+    @Test
+    void GivenSharedOrderWithPaymentTransactions_WhenSalesHistory_ThenNoTransactionsAreExposed() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        LocalDateTime purchasedAt = LocalDateTime.of(2026, 1, 15, 20, 0);
+        OrderReceipt r = fullReceipt(false, purchasedAt,
+                List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)), 1);
+        when(r.getTransactionRecords()).thenReturn(List.of(
+                TransactionRecord.paymentCharge(42, "test-gateway", 300.0, "ILS", purchasedAt),
+                TransactionRecord.ticketIssuance("ISS-42", "test-issuer", purchasedAt)));
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
+        when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
+
+        PurchaseHistoryDTO.PurchaseRecordDTO record = service.salesHistory(OWNER_TOKEN, COMPANY_ID).records().get(0);
+
+        assertTrue(record.transactions().isEmpty());
+        assertEquals(100.0, record.totalPaid());
     }
 }
