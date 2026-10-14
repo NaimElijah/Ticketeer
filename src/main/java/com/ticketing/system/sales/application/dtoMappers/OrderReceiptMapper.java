@@ -50,6 +50,9 @@ public class OrderReceiptMapper {
      * UC-31 admin global history filtered by event: only the lines for {@code selectedEventIds},
      * with {@code totalPaid} as their sum, and every transaction of the receipt. Admin-only, since
      * a receipt's transactions also cover lines outside the filter.
+     *
+     * <p>{@code receipt}, {@code selectedEventIds} and {@code ticketRepository} must be non-null;
+     * the other ports may be null, as described on the class.
      */
     public PurchaseHistoryDTO.PurchaseRecordDTO toFilteredPurchaseRecordDTO(OrderReceipt receipt,
             Set<Integer> selectedEventIds,
@@ -66,6 +69,9 @@ public class OrderReceiptMapper {
      * as their sum, and no transactions. A transaction covers the whole order and names no line or
      * company, so on an order shared with another company it would expose that company's payment
      * data (#121).
+     *
+     * <p>{@code receipt}, {@code companyEventIds} and {@code ticketRepository} must be non-null;
+     * the other ports may be null, as described on the class.
      */
     public PurchaseHistoryDTO.PurchaseRecordDTO toCompanySalesRecordDTO(OrderReceipt receipt,
             Set<Integer> companyEventIds,
