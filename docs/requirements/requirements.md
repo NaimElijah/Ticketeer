@@ -132,8 +132,8 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | II.4.6 | UC-22 | Produce a sales report of revenue and tickets sold, limited to the events the owner manages and their appointment subtree. | Partial: company-wide figures, not limited to the subtree (#68) | `CompanyAnalyticsService.dashboard` · `CompanyAnalyticsServiceTest`, `CompanySalesReportAcceptanceTest` |
 | II.4.7 | UC-24 | Appoint a manager with chosen permissions; the appointee must accept. | Built; the permission set is [OQ-2](#open-questions) | `CompanyManagementService.appointManager`, `CompanyMembershipService` · `ManagerPermissionMatrixAcceptanceTest`, `CompanyMembershipServiceLifecycleTest` |
 | II.4.8 | UC-23 | Appoint a co-owner; the appointee accepts or rejects. | Built | `CompanyManagementService.appointOwner`, `CompanyMembershipService.receiveOwnerAppointment` · `CompanyMembershipServiceTest`, `DelayedAppointmentNotificationAcceptanceTest` |
-| II.4.9 | — | Remove an owner you appointed. | Deferred (#65) | — |
-| II.4.10 | — | Give up ownership. The Founder cannot. | Deferred (#65) | — |
+| II.4.9 | — | Remove an owner you appointed. | Partial: the service revokes owners but does not cascade to their appointees, and no UI offers it (#65, #126) | `CompanyManagementService.RevokeAppointment` |
+| II.4.10 | — | Give up ownership. The Founder cannot. | Partial: an owner can revoke their own appointment through the same service call, with the same gaps (#65, #126) | `CompanyManagementService.RevokeAppointment` |
 | II.4.11 | UC-24 | Change the permissions of a manager you appointed. | Built | `CompanyMembershipService` · `CompanyMembershipServiceLifecycleTest` |
 | II.4.12 | UC-24 | Remove a manager you appointed. | Built | `CompanyAppointment.revoke` · `CompanyMembershipServiceLifecycleTest` |
 | II.4.13 | — | The Founder suspends or closes the company. | Deferred (#62) | — |
@@ -211,13 +211,14 @@ The course states #3 and #4 as one bullet; the code cites them separately.
 - Appointees accept or reject (`CompanyMembershipService.acceptInvitation`,
   `CompanyMembershipService.rejectInvitation`).
 - Each owner has exactly one appointer, the Founder has none, and appointments form a tree, never
-  a cycle (II.4.8). This holds by construction, not by a check:
-  - the appointer must be an owner (`CompanyMembershipService.requireOwnerInCompany`);
-  - an active owner cannot be appointed again (`CompanyMembershipService.receiveOwnerAppointment`);
-  - owner appointments cannot be revoked.
-
-  `AppointmentCycleException` is never thrown, and the acceptance test for cycles is disabled
-  (#52). Owner removal and resignation (#65) must keep the tree intact.
+  a cycle (II.4.8). **Not enforced.**
+  - The appointer must be an owner (`CompanyMembershipService.requireOwnerInCompany`), and an
+    active owner cannot be appointed again (`CompanyMembershipService.receiveOwnerAppointment`).
+  - But `CompanyManagementService.RevokeAppointment` revokes owners too, with no cascade, and a
+    revoked owner can be re-appointed by their own appointee. That forms a cycle (#126). No UI
+    reaches owner revocation today.
+  - `AppointmentCycleException` is never thrown, and the acceptance test for cycles is disabled
+    (#52).
 - Each manager has exactly one appointer, an owner, and only that appointer may change or remove
   the manager (`CompanyAppointment`, `CompanyMembershipService` ·
   `CompanyMembershipServiceLifecycleTest`).
