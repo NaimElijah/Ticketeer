@@ -1,6 +1,6 @@
 package com.ticketing.system.organization.domain;
 
-// TODO (team to confirm full set per UC-24 / II.4.7.2 — open question #10 in design walkthrough)
+// The permission set (UC-24 / II.4.7) is undecided: OQ-2 in docs/requirements/requirements.md.
 public enum Permission {
     MANAGE_INVENTORY,
     CONFIGURE_VENUE,
