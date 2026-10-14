@@ -204,8 +204,12 @@ The course states #3 and #4 as one bullet; the code cites them separately.
 ### Roles and appointments
 
 - A user holds at most one role per company. `CompanyMembershipService` allows one active or
-  pending appointment per user per company. The one exception is a pending owner offer to an active
-  manager from the same appointer, which is a promotion.
+  pending appointment per user per company.
+- Any owner may appoint, as an owner, a member who is not yet an owner of the company (II.4.8),
+  including one of its managers. The code accepts such an offer from any owner, but lets the
+  manager accept it only when it comes from their own appointer
+  (`CompanyMembershipService.acceptInvitation`); that
+  restriction is [OQ-8](#open-questions).
 - Opening a company makes the opener its Founder and first owner
   (`CompanyMembershipService.addFounderAppointment`).
 - Appointees accept or reject (`CompanyMembershipService.acceptInvitation`,
@@ -315,6 +319,6 @@ Every question is owned by @NaimElijah, the project owner.
 | OQ-5 | **Contradictions in the course documents.** V2 calls the alert requirements "I.4 and I.5", where the general document has I.5 and I.6; I.1 and I.2 nearly duplicate each other. This document follows the general document. Confirm. | — |
 | OQ-6 | **Buyer age.** Age policies need it, but guests have no stored age. The code defers the check to checkout and refuses an unknown age (`AgePurchasePolicy`). Is that the rule? | `AgePurchasePolicy` |
 | OQ-7 | **Lottery and queue parameters** (#71, #72): draw method, number of winners, code lifetime; a per-event or system-wide threshold; admission rate. | — |
-| OQ-8 | **Rules found only in code.** Confirm or change them: a password has at least 8 characters with a letter and a digit; 5 failed logins lock the account for 15 minutes; a member session lasts 24 hours, a guest session ends after 30 idle minutes; usernames are 3–32 characters, checked only in the UI (#76); company and event purchase policies both apply; a member's refund covers the whole order. | `AuthenticationService`, `application.yml` |
+| OQ-8 | **Rules found only in code.** Confirm or change them: a password has at least 8 characters with a letter and a digit; 5 failed logins lock the account for 15 minutes; a member session lasts 24 hours, a guest session ends after 30 idle minutes; usernames are 3–32 characters, checked only in the UI (#76); company and event purchase policies both apply; a member's refund covers the whole order; a manager can be promoted to owner only by their own appointer. | `AuthenticationService`, `application.yml` |
 | OQ-9 | **Payment data on shared orders** (#121). An order can hold tickets from several companies. What may each company see of its payment: nothing, or its own share? | `CompanyAnalyticsService.salesHistory` |
 | OQ-10 | **Anti-scalping** (§3 #5). Is a per-buyer ticket limit enough, or are identity checks or resale rules required? | `MaxTicketsPurchasePolicy` |
