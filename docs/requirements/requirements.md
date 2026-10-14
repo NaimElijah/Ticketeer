@@ -174,7 +174,7 @@ cites; "a buyer has an active order" and "at most one per event" are one item (#
 | 3 | Every system admin is a member. | **Not upheld.** Admins are a separate pool, not members (`SystemIntegrityVerifier`). The deviation still needs its ADR (#44). |
 | 4 | Company owners and managers are members. | `CompanyManagementService.appointOwner`, `SystemIntegrityVerifier` · `SystemIntegrityVerifierTest` |
 | 5 | Only users who are currently visiting can act. | A valid session token on every write (`SessionManager`) · `JwtSessionManagerTest` |
-| 6 | An active company has at least one owner. | The Founder can be neither removed nor resign (`ProductionCompany`); scanned by `SystemIntegrityVerifier` · `ProductionCompanyTest`, `SystemIntegrityVerifierTest` |
+| 6 | An active company has at least one owner. | The Founder can be neither removed nor resign (`ProductionCompany`, `CompanyManagementService.RevokeAppointment`; no test covers these guards); scanned by `SystemIntegrityVerifier` · `SystemIntegrityVerifierTest` |
 | 7 | Every company and event has purchase and discount policies, defaulting to "no restrictions". | By construction: `NoPurchasePolicy` is the default |
 | 8 | A buyer has one active order collecting their tickets, and at most one per event at any time. | `ActiveOrder` · `ActiveOrderTest` |
 | 9 | Adding a ticket to an active order locks it for a fixed time (for example 10 minutes). | `ReservationHoldConfig` reads `constants.ticket-reservation-duration` · `ReservationServiceTest` |
