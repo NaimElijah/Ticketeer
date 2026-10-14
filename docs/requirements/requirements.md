@@ -284,10 +284,11 @@ The course states #3 and #4 as one bullet; the code cites them separately.
 | SLR.7 | Persistence: state survives a planned or unplanned shutdown. V3: a remote database is supported, and switching databases is a configuration change only. | Partial: built under the `jpa` profile; no schema migrations (#31); market state (#24), idempotency keys (#25) and login lockouts (#39) are held in memory | The JPA repository adapters and their contract tests · `TicketIdRestartJpaTest` |
 | SLR.8 | Tracking: 8.1 operational measurements; 8.2 error tracking, preferably in real time. V1 adds an event log and an error log. | Partial: logs exist; correlation ids and JSON logs #30; metrics and traces #37 | `LoggingAspect`, `logback-spring.xml` |
 
-### V3 delivery requirements
+### Course delivery requirements (V2, V3)
 
 | ID | Requirement | Status | Enforced by · tested by |
 |---|---|---|---|
+| V2 3.a | Report test coverage automatically, for example with JaCoCo. | Deferred (#45); exempted under V2 Tier B in the course project | — |
 | V3 2.a.i | Initialize from external configuration files; database connection details live in configuration, not code. | Partial: every value in `application.yml` can be overridden from the environment; values are not validated (#27) | `application.yml` |
 | V3 2.a.ii | Optionally initialize from an initial-state file that replays use cases through the application layer. If any step fails, initialization fails. | Partial: the `.scenario` engine runs in every profile except `test` when `seed.mode` is set, but a failing step does not stop startup by default (#27) | `ScenarioRunner`, `ScenarioOps` |
 | V3 2.b | Connect to the real external payment and ticket-issuing systems. | Built (WSEP); Stripe replaces WSEP payments in #98 | `WsepPaymentGateway`, `WsepTicketIssuer` |
