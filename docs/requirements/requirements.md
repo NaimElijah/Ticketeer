@@ -253,6 +253,8 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   (II.6.4) do (#121; `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`,
   `CompanyAcceptanceTest`). Revisit if payments are ever allocated per line, for example for
   per-company payouts: only then can a company be shown its own share of a payment.
+  Known gap: the refunded flag is still order-level, so cancelling another company's event marks
+  the whole shared order refunded in this view and drops it from the revenue figures (#21).
 
 ### Purchase policies and discounts
 
