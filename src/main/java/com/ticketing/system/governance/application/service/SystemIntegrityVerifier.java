@@ -31,10 +31,10 @@ import lombok.extern.slf4j.Slf4j;
  * {@code SystemAdminService.initializePlatform()} after the I.1 post-conditions hold.
  *
  * <p>This javadoc is the single coverage map for <i>every</i> correctness/integrity requirement
- * in {@code requirements.md} (§1 correctness constraints, §2 integrations, §3 commercial rules,
- * and the relevant SLRs). Only <b>scannable structural state</b> is checked in this class;
- * connection rules are checked at initialization, and behavioural / transaction rules are
- * enforced at their call sites — cited below so nothing is silently dropped.
+ * in {@code docs/requirements/requirements.md} (§1 correctness constraints, §2 integrations,
+ * §3 commercial rules, and the relevant SLRs). Only <b>scannable structural state</b> is checked
+ * in this class; connection rules are checked at initialization, and behavioural / transaction
+ * rules are enforced at their call sites — cited below so nothing is silently dropped.
  *
  * <h3>Scanned here (structural state)</h3>
  * <ul>

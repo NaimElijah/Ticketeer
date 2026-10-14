@@ -1,7 +1,7 @@
 package com.ticketing.system.notifications.domain;
 
 // Categorizes Notification entities (UC-35 design walkthrough).
-// TODO (team to confirm full set per UC-35 — open question #13 in design walkthrough)
+// Which types must be sent (UC-35, I.5) is OQ-4 in docs/requirements/requirements.md; see #63.
 public enum NotificationType {
     // Buyer-facing (I.5.2)
     PURCHASE_CONFIRMED,

@@ -5,5 +5,5 @@ package com.ticketing.system.shared.dto;
 public record CompanySummaryDTO(
     int companyId,
     String name,
-    Double rating               // nullable — see open question #4 in design walkthrough
+    Double rating               // nullable; how ratings are created is OQ-1 in docs/requirements/requirements.md
 ) {}

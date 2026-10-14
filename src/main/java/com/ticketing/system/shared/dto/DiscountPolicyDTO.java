@@ -11,5 +11,5 @@ public record DiscountPolicyDTO(
     Double fixedAmountOff,              // nullable
     LocalDate validFrom,                // nullable
     LocalDate validUntil                // nullable
-    // Coupons (II.4.3.2) deferred — open question #12 in design walkthrough
+    // Coupons (II.4.3.2) are deferred to #67; their rules are OQ-3 in docs/requirements/requirements.md
 ) {}
