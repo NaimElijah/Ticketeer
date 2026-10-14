@@ -168,7 +168,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 ### §1 Correctness constraints
 
 The course lists these as unnumbered bullets. The numbers below are the ones the code already
-cites; "a buyer has an active order" and "at most one per event" are one item (#8).
+cites; "a buyer has an active order" and "at most one per event" are one item (§1 #8).
 
 | # | Rule | Enforced by · tested by |
 |---|---|---|
@@ -190,11 +190,11 @@ cites; "a buyer has an active order" and "at most one per event" are one item (#
 | # | Rule | Enforced by · tested by |
 |---|---|---|
 | 1 | At least one payment service is connected. | The initialization quorum in `SystemAdminService.initializePlatform` · `SystemAdminServiceTest` |
-| 2 | At least one ticket-issuing service is connected. | Same as #1 |
+| 2 | At least one ticket-issuing service is connected. | Same as §2 #1 |
 
 ### §3 Commercial integrity rules
 
-The course states #3 and #4 as one bullet; the code cites them separately.
+The course states §3 #3 and §3 #4 as one bullet; the code cites them separately.
 
 | # | Rule | Enforced by · tested by |
 |---|---|---|
