@@ -398,8 +398,10 @@ tickets (`#367`, `V3-INIT-02`). These references are preserved when editing and 
 behavior tied to a requirement.
 
 [`docs/requirements/requirements.md`](docs/requirements/requirements.md) states what the system must
-do. It maps every ID scheme above to the course requirements, gives each requirement a status
-(built, partial, deferred to an issue, or open), and names the class and test that enforce it.
+do. It maps the requirement and use-case IDs above to the course requirements, gives each
+requirement a status (built, partial, deferred to an issue, or open), and names the class and test
+that enforce it. Ticket references such as `#367` and `V3-INIT-02` point at the upstream course
+repository (#57).
 
 ---
 

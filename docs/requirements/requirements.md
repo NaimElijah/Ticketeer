@@ -57,7 +57,10 @@ Where the course documents contradict each other or leave a gap, the item is lis
 
 - **`§1 #n`, `§2 #n`, `§3 #n`** — the [business-rule](#business-rules-and-invariants) numbering,
   cited by `SystemIntegrityVerifier`.
-- **`#n`** — an issue in this repository.
+- **`#n`** — in this document, an issue in this repository. In code and Javadoc, a bare `#n`
+  usually means a ticket in the upstream course repository, `AdamSimkinbgu/event-ticket-system`,
+  and so do codes like `V3-INIT-02`. A few numbers collide with issues here (`RefundService`
+  cites upstream #64). Disambiguating them is #57.
 
 ### Status legend
 
