@@ -195,7 +195,7 @@ The course states #3 and #4 as one bullet; the code cites them separately.
 
 | # | Rule | Enforced by · tested by |
 |---|---|---|
-| 1 | Charge buyers only for completed transactions, and only the declared amounts. | `CheckoutService` checks the charged amount and currency against the request · `CheckoutServiceTest` |
+| 1 | Charge buyers only for completed transactions, and only the declared amounts. | `CheckoutService.validatePaymentResult` rejects a charge whose amount or currency differs from the request · no test covers the mismatch branch |
 | 2 | A company receives money only from a successful purchase. | `CheckoutService` · `CheckoutServiceTest` |
 | 3 | A purchase succeeds if and only if both the payment and the ticket-issuing services approve it. | `CheckoutService` · `CheckoutServiceTest`, `CheckoutServiceAcceptanceTest` |
 | 4 | When payment succeeds but issuing fails, refund automatically and tell the buyer. | `CheckoutService` refunds and publishes `PurchaseFailedNotice` to members. Guests have no channel to be told through until #102. |
