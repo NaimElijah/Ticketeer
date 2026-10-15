@@ -11,6 +11,7 @@ import java.util.function.Function;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
@@ -76,6 +77,9 @@ public class EventCancellationRefundService {
         this.paymentGateway = paymentGateway;
         this.eventPublisher = eventPublisher;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        // Each claim must commit before its gateway call even inside a caller's transaction; joining one
+        // would hold the row lock across the call and keep the claim invisible to concurrent runs.
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**

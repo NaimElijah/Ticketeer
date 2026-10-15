@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,6 +26,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ticketing.system.catalog.domain.event.EventCancelledEvent;
 import com.ticketing.system.sales.adapter.out.persistence.SpringDataOrderReceiptRepository;
@@ -32,6 +36,8 @@ import com.ticketing.system.sales.adapter.out.persistence.SpringDataTicketReposi
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
+import com.ticketing.system.sales.application.service.EventCancellationRefundService;
+import com.ticketing.system.sales.domain.LineRefundState;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.Ticket;
@@ -66,6 +72,8 @@ class EventCancellationRefundConcurrencyTest {
     @Autowired private TicketRepository ticketRepository;
     @Autowired private SpringDataOrderReceiptRepository receiptData;
     @Autowired private SpringDataTicketRepository ticketData;
+    @Autowired private EventCancellationRefundService refundService;
+    @Autowired private PlatformTransactionManager transactionManager;
 
     @MockitoBean
     private PaymentGateway paymentGateway;
@@ -149,6 +157,33 @@ class EventCancellationRefundConcurrencyTest {
         assertTrue(reportedStillPending.get() < CONCURRENT_RUNS, "at least one run completes cleanly");
         publishCancellation(); // with every run finished, nothing is pending any more
         assertEachReceiptRefundedExactlyOnce();
+    }
+
+    // Review finding 5 on #129: even when a caller wraps the run in its own transaction, each claim must
+    // commit before the gateway call, or a concurrent run could claim the same lines and V3-TX-02 breaks.
+    @Test
+    void GivenACallerTransaction_WhenRefundCancelledEvent_ThenEachClaimIsCommittedBeforeTheGatewayCall() {
+        List<LineRefundState> committedStatesDuringGatewayCalls = new CopyOnWriteArrayList<>();
+        when(paymentGateway.refund(anyInt(), anyDouble())).thenAnswer(invocation -> {
+            int chargeId = invocation.getArgument(0);
+            committedStatesDuringGatewayCalls.add(committedRefundStateOf(chargeId - CHARGE_BASE));
+            return new RefundResultDTO("refund-" + chargeId, String.valueOf(chargeId), invocation.getArgument(1),
+                    LocalDateTime.now(), List.of(), List.of());
+        });
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(
+                status -> refundService.refundCancelledEvent(EVENT_ID, "Gala"));
+
+        assertEquals(List.of(LineRefundState.PENDING, LineRefundState.PENDING, LineRefundState.PENDING),
+                committedStatesDuringGatewayCalls);
+    }
+
+    /** Reads the receipt's line state in a separate transaction, so it sees only committed data. */
+    private LineRefundState committedRefundStateOf(int receiptId) {
+        TransactionTemplate separate = new TransactionTemplate(transactionManager);
+        separate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return separate.execute(status -> orderReceiptRepository.findByOrderReceiptId(receiptId).orElseThrow()
+                .getReceiptLines().get(0).getRefundState());
     }
 
     private void publishCancellation() {
