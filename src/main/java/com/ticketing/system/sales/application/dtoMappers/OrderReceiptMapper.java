@@ -136,7 +136,7 @@ public class OrderReceiptMapper {
                 receipt.getGuestEmail(),
                 receipt.getPurchaseTime(),
                 totalPaid,
-                receipt.wasRefunded(),
+                PurchaseHistoryDTO.RefundStatus.of(ticketRecords),
                 transactionDtos,
                 ticketRecords,
                 resolveBuyerName(receipt.getHolderUserId(), userRepository));
@@ -146,7 +146,7 @@ public class OrderReceiptMapper {
             Map<Integer, Ticket> ticketsById, CatalogEventDisplayPort eventDisplay,
             ProductionCompanyRepository companyRepository) {
         Ticket ticket = ticketsById.get(line.getTicketId());
-        TicketStatus currentStatus = ticket != null ? ticket.getStatus() : fallbackStatus(receipt);
+        TicketStatus currentStatus = ticket != null ? ticket.getStatus() : fallbackStatus(line);
 
         // One display projection per line (null when the event is unknown / a null port was passed).
         EventDisplayInfoDTO event = describeEvent(eventDisplay, line.getEventId());
@@ -172,7 +172,8 @@ public class OrderReceiptMapper {
                 category,
                 eventStartsAt,
                 venue,
-                barcode);
+                barcode,
+                line.isRefunded());
     }
 
     // ---- name resolution (all null-safe; a null port/repo yields a null name) ----
@@ -224,8 +225,9 @@ public class OrderReceiptMapper {
                 record.getTimestamp());
     }
 
-    private TicketStatus fallbackStatus(OrderReceipt receipt) {
-        return receipt.wasRefunded() ? TicketStatus.REFUNDED : TicketStatus.PAID;
+    // Per line, not per order: on a shared order another company's refund must not show here (#21).
+    private TicketStatus fallbackStatus(ReceiptLine line) {
+        return line.isRefunded() ? TicketStatus.REFUNDED : TicketStatus.PAID;
     }
 
     private static Map<Integer, Ticket> byId(List<Ticket> tickets) {

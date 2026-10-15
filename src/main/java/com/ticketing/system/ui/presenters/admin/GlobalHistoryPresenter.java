@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
+import com.ticketing.system.reporting.application.service.SalesSummaryCalculator;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.ui.session.AuthSession;
 
@@ -25,9 +27,17 @@ import lombok.extern.slf4j.Slf4j;
 public class GlobalHistoryPresenter {
 
     private final SystemAdminService systemAdminService;
+    private final SalesSummaryCalculator salesSummaryCalculator;
 
-    public GlobalHistoryPresenter(SystemAdminService systemAdminService) {
+    public GlobalHistoryPresenter(SystemAdminService systemAdminService,
+                                  SalesSummaryCalculator salesSummaryCalculator) {
         this.systemAdminService = systemAdminService;
+        this.salesSummaryCalculator = salesSummaryCalculator;
+    }
+
+    /** Headline figures over the records the view currently shows (after its filters). */
+    public SalesSummaryDTO summarize(List<PurchaseRecordDTO> records) {
+        return salesSummaryCalculator.summarize(records);
     }
 
     /** Every purchase record across the platform; empty when not an admin / on failure. */

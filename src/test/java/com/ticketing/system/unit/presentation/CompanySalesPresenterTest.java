@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
+import com.ticketing.system.reporting.application.service.SalesSummaryCalculator;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -32,7 +33,8 @@ class CompanySalesPresenterTest {
     void setUp() {
         companyManagementService = mock(CompanyManagementService.class);
         companyAnalyticsService = mock(CompanyAnalyticsService.class);
-        presenter = new CompanySalesPresenter(companyManagementService, companyAnalyticsService);
+        presenter = new CompanySalesPresenter(companyManagementService, companyAnalyticsService,
+                new SalesSummaryCalculator());
     }
 
     @Test

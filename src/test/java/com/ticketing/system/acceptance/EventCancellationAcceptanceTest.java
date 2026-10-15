@@ -32,7 +32,11 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
@@ -47,6 +51,7 @@ import com.ticketing.system.sales.domain.TransactionRecord.TransactionType;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.CompanyDashboardDTO;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.shared.dto.GridPlacementDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
@@ -77,6 +82,8 @@ class EventCancellationAcceptanceTest {
     @Autowired private SystemAdminService systemAdminService;
     @Autowired private OrderReceiptRepository orderReceiptRepository;
     @Autowired private TicketRepository ticketRepository;
+    @Autowired private CompanyAnalyticsService companyAnalyticsService;
+    @Autowired private SystemAnalyticsService systemAnalyticsService;
 
     @MockitoSpyBean
     private PaymentGateway paymentGateway;
@@ -149,9 +156,45 @@ class EventCancellationAcceptanceTest {
         }
     }
 
+    // #21 end to end: one order holds two companies' tickets, and one company cancels its event. Only
+    // that company's lines leave the revenue figures; the other company does not see the order refunded.
+    @Test
+    void GivenCrossCompanyOrder_WhenOneCompanyCancelsItsEvent_ThenOnlyItsLinesLeaveTheRevenueFigures() {
+        AuthTokenDTO cancellingOwner = registerAndLogin("cancelOwner");
+        AuthTokenDTO keepingOwner = registerAndLogin("keepOwner");
+        Fixture cancelled = newStandingEvent(cancellingOwner);
+        Fixture kept = newStandingEvent(keepingOwner);
+        AuthTokenDTO buyer = registerAndLogin("crossBuyer");
+        reservationService.reserveForMember(buyer.token(), cancelled.eventId(), cancelled.zoneId(),
+                InventorySelectionDTO.standing(TICKETS_BOUGHT));
+        reservationService.reserveForMember(buyer.token(), kept.eventId(), kept.zoneId(),
+                InventorySelectionDTO.standing(TICKETS_BOUGHT));
+        CheckoutResultDTO order = checkoutService.checkoutMember(buyer.token(), "idem-cancel-" + SEQ.incrementAndGet(),
+                "ILS", new CardDetailsDTO("4111111111111111", "123", 12, 2030, "Demo Buyer"));
+        double eachCompanysShare = TICKET_PRICE * TICKETS_BOUGHT;
+        double platformRevenueBefore = systemAnalyticsService.adminOverview().revenue30d();
+
+        eventManagementService.cancelEventAndRefund(cancellingOwner.token(), cancelled.eventId());
+
+        CompanyDashboardDTO keptDashboard = companyAnalyticsService.dashboard(keepingOwner.token(), kept.companyId());
+        assertEquals(TICKETS_BOUGHT, keptDashboard.ticketsSold30d());
+        assertEquals(eachCompanysShare, keptDashboard.revenue30d());
+        PurchaseRecordDTO keptRecord = companyAnalyticsService.salesHistory(keepingOwner.token(), kept.companyId())
+                .records().get(0);
+        assertEquals(RefundStatus.NONE, keptRecord.refundStatus());
+
+        CompanyDashboardDTO cancelledDashboard =
+                companyAnalyticsService.dashboard(cancellingOwner.token(), cancelled.companyId());
+        assertEquals(0, cancelledDashboard.ticketsSold30d());
+        assertEquals(0.0, cancelledDashboard.revenue30d());
+
+        assertEquals(platformRevenueBefore - eachCompanysShare, systemAnalyticsService.adminOverview().revenue30d(), 1e-9);
+        assertFalse(orderReceiptRepository.findByOrderReceiptId(order.orderReceiptId()).orElseThrow().isFullyRefunded());
+    }
+
     // ---- helpers --------------------------------------------------------
 
-    private record Fixture(int eventId, int zoneId) { }
+    private record Fixture(int companyId, int eventId, int zoneId) { }
 
     private static List<Double> refundAmounts(OrderReceipt receipt) {
         return receipt.getTransactionRecords().stream()
@@ -190,7 +233,7 @@ class EventCancellationAcceptanceTest {
         int zoneId = catalogService.getEventVenueMap(owner.token(), eventId).inventoryZones().stream()
                 .filter(z -> "STANDING".equals(z.getZoneType()))
                 .findFirst().orElseThrow().getId();
-        return new Fixture(eventId, zoneId);
+        return new Fixture(companyId, eventId, zoneId);
     }
 
     private AuthTokenDTO registerAndLogin(String baseName) {

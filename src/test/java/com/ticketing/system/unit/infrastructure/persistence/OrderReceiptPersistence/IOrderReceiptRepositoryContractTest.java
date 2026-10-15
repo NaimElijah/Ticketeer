@@ -112,7 +112,7 @@ abstract class IOrderReceiptRepositoryContractTest {
                 .collect(Collectors.toMap(ReceiptLine::getTicketId, ReceiptLine::getRefundState));
         assertEquals(Map.of(10, LineRefundState.REFUNDED, 11, LineRefundState.PENDING, 12, LineRefundState.NONE),
                 stateByTicket);
-        assertTrue(found.wasRefunded());
+        assertFalse(found.isFullyRefunded());
     }
 
     @Test
