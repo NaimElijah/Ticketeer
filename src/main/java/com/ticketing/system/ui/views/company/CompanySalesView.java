@@ -18,7 +18,7 @@ import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.views.admin.SalesDateRange;
-import com.ticketing.system.ui.views.admin.SalesSummary;
+import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
@@ -40,6 +40,8 @@ import java.util.Map;
 public class CompanySalesView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
+
+    private static final String NO_TOP_EVENT = "—";
 
     private final CompanySalesPresenter presenter;
     // Single body slot, rebuilt on every (re)load so the Refresh button can surface a
@@ -131,7 +133,7 @@ public class CompanySalesView extends LkPage {
     }
 
     private Component buildStats(List<PurchaseHistoryDTO.PurchaseRecordDTO> records) {
-        SalesSummary s = SalesSummary.of(records);
+        SalesSummaryDTO s = presenter.summarize(records);
 
         Div statsDiv = new Div();
         statsDiv.addClassName("ow-stats");
@@ -139,7 +141,7 @@ public class CompanySalesView extends LkPage {
             new LkStat("Total revenue",   Money.format(Money.toCents(s.revenue()))),
             new LkStat("Tickets sold",     String.valueOf(s.ticketsSold())),
             new LkStat("Avg order value",  Money.format(Money.toCents(s.avgOrderValue()))),
-            new LkStat("Top event",        s.topEvent())
+            new LkStat("Top event",        s.topEvent().orElse(NO_TOP_EVENT))
         );
         return statsDiv;
     }
@@ -191,7 +193,7 @@ public class CompanySalesView extends LkPage {
 
     /**
      * Total amount for an order. A fully refunded order is shown struck-through with a "Refunded" tag
-     * so it's clear it does not contribute to the headline revenue (see {@link SalesSummary}); a partly
+     * so it's clear it does not contribute to the headline revenue ({@code SalesSummaryCalculator}); a partly
      * refunded one keeps its amount with a "Partly refunded" tag, since its other lines still count.
      */
     private static Component totalCell(PurchaseHistoryDTO.PurchaseRecordDTO r) {

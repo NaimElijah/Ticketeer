@@ -1,31 +1,33 @@
-package com.ticketing.system.ui.views.admin;
+package com.ticketing.system.reporting.application.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.stereotype.Service;
+
+import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 
 /**
- * Refund-aware headline figures for a list of order records, as the sales and global-history grids
- * show them. Only lines that are not refunded count as sold (#21): when one event of a multi-event
- * or shared order is cancelled, the order's other lines still count. Refunded orders stay listed and
- * tagged in the grid. Pure (no Vaadin) so it is unit-testable.
+ * Computes the headline sales figures that the company sales page (UC-22) and the admin global
+ * history (UC-31) show over the order records they list, so the views only render (#21).
  *
- * @param revenue        the prices of the lines not refunded
- * @param ticketsSold    how many lines are not refunded
- * @param avgOrderValue  revenue per order that still has a line not refunded
- * @param topEvent       the event with the highest revenue, or {@link #NO_TOP_EVENT}
- * @param refundedOrders how many orders have at least one refunded line
+ * <p>Only lines that are not refunded count as sold: when one event of a multi-event or shared order
+ * is cancelled, the order's other lines still count. The caller passes records it has already
+ * authorized and filtered (for example by date range), so this does no access checks of its own.
  */
-public record SalesSummary(double revenue, int ticketsSold, double avgOrderValue, String topEvent,
-        long refundedOrders) {
+@Service
+public class SalesSummaryCalculator {
 
-    public static final String NO_TOP_EVENT = "—";
-
-    public static SalesSummary of(List<PurchaseRecordDTO> records) {
+    /**
+     * @param records the order records to summarise; may be empty
+     * @return the figures over the lines of {@code records} that are not refunded
+     */
+    public SalesSummaryDTO summarize(List<PurchaseRecordDTO> records) {
         List<TicketRecordDTO> sold = records.stream()
                 .flatMap(r -> r.tickets().stream())
                 .filter(t -> !t.refunded())
@@ -38,16 +40,15 @@ public record SalesSummary(double revenue, int ticketsSold, double avgOrderValue
         double avgOrderValue = ordersWithSales == 0 ? 0.0 : revenue / ordersWithSales;
         long refundedOrders = records.stream().filter(r -> r.refundStatus() != RefundStatus.NONE).count();
 
-        String topEvent = sold.stream()
+        Optional<String> topEvent = sold.stream()
                 .filter(t -> t.eventName() != null)
                 .collect(Collectors.groupingBy(
                         TicketRecordDTO::eventName,
                         Collectors.summingDouble(TicketRecordDTO::pricePaid)))
                 .entrySet().stream()
                 .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .orElse(NO_TOP_EVENT);
+                .map(Map.Entry::getKey);
 
-        return new SalesSummary(revenue, sold.size(), avgOrderValue, topEvent, refundedOrders);
+        return new SalesSummaryDTO(revenue, sold.size(), avgOrderValue, topEvent, refundedOrders);
     }
 }

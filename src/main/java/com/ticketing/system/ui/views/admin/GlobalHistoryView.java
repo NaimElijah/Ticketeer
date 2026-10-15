@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
+import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
@@ -40,21 +41,22 @@ public class GlobalHistoryView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
     private static final String DATE_ALL = "All time";
+    private static final String STATUS_PAID = "Paid";
+    private static final String STATUS_PARTLY_REFUNDED = "Partly refunded";
+    private static final String STATUS_REFUNDED = "Refunded";
 
+    private final GlobalHistoryPresenter presenter;
     private final List<PurchaseRecordDTO> records;
 
     private LkFilterChip dateChip;
     private LkFilterChip companyChip;
     private LkFilterChip eventChip;
     private LkFilterChip statusChip;
-
-    private static final String STATUS_PAID = "Paid";
-    private static final String STATUS_PARTLY_REFUNDED = "Partly refunded";
-    private static final String STATUS_REFUNDED = "Refunded";
     private Div statsSlot;
     private Div gridSlot;
 
     public GlobalHistoryView(GlobalHistoryPresenter presenter) {
+        this.presenter = presenter;
         this.records = presenter.loadAllRecords();
 
         title("Global Purchase History");
@@ -123,7 +125,7 @@ public class GlobalHistoryView extends LkPage {
     // ---- stats + grid ----
 
     private Component buildStats(List<PurchaseRecordDTO> rs) {
-        SalesSummary summary = SalesSummary.of(rs);
+        SalesSummaryDTO summary = presenter.summarize(rs);
         double revenue = summary.revenue();
         long orders = rs.size();
         long refunds = summary.refundedOrders();

@@ -1,32 +1,36 @@
-package com.ticketing.system.unit.presentation;
+package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
+import com.ticketing.system.reporting.application.service.SalesSummaryCalculator;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 import com.ticketing.system.sales.domain.TicketStatus;
-import com.ticketing.system.ui.views.admin.SalesSummary;
 
-/** Refund-aware headline figures for the sales and global-history pages (pure; no Vaadin). */
-class SalesSummaryTest {
+/** Refund-aware headline figures for the sales and global-history pages (#21). */
+class SalesSummaryCalculatorTest {
+
+    private final SalesSummaryCalculator calculator = new SalesSummaryCalculator();
 
     @Test
     void GivenAPaidAndARefundedOrder_WhenSummarised_ThenOnlyThePaidOrderCounts() {
         PurchaseRecordDTO paid = order(ticket("Gala", 600.0, false));
         PurchaseRecordDTO refunded = order(ticket("Gala", 300.0, true));
 
-        SalesSummary s = SalesSummary.of(List.of(paid, refunded));
+        SalesSummaryDTO s = calculator.summarize(List.of(paid, refunded));
 
         assertEquals(600.0, s.revenue(), "the refunded order is excluded from revenue");
         assertEquals(1, s.ticketsSold(), "the refunded order's ticket is not counted as sold");
         assertEquals(600.0, s.avgOrderValue(), "the average is over orders that still have a sale");
-        assertEquals("Gala", s.topEvent());
+        assertEquals(Optional.of("Gala"), s.topEvent());
         assertEquals(1, s.refundedOrders());
     }
 
@@ -36,12 +40,12 @@ class SalesSummaryTest {
         PurchaseRecordDTO multiEvent = order(ticket("Cancelled", 100.0, true), ticket("Kept", 40.0, false),
                 ticket("Kept", 40.0, false));
 
-        SalesSummary s = SalesSummary.of(List.of(multiEvent));
+        SalesSummaryDTO s = calculator.summarize(List.of(multiEvent));
 
         assertEquals(80.0, s.revenue());
         assertEquals(2, s.ticketsSold());
         assertEquals(80.0, s.avgOrderValue());
-        assertEquals("Kept", s.topEvent());
+        assertEquals(Optional.of("Kept"), s.topEvent());
         assertEquals(1, s.refundedOrders(), "a partly refunded order counts as an order with a refund");
     }
 
@@ -51,7 +55,7 @@ class SalesSummaryTest {
     void GivenACompanysLinesOfASharedOrderWhoseOtherEventWasRefunded_WhenSummarised_ThenTheyAllCount() {
         PurchaseRecordDTO ownLinesOnly = order(ticket("Ours", 70.0, false), ticket("Ours", 30.0, false));
 
-        SalesSummary s = SalesSummary.of(List.of(ownLinesOnly));
+        SalesSummaryDTO s = calculator.summarize(List.of(ownLinesOnly));
 
         assertEquals(100.0, s.revenue());
         assertEquals(2, s.ticketsSold());
@@ -60,12 +64,12 @@ class SalesSummaryTest {
 
     @Test
     void GivenOnlyRefundedOrders_WhenSummarised_ThenEverythingIsZeroAndThereIsNoTopEvent() {
-        SalesSummary s = SalesSummary.of(List.of(order(ticket("X", 300.0, true))));
+        SalesSummaryDTO s = calculator.summarize(List.of(order(ticket("X", 300.0, true))));
 
         assertEquals(0.0, s.revenue());
         assertEquals(0, s.ticketsSold());
         assertEquals(0.0, s.avgOrderValue());
-        assertEquals(SalesSummary.NO_TOP_EVENT, s.topEvent());
+        assertEquals(Optional.empty(), s.topEvent());
     }
 
     @Test
@@ -73,7 +77,7 @@ class SalesSummaryTest {
         PurchaseRecordDTO a = order(ticket("Small", 100.0, false));
         PurchaseRecordDTO b = order(ticket("Big", 500.0, false));
 
-        assertEquals("Big", SalesSummary.of(List.of(a, b)).topEvent());
+        assertEquals(Optional.of("Big"), calculator.summarize(List.of(a, b)).topEvent());
     }
 
     // ---- helpers --------------------------------------------------------

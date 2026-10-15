@@ -7,7 +7,10 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
+import com.ticketing.system.reporting.application.service.SalesSummaryCalculator;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 
@@ -16,12 +19,20 @@ public class CompanySalesPresenter {
 
     private final CompanyManagementService companyManagementService;
     private final CompanyAnalyticsService companyAnalyticsService;
+    private final SalesSummaryCalculator salesSummaryCalculator;
 
     @Autowired
     public CompanySalesPresenter(CompanyManagementService companyManagementService,
-                                  CompanyAnalyticsService companyAnalyticsService) {
+                                  CompanyAnalyticsService companyAnalyticsService,
+                                  SalesSummaryCalculator salesSummaryCalculator) {
         this.companyManagementService = companyManagementService;
         this.companyAnalyticsService = companyAnalyticsService;
+        this.salesSummaryCalculator = salesSummaryCalculator;
+    }
+
+    /** Headline figures over the records the view currently shows (after its date filter). */
+    public SalesSummaryDTO summarize(List<PurchaseRecordDTO> records) {
+        return salesSummaryCalculator.summarize(records);
     }
 
     public Outcome load(String token, Integer companyId) {

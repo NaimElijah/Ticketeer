@@ -132,7 +132,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | II.4.3 | UC-21 | Set purchase methods and purchase and discount policies. | Partial: purchase policies are built; discounts are one percentage per event; conditional, coupon and composed discounts are #67; the lottery purchase method is #72 | `EventManagementService.setEventPolicies`, `PurchasePolicy`, `DiscountPolicy` · `PurchasePolicyAcceptanceTest`, `PurchasePolicyEnforcementAcceptanceTest` |
 | II.4.4 | — | Receive buyer inquiries and answer them. | Built | `MessagingService` · `MessagingAcceptanceTest` |
 | II.4.5 | UC-22 | See the company's order and purchase history. It does not change when events, prices or companies change later. | Built | `CompanyAnalyticsService.salesHistory`, `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`, `CompanyAcceptanceTest`, `EventCancellationAcceptanceTest` |
-| II.4.6 | UC-22 | Produce a sales report of revenue and tickets sold, limited to the events the owner manages and their appointment subtree. | Partial: company-wide figures, not limited to the subtree (#68) | `CompanyAnalyticsService.dashboard`, `SalesSummary` · `CompanyAnalyticsServiceTest`, `SalesSummaryTest`, `CompanySalesReportAcceptanceTest` |
+| II.4.6 | UC-22 | Produce a sales report of revenue and tickets sold, limited to the events the owner manages and their appointment subtree. | Partial: company-wide figures, not limited to the subtree (#68) | `CompanyAnalyticsService.dashboard`, `SalesSummaryCalculator` · `CompanyAnalyticsServiceTest`, `SalesSummaryCalculatorTest`, `CompanySalesReportAcceptanceTest` |
 | II.4.7 | UC-24 | Appoint a manager with chosen permissions; the appointee must accept. | Built; the permission set is [OQ-2](#open-questions) | `CompanyManagementService.appointManager`, `CompanyMembershipService` · `ManagerPermissionMatrixAcceptanceTest`, `CompanyMembershipServiceLifecycleTest` |
 | II.4.8 | UC-23 | Appoint a co-owner; the appointee accepts or rejects. | Built | `CompanyManagementService.appointOwner`, `CompanyMembershipService.receiveOwnerAppointment` · `CompanyMembershipServiceTest`, `DelayedAppointmentNotificationAcceptanceTest` |
 | II.4.9 | — | Remove an owner you appointed. | Partial: the service revokes owners but does not cascade to their appointees, and no UI offers it (#65, #126) | `CompanyManagementService.RevokeAppointment` |
@@ -156,7 +156,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | II.6.1 | — | Close a production company. Its owners and managers are alerted and their appointments cancelled. | Deferred (#62) | — |
 | II.6.2 | — | Cancel a membership, which cancels all of the member's roles in every company. | Deferred (#66) | — |
 | II.6.3 | — | Handle complaints and reply; send system messages to producers and buyers. | Built | `MessagingService.sendOutreach` · `MessagingServiceTest` |
-| II.6.4 | UC-31 | See the global purchase history, by buyer or by company and event. | Partial: with a company or event filter, the figures still count the other companies' lines of each matching order (#131) | `SystemAdminService.viewGlobalHistory`, `SalesSummary` · `SystemAdminServiceTest`, `SalesSummaryTest` |
+| II.6.4 | UC-31 | See the global purchase history, by buyer or by company and event. | Partial: with a company or event filter, the figures still count the other companies' lines of each matching order (#131) | `SystemAdminService.viewGlobalHistory`, `SalesSummaryCalculator` · `SystemAdminServiceTest`, `SalesSummaryCalculatorTest` |
 | II.6.5 | UC-46 | See live and historical analytics: visits, registrations, reservations and purchases. | Built | `SystemAnalyticsService` · `SystemAnalyticsServiceTest`, `EventCancellationAcceptanceTest` |
 | II.6.6 | — | See all active queues live, change the admission rate, and clear a queue after a fault. | Deferred (#71) | — |
 | II.6.7 | — | Suspend a user for a period or permanently; a suspended user can only view (V2). | Deferred (#66) | — |
@@ -266,9 +266,9 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   refunded, so cancelling one event of a multi-event or shared order removes only that event's lines
   from the figures. Each view reports an order as paid, partly refunded or refunded, judged on the
   lines that view shows: a company is never shown another company's refund (#21;
-  `CompanyAnalyticsService.dashboard`, `SystemAnalyticsService.adminOverview`, `SalesSummary`,
+  `CompanyAnalyticsService.dashboard`, `SystemAnalyticsService.adminOverview`, `SalesSummaryCalculator`,
   `OrderReceiptMapper` · `CompanyAnalyticsServiceTest`, `SystemAnalyticsServiceTest`,
-  `SalesSummaryTest`, `EventCancellationAcceptanceTest`).
+  `SalesSummaryCalculatorTest`, `EventCancellationAcceptanceTest`).
 
 ### Purchase policies and discounts
 
