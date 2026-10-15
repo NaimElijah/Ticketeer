@@ -43,7 +43,7 @@ import com.ticketing.system.shared.exception.UserNotFoundException;
  * session token, requires an active appointment in the company, and checks the organization
  * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. Sales
  * figures are the company's own share of each receipt (a receipt can mix events from several
- * companies), over the trailing 30 days, excluding refunded receipts.
+ * companies), over the trailing 30 days, counting only lines that are not refunded (#21).
  */
 @Service
 @Slf4j

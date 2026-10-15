@@ -57,7 +57,7 @@ public class CompanySalesView extends LkPage {
     // The orders for the current company, loaded once per (re)load; the date filter narrows a copy.
     private List<PurchaseHistoryDTO.PurchaseRecordDTO> allRecords = List.of();
     // Default "All time" so every order (including refunded ones, which carry a tag) is visible by
-    // default; the headline figures still count only non-refunded orders.
+    // default; the headline figures still count only lines that are not refunded.
     private String selectedRange = SalesDateRange.ALL_TIME;
     private LkFilterChip dateChip;
 

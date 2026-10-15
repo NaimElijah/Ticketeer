@@ -265,7 +265,9 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 - Refunds are tracked per receipt line. Revenue and tickets sold count only the lines that are not
   refunded, so cancelling one event of a multi-event or shared order removes only that event's lines
   from the figures. Each view reports an order as paid, partly refunded or refunded, judged on the
-  lines that view shows: a company is never shown another company's refund (#21;
+  lines that view shows, so a company is not shown another company's refund. The exception is an
+  order refunded before refunds were tracked per line (#20): it recorded only an order-level flag,
+  so all its lines count as refunded, failing closed as ADR-001 decides (#21;
   `CompanyAnalyticsService.dashboard`, `SystemAnalyticsService.adminOverview`, `SalesSummaryCalculator`,
   `OrderReceiptMapper` · `CompanyAnalyticsServiceTest`, `SystemAnalyticsServiceTest`,
   `SalesSummaryCalculatorTest`, `EventCancellationAcceptanceTest`).
