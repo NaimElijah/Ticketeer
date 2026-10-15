@@ -1,5 +1,7 @@
 package com.ticketing.system.sales.application.service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.OptionalDouble;
@@ -22,6 +24,7 @@ import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 
 import lombok.extern.slf4j.Slf4j;
@@ -39,10 +42,11 @@ import lombok.extern.slf4j.Slf4j;
  *       the receipt, and that receipt's tickets for the event are flipped.</li>
  * </ol>
  * A gateway that declines, or that the request never reached, moved no money: the claim is released
- * and the run stops, so calling this again resumes with the receipts that are still unrefunded. When
- * the gateway may have refunded without a usable answer, when a claim cannot be released, or when a
- * gateway refund cannot be recorded, the lines stay PENDING and are never refunded twice; that receipt
- * needs manual recovery.
+ * so calling this again retries it. A decline is specific to one receipt, so the run carries on with
+ * the others and reports every declined receipt at the end; an unreachable gateway stops the run.
+ * When the gateway may have refunded without a usable answer, when a claim cannot be released, or when
+ * a gateway refund cannot be recorded, the run stops and the lines stay PENDING; they are never
+ * refunded twice, and that receipt needs manual recovery.
  */
 @Service
 @Slf4j
@@ -83,17 +87,35 @@ public class EventCancellationRefundService {
      * @param eventName its display name, for the holder notices
      * @throws RefundOutcomeUnknownException if the gateway may have refunded a receipt without a usable
      *                                       answer; that receipt stays PENDING for manual recovery
-     * @throws RefundFailedException         if a gateway refund was declined or never reached the
-     *                                       gateway, or a receipt has no payment charge. The receipts
-     *                                       refunded before it stay refunded; calling this again
-     *                                       resumes with the rest.
+     * @throws RefundGatewayUnreachableException if the gateway could not be reached; the run stops
+     *                                            and calling this again resumes with the rest
+     * @throws RefundFailedException              naming every receipt whose refund was declined or that
+     *                                            has no payment charge, after the others were refunded;
+     *                                            calling this again retries them
      */
     public void refundCancelledEvent(int eventId, String eventName) {
         Set<Integer> notifiedHolders = new HashSet<>();
-        for (OrderReceipt receipt : orderReceiptRepository.findByEventId(eventId)) {
-            refundReceipt(receipt.getId(), eventId, eventName, notifiedHolders);
+        List<Integer> declinedReceiptIds = new ArrayList<>();
+        // A fixed order makes a resumed run retry the receipts in the order the first run tried them.
+        List<OrderReceipt> receipts = orderReceiptRepository.findByEventId(eventId).stream()
+                .sorted(Comparator.comparingInt(OrderReceipt::getId))
+                .toList();
+        for (OrderReceipt receipt : receipts) {
+            try {
+                refundReceipt(receipt.getId(), eventId, eventName, notifiedHolders);
+            } catch (RefundGatewayUnreachableException | RefundOutcomeUnknownException gatewayInTrouble) {
+                throw gatewayInTrouble;
+            } catch (RefundFailedException declined) {
+                log.warn("Refund of receipt {} for cancelled event {} was declined; carrying on with the other"
+                        + " receipts", receipt.getId(), eventId, declined);
+                declinedReceiptIds.add(receipt.getId());
+            }
         }
         voidUnsoldTickets(eventId);
+        if (!declinedReceiptIds.isEmpty()) {
+            throw new RefundFailedException(declinedReceiptIds, "declined for cancelled event " + eventId
+                    + "; the other receipts were refunded, and cancelling again retries these");
+        }
         log.info("Refund flow completed for cancelled event {}", eventId);
     }
 

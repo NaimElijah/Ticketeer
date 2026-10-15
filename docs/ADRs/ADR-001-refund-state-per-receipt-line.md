@@ -51,8 +51,11 @@ moves a line between states:
 | The request never reached the gateway (connection refused, connect timeout) | `RefundGatewayUnreachableException` | Released. |
 | The gateway may have refunded without a usable answer (read timeout, malformed or mismatched result, unexpected error) | `RefundOutcomeUnknownException` | Kept `PENDING`, logged at ERROR. |
 
-In every case the run stops. The receipts refunded so far stay refunded, and the event stays
-CANCELED.
+A decline is specific to one receipt, so the run carries on with the other receipts and reports
+every declined receipt at the end. An unreachable gateway or an unknown outcome means the gateway
+itself is in trouble, so the run stops there. Either way the receipts refunded so far stay refunded,
+and the event stays CANCELED. Receipts are processed in receipt-id order, so a resumed run retries
+them in the order the first run tried them.
 
 **Cancelling a CANCELED event republishes `EventCancelledEvent`,** which resumes with the receipts
 that are still unrefunded. Catalog keeps no knowledge of sales; the existing event direction stays.
@@ -91,8 +94,9 @@ closed: at worst a refund is withheld, never paid twice.
   when it is still running to see them.
 - **A WSEP timeout counts as unknown.** WSEP's HTTP client reports every transport failure the same
   way; only a connect failure proves the request was never sent, so only that is released.
-- **The run stops at the first failure** instead of carrying on with the remaining receipts. A
-  failing gateway usually fails for everyone, and the retry resumes cleanly.
+- **One receipt cannot block the rest.** A receipt that is declined on every attempt, such as a
+  second reversal of a multi-event order's charge under WSEP, is reported on every retry while the
+  other receipts are refunded.
 - **There is no automatic retry.** The owner re-invokes cancel from the event management screen.
 - **WSEP cannot refund part of a charge.** It reverses the whole charge by id, so refunding one event
   of a multi-event order over-refunds at the payment service even though the receipt records only
@@ -111,7 +115,9 @@ closed: at worst a refund is withheld, never paid twice.
 - **Keep the order-level flag and skip receipts already flagged.** Rejected: a multi-event order
   flagged by one cancellation would never be refunded for its other events. It also cannot express
   an in-flight refund, so concurrent runs would still refund twice.
-- **Continue past a failed receipt and report all failures at the end.** Rejected for now. It hammers
-  a gateway that is already failing, and the retry gives the same outcome.
+- **Stop at the first failure of any kind.** Rejected: a decline that applies to one receipt would
+  stop every retry at that receipt, so the buyers after it would never be refunded.
+- **Carry on past every failure, including an unreachable gateway.** Rejected: it hammers a gateway
+  that is already down, with a connect timeout per receipt, and the retry gives the same outcome.
 - **Retry stale `PENDING` claims after a timeout.** Rejected until the gateway is idempotent: a crash
   after the gateway refunded but before the record step would refund the buyer twice.

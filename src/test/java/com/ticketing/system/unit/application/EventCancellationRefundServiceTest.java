@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -20,6 +21,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
 
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
@@ -143,21 +145,22 @@ class EventCancellationRefundServiceTest {
     }
 
     @Test
-    void GivenGatewayFailsOnTheSecondReceipt_WhenRefundedAgain_ThenEachReceiptIsRefundedExactlyOnce() {
+    void GivenGatewayDeclinesTheSecondReceipt_WhenRefundedAgain_ThenEachReceiptIsRefundedExactlyOnce() {
         OrderReceipt first = paidReceipt(1, 7, 50.0);
         OrderReceipt second = paidReceipt(2, 8, 50.0);
         OrderReceipt third = paidReceipt(3, 9, 50.0);
         when(paymentGateway.refund(eq(chargeOf(2)), anyDouble()))
-                .thenThrow(new RefundFailedException(2, "gateway unavailable"))
+                .thenThrow(new RefundFailedException(2, "declined"))
                 .thenAnswer(inv -> refunded(chargeOf(2), 50.0));
 
-        assertThrows(RefundFailedException.class, this::refundCancelledEvent);
+        RefundFailedException declined = assertThrows(RefundFailedException.class, this::refundCancelledEvent);
 
+        assertTrue(declined.getMessage().contains("[2]"), declined.getMessage());
         assertTrue(allLinesRefunded(first));
         assertEquals(List.of(TicketStatus.REFUNDED), ticketStatusesOf(1));
-        assertTrue(noLineTouched(second), "the refused claim is released for a retry");
-        assertTrue(noLineTouched(third));
+        assertTrue(noLineTouched(second), "the declined claim is released for a retry");
         assertEquals(List.of(TicketStatus.PAID), ticketStatusesOf(2));
+        assertTrue(allLinesRefunded(third), "a decline specific to one receipt does not block the others");
 
         refundCancelledEvent();
 
@@ -167,6 +170,41 @@ class EventCancellationRefundServiceTest {
         assertTrue(allLinesRefunded(second));
         assertTrue(allLinesRefunded(third));
         assertTrue(tickets.stream().allMatch(t -> t.getStatus() == TicketStatus.REFUNDED));
+    }
+
+    // Review finding 2 on #129: a receipt that is declined on every attempt must not strand the rest.
+    @Test
+    void GivenAReceiptThatIsAlwaysDeclined_WhenRefundCancelledEvent_ThenEveryOtherReceiptIsStillRefunded() {
+        paidReceipt(1, 7, 50.0);
+        OrderReceipt second = paidReceipt(2, 8, 50.0);
+        OrderReceipt third = paidReceipt(3, 9, 50.0);
+        Ticket unsold = new Ticket(EVENT_ID, ZONE_ID, 99, "Z9", 50.0, 99, "BC99");
+        unsold.release();
+        tickets.add(unsold);
+        when(paymentGateway.refund(eq(chargeOf(1)), anyDouble())).thenThrow(new RefundFailedException(1, "declined"));
+
+        assertThrows(RefundFailedException.class, this::refundCancelledEvent);
+        assertThrows(RefundFailedException.class, this::refundCancelledEvent);
+
+        assertTrue(allLinesRefunded(second));
+        assertTrue(allLinesRefunded(third));
+        assertEquals(TicketStatus.VOIDED, unsold.getStatus());
+        verify(paymentGateway, times(1)).refund(chargeOf(2), 50.0);
+        verify(paymentGateway, times(1)).refund(chargeOf(3), 50.0);
+    }
+
+    @Test
+    void GivenReceiptsInAnyOrder_WhenRefundCancelledEvent_ThenTheyAreRefundedInReceiptIdOrder() {
+        paidReceipt(3, 9, 50.0);
+        paidReceipt(1, 7, 50.0);
+        paidReceipt(2, 8, 50.0);
+
+        refundCancelledEvent();
+
+        InOrder inOrder = inOrder(paymentGateway);
+        inOrder.verify(paymentGateway).refund(chargeOf(1), 50.0);
+        inOrder.verify(paymentGateway).refund(chargeOf(2), 50.0);
+        inOrder.verify(paymentGateway).refund(chargeOf(3), 50.0);
     }
 
     @Test
