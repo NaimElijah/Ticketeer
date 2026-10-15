@@ -37,7 +37,8 @@ moves a line between states:
 
 1. **Claim.** A short transaction holds the receipt's lock (`SELECT … FOR UPDATE` under JPA). It
    moves the event's `NONE` lines to `PENDING` and commits. A concurrent or repeated run finds
-   nothing to claim and skips the receipt.
+   nothing to claim and skips the receipt. The claim and record transactions are always new ones
+   (`REQUIRES_NEW`), so a claim commits before its gateway call even inside a caller's transaction.
 2. **Refund.** The service calls the gateway outside any transaction, then validates the result.
    Lines that cost nothing need no gateway call.
 3. **Record.** A second short transaction moves the lines to `REFUNDED`, adds the `REFUND` record,
@@ -61,8 +62,8 @@ them in the order the first run tried them.
 that are still unrefunded. Catalog keeps no knowledge of sales; the existing event direction stays.
 
 **A whole-order member refund (`RefundService`) is refused before the gateway call** once any line
-is `PENDING` or `REFUNDED`. Without that check, it could charge back money a cancellation is already
-returning.
+is `PENDING` or `REFUNDED`, or the order is flagged refunded. Without that check, it could charge
+back money a cancellation is already returning.
 
 **The `refund_state` column is nullable, and a null reads as `NONE`.** Hibernate's `ddl-auto: update`
 cannot add a NOT NULL column to populated tables, and versioned migrations do not exist yet (#31).
