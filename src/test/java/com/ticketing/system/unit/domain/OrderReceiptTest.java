@@ -126,6 +126,15 @@ class OrderReceiptTest extends BaseDomainTest {
     }
 
     @Test
+    void GivenClaimedLines_WhenAskedForPendingRefunds_ThenOnlyTheClaimedEventHasOne() {
+        OrderReceipt receipt = twoEventOrder();
+        receipt.claimRefundForEvent(CANCELLED_EVENT);
+
+        assertTrue(receipt.hasPendingRefundFor(CANCELLED_EVENT));
+        assertFalse(receipt.hasPendingRefundFor(OTHER_EVENT));
+    }
+
+    @Test
     void GivenNoClaim_WhenReleaseRefundClaim_ThenIllegalState() {
         OrderReceipt receipt = twoEventOrder();
 

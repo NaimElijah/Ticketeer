@@ -281,10 +281,25 @@ class EventCancellationRefundServiceTest {
         assertThrows(RefundOutcomeUnknownException.class, this::refundCancelledEvent);
         assertTrue(allLinesPending(receipt));
 
-        refundCancelledEvent();
+        assertThrows(RefundFailedException.class, this::refundCancelledEvent, "the retry reports it still pending");
 
         verify(paymentGateway, times(1)).refund(anyInt(), anyDouble());
         assertTrue(allLinesPending(receipt));
+    }
+
+    // Review finding 3 on #129: a claim this run did not make and cannot resolve, whether another run
+    // holds it or a crash stranded it, must be reported instead of the event being called refunded.
+    @Test
+    void GivenAClaimLeftPendingByAnotherRun_WhenRefundCancelledEvent_ThenTheOthersAreRefundedAndTheRunFailsNamingIt() {
+        OrderReceipt stranded = paidReceipt(1, 7, 50.0);
+        stranded.claimRefundForEvent(EVENT_ID);
+        OrderReceipt other = paidReceipt(2, 8, 50.0);
+
+        RefundFailedException pending = assertThrows(RefundFailedException.class, this::refundCancelledEvent);
+
+        assertTrue(pending.getMessage().contains("[1]"), pending.getMessage());
+        assertTrue(allLinesRefunded(other));
+        verify(paymentGateway, never()).refund(eq(chargeOf(1)), anyDouble());
     }
 
     @Test

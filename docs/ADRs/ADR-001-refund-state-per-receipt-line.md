@@ -91,7 +91,9 @@ closed: at worst a refund is withheld, never paid twice.
   unknown, if the process dies or the database fails between the claim and the record, or if a
   refused claim cannot be released. Without gateway idempotency a retry could refund the same money
   twice, so a stale claim is never retried automatically. The service logs these cases at ERROR
-  when it is still running to see them.
+  when it is still running to see them. Afterwards, every run that finds a `PENDING` line it did not
+  claim fails, naming the receipt, and logs a WARN: it cannot tell a claim another run still holds
+  from a stranded one, but it never reports the event as fully refunded.
 - **A WSEP timeout counts as unknown.** WSEP's HTTP client reports every transport failure the same
   way; only a connect failure proves the request was never sent, so only that is released.
 - **One receipt cannot block the rest.** A receipt that is declined on every attempt, such as a

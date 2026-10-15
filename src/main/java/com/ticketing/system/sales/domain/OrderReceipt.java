@@ -268,6 +268,12 @@ public class OrderReceipt implements InvariantChecked {
         return claimedAny ? OptionalDouble.of(claimedAmount) : OptionalDouble.empty();
     }
 
+    /** Whether a refund for {@code eventId} has been claimed on this order and not yet resolved. */
+    public boolean hasPendingRefundFor(int eventId) {
+        return receiptLines.stream()
+                .anyMatch(line -> line.getEventId() == eventId && line.getRefundState() == LineRefundState.PENDING);
+    }
+
     /**
      * Releases a claim whose gateway refund failed: the event's PENDING lines return to NONE, so a
      * later run can claim them again.

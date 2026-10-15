@@ -89,9 +89,10 @@ public class EventCancellationRefundService {
      *                                       answer; that receipt stays PENDING for manual recovery
      * @throws RefundGatewayUnreachableException if the gateway could not be reached; the run stops
      *                                            and calling this again resumes with the rest
-     * @throws RefundFailedException              naming every receipt whose refund was declined or that
-     *                                            has no payment charge, after the others were refunded;
-     *                                            calling this again retries them
+     * @throws RefundFailedException              naming every receipt whose refund was declined, that
+     *                                            has no payment charge, or whose refund is still pending
+     *                                            under another run's claim, after the others were
+     *                                            refunded; calling this again retries the declined ones
      */
     public void refundCancelledEvent(int eventId, String eventName) {
         Set<Integer> notifiedHolders = new HashSet<>();
@@ -112,9 +113,26 @@ public class EventCancellationRefundService {
             }
         }
         voidUnsoldTickets(eventId);
-        if (!declinedReceiptIds.isEmpty()) {
-            throw new RefundFailedException(declinedReceiptIds, "declined for cancelled event " + eventId
-                    + "; the other receipts were refunded, and cancelling again retries these");
+
+        // Every claim this run made is resolved by now, so a PENDING line left on the event belongs to
+        // another run still in flight, or to a claim a crash stranded. Either way the event is not fully
+        // refunded, and the owner must not be told it is.
+        List<Integer> pendingReceiptIds = orderReceiptRepository.findByEventId(eventId).stream()
+                .filter(receipt -> receipt.hasPendingRefundFor(eventId))
+                .map(OrderReceipt::getId)
+                .sorted()
+                .toList();
+        if (!pendingReceiptIds.isEmpty()) {
+            log.warn("Receipts {} of cancelled event {} still have a refund pending: another cancellation may be"
+                    + " refunding them, or a stranded claim needs manual recovery (ADR-001)",
+                    pendingReceiptIds, eventId);
+        }
+        if (!declinedReceiptIds.isEmpty() || !pendingReceiptIds.isEmpty()) {
+            List<Integer> unrefunded = new ArrayList<>(declinedReceiptIds);
+            unrefunded.addAll(pendingReceiptIds);
+            throw new RefundFailedException(unrefunded, "not refunded for cancelled event " + eventId
+                    + " (declined: " + declinedReceiptIds + ", still pending: " + pendingReceiptIds
+                    + "); the other receipts were refunded, and cancelling again retries the declined ones");
         }
         log.info("Refund flow completed for cancelled event {}", eventId);
     }
