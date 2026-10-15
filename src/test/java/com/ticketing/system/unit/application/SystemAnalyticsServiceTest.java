@@ -135,10 +135,10 @@ class SystemAnalyticsServiceTest {
                 .thenReturn(List.of(openA, openB, closed));                                   // 2 open, 1 closed
 
         LocalDateTime base = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
-        OrderReceipt inWindow = receipt(base, false, 100.0);                  // counts
-        OrderReceipt alsoInWindow = receipt(base.minusDays(10), false, 50.0); // counts
-        OrderReceipt refunded = receipt(base, true, 999.0);                   // excluded: refunded
-        OrderReceipt tooOld = receipt(base.minusDays(40), false, 999.0);      // excluded: > 30d
+        OrderReceipt inWindow = receipt(base, 100.0);                  // counts
+        OrderReceipt alsoInWindow = receipt(base.minusDays(10), 50.0); // counts
+        OrderReceipt refunded = fullyRefundedOrder(999.0);             // excluded: every line refunded
+        OrderReceipt tooOld = receipt(base.minusDays(40), 999.0);      // excluded: > 30d
         when(orderReceiptRepository.findGlobal(any()))
                 .thenReturn(List.of(inWindow, alsoInWindow, refunded, tooOld));
 
@@ -172,10 +172,23 @@ class SystemAnalyticsServiceTest {
         return conversation;
     }
 
-    private static OrderReceipt receipt(LocalDateTime purchaseTime, boolean refunded, double total) {
+    private static OrderReceipt receipt(LocalDateTime purchaseTime, double total) {
         OrderReceipt receipt = mock(OrderReceipt.class);
         when(receipt.getPurchaseTime()).thenReturn(purchaseTime);
-        when(receipt.netAmount()).thenReturn(refunded ? 0.0 : total);
+        when(receipt.netAmount()).thenReturn(total);
         return receipt;
+    }
+
+    /**
+     * A real order refunded in full, so it is the domain, not a stub, that says it earns nothing (review
+     * finding 2 on #132). OrderReceipt stamps its purchase time with the real clock, which is always
+     * after the window's start (the fixed clock's T0 minus 30 days), so only the refund can exclude it.
+     */
+    private static OrderReceipt fullyRefundedOrder(double total) {
+        LocalDateTime boughtAt = LocalDateTime.now();
+        OrderReceipt order = OrderReceipt.forMember(2, 7, total, List.of(new ReceiptLine(20, total, 1, 1, null, boughtAt)),
+                List.of(TransactionRecord.paymentCharge(4202, "test-gateway", total, "ILS", boughtAt)));
+        order.markRefunded(TransactionRecord.refund("refund-2", "test-gateway", total, "ILS", boughtAt));
+        return order;
     }
 }
