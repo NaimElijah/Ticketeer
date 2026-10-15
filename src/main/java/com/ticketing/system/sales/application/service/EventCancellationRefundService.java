@@ -146,7 +146,7 @@ public class EventCancellationRefundService {
 
     private TransactionRecord refundAtGateway(int receiptId, Claim claim) {
         RefundResultDTO result = paymentGateway.refund(claim.paymentTransactionId(), claim.amount());
-        validateRefundResult(receiptId, claim.amount(), result);
+        RefundResultValidator.validate(receiptId, claim.amount(), result);
         return TransactionRecord.refund(
                 result.refundTransactionId(),
                 paymentGateway.getId(),
@@ -227,21 +227,6 @@ public class EventCancellationRefundService {
         } catch (RuntimeException e) {
             // The refund has committed; a lost notice must not report the refund as failed.
             log.warn("Failed to send cancellation notification to userId={} for eventId={}", userId, eventId, e);
-        }
-    }
-
-    private void validateRefundResult(int receiptId, double expectedRefundAmount, RefundResultDTO refundResult) {
-        if (refundResult == null) {
-            throw new RefundFailedException(receiptId, "payment gateway returned null refund result");
-        }
-        if (refundResult.refundTransactionId() == null || refundResult.refundTransactionId().isBlank()) {
-            throw new RefundFailedException(receiptId, "refund transaction id is missing");
-        }
-        if (Math.abs(refundResult.totalRefunded() - expectedRefundAmount) > 0.0001) {
-            throw new RefundFailedException(receiptId, "refund amount mismatch");
-        }
-        if (refundResult.refundedAt() == null) {
-            throw new RefundFailedException(receiptId, "refund timestamp is missing");
         }
     }
 

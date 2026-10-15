@@ -121,7 +121,7 @@ public class RefundService {
                         .orElseThrow(() -> new RefundFailedException(orderId, "receipt does not contain a payment transaction"));
 
                 RefundResultDTO result = paymentGateway.refund(paymentTransactionId, refundAmount);
-                validateRefundResult(orderId, refundAmount, result);
+                RefundResultValidator.validate(orderId, refundAmount, result);
 
                 receipt.markRefunded(TransactionRecord.refund(
                         result.refundTransactionId(),
@@ -184,21 +184,6 @@ public class RefundService {
             inventoryPort.returnSoldToStock(lines);
         } catch (RuntimeException e) {
             log.warn("Refund: returning inventory to stock failed; the refund has already committed", e);
-        }
-    }
-
-    private void validateRefundResult(int receiptId, double expectedRefundAmount, RefundResultDTO refundResult) {
-        if (refundResult == null) {
-            throw new RefundFailedException(receiptId, "payment gateway returned null refund result");
-        }
-        if (refundResult.refundTransactionId() == null || refundResult.refundTransactionId().isBlank()) {
-            throw new RefundFailedException(receiptId, "refund transaction id is missing");
-        }
-        if (Math.abs(refundResult.totalRefunded() - expectedRefundAmount) > 0.0001) {
-            throw new RefundFailedException(receiptId, "refund amount mismatch");
-        }
-        if (refundResult.refundedAt() == null) {
-            throw new RefundFailedException(receiptId, "refund timestamp is missing");
         }
     }
 }
