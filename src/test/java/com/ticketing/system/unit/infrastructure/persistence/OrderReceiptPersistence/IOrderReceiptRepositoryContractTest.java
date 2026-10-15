@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.LineRefundState;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
@@ -95,6 +97,22 @@ abstract class IOrderReceiptRepositoryContractTest {
         assertEquals(TransactionType.PAYMENT_CHARGE, tx.getType());
         assertEquals("999", tx.getExternalTransactionId());
         assertEquals("ILS", tx.getCurrency());
+    }
+
+    @Test
+    void GivenLinesInEveryRefundState_WhenSavedAndReloaded_ThenEachLineKeepsItsState() {
+        OrderReceipt r = OrderReceipt.forMember(1, 7, 150.0, List.of(line(10, 5), line(11, 6), line(12, 8)));
+        r.claimRefundForEvent(5);
+        r.completeEventRefund(5, TransactionRecord.refund("refund-1", "WSEP", 50.0, "ILS", LocalDateTime.now()));
+        r.claimRefundForEvent(6);
+        repo.save(r);
+
+        OrderReceipt found = repo.findByOrderReceiptId(1).orElseThrow();
+        Map<Integer, LineRefundState> stateByTicket = found.getReceiptLines().stream()
+                .collect(Collectors.toMap(ReceiptLine::getTicketId, ReceiptLine::getRefundState));
+        assertEquals(Map.of(10, LineRefundState.REFUNDED, 11, LineRefundState.PENDING, 12, LineRefundState.NONE),
+                stateByTicket);
+        assertTrue(found.wasRefunded());
     }
 
     @Test

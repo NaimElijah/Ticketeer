@@ -388,8 +388,9 @@ public class CompanyEventListView extends LkPage {
             actions.add(iconBtn("chart", "Sales", () -> UI.getCurrent().navigate(CompanySalesView.class)));
         }
         if (ev.status() == EventStatus.CANCELED) {
-            // A canceled event has no further transitions and can't be canceled again —
-            // the only action is to permanently remove it.
+            // A canceled event has no further status transitions, so this list only offers to
+            // remove it. Cancelling it again, which resumes refunds a failure interrupted (#20),
+            // is done from the event's management page.
             if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
                 actions.add(iconBtn("trash", "Remove event", () -> openDeleteDialog(ev)));
             }

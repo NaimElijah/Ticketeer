@@ -1,17 +1,23 @@
 package com.ticketing.system.sales.domain;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 
 /**
  * V3: an {@code @Embeddable} value object — one row in the owning OrderReceipt's
  * {@code receipt_lines} element collection (no identity of its own). Fields are non-final
  * with a protected no-arg ctor so Hibernate can hydrate; the public ctor still enforces
  * the invariants.
+ *
+ * <p>Lines are immutable once built: the owning {@link OrderReceipt} replaces a line with a copy
+ * ({@link #withRefundState}) to move it through its {@link LineRefundState}.
  */
 @Embeddable
 public class ReceiptLine implements InvariantChecked {
@@ -34,6 +40,12 @@ public class ReceiptLine implements InvariantChecked {
     @Column(name = "seat_number")
     private String seatNumber;
 
+    // Nullable on purpose: ddl-auto "update" cannot add a NOT NULL column to a receipt_lines table that
+    // already has rows, and there are no versioned migrations yet (#31). A null reads as NONE.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "refund_state")
+    private LineRefundState refundState;
+
     /** For JPA only — do not call from application code. */
     protected ReceiptLine() { }
 
@@ -44,7 +56,18 @@ public class ReceiptLine implements InvariantChecked {
         this.zoneId = zoneId;
         this.seatNumber = seatNumber;
         this.addedAt = addedAt;
+        this.refundState = LineRefundState.NONE;
         checkInvariants();
+    }
+
+    /**
+     * Returns a copy of this line in {@code state}. Package-private: only the owning
+     * {@link OrderReceipt} moves a line through a refund, so the receipt can keep its invariants.
+     */
+    ReceiptLine withRefundState(LineRefundState state) {
+        ReceiptLine copy = new ReceiptLine(ticketId, price, eventid, zoneId, seatNumber, addedAt);
+        copy.refundState = Objects.requireNonNull(state, "refund state must not be null");
+        return copy;
     }
 
     public boolean isExpired() {
@@ -70,6 +93,16 @@ public class ReceiptLine implements InvariantChecked {
 
     public String getSeatNumber() {
         return seatNumber;
+    }
+
+    /** Where this line stands in a refund; never {@code null}. */
+    public LineRefundState getRefundState() {
+        return refundState == null ? LineRefundState.NONE : refundState;
+    }
+
+    /** {@code true} once this line's refund has been recorded. */
+    public boolean isRefunded() {
+        return getRefundState() == LineRefundState.REFUNDED;
     }
 
     @Override

@@ -810,8 +810,10 @@ public class EventManagementService {
     // publishes an EventCancelledEvent. The sales context's EventCancellationRefundListener consumes
     // that event and performs the refund / ticket-void / holder-notification flow, so catalog touches
     // no sales type.
-    // Intentionally NOT @Transactional at this layer: the sales listener fires synchronously within
-    // publishEvent and owns its own refund transaction boundary (externals outside the tx) per V3-TX-02.
+    // Intentionally NOT @Transactional at this layer: the CANCELED state must commit even when a refund
+    // fails, and the sales side refunds each receipt in its own short transactions with the gateway
+    // call outside them (V3-TX-02, ADR-001). Calling this again on a CANCELED event republishes the
+    // event, which resumes the refunds a failure interrupted (#20).
     public void cancelEventAndRefund(String token, int eventId) {
         int ownerId = validateTokenAndGetUserId(token);                        // authenticate + resolve caller
         // We lock the event for update to prevent concurrent modifications during the
@@ -823,17 +825,16 @@ public class EventManagementService {
             User user = userRepository.getUserById(ownerId);                   // load caller for permission check
             companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
 
-            if (event.getStatus() == EventStatus.CANCELED) {                   // idempotent: already cancelled
-                return;
+            if (event.getStatus() != EventStatus.CANCELED) {
+                // Soft cancel: keep the event for history/reporting while blocking future purchases.
+                event.transitionToCanceled("Event canceled by owner");
+                eventRepository.save(event);                                   // persist the CANCELED state
             }
 
-            // Soft cancel: keep the event for history/reporting while blocking future purchases.
-            event.transitionToCanceled("Event canceled by owner");
-            eventRepository.save(event);                                       // persist the CANCELED state
-
             // Hand the sales-side work (refunds, ticket voiding, holder notifications) to the sales
-            // context via a domain event. The synchronous listener runs inline, so a RefundFailedException
-            // it raises still surfaces here and aborts the flow exactly as the former inline loop did.
+            // context via a domain event, on every call: for an already-cancelled event this resumes
+            // the refunds still pending. The synchronous listener runs inline, so a
+            // RefundFailedException it raises surfaces here and the caller can retry.
             eventPublisher.publishEvent(new EventCancelledEvent(eventId, event.getName()));
 
             log.info("Event {} canceled and cancellation event published", eventId);
