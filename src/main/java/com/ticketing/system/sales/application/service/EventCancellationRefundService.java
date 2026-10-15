@@ -22,6 +22,7 @@ import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,9 +38,11 @@ import lombok.extern.slf4j.Slf4j;
  *   <li><b>record</b>: in a second short transaction the lines become REFUNDED, the refund is added to
  *       the receipt, and that receipt's tickets for the event are flipped.</li>
  * </ol>
- * A gateway failure releases the claim and stops the run, so calling this again resumes with the
- * receipts that are still unrefunded. If a claim cannot be released, or a gateway refund cannot be
- * recorded, the lines stay PENDING and are never refunded twice; that receipt needs manual recovery.
+ * A gateway that declines, or that the request never reached, moved no money: the claim is released
+ * and the run stops, so calling this again resumes with the receipts that are still unrefunded. When
+ * the gateway may have refunded without a usable answer, when a claim cannot be released, or when a
+ * gateway refund cannot be recorded, the lines stay PENDING and are never refunded twice; that receipt
+ * needs manual recovery.
  */
 @Service
 @Slf4j
@@ -78,9 +81,12 @@ public class EventCancellationRefundService {
      *
      * @param eventId   the cancelled event
      * @param eventName its display name, for the holder notices
-     * @throws RefundFailedException if a gateway refund fails or a receipt has no payment charge. The
-     *                               receipts refunded before it stay refunded; calling this again
-     *                               resumes with the rest.
+     * @throws RefundOutcomeUnknownException if the gateway may have refunded a receipt without a usable
+     *                                       answer; that receipt stays PENDING for manual recovery
+     * @throws RefundFailedException         if a gateway refund was declined or never reached the
+     *                                       gateway, or a receipt has no payment charge. The receipts
+     *                                       refunded before it stay refunded; calling this again
+     *                                       resumes with the rest.
      */
     public void refundCancelledEvent(int eventId, String eventName) {
         Set<Integer> notifiedHolders = new HashSet<>();
@@ -100,9 +106,14 @@ public class EventCancellationRefundService {
         TransactionRecord refundRecord;
         try {
             refundRecord = claim.amount() > 0 ? refundAtGateway(receiptId, claim) : null;
-        } catch (RuntimeException gatewayFailure) {
-            releaseClaim(receiptId, eventId, gatewayFailure);
-            throw gatewayFailure;
+        } catch (RefundOutcomeUnknownException unknown) {
+            log.error("Receipt {} may have been refunded at the gateway for cancelled event {}, but no usable"
+                    + " answer came back; its lines stay PENDING and need manual recovery (ADR-001)",
+                    receiptId, eventId, unknown);
+            throw unknown;
+        } catch (RefundFailedException noMoneyMoved) {
+            releaseClaim(receiptId, eventId, noMoneyMoved);
+            throw noMoneyMoved;
         }
 
         Integer holderUserId;
@@ -144,18 +155,35 @@ public class EventCancellationRefundService {
         return new Claim(amount, receipt.getPaymentTransactionId().orElse(0), receipt.getPaymentCurrency());
     }
 
+    /**
+     * Refunds the claim at the gateway. A {@link RefundFailedException} other than
+     * {@link RefundOutcomeUnknownException} means no money moved; anything that goes wrong once the
+     * request may have been sent is reported as {@link RefundOutcomeUnknownException}.
+     */
     private TransactionRecord refundAtGateway(int receiptId, Claim claim) {
-        RefundResultDTO result = paymentGateway.refund(claim.paymentTransactionId(), claim.amount());
-        RefundResultValidator.validate(receiptId, claim.amount(), result);
-        return TransactionRecord.refund(
-                result.refundTransactionId(),
-                paymentGateway.getId(),
-                result.totalRefunded(),
-                claim.currency(),
-                result.refundedAt());
+        RefundResultDTO result;
+        try {
+            result = paymentGateway.refund(claim.paymentTransactionId(), claim.amount());
+        } catch (RefundFailedException gatewayAnswer) {
+            throw gatewayAnswer;
+        } catch (RuntimeException unexpected) {
+            throw new RefundOutcomeUnknownException(receiptId, "unexpected error from the payment gateway", unexpected);
+        }
+        // The gateway answered, so the money may have moved: a rejected answer must not free the claim.
+        try {
+            RefundResultValidator.validate(receiptId, claim.amount(), result);
+            return TransactionRecord.refund(
+                    result.refundTransactionId(),
+                    paymentGateway.getId(),
+                    result.totalRefunded(),
+                    claim.currency(),
+                    result.refundedAt());
+        } catch (RuntimeException rejected) {
+            throw new RefundOutcomeUnknownException(receiptId, "the gateway's refund answer was rejected", rejected);
+        }
     }
 
-    private void releaseClaim(int receiptId, int eventId, RuntimeException gatewayFailure) {
+    private void releaseClaim(int receiptId, int eventId, RefundFailedException gatewayFailure) {
         try {
             inReceiptTransaction(receiptId, receipt -> {
                 receipt.releaseRefundClaim(eventId);

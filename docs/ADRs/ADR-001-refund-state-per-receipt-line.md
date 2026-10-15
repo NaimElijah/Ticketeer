@@ -43,11 +43,16 @@ moves a line between states:
 3. **Record.** A second short transaction moves the lines to `REFUNDED`, adds the `REFUND` record,
    and flips that receipt's tickets for the event. All of this commits together.
 
-**If the gateway refuses a refund:**
+**What happens to the claim depends on what the gateway's failure says about the money:**
 
-- The claim is released (`PENDING` back to `NONE`) and the run stops.
-- The receipts refunded so far stay refunded.
-- The event stays CANCELED.
+| Outcome | Raised as | Claim |
+|---|---|---|
+| The gateway declined | `RefundFailedException` | Released (`PENDING` back to `NONE`). |
+| The request never reached the gateway (connection refused, connect timeout) | `RefundGatewayUnreachableException` | Released. |
+| The gateway may have refunded without a usable answer (read timeout, malformed or mismatched result, unexpected error) | `RefundOutcomeUnknownException` | Kept `PENDING`, logged at ERROR. |
+
+In every case the run stops. The receipts refunded so far stay refunded, and the event stays
+CANCELED.
 
 **Cancelling a CANCELED event republishes `EventCancelledEvent`,** which resumes with the receipts
 that are still unrefunded. Catalog keeps no knowledge of sales; the existing event direction stays.
@@ -63,8 +68,9 @@ cannot add a NOT NULL column to populated tables, and versioned migrations do no
 
 **What this makes easy:**
 
-- **Exactly once.** Each line is refunded at most once, across retries and concurrent runs. This is
-  proved on JPA by `EventCancellationRefundConcurrencyTest`.
+- **At most once.** Each line is refunded at most once, across retries and concurrent runs. This is
+  proved on JPA by `EventCancellationRefundConcurrencyTest`. A line whose refund was declined or never
+  sent is refunded by a later run; a line whose outcome is unknown is never retried automatically.
 - **Resumable.** A gateway outage partway through an event no longer strands buyers: the owner
   cancels again and the run continues where it stopped.
 - **Correct per-event refunds.** A multi-event order refunds only the cancelled event's lines.
@@ -73,10 +79,13 @@ cannot add a NOT NULL column to populated tables, and versioned migrations do no
 
 **What this makes hard, and what is accepted:**
 
-- **A receipt can stay `PENDING` and need manual recovery.** This happens if the process dies or the
-  database fails between the claim and the record. It also happens if a refused claim cannot be
-  released. Without gateway idempotency a retry could refund the same money twice, so a stale claim
-  is never retried automatically. The service logs these cases at ERROR.
+- **A receipt can stay `PENDING` and need manual recovery.** This happens if the gateway's outcome is
+  unknown, if the process dies or the database fails between the claim and the record, or if a
+  refused claim cannot be released. Without gateway idempotency a retry could refund the same money
+  twice, so a stale claim is never retried automatically. The service logs these cases at ERROR
+  when it is still running to see them.
+- **A WSEP timeout counts as unknown.** WSEP's HTTP client reports every transport failure the same
+  way; only a connect failure proves the request was never sent, so only that is released.
 - **The run stops at the first failure** instead of carrying on with the remaining receipts. A
   failing gateway usually fails for everyone, and the retry resumes cleanly.
 - **There is no automatic retry.** The owner re-invokes cancel from the event management screen.

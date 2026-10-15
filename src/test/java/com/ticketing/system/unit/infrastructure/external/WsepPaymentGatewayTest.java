@@ -9,6 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.net.ConnectException;
+import java.net.http.HttpTimeoutException;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,8 @@ import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.shared.external.WsepCommunicationException;
 import com.ticketing.system.shared.external.WsepHttpClient;
 import com.ticketing.system.sales.adapter.out.wsep.WsepPaymentGateway;
@@ -119,6 +123,22 @@ class WsepPaymentGatewayTest {
 
         when(http.post(any())).thenReturn("-1");
         assertThrows(RefundFailedException.class, () -> gateway.refund(54321, 100.0));
+    }
+
+    // ADR-001: a refund that never reached WSEP moved no money, so its claim may be released ...
+    @Test
+    void GivenConnectionRefused_WhenRefund_ThenGatewayUnreachable() {
+        when(http.post(any())).thenThrow(new WsepCommunicationException("refused", new ConnectException("refused")));
+
+        assertThrows(RefundGatewayUnreachableException.class, () -> gateway.refund(54321, 100.0));
+    }
+
+    // ... but a timeout may come after WSEP reversed the charge, so the outcome is unknown.
+    @Test
+    void GivenRequestTimesOut_WhenRefund_ThenOutcomeUnknown() {
+        when(http.post(any())).thenThrow(new WsepCommunicationException("timeout", new HttpTimeoutException("timed out")));
+
+        assertThrows(RefundOutcomeUnknownException.class, () -> gateway.refund(54321, 100.0));
     }
 
     @Test

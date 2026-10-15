@@ -35,6 +35,8 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.testutil.TestTransactions;
 
 /**
@@ -112,6 +114,10 @@ class EventCancellationRefundServiceTest {
 
     private static boolean allLinesRefunded(OrderReceipt receipt) {
         return receipt.getReceiptLines().stream().allMatch(ReceiptLine::isRefunded);
+    }
+
+    private static boolean allLinesPending(OrderReceipt receipt) {
+        return receipt.getReceiptLines().stream().allMatch(l -> l.getRefundState() == LineRefundState.PENDING);
     }
 
     private static boolean noLineTouched(OrderReceipt receipt) {
@@ -227,14 +233,58 @@ class EventCancellationRefundServiceTest {
         verify(paymentGateway, never()).refund(anyInt(), anyDouble());
     }
 
+    // ADR-001: once the gateway has answered, the money may have moved, so a rejected answer keeps the
+    // claim and a retry never asks the gateway again (review finding 1 on #129).
     @Test
-    void GivenGatewayRefundsTheWrongAmount_WhenRefundCancelledEvent_ThenRefundFailsAndTheClaimIsReleased() {
+    void GivenGatewayRefundsTheWrongAmount_WhenRefundedAgain_ThenTheClaimStaysPendingAndTheGatewayIsNotCalledAgain() {
         OrderReceipt receipt = paidReceipt(1, 7, 50.0);
         when(paymentGateway.refund(anyInt(), anyDouble())).thenReturn(refunded(chargeOf(1), 49.0));
 
-        assertThrows(RefundFailedException.class, this::refundCancelledEvent);
+        assertThrows(RefundOutcomeUnknownException.class, this::refundCancelledEvent);
+        assertTrue(allLinesPending(receipt));
 
-        assertTrue(noLineTouched(receipt));
+        refundCancelledEvent();
+
+        verify(paymentGateway, times(1)).refund(anyInt(), anyDouble());
+        assertTrue(allLinesPending(receipt));
+    }
+
+    @Test
+    void GivenGatewayOutcomeUnknown_WhenRefundCancelledEvent_ThenTheClaimStaysPendingAndTheRunStops() {
+        OrderReceipt first = paidReceipt(1, 7, 50.0);
+        OrderReceipt second = paidReceipt(2, 8, 50.0);
+        when(paymentGateway.refund(eq(chargeOf(1)), anyDouble()))
+                .thenThrow(new RefundOutcomeUnknownException(chargeOf(1), "timed out", new RuntimeException()));
+
+        assertThrows(RefundOutcomeUnknownException.class, this::refundCancelledEvent);
+
+        assertTrue(allLinesPending(first));
+        assertTrue(noLineTouched(second));
+        verify(paymentGateway, never()).refund(eq(chargeOf(2)), anyDouble());
+    }
+
+    @Test
+    void GivenUnexpectedGatewayError_WhenRefundCancelledEvent_ThenTheOutcomeIsUnknownAndTheClaimStaysPending() {
+        OrderReceipt receipt = paidReceipt(1, 7, 50.0);
+        when(paymentGateway.refund(anyInt(), anyDouble())).thenThrow(new IllegalStateException("adapter bug"));
+
+        assertThrows(RefundOutcomeUnknownException.class, this::refundCancelledEvent);
+
+        assertTrue(allLinesPending(receipt));
+    }
+
+    @Test
+    void GivenGatewayUnreachable_WhenRefundCancelledEvent_ThenTheClaimIsReleasedAndTheRunStops() {
+        OrderReceipt first = paidReceipt(1, 7, 50.0);
+        OrderReceipt second = paidReceipt(2, 8, 50.0);
+        when(paymentGateway.refund(eq(chargeOf(1)), anyDouble()))
+                .thenThrow(new RefundGatewayUnreachableException(chargeOf(1), "refused", new RuntimeException()));
+
+        assertThrows(RefundGatewayUnreachableException.class, this::refundCancelledEvent);
+
+        assertTrue(noLineTouched(first), "nothing reached the gateway, so the claim is released for a retry");
+        assertTrue(noLineTouched(second));
+        verify(paymentGateway, never()).refund(eq(chargeOf(2)), anyDouble());
     }
 
     // ---- tickets --------------------------------------------------------

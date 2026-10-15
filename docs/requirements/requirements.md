@@ -244,9 +244,11 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   (`SessionAndOrderSweeper`).
 - Checkout is all or nothing. Any failure releases the tickets and refunds a charge that went
   through (`CheckoutService`).
-- Cancelling an event refunds each of its receipt lines exactly once. If the payment service fails
-  partway, the event stays cancelled and the lines refunded so far stay refunded; cancelling it
-  again refunds the rest ([ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md);
+- Cancelling an event refunds each of its receipt lines at most once. If the payment service
+  declines a refund or cannot be reached, the event stays cancelled and the lines refunded so far
+  stay refunded; cancelling it again refunds the rest. A refund the payment service may have carried
+  out without a usable answer is never retried automatically; it stays pending for manual recovery
+  ([ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md);
   `EventCancellationRefundService` · `EventCancellationRefundServiceTest`,
   `EventCancellationRefundConcurrencyTest`, `EventCancellationAcceptanceTest`).
 - A member's whole-order refund is refused once any line of the order has been refunded or is
