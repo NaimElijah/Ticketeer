@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.account;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.ui.components.Toasts;
@@ -132,9 +133,11 @@ public class MyAccountView extends LkPage {
         row.put("evt", orderEventLabel(r));
         row.put("date", r.purchasedAt() == null ? "—" : r.purchasedAt().format(DATE_FMT));
         row.put("total", money(r.totalPaid()));
-        boolean refunded = r.refunded();
-        row.put("status", new LkStatusDot(refunded ? LkStatusDot.Tone.muted : LkStatusDot.Tone.ok,
-                refunded ? "Refunded" : "Paid"));
+        row.put("status", switch (r.refundStatus()) {
+            case NONE    -> new LkStatusDot(LkStatusDot.Tone.ok, "Paid");
+            case PARTIAL -> new LkStatusDot(LkStatusDot.Tone.warn, "Partly refunded");
+            case FULL    -> new LkStatusDot(LkStatusDot.Tone.muted, "Refunded");
+        });
 
         NativeButton view = new NativeButton("View");
         view.addClassName("bz-link");
@@ -157,8 +160,9 @@ public class MyAccountView extends LkPage {
     }
 
     private static boolean refundEligible(PurchaseRecordDTO r) {
-        if (r.refunded() || r.buyerUserId() == null) {
-            return false;   // already refunded, or a guest order (member-only flow)
+        // A member refund covers the whole order, so any refunded line (e.g. a cancelled event) rules it out.
+        if (r.refundStatus() != RefundStatus.NONE || r.buyerUserId() == null) {
+            return false;   // already refunded in part or in full, or a guest order (member-only flow)
         }
         return r.tickets().stream().anyMatch(t ->
             t.currentStatus() == TicketStatus.PAID || t.currentStatus() == TicketStatus.ISSUED);

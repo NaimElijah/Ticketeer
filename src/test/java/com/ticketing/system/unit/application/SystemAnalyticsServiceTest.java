@@ -30,6 +30,8 @@ import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TransactionRecord;
 
 /**
  * Unit tests for {@link SystemAnalyticsService} (UC-46 / #43, #279). The metrics
@@ -148,6 +150,22 @@ class SystemAnalyticsServiceTest {
         assertEquals(150.0, dto.revenue30d(), 1e-9);
     }
 
+    // #21: an event cancellation refunds only that event's lines, so the rest of the order is revenue.
+    @Test
+    void GivenPartlyRefundedOrder_WhenAdminOverview_ThenItsRemainingLinesCount() {
+        LocalDateTime boughtAt = LocalDateTime.now();
+        OrderReceipt order = OrderReceipt.forMember(1, 7, 150.0,
+                List.of(new ReceiptLine(10, 100.0, 1, 1, null, boughtAt), new ReceiptLine(11, 50.0, 2, 1, null, boughtAt)),
+                List.of(TransactionRecord.paymentCharge(4201, "test-gateway", 150.0, "ILS", boughtAt)));
+        order.claimRefundForEvent(1);
+        order.completeEventRefund(1, TransactionRecord.refund("refund-1", "test-gateway", 100.0, "ILS", boughtAt));
+        when(orderReceiptRepository.findGlobal(any())).thenReturn(List.of(order));
+
+        AdminOverviewDTO dto = service.adminOverview();
+
+        assertEquals(50.0, dto.revenue30d(), 1e-9);
+    }
+
     private static Conversation conversation(boolean closed) {
         Conversation conversation = mock(Conversation.class);
         when(conversation.isClosed()).thenReturn(closed);
@@ -157,8 +175,7 @@ class SystemAnalyticsServiceTest {
     private static OrderReceipt receipt(LocalDateTime purchaseTime, boolean refunded, double total) {
         OrderReceipt receipt = mock(OrderReceipt.class);
         when(receipt.getPurchaseTime()).thenReturn(purchaseTime);
-        when(receipt.wasRefunded()).thenReturn(refunded);
-        when(receipt.getTotalAmount()).thenReturn(total);
+        when(receipt.netAmount()).thenReturn(refunded ? 0.0 : total);
         return receipt;
     }
 }

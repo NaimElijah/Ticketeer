@@ -190,20 +190,28 @@ public class CompanySalesView extends LkPage {
     }
 
     /**
-     * Total amount for an order. A refunded order is shown struck-through with a "Refunded" tag so
-     * it's clear it does not contribute to the headline revenue (see {@link SalesSummary}).
+     * Total amount for an order. A fully refunded order is shown struck-through with a "Refunded" tag
+     * so it's clear it does not contribute to the headline revenue (see {@link SalesSummary}); a partly
+     * refunded one keeps its amount with a "Partly refunded" tag, since its other lines still count.
      */
     private static Component totalCell(PurchaseHistoryDTO.PurchaseRecordDTO r) {
         String amount = Money.format(Money.toCents(r.totalPaid()));
         Span amountSpan = new Span();
         LkRow cell = new LkRow().gap(8).noWrap().justify("flex-end");
-        if (r.refunded()) {
-            amountSpan.getElement().setProperty("innerHTML",
-                    "<span style=\"text-decoration:line-through;color:var(--muted);\">" + amount + "</span>");
-            cell.add(amountSpan, new LkBadge("Refunded", LkBadge.Tone.error).small());
-        } else {
-            amountSpan.getElement().setProperty("innerHTML", "<b>" + amount + "</b>");
-            cell.add(amountSpan);
+        switch (r.refundStatus()) {
+            case FULL -> {
+                amountSpan.getElement().setProperty("innerHTML",
+                        "<span style=\"text-decoration:line-through;color:var(--muted);\">" + amount + "</span>");
+                cell.add(amountSpan, new LkBadge("Refunded", LkBadge.Tone.error).small());
+            }
+            case PARTIAL -> {
+                amountSpan.getElement().setProperty("innerHTML", "<b>" + amount + "</b>");
+                cell.add(amountSpan, new LkBadge("Partly refunded", LkBadge.Tone.warn).small());
+            }
+            case NONE -> {
+                amountSpan.getElement().setProperty("innerHTML", "<b>" + amount + "</b>");
+                cell.add(amountSpan);
+            }
         }
         return cell;
     }

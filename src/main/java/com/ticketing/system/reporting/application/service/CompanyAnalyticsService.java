@@ -120,15 +120,13 @@ public class CompanyAnalyticsService {
             Set<Integer> companyEventIds = new HashSet<>(eventIds);
             LocalDateTime cutoff = LocalDateTime.now().minusDays(WINDOW_DAYS);
             for (OrderReceipt receipt : orderReceiptRepository.findByEventIds(eventIds)) {
-                if (receipt.wasRefunded()
-                        || receipt.getPurchaseTime() == null
-                        || receipt.getPurchaseTime().isBefore(cutoff)) {
+                if (receipt.getPurchaseTime() == null || receipt.getPurchaseTime().isBefore(cutoff)) {
                     continue;
                 }
-                // Count only the lines that belong to this company's events — a receipt may
-                // span multiple companies' events.
+                // Count only this company's lines that are not refunded: a receipt may span several
+                // companies' events, and a cancellation refunds only its own event's lines (#21).
                 for (ReceiptLine line : receipt.getReceiptLines()) {
-                    if (companyEventIds.contains(line.getEventId())) {
+                    if (companyEventIds.contains(line.getEventId()) && !line.isRefunded()) {
                         ticketsSold++;
                         revenue += line.getPriceAtReservation();
                     }

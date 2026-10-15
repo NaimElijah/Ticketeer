@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
@@ -46,6 +47,10 @@ public class GlobalHistoryView extends LkPage {
     private LkFilterChip companyChip;
     private LkFilterChip eventChip;
     private LkFilterChip statusChip;
+
+    private static final String STATUS_PAID = "Paid";
+    private static final String STATUS_PARTLY_REFUNDED = "Partly refunded";
+    private static final String STATUS_REFUNDED = "Refunded";
     private Div statsSlot;
     private Div gridSlot;
 
@@ -71,7 +76,7 @@ public class GlobalHistoryView extends LkPage {
                 true, List.of(DATE_ALL)).onApply(this::render);
         companyChip = new LkFilterChip("Company", distinct(this::companyOf), false, List.of()).onApply(this::render);
         eventChip = new LkFilterChip("Event", distinct(this::eventOf), false, List.of()).onApply(this::render);
-        statusChip = new LkFilterChip("Status", List.of("Paid", "Refunded"), false, List.of()).onApply(this::render);
+        statusChip = new LkFilterChip("Status", List.of(STATUS_PAID, STATUS_PARTLY_REFUNDED, STATUS_REFUNDED), false, List.of()).onApply(this::render);
         row.add(dateChip, companyChip, eventChip, statusChip);
         return row;
     }
@@ -112,16 +117,17 @@ public class GlobalHistoryView extends LkPage {
 
     private boolean matchesStatus(PurchaseRecordDTO r) {
         Set<String> sel = statusChip.getSelected();
-        return sel.isEmpty() || sel.contains(r.refunded() ? "Refunded" : "Paid");
+        return sel.isEmpty() || sel.contains(statusLabel(r.refundStatus()));
     }
 
     // ---- stats + grid ----
 
     private Component buildStats(List<PurchaseRecordDTO> rs) {
-        double revenue = rs.stream().filter(r -> !r.refunded()).mapToDouble(PurchaseRecordDTO::totalPaid).sum();
+        SalesSummary summary = SalesSummary.of(rs);
+        double revenue = summary.revenue();
         long orders = rs.size();
-        long refunds = rs.stream().filter(PurchaseRecordDTO::refunded).count();
-        long tickets = rs.stream().mapToLong(r -> r.tickets().size()).sum();
+        long refunds = summary.refundedOrders();
+        long tickets = summary.ticketsSold();
 
         Div stats = new Div();
         stats.addClassName("ow-stats");
@@ -169,7 +175,7 @@ public class GlobalHistoryView extends LkPage {
         Span t = new Span();
         t.getElement().setProperty("innerHTML", "<b>" + money(r.totalPaid()) + "</b>");
         row.put("total", t);
-        row.put("status", statusBadge(r.refunded() ? "Refunded" : "Paid"));
+        row.put("status", statusBadge(statusLabel(r.refundStatus())));
         grid.row(row);
     }
 
@@ -210,11 +216,20 @@ public class GlobalHistoryView extends LkPage {
         return (value == null || value.isBlank()) ? fallback : value;
     }
 
+    private static String statusLabel(RefundStatus status) {
+        return switch (status) {
+            case NONE    -> STATUS_PAID;
+            case PARTIAL -> STATUS_PARTLY_REFUNDED;
+            case FULL    -> STATUS_REFUNDED;
+        };
+    }
+
     private LkBadge statusBadge(String status) {
         LkBadge.Tone tone = switch (status) {
-            case "Paid"     -> LkBadge.Tone.success;
-            case "Refunded" -> LkBadge.Tone.warn;
-            default          -> LkBadge.Tone.muted;
+            case STATUS_PAID            -> LkBadge.Tone.success;
+            case STATUS_PARTLY_REFUNDED -> LkBadge.Tone.primary;
+            case STATUS_REFUNDED        -> LkBadge.Tone.warn;
+            default                     -> LkBadge.Tone.muted;
         };
         return new LkBadge(status, tone).small();
     }

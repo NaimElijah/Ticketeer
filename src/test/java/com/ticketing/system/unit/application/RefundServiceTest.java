@@ -97,7 +97,7 @@ class RefundServiceTest {
         RefundResultDTO returned = service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
 
         assertThat(returned).isSameAs(result);
-        assertThat(receipt.wasRefunded()).isTrue();
+        assertThat(receipt.isFullyRefunded()).isTrue();
         Mockito.verify(paymentGateway).refund(PAYMENT_TX, TOTAL);
         Mockito.verify(ticket).markRefunded();
         Mockito.verify(ticketRepository).save(ticket);
@@ -157,7 +157,7 @@ class RefundServiceTest {
         RefundResultDTO returned = service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
 
         assertThat(returned).isSameAs(result);
-        assertThat(receipt.wasRefunded()).isTrue();
+        assertThat(receipt.isFullyRefunded()).isTrue();
         Mockito.verify(ticket).markRefunded();
         // The port was invoked (and its failure swallowed) after the refund committed.
         Mockito.verify(inventoryPort).returnSoldToStock(Mockito.anyList());
@@ -238,7 +238,7 @@ class RefundServiceTest {
         assertThatThrownBy(() -> service.requestRefund(VALID_TOKEN, ORDER_ID, "x"))
                 .isInstanceOf(RefundFailedException.class);
 
-        assertThat(receipt.wasRefunded()).isFalse();
+        assertThat(receipt.isFullyRefunded()).isFalse();
         Mockito.verify(orderReceiptRepository, Mockito.never()).save(Mockito.any());
     }
 
@@ -298,6 +298,6 @@ class RefundServiceTest {
         assertThat(refundCalls.get()).isEqualTo(1);
         assertThat(succeeded.get()).isEqualTo(1);
         assertThat(alreadyRefunded.get()).isEqualTo(1);
-        assertThat(receipt.wasRefunded()).isTrue();
+        assertThat(receipt.isFullyRefunded()).isTrue();
     }
 }

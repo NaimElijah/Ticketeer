@@ -5,33 +5,40 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 
 /**
- * Refund-aware headline figures for the Company Sales History page, derived from the order
- * records the grid shows. Refunded orders are excluded from every figure (they remain listed and
- * tagged in the grid). Pure (no Vaadin) so it is unit-testable.
+ * Refund-aware headline figures for a list of order records, as the sales and global-history grids
+ * show them. Only lines that are not refunded count as sold (#21): when one event of a multi-event
+ * or shared order is cancelled, the order's other lines still count. Refunded orders stay listed and
+ * tagged in the grid. Pure (no Vaadin) so it is unit-testable.
  *
- * <p><b>Known limitation (see issue #457):</b> {@code refunded()} reflects the order-level
- * {@code OrderReceipt.isRefunded} flag, which an event cancellation flips for the whole receipt even
- * when only that one event's lines were refunded. So an order mixing multiple events or companies that
- * then has one event cancelled is excluded in full — understating revenue for its still-valid tickets.
- * Single-event orders and full-order member refunds are unaffected; a proper fix needs per-line refund
- * granularity rather than this whole-order boolean.
+ * @param revenue        the prices of the lines not refunded
+ * @param ticketsSold    how many lines are not refunded
+ * @param avgOrderValue  revenue per order that still has a line not refunded
+ * @param topEvent       the event with the highest revenue, or {@link #NO_TOP_EVENT}
+ * @param refundedOrders how many orders have at least one refunded line
  */
-public record SalesSummary(double revenue, int ticketsSold, double avgOrderValue, String topEvent) {
+public record SalesSummary(double revenue, int ticketsSold, double avgOrderValue, String topEvent,
+        long refundedOrders) {
 
     public static final String NO_TOP_EVENT = "—";
 
     public static SalesSummary of(List<PurchaseRecordDTO> records) {
-        List<PurchaseRecordDTO> paid = records.stream().filter(r -> !r.refunded()).toList();
-
-        double revenue = paid.stream().mapToDouble(PurchaseRecordDTO::totalPaid).sum();
-        int ticketsSold = paid.stream().mapToInt(r -> r.tickets().size()).sum();
-        double avgOrderValue = paid.isEmpty() ? 0.0 : revenue / paid.size();
-
-        String topEvent = paid.stream()
+        List<TicketRecordDTO> sold = records.stream()
                 .flatMap(r -> r.tickets().stream())
+                .filter(t -> !t.refunded())
+                .toList();
+
+        double revenue = sold.stream().mapToDouble(TicketRecordDTO::pricePaid).sum();
+        long ordersWithSales = records.stream()
+                .filter(r -> r.tickets().stream().anyMatch(t -> !t.refunded()))
+                .count();
+        double avgOrderValue = ordersWithSales == 0 ? 0.0 : revenue / ordersWithSales;
+        long refundedOrders = records.stream().filter(r -> r.refundStatus() != RefundStatus.NONE).count();
+
+        String topEvent = sold.stream()
                 .filter(t -> t.eventName() != null)
                 .collect(Collectors.groupingBy(
                         TicketRecordDTO::eventName,
@@ -41,6 +48,6 @@ public record SalesSummary(double revenue, int ticketsSold, double avgOrderValue
                 .map(Map.Entry::getKey)
                 .orElse(NO_TOP_EVENT);
 
-        return new SalesSummary(revenue, ticketsSold, avgOrderValue, topEvent);
+        return new SalesSummary(revenue, sold.size(), avgOrderValue, topEvent, refundedOrders);
     }
 }

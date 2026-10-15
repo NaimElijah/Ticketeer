@@ -57,7 +57,7 @@ class OrderReceiptTest extends BaseDomainTest {
         ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
         OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item))));
         receipt.markRefunded();
-        assertTrue(receipt.wasRefunded());
+        assertTrue(receipt.isFullyRefunded());
     }
 
     // --- Refund state per receipt line (#20, ADR-001) ---
@@ -152,7 +152,29 @@ class OrderReceiptTest extends BaseDomainTest {
         assertEquals(List.of(LineRefundState.NONE), statesOf(receipt, OTHER_EVENT));
         assertTrue(receipt.getTransactionRecords().stream()
                 .anyMatch(t -> t.getType() == TransactionRecord.TransactionType.REFUND && t.getAmount() == 50.0));
-        assertTrue(receipt.wasRefunded());
+        assertFalse(receipt.isFullyRefunded(), "the other event's line is still paid (#21)");
+        assertEquals(50.0, receipt.netAmount());
+    }
+
+    @Test
+    void GivenEveryEventRefunded_WhenCompleteEventRefund_ThenTheOrderIsFullyRefundedAndEarnsNothing() {
+        OrderReceipt receipt = twoEventOrder();
+        receipt.claimRefundForEvent(CANCELLED_EVENT);
+        receipt.completeEventRefund(CANCELLED_EVENT, refundOf(50.0));
+        receipt.claimRefundForEvent(OTHER_EVENT);
+
+        receipt.completeEventRefund(OTHER_EVENT, refundOf(50.0));
+
+        assertTrue(receipt.isFullyRefunded());
+        assertEquals(0.0, receipt.netAmount());
+    }
+
+    @Test
+    void GivenClaimedButUnrecordedRefund_WhenNetAmount_ThenTheClaimedLinesStillCount() {
+        OrderReceipt receipt = twoEventOrder();
+        receipt.claimRefundForEvent(CANCELLED_EVENT);
+
+        assertEquals(100.0, receipt.netAmount());
     }
 
     @Test

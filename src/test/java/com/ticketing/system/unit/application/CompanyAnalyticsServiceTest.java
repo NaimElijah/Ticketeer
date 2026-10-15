@@ -35,6 +35,7 @@ import com.ticketing.system.messaging.application.port.out.ConversationRepositor
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
+import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -117,19 +118,24 @@ class CompanyAnalyticsServiceTest {
 
     private static OrderReceipt receipt(boolean refunded, LocalDateTime purchasedAt, List<ReceiptLine> lines) {
         OrderReceipt r = mock(OrderReceipt.class);
-        when(r.wasRefunded()).thenReturn(refunded);
         when(r.getPurchaseTime()).thenReturn(purchasedAt);
-        when(r.getReceiptLines()).thenReturn(lines);
+        when(r.getReceiptLines()).thenReturn(refunded ? refundedCopies(lines) : lines);
         return r;
+    }
+
+    /** The same lines, refunded: only a real receipt can move a line to REFUNDED. */
+    private static List<ReceiptLine> refundedCopies(List<ReceiptLine> lines) {
+        OrderReceipt refunded = OrderReceipt.forMember(999, BUYER_ID, 0.0, lines);
+        refunded.markRefunded();
+        return refunded.getReceiptLines();
     }
 
 
     private static OrderReceipt fullReceipt(boolean refunded, LocalDateTime purchasedAt,
                                          List<ReceiptLine> lines, int id) {
         OrderReceipt r = mock(OrderReceipt.class);
-        when(r.wasRefunded()).thenReturn(refunded);
         when(r.getPurchaseTime()).thenReturn(purchasedAt);
-        when(r.getReceiptLines()).thenReturn(lines);
+        when(r.getReceiptLines()).thenReturn(refunded ? refundedCopies(lines) : lines);
         when(r.getId()).thenReturn(id);
         when(r.getTransactionRecords()).thenReturn(List.of());
         when(r.getHolderUserId()).thenReturn(null); // guest order; mapper is null-safe
@@ -183,6 +189,63 @@ class CompanyAnalyticsServiceTest {
         assertEquals(3, stats.ticketsSold30d());           // 1 (mixed) + 2 (twoTickets)
         assertEquals(90.0, stats.revenue30d());            // 50 + 20 + 20
         assertEquals(1, stats.openInquiries());
+    }
+
+    // #21: an event cancellation refunds only that event's lines; the rest of the order is still sold.
+
+    /** A real member order bought now, with {@code refundedEventId}'s lines already refunded. */
+    private static OrderReceipt orderWithEventRefunded(int receiptId, List<ReceiptLine> lines, int refundedEventId) {
+        double total = lines.stream().mapToDouble(ReceiptLine::getPriceAtReservation).sum();
+        OrderReceipt receipt = OrderReceipt.forMember(receiptId, BUYER_ID, total, lines,
+                List.of(TransactionRecord.paymentCharge(4200 + receiptId, "test-gateway", total, "ILS", LocalDateTime.now())));
+        double refunded = receipt.claimRefundForEvent(refundedEventId).orElseThrow();
+        receipt.completeEventRefund(refundedEventId,
+                TransactionRecord.refund("refund-" + receiptId, "test-gateway", refunded, "ILS", LocalDateTime.now()));
+        return receipt;
+    }
+
+    @Test
+    void GivenSharedOrderWhereAnotherCompanysEventWasRefunded_WhenDashboard_ThenThisCompanysLinesStillCount() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt shared = orderWithEventRefunded(1,
+                List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)), OTHER_COMPANY_EVENT);
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(shared));
+
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
+
+        assertEquals(1, stats.ticketsSold30d());
+        assertEquals(100.0, stats.revenue30d());
+    }
+
+    @Test
+    void GivenOneOfTheCompanysTwoEventsRefunded_WhenDashboard_ThenTheOtherEventsLinesStillCount() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A, EVENT_B));
+        OrderReceipt multiEvent = orderWithEventRefunded(1,
+                List.of(line(1, 100.0, EVENT_A), line(2, 40.0, EVENT_B), line(3, 40.0, EVENT_B)), EVENT_A);
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A, EVENT_B))).thenReturn(List.of(multiEvent));
+
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
+
+        assertEquals(2, stats.ticketsSold30d());
+        assertEquals(80.0, stats.revenue30d());
+    }
+
+    @Test
+    void GivenSharedOrderWhereAnotherCompanysEventWasRefunded_WhenSalesHistory_ThenTheOrderIsNotShownAsRefunded() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt shared = orderWithEventRefunded(1,
+                List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)), OTHER_COMPANY_EVENT);
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(shared));
+        when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
+
+        PurchaseHistoryDTO.PurchaseRecordDTO record = service.salesHistory(OWNER_TOKEN, COMPANY_ID).records().get(0);
+
+        assertEquals(PurchaseHistoryDTO.RefundStatus.NONE, record.refundStatus());
+        assertEquals(1, record.tickets().size());
+        assertEquals(TicketStatus.PAID, record.tickets().get(0).currentStatus());
     }
 
     @Test
@@ -389,7 +452,7 @@ class CompanyAnalyticsServiceTest {
         PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
         assertEquals(1, result.records().size());
-        assertTrue(result.records().get(0).refunded());
+        assertEquals(PurchaseHistoryDTO.RefundStatus.FULL, result.records().get(0).refundStatus());
     }
 
     @Test

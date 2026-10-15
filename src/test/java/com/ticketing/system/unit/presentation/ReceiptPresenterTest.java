@@ -10,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.reporting.application.service.MemberAccountService;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
@@ -33,7 +34,7 @@ class ReceiptPresenterTest {
 
     private static PurchaseRecordDTO record() {
         return new PurchaseRecordDTO(RECEIPT_ID, 42, null,
-                java.time.LocalDateTime.of(2026, 6, 1, 12, 0), 150.00, false,
+                java.time.LocalDateTime.of(2026, 6, 1, 12, 0), 150.00, PurchaseHistoryDTO.RefundStatus.NONE,
                 List.of(), List.of(), "member42");
     }
 
