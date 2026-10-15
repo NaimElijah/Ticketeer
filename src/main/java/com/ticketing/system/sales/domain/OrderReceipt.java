@@ -28,7 +28,8 @@ import jakarta.persistence.Version;
 // invariants.
 // Refund state is tracked per line (LineRefundState, ADR-001) so a cancelled event's refund can be
 // claimed, retried and recorded without touching the order's other lines (#20). The order-level
-// is_refunded flag means "every line refunded" (#21).
+// is_refunded column mirrors "every line refunded" (#21): it is re-synced on every line change, and
+// readers derive the answer from the lines, so a stale stored value is never trusted.
 @Entity
 @Table(name = "receipts")
 public class OrderReceipt implements InvariantChecked {
@@ -212,9 +213,12 @@ public class OrderReceipt implements InvariantChecked {
         return List.copyOf(receiptLines);
     }
 
-    /** Whether every line of this order has been refunded. A partly refunded order is not. */
+    /**
+     * Whether every line of this order has been refunded; a partly refunded order is not. Derived from
+     * the lines rather than the stored flag: while #129 ran, a partial refund also set that flag.
+     */
     public boolean isFullyRefunded() {
-        return isRefunded;
+        return getReceiptLines().stream().allMatch(ReceiptLine::isRefunded);
     }
 
     /**
@@ -276,6 +280,7 @@ public class OrderReceipt implements InvariantChecked {
                 claimedAny = true;
             }
         }
+        syncRefundedFlag();
         checkInvariants();
         return claimedAny ? OptionalDouble.of(claimedAmount) : OptionalDouble.empty();
     }
@@ -294,6 +299,7 @@ public class OrderReceipt implements InvariantChecked {
      */
     public void releaseRefundClaim(int eventId) {
         moveClaimedLines(eventId, LineRefundState.NONE);
+        syncRefundedFlag();
         checkInvariants();
     }
 
@@ -310,7 +316,7 @@ public class OrderReceipt implements InvariantChecked {
             throw new IllegalArgumentException("expected a REFUND record, got " + refundRecord.getType());
         }
         moveClaimedLines(eventId, LineRefundState.REFUNDED);
-        this.isRefunded = everyLineRefunded();
+        syncRefundedFlag();
         addTransaction(refundRecord);
     }
 
@@ -321,12 +327,12 @@ public class OrderReceipt implements InvariantChecked {
      */
     public void completeUnchargedEventRefund(int eventId) {
         moveClaimedLines(eventId, LineRefundState.REFUNDED);
-        this.isRefunded = everyLineRefunded();
+        syncRefundedFlag();
         checkInvariants();
     }
 
-    private boolean everyLineRefunded() {
-        return receiptLines.stream().allMatch(ReceiptLine::isRefunded);
+    private void syncRefundedFlag() {
+        this.isRefunded = isFullyRefunded();
     }
 
     public List<TransactionRecord> getTransactionRecords() {
@@ -446,9 +452,9 @@ public class OrderReceipt implements InvariantChecked {
             line.checkInvariants();
         }
 
-        // Read through getReceiptLines() so a receipt refunded before line state existed (flag set, every
-        // line NONE) counts as fully refunded, as everywhere else.
-        if (isRefunded != getReceiptLines().stream().allMatch(ReceiptLine::isRefunded)) {
+        // isFullyRefunded() reads through getReceiptLines(), so a receipt refunded before line state
+        // existed (flag set, every line NONE) counts as fully refunded, as everywhere else.
+        if (isRefunded != isFullyRefunded()) {
             throw new IllegalStateException("OrderReceipt invariant violated: the order is marked refunded exactly when every line is refunded");
         }
 
