@@ -2,7 +2,13 @@ package com.ticketing.system.acceptance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -27,6 +34,7 @@ import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
@@ -45,11 +53,13 @@ import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
+import com.ticketing.system.shared.exception.RefundFailedException;
 
 /**
  * UC-19 / UC-4 end to end: an owner cancels an event that has sold tickets, and the buyer is refunded
  * through the payment service (I.3). Drives the real reserve → checkout → cancel path against live
- * services (test profile: in-memory repositories and the in-process payment and issuer stubs).
+ * services (test profile: in-memory repositories and the in-process payment and issuer stubs). The
+ * payment stub is wrapped in a spy so a test can make one refund fail and count the refunds per charge.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -67,6 +77,9 @@ class EventCancellationAcceptanceTest {
     @Autowired private SystemAdminService systemAdminService;
     @Autowired private OrderReceiptRepository orderReceiptRepository;
     @Autowired private TicketRepository ticketRepository;
+
+    @MockitoSpyBean
+    private PaymentGateway paymentGateway;
 
     private static final AtomicInteger SEQ = new AtomicInteger(0);
 
@@ -110,6 +123,32 @@ class EventCancellationAcceptanceTest {
         assertEquals(List.of(TICKET_PRICE * TICKETS_BOUGHT), refundAmounts(receipt));
     }
 
+    // #20 through catalog (review finding 6 on #129): the payment service declines one buyer's refund,
+    // so the first cancel fails; cancelling again refunds that buyer, and nobody is refunded twice.
+    @Test
+    void GivenTheGatewayDeclinesARefund_WhenOwnerCancelsAgain_ThenEveryBuyerIsRefundedExactlyOnce() {
+        AuthTokenDTO owner = registerAndLogin("cancelOwner");
+        Fixture event = newStandingEvent(owner);
+        CheckoutResultDTO declinedOrder = checkout(event);
+        CheckoutResultDTO otherOrder = checkout(event);
+        int declinedCharge = declinedOrder.paymentTransactionId();
+        doThrow(new RefundFailedException(declinedCharge, "declined"))
+                .doCallRealMethod()
+                .when(paymentGateway).refund(eq(declinedCharge), anyDouble());
+
+        assertThrows(RefundFailedException.class,
+                () -> eventManagementService.cancelEventAndRefund(owner.token(), event.eventId()));
+        eventManagementService.cancelEventAndRefund(owner.token(), event.eventId());
+
+        verify(paymentGateway, times(2)).refund(eq(declinedCharge), anyDouble());
+        verify(paymentGateway, times(1)).refund(eq(otherOrder.paymentTransactionId()), anyDouble());
+        for (CheckoutResultDTO order : List.of(declinedOrder, otherOrder)) {
+            OrderReceipt receipt = orderReceiptRepository.findByOrderReceiptId(order.orderReceiptId()).orElseThrow();
+            assertTrue(receipt.getReceiptLines().stream().allMatch(ReceiptLine::isRefunded));
+            assertEquals(List.of(TICKET_PRICE * TICKETS_BOUGHT), refundAmounts(receipt));
+        }
+    }
+
     // ---- helpers --------------------------------------------------------
 
     private record Fixture(int eventId, int zoneId) { }
@@ -123,12 +162,16 @@ class EventCancellationAcceptanceTest {
 
     /** A buyer reserves and checks out {@link #TICKETS_BOUGHT} standing tickets; returns the receipt id. */
     private int buyTickets(Fixture event) {
+        return checkout(event).orderReceiptId();
+    }
+
+    /** A new buyer reserves and checks out {@link #TICKETS_BOUGHT} standing tickets. */
+    private CheckoutResultDTO checkout(Fixture event) {
         AuthTokenDTO buyer = registerAndLogin("cancelBuyer");
         reservationService.reserveForMember(buyer.token(), event.eventId(), event.zoneId(),
                 InventorySelectionDTO.standing(TICKETS_BOUGHT));
-        CheckoutResultDTO result = checkoutService.checkoutMember(buyer.token(), "idem-cancel-" + SEQ.incrementAndGet(),
+        return checkoutService.checkoutMember(buyer.token(), "idem-cancel-" + SEQ.incrementAndGet(),
                 "ILS", new CardDetailsDTO("4111111111111111", "123", 12, 2030, "Demo Buyer"));
-        return result.orderReceiptId();
     }
 
     /** A company and a published single standing-zone event at {@link #TICKET_PRICE}. */
