@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 
 import com.ticketing.system.shared.InvariantChecked;
 
@@ -25,6 +26,10 @@ import jakarta.persistence.Version;
 // @ElementCollection of @Embeddable in its own side-table, loaded eagerly so a detached receipt is
 // fully usable. A protected no-arg ctor lets Hibernate hydrate; the factories still enforce the
 // invariants.
+// Refund state is tracked per line (LineRefundState, ADR-001) so a cancelled event's refund can be
+// claimed, retried and recorded without touching the order's other lines (#20). The order-level
+// is_refunded column mirrors "every line refunded" (#21): it is re-synced on every line change, and
+// readers derive the answer from the lines, so a stale stored value is never trusted.
 @Entity
 @Table(name = "receipts")
 public class OrderReceipt implements InvariantChecked {
@@ -202,16 +207,132 @@ public class OrderReceipt implements InvariantChecked {
     }
 
     public List<ReceiptLine> getReceiptLines() {
+        if (isRefundedWithoutLineState()) {
+            return receiptLines.stream().map(line -> line.withRefundState(LineRefundState.REFUNDED)).toList();
+        }
         return List.copyOf(receiptLines);
     }
 
-    public boolean wasRefunded() {
-        return isRefunded;
+    /**
+     * Whether every line of this order has been refunded; a partly refunded order is not. Derived from
+     * the lines rather than the stored flag: while #129 ran, a partial refund also set that flag.
+     */
+    public boolean isFullyRefunded() {
+        return getReceiptLines().stream().allMatch(ReceiptLine::isRefunded);
     }
 
+    /**
+     * What this order still brings in: the prices of its lines that are not refunded. A line whose
+     * refund is in flight (PENDING) still counts until the refund is recorded.
+     */
+    public double netAmount() {
+        return getReceiptLines().stream()
+                .filter(line -> !line.isRefunded())
+                .mapToDouble(ReceiptLine::getPriceAtReservation)
+                .sum();
+    }
+
+    /**
+     * Refunds the whole order without a transaction record: every line becomes REFUNDED.
+     *
+     * @throws IllegalStateException if a line is already refunded or claimed by a refund in flight
+     */
     public void markRefunded() {
-        this.isRefunded = true;
+        refundEveryLine();
         checkInvariants();
+    }
+
+    /**
+     * Whether any refund has been recorded on this order or is in flight for one of its lines. A
+     * whole-order refund is allowed only while this is {@code false}; otherwise it would charge back
+     * money that another refund has already returned or is returning (#20).
+     */
+    public boolean hasRefundedOrPendingLines() {
+        return isRefunded || receiptLines.stream().anyMatch(line -> line.getRefundState() != LineRefundState.NONE);
+    }
+
+    // A receipt refunded before refund state moved onto the lines (#20) records the refund only in the
+    // order-level flag, and every line reads NONE. Its lines count as refunded, so an upgraded database
+    // fails closed: at worst a refund is withheld, never paid twice.
+    private boolean isRefundedWithoutLineState() {
+        return isRefunded && receiptLines.stream().allMatch(line -> line.getRefundState() == LineRefundState.NONE);
+    }
+
+    /**
+     * Claims this order's unrefunded lines for {@code eventId} ahead of a gateway refund (#20,
+     * ADR-001). They move from NONE to PENDING, so a concurrent or repeated run finds nothing to claim
+     * and never refunds them twice. The caller must persist the claim before calling the gateway.
+     *
+     * @param eventId the cancelled event
+     * @return the amount paid for the claimed lines, or empty when no line for the event is unrefunded
+     */
+    public OptionalDouble claimRefundForEvent(int eventId) {
+        if (isRefundedWithoutLineState()) {
+            return OptionalDouble.empty();
+        }
+        double claimedAmount = 0.0;
+        boolean claimedAny = false;
+        for (int i = 0; i < receiptLines.size(); i++) {
+            ReceiptLine line = receiptLines.get(i);
+            if (line.getEventId() == eventId && line.getRefundState() == LineRefundState.NONE) {
+                receiptLines.set(i, line.withRefundState(LineRefundState.PENDING));
+                claimedAmount += line.getPriceAtReservation();
+                claimedAny = true;
+            }
+        }
+        syncRefundedFlag();
+        checkInvariants();
+        return claimedAny ? OptionalDouble.of(claimedAmount) : OptionalDouble.empty();
+    }
+
+    /** Whether a refund for {@code eventId} has been claimed on this order and not yet resolved. */
+    public boolean hasPendingRefundFor(int eventId) {
+        return receiptLines.stream()
+                .anyMatch(line -> line.getEventId() == eventId && line.getRefundState() == LineRefundState.PENDING);
+    }
+
+    /**
+     * Releases a claim whose gateway refund failed: the event's PENDING lines return to NONE, so a
+     * later run can claim them again.
+     *
+     * @throws IllegalStateException if this order holds no claim for the event
+     */
+    public void releaseRefundClaim(int eventId) {
+        moveClaimedLines(eventId, LineRefundState.NONE);
+        syncRefundedFlag();
+        checkInvariants();
+    }
+
+    /**
+     * Records the gateway refund for the event's claimed lines: they become REFUNDED and
+     * {@code refundRecord} is added to the order's transactions.
+     *
+     * @throws IllegalArgumentException if {@code refundRecord} is not a REFUND record
+     * @throws IllegalStateException    if this order holds no claim for the event
+     */
+    public void completeEventRefund(int eventId, TransactionRecord refundRecord) {
+        Objects.requireNonNull(refundRecord, "refund record must not be null");
+        if (refundRecord.getType() != TransactionRecord.TransactionType.REFUND) {
+            throw new IllegalArgumentException("expected a REFUND record, got " + refundRecord.getType());
+        }
+        moveClaimedLines(eventId, LineRefundState.REFUNDED);
+        syncRefundedFlag();
+        addTransaction(refundRecord);
+    }
+
+    /**
+     * Completes a claim whose lines cost nothing, so no money moved and there is no refund record.
+     *
+     * @throws IllegalStateException if this order holds no claim for the event
+     */
+    public void completeUnchargedEventRefund(int eventId) {
+        moveClaimedLines(eventId, LineRefundState.REFUNDED);
+        syncRefundedFlag();
+        checkInvariants();
+    }
+
+    private void syncRefundedFlag() {
+        this.isRefunded = isFullyRefunded();
     }
 
     public List<TransactionRecord> getTransactionRecords() {
@@ -241,11 +362,41 @@ public class OrderReceipt implements InvariantChecked {
                 .orElse("ILS");
     }
 
-    // For simplicity we assume there is at most one ticket issuance per receipt. In a real system we might want to enforce this or handle multiple issuances more robustly.
+    /**
+     * Refunds the whole order and records {@code refundRecord}: every line becomes REFUNDED.
+     *
+     * @throws IllegalStateException if a line is already refunded or claimed by a refund in flight
+     */
     public void markRefunded(TransactionRecord refundRecord) {
+        Objects.requireNonNull(refundRecord, "transaction record must not be null");
+        refundRecord.checkInvariants();
+        refundEveryLine();
         addTransaction(refundRecord);
+    }
+
+    private void refundEveryLine() {
+        if (hasRefundedOrPendingLines()) {
+            throw new IllegalStateException("Receipt " + receiptId
+                    + " cannot be refunded as a whole: some lines are already refunded or being refunded");
+        }
+        for (int i = 0; i < receiptLines.size(); i++) {
+            receiptLines.set(i, receiptLines.get(i).withRefundState(LineRefundState.REFUNDED));
+        }
         this.isRefunded = true;
-        checkInvariants();
+    }
+
+    private void moveClaimedLines(int eventId, LineRefundState target) {
+        boolean movedAny = false;
+        for (int i = 0; i < receiptLines.size(); i++) {
+            ReceiptLine line = receiptLines.get(i);
+            if (line.getEventId() == eventId && line.getRefundState() == LineRefundState.PENDING) {
+                receiptLines.set(i, line.withRefundState(target));
+                movedAny = true;
+            }
+        }
+        if (!movedAny) {
+            throw new IllegalStateException("Receipt " + receiptId + " holds no refund claim for event " + eventId);
+        }
     }
 
 
@@ -299,6 +450,12 @@ public class OrderReceipt implements InvariantChecked {
         for (ReceiptLine line : receiptLines) {
             Objects.requireNonNull(line, "OrderReceipt invariant violated: receipt line must not be null");
             line.checkInvariants();
+        }
+
+        // isFullyRefunded() reads through getReceiptLines(), so a receipt refunded before line state
+        // existed (flag set, every line NONE) counts as fully refunded, as everywhere else.
+        if (isRefunded != isFullyRefunded()) {
+            throw new IllegalStateException("OrderReceipt invariant violated: the order is marked refunded exactly when every line is refunded");
         }
 
         for (TransactionRecord record : transactionRecords) {

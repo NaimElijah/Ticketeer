@@ -3,6 +3,8 @@ import com.ticketing.system.shared.external.SensitiveDataMasker; // transitional
 import com.ticketing.system.shared.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
 import com.ticketing.system.shared.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
 
+import java.net.ConnectException;
+import java.net.http.HttpConnectTimeoutException;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -17,6 +19,8 @@ import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -125,7 +129,12 @@ public class WsepPaymentGateway implements PaymentGateway {
         try {
             body = http.post(WsepHttpClient.action("refund").add("transaction_id", paymentTransactionId));
         } catch (WsepCommunicationException e) {
-            throw new RefundFailedException(paymentTransactionId, "refund gateway unreachable: " + e.getMessage());
+            if (neverReachedGateway(e)) {
+                throw new RefundGatewayUnreachableException(paymentTransactionId,
+                        "refund gateway unreachable: " + e.getMessage(), e);
+            }
+            throw new RefundOutcomeUnknownException(paymentTransactionId,
+                    "no answer from the refund gateway: " + e.getMessage(), e);
         }
 
         // WSEP refund reverses the whole charge by id and returns 1/-1 — there is no partial-refund amount.
@@ -161,5 +170,17 @@ public class WsepPaymentGateway implements PaymentGateway {
 
     private static long msSince(long startNanos) {
         return (System.nanoTime() - startNanos) / 1_000_000;
+    }
+
+    // A connect failure means the refund request was never sent, so WSEP cannot have reversed the
+    // charge. Any other transport failure, a read timeout above all, may come after WSEP processed it
+    // (ADR-001).
+    private static boolean neverReachedGateway(WsepCommunicationException e) {
+        for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConnectException || cause instanceof HttpConnectTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 }

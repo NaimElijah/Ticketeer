@@ -133,8 +133,8 @@ public class SystemAnalyticsService {
         double revenue30d = 0.0;
         for (OrderReceipt receipt : allReceipts()) {
             LocalDateTime purchasedAt = receipt.getPurchaseTime();
-            if (!receipt.wasRefunded() && purchasedAt != null && !purchasedAt.isBefore(cutoff)) {
-                revenue30d += receipt.getTotalAmount();
+            if (purchasedAt != null && !purchasedAt.isBefore(cutoff)) {
+                revenue30d += receipt.netAmount(); // a partly refunded order still earns its other lines (#21)
             }
         }
 

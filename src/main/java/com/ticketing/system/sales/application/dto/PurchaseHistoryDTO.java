@@ -18,7 +18,7 @@ public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
         String guestEmail,         // null for member purchases
         LocalDateTime purchasedAt,
         double totalPaid,
-        boolean refunded,
+        RefundStatus refundStatus, // over this record's lines only: a company's record ignores other companies' refunds
         List<TransactionRecordDTO> transactions,
         List<TicketRecordDTO> tickets,
         String buyerName           // resolved member username; null for guests (use guestEmail)
@@ -47,6 +47,26 @@ public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
         String category,       // event category; null if unresolved
         LocalDateTime eventStartsAt, // first show date; null if unresolved
         String venue,          // event location; null if unresolved
-        String barcode         // issued-ticket barcode; null if not yet issued
+        String barcode,        // issued-ticket barcode; null if not yet issued
+        boolean refunded       // this line's refund is recorded (#21)
     ) {}
+
+    /** How much of a record's lines has been refunded (#21). */
+    public enum RefundStatus {
+        /** No line is refunded. */
+        NONE,
+        /** Some lines are refunded, for example by one cancelled event of a multi-event order. */
+        PARTIAL,
+        /** Every line is refunded. */
+        FULL;
+
+        /** The status of a record made of {@code tickets}; a record with no lines is {@link #NONE}. */
+        public static RefundStatus of(List<TicketRecordDTO> tickets) {
+            long refunded = tickets.stream().filter(TicketRecordDTO::refunded).count();
+            if (refunded == 0) {
+                return NONE;
+            }
+            return refunded == tickets.size() ? FULL : PARTIAL;
+        }
+    }
 }

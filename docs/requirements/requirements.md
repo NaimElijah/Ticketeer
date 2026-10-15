@@ -80,7 +80,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 |---|---|---|---|---|
 | I.1 | UC-1 | Initialize the platform into a valid state: payment and ticket-issuing services connected (§2), at least one system admin (§1 #2). V3: parameters come from external configuration files, and an initial-state file may be replayed. | Partial: invalid initialization, including a failing initial-state step, does not stop startup (#27); destructive seed modes are not refused outside `dev` (#78) | `SystemAdminService.initializePlatform`, `PlatformInitializationRunner`, `SystemIntegrityVerifier` · `SystemAdminServiceTest`, `PlatformInitializationRunnerTest`, `SystemIntegrityVerifierTest` |
 | I.2 | UC-32 | Open the market only in a valid state; reserving and checking out need an open market. | Built; an admin's CLOSE is lost on restart (#24) | `SystemAdminService.openMarket`, `SystemAdminService.closeMarket`, `MarketGate`, `MarketSelfHealScheduler` · `SystemAdminServiceTest`, `MarketSelfHealSchedulerTest` |
-| I.3 | UC-33, UC-4 | Charge through an external payment service, with support for more than one. Refund automatically when ticket issuing fails or an event is cancelled. | Partial: one payment adapter (Stripe: #98); cancellation refunds are neither atomic nor resumable (#20) | `PaymentGateway`, `WsepPaymentGateway`, `CheckoutService`, `EventCancellationRefundListener` · `WsepPaymentGatewayTest`, `CheckoutServiceTest`, `EventCancellationRefundListenerTest` |
+| I.3 | UC-33, UC-4 | Charge through an external payment service, with support for more than one. Refund automatically when ticket issuing fails or an event is cancelled. | Partial: one payment adapter (Stripe: #98); WSEP can only reverse a whole charge, so refunding one event of a multi-event order over-refunds at the payment service (#98, [ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md)) | `PaymentGateway`, `WsepPaymentGateway`, `CheckoutService`, `EventCancellationRefundService` · `WsepPaymentGatewayTest`, `CheckoutServiceTest`, `EventCancellationRefundServiceTest`, `EventCancellationAcceptanceTest` |
 | I.4 | UC-34 | Issue tickets through an external service, with support for more than one. | Partial: one issuing adapter (in-house issuing: #100) | `TicketIssuer`, `WsepTicketIssuer` · `WsepTicketIssuerTest` |
 | I.5 | UC-35 | Real-time alerts. Producers: sold out, company closed, role changes. Buyers: purchase completed, event cancelled or moved, order about to expire. All members: messages from admins or producers. | Partial: delivered by polling, not push (#61); several declared types are never sent (#63) | `NotificationDispatchService` · `NotificationDispatchServiceTest` |
 | I.6 | UC-36, UC-37 | Delayed alerts: keep alerts for offline members and show them at their next login. | Built | `NotificationDispatchService.dispatch`, `NotificationDispatchService.deliverPending` · `NotificationDispatchServiceTest`, `DelayedAppointmentNotificationAcceptanceTest` |
@@ -131,8 +131,8 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | II.4.2 | UC-20 | Configure the venue map; every map zone links to an inventory zone, and the map shows free and taken places live. | Built | `EventManagementService.configureVenueMap`, `VenueMap` · `EventManagementServiceTest`, `VenueMapTest`, `InventoryZoneTest` |
 | II.4.3 | UC-21 | Set purchase methods and purchase and discount policies. | Partial: purchase policies are built; discounts are one percentage per event; conditional, coupon and composed discounts are #67; the lottery purchase method is #72 | `EventManagementService.setEventPolicies`, `PurchasePolicy`, `DiscountPolicy` · `PurchasePolicyAcceptanceTest`, `PurchasePolicyEnforcementAcceptanceTest` |
 | II.4.4 | — | Receive buyer inquiries and answer them. | Built | `MessagingService` · `MessagingAcceptanceTest` |
-| II.4.5 | UC-22 | See the company's order and purchase history. It does not change when events, prices or companies change later. | Built | `CompanyAnalyticsService.salesHistory`, `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`, `CompanyAcceptanceTest` |
-| II.4.6 | UC-22 | Produce a sales report of revenue and tickets sold, limited to the events the owner manages and their appointment subtree. | Partial: company-wide figures, not limited to the subtree (#68) | `CompanyAnalyticsService.dashboard` · `CompanyAnalyticsServiceTest`, `CompanySalesReportAcceptanceTest` |
+| II.4.5 | UC-22 | See the company's order and purchase history. It does not change when events, prices or companies change later. | Built | `CompanyAnalyticsService.salesHistory`, `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`, `CompanyAcceptanceTest`, `EventCancellationAcceptanceTest` |
+| II.4.6 | UC-22 | Produce a sales report of revenue and tickets sold, limited to the events the owner manages and their appointment subtree. | Partial: company-wide figures, not limited to the subtree (#68) | `CompanyAnalyticsService.dashboard`, `SalesSummaryCalculator` · `CompanyAnalyticsServiceTest`, `SalesSummaryCalculatorTest`, `CompanySalesReportAcceptanceTest` |
 | II.4.7 | UC-24 | Appoint a manager with chosen permissions; the appointee must accept. | Built; the permission set is [OQ-2](#open-questions) | `CompanyManagementService.appointManager`, `CompanyMembershipService` · `ManagerPermissionMatrixAcceptanceTest`, `CompanyMembershipServiceLifecycleTest` |
 | II.4.8 | UC-23 | Appoint a co-owner; the appointee accepts or rejects. | Built | `CompanyManagementService.appointOwner`, `CompanyMembershipService.receiveOwnerAppointment` · `CompanyMembershipServiceTest`, `DelayedAppointmentNotificationAcceptanceTest` |
 | II.4.9 | — | Remove an owner you appointed. | Partial: the service revokes owners but does not cascade to their appointees, and no UI offers it (#65, #126) | `CompanyManagementService.RevokeAppointment` |
@@ -156,8 +156,8 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | II.6.1 | — | Close a production company. Its owners and managers are alerted and their appointments cancelled. | Deferred (#62) | — |
 | II.6.2 | — | Cancel a membership, which cancels all of the member's roles in every company. | Deferred (#66) | — |
 | II.6.3 | — | Handle complaints and reply; send system messages to producers and buyers. | Built | `MessagingService.sendOutreach` · `MessagingServiceTest` |
-| II.6.4 | UC-31 | See the global purchase history, by buyer or by company and event. | Built | `SystemAdminService.viewGlobalHistory` · `SystemAdminServiceTest` |
-| II.6.5 | UC-46 | See live and historical analytics: visits, registrations, reservations and purchases. | Built | `SystemAnalyticsService` · `SystemAnalyticsServiceTest` |
+| II.6.4 | UC-31 | See the global purchase history, by buyer or by company and event. | Partial: with a company or event filter, the figures still count the other companies' lines of each matching order (#131) | `SystemAdminService.viewGlobalHistory`, `SalesSummaryCalculator` · `SystemAdminServiceTest`, `SalesSummaryCalculatorTest` |
+| II.6.5 | UC-46 | See live and historical analytics: visits, registrations, reservations and purchases. | Built | `SystemAnalyticsService` · `SystemAnalyticsServiceTest`, `EventCancellationAcceptanceTest` |
 | II.6.6 | — | See all active queues live, change the admission rate, and clear a queue after a fault. | Deferred (#71) | — |
 | II.6.7 | — | Suspend a user for a period or permanently; a suspended user can only view (V2). | Deferred (#66) | — |
 | II.6.8 | — | Lift a suspension (V2). | Deferred (#66) | — |
@@ -244,6 +244,15 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   (`SessionAndOrderSweeper`).
 - Checkout is all or nothing. Any failure releases the tickets and refunds a charge that went
   through (`CheckoutService`).
+- Cancelling an event refunds each of its receipt lines at most once. If the payment service
+  declines a refund or cannot be reached, the event stays cancelled and the lines refunded so far
+  stay refunded; cancelling it again refunds the rest. A refund the payment service may have carried
+  out without a usable answer is never retried automatically; it stays pending for manual recovery
+  ([ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md);
+  `EventCancellationRefundService` · `EventCancellationRefundServiceTest`,
+  `EventCancellationRefundConcurrencyTest`, `EventCancellationAcceptanceTest`).
+- A member's whole-order refund is refused once any line of the order has been refunded or is
+  being refunded by an event cancellation (`RefundService` · `RefundServiceTest`).
 - A guest's order ends with the visit; a member's lasts until the hold expires.
 - Receipts and purchase history never change when events, prices or companies change later
   (II.3.5, II.4.5). Receipts store the price at purchase (`OrderReceipt`, `ReceiptLine`).
@@ -253,8 +262,15 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   (II.6.4) do (#121; `OrderReceiptMapper.toCompanySalesRecordDTO` · `CompanyAnalyticsServiceTest`,
   `CompanyAcceptanceTest`). Revisit if payments are ever allocated per line, for example for
   per-company payouts: only then can a company be shown its own share of a payment.
-  Known gap: the refunded flag is still order-level, so cancelling another company's event marks
-  the whole shared order refunded in this view and drops it from the revenue figures (#21).
+- Refunds are tracked per receipt line. Revenue and tickets sold count only the lines that are not
+  refunded, so cancelling one event of a multi-event or shared order removes only that event's lines
+  from the figures. Each view reports an order as paid, partly refunded or refunded, judged on the
+  lines that view shows, so a company is not shown another company's refund. The exception is an
+  order refunded before refunds were tracked per line (#20): it recorded only an order-level flag,
+  so all its lines count as refunded, failing closed as ADR-001 decides (#21;
+  `CompanyAnalyticsService.dashboard`, `SystemAnalyticsService.adminOverview`, `SalesSummaryCalculator`,
+  `OrderReceiptMapper` · `CompanyAnalyticsServiceTest`, `SystemAnalyticsServiceTest`,
+  `SalesSummaryCalculatorTest`, `EventCancellationAcceptanceTest`).
 
 ### Purchase policies and discounts
 
@@ -284,11 +300,11 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 
 | ID | Requirement | Status | Enforced by · tested by |
 |---|---|---|---|
-| SLR.1 | Consistency and concurrency: every action keeps the platform valid; reserving and purchasing are atomic; no seat is ever sold twice. | Partial: event-cancellation refunds can stop halfway (#20) | Optimistic locking, `OptimisticLockTranslationAspect` · `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `OptimisticLockTranslationAspectTest` |
+| SLR.1 | Consistency and concurrency: every action keeps the platform valid; reserving and purchasing are atomic; no seat is ever sold twice. | Built | Optimistic locking, `OptimisticLockTranslationAspect`, per-line refund claims ([ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md)) · `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `EventCancellationRefundConcurrencyTest`, `OptimisticLockTranslationAspectTest` |
 | SLR.2 | Privacy and security: identifying data is neither exposed nor recoverable; passwords are stored hashed; requests after login carry a token; passwords are masked in the UI. | Partial: session-id rotation #75, default secrets #34, admin credentials #77 | `BcryptPasswordHasher`, `JwtSessionManager` · `AuthenticationServiceTest`, `JwtSessionManagerTest` |
 | SLR.3 | User experience: 3.1 response time holds under load; 3.2 help with common errors; 3.3 a convenient UI; 3.4 each role sees only the actions it may perform; 3.5 the UI explains successes and failures (V2). | Partial: 3.4 depends on a mock capability resolver (#59); accessibility #110; for 3.3, browse filters kept in the URL #70 | `AuthBootstrap`, `RequireCapability`, `Capability` |
 | SLR.4 | Load, stress and availability: unlimited visitors, companies and events; spikes when sales open; continuous availability. | TODO: no targets set ([OQ-11](#open-questions)). Load test #108; waiting queue #71 | — |
-| SLR.5 | Robustness: keep working under load, network failures and the loss of an external service. | Partial: external-call timeouts and handshake retries are built; cancellation refunds cannot resume (#20) | `WsepHttpClient` · `WsepHttpClientRetryTest` |
+| SLR.5 | Robustness: keep working under load, network failures and the loss of an external service. | Built: external-call timeouts and handshake retries; an event cancellation interrupted by a payment-service failure resumes when the owner cancels again | `WsepHttpClient`, `EventCancellationRefundService` · `WsepHttpClientRetryTest`, `EventCancellationRefundServiceTest`, `EventCancellationRefundConcurrencyTest` |
 | SLR.6 | Recovery: return to normal operation after a fault, for example resume automatically when the database comes back. | Built; not run in CI (#32) | Connection-pool settings in `application-supabase.yml`, `MarketSelfHealScheduler` · `DbOutageRecoveryLocalPgIT`, `MarketSelfHealSchedulerTest` |
 | SLR.7 | Persistence: state survives a planned or unplanned shutdown. V3: a remote database is supported, and switching databases is a configuration change only. | Partial: built under the `jpa` profile; no schema migrations (#31); market state (#24), idempotency keys (#25) and login lockouts (#39) are held in memory | The JPA repository adapters and their contract tests · `TicketIdRestartJpaTest` |
 | SLR.8 | Tracking: 8.1 operational measurements; 8.2 error tracking, preferably in real time. V1 adds an event log and an error log. | Partial: logs exist; correlation ids and JSON logs #30; metrics and traces #37 | `LoggingAspect`, `logback-spring.xml` |
@@ -305,7 +321,7 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 | V3 4.b | Tests prove the system does not start after an invalid initialization. | Deferred (#27) | — |
 | V3 4.c | Tests use a dedicated configuration and never reach the real external systems or the production database. | Built: the `test` profile and `application-test.yml` swap in stub gateways | `application-test.yml` · every test that runs under the `test` profile |
 | V3 appendix 3 | Use the ORM's built-in cache. | TODO: [OQ-12](#open-questions), evaluated in #33 | — |
-| V3 appendix 4 | Each use case runs as one transaction. | Partial: most application services are one `@Transactional` method; checkout and refunds deliberately call the external services outside the transaction and commit afterwards (ADR pending, #44); cancellation refunds are not atomic (#20) | `CheckoutService`, `RefundService` |
+| V3 appendix 4 | Each use case runs as one transaction. | Partial: most application services are one `@Transactional` method. Checkout calls the external services outside the transaction and commits afterwards (ADR pending, #44). Event-cancellation refunds claim and record each receipt in its own short transaction around the gateway call ([ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md)). The member refund holds the receipt's row lock across the gateway call by design (#410) | `CheckoutService`, `EventCancellationRefundService`, `RefundService` |
 
 ## Non-goals
 
@@ -329,7 +345,7 @@ Every question is owned by @NaimElijah, the project owner.
 | OQ-5 | **Contradictions in the course documents.** V2 calls the alert requirements "I.4 and I.5", where the general document has I.5 and I.6; I.1 and I.2 nearly duplicate each other. This document follows the general document. Confirm. | — |
 | OQ-6 | **Buyer age.** Age policies need it, but guests have no stored age. The code defers the check to checkout and refuses an unknown age (`AgePurchasePolicy`). Is that the rule? | `AgePurchasePolicy` |
 | OQ-7 | **Lottery and queue parameters** (#71, #72): draw method, number of winners, code lifetime; a per-event or system-wide threshold; admission rate. | — |
-| OQ-8 | **Rules found only in code.** Confirm or change them: a password has at least 8 characters with a letter and a digit; 5 failed logins lock the account for 15 minutes; a member session lasts 24 hours, a guest session ends after 30 idle minutes; usernames are 3–32 characters, checked only in the UI (#76); company and event purchase policies both apply; a member's refund covers the whole order; a manager can be promoted to owner only by their own appointer. | `AuthenticationService`, `application.yml` |
+| OQ-8 | **Rules found only in code.** Confirm or change them: a password has at least 8 characters with a letter and a digit; 5 failed logins lock the account for 15 minutes; a member session lasts 24 hours, a guest session ends after 30 idle minutes; usernames are 3–32 characters, checked only in the UI (#76); company and event purchase policies both apply; a member's refund covers the whole order, and is refused once any line of it has been refunded (for example by a cancelled event); a manager can be promoted to owner only by their own appointer. | `AuthenticationService`, `application.yml` |
 | OQ-9 | **Resolved (#121).** A company sees no payment transactions on any order, only its own tickets and revenue; see [Purchase flow](#purchase-flow). | `OrderReceiptMapper.toCompanySalesRecordDTO` |
 | OQ-10 | **Anti-scalping** (§3 #5). Is a per-buyer ticket limit enough, or are identity checks or resale rules required? | `MaxTicketsPurchasePolicy` |
 | OQ-11 | **Load and availability targets** (SLR.4). The course asks for "unlimited" visitors and continuous availability, with no numbers. What peak concurrency, response time and availability must launch meet? Feeds #108. | — |

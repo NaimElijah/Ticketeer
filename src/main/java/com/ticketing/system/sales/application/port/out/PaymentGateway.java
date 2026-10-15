@@ -19,6 +19,8 @@ public interface PaymentGateway {
     // UC-33 — process a charge. Throws PaymentGatewayException on failure / decline.
     PaymentResultDTO charge(PaymentRequestDTO request);
 
-    // UC-4 / I.3.3 — refund an existing charge. Throws RefundFailedException on failure.
+    // UC-4 / I.3.3 — refund an existing charge. Throws RefundFailedException when the gateway declines,
+    // RefundGatewayUnreachableException when the request never reached it (nothing was refunded), and
+    // RefundOutcomeUnknownException when it may have been processed without a usable answer (ADR-001).
     RefundResultDTO refund(int paymentTransactionId, double amount);
 }

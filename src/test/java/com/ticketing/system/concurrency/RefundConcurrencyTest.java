@@ -39,7 +39,7 @@ import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
  * No-double-refund concurrency proof (#410), run on the real JPA stack.
  *
  * <p>Under jpa the receipt's {@code lockForUpdate} used to be a no-op, so two concurrent refund
- * requests for the same receipt could both pass {@code wasRefunded()} and both call
+ * requests for the same receipt could both pass the eligibility check and both call
  * {@code paymentGateway.refund()} — refunding the buyer twice ({@code @Version} only fails the second
  * SAVE, <em>after</em> the gateway was already hit). This test fires N refunds at the same receipt
  * simultaneously and asserts the gateway is called <strong>exactly once</strong>, proving the real
@@ -136,7 +136,7 @@ class RefundConcurrencyTest {
                 "every other request must bail as already-refunded");
         // The crux of #410: the gateway is hit exactly once despite the concurrent double-clicks.
         verify(paymentGateway, times(1)).refund(anyInt(), anyDouble());
-        assertTrue(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID).orElseThrow().wasRefunded(),
+        assertTrue(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID).orElseThrow().isFullyRefunded(),
                 "the receipt is recorded as refunded");
     }
 }

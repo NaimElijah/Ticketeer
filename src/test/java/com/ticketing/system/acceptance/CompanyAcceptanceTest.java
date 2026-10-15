@@ -267,7 +267,7 @@ class CompanyAcceptanceTest {
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
         assertEquals(1, result.records().size());
-        assertTrue(result.records().get(0).refunded());
+        assertEquals(PurchaseHistoryDTO.RefundStatus.FULL, result.records().get(0).refundStatus());
         }
 
         // #121 — the order's payment transactions cover both companies' tickets, so neither company

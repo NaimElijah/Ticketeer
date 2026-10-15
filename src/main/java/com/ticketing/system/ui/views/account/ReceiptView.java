@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.views.account;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TransactionRecordDTO;
 import com.ticketing.system.sales.domain.TicketStatus;
@@ -106,7 +107,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         actions(buildHeaderActions(receipt));
 
         bodyHolder.add(buildStatusCard(receipt));
-        if (receipt.refunded()) {
+        if (receipt.refundStatus() != RefundStatus.NONE) {
             bodyHolder.add(buildRefundTimeline(receipt));
         }
         bodyHolder.add(Lk.h2("Items"));
@@ -142,8 +143,9 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     // ---- refund (#284): order-level, member-initiated ----
 
     private static boolean refundEligible(PurchaseRecordDTO r) {
-        if (r.refunded() || r.buyerUserId() == null) {
-            return false; // already refunded, or a guest order (member-only flow)
+        // A member refund covers the whole order, so any refunded line (e.g. a cancelled event) rules it out.
+        if (r.refundStatus() != RefundStatus.NONE || r.buyerUserId() == null) {
+            return false; // already refunded in part or in full, or a guest order (member-only flow)
         }
         return r.tickets().stream()
                 .anyMatch(t -> t.currentStatus() == TicketStatus.PAID || t.currentStatus() == TicketStatus.ISSUED);
@@ -203,8 +205,11 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
                 .set("grid-template-columns", "repeat(auto-fit, minmax(140px, 1fr))")
                 .set("gap", "18px");
 
-        LkBadge statusBadge = new LkBadge(receipt.refunded() ? "Refunded" : "Paid",
-                receipt.refunded() ? LkBadge.Tone.muted : LkBadge.Tone.success).small();
+        LkBadge statusBadge = switch (receipt.refundStatus()) {
+            case NONE    -> new LkBadge("Paid", LkBadge.Tone.success).small();
+            case PARTIAL -> new LkBadge("Partly refunded", LkBadge.Tone.warn).small();
+            case FULL    -> new LkBadge("Refunded", LkBadge.Tone.muted).small();
+        };
 
         Span totalSpan = new Span();
         totalSpan.getElement().setProperty("innerHTML",
@@ -276,7 +281,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
             col.add(paymentRow("Service fee", money(fee), false));
         }
         col.add(Lk.divider());
-        col.add(paymentRow(receipt.refunded() ? "Total refunded" : "Total paid",
+        col.add(paymentRow(receipt.refundStatus() == RefundStatus.FULL ? "Total refunded" : "Total paid",
                 money(receipt.totalPaid()), true));
 
         TransactionRecordDTO charge = paymentCharge(receipt);
