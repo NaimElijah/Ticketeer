@@ -205,6 +205,9 @@ public class OrderReceipt implements InvariantChecked {
     }
 
     public List<ReceiptLine> getReceiptLines() {
+        if (isRefundedWithoutLineState()) {
+            return receiptLines.stream().map(line -> line.withRefundState(LineRefundState.REFUNDED)).toList();
+        }
         return List.copyOf(receiptLines);
     }
 
@@ -224,12 +227,19 @@ public class OrderReceipt implements InvariantChecked {
     }
 
     /**
-     * Whether any line is refunded or claimed by a refund in flight. A whole-order refund is allowed
-     * only while this is {@code false}; otherwise it would charge back money that another refund has
-     * already returned or is returning (#20).
+     * Whether any refund has been recorded on this order or is in flight for one of its lines. A
+     * whole-order refund is allowed only while this is {@code false}; otherwise it would charge back
+     * money that another refund has already returned or is returning (#20).
      */
     public boolean hasRefundedOrPendingLines() {
-        return receiptLines.stream().anyMatch(line -> line.getRefundState() != LineRefundState.NONE);
+        return isRefunded || receiptLines.stream().anyMatch(line -> line.getRefundState() != LineRefundState.NONE);
+    }
+
+    // A receipt refunded before refund state moved onto the lines (#20) records the refund only in the
+    // order-level flag, and every line reads NONE. Its lines count as refunded, so an upgraded database
+    // fails closed: at worst a refund is withheld, never paid twice.
+    private boolean isRefundedWithoutLineState() {
+        return isRefunded && receiptLines.stream().allMatch(line -> line.getRefundState() == LineRefundState.NONE);
     }
 
     /**
@@ -241,6 +251,9 @@ public class OrderReceipt implements InvariantChecked {
      * @return the amount paid for the claimed lines, or empty when no line for the event is unrefunded
      */
     public OptionalDouble claimRefundForEvent(int eventId) {
+        if (isRefundedWithoutLineState()) {
+            return OptionalDouble.empty();
+        }
         double claimedAmount = 0.0;
         boolean claimedAny = false;
         for (int i = 0; i < receiptLines.size(); i++) {

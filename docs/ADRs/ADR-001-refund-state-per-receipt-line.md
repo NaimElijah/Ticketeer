@@ -64,6 +64,11 @@ returning.
 **The `refund_state` column is nullable, and a null reads as `NONE`.** Hibernate's `ddl-auto: update`
 cannot add a NOT NULL column to populated tables, and versioned migrations do not exist yet (#31).
 
+**A receipt refunded before this decision counts as fully refunded.** Such a row has the
+order-level refunded flag set and no refund state on any line. Treating its lines as `NONE` would
+let a member refund or a cancellation pay it back a second time. Counting them as `REFUNDED` fails
+closed: at worst a refund is withheld, never paid twice.
+
 ## Consequences
 
 **What this makes easy:**
