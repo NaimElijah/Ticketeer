@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.infrastructure.persistence.OrderReceiptPersistence;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,6 +72,9 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
         OrderReceipt legacy = repository.findByOrderReceiptId(1).orElseThrow();
 
         assertTrue(legacy.getReceiptLines().stream().allMatch(ReceiptLine::isRefunded));
+        assertTrue(legacy.isFullyRefunded());
+        assertEquals(0.0, legacy.netAmount(), "it earns nothing in the revenue figures");
+        assertDoesNotThrow(legacy::checkInvariants, "the invariant accepts a pre-#129 row");
         assertTrue(legacy.hasRefundedOrPendingLines(), "a whole-order member refund must be refused");
         assertTrue(legacy.claimRefundForEvent(5).isEmpty(), "an event cancellation must claim nothing");
     }
