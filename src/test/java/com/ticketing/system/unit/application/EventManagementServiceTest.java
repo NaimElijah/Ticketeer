@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -190,15 +191,17 @@ class EventManagementServiceTest {
                 assertThrows(RuntimeException.class, () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
         }
 
+        // #20: cancelling an already-cancelled event republishes the cancellation so the sales side
+        // resumes the refunds a failure interrupted; the CANCELED state is not saved a second time.
         @Test
-        public void GivenEventAlreadyCanceled_WhenCancelEventAndRefund_ThenReceiptStateRemainsUnchanged() {
-                OrderReceipt receipt = setupStateBasedHappyPath();
+        public void GivenEventAlreadyCanceled_WhenCancelEventAndRefund_ThenRefundsResumeWithoutResaving() {
+                setupStateBasedHappyPath();
                 event.transitionToCanceled("cancelled");
-                ; // Manually cancel it beforehand
 
                 eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
 
-                assertEquals(false, receipt.wasRefunded());
+                verify(eventPublisher).publishEvent(new EventCancelledEvent(EVENT_ID, "Concert"));
+                verify(mockEventRepo, never()).save(any());
         }
 
         @Test
@@ -212,7 +215,7 @@ class EventManagementServiceTest {
 
         // Catalog now owns only the cancellation + hand-off: on a successful cancel it must publish an
         // EventCancelledEvent so the sales listener runs the refund/ticket-void/notification flow. The
-        // refund/ticket/notification BEHAVIOUR is asserted in EventCancellationRefundListenerTest.
+        // refund/ticket/notification BEHAVIOUR is asserted in EventCancellationRefundServiceTest.
         @Test
         public void GivenValidRequest_WhenCancelEventAndRefund_ThenEventCancelledEventIsPublished() {
                 setupStateBasedHappyPath();

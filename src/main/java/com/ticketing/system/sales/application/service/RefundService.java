@@ -35,8 +35,9 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Mirrors the cancellation refund mechanics, scoped to a single member-owned receipt: charge
  * the gateway refund first, then flip the receipt + its tickets to refunded. Refunds are
- * <strong>immediate</strong> (no request lifecycle exists in the domain) and whole-order (the
- * receipt's refunded flag is all-or-nothing). It deliberately dispatches <strong>no</strong>
+ * <strong>immediate</strong> (no request lifecycle exists in the domain) and whole-order: an order
+ * with any line already refunded or claimed by an event-cancellation refund is not eligible (#20).
+ * It deliberately dispatches <strong>no</strong>
  * notification — real-time notifications (I.5) are a Grade ג' V2 exemption, which also keeps this
  * flow clear of the unimplemented {@code NotificationDispatchService.dispatchFromEvent} (#304).
  *
@@ -93,9 +94,9 @@ public class RefundService {
         // Serialize the eligibility check + gateway refund + receipt flip in ONE transaction holding a
         // row lock on the receipt. orderReceiptRepository.lockForUpdate takes a real SELECT … FOR UPDATE
         // under jpa (and a real lock under the in-memory repo), held until this transaction commits.
-        // Without it, two concurrent requests (double-click / retry) could both pass wasRefunded() and
-        // both call paymentGateway.refund() — refunding the buyer twice (#410). The loser blocks on the
-        // lock, then sees isRefunded=true and bails before any second gateway call. The slow WSEP refund
+        // Without it, two concurrent requests (double-click / retry) could both pass the eligibility check
+        // and both call paymentGateway.refund() — refunding the buyer twice (#410). The loser blocks on the
+        // lock, then sees the refunded lines and bails before any second gateway call. The slow WSEP refund
         // runs inside this section by design (gateway-first: never mark refunded while the gateway
         // disagrees); refunds are low-frequency, so holding the row lock across it is acceptable.
         RefundResultDTO refundResult = transactionTemplate.execute(status -> {
@@ -109,7 +110,9 @@ public class RefundService {
                     throw new UnauthorizedActionException("refund order " + orderId, userId);
                 }
 
-                if (receipt.wasRefunded()) {
+                // Checked before the gateway call: lines an event-cancellation refund has claimed (PENDING)
+                // or refunded must never be charged back a second time by a whole-order refund (#20).
+                if (receipt.hasRefundedOrPendingLines()) {
                     throw new BusinessRuleViolationException("Order " + orderId + " has already been refunded");
                 }
 
@@ -135,7 +138,7 @@ public class RefundService {
 
         // The money refund + receipt flip have committed under the lock; the remaining ticket flips and
         // inventory return run outside it (best-effort, idempotent-by-state). A second concurrent request
-        // already bailed on wasRefunded() above, so only this caller reaches here.
+        // already bailed on the eligibility check above, so only this caller reaches here.
         // PAID/ISSUED tickets become REFUNDED; anything else (e.g. reserved-but-unissued) is voided.
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(orderId);
         List<Ticket> refundedTickets = new ArrayList<>();
