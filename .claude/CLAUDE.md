@@ -168,7 +168,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
   - Requirement and use-case IDs (`UC-1`, `I.1.4`, `II.3.0.x`, `SLR.6`) are defined in `docs/requirements/requirements.md`.
   - There are **two `#n` namespaces**. In code and Javadoc, a bare `#n` (e.g. `#367`, `#410`) and codes like `V3-INIT-02` usually mean the upstream course repo. In commits, PRs, `requirements.md` and ADRs, `#n` is an issue in `NaimElijah/Ticketeer`. The numbers collide (#57), so don't look up a code-comment `#n` here and assume it's ours.
 - **Time.** Inject the `Clock` bean (`shared/config/SecurityConfig.systemClock`, UTC) instead of reading the system time; tests override it with `Clock.fixed`. Seeded dates are relative to boot via `DemoClock`.
-- **Scenario files** (`src/main/resources/scenarios/{demo,review}.scenario`) replay real use-case calls line by line through the application services. Syntax: README, "Initial-state files". Engine: `bootstrap/dev/seed/scenario/`, inert while `seed.mode=off`.
+- **Scenario files** (`src/main/resources/scenarios/{demo,review}.scenario`) replay real use-case calls line by line through the application services. Syntax: `SEED.md`, "Scenario file format". Engine: `bootstrap/dev/seed/scenario/`, inert while `seed.mode=off`.
 
 ## Git and PRs
 
@@ -184,5 +184,5 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | What the system must do; requirement status and enforcing class/test | `docs/requirements/requirements.md` |
 | Why a decision was made | `docs/ADRs/` |
 | Module docs, generated C4/PlantUML snapshot | `docs/architecture/README.md` |
-| Init sequence, config keys, scenario syntax, persistent cart (UC-13) | `README.md` |
-| Dev dataset, logins, full `seed.mode` reference | `SEED.md` |
+| Overview, checkout request path, config variables and profiles, test layers, known limitations | `README.md` |
+| Dev dataset, logins, full `seed.mode` reference, `.scenario` syntax | `SEED.md` |

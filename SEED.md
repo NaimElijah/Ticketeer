@@ -12,7 +12,7 @@ so the seed doubles as an end-to-end smoke test. Two pieces cooperate at startup
 Run the seeded dev app:
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
 
 ## How dev seeding works
@@ -106,8 +106,7 @@ deleted and refuse — so a stray `SEED_MODE=reset` can never wipe a database on
 ```bash
 # Force a full wipe + reseed (needs the explicit opt-in). Mainly for a persistent DB —
 # dev's H2 is create-drop, so a normal `dev` boot already starts empty and reseeds.
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
-    -Dspring-boot.run.arguments="--seed.mode=reset --seed.assume-yes=true"
+./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--seed.mode=reset --seed.assume-yes=true"
 ```
 
 The wipe is implemented per persistence backend: `JpaRepoCleaner` (`@Profile("jpa")`, deletes through the
@@ -120,14 +119,78 @@ in-memory backend the admin is re-seeded by init on the next cycle rather than p
 ## Choosing / replaying a different scenario
 
 Point `seed.scenario` at any file. Two ship under `src/main/resources/scenarios/`: `demo.scenario` (this
-rich dataset) and `review.scenario` (a minimal baseline). See the **Initial-state files** section of
-[`README.md`](README.md) for the full operation vocabulary and syntax.
+rich dataset) and `review.scenario` (a minimal baseline). The format is in
+[Scenario file format](#scenario-file-format) below.
 
 ```bash
 # Replay a specific file instead of the default demo scenario
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
-    -Dspring-boot.run.arguments="--seed.mode=reseed --seed.scenario=file:/abs/path/to/your.scenario"
+./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--seed.mode=reseed --seed.scenario=file:/abs/path/to/your.scenario"
 ```
+
+## Scenario file format
+
+A `.scenario` file is the platform's initial state, written as **use-case operations replayed
+through the real application services**, one per line. The engine is
+`bootstrap/dev/seed/scenario/` (`ScenarioRunner` runs it, `ScenarioOps` maps each operation to a
+service call).
+
+- One operation per line; blank lines and lines starting with `#` are ignored.
+- Tokens are whitespace-separated; wrap values containing spaces in `"double quotes"`.
+- The first token is the operation; remaining bare tokens are **positional** args; `key=value` tokens
+  are **named** args.
+- Refer to users, companies and events by short **aliases** (`u1`, `p1`, `e1`); the engine maps each
+  alias to the real id the service mints.
+
+| Operation | Application-service call |
+|---|---|
+| `register <alias> <password> <email> <age>` | `AuthenticationService.register` |
+| `login <alias>` | `AuthenticationService.login` |
+| `login-admin <alias> <username> <password>` | `AuthenticationService.signInAsAdmin` |
+| `logout <alias>` / `logout-all` | `AuthenticationService.logout` |
+| `guest <alias>` | `AuthenticationService.startGuestSession` |
+| `open-company <owner> <companyAlias> "<name>" ["<desc>"]` | `CompanyManagementService.registerCompany` |
+| `appoint-owner <by> <company> <target>` | `CompanyManagementService.appointOwner` |
+| `appoint-manager <by> <company> <target> perms=A,B,C` | `CompanyManagementService.appointManager` |
+| `confirm <alias> <company>` | `CompanyManagementService.respondToAppointment` |
+| `add-event <by> <company> <eventAlias> <zone>… [name= category= city= days= rating= publish=]` | `EventManagementService.addEvent` + `configureVenueMap` (+ `publishEvent`) |
+| `publish <by> <company> <event>` | `EventManagementService.publishEvent` |
+| `reserve <buyer> <event> <zoneRef> qty=<n> \| seats=A1,A2` | `ReservationService.reserveForMember` / `reserveForGuest` |
+| `checkout <buyer> [email= age=]` | `CheckoutService.checkoutMember` / `checkoutGuest` |
+| `cancel-event <by> <event>` | `EventManagementService.cancelEventAndRefund` |
+| `contact-company <from> <company> subject= body=` | `MessagingService.startConversation` |
+| `submit-complaint <from> subject= body=` | `MessagingService.submitComplaint` |
+| `announce <admin> title= body= [audience=BROADCAST_MEMBERS\|BROADCAST_PRODUCERS]` | `MessagingService.sendOutreach` |
+| `assert-status <event> <STATUS> by=<owner>` | Read-only assertion via `EventManagementService.getEventDetail` |
+| `expect-error <op> <args…>` | Negative test: passes only if the wrapped operation throws |
+| `add-coupon …` | Not built: always throws `UnsupportedOperationException`, so the step is SKIPPED |
+
+Manager permissions (`perms=`) are any of `CONFIGURE_VENUE`, `MANAGE_INVENTORY`, `EDIT_POLICIES`,
+`VIEW_SALES`, `RESPOND_TO_INQUIRIES`. Zone specs for `add-event` are `standing:<capacity>@<price>` or
+`seated:<rows>x<cols>@<price>` (e.g. `standing:30@50`, `seated:10x10@100`).
+
+The operations in `review.scenario`, without its comments:
+
+```text
+register u1 password123 u1@demo.test 30
+register u2 password123 u2@demo.test 35
+register u3 password123 u3@demo.test 28
+register u4 password123 u4@demo.test 41
+login u1
+open-company u1 p1 "Production Company p1"
+appoint-owner u1 p1 u2
+login u2
+confirm u2 p1
+appoint-manager u2 p1 u3 perms=CONFIGURE_VENUE
+login u3
+confirm u3 p1
+add-event u2 p1 e1 standing:30@50 seated:10x10@100 name="e1" rating=4.5
+add-coupon u2 p1 code=sale123 percent=20
+logout-all
+```
+
+Each line ends up PASS, SKIPPED, FAIL or BLOCKED in the end-of-run `SeedReport` (see
+[How dev seeding works](#how-dev-seeding-works)). With `seed.fail-fast=true` the run stops at the
+first unexpected failure, though startup itself still continues (#27).
 
 ## Date relativity
 
