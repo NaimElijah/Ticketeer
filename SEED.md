@@ -17,8 +17,10 @@ Run the seeded dev app:
 
 ## How dev seeding works
 
-The `dev` profile activates `jpa` on in-memory **H2** (`create-drop`, so the schema is empty every boot),
-auto-opens the market, and sets `seed.mode=reseed` (see `application-dev.yml`). On startup:
+The `dev` profile activates `jpa` on in-memory **H2** (`create-drop`, so the schema is empty every boot)
+and sets `seed.mode=reseed` (see `application-dev.yml`). The market opening is not dev-specific:
+`bootstrap/scheduling/MarketOpener` opens it on every boot outside the `test` profile, and
+`MarketSelfHealScheduler` keeps retrying if the external services are not reachable yet. On startup:
 
 1. **`DevUserSeeder`** registers `dev.member`.
 2. **`ScenarioRunner`** opens the market (via the real admin path, so purchases can transact) and replays
