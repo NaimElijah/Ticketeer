@@ -44,7 +44,7 @@
         <logger name="com.ticketing.system.shared.logging" level="INFO"/>
     </springProfile>
 
-    <!-- Dev profile: local run with Memory* repos + demo seed (no DB). Console + rolling file. -->
+    <!-- Dev profile: local run on JPA against in-memory H2, with the demo seed. Console + rolling file. -->
     <springProfile name="dev">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>

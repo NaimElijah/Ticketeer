@@ -44,6 +44,17 @@ src/main/frontend/generated/
 **/vite.generated.ts
 **/vite.config.ts.timestamp-*
 .vaadin/
+# Vaadin writes these into the project root while it builds a dev bundle, and its
+# TaskCleanFrontendFiles deletes them when the build ends. A run stopped mid-build leaves them, and
+# Vaadin then treats them as the project's own and never removes them (#160). Commit
+# package-lock.json instead once the project adds its own npm packages or CI builds the production
+# bundle (#45), when pinned frontend versions start to matter.
+/package.json
+/package-lock.json
+/tsconfig.json
+/types.d.ts
+/vite.config.ts
+/.vaadin-node-tasks.lock
 
 scripts/*
 # The course requirement PDFs are the university's material and this repo is public, so

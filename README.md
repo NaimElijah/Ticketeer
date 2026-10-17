@@ -369,8 +369,10 @@ The full status of every requirement, with the issue for each gap, is in
 
 ## Licence and acknowledgements
 
-There is no licence file yet ([#48](https://github.com/NaimElijah/Ticketeer/issues/48)), so all
-rights are reserved by default.
+Copyright (c) 2026 Naim Elijah. All rights reserved: no part of this project may be used,
+copied, modified or distributed without written permission. The code inherited from
+event-ticket-system stays under its MIT License, which [LICENSE](LICENSE) reproduces. Why:
+[ADR-002](docs/ADRs/ADR-002-all-rights-reserved-licence.md).
 
 Ticketeer continues [event-ticket-system](https://github.com/AdamSimkinbgu/event-ticket-system),
 built by me and my collaborators as the Software Engineering Workshop project at Ben-Gurion

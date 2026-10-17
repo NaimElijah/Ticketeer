@@ -1,0 +1,54 @@
+Ticketeer
+Copyright (c) 2026 Naim Elijah. All rights reserved.
+
+This software and its documentation are proprietary. Except as stated below, no licence is
+granted to use, copy, modify, merge, publish, distribute, sublicense or sell this software, or any
+part of it, in source or binary form, without the prior written permission of the copyright
+holder.
+
+Because this repository is public on GitHub, GitHub's Terms of Service (section D.5, "License
+Grant to Other Users") let GitHub users view it and fork it within GitHub. That is the only
+permission given, and it does not extend to any use outside GitHub.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT
+SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+-------------------------------------------------------------------------------
+Third-party notice: event-ticket-system
+-------------------------------------------------------------------------------
+
+Ticketeer is derived from event-ticket-system
+(https://github.com/AdamSimkinbgu/event-ticket-system). Every commit in this repository's history
+that also exists in that project comes from it. The portions of this software that come from
+event-ticket-system are licensed under the MIT License reproduced below. The All Rights Reserved
+notice above covers the changes and additions made in this repository from 8 July 2026 onwards.
+
+MIT License
+
+Copyright (c) 2026 Adam Simkin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+Files with their own licence header
+-------------------------------------------------------------------------------
+
+Files that carry their own licence header, such as the Maven wrapper scripts mvnw and mvnw.cmd
+(Apache License, Version 2.0), are licensed under the terms in that header.
