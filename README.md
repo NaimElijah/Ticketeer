@@ -21,7 +21,7 @@ and ticket-issuing services.**
 [Design decisions](#design-decisions) · [Status](#status-and-limitations)
 
 ```mermaid
-flowchart LR
+flowchart TB
     browser["Browser"]
     subgraph jvm["Ticketeer: one Spring Boot process"]
         ui["Vaadin UI<br/>40 server-side views"]
