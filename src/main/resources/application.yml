@@ -86,7 +86,7 @@ platform:
     password: ${PLATFORM_ADMIN_PASSWORD:admin}
 
 # WSEP external systems (UC-33 payment / UC-34 issuance). WsepPaymentGateway /
-# WsepTicketIssuer back IPaymentGateway / ITicketIssuer in every real run
+# WsepTicketIssuer back the PaymentGateway / TicketIssuer ports in every real run
 # (@Profile("!test")); the test profile swaps in the in-process stubs. base-url is
 # the single koyeb endpoint both adapters POST to.
 wsep:
@@ -96,7 +96,8 @@ wsep:
   handshake-attempts: ${WSEP_HANDSHAKE_ATTEMPTS:3}
   handshake-backoff-ms: ${WSEP_HANDSHAKE_BACKOFF_MS:1000}
 
-# Market self-heal (dev): if a transient external-service outage leaves the market closed at boot,
-# MarketSelfHealScheduler re-attempts the open on this interval until it succeeds (recover, no restart).
+# Market self-heal (every profile except test): if a transient external-service outage leaves the
+# market closed at boot, MarketSelfHealScheduler re-attempts the open on this interval until it
+# succeeds (recover, no restart).
 market:
   self-heal-delay-ms: ${MARKET_SELF_HEAL_DELAY_MS:30000}

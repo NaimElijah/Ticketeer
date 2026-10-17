@@ -1,15 +1,14 @@
 # V3 dev profile.
 #
-# dev now runs on the real JPA persistence path against in-memory H2 (no Postgres
-# or Docker needed locally). The `jpa` profile is auto-activated for dev via
-# spring.profiles.group in application.yml, so the Jpa* repositories are wired:
-# mapped aggregates (Admin, …) persist to H2, while aggregates not yet migrated
-# stay on their in-memory Memory* repos until their own Lane-B slice.
+# dev runs on the real JPA persistence path against in-memory H2 (no Postgres or
+# Docker needed locally). The `jpa` profile is auto-activated for dev via
+# spring.profiles.group in application.yml, so every aggregate's Jpa* repository is
+# wired and persists to H2; create-drop starts each boot with an empty schema.
 #
 # Deploy/run uses the SAME `jpa` profile against Postgres (Supabase) by setting the
 # DB_* env vars — a config-only switch, no code change.
 #
-#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+#   ./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev"
 spring:
   datasource:
     url: jdbc:h2:mem:devdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE

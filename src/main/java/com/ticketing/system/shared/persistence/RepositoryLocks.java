@@ -7,14 +7,15 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * Per-key lock map used by the in-memory repository implementations to
  * provide the pessimistic-lock semantics promised by
- * {@link com.ticketing.system.shared.IRepository#findByIdForUpdate}.
+ * {@link com.ticketing.system.shared.IRepository#lockForUpdate} and
+ * {@link com.ticketing.system.shared.IRepository#unlock}.
  *
- * <p>Each {@code MemoryXxxRepository} owns one instance and routes its
- * {@code findByIdForUpdate} / {@code save} / {@code delete} / {@code unlock}
- * calls through it. Locks are {@link ReentrantLock}, so a single thread can
- * re-enter {@code findByIdForUpdate} for the same id without deadlocking
- * itself (useful when a service method calls another repo method that also
- * locks).
+ * <p>Each {@code MemoryXxxRepository} except {@code MemoryEventRepository},
+ * which uses {@code RepositoryReadWriteLocks}, owns one instance and routes its
+ * {@code lockForUpdate} / {@code unlock} calls through it. Locks are
+ * {@link ReentrantLock}, so a single thread can re-enter {@code lockForUpdate}
+ * for the same id without deadlocking itself (useful when a service method
+ * calls another repo method that also locks).
  *
  * <p>Locks are kept in a {@link ConcurrentHashMap} keyed by id; they're never
  * evicted, so the long-lived per-id lock identity is stable across calls.

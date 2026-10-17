@@ -23,8 +23,9 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
  * <p>Locking is OPTIMISTIC and fine-grained: {@code lockForUpdate}/{@code lockForBuyerOperation} and
  * their unlocks are no-ops. Event carries an {@code @Version} for structural/lifecycle edits, while
  * Seat and InventoryZone carry their own {@code @Version} so two buyers reserving different seats (or
- * a buyer vs. a structural edit touching a different entity) never false-conflict; genuine conflicts
- * raise {@code OptimisticLockException}, retried by the service {@code @Retryable} (C1, #359).
+ * a buyer vs. a structural edit touching a different entity) never false-conflict. A genuine conflict
+ * fails the losing commit, and {@code OptimisticLockTranslationAspect} re-types it into
+ * {@code ConcurrentReservationException}; nothing retries it automatically (C1, #359).
  *
  * <p>{@code searchAll}/{@code searchONSALE} push the 18-filter catalogue search down into a Criteria
  * {@link Specification} (see {@link EventSearchSpecification}). {@code nextId}/{@code nextVenueMapId}

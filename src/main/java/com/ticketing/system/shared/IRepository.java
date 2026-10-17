@@ -41,12 +41,16 @@ package com.ticketing.system.shared;
  *       {@link java.util.concurrent.locks.ReentrantLock} via
  *       {@code RepositoryLocks}. Reentrant: same thread re-locking is safe.</li>
  *   <li><b>JPA-backed implementations</b> (V3) make {@code lockForUpdate} and
- *       {@code unlock} <b>no-ops</b>. Concurrency is handled by {@code @Version}
- *       OPTIMISTIC locking on the aggregate — at the granularity of the real
- *       contention (e.g. per-{@code Seat} for Event, so independent reservations
- *       don't conflict) — and the service use-case retries on
- *       {@code OptimisticLockException} (a fresh transaction re-reads the current
- *       version). No pessimistic {@code SELECT ... FOR UPDATE} is used.</li>
+ *       {@code unlock} <b>no-ops</b>, with one exception. Concurrency is handled
+ *       by {@code @Version} OPTIMISTIC locking on the aggregate — at the
+ *       granularity of the real contention (e.g. per-{@code Seat} for Event, so
+ *       independent reservations don't conflict). A conflict fails the losing
+ *       commit, and {@code OptimisticLockTranslationAspect} re-types it into
+ *       {@code ConcurrentReservationException} for the caller; nothing retries
+ *       automatically. The exception is {@code JpaOrderReceiptRepository}, whose
+ *       {@code lockForUpdate} takes a real pessimistic
+ *       {@code SELECT ... FOR UPDATE} row lock so two concurrent refunds of one
+ *       receipt cannot both reach the payment gateway (#410).</li>
  * </ul>
  *
  * <p><b>Always pair lockForUpdate with unlock in a try/finally.</b>
