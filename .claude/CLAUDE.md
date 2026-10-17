@@ -169,6 +169,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
   - There are **two `#n` namespaces**. In code and Javadoc, a bare `#n` (e.g. `#367`, `#410`) and codes like `V3-INIT-02` usually mean the upstream course repo. In commits, PRs, `requirements.md` and ADRs, `#n` is an issue in `NaimElijah/Ticketeer`. The numbers collide (#57), so don't look up a code-comment `#n` here and assume it's ours.
 - **Time.** Inject the `Clock` bean (`shared/config/SecurityConfig.systemClock`, UTC) instead of reading the system time; tests override it with `Clock.fixed`. Seeded dates are relative to boot via `DemoClock`.
 - **Scenario files** (`src/main/resources/scenarios/{demo,review}.scenario`) replay real use-case calls line by line through the application services. Syntax: `SEED.md`, "Scenario file format". Engine: `bootstrap/dev/seed/scenario/`, inert while `seed.mode=off`.
+- **Licence.** All Rights Reserved for work since 2026-07-08; the code inherited from event-ticket-system stays MIT ([ADR-002](../docs/ADRs/ADR-002-all-rights-reserved-licence.md)). Never remove the MIT notice from `LICENSE`: MIT requires it, and deleting it once (20c0f520) put the repo out of compliance.
 
 ## Git and PRs
 
