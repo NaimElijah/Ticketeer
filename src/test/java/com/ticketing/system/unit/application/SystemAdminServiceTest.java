@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +46,7 @@ import com.ticketing.system.shared.exception.InitializationIntegrityException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.MissingDefaultAdminException;
+import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
@@ -115,12 +117,14 @@ class SystemAdminServiceTest {
 
     @Test
     void givenNoReachablePaymentGateway_whenInitializePlatform_thenThrows() {
+        when(adminRepository.existsAny()).thenReturn(true);   // admin present, so only WSEP fails
         SystemAdminService svc = serviceWith(List.of(), List.of(reachableIssuer()));
         assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
     }
 
     @Test
     void givenNoReachableTicketIssuer_whenInitializePlatform_thenThrows() {
+        when(adminRepository.existsAny()).thenReturn(true);   // admin present, so only WSEP fails
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of());
         assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
     }
@@ -139,6 +143,23 @@ class SystemAdminServiceTest {
         when(adminRepository.existsAny()).thenReturn(false);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         assertThrows(MissingDefaultAdminException.class, svc::initializePlatform);
+    }
+
+    // ADR-003: a WSEP outage is the only self-healing init failure, so it must not hide a fatal one.
+    @Test
+    void GivenAdminCannotBePersistedAndWsepDown_WhenInitializePlatform_ThenMissingDefaultAdmin() {
+        when(adminRepository.existsAny()).thenReturn(false);
+        SystemAdminService svc = serviceWith(List.of(), List.of());
+        assertThrows(MissingDefaultAdminException.class, svc::initializePlatform);
+    }
+
+    @Test
+    void GivenCorruptStateAndWsepDown_WhenInitializePlatform_ThenIntegrityViolation() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        doThrow(new SystemIntegrityViolationException("active company 7 has no owner"))
+                .when(integrityVerifier).verify();
+        SystemAdminService svc = serviceWith(List.of(), List.of());
+        assertThrows(SystemIntegrityViolationException.class, svc::initializePlatform);
     }
 
     @Test

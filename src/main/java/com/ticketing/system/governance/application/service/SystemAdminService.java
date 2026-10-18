@@ -113,16 +113,19 @@ public class SystemAdminService {
             return;
         }
 
-        // I.1.2 / I.1.3 — at least one payment service and one ticket-issuance service reachable.
-        requireExternalServicesReachable();
+        // ADR-003: the fatal checks run first. A WSEP outage is the only failure that self-heals,
+        // so checking WSEP first would hide a missing admin or corrupt data behind every retry.
 
         // I.1.4 — guarantee at least one System Admin (auto-create a default if none).
         createDefaultAdminIfMissing();
 
-        // Step 4 / I.1.1 — re-assert the platform post-conditions, then the system-wide
-        // structural correctness constraints, as explicit gates before going live.
+        // Step 4 / I.1.1 — re-assert that an admin exists, then the system-wide structural
+        // correctness constraints, as explicit gates before going live.
         verifyInitializationInvariants();
         integrityVerifier.verify();
+
+        // I.1.2 / I.1.3 — at least one payment service and one ticket-issuance service reachable.
+        requireExternalServicesReachable();
 
         this.lastInitializedAt = LocalDateTime.now();
         this.status = PlatformStatus.READY;
@@ -288,15 +291,9 @@ public class SystemAdminService {
         }
     }
 
-    // *HELPER* — UC-1 step 4 / I.1.1: re-assert the platform post-conditions as a single gate.
-    // Defensive against an external service dropping between the initial check and this point.
+    // *HELPER* — UC-1 step 4 / I.1.1: re-assert that a System Admin exists. The external-service
+    // post-conditions are asserted by requireExternalServicesReachable(), which now runs last.
     private void verifyInitializationInvariants() {
-        if (paymentGateways.stream().noneMatch(this::isReachable)) {
-            throw new InitializationIntegrityException("no reachable payment service");
-        }
-        if (ticketIssuers.stream().noneMatch(this::isReachable)) {
-            throw new InitializationIntegrityException("no reachable ticket issuance service");
-        }
         if (!adminRepository.existsAny()) {
             throw new InitializationIntegrityException("no System Admin present");
         }
