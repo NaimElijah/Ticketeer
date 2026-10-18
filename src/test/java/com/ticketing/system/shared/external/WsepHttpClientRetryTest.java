@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.shared.config.WsepProperties;
+
 /**
  * The bounded retry behind the WSEP reachability handshake (#455 / #365): a cold-starting endpoint may
  * miss early attempts but answer a later one. Exercises {@code withRetry} directly (package-private) so
@@ -16,7 +18,7 @@ class WsepHttpClientRetryTest {
 
     // attempts=3, backoff=0; base-url/timeout are irrelevant to withRetry (post() is never called here).
     private WsepHttpClient client() {
-        return new WsepHttpClient("http://localhost", 1, 3, 0);
+        return new WsepHttpClient(new WsepProperties("http://localhost", 1, 3, 0));
     }
 
     @Test

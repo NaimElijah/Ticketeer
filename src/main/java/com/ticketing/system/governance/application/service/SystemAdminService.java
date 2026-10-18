@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.shared.dto.MarketStateDTO;
@@ -34,7 +35,6 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import lombok.extern.slf4j.Slf4j;
 // Owns platform-bootstrap, market-lifecycle, and global admin queries.
 // UC-1 (Initialize), UC-31 (Global History), UC-32 (Open/Close Market).
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,8 +82,7 @@ public class SystemAdminService {
             List<TicketIssuer> ticketIssuers,
             PasswordHasher passwordHasher,
             SystemIntegrityVerifier integrityVerifier,
-            @Value("${platform.admin.username}") String defaultAdminUsername,
-            @Value("${platform.admin.password}") String defaultAdminPassword
+            PlatformAdminProperties platformAdmin
     ) {
         this.sessionManager = sessionManager;
         this.adminRepository = adminRepository;
@@ -97,8 +96,8 @@ public class SystemAdminService {
         this.ticketIssuers = ticketIssuers;
         this.passwordHasher = passwordHasher;
         this.integrityVerifier = integrityVerifier;
-        this.defaultAdminUsername = defaultAdminUsername;
-        this.defaultAdminPassword = defaultAdminPassword;
+        this.defaultAdminUsername = platformAdmin.username();
+        this.defaultAdminPassword = platformAdmin.password();
     }
 
     // UC-1 — I.1.1 invariants + I.1.2 payment-gateway check + I.1.3 issuer check + I.1.4 default-admin.

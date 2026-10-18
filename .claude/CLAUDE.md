@@ -159,6 +159,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | `production`, `no-vaadin` | Maven build profiles: bundle the frontend / skip `prepare-frontend` |
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
+- Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
 - A new Spring profile needs a `<springProfile>` block in `logback-spring.xml`; otherwise the run gets no appenders and looks hung (36ac7924).
 - `src/test/resources/application-acceptance.yml` exists, but nothing activates it.
 

@@ -1,5 +1,6 @@
 package com.ticketing.system.bootstrap.dev.seed.scenario;
 
+import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.service.AuthenticationService;
@@ -119,7 +120,7 @@ public class ScenarioRunner implements ApplicationRunner {
             @Value("${seed.fail-fast:false}") boolean failFast,
             @Value("${seed.assume-yes:false}") boolean assumeYes,
             @Value("${seed.scenario:classpath:scenarios/demo.scenario}") String scenarioLocation,
-            @Value("${platform.admin.username:admin}") String adminUsername,
+            PlatformAdminProperties platformAdmin,
             @Value("${spring.datasource.url:unknown}") String datasourceUrl) {
         this.authenticationService = authenticationService;
         this.companyManagementService = companyManagementService;
@@ -140,7 +141,7 @@ public class ScenarioRunner implements ApplicationRunner {
         this.failFast = failFast;
         this.assumeYes = assumeYes;
         this.scenarioLocation = scenarioLocation;
-        this.adminUsername = adminUsername;
+        this.adminUsername = platformAdmin.username();
         this.datasourceUrl = datasourceUrl;
     }
 

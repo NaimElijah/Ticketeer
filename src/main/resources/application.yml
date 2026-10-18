@@ -91,6 +91,7 @@ platform:
 # the single koyeb endpoint both adapters POST to.
 wsep:
   base-url: ${WSEP_BASE_URL:https://damp-lynna-wsep-1984852e.koyeb.app/}
+  request-timeout-seconds: ${WSEP_REQUEST_TIMEOUT_SECONDS:20}
   # The reachability handshake is retried (idempotent) so a cold-starting WSEP host doesn't leave the
   # market closed at boot (#455/#365). pay/issue/refund are never retried (non-idempotent).
   handshake-attempts: ${WSEP_HANDSHAKE_ATTEMPTS:3}

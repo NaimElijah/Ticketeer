@@ -2,6 +2,7 @@ package com.ticketing.system.identity.adapter.out.security;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
@@ -58,11 +60,11 @@ public class JwtSessionManager implements SessionManager {
 
     public JwtSessionManager(
             @Value("${jwt.secret}") String secret,
-            @Value("${session.member-ttl-minutes}") long expirationMinutes,
+            SessionProperties sessionProperties,
             SessionRepository sessions,
             Clock clock) {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMillis = expirationMinutes * 60 * 1000;
+        this.expirationMillis = Duration.ofMinutes(sessionProperties.memberTtlMinutes()).toMillis();
         this.sessions = sessions;
         this.clock = clock;
     }

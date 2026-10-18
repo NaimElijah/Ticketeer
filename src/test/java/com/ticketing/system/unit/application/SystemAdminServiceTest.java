@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.shared.dto.MarketStateDTO;
@@ -97,8 +98,7 @@ class SystemAdminServiceTest {
                 List.of(),
                 passwordHasher,
                 integrityVerifier,
-                "admin",
-                "admin"
+                new PlatformAdminProperties("admin", "admin")
         );
         when(sessionManager.validateToken(ADMIN_TOKEN)).thenReturn(true);
         when(sessionManager.isAdminToken(ADMIN_TOKEN)).thenReturn(true);
@@ -484,7 +484,7 @@ class SystemAdminServiceTest {
                 sessionManager, adminRepository, orderReceiptRepository,
                 ticketRepository, eventRepository, eventDisplayPort, companyRepository, userRepository,
                 gateways, issuers, passwordHasher,
-                integrityVerifier, "admin", "admin");
+                integrityVerifier, new PlatformAdminProperties("admin", "admin"));
     }
 
     private PaymentGateway reachablePayment() {

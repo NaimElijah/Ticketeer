@@ -200,6 +200,23 @@ set these:
 | `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes |
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
 
+**Startup validates these settings.** Each group binds to a validated record, and a value out of
+bounds (a zero hold, a negative TTL, a blank admin password, a malformed WSEP URL) stops the boot
+with a report naming the property
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)).
+
+**Settings can come from a file instead of the environment.** Spring Boot layers an external
+`application.yml` over the bundled defaults:
+
+```bash
+java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.additional-location=file:/etc/ticketeer/
+java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.import=file:./ticketeer.yml
+./mvnw spring-boot:run "-Dspring-boot.run.arguments=--spring.config.import=file:./ticketeer.yml"
+```
+
+`additional-location` reads `application.yml` (and `application-<profile>.yml`) from that folder;
+`import` reads one named file. Either way, environment variables still win over the file.
+
 > [!WARNING]
 > With no profile at all, the app runs on the in-memory repositories: nothing survives a
 > restart, even though `application.yml` configures a PostgreSQL datasource. Select `jpa` or
@@ -216,6 +233,7 @@ set these:
 | `TICKET_RESERVATION_DURATION` | Ticket hold, in minutes | `10` |
 | `ORDER_EXPIRATION_DURATION` | Active-order lifetime, in minutes | `60` |
 | `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window · dashboard refresh (`0` stops it) | `5` · `5000` |
+| `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
@@ -356,8 +374,8 @@ Known limitations:
   forgets them ([#24](https://github.com/NaimElijah/Ticketeer/issues/24),
   [#25](https://github.com/NaimElijah/Ticketeer/issues/25),
   [#39](https://github.com/NaimElijah/Ticketeer/issues/39)).
-- Configuration values are not validated, and a failing initial-state step does not stop
-  startup ([#27](https://github.com/NaimElijah/Ticketeer/issues/27)).
+- A failing initial-state step does not stop startup
+  ([#27](https://github.com/NaimElijah/Ticketeer/issues/27)).
 - The committed defaults include dev-only secrets, and nothing refuses them outside `dev`
   ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)).
 - Money is a `double`, not integer minor units with a currency

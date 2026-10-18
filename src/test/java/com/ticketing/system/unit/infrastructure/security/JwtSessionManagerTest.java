@@ -19,8 +19,14 @@ import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
+import com.ticketing.system.identity.config.SessionProperties;
 
 class JwtSessionManagerTest {
+
+    // JwtSessionManager reads only the member TTL; the guest idle timeout is irrelevant here.
+    private static SessionProperties sessionTtl(long memberTtlMinutes) {
+        return new SessionProperties(memberTtlMinutes, 30);
+    }
 
     private static final String SECRET =
         "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
@@ -33,7 +39,7 @@ class JwtSessionManagerTest {
     void setUp() {
         clock = Clock.systemUTC();
         sessions = new MemorySessionRepository(clock);
-        manager = new JwtSessionManager(SECRET, 60, sessions, clock);
+        manager = new JwtSessionManager(SECRET, sessionTtl(60), sessions, clock);
     }
 
     @Test
@@ -77,7 +83,7 @@ class JwtSessionManagerTest {
         // Negative expiration → token is issued already past its exp claim.
         Clock expiredClock = Clock.systemUTC();
         SessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
-        JwtSessionManager expiredManager = new JwtSessionManager(SECRET, -1, expiredSessions, expiredClock);
+        JwtSessionManager expiredManager = new JwtSessionManager(SECRET, sessionTtl(-1), expiredSessions, expiredClock);
         String token = expiredManager.generateToken(42, "alice");
         assertThrows(SessionExpiredException.class, () -> expiredManager.validateToken(token));
     }
