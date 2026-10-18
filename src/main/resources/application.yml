@@ -97,6 +97,15 @@ wsep:
   handshake-attempts: ${WSEP_HANDSHAKE_ATTEMPTS:3}
   handshake-backoff-ms: ${WSEP_HANDSHAKE_BACKOFF_MS:1000}
 
+# Initial-state seeding (V3 2.a.ii; ScenarioRunner, every profile except test). See SEED.md.
+#  - mode: off | reseed | wipe | reset | ask. An unknown mode stops the boot.
+#  - wipe/reset also need assume-yes=true.
+seed:
+  mode: ${SEED_MODE:off}
+  fail-fast: ${SEED_FAIL_FAST:false}
+  assume-yes: ${SEED_ASSUME_YES:false}
+  scenario: ${SEED_SCENARIO:classpath:scenarios/demo.scenario}
+
 # Market self-heal (every profile except test): if a transient external-service outage leaves the
 # market closed at boot, MarketSelfHealScheduler re-attempts the open on this interval until it
 # succeeds (recover, no restart).

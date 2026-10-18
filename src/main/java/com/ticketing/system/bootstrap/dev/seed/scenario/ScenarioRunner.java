@@ -1,5 +1,6 @@
 package com.ticketing.system.bootstrap.dev.seed.scenario;
 
+import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -35,6 +36,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Boots the system from an editable scenario file (#366). Reads {@code seed.scenario}, parses it, and
@@ -89,7 +91,7 @@ public class ScenarioRunner implements ApplicationRunner {
     private final ResourceLoader resourceLoader;
     private final Environment environment;
     private final java.time.Clock clock;
-    private final String seedMode;
+    private final SeedProperties.Mode seedMode;
     private final boolean failFast;
     private final boolean assumeYes;
     private final String scenarioLocation;
@@ -116,10 +118,7 @@ public class ScenarioRunner implements ApplicationRunner {
             ResourceLoader resourceLoader,
             Environment environment,
             java.time.Clock clock,
-            @Value("${seed.mode:off}") String seedMode,
-            @Value("${seed.fail-fast:false}") boolean failFast,
-            @Value("${seed.assume-yes:false}") boolean assumeYes,
-            @Value("${seed.scenario:classpath:scenarios/demo.scenario}") String scenarioLocation,
+            SeedProperties seed,
             PlatformAdminProperties platformAdmin,
             @Value("${spring.datasource.url:unknown}") String datasourceUrl) {
         this.authenticationService = authenticationService;
@@ -137,39 +136,35 @@ public class ScenarioRunner implements ApplicationRunner {
         this.resourceLoader = resourceLoader;
         this.environment = environment;
         this.clock = clock;
-        this.seedMode = seedMode == null ? "off" : seedMode.trim().toLowerCase();
-        this.failFast = failFast;
-        this.assumeYes = assumeYes;
-        this.scenarioLocation = scenarioLocation;
+        this.seedMode = seed.mode();
+        this.failFast = seed.failFast();
+        this.assumeYes = seed.assumeYes();
+        this.scenarioLocation = seed.scenario();
         this.adminUsername = platformAdmin.username();
         this.datasourceUrl = datasourceUrl;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        if (seedMode.equals("ask")) {
-            runInteractive();
-        } else {
-            executeMode(seedMode, scenarioLocation);
-        }
+        executeMode(seedMode, scenarioLocation);
     }
 
-    /** Runs one resolved mode against one scenario. Shared by the config-driven and interactive paths. */
-    private void executeMode(String mode, String scenario) {
+    /** Runs one mode against one scenario. Shared by the config-driven and interactive paths. */
+    private void executeMode(SeedProperties.Mode mode, String scenario) {
         switch (mode) {
-            case "off" -> log.info("seed.mode=off — no seeding");
-            case "reseed" -> {
+            case OFF -> log.info("seed.mode=off — no seeding");
+            case RESEED -> {
                 log.info("seed.mode=reseed — seeding (idempotent)");
                 ensureMarketOpen();
                 runScenario(scenario);
             }
-            case "wipe" -> {
+            case WIPE -> {
                 if (destructiveAllowed("wipe")) {
                     repoCleaner.clearAll();
                     log.info("seed.mode=wipe — done; database cleared");
                 }
             }
-            case "reset" -> {
+            case RESET -> {
                 if (destructiveAllowed("reset")) {
                     repoCleaner.clearAll();
                     ensureMarketOpen();
@@ -178,7 +173,7 @@ public class ScenarioRunner implements ApplicationRunner {
                     log.info("seed.mode=reset — done; database wiped and reseeded");
                 }
             }
-            default -> log.warn("seed.mode='{}' not recognised ({} | ask) — skipping", mode, String.join(" | ", MODES));
+            case ASK -> runInteractive();
         }
     }
 
@@ -188,11 +183,16 @@ public class ScenarioRunner implements ApplicationRunner {
         System.out.println("  === SEEDER — profiles: " + String.join(",", environment.getActiveProfiles())
                 + " — database: " + datasourceUrl + " ===");
         String mode = askChoice("Mode", MODES, "off");
+        // A typo at the console is skipped, not fatal: binding already rejected any unknown configured mode.
+        if (!MODES.contains(mode)) {
+            log.warn("seed mode '{}' not recognised ({}) — skipping", mode, String.join(" | ", MODES));
+            return;
+        }
         String scenario = scenarioLocation;
         if (mode.equals("reseed") || mode.equals("reset")) {
             scenario = "classpath:scenarios/" + askChoice("Scenario", SCENARIOS, "demo") + ".scenario";
         }
-        executeMode(mode, scenario);
+        executeMode(SeedProperties.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), scenario);
     }
 
     /** Prompts with a list of options and a default; returns the lowercased answer, or the default on empty/EOF. */

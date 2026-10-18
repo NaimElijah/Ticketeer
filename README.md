@@ -237,7 +237,7 @@ java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.import=f
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
-| `SEED_MODE` · `SEED_ASSUME_YES` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` |
+| `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |
 
 | Profile | Effect |
 |---|---|

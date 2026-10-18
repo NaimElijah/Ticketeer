@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.validation.BindValidationException;
 import org.springframework.boot.context.properties.bind.validation.ValidationErrors;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
@@ -14,6 +15,7 @@ import org.springframework.core.NestedExceptionUtils;
 import org.springframework.validation.FieldError;
 
 import com.ticketing.system.bootstrap.config.MarketProperties;
+import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
@@ -32,7 +34,7 @@ class InitPropertiesValidationTest {
 
     @EnableConfigurationProperties({
             ReservationHoldProperties.class, SessionProperties.class, LockoutProperties.class,
-            WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class})
+            WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class, SeedProperties.class})
     static class InitProperties {
     }
 
@@ -46,6 +48,7 @@ class InitPropertiesValidationTest {
             assertThat(context.getBean(WsepProperties.class).requestTimeoutSeconds()).isEqualTo(20);
             assertThat(context.getBean(PlatformAdminProperties.class).username()).isEqualTo("admin");
             assertThat(context.getBean(MarketProperties.class).selfHealDelayMs()).isEqualTo(30000);
+            assertThat(context.getBean(SeedProperties.class).mode()).isEqualTo(SeedProperties.Mode.OFF);
         });
     }
 
@@ -55,6 +58,21 @@ class InitPropertiesValidationTest {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(LockoutProperties.class).maxAttempts()).isZero();
         });
+    }
+
+    @Test
+    void GivenUnknownSeedMode_WhenContextStarts_ThenFailsNamingTheProperty() {
+        runner.withPropertyValues("seed.mode=resed").run(context -> {
+            assertThat(context).hasFailed();
+            BindException bindFailure = causeOfType(context.getStartupFailure(), BindException.class);
+            assertThat(bindFailure.getProperty().getName()).hasToString("seed.mode");
+        });
+    }
+
+    @Test
+    void GivenSeedModeInLowerCase_WhenContextStarts_ThenBinds() {
+        runner.withPropertyValues("seed.mode=reseed").run(context ->
+                assertThat(context.getBean(SeedProperties.class).mode()).isEqualTo(SeedProperties.Mode.RESEED));
     }
 
     @ParameterizedTest(name = "{0}={1}")
@@ -72,6 +90,7 @@ class InitPropertiesValidationTest {
             "platform.admin.username,               '',        username",
             "platform.admin.password,               '',        password",
             "market.self-heal-delay-ms,             0,         selfHealDelayMs",
+            "seed.scenario,                         '',        scenario",
     })
     void GivenOutOfBoundsValue_WhenContextStarts_ThenFailsNamingTheField(String property, String value, String field) {
         runner.withPropertyValues(property + "=" + value).run(context -> {
@@ -84,5 +103,14 @@ class InitPropertiesValidationTest {
                     .extracting(error -> ((FieldError) error).getField())
                     .containsExactly(field);
         });
+    }
+
+    private static <T extends Throwable> T causeOfType(Throwable failure, Class<T> type) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (type.isInstance(cause)) {
+                return type.cast(cause);
+            }
+        }
+        throw new AssertionError("no " + type.getSimpleName() + " in the cause chain of " + failure);
     }
 }

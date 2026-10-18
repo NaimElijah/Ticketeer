@@ -32,7 +32,7 @@ quoted and on one line, so they work in both shells.
 UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
 `seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default) · `wipe` (delete, then stop) ·
-`reset` (wipe + reseed) · `ask`. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
+`reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
 on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. Full reference: `SEED.md`.
 
 ## Tests and CI
