@@ -1,12 +1,21 @@
 package com.ticketing.system.architecture;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 
@@ -101,4 +110,34 @@ class HexagonalRulesTest {
                 .should().beFreeOfCycles()
                 .check(PRODUCTION_CLASSES);
     }
+
+    /**
+     * ADR-004: every {@code shared.event} notice is consumed after the publisher commits, off its
+     * thread. Publishers no longer guard {@code publishEvent}, so a synchronous listener on a notice
+     * would let a notification failure fail the use case, e.g. report a paid checkout as failed.
+     */
+    @Test
+    void GivenANoticeListener_WhenScanned_ThenItIsAnAsyncAfterCommitListener() {
+        methods().that().areAnnotatedWith(EventListener.class)
+                .or().areMetaAnnotatedWith(EventListener.class)
+                .and(TAKE_A_SHARED_EVENT_NOTICE)
+                .should(BE_ASYNC_AFTER_COMMIT_LISTENERS)
+                .check(PRODUCTION_CLASSES);
+    }
+
+    private static final DescribedPredicate<JavaMethod> TAKE_A_SHARED_EVENT_NOTICE =
+            DescribedPredicate.describe("take a shared.event notice", method -> method.getRawParameterTypes()
+                    .stream().anyMatch(type -> type.getPackageName().equals("com.ticketing.system.shared.event")));
+
+    private static final ArchCondition<JavaMethod> BE_ASYNC_AFTER_COMMIT_LISTENERS =
+            new ArchCondition<>("be @TransactionalEventListener methods that run @Async") {
+                @Override
+                public void check(JavaMethod method, ConditionEvents events) {
+                    boolean afterCommit = method.isAnnotatedWith(TransactionalEventListener.class);
+                    boolean async = method.isAnnotatedWith(Async.class) || method.getOwner().isAnnotatedWith(Async.class);
+                    events.add(new SimpleConditionEvent(method, afterCommit && async,
+                            method.getFullName() + (afterCommit && async ? " is" : " is not")
+                                    + " an @Async @TransactionalEventListener"));
+                }
+            };
 }
