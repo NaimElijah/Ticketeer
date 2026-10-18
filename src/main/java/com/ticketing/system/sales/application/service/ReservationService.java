@@ -178,7 +178,9 @@ public class ReservationService {
 
             notifyFailureAfterUnlock = true;
             failureNotificationReason = "Reservation failed: " + e.getMessage();
-            // Notify the member of the failed reservation attempt. For guests, we do not have a user ID to send notifications to, so we skip this step for guests. The notification can be used to trigger email notifications, app push notifications, etc. to inform the member that their reservation attempt failed and provide any details that may be relevant (e.g. event name, zone, quantity they tried to reserve, reason for failure if known, etc.).
+            // The failure notice is published inside this transaction, which the rethrow rolls back, so
+            // it is never delivered (ADR-004); the caller sees the failure directly. #63 decides whether
+            // failure alerts are wanted, and if so they must be published after the transaction ends.
 
             log.warn("reserve failed: eventId={}, zoneId={}, selectionQuantity={}, seats={}, reason={}",
                     eventId, zoneId,

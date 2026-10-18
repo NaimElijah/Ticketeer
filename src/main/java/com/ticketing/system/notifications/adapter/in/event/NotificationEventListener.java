@@ -67,7 +67,10 @@ public class NotificationEventListener {
                 notice.userId(), notice.eventId(), notice.zoneId(), notice.quantity());
     }
 
-    /** Raises a reservation-failure notification when a reservation attempt fails. */
+    /**
+     * Raises a reservation-failure notification. Not delivered today: the notice is published inside
+     * the reservation's transaction, which rolls back on failure (ADR-004, #63).
+     */
     @TransactionalEventListener(fallbackExecution = true)
     public void on(TicketReservationFailedNotice notice) {
         notificationService.notifyTicketReservationFailure(
@@ -81,7 +84,10 @@ public class NotificationEventListener {
                 notice.userId(), notice.eventId(), notice.zoneId(), notice.quantity());
     }
 
-    /** Raises a removal-failure notification when a removal attempt fails. */
+    /**
+     * Raises a removal-failure notification. Not delivered today: the notice is published inside the
+     * removal's transaction, which rolls back on failure (ADR-004, #63).
+     */
     @TransactionalEventListener(fallbackExecution = true)
     public void on(ReservationRemovalFailedNotice notice) {
         notificationService.notifyRemoveTicketReservationFailure(
