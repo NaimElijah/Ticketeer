@@ -200,10 +200,13 @@ set these:
 | `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes |
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
 
-**Startup validates these settings.** Each group binds to a validated record, and a value out of
-bounds (a zero hold, a negative TTL, a blank admin password, a malformed WSEP URL) stops the boot
-with a report naming the property
-([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)).
+**Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
+`wsep`, `platform.admin`, `seed` and `market` groups bind to validated records. A value out of
+bounds, such as a zero hold, a negative TTL, a blank admin password or a malformed WSEP URL, stops
+the boot with a report naming the property
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource,
+`JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) and `ANALYTICS_*`
+([#165](https://github.com/NaimElijah/Ticketeer/issues/165)) are not validated yet.
 
 **Settings can come from a file instead of the environment.** Spring Boot layers an external
 `application.yml` over the bundled defaults:
