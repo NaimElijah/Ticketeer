@@ -13,6 +13,12 @@ spring:
     # deploy/run target, H2 in dev and the @DataJpaTest contract tests), so one config
     # serves every backend — a config-only switch to the cloud DB.
 
+  # Keep Boot's applicationTaskExecutor: Boot 3.5 stops creating it once any Executor bean exists,
+  # and the notifications module defines its own (notificationExecutor, ADR-004).
+  task:
+    execution:
+      mode: force
+
   # Activating the `dev` profile also activates `jpa`, so dev develops on the real
   # persistence path (JPA + H2 — see application-dev.yml). Deploy/run = `jpa` + Postgres.
   profiles:

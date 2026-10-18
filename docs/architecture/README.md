@@ -34,8 +34,9 @@ or transitively):
 - **catalog** — Event, venue maps, zones, seats, inventory.
 - **sales** — ActiveOrder, OrderReceipt, Ticket, checkout, reservations, refunds.
 - **messaging** — conversations and support inquiries.
-- **notifications** — a pure sink: it consumes `shared/event` integration events (via a synchronous
-  `@EventListener` adapter) and depends on nothing but the kernel.
+- **notifications** — a pure sink: it consumes `shared/event` integration events (via an
+  `@Async` `@TransactionalEventListener` adapter that runs after the publisher commits, on the
+  `notify-` thread; [ADR-004](../ADRs/ADR-004-no-outbox-for-notifications.md)) and depends on nothing but the kernel.
 - **governance** — platform lifecycle, market state, system analytics and integrity. A top-level
   consumer (nothing depends on it; the market gate is inverted through a sales-owned port).
 - **reporting** — the read/reporting (CQRS query) side: cross-context read services (member purchase
