@@ -133,7 +133,9 @@ into domain exceptions.
 `SystemAdminService`. At boot, `PlatformInitializationRunner` reaches READY once the payment
 gateway and ticket issuer answer and a System Admin exists; it creates that admin from
 `PLATFORM_ADMIN_*` when there is none. `MarketOpener` then opens the market on every boot outside
-the `test` profile, and `MarketSelfHealScheduler` keeps retrying while WSEP is down.
+the `test` profile, and `MarketSelfHealScheduler` keeps retrying while WSEP is down. A WSEP outage
+is the only initialization failure the app boots through; a missing admin or persisted state that
+breaks an invariant stops the boot ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)).
 
 Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.md). Decisions:
 [docs/ADRs/](docs/ADRs/). A full `architecture.md` is tracked in
@@ -354,8 +356,8 @@ Known limitations:
   forgets them ([#24](https://github.com/NaimElijah/Ticketeer/issues/24),
   [#25](https://github.com/NaimElijah/Ticketeer/issues/25),
   [#39](https://github.com/NaimElijah/Ticketeer/issues/39)).
-- A failed initialization is logged, not fatal: the app boots without an open market
-  ([#27](https://github.com/NaimElijah/Ticketeer/issues/27)).
+- Configuration values are not validated, and a failing initial-state step does not stop
+  startup ([#27](https://github.com/NaimElijah/Ticketeer/issues/27)).
 - The committed defaults include dev-only secrets, and nothing refuses them outside `dev`
   ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)).
 - Money is a `double`, not integer minor units with a currency
