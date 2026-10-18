@@ -149,6 +149,12 @@ public class SystemAdminService {
             defaultAdmin.checkInvariants();
             adminRepository.save(defaultAdmin);
         } catch (RuntimeException e) {
+            // Another instance booting against the same database may have inserted it first. An admin
+            // then exists, so the lost insert is not an init failure and must not stop this boot (ADR-003).
+            if (adminRepository.existsAny()) {
+                log.info("The default System Admin was created concurrently; continuing.");
+                return;
+            }
             throw new MissingDefaultAdminException(e.getMessage());
         }
 

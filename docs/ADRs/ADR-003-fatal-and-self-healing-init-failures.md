@@ -46,6 +46,10 @@ present, structural integrity, then the WSEP quorum. A WSEP outage at boot can n
 fatal condition. `verifyInitializationInvariants()` keeps only the admin check; its two
 reachability re-checks repeated the quorum check that now runs last.
 
+**A failed default-admin insert is fatal only if no admin exists afterwards.** Several instances may
+boot against one database (the `supabase` profile allows it); when two race on an empty admin table,
+the loser's insert fails but the winner's admin exists, so the loser carries on.
+
 **`PlatformInitializationRunner` catches only `ExternalServiceUnavailableException`.** Everything
 else propagates out of the `ApplicationRunner`, so `SpringApplication.run` fails and the process
 exits.

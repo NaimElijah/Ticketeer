@@ -153,6 +153,24 @@ class SystemAdminServiceTest {
         assertThrows(MissingDefaultAdminException.class, svc::initializePlatform);
     }
 
+    // Two instances booting against one empty admin table: the loser's insert fails, but an admin exists.
+    @Test
+    void GivenAnotherInstanceCreatedTheAdmin_WhenDefaultAdminSaveFails_ThenInitializationSucceeds() {
+        when(adminRepository.existsAny()).thenReturn(false, true);
+        doThrow(new RuntimeException("duplicate key value violates unique constraint \"admins_pkey\""))
+                .when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+        assertDoesNotThrow(svc::initializePlatform);
+    }
+
+    @Test
+    void GivenDefaultAdminSaveFailsAndStillNoAdmin_WhenInitializePlatform_ThenMissingDefaultAdmin() {
+        when(adminRepository.existsAny()).thenReturn(false);
+        doThrow(new RuntimeException("database unavailable")).when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+        assertThrows(MissingDefaultAdminException.class, svc::initializePlatform);
+    }
+
     @Test
     void GivenCorruptStateAndWsepDown_WhenInitializePlatform_ThenIntegrityViolation() {
         when(adminRepository.existsAny()).thenReturn(true);
