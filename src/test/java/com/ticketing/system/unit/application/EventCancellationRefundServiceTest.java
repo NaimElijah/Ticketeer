@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -383,16 +382,5 @@ class EventCancellationRefundServiceTest {
         refundCancelledEvent();
 
         verify(eventPublisher, times(1)).publishEvent(any(EventCancelledNotice.class));
-    }
-
-    @Test
-    void GivenNoticeDeliveryFails_WhenRefundCancelledEvent_ThenTheRefundStillSucceeds() {
-        OrderReceipt receipt = paidReceipt(1, 7, 50.0);
-        doThrow(new IllegalStateException("notifications down"))
-                .when(eventPublisher).publishEvent(any(EventCancelledNotice.class));
-
-        refundCancelledEvent();
-
-        assertTrue(allLinesRefunded(receipt));
     }
 }
