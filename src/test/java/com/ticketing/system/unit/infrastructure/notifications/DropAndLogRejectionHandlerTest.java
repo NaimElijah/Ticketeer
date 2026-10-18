@@ -62,6 +62,19 @@ class DropAndLogRejectionHandlerTest {
         assertFalse(ran.get(), "a dropped notification must never run, on the caller or later");
     }
 
+    @Test
+    void GivenShutDownExecutor_WhenANotificationIsSubmitted_ThenItIsDroppedWithoutThrowing()
+            throws InterruptedException {
+        releaseWorker.countDown();
+        executor.getThreadPoolExecutor().shutdown();
+        assertTrue(executor.getThreadPoolExecutor().awaitTermination(WAIT_SECONDS, TimeUnit.SECONDS));
+        AtomicBoolean ran = new AtomicBoolean(false);
+
+        assertDoesNotThrow(() -> executor.getThreadPoolExecutor().execute(() -> ran.set(true)));
+
+        assertFalse(ran.get());
+    }
+
     private static void awaitQuietly(CountDownLatch latch) {
         try {
             latch.await(WAIT_SECONDS, TimeUnit.SECONDS);

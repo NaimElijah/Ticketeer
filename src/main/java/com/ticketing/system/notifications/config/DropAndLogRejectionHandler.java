@@ -2,6 +2,7 @@ package com.ticketing.system.notifications.config;
 
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicLong;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -13,18 +14,34 @@ import lombok.extern.slf4j.Slf4j;
  * task on the caller either: that would block the use case, and during {@code afterCompletion} the
  * caller's committed transaction is still bound, so the notification's insert would join it and be
  * lost.
+ *
+ * <p>The executor also rejects work submitted after it has shut down, which is logged as such. An
+ * overflow logs its first drop and then a running total every hundred drops, so a
+ * sustained spike doesn't flood the log.
  */
 @Slf4j
 public class DropAndLogRejectionHandler implements RejectedExecutionHandler {
+
+    private static final long LOG_EVERY_N_DROPS = 100;
+
+    private final AtomicLong droppedForOverflow = new AtomicLong();
 
     /**
      * Discards {@code task} without running it.
      *
      * @param task     the notification delivery that could not be queued
-     * @param executor the saturated executor, read only for its queue size in the log
+     * @param executor the rejecting executor, read only for its state and queue size in the log
      */
     @Override
     public void rejectedExecution(Runnable task, ThreadPoolExecutor executor) {
-        log.warn("Notification queue full ({} waiting); dropping a notification", executor.getQueue().size());
+        if (executor.isShutdown()) {
+            log.warn("Notification executor is shut down; dropping a notification");
+            return;
+        }
+        long dropped = droppedForOverflow.incrementAndGet();
+        if (dropped == 1 || dropped % LOG_EVERY_N_DROPS == 0) {
+            log.warn("Notification queue full ({} waiting); {} notification(s) dropped since startup",
+                    executor.getQueue().size(), dropped);
+        }
     }
 }
