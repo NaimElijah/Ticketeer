@@ -194,28 +194,11 @@ public class ReservationService {
             activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
-                try {
-                    notifyReservationSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
-                } catch (RuntimeException notificationFailure) {
-                    log.warn("Reservation succeeded but notification failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyReservationSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
             }
 
             if (notifyFailureAfterUnlock) {
-                try {
-                    notifyReservationFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
-                } catch (RuntimeException notificationFailure) {
-                    log.warn(
-                            "Reservation failed and failure-notification also failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyReservationFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
             }
         }
 
@@ -324,28 +307,11 @@ public class ReservationService {
             activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
-                try {
-                    notifyRemoveSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
-                } catch (RuntimeException notificationFailure) {
-                    log.warn("Remove reservation succeeded but notification failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyRemoveSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
             }
 
             if (notifyFailureAfterUnlock) {
-                try {
-                    notifyRemoveFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
-                } catch (RuntimeException notificationFailure) {
-                    log.warn(
-                            "Remove reservation failed and failure-notification also failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyRemoveFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
             }
         }
 
@@ -589,28 +555,28 @@ public class ReservationService {
 
     private void notifyReservationSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
 
     private void notifyRemoveSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new ReservationRemovalSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyRemoveFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new ReservationRemovalFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
