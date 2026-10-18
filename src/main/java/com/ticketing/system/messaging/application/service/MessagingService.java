@@ -196,7 +196,7 @@ public class MessagingService {
         }
 
         // Bridge — notify the member who filed the complaint.
-        safeNotify(conversation.getInitiatorId(), conversationId,
+        publishNewMessage(conversation.getInitiatorId(), conversationId,
                 senderLabel(ParticipantType.ADMIN), conversation.getSubject(), request.body());
         log.info("Admin {} resolved complaint {}", adminId, conversationId);
     }
@@ -239,7 +239,7 @@ public class MessagingService {
                     memberId, ParticipantType.MEMBER,
                     request.subject(), request.body());
             conversationRepository.save(conversation);
-            safeNotify(memberId, conversation.getConversationId(),
+            publishNewMessage(memberId, conversation.getConversationId(),
                     senderLabel(ParticipantType.ADMIN), request.subject(), request.body());
             created.add(conversation);
         }
@@ -463,7 +463,7 @@ public class MessagingService {
         String label = senderLabel(sender.type());
 
         switch (otherType) {
-            case MEMBER -> safeNotify(otherId, conversation.getConversationId(), label,
+            case MEMBER -> publishNewMessage(otherId, conversation.getConversationId(), label,
                     conversation.getSubject(), body);
             case COMPANY -> {
                 ProductionCompany company = tryGetCompany(otherId);
@@ -488,7 +488,7 @@ public class MessagingService {
             String senderLabel, String body) {
         for (Integer ownerId : company.getOwnerIds()) {
             if (ownerId != null) {
-                safeNotify(ownerId, conversation.getConversationId(), senderLabel,
+                publishNewMessage(ownerId, conversation.getConversationId(), senderLabel,
                         conversation.getSubject(), body);
             }
         }
@@ -496,22 +496,17 @@ public class MessagingService {
 
     private void notifyAllAdmins(Conversation conversation, String senderLabel, String body) {
         for (Admin admin : adminRepository.findAll()) {
-            safeNotify(admin.getId(), conversation.getConversationId(), senderLabel,
+            publishNewMessage(admin.getId(), conversation.getConversationId(), senderLabel,
                     conversation.getSubject(), body);
         }
     }
 
-    // Never let a notification failure undo a persisted message — log and continue.
-    private void safeNotify(int recipientUserId, String conversationId, String senderLabel,
+    // Notifications consumes the notice after this transaction commits, off this thread (ADR-004), so a
+    // notification failure can neither undo the persisted message nor reach the sender.
+    private void publishNewMessage(int recipientUserId, String conversationId, String senderLabel,
             String subject, String body) {
-        try {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
-            eventPublisher.publishEvent(new NewMessageNotice(recipientUserId, conversationId, senderLabel,
-                    subject, snippet(body)));
-        } catch (RuntimeException e) {
-            log.warn("Message persisted but notification failed for recipient {} (conversation {})",
-                    recipientUserId, conversationId, e);
-        }
+        eventPublisher.publishEvent(new NewMessageNotice(recipientUserId, conversationId, senderLabel,
+                subject, snippet(body)));
     }
 
     // ---------------------------------------------------------------------------

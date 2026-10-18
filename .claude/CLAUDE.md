@@ -80,7 +80,7 @@ nothing depends on either. Known exception, due to move behind an inbound port: 
 | `catalog` | Event, venue maps, zones, seats, **inventory** (reserve/release/confirm via inbound `InventoryCommandPort`) |
 | `sales` | ActiveOrder, OrderReceipt, Ticket, checkout, reservations, refunds, WSEP adapters |
 | `messaging` | Conversations, support inquiries |
-| `notifications` | Consumes `shared/event` notices via `@EventListener` (`adapter/in/event`) |
+| `notifications` | Consumes `shared/event` notices after commit on the `notify-` thread (`adapter/in/event`, ADR-004) |
 | `governance` | Platform lifecycle, market state, system analytics/integrity; implements sales' `MarketGate` |
 | `reporting` | CQRS read side (purchase history, company dashboards), read by `ui` |
 | `ui` | The single Vaadin driving adapter |
@@ -94,10 +94,10 @@ the JPA entities: `HexagonalRulesTest` deliberately allows `jakarta.persistence`
 
 Seams: `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`, `EventSalesHistoryPort`,
 `InventoryCommandPort`, `CatalogEventDisplayPort`, `EventCancelledEvent`, the `shared/event` notices.
-Events are synchronous in-process `@EventListener`s: no outbox, no Modulith event registry.
+Events are in-process, with no outbox and no Modulith event registry. Catalog → sales (`EventCancelledEvent`) is a synchronous `@EventListener`, because the cancel call must see refund failures. Every `shared/event` notice is consumed by `NotificationEventListener` with `@Async("notificationExecutor")` + `@TransactionalEventListener(fallbackExecution = true)`: after commit, on one `notify-` thread, never delivered for a rolled-back transaction (ADR-004). Publishers don't catch notification failures, so a new notice consumer must follow the same pattern; `HexagonalRulesTest` fails the build otherwise. A Spring test that reads notifications must wait for them (Awaitility).
 
 **Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity,
-application-not-adapter, no-backend→ui, `bounded_contexts_are_acyclic`) and `ModularityTests`
+application-not-adapter, no-backend→ui, `bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by
 copying from `target/`; git has CRLF and the generator writes LF, so a naive diff shows every line.

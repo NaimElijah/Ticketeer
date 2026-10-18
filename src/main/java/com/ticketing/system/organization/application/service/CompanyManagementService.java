@@ -112,14 +112,10 @@ public class CompanyManagementService {
         companyMembershipService.receiveOwnerAppointment(request.targetUserId(), request.companyId(), appointerId);
 
         // Notify target user
-        try {
-            ProductionCompany company = companyRepository.getCompanyById(request.companyId());
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
-            eventPublisher.publishEvent(new OwnerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
-                    company.getName()));
-        } catch (Exception e) {
-            log.warn("Owner appointment created but notification failed for userId={}", request.targetUserId(), e);
-        }
+        ProductionCompany company = companyRepository.getCompanyById(request.companyId());
+        // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
+        eventPublisher.publishEvent(new OwnerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
+                company.getName()));
 
         log.info("Owner appointment created successfully: appointerId={}, targetUserId={}, companyId={}",
                 appointerId, request.targetUserId(), request.companyId());
@@ -145,14 +141,10 @@ public class CompanyManagementService {
                 request.targetUserId(), request.companyId(), ownerId, request.permissions());
 
         // Notify target user
-        try {
-            ProductionCompany company = companyRepository.getCompanyById(request.companyId());
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
-            eventPublisher.publishEvent(new RoleChangedNotice(request.targetUserId(), request.companyId(),
-                    company.getName(), "MANAGER"));
-        } catch (Exception e) {
-            log.warn("Manager appointment created but notification failed for userId={}", request.targetUserId(), e);
-        }
+        ProductionCompany company = companyRepository.getCompanyById(request.companyId());
+        // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
+        eventPublisher.publishEvent(new RoleChangedNotice(request.targetUserId(), request.companyId(),
+                company.getName(), "MANAGER"));
 
         log.info("Manager appointment created successfully: ownerId={}, targetUserId={}, companyId={}, permissions={}",
                 ownerId, request.targetUserId(), request.companyId(), request.permissions());
@@ -190,13 +182,9 @@ public class CompanyManagementService {
             log.info("Appointment accepted: userId={}, companyId={}", userId, response.companyId());
 
             // Notify of role change to final role
-            try {
-                // Publish a cross-context integration event; the notifications listener delivers it in-line.
-                eventPublisher.publishEvent(new RoleChangedNotice(userId, response.companyId(), company.getName(),
-                        appointment.getRole().name()));
-            } catch (Exception e) {
-                log.warn("Appointment accepted but notification failed for userId={}", userId, e);
-            }
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
+            eventPublisher.publishEvent(new RoleChangedNotice(userId, response.companyId(), company.getName(),
+                    appointment.getRole().name()));
         } else {
             // Transitions the pending appointment to REJECTED (persisted via the appointment repo);
             // status-based lookups will no longer return it.
@@ -232,14 +220,10 @@ public class CompanyManagementService {
                 edit.newPermissions());
 
         // Notify manager of permission change
-        try {
-            ProductionCompany company = companyRepository.getCompanyById(edit.companyId());
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
-            eventPublisher.publishEvent(new RoleChangedNotice(edit.targetUserId(), edit.companyId(),
-                    company.getName(), "MANAGER (permissions updated)"));
-        } catch (Exception e) {
-            log.warn("Manager permissions updated but notification failed for userId={}", edit.targetUserId(), e);
-        }
+        ProductionCompany company = companyRepository.getCompanyById(edit.companyId());
+        // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
+        eventPublisher.publishEvent(new RoleChangedNotice(edit.targetUserId(), edit.companyId(),
+                company.getName(), "MANAGER (permissions updated)"));
 
         log.info("Manager permissions updated successfully for user {} in company {}", edit.targetUserId(),
                 edit.companyId());
@@ -264,13 +248,9 @@ public class CompanyManagementService {
         companyRepository.updateCompany(company);
 
         // Notify user of revocation
-        try {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
-            eventPublisher.publishEvent(new ManagerRevokedNotice(revokeRequest.targetUserId(),
-                    revokeRequest.companyId(), company.getName()));
-        } catch (Exception e) {
-            log.warn("Role revoked but notification failed for userId={}", revokeRequest.targetUserId(), e);
-        }
+        // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
+        eventPublisher.publishEvent(new ManagerRevokedNotice(revokeRequest.targetUserId(),
+                revokeRequest.companyId(), company.getName()));
 
         log.info("Manager revoked successfully");
     }

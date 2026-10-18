@@ -122,7 +122,8 @@ re-validates the hold, writes the tickets and the `OrderReceipt`, and confirms t
 SOLD through catalog's `InventoryCommandPort`. If that unit fails, for example on a `@Version`
 conflict when two buyers race for one seat, it rolls back, and the service returns the seats to stock
 and refunds the charge. On success it publishes a `PurchaseCompletedNotice`, which `notifications`
-turns into an alert.
+turns into an alert after the purchase commits, on a background thread, so a slow or failing alert
+never delays or fails the checkout ([ADR-004](docs/ADRs/ADR-004-no-outbox-for-notifications.md)).
 
 **Every repository port has two adapters**, `MemoryXxxRepository` (`@Profile("!jpa")`) and
 `JpaXxxRepository` (`@Profile("jpa")`), and one abstract contract test runs against both. Under

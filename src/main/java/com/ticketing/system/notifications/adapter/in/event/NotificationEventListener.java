@@ -1,9 +1,11 @@
 package com.ticketing.system.notifications.adapter.in.event;
 
-import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.config.NotificationAsyncConfig;
 import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.NewMessageNotice;
@@ -22,11 +24,15 @@ import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
  * source contexts (sales, catalog, organization, messaging) into notifications: they publish
  * shared-kernel events, this listener consumes them, so no source context imports notifications.
  *
- * Listeners are PLAIN synchronous {@link EventListener}s (not {@code @Async} /
- * {@code @TransactionalEventListener}): each fires inline within the publisher's thread and
- * transaction, preserving the exact timing of the former direct facade calls.
+ * <p>Every notice is consumed after the publisher's transaction commits, on the single
+ * {@code notify-} thread (ADR-004). A notice from a transaction that rolls back is never delivered;
+ * one published outside a transaction ({@code fallbackExecution}) is delivered at once, still off the
+ * publisher's thread. A failure here therefore cannot reach the publisher: it is logged by the async
+ * uncaught-exception handler. Any new consumer of a {@code *Notice} must follow the same pattern, or
+ * it couples the publishers to notification delivery again.
  */
 @Component
+@Async(NotificationAsyncConfig.NOTIFICATION_EXECUTOR)
 public class NotificationEventListener {
 
     // The existing notifications facade this adapter delegates to (unchanged application bean).
@@ -42,74 +48,80 @@ public class NotificationEventListener {
     }
 
     /** Raises a purchase-confirmed notification when a purchase completes. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(PurchaseCompletedNotice notice) {
         // Delegate 1:1 to the former facade call, preserving arguments.
         notificationService.notifyPurchaseCompleted(notice.userId(), notice.totalPrice(), notice.ticketIds());
     }
 
     /** Raises a purchase-failed notification when a checkout attempt fails. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(PurchaseFailedNotice notice) {
         notificationService.notifyPurchaseFailed(notice.userId(), notice.reason());
     }
 
     /** Raises a reservation-success notification when a member reserves tickets. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(TicketReservationSucceededNotice notice) {
         notificationService.notifyTicketReservationSuccess(
                 notice.userId(), notice.eventId(), notice.zoneId(), notice.quantity());
     }
 
-    /** Raises a reservation-failure notification when a reservation attempt fails. */
-    @EventListener
+    /**
+     * Raises a reservation-failure notification. Not delivered today: the notice is published inside
+     * the reservation's transaction, which rolls back on failure (ADR-004, #63).
+     */
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(TicketReservationFailedNotice notice) {
         notificationService.notifyTicketReservationFailure(
                 notice.userId(), notice.eventId(), notice.zoneId(), notice.reason());
     }
 
     /** Raises a removal-success notification when a member removes a reservation. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(ReservationRemovalSucceededNotice notice) {
         notificationService.notifyRemoveTicketReservationSuccess(
                 notice.userId(), notice.eventId(), notice.zoneId(), notice.quantity());
     }
 
-    /** Raises a removal-failure notification when a removal attempt fails. */
-    @EventListener
+    /**
+     * Raises a removal-failure notification. Not delivered today: the notice is published inside the
+     * removal's transaction, which rolls back on failure (ADR-004, #63).
+     */
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(ReservationRemovalFailedNotice notice) {
         notificationService.notifyRemoveTicketReservationFailure(
                 notice.userId(), notice.eventId(), notice.zoneId(), notice.reason());
     }
 
     /** Raises an event-cancelled notification for a ticket holder. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(EventCancelledNotice notice) {
         notificationService.notifyEventCancelled(notice.userId(), notice.eventId(), notice.eventName());
     }
 
     /** Raises a manager-revoked notification when an appointment is revoked. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(ManagerRevokedNotice notice) {
         notificationService.notifyManagerRevoked(notice.userId(), notice.companyId(), notice.companyName());
     }
 
     /** Raises a pending-owner-appointment notification when a member is offered ownership. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(OwnerAppointmentPendingNotice notice) {
         notificationService.notifyOwnerAppointmentPending(
                 notice.userId(), notice.companyId(), notice.companyName());
     }
 
     /** Raises a role-changed notification when a member's company role changes. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(RoleChangedNotice notice) {
         notificationService.notifyRoleChanged(
                 notice.userId(), notice.companyId(), notice.companyName(), notice.newRole());
     }
 
     /** Raises a direct-message notification when a new message arrives for a recipient. */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
     public void on(NewMessageNotice notice) {
         notificationService.notifyNewMessage(
                 notice.recipientUserId(), notice.conversationId(), notice.senderLabel(),

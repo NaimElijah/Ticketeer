@@ -178,7 +178,9 @@ public class ReservationService {
 
             notifyFailureAfterUnlock = true;
             failureNotificationReason = "Reservation failed: " + e.getMessage();
-            // Notify the member of the failed reservation attempt. For guests, we do not have a user ID to send notifications to, so we skip this step for guests. The notification can be used to trigger email notifications, app push notifications, etc. to inform the member that their reservation attempt failed and provide any details that may be relevant (e.g. event name, zone, quantity they tried to reserve, reason for failure if known, etc.).
+            // The failure notice is published inside this transaction, which the rethrow rolls back, so
+            // it is never delivered (ADR-004); the caller sees the failure directly. #63 decides whether
+            // failure alerts are wanted, and if so they must be published after the transaction ends.
 
             log.warn("reserve failed: eventId={}, zoneId={}, selectionQuantity={}, seats={}, reason={}",
                     eventId, zoneId,
@@ -194,28 +196,11 @@ public class ReservationService {
             activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
-                try {
-                    notifyReservationSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
-                } catch (RuntimeException notificationFailure) {
-                    log.warn("Reservation succeeded but notification failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyReservationSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
             }
 
             if (notifyFailureAfterUnlock) {
-                try {
-                    notifyReservationFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
-                } catch (RuntimeException notificationFailure) {
-                    log.warn(
-                            "Reservation failed and failure-notification also failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyReservationFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
             }
         }
 
@@ -324,28 +309,11 @@ public class ReservationService {
             activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
-                try {
-                    notifyRemoveSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
-                } catch (RuntimeException notificationFailure) {
-                    log.warn("Remove reservation succeeded but notification failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyRemoveSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
             }
 
             if (notifyFailureAfterUnlock) {
-                try {
-                    notifyRemoveFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
-                } catch (RuntimeException notificationFailure) {
-                    log.warn(
-                            "Remove reservation failed and failure-notification also failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyRemoveFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
             }
         }
 
@@ -589,28 +557,28 @@ public class ReservationService {
 
     private void notifyReservationSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
 
     private void notifyRemoveSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new ReservationRemovalSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyRemoveFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new ReservationRemovalFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
