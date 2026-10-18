@@ -680,29 +680,6 @@ public class CheckoutServiceAcceptanceTest {
         assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
     }
 
-    @Test
-    @Disabled("Notification failure should not cause checkout failure.")
-    void GivenNotificationFailsAfterSuccessfulPurchase_WhenCheckout_ThenThrowExceptionAndRefundPaymentAndReturnTicketsToStock() {
-        validSession();
-        AtomicBoolean refundRequested = trackRefund();
-        AtomicInteger returnedTickets = trackReturnedTickets(event1, ZONE_ID_1);
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        validPaymentAndIssuance(1);
-
-        doThrow(new RuntimeException("notify failed"))
-                .when(eventPublisher)
-                .publishEvent(any(PurchaseCompletedNotice.class));
-
-        RuntimeException exception = assertThrows(RuntimeException.class,
-                () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
-
-        assertEquals(true, refundRequested.get());
-        assertEquals(1, returnedTickets.get());
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
     
     @Test
     void GivenTwoUsersCheckoutSameReservedTicketConcurrently_WhenCheckout_ThenOnlyOneCheckoutSucceeds()

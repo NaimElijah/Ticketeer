@@ -1,9 +1,11 @@
 package com.ticketing.system.acceptance;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -58,10 +60,12 @@ class DelayedAppointmentNotificationAcceptanceTest {
         assertTrue(notificationRepository.findByRecipientAndStatus(u2Id, NotificationStatus.PENDING).isEmpty(),
                 "no notifications before the appointment");
 
-        // --- u1 appoints u2 as owner while u2 is offline -> a PENDING notification is stored ---
+        // --- u1 appoints u2 as owner while u2 is offline -> a PENDING notification is stored, after
+        // commit on the notify- thread (ADR-004), so wait for it ---
         companyService.appointOwner(u1.token(), new OwnerAppointmentRequestDTO(companyId, u2Id));
-        assertEquals(1, notificationRepository.findByRecipientAndStatus(u2Id, NotificationStatus.PENDING).size(),
-                "the offline appointment must be queued as a pending notification");
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                assertEquals(1, notificationRepository.findByRecipientAndStatus(u2Id, NotificationStatus.PENDING).size(),
+                        "the offline appointment must be queued as a pending notification"));
 
         // --- u2 logs in -> the delayed notification is delivered immediately in the login payload ---
         LoginDTO u2Login = login(u2Name);

@@ -2,7 +2,6 @@ package com.ticketing.system.sales.config;
 
 import java.time.Duration;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -21,11 +20,14 @@ import jakarta.annotation.PostConstruct;
 @Configuration
 public class ReservationHoldConfig {
 
-    @Value("${constants.ticket-reservation-duration}")
-    private int reservationTimeoutMinutes;
+    private final ReservationHoldProperties properties;
+
+    public ReservationHoldConfig(ReservationHoldProperties properties) {
+        this.properties = properties;
+    }
 
     @PostConstruct
     void applyHoldWindow() {
-        CartLineItem.setExpirationLimit(Duration.ofMinutes(reservationTimeoutMinutes));
+        CartLineItem.setExpirationLimit(Duration.ofMinutes(properties.ticketReservationDuration()));
     }
 }

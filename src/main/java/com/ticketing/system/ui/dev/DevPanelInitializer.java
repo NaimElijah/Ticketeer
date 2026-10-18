@@ -1,11 +1,11 @@
 package com.ticketing.system.ui.dev;
 
+import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinServiceInitListener;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,10 +29,9 @@ public class DevPanelInitializer implements VaadinServiceInitListener {
     public DevPanelInitializer(ReservationService reservationService,
                                AuthenticationService authenticationService,
                                SignOutFlow signOutFlow,
-                               @Value("${platform.admin.username:admin}") String adminUsername,
-                               @Value("${platform.admin.password:admin}") String adminPassword) {
+                               PlatformAdminProperties platformAdmin) {
         DevPanel.init(reservationService);
-        DevPanel.bindBeans(authenticationService, signOutFlow, adminUsername, adminPassword);
+        DevPanel.bindBeans(authenticationService, signOutFlow, platformAdmin.username(), platformAdmin.password());
     }
 
     @Override

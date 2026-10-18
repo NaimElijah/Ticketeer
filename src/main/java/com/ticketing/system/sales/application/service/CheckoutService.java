@@ -324,11 +324,7 @@ public class CheckoutService {
                 }
             }
             if (checkoutSucceeded && userId > 0 && receiptLinesToNotifyAfterUnlock != null) {
-                try {
-                    notifyPurchaseCompleted(userId, totalPrice, receiptLinesToNotifyAfterUnlock);
-                } catch (RuntimeException notificationFailure) {
-                    log.warn("Purchase completed but notification failed for userId={}", userId, notificationFailure);
-                }
+                notifyPurchaseCompleted(userId, totalPrice, receiptLinesToNotifyAfterUnlock);
             }
         }
     }
@@ -1028,7 +1024,7 @@ public class CheckoutService {
     // notifications or what information we include in the notification without
     // affecting the main checkout flow.
     private void notifyPurchaseCompleted(int userId, double totalPrice, List<ReceiptLine> receiptLines) {
-        // Publish a cross-context integration event; the notifications listener delivers it in-line.
+        // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         eventPublisher.publishEvent(new PurchaseCompletedNotice(
                 userId,
                 totalPrice,
@@ -1082,13 +1078,8 @@ public class CheckoutService {
         }
 
         if (userId > 0) {
-            try {
-                // Publish a cross-context integration event; the notifications listener delivers it in-line.
-                eventPublisher.publishEvent(new PurchaseFailedNotice(userId, "Checkout failed."));
-            } catch (RuntimeException notificationFailure) {
-                log.warn("Checkout failed and failure-notification also failed for userId={}", userId,
-                        notificationFailure);
-            }
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
+            eventPublisher.publishEvent(new PurchaseFailedNotice(userId, "Checkout failed."));
         }
     }
 

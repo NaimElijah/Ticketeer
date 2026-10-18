@@ -24,6 +24,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.ticketing.system.identity.config.LockoutProperties;
+import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
@@ -79,7 +81,8 @@ class AuthenticationServiceTest {
         service = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
                 mockSessionRepo, mock(ISystemMetrics.class),
-                fixedClock, mockAdminRepo, GUEST_IDLE_MINUTES, MEMBER_TTL_MINUTES, 5, 15L);
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L));
     }
 
     /**

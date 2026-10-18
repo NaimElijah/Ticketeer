@@ -7,7 +7,6 @@ import java.util.List;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +26,7 @@ import com.ticketing.system.shared.metrics.MetricType;
 // application layer no longer imports any catalog.domain type — it drives inventory through this port.
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
@@ -49,9 +49,6 @@ public class ReservationService {
     private final UserRepository userRepository;
     private final MarketGate marketGate; // queried to enforce the UC-32 market-open gate (dependency-inverted away from governance)
     private final ISystemMetrics systemMetrics;
-
-    @Value("${constants.ticket-reservation-duration}")
-    private int reservationTimeoutMinutes;
 
     public ReservationService(
             InventoryCommandPort inventoryPort,
@@ -181,7 +178,9 @@ public class ReservationService {
 
             notifyFailureAfterUnlock = true;
             failureNotificationReason = "Reservation failed: " + e.getMessage();
-            // Notify the member of the failed reservation attempt. For guests, we do not have a user ID to send notifications to, so we skip this step for guests. The notification can be used to trigger email notifications, app push notifications, etc. to inform the member that their reservation attempt failed and provide any details that may be relevant (e.g. event name, zone, quantity they tried to reserve, reason for failure if known, etc.).
+            // The failure notice is published inside this transaction, which the rethrow rolls back, so
+            // it is never delivered (ADR-004); the caller sees the failure directly. #63 decides whether
+            // failure alerts are wanted, and if so they must be published after the transaction ends.
 
             log.warn("reserve failed: eventId={}, zoneId={}, selectionQuantity={}, seats={}, reason={}",
                     eventId, zoneId,
@@ -197,28 +196,11 @@ public class ReservationService {
             activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
-                try {
-                    notifyReservationSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
-                } catch (RuntimeException notificationFailure) {
-                    log.warn("Reservation succeeded but notification failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyReservationSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
             }
 
             if (notifyFailureAfterUnlock) {
-                try {
-                    notifyReservationFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
-                } catch (RuntimeException notificationFailure) {
-                    log.warn(
-                            "Reservation failed and failure-notification also failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyReservationFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
             }
         }
 
@@ -327,28 +309,11 @@ public class ReservationService {
             activeOrderRepository.unlock(orderLockKey);
 
             if (notifySuccessAfterUnlock) {
-                try {
-                    notifyRemoveSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
-                } catch (RuntimeException notificationFailure) {
-                    log.warn("Remove reservation succeeded but notification failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyRemoveSuccessIfMember(buyer, eventId, zoneId, selection.getQuantity());
             }
 
             if (notifyFailureAfterUnlock) {
-                try {
-                    notifyRemoveFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
-                } catch (RuntimeException notificationFailure) {
-                    log.warn(
-                            "Remove reservation failed and failure-notification also failed. userId={}, eventId={}, zoneId={}",
-                            buyer.isMember() ? buyer.userId() : null,
-                            eventId,
-                            zoneId,
-                            notificationFailure);
-                }
+                notifyRemoveFailureIfMember(buyer, eventId, zoneId, failureNotificationReason);
             }
         }
 
@@ -592,28 +557,28 @@ public class ReservationService {
 
     private void notifyReservationSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
 
     private void notifyRemoveSuccessIfMember(BuyerContextDTO buyer, int eventId, int zoneId, int quantity) {
         if (buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new ReservationRemovalSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
     }
 
     private void notifyRemoveFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
         if (buyer != null && buyer.isMember()) {
-            // Publish a cross-context integration event; the notifications listener delivers it in-line.
+            // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new ReservationRemovalFailedNotice(buyer.userId(), eventId, zoneId, reason));
         }
     }
@@ -625,7 +590,7 @@ public class ReservationService {
                 zoneId,
                 selection.getQuantity(),
                 selection.getSeatNumbers(),
-                LocalDateTime.now().plusMinutes(this.reservationTimeoutMinutes));
+                LocalDateTime.now().plus(CartLineItem.getExpirationLimit()));
     }
 
     // method to restore an active order for a user (member) - this is used by the frontend when a user logs in or returns to the site after navigating away, to restore their active order and show them their current reservations in the cart. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we convert it to an ActiveOrderDTO and return it. If no active order is found, we return null. We also enrich the DTO with event names for better UX in the frontend, so that the frontend can show the event names directly in the cart without needing to make extra calls to get event details for each line item.

@@ -12,7 +12,6 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +24,8 @@ import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.shared.dto.RefreshTokenRequestDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.identity.config.LockoutProperties;
+import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.identity.application.port.out.CartRestorationPort;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -92,10 +93,8 @@ public class AuthenticationService {
             ISystemMetrics systemMetrics,
             Clock clock,
             AdminRepository adminRepository,
-            @Value("${session.guest-idle-timeout-minutes}") long guestIdleMinutes,
-            @Value("${session.member-ttl-minutes}") long memberTtlMinutes,
-            @Value("${auth.lockout.max-attempts:5}") int lockoutMaxAttempts,
-            @Value("${auth.lockout.lock-minutes:15}") long lockoutLockMinutes) {
+            SessionProperties sessionProperties,
+            LockoutProperties lockoutProperties) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.sessionManager = sessionManager;
@@ -105,10 +104,10 @@ public class AuthenticationService {
         this.systemMetrics = systemMetrics;
         this.clock = clock;
         this.adminRepository = adminRepository;
-        this.guestIdleMinutes = guestIdleMinutes;
-        this.memberTtlMinutes = memberTtlMinutes;
-        this.lockoutMaxAttempts = lockoutMaxAttempts;
-        this.lockoutLockMinutes = lockoutLockMinutes;
+        this.guestIdleMinutes = sessionProperties.guestIdleTimeoutMinutes();
+        this.memberTtlMinutes = sessionProperties.memberTtlMinutes();
+        this.lockoutMaxAttempts = lockoutProperties.maxAttempts();
+        this.lockoutLockMinutes = lockoutProperties.lockMinutes();
     }
 
     /** Delegates to {@link SessionManager#extractUserId}. */

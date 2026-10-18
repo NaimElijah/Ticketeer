@@ -32,8 +32,10 @@ quoted and on one line, so they work in both shells.
 UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
 `seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default) · `wipe` (delete, then stop) ·
-`reset` (wipe + reseed) · `ask`. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
-on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. Full reference: `SEED.md`.
+`reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
+on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. A missing or unreadable
+scenario file stops the boot in every profile. A failing scenario step stops it only while
+`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Full reference: `SEED.md`.
 
 ## Tests and CI
 
@@ -78,7 +80,7 @@ nothing depends on either. Known exception, due to move behind an inbound port: 
 | `catalog` | Event, venue maps, zones, seats, **inventory** (reserve/release/confirm via inbound `InventoryCommandPort`) |
 | `sales` | ActiveOrder, OrderReceipt, Ticket, checkout, reservations, refunds, WSEP adapters |
 | `messaging` | Conversations, support inquiries |
-| `notifications` | Consumes `shared/event` notices via `@EventListener` (`adapter/in/event`) |
+| `notifications` | Consumes `shared/event` notices after commit on the `notify-` thread (`adapter/in/event`, ADR-004) |
 | `governance` | Platform lifecycle, market state, system analytics/integrity; implements sales' `MarketGate` |
 | `reporting` | CQRS read side (purchase history, company dashboards), read by `ui` |
 | `ui` | The single Vaadin driving adapter |
@@ -92,10 +94,10 @@ the JPA entities: `HexagonalRulesTest` deliberately allows `jakarta.persistence`
 
 Seams: `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`, `EventSalesHistoryPort`,
 `InventoryCommandPort`, `CatalogEventDisplayPort`, `EventCancelledEvent`, the `shared/event` notices.
-Events are synchronous in-process `@EventListener`s: no outbox, no Modulith event registry.
+Events are in-process, with no outbox and no Modulith event registry. Catalog → sales (`EventCancelledEvent`) is a synchronous `@EventListener`, because the cancel call must see refund failures. Every `shared/event` notice is consumed by `NotificationEventListener` with `@Async("notificationExecutor")` + `@TransactionalEventListener(fallbackExecution = true)`: after commit, on one `notify-` thread, never delivered for a rolled-back transaction (ADR-004). Publishers don't catch notification failures, so a new notice consumer must follow the same pattern; `HexagonalRulesTest` fails the build otherwise. A Spring test that reads notifications must wait for them (Awaitility).
 
 **Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity,
-application-not-adapter, no-backend→ui, `bounded_contexts_are_acyclic`) and `ModularityTests`
+application-not-adapter, no-backend→ui, `bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by
 copying from `target/`; git has CRLF and the generator writes LF, so a naive diff shows every line.
@@ -127,7 +129,7 @@ subclasses (third test command above).
 
 An in-memory state machine in `SystemAdminService` (governance, not persisted):
 `UNINITIALIZED → READY → OPEN ↔ CLOSED`.
-- `PlatformInitializationRunner` (`@Order(0)`) calls `initializePlatform()`. It needs a reachable WSEP `PaymentGateway` *and* `TicketIssuer` plus a System Admin, then moves to READY. Failures are logged, not fatal; the process still boots.
+- `PlatformInitializationRunner` (`@Order(0)`) calls `initializePlatform()`. It needs a reachable WSEP `PaymentGateway` *and* `TicketIssuer` plus a System Admin, then moves to READY. Only a WSEP outage (`ExternalServiceUnavailableException`) is logged and left to self-heal; every other init failure propagates and stops the boot (ADR-003).
 - `bootstrap/scheduling/MarketOpener` opens the market on **every** non-test boot, and `MarketSelfHealScheduler` keeps retrying (it never reopens a market an admin closed). While CLOSED, `ReservationService`/`CheckoutService` refuse via `MarketGate`.
 - Under `test`, none of these runners, schedulers or real WSEP clients exist (`@Profile("!test")`); tests drive init themselves against `Stub*` gateways.
 
@@ -159,6 +161,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | `production`, `no-vaadin` | Maven build profiles: bundle the frontend / skip `prepare-frontend` |
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
+- Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
 - A new Spring profile needs a `<springProfile>` block in `logback-spring.xml`; otherwise the run gets no appenders and looks hung (36ac7924).
 - `src/test/resources/application-acceptance.yml` exists, but nothing activates it.
 

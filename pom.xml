@@ -147,8 +147,7 @@
 		     starter-core: @ApplicationModule model at runtime.
 		     starter-test: ApplicationModules.verify() + Documenter (diagram/canvas generation).
 		     The JPA event-publication registry (spring-modulith-starter-jpa) is deliberately
-		     deferred until domain events are introduced (Step 7), so it doesn't perturb the
-		     current persistence/test context. -->
+		     left out: notices are delivered after commit without an outbox (ADR-004). -->
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>
 			<artifactId>spring-modulith-starter-core</artifactId>

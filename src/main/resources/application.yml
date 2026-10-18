@@ -13,6 +13,12 @@ spring:
     # deploy/run target, H2 in dev and the @DataJpaTest contract tests), so one config
     # serves every backend — a config-only switch to the cloud DB.
 
+  # Keep Boot's applicationTaskExecutor: Boot 3.5 stops creating it once any Executor bean exists,
+  # and the notifications module defines its own (notificationExecutor, ADR-004).
+  task:
+    execution:
+      mode: force
+
   # Activating the `dev` profile also activates `jpa`, so dev develops on the real
   # persistence path (JPA + H2 — see application-dev.yml). Deploy/run = `jpa` + Postgres.
   profiles:
@@ -91,10 +97,22 @@ platform:
 # the single koyeb endpoint both adapters POST to.
 wsep:
   base-url: ${WSEP_BASE_URL:https://damp-lynna-wsep-1984852e.koyeb.app/}
+  request-timeout-seconds: ${WSEP_REQUEST_TIMEOUT_SECONDS:20}
   # The reachability handshake is retried (idempotent) so a cold-starting WSEP host doesn't leave the
   # market closed at boot (#455/#365). pay/issue/refund are never retried (non-idempotent).
   handshake-attempts: ${WSEP_HANDSHAKE_ATTEMPTS:3}
   handshake-backoff-ms: ${WSEP_HANDSHAKE_BACKOFF_MS:1000}
+
+# Initial-state seeding (V3 2.a.ii; ScenarioRunner, every profile except test). See SEED.md.
+#  - mode: off | reseed | wipe | reset | ask. An unknown mode stops the boot.
+#  - wipe/reset also need assume-yes=true.
+#  - fail-fast: a failing step stops the boot (V3 2.a.ii, ADR-003). The dev profile turns it off so
+#    a broken demo line doesn't block local work. A missing scenario file stops the boot either way.
+seed:
+  mode: ${SEED_MODE:off}
+  fail-fast: ${SEED_FAIL_FAST:true}
+  assume-yes: ${SEED_ASSUME_YES:false}
+  scenario: ${SEED_SCENARIO:classpath:scenarios/demo.scenario}
 
 # Market self-heal (every profile except test): if a transient external-service outage leaves the
 # market closed at boot, MarketSelfHealScheduler re-attempts the open on this interval until it

@@ -7,15 +7,17 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.governance.application.service.SystemAdminService;
-import com.ticketing.system.shared.exception.DomainException;
+import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Runs platform initialization (UC-1) at startup. Non-fatal by design: if external services
- * are unreachable or the default admin cannot be created, the platform stays uninitialized and
- * the market cannot open (UC-32 guards that) — but the process still boots, so the health
- * endpoint and ops tooling remain available to diagnose and recover.
+ * Runs platform initialization (UC-1) at startup and decides whether a failure stops the boot
+ * (ADR-003). An unreachable payment service or ticket issuer is the one failure that waiting can
+ * fix: it is logged, the process boots with the market closed (UC-32 guards that), and
+ * {@code MarketSelfHealScheduler} retries. Every other failure, such as a default admin that
+ * cannot be created or persisted state that breaks an invariant, propagates out of this runner,
+ * so {@code SpringApplication.run} fails and the process exits.
  *
  * <p>{@code @Order(0)} runs this before the dev seeders ({@code @Order(1)}/{@code (2)}).
  * Excluded from the {@code test} profile so acceptance tests drive initialization explicitly.
@@ -36,8 +38,9 @@ public class PlatformInitializationRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         try {
             systemAdminService.initializePlatform();
-        } catch (DomainException e) {
-            log.error("Platform NOT initialized — market cannot open until resolved: {}", e.getMessage());
+        } catch (ExternalServiceUnavailableException e) {
+            log.warn("Platform not initialized yet; the market stays closed and self-heal retries: {}",
+                    e.getMessage());
         }
     }
 }

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.shared.dto.MarketStateDTO;
@@ -34,7 +35,6 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import lombok.extern.slf4j.Slf4j;
 // Owns platform-bootstrap, market-lifecycle, and global admin queries.
 // UC-1 (Initialize), UC-31 (Global History), UC-32 (Open/Close Market).
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,8 +82,7 @@ public class SystemAdminService {
             List<TicketIssuer> ticketIssuers,
             PasswordHasher passwordHasher,
             SystemIntegrityVerifier integrityVerifier,
-            @Value("${platform.admin.username}") String defaultAdminUsername,
-            @Value("${platform.admin.password}") String defaultAdminPassword
+            PlatformAdminProperties platformAdmin
     ) {
         this.sessionManager = sessionManager;
         this.adminRepository = adminRepository;
@@ -97,8 +96,8 @@ public class SystemAdminService {
         this.ticketIssuers = ticketIssuers;
         this.passwordHasher = passwordHasher;
         this.integrityVerifier = integrityVerifier;
-        this.defaultAdminUsername = defaultAdminUsername;
-        this.defaultAdminPassword = defaultAdminPassword;
+        this.defaultAdminUsername = platformAdmin.username();
+        this.defaultAdminPassword = platformAdmin.password();
     }
 
     // UC-1 — I.1.1 invariants + I.1.2 payment-gateway check + I.1.3 issuer check + I.1.4 default-admin.
@@ -113,16 +112,19 @@ public class SystemAdminService {
             return;
         }
 
-        // I.1.2 / I.1.3 — at least one payment service and one ticket-issuance service reachable.
-        requireExternalServicesReachable();
+        // ADR-003: the fatal checks run first. A WSEP outage is the only failure that self-heals,
+        // so checking WSEP first would hide a missing admin or corrupt data behind every retry.
 
         // I.1.4 — guarantee at least one System Admin (auto-create a default if none).
         createDefaultAdminIfMissing();
 
-        // Step 4 / I.1.1 — re-assert the platform post-conditions, then the system-wide
-        // structural correctness constraints, as explicit gates before going live.
+        // Step 4 / I.1.1 — re-assert that an admin exists, then the system-wide structural
+        // correctness constraints, as explicit gates before going live.
         verifyInitializationInvariants();
         integrityVerifier.verify();
+
+        // I.1.2 / I.1.3 — at least one payment service and one ticket-issuance service reachable.
+        requireExternalServicesReachable();
 
         this.lastInitializedAt = LocalDateTime.now();
         this.status = PlatformStatus.READY;
@@ -147,6 +149,12 @@ public class SystemAdminService {
             defaultAdmin.checkInvariants();
             adminRepository.save(defaultAdmin);
         } catch (RuntimeException e) {
+            // Another instance booting against the same database may have inserted it first. An admin
+            // then exists, so the lost insert is not an init failure and must not stop this boot (ADR-003).
+            if (adminRepository.existsAny()) {
+                log.info("The default System Admin was created concurrently; continuing.");
+                return;
+            }
             throw new MissingDefaultAdminException(e.getMessage());
         }
 
@@ -288,15 +296,9 @@ public class SystemAdminService {
         }
     }
 
-    // *HELPER* — UC-1 step 4 / I.1.1: re-assert the platform post-conditions as a single gate.
-    // Defensive against an external service dropping between the initial check and this point.
+    // *HELPER* — UC-1 step 4 / I.1.1: re-assert that a System Admin exists. The external-service
+    // post-conditions are asserted by requireExternalServicesReachable(), which now runs last.
     private void verifyInitializationInvariants() {
-        if (paymentGateways.stream().noneMatch(this::isReachable)) {
-            throw new InitializationIntegrityException("no reachable payment service");
-        }
-        if (ticketIssuers.stream().noneMatch(this::isReachable)) {
-            throw new InitializationIntegrityException("no reachable ticket issuance service");
-        }
         if (!adminRepository.existsAny()) {
             throw new InitializationIntegrityException("no System Admin present");
         }

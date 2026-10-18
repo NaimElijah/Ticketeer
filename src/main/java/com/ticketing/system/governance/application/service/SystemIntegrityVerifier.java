@@ -48,8 +48,9 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <h3>Checked at initialization (connection rules)</h3>
  * <ul>
- *   <li>§1 #2 ≥1 System Admin, §2 ≥1 payment + ≥1 ticket-issuance connection — asserted by
- *       {@code SystemAdminService.verifyInitializationInvariants()}.</li>
+ *   <li>§1 #2 ≥1 System Admin — asserted by {@code SystemAdminService.verifyInitializationInvariants()};
+ *       §2 ≥1 payment + ≥1 ticket-issuance connection — asserted last, by
+ *       {@code SystemAdminService.requireExternalServicesReachable()} (ADR-003).</li>
  * </ul>
  *
  * <h3>Enforced at their call sites (behavioural / transaction rules — not scannable state)</h3>

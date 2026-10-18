@@ -293,13 +293,10 @@ public class EventCancellationRefundService {
         return ticket.getStatus() == TicketStatus.REFUNDED || ticket.getStatus() == TicketStatus.VOIDED;
     }
 
+    // The refund has committed. Notifications consumes the notice off this thread (ADR-004), so a
+    // notification failure cannot report the refund as failed.
     private void notifyHolder(int userId, int eventId, String eventName) {
-        try {
-            eventPublisher.publishEvent(new EventCancelledNotice(userId, eventId, eventName));
-        } catch (RuntimeException e) {
-            // The refund has committed; a lost notice must not report the refund as failed.
-            log.warn("Failed to send cancellation notification to userId={} for eventId={}", userId, eventId, e);
-        }
+        eventPublisher.publishEvent(new EventCancelledNotice(userId, eventId, eventName));
     }
 
     /** What a claim holds for the gateway call that follows it. */

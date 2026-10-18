@@ -122,7 +122,8 @@ re-validates the hold, writes the tickets and the `OrderReceipt`, and confirms t
 SOLD through catalog's `InventoryCommandPort`. If that unit fails, for example on a `@Version`
 conflict when two buyers race for one seat, it rolls back, and the service returns the seats to stock
 and refunds the charge. On success it publishes a `PurchaseCompletedNotice`, which `notifications`
-turns into an alert.
+turns into an alert after the purchase commits, on a background thread, so a slow or failing alert
+never delays or fails the checkout ([ADR-004](docs/ADRs/ADR-004-no-outbox-for-notifications.md)).
 
 **Every repository port has two adapters**, `MemoryXxxRepository` (`@Profile("!jpa")`) and
 `JpaXxxRepository` (`@Profile("jpa")`), and one abstract contract test runs against both. Under
@@ -133,7 +134,9 @@ into domain exceptions.
 `SystemAdminService`. At boot, `PlatformInitializationRunner` reaches READY once the payment
 gateway and ticket issuer answer and a System Admin exists; it creates that admin from
 `PLATFORM_ADMIN_*` when there is none. `MarketOpener` then opens the market on every boot outside
-the `test` profile, and `MarketSelfHealScheduler` keeps retrying while WSEP is down.
+the `test` profile, and `MarketSelfHealScheduler` keeps retrying while WSEP is down. A WSEP outage
+is the only initialization failure the app boots through; a missing admin or persisted state that
+breaks an invariant stops the boot ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)).
 
 Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.md). Decisions:
 [docs/ADRs/](docs/ADRs/). A full `architecture.md` is tracked in
@@ -198,6 +201,31 @@ set these:
 | `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes |
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
 
+**Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
+`wsep`, `platform.admin`, `seed` and `market` groups bind to validated records. A value out of
+bounds, such as a zero hold, a negative TTL, a blank admin password or a malformed WSEP URL, stops
+the boot with a report naming the property
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource,
+`JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) and `ANALYTICS_*`
+([#165](https://github.com/NaimElijah/Ticketeer/issues/165)) are not validated yet.
+
+**Settings can come from a file instead of the environment.** Spring Boot layers an external
+`application.yml` over the bundled defaults:
+
+```bash
+java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.additional-location=file:/etc/ticketeer/
+java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.import=file:./ticketeer.yml
+./mvnw spring-boot:run "-Dspring-boot.run.arguments=--spring.config.import=file:./ticketeer.yml"
+```
+
+`additional-location` reads `application.yml` (and `application-<profile>.yml`) from that folder;
+`import` reads one named file. A key set in the file replaces the bundled entry, `${VAR:default}`
+placeholder included. An environment variable still wins only when its name is the property's own
+name in environment form, as with `WSEP_BASE_URL`, `SESSION_*`, `PLATFORM_ADMIN_*`, `JWT_SECRET` and
+`SEED_*`. `TICKET_RESERVATION_DURATION`, `ORDER_EXPIRATION_DURATION`, `DB_*` and `DB_POOL_SIZE` are
+read only through the bundled placeholder, so a file that sets their key overrides them. Set each
+value in one place.
+
 > [!WARNING]
 > With no profile at all, the app runs on the in-memory repositories: nothing survives a
 > restart, even though `application.yml` configures a PostgreSQL datasource. Select `jpa` or
@@ -214,10 +242,12 @@ set these:
 | `TICKET_RESERVATION_DURATION` | Ticket hold, in minutes | `10` |
 | `ORDER_EXPIRATION_DURATION` | Active-order lifetime, in minutes | `60` |
 | `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window · dashboard refresh (`0` stops it) | `5` · `5000` |
+| `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
-| `SEED_MODE` · `SEED_ASSUME_YES` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` |
+| `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |
+| `SEED_FAIL_FAST` | A failing scenario step stops the boot | `true` (`false` under `dev`) |
 
 | Profile | Effect |
 |---|---|
@@ -354,8 +384,6 @@ Known limitations:
   forgets them ([#24](https://github.com/NaimElijah/Ticketeer/issues/24),
   [#25](https://github.com/NaimElijah/Ticketeer/issues/25),
   [#39](https://github.com/NaimElijah/Ticketeer/issues/39)).
-- A failed initialization is logged, not fatal: the app boots without an open market
-  ([#27](https://github.com/NaimElijah/Ticketeer/issues/27)).
 - The committed defaults include dev-only secrets, and nothing refuses them outside `dev`
   ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)).
 - Money is a `double`, not integer minor units with a currency
