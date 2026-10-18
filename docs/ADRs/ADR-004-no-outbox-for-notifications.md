@@ -21,8 +21,11 @@ Before this decision the listener was a plain synchronous `@EventListener`:
   every publisher.
 
 Spring Modulith offers two ready answers. `@ApplicationModuleListener` (async, after commit, in its
-own transaction) is deprecated for removal in 1.4.1 and skips events published outside a
-transaction. The event-publication registry is an outbox: it persists every event before commit
+own transaction) composes a `@TransactionalEventListener` without fallback execution, so it skips
+events published outside a transaction. The copy on this classpath
+(`org.springframework.modulith.ApplicationModuleListener`, spring-modulith-api 1.4.1) is deprecated
+for removal; the supported one lives in `spring-modulith-events-api`, which the project does not
+depend on. The event-publication registry is an outbox: it persists every event before commit
 and replays incomplete ones after a crash. The V3 appendix says not to persist event-like data.
 
 ## Decision
@@ -40,8 +43,8 @@ a dedicated background thread:** `@Async("notificationExecutor")` on the class, 
   their transactions have ended. With no transaction active, the listener runs at once, still on
   the background thread.
 - **One background thread.** The `notificationExecutor` is a single-thread pool with a bounded
-  queue, so notices are stored in the order they were published. Storing one is a single row
-  insert.
+  queue, so notices are stored in the order they were submitted: publish order within one thread,
+  commit order across concurrent transactions. Storing one is a single row insert.
 - **A full queue drops the notice and logs a WARN.** It never throws into the publisher and never
   runs on the publisher's thread. Running it on the caller would block the use case, and during
   `afterCompletion` the caller's committed transaction is still bound, so the notification's own
@@ -85,9 +88,10 @@ a dedicated background thread:** `@Async("notificationExecutor")` on the class, 
 
 - **Modulith's event-publication registry (an outbox).** Rejected for now: it persists event data,
   which the V3 appendix rules out, and adds a table and a replay job for alerts that tolerate loss.
-- **`@ApplicationModuleListener`.** Rejected: deprecated for removal in Modulith 1.4.1, and without
-  fallback execution it would silently drop the notices that checkout and event cancellation
-  publish after their transactions end.
+- **`@ApplicationModuleListener`.** Rejected: without fallback execution it would silently drop the
+  notices that checkout and event cancellation publish after their transactions end. The copy on
+  this classpath is also deprecated for removal, and the supported one needs the extra
+  `spring-modulith-events-api` dependency.
 - **Keep the synchronous listener and the publishers' try/catch blocks.** Rejected: a slow channel
   still blocks the use case, and a rolled-back transaction can still notify.
 - **`AFTER_COMPLETION` for the failure notices,** so that a failure raised inside a rolled-back
