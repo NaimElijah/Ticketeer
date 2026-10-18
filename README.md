@@ -215,7 +215,12 @@ java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.import=f
 ```
 
 `additional-location` reads `application.yml` (and `application-<profile>.yml`) from that folder;
-`import` reads one named file. Either way, environment variables still win over the file.
+`import` reads one named file. A key set in the file replaces the bundled entry, `${VAR:default}`
+placeholder included. An environment variable still wins only when its name is the property's own
+name in environment form, as with `WSEP_BASE_URL`, `SESSION_*`, `PLATFORM_ADMIN_*`, `JWT_SECRET` and
+`SEED_*`. `TICKET_RESERVATION_DURATION`, `ORDER_EXPIRATION_DURATION`, `DB_*` and `DB_POOL_SIZE` are
+read only through the bundled placeholder, so a file that sets their key overrides them. Set each
+value in one place.
 
 > [!WARNING]
 > With no profile at all, the app runs on the in-memory repositories: nothing survives a
