@@ -70,11 +70,6 @@ public class ReceiptLine implements InvariantChecked {
         return copy;
     }
 
-    public boolean isExpired() {
-        // return time at which the line was added + reservation hold duration < now. This is used to determine if the reservation hold has expired and the line can be removed from the receipt.
-        return addedAt.plusMinutes(10).isBefore(LocalDateTime.now());   //TODO: use the timeout value from config.
-    }
-
     public int getTicketId() {
         return ticketId;
     }

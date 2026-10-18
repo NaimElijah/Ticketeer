@@ -13,9 +13,10 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+
+import com.ticketing.system.shared.config.WsepProperties;
 
 /**
  * Thin HTTP client for the WSEP external-systems endpoint. Every operation is a
@@ -38,15 +39,11 @@ public class WsepHttpClient {
     private final long handshakeBackoffMs;
     private final HttpClient http;
 
-    public WsepHttpClient(
-            @Value("${wsep.base-url:https://damp-lynna-wsep-1984852e.koyeb.app/}") String baseUrl,
-            @Value("${wsep.request-timeout-seconds:20}") long requestTimeoutSeconds,
-            @Value("${wsep.handshake-attempts:3}") int handshakeAttempts,
-            @Value("${wsep.handshake-backoff-ms:1000}") long handshakeBackoffMs) {
-        this.baseUrl = baseUrl;
-        this.requestTimeoutSeconds = requestTimeoutSeconds;
-        this.handshakeAttempts = handshakeAttempts;
-        this.handshakeBackoffMs = handshakeBackoffMs;
+    public WsepHttpClient(WsepProperties properties) {
+        this.baseUrl = properties.baseUrl();
+        this.requestTimeoutSeconds = properties.requestTimeoutSeconds();
+        this.handshakeAttempts = properties.handshakeAttempts();
+        this.handshakeBackoffMs = properties.handshakeBackoffMs();
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();

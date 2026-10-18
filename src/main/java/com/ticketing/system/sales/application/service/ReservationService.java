@@ -7,7 +7,6 @@ import java.util.List;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +26,7 @@ import com.ticketing.system.shared.metrics.MetricType;
 // application layer no longer imports any catalog.domain type — it drives inventory through this port.
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
@@ -49,9 +49,6 @@ public class ReservationService {
     private final UserRepository userRepository;
     private final MarketGate marketGate; // queried to enforce the UC-32 market-open gate (dependency-inverted away from governance)
     private final ISystemMetrics systemMetrics;
-
-    @Value("${constants.ticket-reservation-duration}")
-    private int reservationTimeoutMinutes;
 
     public ReservationService(
             InventoryCommandPort inventoryPort,
@@ -625,7 +622,7 @@ public class ReservationService {
                 zoneId,
                 selection.getQuantity(),
                 selection.getSeatNumbers(),
-                LocalDateTime.now().plusMinutes(this.reservationTimeoutMinutes));
+                LocalDateTime.now().plus(CartLineItem.getExpirationLimit()));
     }
 
     // method to restore an active order for a user (member) - this is used by the frontend when a user logs in or returns to the site after navigating away, to restore their active order and show them their current reservations in the cart. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we convert it to an ActiveOrderDTO and return it. If no active order is found, we return null. We also enrich the DTO with event names for better UX in the frontend, so that the frontend can show the event names directly in the cart without needing to make extra calls to get event details for each line item.

@@ -39,13 +39,24 @@ public class CartLineItem implements InvariantChecked {
     @Column(name = "seat_number")
     private String seatNumber;  // null for standing zones
 
-    private static volatile Duration expirationLimit = Duration.ofMinutes(10);
+    // The hold until ReservationHoldConfig applies the configured one, e.g. in plain unit tests.
+    private static final Duration DEFAULT_EXPIRATION_LIMIT = Duration.ofMinutes(10);
 
-    /** Applied once at startup from {@code constants.ticket-reservation-duration} (see ReservationHoldConfig). */
+    private static volatile Duration expirationLimit = DEFAULT_EXPIRATION_LIMIT;
+
+    /**
+     * Applies the reservation hold window, once at startup, from
+     * {@code constants.ticket-reservation-duration} (see ReservationHoldConfig).
+     *
+     * @param limit the hold window every line item expires after
+     * @throws IllegalArgumentException if {@code limit} is null, zero or negative; the current
+     *         window is kept
+     */
     public static void setExpirationLimit(Duration limit) {
-        if (limit != null && !limit.isZero() && !limit.isNegative()) {
-            expirationLimit = limit;
+        if (limit == null || limit.isZero() || limit.isNegative()) {
+            throw new IllegalArgumentException("Reservation hold must be positive (was " + limit + ")");
         }
+        expirationLimit = limit;
     }
 
     /** The configured reservation hold window (the same value the expiry sweep uses). */

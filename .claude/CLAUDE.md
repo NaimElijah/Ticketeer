@@ -32,8 +32,10 @@ quoted and on one line, so they work in both shells.
 UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
 `seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default) · `wipe` (delete, then stop) ·
-`reset` (wipe + reseed) · `ask`. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
-on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. Full reference: `SEED.md`.
+`reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
+on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. A missing or unreadable
+scenario file stops the boot in every profile. A failing scenario step stops it only while
+`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Full reference: `SEED.md`.
 
 ## Tests and CI
 
@@ -127,7 +129,7 @@ subclasses (third test command above).
 
 An in-memory state machine in `SystemAdminService` (governance, not persisted):
 `UNINITIALIZED → READY → OPEN ↔ CLOSED`.
-- `PlatformInitializationRunner` (`@Order(0)`) calls `initializePlatform()`. It needs a reachable WSEP `PaymentGateway` *and* `TicketIssuer` plus a System Admin, then moves to READY. Failures are logged, not fatal; the process still boots.
+- `PlatformInitializationRunner` (`@Order(0)`) calls `initializePlatform()`. It needs a reachable WSEP `PaymentGateway` *and* `TicketIssuer` plus a System Admin, then moves to READY. Only a WSEP outage (`ExternalServiceUnavailableException`) is logged and left to self-heal; every other init failure propagates and stops the boot (ADR-003).
 - `bootstrap/scheduling/MarketOpener` opens the market on **every** non-test boot, and `MarketSelfHealScheduler` keeps retrying (it never reopens a market an admin closed). While CLOSED, `ReservationService`/`CheckoutService` refuse via `MarketGate`.
 - Under `test`, none of these runners, schedulers or real WSEP clients exist (`@Profile("!test")`); tests drive init themselves against `Stub*` gateways.
 
@@ -159,6 +161,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | `production`, `no-vaadin` | Maven build profiles: bundle the frontend / skip `prepare-frontend` |
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
+- Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
 - A new Spring profile needs a `<springProfile>` block in `logback-spring.xml`; otherwise the run gets no appenders and looks hung (36ac7924).
 - `src/test/resources/application-acceptance.yml` exists, but nothing activates it.
 

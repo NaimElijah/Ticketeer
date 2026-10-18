@@ -23,7 +23,9 @@ spring:
 #   scenario:  the file to run (classpath:scenarios/*.scenario, or file:/abs/path/to/your.scenario)
 #   mode:      off (nothing) | reseed (idempotent) | wipe (clear data) | reset (wipe + reseed)
 #              | ask (interactive menu: pick mode + scenario at boot)
-#   fail-fast: true = stop at the first unexpected error (partial report still logged); false = run all
+#   fail-fast: true = stop at the first unexpected error and fail startup (partial report still logged;
+#              the default outside dev); false = run all and boot anyway, so a broken demo line
+#              doesn't block local work
 # dev's H2 is create-drop (empty every boot), so reseed is the right default here — no wipe needed.
 seed:
   scenario: classpath:scenarios/demo.scenario
