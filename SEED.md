@@ -38,7 +38,9 @@ Because every line is a real service call, each is classified in the end-of-run 
 | **BLOCKED** | A dependent step skipped because a prerequisite failed (recorded to avoid cascade noise). |
 
 With `seed.fail-fast=true` the run aborts at the first unexpected failure (a partial report is still
-logged). The same mechanism seeds a real Postgres/Supabase database too — it runs against the live `jpa`
+logged) and startup fails. That is the default outside `dev`; `dev` sets it to `false` so a broken demo
+line doesn't block local work. A missing or unreadable scenario file stops startup in every profile
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against the live `jpa`
 backend, not just H2 — but stays gated behind `seed.mode` so it is opt-in there.
 
 ## What gets seeded (`demo.scenario`)
@@ -190,8 +192,8 @@ logout-all
 ```
 
 Each line ends up PASS, SKIPPED, FAIL or BLOCKED in the end-of-run `SeedReport` (see
-[How dev seeding works](#how-dev-seeding-works)). With `seed.fail-fast=true` the run stops at the
-first unexpected failure, though startup itself still continues (#27).
+[How dev seeding works](#how-dev-seeding-works)). With `seed.fail-fast=true` (the default outside
+`dev`) the run stops at the first unexpected failure, and startup fails with it.
 
 ## Date relativity
 

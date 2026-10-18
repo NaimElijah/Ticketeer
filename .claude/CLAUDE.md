@@ -33,7 +33,9 @@ UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
 `seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default) · `wipe` (delete, then stop) ·
 `reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
-on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. Full reference: `SEED.md`.
+on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. `seed.fail-fast` (env
+`SEED_FAIL_FAST`) defaults to `true` outside dev: a failing scenario step or a missing scenario file
+stops the boot (ADR-003). Full reference: `SEED.md`.
 
 ## Tests and CI
 

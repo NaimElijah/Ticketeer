@@ -238,6 +238,7 @@ java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.import=f
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
 | `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |
+| `SEED_FAIL_FAST` | A failing scenario step stops the boot | `true` (`false` under `dev`) |
 
 | Profile | Effect |
 |---|---|
@@ -374,8 +375,6 @@ Known limitations:
   forgets them ([#24](https://github.com/NaimElijah/Ticketeer/issues/24),
   [#25](https://github.com/NaimElijah/Ticketeer/issues/25),
   [#39](https://github.com/NaimElijah/Ticketeer/issues/39)).
-- A failing initial-state step does not stop startup
-  ([#27](https://github.com/NaimElijah/Ticketeer/issues/27)).
 - The committed defaults include dev-only secrets, and nothing refuses them outside `dev`
   ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)).
 - Money is a `double`, not integer minor units with a currency

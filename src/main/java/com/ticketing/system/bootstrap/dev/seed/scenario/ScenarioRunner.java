@@ -63,7 +63,8 @@ import java.util.Locale;
  * {@code SEED_MODE} directly or was chosen in the {@code ask} menu — picking a destructive mode is not by
  * itself sufficient. The wipe keeps the bootstrap admin (see {@code JpaRepoCleaner}). The {@code ask} menu
  * reads stdin only to choose mode/scenario; with no terminal it falls back to {@code off} (safe).
- * {@code seed.fail-fast=true} stops the scenario at the first unexpected error.
+ * {@code seed.fail-fast=true} (the default outside {@code dev}) stops the scenario at the first unexpected
+ * error and fails startup, as does a missing or unreadable scenario file (V3 2.a.ii, ADR-003).
  */
 @Component
 @Profile("!test")
@@ -253,20 +254,18 @@ public class ScenarioRunner implements ApplicationRunner {
         return consoleReader.readLine();
     }
 
+    // V3 2.a.ii / ADR-003: a requested initial-state file is part of initialization, so a missing or
+    // unreadable file, or a failed step under fail-fast, propagates and stops the boot.
     private void runScenario(String scenario) {
+        Resource resource = resourceLoader.getResource(scenario);
+        if (!resource.exists()) {
+            throw new IllegalStateException("Initial-state file not found: " + scenario + " (seed.scenario)");
+        }
         String text;
-        try {
-            Resource resource = resourceLoader.getResource(scenario);
-            if (!resource.exists()) {
-                log.error("scenario file not found: {} — nothing seeded", scenario);
-                return;
-            }
-            try (var in = resource.getInputStream()) {
-                text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            }
-        } catch (Exception e) {
-            log.error("could not read scenario file {}: {}", scenario, e.getMessage(), e);
-            return;
+        try (var in = resource.getInputStream()) {
+            text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not read initial-state file " + scenario, e);
         }
 
         List<ScenarioCommand> commands = new ScenarioParser().parse(text);
@@ -283,8 +282,6 @@ public class ScenarioRunner implements ApplicationRunner {
             for (ScenarioCommand cmd : commands) {
                 ops.execute(cmd, ctx, harness);
             }
-        } catch (SeedHarness.SeedAbortException abort) {
-            log.error("scenario aborted (fail-fast): {}", abort.getMessage());
         } finally {
             String summary = report.render();
             if (report.hasFailures()) {
