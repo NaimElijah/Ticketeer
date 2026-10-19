@@ -302,12 +302,14 @@ About 1,500 test methods, organised by what they boot:
 | `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
 | `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats and refunds | Spring under `test`: JPA repositories on H2 |
 | `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith) and `RepositoryAdapterProfileTest` (which adapter each profile set selects) | Nothing |
+| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
 ```bash
 ./mvnw -Pno-vaadin test "-Dtest=ReservationServiceTest"                # one class
 ./mvnw -Pno-vaadin test "-Dtest=*UserRepositoryContractTest"           # both adapters of one port
 ./mvnw -Pno-vaadin test "-Dtest=HexagonalRulesTest,ModularityTests"    # the architecture gates
-./mvnw verify                                                          # everything CI runs
+./mvnw -Pno-vaadin test-compile failsafe:integration-test failsafe:verify "-Dit.test=DbOutageRecoveryIT"   # one *IT, needs Docker
+./mvnw verify                                                          # everything CI runs; needs Docker
 ```
 
 `-Pno-vaadin` skips Vaadin's frontend preparation, which can fail on Windows with 24.7.0. Use it for
@@ -316,8 +318,9 @@ tests only, because the app then serves no views.
 **What gates a merge:** pull requests into `main` and `dev` need the CI check (`mvn -B verify` on
 Temurin 21) and CodeQL to pass. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
-([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). `DbOutageRecoveryLocalPgIT`, the one
-`*IT` class, needs a local PostgreSQL and does not run in CI.
+([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
+PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them
+([ADR-006](docs/ADRs/ADR-006-postgres-integration-tests-with-testcontainers.md)).
 
 ## Deployment and operations
 
