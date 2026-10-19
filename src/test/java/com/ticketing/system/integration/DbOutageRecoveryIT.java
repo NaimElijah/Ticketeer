@@ -46,9 +46,7 @@ import com.zaxxer.hikari.HikariDataSource;
         // No idle floor, so retiring the idle connections does not start a refill before the pause.
         "spring.datasource.hikari.minimum-idle=0",
         "spring.datasource.hikari.connection-timeout=2000",
-        "spring.datasource.hikari.validation-timeout=1000",
-        // `create`, not the test profile's `create-drop`: the context may close after the container stops.
-        "spring.jpa.hibernate.ddl-auto=create"})
+        "spring.datasource.hikari.validation-timeout=1000"})
 @ActiveProfiles("test")
 @DirtiesContext
 class DbOutageRecoveryIT {
