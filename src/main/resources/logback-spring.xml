@@ -34,8 +34,9 @@
 
     <!-- Every run that is not dev or a test: no profile (prod), supabase, or any profile added later.
          A catch-all rather than one block per profile, so a new profile can never boot with no
-         appenders at all (36ac7924). The exclusions keep each line from being logged twice where a
-         profile below has its own block. AOP entry/exit tracing stays off. -->
+         appenders at all (36ac7924). The exclusions keep the profiles below on their own settings:
+         blocks that both match merge, so root would get both blocks' appenders (a test run would gain
+         FILE) and the later block's levels would win. AOP entry/exit tracing stays off. -->
     <springProfile name="!dev &amp; !test &amp; !acceptance">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
