@@ -11,9 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link ActiveOrderRepository} — active only in the {@code jpa} run/dev profile. Adapts
+ * JPA-backed {@link ActiveOrderRepository} — active in every run but the in-memory test suite. Adapts
  * the domain port onto Spring Data ({@link SpringDataActiveOrderRepository}); the application layer
  * depends only on {@code ActiveOrderRepository}, never on Spring Data. Owned cart items
  * ({@code @ElementCollection}) persist by cascade with the order.
@@ -31,7 +32,7 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
  * adapter is self-sufficient before the service layer gains transactions (#359).
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaActiveOrderRepository implements ActiveOrderRepository {
 
     private final SpringDataActiveOrderRepository data;

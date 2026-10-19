@@ -1,4 +1,7 @@
 spring:
+  # Persistence needs no profile (ADR-005): every run uses the JPA repository adapters on this
+  # datasource, and fails at startup if it is unreachable. Only the in-memory test suite
+  # (`test` + `memory`) swaps the adapters out.
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketing}
     username: ${DB_USER:postgres}
@@ -18,15 +21,6 @@ spring:
   task:
     execution:
       mode: force
-
-  # Activating the `dev` profile also activates `jpa`, so dev develops on the real
-  # persistence path (JPA + H2 — see application-dev.yml). Deploy/run = `jpa` + Postgres.
-  profiles:
-    group:
-      dev: jpa
-      # Running against Supabase: `supabase` activates the JPA stack + the SSL/pooler datasource
-      # (see application-supabase.yml). Run with SPRING_PROFILES_ACTIVE=supabase + the DB_* env vars.
-      supabase: jpa
 
 # JWT signing secret (consumed by Infrastructure/security/JwtSessionManager — UC-12).
 # In production the secret MUST be supplied via environment variable, never committed.

@@ -51,9 +51,10 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class CompanyAcceptanceTest {
         @Autowired
         private AuthenticationService authService;

@@ -14,16 +14,17 @@ import org.springframework.stereotype.Repository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.organization.domain.ProductionCompany;
 
 /**
  * In-memory {@link ProductionCompanyRepository}. Lets Spring wire
  * CatalogService / CompanyManagementService / EventManagementService.
- * {@code @Profile("!jpa")}: the {@code jpa} run/dev profile swaps in
- * {@link JpaProductionCompanyRepository} instead.
+ * Used only by the in-memory test suite ({@code test} with {@code memory});
+ * every other run gets {@link JpaProductionCompanyRepository}.
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryProductionCompanyRepository implements ProductionCompanyRepository {
 
     private final Map<Integer, ProductionCompany> companiesById = new ConcurrentHashMap<>();

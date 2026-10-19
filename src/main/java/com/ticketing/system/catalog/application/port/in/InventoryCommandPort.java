@@ -15,9 +15,9 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  *
  * <h2>Locking contract (read carefully — concurrency-critical)</h2>
  * The Event carries a shared "buyer operation" read lock ({@code lockForBuyerOperation}) that many
- * buyers may hold at once and that blocks only structural/lifecycle edits. Under the {@code jpa}
- * profile these locks are no-ops and correctness comes from JPA {@code @Version} optimistic locking;
- * under the in-memory profile they are real reentrant read/write locks. Methods here fall into two
+ * buyers may hold at once and that blocks only structural/lifecycle edits. On the Jpa adapters
+ * these locks are no-ops and correctness comes from JPA {@code @Version} optimistic locking; on the
+ * in-memory adapters (test suite only) they are real reentrant read/write locks. Methods here fall into two
  * groups, and each method's Javadoc states which it is:
  * <ul>
  *   <li><b>Self-locking</b> ({@link #reserve}, {@link #release}, {@link #restore},

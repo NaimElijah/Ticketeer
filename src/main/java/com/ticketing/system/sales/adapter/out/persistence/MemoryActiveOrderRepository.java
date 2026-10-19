@@ -1,6 +1,7 @@
 package com.ticketing.system.sales.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -13,8 +14,8 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 
 /**
- * In-memory {@link ActiveOrderRepository}. {@code @Profile("!jpa")}: the {@code jpa} run/dev
- * profile swaps in {@link JpaActiveOrderRepository} instead.
+ * In-memory {@link ActiveOrderRepository}, used only by the in-memory test suite ({@code test}
+ * with {@code memory}); every other run gets {@link JpaActiveOrderRepository}.
  *
  * <p>
  * Storage is a single {@link CopyOnWriteArrayList} of carts; lookups scan.
@@ -24,7 +25,7 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
  * Guest-turned-Member cart over a prior orphaned Member cart).
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryActiveOrderRepository implements ActiveOrderRepository {
 
     private final List<ActiveOrder> carts = new CopyOnWriteArrayList<>();

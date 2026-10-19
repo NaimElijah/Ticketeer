@@ -10,9 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.organization.application.port.out.CompanyAppointmentRepository;
 import com.ticketing.system.organization.domain.CompanyAppointment;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link CompanyAppointmentRepository} — active only in the {@code jpa} run/dev profile.
+ * JPA-backed {@link CompanyAppointmentRepository} — active in every run but the in-memory test suite.
  * Adapts the domain port onto Spring Data ({@link SpringDataCompanyAppointmentRepository}); the
  * application layer depends only on {@code CompanyAppointmentRepository}, never on Spring Data. The
  * appointment's {@code permissions} persist as an {@code @ElementCollection} side-table by cascade.
@@ -24,7 +25,7 @@ import com.ticketing.system.organization.domain.CompanyAppointment;
  * {@link JpaProductionCompanyRepository}.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaCompanyAppointmentRepository implements CompanyAppointmentRepository {
 
     private final SpringDataCompanyAppointmentRepository data;

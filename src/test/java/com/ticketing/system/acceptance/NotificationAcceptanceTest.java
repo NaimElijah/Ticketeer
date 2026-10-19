@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import com.ticketing.system.shared.dto.NotificationDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import java.util.List;
 
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
@@ -21,7 +22,7 @@ import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
 
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class NotificationAcceptanceTest {
 
     @Autowired

@@ -28,6 +28,7 @@ import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
@@ -49,7 +50,7 @@ import com.ticketing.system.organization.domain.Permission;
  * intended permission.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class ManagerPermissionMatrixAcceptanceTest {
 
     @Autowired private AuthenticationService authService;

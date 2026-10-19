@@ -9,9 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link TicketRepository} — active only in the {@code jpa} run/dev profile.
+ * JPA-backed {@link TicketRepository} — active in every run but the in-memory test suite.
  * Adapts the domain port onto Spring Data ({@link SpringDataTicketRepository}); the
  * application layer depends only on {@code TicketRepository}, never on Spring Data.
  *
@@ -31,7 +32,7 @@ import com.ticketing.system.sales.domain.Ticket;
  * layer gains transactions (#359); reads inherit Spring Data's read-only tx.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaTicketRepository implements TicketRepository {
 
     private final SpringDataTicketRepository data;

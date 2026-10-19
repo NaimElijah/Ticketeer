@@ -56,7 +56,7 @@ import com.ticketing.system.shared.exception.RefundFailedException;
  * can be counted per original charge.
  */
 @SpringBootTest
-@ActiveProfiles({"jpa", "test"})
+@ActiveProfiles("test")
 class EventCancellationRefundConcurrencyTest {
 
     private static final int EVENT_ID = 900;

@@ -11,13 +11,14 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 
 import jakarta.persistence.criteria.Predicate;
 
 /**
- * JPA-backed {@link OrderReceiptRepository} — active only in the {@code jpa} run/dev profile.
+ * JPA-backed {@link OrderReceiptRepository} — active in every run but the in-memory test suite.
  * Adapts the domain port onto Spring Data ({@link SpringDataOrderReceiptRepository}); the application
  * layer depends only on {@code OrderReceiptRepository}, never on Spring Data. Owned receipt-line and
  * transaction value lists ({@code @ElementCollection}) persist by cascade with the receipt.
@@ -31,7 +32,7 @@ import jakarta.persistence.criteria.Predicate;
  * know company ownership directly).
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaOrderReceiptRepository implements OrderReceiptRepository {
 
     private final SpringDataOrderReceiptRepository data;

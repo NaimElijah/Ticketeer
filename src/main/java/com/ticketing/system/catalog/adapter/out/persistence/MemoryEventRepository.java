@@ -13,12 +13,17 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
+/**
+ * In-memory {@link EventRepository}, used only by the in-memory test suite ({@code test} with
+ * {@code memory}); every other run gets {@link JpaEventRepository}.
+ */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryEventRepository implements EventRepository {
 
     private final ConcurrentHashMap<Integer, Event> events = new ConcurrentHashMap<>();

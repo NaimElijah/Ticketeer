@@ -40,17 +40,17 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.bootstrap.scheduling.EventCompletionSweeper;
 
 /**
- * Regression test for the seated-ticket reservation failure under the {@code jpa} profile.
+ * Regression test for the seated-ticket reservation failure on the Jpa adapters.
  *
  * <p>A buyer reserving free, addressable seats flips several child {@code Seat} rows
  * (AVAILABLE → RESERVED, plus the holding order key + expiry) which must persist through the
- * {@code SeatedZone} {@code @OneToMany} seat map. The default in-memory ({@code !jpa}) suite can't
- * catch a flush/merge or optimistic-lock problem there, and the existing JPA repo test only saves
- * <em>AVAILABLE</em> seats — so this drives a real {@code reserve} under {@code {"test","jpa"}}
+ * {@code SeatedZone} {@code @OneToMany} seat map. The in-memory acceptance suite can't catch a
+ * flush/merge or optimistic-lock problem there, and the existing JPA repo test only saves
+ * <em>AVAILABLE</em> seats — so this drives a real {@code reserve} under {@code test} alone
  * (real {@code Jpa*Repository} + H2, in-process external stubs). Fails before the fix; passes after.
  */
 @SpringBootTest
-@ActiveProfiles({"test", "jpa"})
+@ActiveProfiles("test")
 class SeatedReservationJpaTest {
 
     @Autowired private AuthenticationService authService;

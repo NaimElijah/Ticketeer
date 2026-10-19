@@ -8,9 +8,9 @@ import com.ticketing.system.identity.domain.Admin;
 /**
  * Spring Data JPA repository for the {@link Admin} aggregate. Auto-implemented by
  * Spring Data and used only by {@link JpaAdminRepository} (the adapter that
- * fulfils the domain {@code AdminRepository} port). Only scanned when JPA is
- * active (an EntityManagerFactory exists), i.e. the {@code jpa} run profile and
- * the JPA contract test; never in the dev profile (JPA autoconfig excluded).
+ * fulfils the domain {@code AdminRepository} port). Created in every context
+ * that has an EntityManagerFactory, which is every run; only the in-memory
+ * test suite leaves it unused.
  */
 public interface SpringDataAdminRepository extends JpaRepository<Admin, Integer> {
 
