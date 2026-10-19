@@ -5,12 +5,11 @@ spring:
     password:
     driver-class-name: org.h2.Driver
 
+  # No explicit dialect: Hibernate detects H2 here, and PostgreSQL when an *IT points the datasource
+  # at a container (ADR-006).
   jpa:
     hibernate:
       ddl-auto: create-drop
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
 
 # JWT signing secret (test-only, never used in prod).
 jwt:

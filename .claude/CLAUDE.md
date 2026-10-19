@@ -47,7 +47,7 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 - `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which can NPE on Windows with 24.7.0. Tests only; the app then serves no views.
 - **Don't run the full suite locally.** About 1650 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
 - CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`. There is no format, lint or dependency-audit step.
-- `*IT` classes run under failsafe in `verify`, never under `test`, and need Docker (Testcontainers, ADR-006); `-DskipITs` skips them. `DbOutageRecoveryLocalPgIT` still needs `LOCAL_PG_IT=true` and the `PG_*` env vars (its defaults are macOS paths), so it stays skipped.
+- `*IT` classes run under failsafe in `verify`, never under `test`, and need Docker (Testcontainers, ADR-006); `-DskipITs` skips them. One IT, without surefire or packaging: `./mvnw -Pno-vaadin test-compile failsafe:integration-test failsafe:verify "-Dit.test=DbOutageRecoveryIT"`. Each IT declares its own container from `support/PostgresContainers` (`@Container @ServiceConnection`). Under `test`, Hibernate detects the dialect, so an IT can point a `test` context at PostgreSQL.
 - Acceptance classes share one cached Spring context with in-memory state. A class that mutates shared pools (admins, users) needs `@DirtiesContext(classMode = AFTER_CLASS)`, as `MessagingAcceptanceTest` has; otherwise it passes locally and breaks under CI's ordering (87e6952e).
 
 | Folder (`src/test/java/com/ticketing/system/`) | Boots |
