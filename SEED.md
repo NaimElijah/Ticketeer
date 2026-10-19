@@ -112,12 +112,9 @@ deleted and refuse — so a stray `SEED_MODE=reset` can never wipe a database on
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--seed.mode=reset --seed.assume-yes=true"
 ```
 
-The wipe is implemented per persistence backend: `JpaRepoCleaner` (every run, deletes through the
-Spring Data repositories — H2 and Postgres alike) and `MemoryRepoCleaner` (in-memory test suite only, clears
-the in-memory maps via reflection). `JpaRepoCleaner` deliberately keeps the `admins` row so a reset still has
-an admin to re-open the market for the reseed's checkouts (`PlatformInitializationRunner` re-creates it
-regardless). `MemoryRepoCleaner` clears every in-memory repo including `MemoryAdminRepository`, so on the
-in-memory backend the admin is re-seeded by init on the next cycle rather than preserved.
+The wipe is `JpaRepoCleaner`, which deletes through the Spring Data repositories — H2 and Postgres
+alike. It deliberately keeps the `admins` row so a reset still has an admin to re-open the market for
+the reseed's checkouts (`PlatformInitializationRunner` re-creates it regardless).
 
 ## Choosing / replaying a different scenario
 
