@@ -228,8 +228,9 @@ read only through the bundled placeholder, so a file that sets their key overrid
 value in one place.
 
 > [!NOTE]
-> With no profile at all, the app runs on PostgreSQL through the `DB_*` variables and stops at
-> startup if it cannot reach the database. It never falls back to in-memory storage
+> With no profile at all, the app runs on PostgreSQL through the `DB_*` variables. If it cannot
+> reach the database, startup stops with an "APPLICATION FAILED TO START" report that names the
+> datasource URL and the settings to check. It never falls back to in-memory storage
 > ([ADR-005](docs/ADRs/ADR-005-persistent-storage-by-default.md)). For a local run without a
 > database server, use `dev`.
 
