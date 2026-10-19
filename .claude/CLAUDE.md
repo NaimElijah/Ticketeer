@@ -53,7 +53,7 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 | Folder (`src/test/java/com/ticketing/system/`) | Boots |
 |---|---|
 | `unit/**` (except persistence), `ui/` | Nothing: plain JUnit + Mockito |
-| `unit/infrastructure/persistence/<Agg>Persistence/` | Abstract `IXxxRepositoryContractTest` + `Memory…`/`Jpa…` subclasses; Jpa = `@DataJpaTest @Import(JpaXxxRepository.class)`, no profile. Admin and MemoryEvent subclasses are named `…RepositoryTest` |
+| `unit/infrastructure/persistence/<Agg>Persistence/` | Abstract `IXxxRepositoryContractTest` + `Memory…`/`Jpa…` subclasses; Jpa = `@DataJpaTest @Import(JpaXxxRepository.class)`, no profile, on H2. `Postgres…IT` extends each Jpa subclass to run the same suite on a PostgreSQL container (failsafe). Admin and MemoryEvent subclasses are named `…RepositoryTest`; Admin's IT is `PostgresAdminRepositoryIT` |
 | `acceptance/` | `@SpringBootTest @ActiveProfiles({"test", PersistenceProfiles.MEMORY})`: Memory repos, `Stub*` WSEP |
 | `integration/`, `concurrency/` | `@SpringBootTest @ActiveProfiles("test")`: Jpa repos on H2 |
 | `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Modulith), `RepositoryAdapterProfileTest` (adapter per profile set) |
