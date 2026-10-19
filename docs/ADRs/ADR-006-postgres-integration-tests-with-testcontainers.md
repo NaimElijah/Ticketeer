@@ -31,6 +31,13 @@ classes that failsafe runs in `verify`.**
 - **Dependencies (test scope only):** `org.testcontainers:postgresql` and
   `org.testcontainers:junit-jupiter`, plus Spring Boot's `spring-boot-testcontainers` for
   `@ServiceConnection`.
+  - *What they replace:* the `pg_ctl` test and the H2-only coverage of the production dialect.
+    Nothing already on the classpath can start a database, pause it, or wire it into Spring.
+  - *Licences:* Testcontainers is MIT; `spring-boot-testcontainers` is Apache-2.0, like the rest of
+    Spring Boot (both from the artifacts' POMs). Neither ships in the application jar.
+  - *Maintenance:* both are actively released. Testcontainers' newest line is 2.x, which renames
+    its artifacts; Spring Boot 3.5's dependency management and `spring-boot-testcontainers` target
+    1.x, so this project stays on 1.21.x until the move to Spring Boot 4.
 - **The version is pinned to 1.21.4.** Spring Boot 3.5.0 manages Testcontainers 1.21.0, and Docker
   Engine 29 answers its client with HTTP 400 ("Could not find a valid Docker environment").
   1.21.4, the latest 1.21.x, works; both were checked against Engine 29.8.
