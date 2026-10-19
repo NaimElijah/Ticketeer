@@ -21,9 +21,10 @@ Before this decision, the profile selected them the wrong way round:
 - **Persistence came only through profile groups.** `dev` and `supabase` each activated `jpa`
   through `spring.profiles.group`; any new runtime profile had to remember to do the same.
 
-The in-memory adapters are still worth keeping. The 14 Spring acceptance classes run on them in a
-cached context that needs no schema work, and plain unit tests construct them with `new`. The
-contract tests keep the two adapters of each port in step.
+The in-memory adapters are still worth keeping. The 14 Spring acceptance classes share one cached
+context on them, whose state needs no flushing, transactions or row locks to set up, and plain
+unit tests construct them with `new`. The contract tests keep the two adapters of each port in
+step.
 
 ## Decision
 
@@ -67,7 +68,10 @@ that matter, so a new adapter with the wrong `@Profile` fails the build.
 - **The Memory adapters still ship in the jar.** They are inert outside the suite. Moving them out of
   `src/main` is a separate decision (see below).
 - **Opting in is per test class.** A new in-memory Spring test that forgets `memory` runs on JPA over
-  H2 instead. It still passes, only slower, so the mistake costs time but never correctness.
+  H2 instead, and may join the cached `test` context of the integration suites. There, rows that
+  other classes committed are still visible, and the two backends differ in locking, exception
+  types and flushing, so the test can fail, or pass only in some run orders. The fix is the
+  missing `memory`.
 
 **Revisit when** the acceptance suite runs on JPA in about the same time as on the Memory adapters,
 or when keeping the two adapters of a port in step costs a bug that reaches `dev`. Either makes
