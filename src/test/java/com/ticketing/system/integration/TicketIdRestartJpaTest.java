@@ -53,7 +53,7 @@ import com.ticketing.system.shared.dto.VenueMapDTO;
  */
 @SpringBootTest(properties =
         "spring.datasource.url=jdbc:h2:mem:ticketidrestart;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
-@ActiveProfiles({"test", "jpa"})
+@ActiveProfiles("test")
 @DirtiesContext
 class TicketIdRestartJpaTest {
 

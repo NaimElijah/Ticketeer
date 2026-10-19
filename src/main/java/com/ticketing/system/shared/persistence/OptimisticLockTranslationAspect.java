@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Translates a JPA optimistic-lock conflict into the domain's {@link ConcurrentReservationException}.
  *
- * <p>Under the {@code jpa} profile, concurrency is enforced by {@code @Version} optimistic locking:
+ * <p>On the Jpa adapters, concurrency is enforced by {@code @Version} optimistic locking:
  * when two transactions write the same aggregate, the loser's commit fails and Spring raises an
  * {@link OptimisticLockingFailureException}. That is an infrastructure exception; left unhandled it
  * would leak past the application layer to the UI. This aspect re-types it into the domain's

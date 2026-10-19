@@ -11,7 +11,7 @@ import com.ticketing.system.governance.application.service.SystemAdminService;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Opens the trading market automatically on boot in <b>every real run</b> (dev, jpa, supabase, prod),
+ * Opens the trading market automatically on boot in <b>every real run</b> (dev, supabase, prod),
  * so the app comes up usable without a manual admin open. Only the {@code test} profile is excluded —
  * tests drive the market state themselves.
  *

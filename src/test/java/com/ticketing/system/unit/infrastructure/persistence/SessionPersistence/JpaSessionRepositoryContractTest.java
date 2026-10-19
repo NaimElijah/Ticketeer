@@ -8,7 +8,6 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.adapter.out.persistence.JpaSessionRepository;
@@ -16,7 +15,7 @@ import com.ticketing.system.identity.adapter.out.persistence.SpringDataSessionRe
 
 /**
  * Runs the {@link ISessionRepositoryContractTest} suite against the JPA adapter on an
- * embedded H2 schema. {@code @ActiveProfiles("jpa")} activates {@link JpaSessionRepository};
+ * embedded H2 schema. {@code @Import} adds {@link JpaSessionRepository};
  * {@code @DataJpaTest} provides H2 + a real {@code sessions} table.
  *
  * <p>The repository is Spring-built (via {@code @Import}) so its {@code @PersistenceContext}
@@ -26,7 +25,6 @@ import com.ticketing.system.identity.adapter.out.persistence.SpringDataSessionRe
  * ({@link #cleanTable()}) so the suite is order-independent. CI never touches a real database.
  */
 @DataJpaTest
-@ActiveProfiles("jpa")
 @Import({JpaSessionRepository.class, JpaSessionRepositoryContractTest.TestClockConfig.class})
 class JpaSessionRepositoryContractTest extends ISessionRepositoryContractTest {
 

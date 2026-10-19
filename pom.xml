@@ -166,7 +166,7 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- H2: dev runs the `jpa` profile on in-memory H2, and the @DataJpaTest
+		<!-- H2: dev runs the JPA repositories on in-memory H2, and the @DataJpaTest
 		     repository contract tests use it too. runtime (not test) scope so the
 		     dev app can load org.h2.Driver; the deploy still uses Postgres. -->
 		<dependency>

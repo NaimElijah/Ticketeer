@@ -49,7 +49,7 @@ import com.ticketing.system.organization.adapter.out.persistence.SpringDataProdu
  * <p>The contract tests cover reservation <em>behaviour</em> but not concurrency. This test fires N
  * buyers at a single unit of inventory at once and asserts <strong>exactly one wins</strong> with no
  * oversell — the guarantee that {@code @Version} optimistic locking is supposed to provide. It must
- * run on the {@code jpa} profile, because the in-memory repos serialise via real locks (a different
+ * run on the Jpa adapters, because the in-memory repos serialise via real locks (a different
  * mechanism); only Hibernate's {@code @Version} check at commit is exercised here.
  *
  * <p>Two granularities, deliberately different:
@@ -61,12 +61,13 @@ import com.ticketing.system.organization.adapter.out.persistence.SpringDataProdu
  *       is Hibernate bumping the owning zone's {@code @Version} when that collection changes.</li>
  * </ul>
  *
- * <p>Profiles {@code jpa,test}: JPA repositories on, Memory repos off, the in-process stub
- * payment/issuer adapters on (so the context wires), and H2 from {@code application-test.yml}. The
+ * <p>Profile {@code test} without {@code memory}: JPA repositories on, Memory repos off, the
+ * in-process stub payment/issuer adapters on (so the context wires), and H2 from
+ * {@code application-test.yml}. The
  * market gate is mocked open — it is not what this test proves.
  */
 @SpringBootTest
-@ActiveProfiles({"jpa", "test"})
+@ActiveProfiles("test")
 class ReservationConcurrencyTest {
 
     private static final int CONCURRENT_BUYERS = 8;

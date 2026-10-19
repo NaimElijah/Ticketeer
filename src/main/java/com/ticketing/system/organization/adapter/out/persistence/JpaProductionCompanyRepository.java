@@ -12,9 +12,10 @@ import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link ProductionCompanyRepository} — active only in the {@code jpa} run/dev profile.
+ * JPA-backed {@link ProductionCompanyRepository} — active in every run but the in-memory test suite.
  * Adapts the domain port onto Spring Data ({@link SpringDataProductionCompanyRepository}); the
  * application layer depends only on {@code ProductionCompanyRepository}, never on Spring Data.
  * Owner/manager id lists ({@code @ElementCollection}) and the purchase policy (JSON column) persist
@@ -27,7 +28,7 @@ import com.ticketing.system.shared.exception.CompanyNotFoundException;
  * from {@code max(companyId)} on first use, so ids survive a restart on a persistent database.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaProductionCompanyRepository implements ProductionCompanyRepository {
 
     private final SpringDataProductionCompanyRepository data;

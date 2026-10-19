@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.shared.exception.UserNotFoundException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 
@@ -18,11 +19,11 @@ import com.ticketing.system.identity.domain.User;
  * In-memory {@link UserRepository}.
  *
  * <p>Storage is a thread-safe {@code ConcurrentHashMap}; IDs are minted from
- * an {@code AtomicInteger} starting at 1. {@code @Profile("!jpa")}: the {@code jpa}
- * run/dev profile swaps in {@link JpaUserRepository} instead.
+ * an {@code AtomicInteger} starting at 1. Used only by the in-memory test suite
+ * ({@code test} with {@code memory}); every other run gets {@link JpaUserRepository}.
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryUserRepository implements UserRepository {
 
     private final Map<Integer, User> usersById = new ConcurrentHashMap<>();

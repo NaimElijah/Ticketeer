@@ -1,7 +1,7 @@
 # Supabase (remote Postgres) run profile — V3 Lane J (#377).
 #
-# Activate with SPRING_PROFILES_ACTIVE=supabase — that auto-activates `jpa` too (see the
-# profiles.group in application.yml), so the Jpa* repositories are wired. Supply the connection
+# Activate with SPRING_PROFILES_ACTIVE=supabase. The Jpa* repositories are wired in every run
+# (ADR-005); this profile only adds the SSL/pooler datasource. Supply the connection
 # entirely via env vars; NEVER commit them:
 #
 #   DB_HOST=aws-1-eu-central-1.pooler.supabase.com   (your project's Session-pooler host)

@@ -13,9 +13,10 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link EventRepository} — active only in the {@code jpa} run/dev profile. Adapts the
+ * JPA-backed {@link EventRepository} — active in every run but the in-memory test suite. Adapts the
  * domain port onto Spring Data ({@link SpringDataEventRepository}); the application layer depends only
  * on {@code EventRepository}, never on Spring Data. The owned VenueMap / zone hierarchy / seats /
  * element collections persist by cascade with the event.
@@ -32,7 +33,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
  * seed in-memory counters from the current max ids so they survive a restart.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaEventRepository implements EventRepository {
 
     private final SpringDataEventRepository data;

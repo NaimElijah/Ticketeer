@@ -12,17 +12,18 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 
 /**
  * In-memory {@link OrderReceiptRepository}. Lets Spring wire
  * CheckoutService / MemberAccountService / SystemAdminService.
- * {@code @Profile("!jpa")}: the {@code jpa} run/dev profile swaps in
- * {@link JpaOrderReceiptRepository} instead.
+ * Used only by the in-memory test suite ({@code test} with {@code memory});
+ * every other run gets {@link JpaOrderReceiptRepository}.
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryOrderReceiptRepository implements OrderReceiptRepository {
 
     private final Map<Integer, OrderReceipt> receiptsById = new ConcurrentHashMap<>();

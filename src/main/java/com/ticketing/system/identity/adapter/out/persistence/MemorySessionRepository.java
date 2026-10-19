@@ -1,6 +1,7 @@
 package com.ticketing.system.identity.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,14 +20,14 @@ import com.ticketing.system.identity.domain.Session;
  * In-memory {@link SessionRepository}.
  *
  * <p>Storage is a thread-safe {@code ConcurrentHashMap} keyed by sessionId.
- * Mirrors {@code MemoryUserRepository}'s shape. {@code @Profile("!jpa")}: the
- * {@code jpa} run/dev profile swaps in {@link JpaSessionRepository} instead.
+ * Mirrors {@code MemoryUserRepository}'s shape. Used only by the in-memory test
+ * suite ({@code test} with {@code memory}); every other run gets {@link JpaSessionRepository}.
  *
  * <p>{@link Clock} is injected so tests can supply a fixed clock for
  * deterministic expiry behavior.
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemorySessionRepository implements SessionRepository {
 
     private final Map<String, Session> sessionsById = new ConcurrentHashMap<>();

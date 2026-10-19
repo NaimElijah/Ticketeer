@@ -45,7 +45,7 @@ import java.util.Locale;
  *
  * <p>Present on every non-{@code test} profile but <strong>inert by default</strong>
  * ({@code seed.mode=off}) — it never seeds or wipes prod/cloud unless explicitly asked. Works against
- * the live database (the {@code jpa} backend), not just the in-memory dev repos.
+ * whatever database the run is configured with: dev's in-memory H2 or a persistent PostgreSQL.
  *
  * <p>{@code seed.mode}:
  * <ul>

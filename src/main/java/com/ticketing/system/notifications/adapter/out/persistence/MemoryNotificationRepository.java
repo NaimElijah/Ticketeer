@@ -1,6 +1,7 @@
 package com.ticketing.system.notifications.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
@@ -14,9 +15,12 @@ import java.util.stream.Collectors;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
-
+/**
+ * In-memory {@link NotificationRepository}, used only by the in-memory test suite ({@code test} with
+ * {@code memory}); every other run gets {@link JpaNotificationRepository}.
+ */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryNotificationRepository implements NotificationRepository {
     // ConcurrentHashMap (not HashMap) for thread-safe concurrent access, matching the
     // other Memory repositories — notifications are written and read from many threads.

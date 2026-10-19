@@ -10,6 +10,7 @@ import com.ticketing.system.organization.adapter.out.persistence.MemoryProductio
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryTicketRepository;
 import com.ticketing.system.identity.adapter.out.persistence.MemoryUserRepository;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -45,11 +46,11 @@ import java.util.stream.Stream;
  * {@code seed.mode} reset-safety work, #366). So this cleaner keeps working through the
  * whole Memory→JPA migration without edits.
  *
- * <p>{@code @Profile("!jpa")} — active on the in-memory backends (test / default-fast). Under the
- * {@code jpa} profile (dev / supabase / deploy) {@code JpaRepoCleaner} performs the wipe instead.
+ * <p>Active only in the in-memory test suite ({@code test} with {@code memory}); every other run
+ * wipes the database through {@code JpaRepoCleaner} instead.
  */
 @Component
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 @Slf4j
 public class MemoryRepoCleaner implements RepoCleaner {
 

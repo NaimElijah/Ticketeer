@@ -17,7 +17,7 @@ Run the seeded dev app:
 
 ## How dev seeding works
 
-The `dev` profile activates `jpa` on in-memory **H2** (`create-drop`, so the schema is empty every boot)
+The `dev` profile runs the JPA repositories on in-memory **H2** (`create-drop`, so the schema is empty every boot)
 and sets `seed.mode=reseed` (see `application-dev.yml`). The market opening is not dev-specific:
 `bootstrap/scheduling/MarketOpener` opens it on every boot outside the `test` profile, and
 `MarketSelfHealScheduler` keeps retrying if the external services are not reachable yet. On startup:
@@ -40,8 +40,8 @@ Because every line is a real service call, each is classified in the end-of-run 
 With `seed.fail-fast=true` the run aborts at the first unexpected failure (a partial report is still
 logged) and startup fails. That is the default outside `dev`; `dev` sets it to `false` so a broken demo
 line doesn't block local work. A missing or unreadable scenario file stops startup in every profile
-([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against the live `jpa`
-backend, not just H2 — but stays gated behind `seed.mode` so it is opt-in there.
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against whatever database
+the run is configured with, not just H2 — but stays gated behind `seed.mode` so it is opt-in there.
 
 ## What gets seeded (`demo.scenario`)
 
@@ -112,9 +112,9 @@ deleted and refuse — so a stray `SEED_MODE=reset` can never wipe a database on
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--seed.mode=reset --seed.assume-yes=true"
 ```
 
-The wipe is implemented per persistence backend: `JpaRepoCleaner` (`@Profile("jpa")`, deletes through the
-Spring Data repositories — H2 and Postgres alike) and `MemoryRepoCleaner` (`@Profile("!jpa")`, clears the
-in-memory maps via reflection). `JpaRepoCleaner` deliberately keeps the `admins` row so a reset still has
+The wipe is implemented per persistence backend: `JpaRepoCleaner` (every run, deletes through the
+Spring Data repositories — H2 and Postgres alike) and `MemoryRepoCleaner` (in-memory test suite only, clears
+the in-memory maps via reflection). `JpaRepoCleaner` deliberately keeps the `admins` row so a reset still has
 an admin to re-open the market for the reseed's checkouts (`PlatformInitializationRunner` re-creates it
 regardless). `MemoryRepoCleaner` clears every in-memory repo including `MemoryAdminRepository`, so on the
 in-memory backend the admin is re-seeded by init on the next cycle rather than preserved.
