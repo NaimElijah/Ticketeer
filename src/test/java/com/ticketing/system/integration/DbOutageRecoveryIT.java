@@ -36,7 +36,9 @@ import com.zaxxer.hikari.HikariDataSource;
  *
  * <p>The pool settings are shortened so the outage shows in seconds rather than after Hikari's
  * 30-second default. {@code socketTimeout} bounds a read on a connection that was lent just before
- * the pause; without it that read would block for good.
+ * the pause; without it that read would block until the pause ended. Production sets no socket
+ * timeout yet (#173), so this test proves recovery once the database returns, not that in-flight
+ * reads are bounded.
  */
 @Testcontainers
 @SpringBootTest(properties = {
