@@ -32,6 +32,7 @@ import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 // End-to-end acceptance tests for the messaging subsystem, exercised through the real
 // Spring "test" context (AuthenticationService → CompanyManagementService → MessagingService).
@@ -53,7 +54,7 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 // in the shared context — breaking any test that signs in as the default admin (e.g. to open the
 // market). @DirtiesContext rebuilds the context after this class so that leakage stays contained.
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class MessagingAcceptanceTest {
 

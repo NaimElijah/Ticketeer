@@ -59,6 +59,7 @@ import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
  * UC-19 / UC-4 end to end: an owner cancels an event that has sold tickets, and the buyer is refunded
@@ -67,7 +68,7 @@ import com.ticketing.system.shared.exception.RefundFailedException;
  * payment stub is wrapped in a spy so a test can make one refund fail and count the refunds per charge.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class EventCancellationAcceptanceTest {
 
     private static final double TICKET_PRICE = 50.0;

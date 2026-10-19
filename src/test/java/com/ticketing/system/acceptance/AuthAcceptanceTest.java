@@ -28,13 +28,14 @@ import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
 
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class AuthAcceptanceTest {
 
     @Autowired

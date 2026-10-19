@@ -33,6 +33,7 @@ import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.sales.application.service.CheckoutService;
@@ -61,7 +62,7 @@ import com.ticketing.system.organization.domain.Permission;
  * </ul>
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class RoleChainAndLayoutPermissionAcceptanceTest {
 
     @Autowired private AuthenticationService authService;
