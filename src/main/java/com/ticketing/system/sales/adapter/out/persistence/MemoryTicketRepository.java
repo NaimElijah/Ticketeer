@@ -1,6 +1,7 @@
 package com.ticketing.system.sales.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,14 +17,14 @@ import com.ticketing.system.sales.domain.Ticket;
 /**
  * In-memory {@link TicketRepository}. Lets Spring wire
  * CatalogService / CheckoutService / EventManagementService /
- * MemberAccountService. {@code @Profile("!jpa")}: the {@code jpa} run/dev profile
- * swaps in {@link JpaTicketRepository} instead.
+ * MemberAccountService. Used only by the in-memory test suite ({@code test} with
+ * {@code memory}); every other run gets {@link JpaTicketRepository}.
  *
  * <p>All keys are {@code int}, matching the {@code Ticket} fields end-to-end (the
  * former {@code String} eventId/zoneId on the port have been corrected to {@code int}).
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryTicketRepository implements TicketRepository {
 
     private final Map<Integer, Ticket> ticketsById = new ConcurrentHashMap<>();

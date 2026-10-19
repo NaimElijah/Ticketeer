@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
@@ -40,7 +39,6 @@ import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepos
  * element collections). Each test starts from an empty schema; CI never touches a real database.
  */
 @DataJpaTest
-@ActiveProfiles("jpa")
 @Import(JpaEventRepository.class)
 class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
 

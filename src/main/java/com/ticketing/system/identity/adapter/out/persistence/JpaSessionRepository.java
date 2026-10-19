@@ -10,12 +10,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
 /**
- * JPA-backed {@link SessionRepository} — active only in the {@code jpa} run/dev profile.
+ * JPA-backed {@link SessionRepository} — active in every run but the in-memory test suite.
  * Adapts the domain port onto Spring Data ({@link SpringDataSessionRepository}); the
  * application layer depends only on {@code SessionRepository}, never on Spring Data.
  *
@@ -40,7 +41,7 @@ import jakarta.persistence.PersistenceContext;
  * {@code MemorySessionRepository}), and the non-expired filter runs in SQL.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaSessionRepository implements SessionRepository {
 
     private final SpringDataSessionRepository data;

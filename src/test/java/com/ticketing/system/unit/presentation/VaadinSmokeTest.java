@@ -69,6 +69,7 @@ import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.vaadin.flow.router.Route;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -110,7 +111,7 @@ import java.util.List;
  * exercised by the application-layer acceptance tests instead.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class VaadinSmokeTest {
 
     @Autowired

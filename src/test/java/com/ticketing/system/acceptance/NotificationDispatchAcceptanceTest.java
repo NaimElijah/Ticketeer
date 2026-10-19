@@ -65,6 +65,7 @@ import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
 import com.ticketing.system.shared.event.RoleChangedNotice;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
  * #29 / ADR-004 / SLR.5: notifications are delivered after commit on the {@code notify-} thread, so a
@@ -73,7 +74,7 @@ import com.ticketing.system.shared.event.RoleChangedNotice;
  * channel. The mock replaces a bean, so this class gets its own context, closed after the class.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class NotificationDispatchAcceptanceTest {
 

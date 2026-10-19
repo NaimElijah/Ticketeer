@@ -20,6 +20,7 @@ import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
@@ -38,7 +39,7 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
  * ({@code appointOwner} → login {@code deliverPending} → {@code respondToAppointment}).
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class DelayedAppointmentNotificationAcceptanceTest {
 
     @Autowired private AuthenticationService authService;

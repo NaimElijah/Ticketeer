@@ -12,9 +12,10 @@ import com.ticketing.system.messaging.domain.ConversationStatus;
 import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.ParticipantType;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link ConversationRepository} — active only in the {@code jpa} run/dev profile. Adapts
+ * JPA-backed {@link ConversationRepository} — active in every run but the in-memory test suite. Adapts
  * the domain port onto Spring Data ({@link SpringDataConversationRepository}); the application layer
  * depends only on {@code ConversationRepository}, never on Spring Data. Owned, send-ordered messages
  * ({@code @OneToMany} + {@code @OrderColumn}) persist by cascade with the conversation.
@@ -26,7 +27,7 @@ import com.ticketing.system.messaging.domain.ParticipantType;
  * read-state.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaConversationRepository implements ConversationRepository {
 
     private final SpringDataConversationRepository data;

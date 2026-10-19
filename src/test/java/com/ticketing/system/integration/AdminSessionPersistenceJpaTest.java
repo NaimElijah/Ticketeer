@@ -17,18 +17,18 @@ import com.ticketing.system.identity.application.port.out.SessionRepository;
 /**
  * Regression test for the admin "session expired" bug: {@code AuthenticationService.signInAsAdmin}
  * persists a brand-new {@code Session} row (via {@code generateAdminToken}). It was annotated
- * {@code @Transactional(readOnly = true)}, so under the {@code jpa} profile Hibernate's MANUAL
+ * {@code @Transactional(readOnly = true)}, so on the Jpa adapters Hibernate's MANUAL
  * flush mode discarded the assigned-id INSERT — the row was never written and every admin token
  * then failed validation as "session not found", stranding admins on every admin page.
  *
- * <p>This runs under {@code {"test", "jpa"}} on purpose: {@code jpa} swaps in the real
+ * <p>This runs under {@code test} without {@code memory} on purpose: that keeps the real
  * {@link com.ticketing.system.identity.adapter.out.persistence.JpaSessionRepository}
- * (the in-memory repo used by the rest of the suite has no flush semantics, which is exactly why
- * the bug slipped through), while {@code test} keeps the in-process external-service stubs and the
+ * (the in-memory repo used by the acceptance suite has no flush semantics, which is exactly why
+ * the bug slipped through), while {@code test} adds the in-process external-service stubs and the
  * H2 datasource. Fails before the {@code @Transactional} fix, passes after.
  */
 @SpringBootTest
-@ActiveProfiles({"test", "jpa"})
+@ActiveProfiles("test")
 class AdminSessionPersistenceJpaTest {
 
     @Autowired
@@ -51,7 +51,7 @@ class AdminSessionPersistenceJpaTest {
 
         // The admin Session row must have been flushed: its token validates and the row is findable.
         assertTrue(authService.validateToken(token.token()),
-                "admin token must validate — its backing Session row must be persisted under jpa");
+                "admin token must validate — its backing Session row must be persisted");
         assertTrue(sessionRepository.findById(sessionManager.extractSessionId(token.token())).isPresent(),
                 "admin Session row must be persisted (was lost under @Transactional(readOnly=true))");
     }

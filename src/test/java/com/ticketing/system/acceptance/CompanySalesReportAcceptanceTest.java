@@ -17,6 +17,7 @@ import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
@@ -38,7 +39,7 @@ import com.ticketing.system.ui.presenters.company.CompanySalesPresenter;
  * this closes the gap by exercising the presenter and the reload (refresh) contract.
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class CompanySalesReportAcceptanceTest {
 
     @Autowired

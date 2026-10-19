@@ -10,10 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link NotificationRepository} — active only in the {@code jpa} run/dev
- * profile. Adapts the domain port onto Spring Data ({@link SpringDataNotificationRepository});
+ * JPA-backed {@link NotificationRepository} — active in every run but the in-memory
+ * test suite. Adapts the domain port onto Spring Data ({@link SpringDataNotificationRepository});
  * the application layer depends only on {@code NotificationRepository}, never on Spring Data.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrent writes are guarded by
@@ -24,7 +25,7 @@ import com.ticketing.system.notifications.domain.NotificationStatus;
  * before the service layer gains transactions (#359); reads inherit Spring Data's read-only tx.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaNotificationRepository implements NotificationRepository {
 
     private final SpringDataNotificationRepository data;

@@ -6,10 +6,11 @@ import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
- * JPA-backed {@link AdminRepository} — active only in the {@code jpa} run/dev
- * profile. Adapts the domain port onto Spring Data ({@link SpringDataAdminRepository});
+ * JPA-backed {@link AdminRepository} — active in every run but the in-memory
+ * test suite. Adapts the domain port onto Spring Data ({@link SpringDataAdminRepository});
  * the application layer depends only on {@code AdminRepository}, never on Spring Data.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrent writes are guarded by
@@ -18,7 +19,7 @@ import com.ticketing.system.identity.application.port.out.AdminRepository;
  * version checks). Admin is written once at platform init, so contention is nil.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaAdminRepository implements AdminRepository {
 
     private final SpringDataAdminRepository data;

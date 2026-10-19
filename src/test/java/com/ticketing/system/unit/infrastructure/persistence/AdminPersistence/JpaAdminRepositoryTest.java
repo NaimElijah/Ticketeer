@@ -4,7 +4,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.adapter.out.persistence.JpaAdminRepository;
@@ -12,7 +11,7 @@ import com.ticketing.system.identity.adapter.out.persistence.SpringDataAdminRepo
 
 /**
  * Runs the {@link IAdminRepositoryContractTest} suite against the JPA adapter on an
- * embedded H2 schema. {@code @ActiveProfiles("jpa")} activates {@link JpaAdminRepository};
+ * embedded H2 schema. {@code @Import} adds {@link JpaAdminRepository};
  * {@code @DataJpaTest} provides H2 + a real {@code admins} table.
  *
  * <p>Each contract test starts from an empty table ({@link #cleanTable()}) so the suite is
@@ -20,7 +19,6 @@ import com.ticketing.system.identity.adapter.out.persistence.SpringDataAdminRepo
  * JPA adapter the same clean slate. CI never touches a real database.
  */
 @DataJpaTest
-@ActiveProfiles("jpa")
 @Import(JpaAdminRepository.class)
 class JpaAdminRepositoryTest extends IAdminRepositoryContractTest {
 

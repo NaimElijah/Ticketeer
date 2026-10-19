@@ -44,6 +44,11 @@
 		<spring-modulith.version>1.4.1</spring-modulith.version>
 		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. -->
 		<archunit.version>1.4.1</archunit.version>
+		<!-- Overrides Boot 3.5.0's managed 1.21.0: Docker Engine 29 answers its Docker client with
+		     HTTP 400, and every container start fails with "Could not find a valid Docker environment".
+		     1.21.4, the latest 1.21.x, works with it (both checked against Engine 29.8; ADR-006).
+		     Drop the override once the Boot upgrade (#40) manages 1.21.4 or later. -->
+		<testcontainers.version>1.21.4</testcontainers.version>
 	</properties>
 
 	<!-- Vaadin BOM manages versions for the entire Vaadin Flow stack -->
@@ -166,7 +171,26 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- H2: dev runs the `jpa` profile on in-memory H2, and the @DataJpaTest
+		<!-- Testcontainers: the *IT classes run against a throwaway PostgreSQL container, the
+		     production dialect, instead of H2 (ADR-006). @ServiceConnection wires the container
+		     into the Spring datasource. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- H2: dev runs the JPA repositories on in-memory H2, and the @DataJpaTest
 		     repository contract tests use it too. runtime (not test) scope so the
 		     dev app can load org.h2.Driver; the deploy still uses Postgres. -->
 		<dependency>
@@ -225,6 +249,12 @@
 						</configuration>
 					</execution>
 				</executions>
+			</plugin>
+			<!-- Runs the *IT classes in the integration-test phase of `verify`; the goals and
+			     classesDirectory come from spring-boot-starter-parent's pluginManagement. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
 			</plugin>
 			<!-- Vaadin Maven plugin (V2-F-01).
 			     prepare-frontend runs every build to keep node_modules + dev-bundle in sync.

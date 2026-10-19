@@ -26,7 +26,7 @@ flowchart TB
     subgraph jvm["Ticketeer: one Spring Boot process"]
         ui["Vaadin UI<br/>40 server-side views"]
         app["Application services<br/>8 backend modules"]
-        repos["Repository adapters<br/>in-memory or JPA, by profile"]
+        repos["Repository adapters<br/>JPA; in-memory only in tests"]
     end
     db[("PostgreSQL<br/>or H2 in dev")]
     wsep["WSEP<br/>payment + ticket issuing"]
@@ -125,10 +125,11 @@ and refunds the charge. On success it publishes a `PurchaseCompletedNotice`, whi
 turns into an alert after the purchase commits, on a background thread, so a slow or failing alert
 never delays or fails the checkout ([ADR-004](docs/ADRs/ADR-004-no-outbox-for-notifications.md)).
 
-**Every repository port has two adapters**, `MemoryXxxRepository` (`@Profile("!jpa")`) and
-`JpaXxxRepository` (`@Profile("jpa")`), and one abstract contract test runs against both. Under
-`jpa`, concurrency is optimistic (`@Version`), and an aspect re-types commit-time lock failures
-into domain exceptions.
+**Every repository port has two adapters**, and one abstract contract test runs against both.
+`JpaXxxRepository` serves every run; `MemoryXxxRepository` exists only for the in-memory test suite,
+which activates `test` and `memory` together
+([ADR-005](docs/ADRs/ADR-005-persistent-storage-by-default.md)). On JPA, concurrency is optimistic
+(`@Version`), and an aspect re-types commit-time lock failures into domain exceptions.
 
 **The platform has a lifecycle:** `UNINITIALIZED → READY → OPEN ↔ CLOSED`, held in
 `SystemAdminService`. At boot, `PlatformInitializationRunner` reaches READY once the payment
@@ -151,7 +152,7 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | UI | Vaadin Flow | 24.7.0 | Server-side Java views, so one language and one process from view to database |
 | Modularity | Spring Modulith | 1.4.1 | Module model, verification and generated module docs |
 | Architecture tests | ArchUnit | 1.4.1 | Fails the build on a layer violation or a module cycle |
-| Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a profile switch |
+| Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a configuration switch |
 | Auth | jjwt + BCrypt | 0.12.6 | Signed session tokens and hashed passwords |
 | Build | Maven wrapper | 3.9.14 | The pinned build tool ships in the repo |
 
@@ -194,7 +195,7 @@ set these:
 
 | Variable | Purpose | Default | Required |
 |---|---|---|---|
-| `SPRING_PROFILES_ACTIVE` | `jpa` for PostgreSQL, `supabase` for Supabase over SSL | none: in-memory | Yes |
+| `SPRING_PROFILES_ACTIVE` | `supabase` for Supabase over SSL; plain PostgreSQL needs no profile | none: PostgreSQL through `DB_*` | No |
 | `DB_HOST` · `DB_PORT` · `DB_NAME` | PostgreSQL location | `localhost` · `5432` · `ticketing` | Yes |
 | `DB_USER` · `DB_PASSWORD` | PostgreSQL credentials | `postgres` · `postgres` | Yes |
 | `JWT_SECRET` | Token signing key, 256 bits or more | a dev-only value | Yes |
@@ -226,10 +227,12 @@ name in environment form, as with `WSEP_BASE_URL`, `SESSION_*`, `PLATFORM_ADMIN_
 read only through the bundled placeholder, so a file that sets their key overrides them. Set each
 value in one place.
 
-> [!WARNING]
-> With no profile at all, the app runs on the in-memory repositories: nothing survives a
-> restart, even though `application.yml` configures a PostgreSQL datasource. Select `jpa` or
-> `supabase` for a real database.
+> [!NOTE]
+> With no profile at all, the app runs on PostgreSQL through the `DB_*` variables. If it cannot
+> reach the database, startup stops with an "APPLICATION FAILED TO START" report that names the
+> datasource URL and the settings to check. It never falls back to in-memory storage
+> ([ADR-005](docs/ADRs/ADR-005-persistent-storage-by-default.md)). For a local run without a
+> database server, use `dev`.
 
 <details>
 <summary>Every other setting, and what each profile does</summary>
@@ -251,11 +254,11 @@ value in one place.
 
 | Profile | Effect |
 |---|---|
-| *(none)* | In-memory repositories, real WSEP, market opened at boot |
-| `dev` | Turns on `jpa` with in-memory H2 (`create-drop`), replays `demo.scenario`, adds the dev panel |
-| `jpa` | JPA repositories on the configured datasource |
-| `supabase` | Turns on `jpa` against Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default |
-| `test` | The test suite's profile: H2, stub WSEP, no boot runners or schedulers |
+| *(none)* | JPA repositories on PostgreSQL through `DB_*`, real WSEP, market opened at boot |
+| `dev` | JPA repositories on in-memory H2 (`create-drop`), replays `demo.scenario`, adds the dev panel |
+| `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default |
+| `test` | The test suite's profile: JPA repositories on H2, stub WSEP, no boot runners or schedulers |
+| `memory` | Tests only, together with `test`: swaps in the in-memory repositories. Does nothing on its own |
 | `production` · `no-vaadin` | Maven build profiles: bundle the frontend · skip Vaadin's frontend step |
 
 </details>
@@ -296,15 +299,17 @@ About 1,500 test methods, organised by what they boot:
 | Layer | Covers | Boots |
 |---|---|---|
 | `unit/` · `ui/` | Domain rules, services and presenters with mocked ports, both adapters of every repository port | Nothing, or `@DataJpaTest` on H2 for the JPA contract tests |
-| `acceptance/` | Use cases end to end through the services | Spring with in-memory repositories and stub WSEP |
-| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats and refunds | Spring with JPA repositories on H2 |
-| `architecture/` | `HexagonalRulesTest` (ArchUnit) and `ModularityTests` (Spring Modulith) | Nothing |
+| `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
+| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats and refunds | Spring under `test`: JPA repositories on H2 |
+| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith) and `RepositoryAdapterProfileTest` (which adapter each profile set selects) | Nothing |
+| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
 ```bash
 ./mvnw -Pno-vaadin test "-Dtest=ReservationServiceTest"                # one class
 ./mvnw -Pno-vaadin test "-Dtest=*UserRepositoryContractTest"           # both adapters of one port
 ./mvnw -Pno-vaadin test "-Dtest=HexagonalRulesTest,ModularityTests"    # the architecture gates
-./mvnw verify                                                          # everything CI runs
+./mvnw -Pno-vaadin test-compile failsafe:integration-test failsafe:verify "-Dit.test=DbOutageRecoveryIT"   # one *IT, needs Docker
+./mvnw verify                                                          # everything CI runs; needs Docker
 ```
 
 `-Pno-vaadin` skips Vaadin's frontend preparation, which can fail on Windows with 24.7.0. Use it for
@@ -313,8 +318,9 @@ tests only, because the app then serves no views.
 **What gates a merge:** pull requests into `main` and `dev` need the CI check (`mvn -B verify` on
 Temurin 21) and CodeQL to pass. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
-([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). `DbOutageRecoveryLocalPgIT`, the one
-`*IT` class, needs a local PostgreSQL and does not run in CI.
+([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
+PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them
+([ADR-006](docs/ADRs/ADR-006-postgres-integration-tests-with-testcontainers.md)).
 
 ## Deployment and operations
 
@@ -360,9 +366,11 @@ gateway therefore cannot exhaust the connection pool or hold row locks. Cost: a 
 charge needs an explicit compensating refund, and checkout idempotency is an in-memory cache that a
 restart loses ([#25](https://github.com/NaimElijah/Ticketeer/issues/25)).
 
-**Two repository adapters per port, chosen by profile** (no ADR yet). V3 requires that switching
-databases is a configuration change only (SLR.7), and the in-memory adapters keep the acceptance
-suite independent of a database. Cost: every port is implemented twice, so each one carries a
+**Persistent storage by default; in-memory adapters only for tests**
+([ADR-005](docs/ADRs/ADR-005-persistent-storage-by-default.md)). V3 requires that state survives a
+restart and that switching databases is a configuration change only (SLR.7). Every run uses the JPA
+adapters, so a forgotten profile can no longer lose data; the in-memory adapters keep the acceptance
+suite fast and independent of a schema. Cost: every port is implemented twice, so each one carries a
 shared contract test to stop the two from drifting.
 
 **Open Modulith modules, with ArchUnit as the cycle gate** (no ADR yet). The code began as a

@@ -1,6 +1,7 @@
 package com.ticketing.system.organization.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,13 +18,13 @@ import com.ticketing.system.organization.domain.CompanyAppointment;
 /**
  * In-memory {@link CompanyAppointmentRepository}. Lets Spring wire {@code CompanyMembershipService}
  * (and, through it, the organization / catalog / messaging / reporting services) without a database.
- * {@code @Profile("!jpa")}: the {@code jpa} run/dev profile swaps in
- * {@link JpaCompanyAppointmentRepository} instead. Storage is a thread-safe {@code ConcurrentHashMap}
+ * Used only by the in-memory test suite ({@code test} with {@code memory}); every other run gets
+ * {@link JpaCompanyAppointmentRepository}. Storage is a thread-safe {@code ConcurrentHashMap}
  * keyed by appointmentId; ids are minted from an {@code AtomicInteger} starting at 1, mirroring the
  * sibling Memory repositories.
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryCompanyAppointmentRepository implements CompanyAppointmentRepository {
 
     // Appointments keyed by their assigned id.

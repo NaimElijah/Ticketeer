@@ -13,8 +13,8 @@ import com.ticketing.system.shared.IRepository;
  * what breaks the last {@code identity -> organization} cycle: appointments are now looked up by the
  * appointed user's id ({@code targetId}) through this port instead of being an owned {@code @OneToMany}
  * collection on {@code User}. Two adapters implement it, selected by Spring profile — a
- * {@code ConcurrentHashMap}-backed Memory one ({@code @Profile("!jpa")}) and a Spring-Data-backed JPA
- * one ({@code @Profile("jpa")}); the application layer depends only on this port.
+ * Spring-Data-backed JPA one in every run, and a {@code ConcurrentHashMap}-backed Memory one only in
+ * the in-memory test suite (ADR-005); the application layer depends only on this port.
  */
 public interface CompanyAppointmentRepository extends IRepository<CompanyAppointment, Integer> {
 

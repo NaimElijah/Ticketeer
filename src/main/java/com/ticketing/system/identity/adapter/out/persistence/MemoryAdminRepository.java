@@ -1,6 +1,7 @@
 package com.ticketing.system.identity.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,13 +14,11 @@ import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 
 /**
- * In-memory {@link AdminRepository} for V1.
- *
- * <p>Lets Spring wire SystemAdminService. A future JPA-backed adapter
- * replaces this class without touching the application layer.
+ * In-memory {@link AdminRepository}, used only by the in-memory test suite
+ * ({@code test} with {@code memory}, ADR-005); every other run gets {@link JpaAdminRepository}.
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryAdminRepository implements AdminRepository {
 
     private final Map<Integer, Admin> adminsById = new ConcurrentHashMap<>();

@@ -43,6 +43,7 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.exception.PolicyViolationException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
  * Eval point 3 — purchase policy "between 2 and 4 tickets". An event carries an
@@ -56,7 +57,7 @@ import com.ticketing.system.shared.exception.PolicyViolationException;
  * {@code IllegalStateException} (which surfaced only as "Payment could not be completed").
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class PurchasePolicyEnforcementAcceptanceTest {
 
     @Autowired private AuthenticationService authService;

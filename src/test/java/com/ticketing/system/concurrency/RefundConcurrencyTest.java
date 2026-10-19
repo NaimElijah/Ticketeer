@@ -38,7 +38,7 @@ import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 /**
  * No-double-refund concurrency proof (#410), run on the real JPA stack.
  *
- * <p>Under jpa the receipt's {@code lockForUpdate} used to be a no-op, so two concurrent refund
+ * <p>Under JPA the receipt's {@code lockForUpdate} used to be a no-op, so two concurrent refund
  * requests for the same receipt could both pass the eligibility check and both call
  * {@code paymentGateway.refund()} — refunding the buyer twice ({@code @Version} only fails the second
  * SAVE, <em>after</em> the gateway was already hit). This test fires N refunds at the same receipt
@@ -46,12 +46,12 @@ import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
  * {@code SELECT … FOR UPDATE} row lock serialises the critical section so every loser sees
  * {@code is_refunded=true} and bails before any second gateway call.
  *
- * <p>Profiles {@code jpa,test}: JPA repositories + H2. The gateway is mocked so {@code refund()} calls
+ * <p>Profile {@code test} without {@code memory}: JPA repositories + H2. The gateway is mocked so {@code refund()} calls
  * can be counted; the platform-init runner that would probe it is {@code @Profile("!test")}, so it
  * stays off and the unstubbed mock is harmless at startup.
  */
 @SpringBootTest
-@ActiveProfiles({"jpa", "test"})
+@ActiveProfiles("test")
 class RefundConcurrencyTest {
 
     private static final int CONCURRENT_REQUESTS = 6;

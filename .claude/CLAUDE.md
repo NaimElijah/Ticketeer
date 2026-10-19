@@ -22,10 +22,9 @@ to `$env:Path`, and quote every dotted `-D…` argument: PowerShell 5.1 splits i
 quoted and on one line, so they work in both shells.
 
 ```bash
-./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev"   # local default: jpa on in-memory H2, demo seeded
+./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev"   # local default: JPA on in-memory H2, demo seeded
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--seed.scenario=file:<abs-path>.scenario"
-./mvnw spring-boot:run "-Dspring-boot.run.profiles=jpa"   # jpa on PostgreSQL via the DB_* env vars
-./mvnw spring-boot:run                                    # NO profile: in-memory Memory* repos, not Postgres
+./mvnw spring-boot:run                                    # NO profile: JPA on PostgreSQL via the DB_* env vars; fails at boot without it
 ./mvnw -Pproduction package                               # minified Vaadin bundle, for deployment
 ```
 
@@ -48,16 +47,16 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 - `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which can NPE on Windows with 24.7.0. Tests only; the app then serves no views.
 - **Don't run the full suite locally.** About 1650 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
 - CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`. There is no format, lint or dependency-audit step.
-- `*IT` classes never run under `test` or `verify` (surefire default includes, failsafe unbound). `DbOutageRecoveryLocalPgIT` also needs `LOCAL_PG_IT=true`, an explicit `-Dtest=` and the `PG_*` env vars (its defaults are macOS paths).
+- `*IT` classes run under failsafe in `verify`, never under `test`, and need Docker (Testcontainers, ADR-006); `-DskipITs` skips them. One IT, without surefire or packaging: `./mvnw -Pno-vaadin test-compile failsafe:integration-test failsafe:verify "-Dit.test=DbOutageRecoveryIT"`. Each IT declares its own container from `support/PostgresContainers` (`@Container @ServiceConnection`). Under `test`, Hibernate detects the dialect, so an IT can point a `test` context at PostgreSQL.
 - Acceptance classes share one cached Spring context with in-memory state. A class that mutates shared pools (admins, users) needs `@DirtiesContext(classMode = AFTER_CLASS)`, as `MessagingAcceptanceTest` has; otherwise it passes locally and breaks under CI's ordering (87e6952e).
 
 | Folder (`src/test/java/com/ticketing/system/`) | Boots |
 |---|---|
 | `unit/**` (except persistence), `ui/` | Nothing: plain JUnit + Mockito |
-| `unit/infrastructure/persistence/<Agg>Persistence/` | Abstract `IXxxRepositoryContractTest` + `Memory…`/`Jpa…` subclasses; Jpa = `@DataJpaTest @ActiveProfiles("jpa")`. Admin and MemoryEvent subclasses are named `…RepositoryTest` |
-| `acceptance/` | `@SpringBootTest @ActiveProfiles("test")`: Memory repos, `Stub*` WSEP |
-| `integration/`, `concurrency/` | `@SpringBootTest` with `{test, jpa}`: Jpa repos on H2 |
-| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Modulith) |
+| `unit/infrastructure/persistence/<Agg>Persistence/` | Abstract `IXxxRepositoryContractTest` + `Memory…`/`Jpa…` subclasses; Jpa = `@DataJpaTest @Import(JpaXxxRepository.class)`, no profile, on H2. `Postgres…IT` extends each Jpa subclass to run the same suite on a PostgreSQL container (failsafe). Admin and MemoryEvent subclasses are named `…RepositoryTest`; Admin's IT is `PostgresAdminRepositoryIT` |
+| `acceptance/` | `@SpringBootTest @ActiveProfiles({"test", PersistenceProfiles.MEMORY})`: Memory repos, `Stub*` WSEP |
+| `integration/`, `concurrency/` | `@SpringBootTest @ActiveProfiles("test")`: Jpa repos on H2 |
+| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Modulith), `RepositoryAdapterProfileTest` (adapter per profile set) |
 
 ## Architecture
 
@@ -105,10 +104,10 @@ copying from `target/`; git has CRLF and the generator writes LF, so a naive dif
 ### Repository ports with dual adapters (the central pattern)
 
 Each of the 11 aggregates has a port `XxxRepository extends IRepository<T, ID>` and two adapters,
-selected by profile. **Depend only on the port; never wire a concrete adapter.**
+selected by profile (ADR-005). **Depend only on the port; never wire a concrete adapter.**
 
-- `MemoryXxxRepository`: `@Profile("!jpa")`, `ConcurrentHashMap`-backed.
-- `JpaXxxRepository`: `@Profile("jpa")`, adapts the port onto a Spring Data `SpringDataXxxRepository`. The application layer never sees Spring Data types.
+- `JpaXxxRepository`: `@Profile(PersistenceProfiles.JPA_ADAPTERS)`, i.e. every run except `test` + `memory`. Adapts the port onto a Spring Data `SpringDataXxxRepository`. The application layer never sees Spring Data types.
+- `MemoryXxxRepository`: `@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)` (`test & memory`), `ConcurrentHashMap`-backed. A Spring test opts in with `@ActiveProfiles({"test", PersistenceProfiles.MEMORY})`, always in that order: the context cache keys on the ordered list. `RepositoryAdapterProfileTest` fails a new adapter with the wrong profile.
 
 Changing a port means implementing it in **both** adapters and adding the behaviour to the port's
 `IXxxRepositoryContractTest`. The two backends drift silently (lock semantics, exception types, key
@@ -120,7 +119,7 @@ subclasses (third test command above).
 - `@Transactional` sits on the application services (~15) and on Jpa adapter methods, never in `domain` or `ui`.
 - Keep WSEP calls outside the DB transaction (V3-TX-02). `CheckoutService`, `RefundService` and `EventCancellationRefundService` wrap only the DB steps in a programmatic `TransactionTemplate`; follow that pattern for any new external call.
 - `@Transactional(readOnly = true)` on a path that writes drops the write under JPA without an error (b356bf57: the admin session vanished on the next request).
-- Under `jpa`, concurrency is optimistic (`@Version`). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the tx advice) re-types the commit-time `OptimisticLockingFailureException` into `ConcurrentReservationException`. Jpa `lockForUpdate`/`unlock` are no-ops **except** in `JpaOrderReceiptRepository`, which takes a real `PESSIMISTIC_WRITE` lock so concurrent refunds can't both reach the gateway.
+- On the Jpa adapters, concurrency is optimistic (`@Version`). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the tx advice) re-types the commit-time `OptimisticLockingFailureException` into `ConcurrentReservationException`. Jpa `lockForUpdate`/`unlock` are no-ops **except** in `JpaOrderReceiptRepository`, which takes a real `PESSIMISTIC_WRITE` lock so concurrent refunds can't both reach the gateway.
 - Never mint IDs from an in-memory counter: it restarts at 1 on every boot and collides with persisted rows. Ticket IDs come from `TicketRepository.nextId` (seeded from the max existing id) inside the checkout transaction (6ce60ea1).
 - No migration tool: `ddl-auto: update` on Postgres (`create-drop` in dev). Hibernate adds tables and columns but never renames or drops, so entity changes must still read existing rows (example: the legacy refunded-order handling around ADR-001).
 - `LoggingAspect` traces every public method in `..application.service..` with argument *counts* only, but it logs exception messages at WARN, so keep PII out of exception messages.
@@ -153,16 +152,16 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 
 | Profile | Effect |
 |---|---|
-| *(none)* | Memory repos. The Postgres datasource in `application.yml` is configured but unused. Real WSEP; market auto-opens |
-| `dev` | Activates `jpa` (`spring.profiles.group`); H2 in-memory `create-drop`; `seed.mode=reseed` with `demo.scenario`; `ui/dev` seeders; 8 s WSEP timeout |
-| `jpa` | Jpa repos on the configured datasource: Postgres via `DB_*` unless `dev`/`test` override it |
-| `supabase` | Activates `jpa`; remote Postgres over SSL; `DB_HOST`/`DB_USER`/`DB_PASSWORD` required (`application-supabase.yml`) |
-| `test` | Suite profile (`src/test/resources/application-test.yml`): H2, Memory repos unless combined with `jpa`, no runners/schedulers, `Stub*` WSEP |
+| *(none)* | Jpa repos on Postgres via `DB_*`; boot fails if it is unreachable, never falls back to memory (ADR-005). Real WSEP; market auto-opens |
+| `dev` | Jpa repos on H2 in-memory `create-drop`; `seed.mode=reseed` with `demo.scenario`; `ui/dev` seeders; 8 s WSEP timeout |
+| `supabase` | Jpa repos on remote Postgres over SSL; `DB_HOST`/`DB_USER`/`DB_PASSWORD` required (`application-supabase.yml`) |
+| `test` | Suite profile (`src/test/resources/application-test.yml`): Jpa repos on H2, no runners/schedulers, `Stub*` WSEP |
+| `memory` | Only with `test`: swaps in the Memory repos. Inert on its own. `jpa` no longer exists; setting it does nothing |
 | `production`, `no-vaadin` | Maven build profiles: bundle the frontend / skip `prepare-frontend` |
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
 - Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
-- A new Spring profile needs a `<springProfile>` block in `logback-spring.xml`; otherwise the run gets no appenders and looks hung (36ac7924).
+- `logback-spring.xml` has a catch-all `!dev & !test & !acceptance` block, so a new runtime profile gets appenders without a block of its own. A new profile that needs different logging gets its own block and an exclusion in the catch-all: blocks that both match merge (root gets both blocks' appenders, logback ignores a duplicate, and the later block's levels win), and a run that matches none is silent (36ac7924).
 - `src/test/resources/application-acceptance.yml` exists, but nothing activates it.
 
 ## Conventions

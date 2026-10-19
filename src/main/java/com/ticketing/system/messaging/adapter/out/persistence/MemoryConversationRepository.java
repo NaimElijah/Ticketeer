@@ -1,6 +1,7 @@
 package com.ticketing.system.messaging.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,15 +19,15 @@ import com.ticketing.system.messaging.domain.ParticipantType;
 
 /**
  * In-memory {@link ConversationRepository}. Lets Spring wire MessagingService.
- * {@code @Profile("!jpa")}: the {@code jpa} run/dev profile swaps in
- * {@link JpaConversationRepository} instead.
+ * Used only by the in-memory test suite ({@code test} with {@code memory});
+ * every other run gets {@link JpaConversationRepository}.
  *
  * <p>Read-tracking ({@code countUnreadForMember}) is computed by summing
  * {@link Conversation#unreadCountFor(int)} over the conversations where the
  * member is a participant.
  */
 @Repository
-@Profile("!jpa")
+@Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
 public class MemoryConversationRepository implements ConversationRepository {
 
     private final Map<String, Conversation> conversationsById = new ConcurrentHashMap<>();

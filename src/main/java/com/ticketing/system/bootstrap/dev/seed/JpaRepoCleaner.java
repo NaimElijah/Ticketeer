@@ -13,12 +13,13 @@ import com.ticketing.system.organization.adapter.out.persistence.SpringDataProdu
 import com.ticketing.system.identity.adapter.out.persistence.SpringDataSessionRepository;
 import com.ticketing.system.sales.adapter.out.persistence.SpringDataTicketRepository;
 import com.ticketing.system.identity.adapter.out.persistence.SpringDataUserRepository;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The real database wipe behind {@code seed.mode=wipe}/{@code reset} (#366), active on the
- * {@code jpa} profile (dev's H2 and the Supabase Postgres alike).
+ * The database wipe behind {@code seed.mode=wipe}/{@code reset} (#366), active wherever the Jpa
+ * repository adapters are (dev's H2 and the Supabase Postgres alike).
  *
  * <p>{@code deleteAll()} per aggregate root removes the root rows and cascades to their owned
  * sub-tables (venue maps → zones → seats, receipt lines, messages, …). Cross-aggregate references
@@ -33,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
  * opt-in (default {@code seed.mode=off}) and gated behind an interactive confirmation in the runner.
  */
 @Component
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 @Slf4j
 public class JpaRepoCleaner implements RepoCleaner {
 

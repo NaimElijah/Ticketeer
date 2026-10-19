@@ -9,11 +9,12 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.shared.exception.UserNotFoundException;
+import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 
 /**
- * JPA-backed {@link UserRepository} — active only in the {@code jpa} run/dev profile. Adapts the
+ * JPA-backed {@link UserRepository} — active in every run but the in-memory test suite. Adapts the
  * domain port onto Spring Data ({@link SpringDataUserRepository}); the application layer depends
  * only on {@code UserRepository}, never on Spring Data. Company appointments are no longer owned by
  * the user (task #20) — they persist through the separate {@code CompanyAppointmentRepository}.
@@ -29,7 +30,7 @@ import com.ticketing.system.identity.domain.User;
  * first use, so ids don't collide with existing rows after a restart on a persistent database.
  */
 @Repository
-@Profile("jpa")
+@Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaUserRepository implements UserRepository {
 
     private final SpringDataUserRepository data;
