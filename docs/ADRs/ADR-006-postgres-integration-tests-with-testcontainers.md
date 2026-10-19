@@ -41,8 +41,9 @@ classes that failsafe runs in `verify`.**
 - **The version is pinned to 1.21.4.** Spring Boot 3.5.0 manages Testcontainers 1.21.0, and Docker
   Engine 29 answers its client with HTTP 400 ("Could not find a valid Docker environment").
   1.21.4, the latest 1.21.x, works; both were checked against Engine 29.8.
-- **One image, one place.** `support/PostgresContainers` pins `postgres:17.11-alpine`, the current
-  major at a fixed minor. #87 will choose the RDS engine version, and the image follows it then.
+- **One image, one place.** `support/PostgresContainers` pins `postgres:17.11-alpine`, PostgreSQL 17
+  at a fixed minor. No production engine version is chosen yet (PostgreSQL 18 is also current);
+  #87 will choose the RDS one, and the image follows it then.
 - **One container per test class.** Each `*IT` declares its own static container, so committed rows
   and dead pools cannot leak from one class into another. `@DirtiesContext` closes each class's
   Spring context with its container.
