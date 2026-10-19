@@ -32,15 +32,16 @@
         </rollingPolicy>
     </appender>
 
-    <!-- Default profile (prod): INFO to file + console. -->
-    <springProfile name="default">
+    <!-- Every run that is not dev or a test: no profile (prod), supabase, or any profile added later.
+         A catch-all rather than one block per profile, so a new profile can never boot with no
+         appenders at all (36ac7924). The exclusions keep each line from being logged twice where a
+         profile below has its own block. AOP entry/exit tracing stays off. -->
+    <springProfile name="!dev &amp; !test &amp; !acceptance">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
             <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="INFO"/>
-        <!-- Domain warnings/errors always reach the file -->
-        <!-- AOP entry/exit tracing off in prod by default -->
         <logger name="com.ticketing.system.shared.logging" level="INFO"/>
     </springProfile>
 
@@ -52,18 +53,6 @@
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
         <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
-    </springProfile>
-
-    <!-- JPA run profiles (supabase / plain `jpa` deploy) — but NOT dev, which has its own block
-         above (dev activates jpa via profiles.group, so the `& !dev` avoids double-logging). Without
-         this, a supabase/jpa run matches no <springProfile> and gets NO appenders at all (silent). -->
-    <springProfile name="jpa &amp; !dev">
-        <root level="INFO">
-            <appender-ref ref="CONSOLE"/>
-            <appender-ref ref="FILE"/>
-        </root>
-        <logger name="com.ticketing.system" level="INFO"/>
-        <logger name="com.ticketing.system.shared.logging" level="INFO"/>
     </springProfile>
 
     <!-- Test profile: DEBUG for our code, console only. -->
