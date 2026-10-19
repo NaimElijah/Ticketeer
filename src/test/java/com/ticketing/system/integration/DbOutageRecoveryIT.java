@@ -43,6 +43,8 @@ import com.zaxxer.hikari.HikariDataSource;
 @Testcontainers
 @SpringBootTest(properties = {
         "spring.datasource.hikari.maximum-pool-size=2",
+        // No idle floor, so retiring the idle connections does not start a refill before the pause.
+        "spring.datasource.hikari.minimum-idle=0",
         "spring.datasource.hikari.connection-timeout=2000",
         "spring.datasource.hikari.validation-timeout=1000",
         // `create`, not the test profile's `create-drop`: the context may close after the container stops.
@@ -87,8 +89,9 @@ class DbOutageRecoveryIT {
     }
 
     /**
-     * Retires the idle connections first, so the read during the outage always needs a new
-     * connection and fails on the pool's connection timeout, the same way on every run.
+     * Retires the idle connections first. With {@code minimum-idle=0} the pool does not refill, so
+     * the read during the outage always needs a new connection and fails on the pool's connection
+     * timeout, the same way on every run.
      */
     private void pauseDatabase() throws SQLException {
         dataSource.unwrap(HikariDataSource.class).getHikariPoolMXBean().softEvictConnections();
