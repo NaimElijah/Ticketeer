@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>Idempotent — if the user already exists (e.g. a dev run pointed at a
  * persistent database) the seeder logs and moves on. On dev's default
- * {@code create-drop} H2 the user is (re-)created on every boot.
+ * in-memory H2 the user is (re-)created on every boot.
  *
  * <p>There is no dev admin persona. Admin access goes through the real
  * admin sign-in ({@code /admin/sign-in}) with the default platform admin

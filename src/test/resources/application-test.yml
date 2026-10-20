@@ -1,15 +1,14 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # One database per Spring context: a context never sees another's rows. Without DB_CLOSE_DELAY
+    # the database lives as long as the context's connection pool, not until the JVM exits.
+    url: jdbc:h2:mem:testdb-${random.uuid};DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password:
     driver-class-name: org.h2.Driver
 
   # No explicit dialect: Hibernate detects H2 here, and PostgreSQL when an *IT points the datasource
-  # at a container (ADR-006).
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
+  # at a container (ADR-006). The schema comes from the Flyway migrations, as in every run (ADR-007).
 
 # JWT signing secret (test-only, never used in prod).
 jwt:

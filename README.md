@@ -153,6 +153,7 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | Modularity | Spring Modulith | 1.4.1 | Module model, verification and generated module docs |
 | Architecture tests | ArchUnit | 1.4.1 | Fails the build on a layer violation or a module cycle |
 | Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a configuration switch |
+| Schema migrations | Flyway | Boot-managed (11.7.2) | Versioned SQL applied at startup; Hibernate only validates ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)) |
 | Auth | jjwt + BCrypt | 0.12.6 | Signed session tokens and hashed passwords |
 | Build | Maven wrapper | 3.9.14 | The pinned build tool ships in the repo |
 
@@ -255,7 +256,7 @@ value in one place.
 | Profile | Effect |
 |---|---|
 | *(none)* | JPA repositories on PostgreSQL through `DB_*`, real WSEP, market opened at boot |
-| `dev` | JPA repositories on in-memory H2 (`create-drop`), replays `demo.scenario`, adds the dev panel |
+| `dev` | JPA repositories on in-memory H2, empty every boot and built by the Flyway migrations; replays `demo.scenario`, adds the dev panel |
 | `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default |
 | `test` | The test suite's profile: JPA repositories on H2, stub WSEP, no boot runners or schedulers |
 | `memory` | Tests only, together with `test`: swaps in the in-memory repositories. Does nothing on its own |
@@ -276,7 +277,9 @@ through a pull request. A release is a separate promotion PR from `dev` to `main
    `application/service`.
 3. If it needs storage, extend the outbound port in `application/port/out`. Implement it in
    both adapters under `adapter/out/persistence`, and add the behaviour to that port's contract
-   test.
+   test. If an `@Entity` changes, add the next `V<n>__<description>.sql` to
+   `src/main/resources/db/migration`, in SQL that both PostgreSQL and H2 accept. Never edit one that
+   has already run ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)).
 4. Add a presenter in `ui/presenters` and a thin `@Route` view in `ui/views`.
 
 `HexagonalRulesTest` fails the build if a dependency points the wrong way.
@@ -302,7 +305,7 @@ About 1,500 test methods, organised by what they boot:
 | `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
 | `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats and refunds | Spring under `test`: JPA repositories on H2 |
 | `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith) and `RepositoryAdapterProfileTest` (which adapter each profile set selects) | Nothing |
-| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
+| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database (`SchemaMigrationIT`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
 ```bash
 ./mvnw -Pno-vaadin test "-Dtest=ReservationServiceTest"                # one class
@@ -331,7 +334,7 @@ with the minified frontend.
 | Concern | Today |
 |---|---|
 | Health | `GET /actuator/health` and `/actuator/info`; no separate readiness probe |
-| Schema | Hibernate `ddl-auto: update` on PostgreSQL; no versioned migrations ([#31](https://github.com/NaimElijah/Ticketeer/issues/31)) |
+| Schema | Flyway applies `src/main/resources/db/migration` at startup, then Hibernate validates its mapping against it ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)). A database that `ddl-auto: update` built before this has no migration history and refuses to boot; drop and recreate its `public` schema once, or see the ADR to keep its data |
 | Logs | Plain text to the console and `logs/event-ticket-system.log`, rolled daily. No JSON or correlation id ([#30](https://github.com/NaimElijah/Ticketeer/issues/30)) |
 | Metrics and traces | Not exported yet ([#37](https://github.com/NaimElijah/Ticketeer/issues/37)) |
 
@@ -372,6 +375,13 @@ restart and that switching databases is a configuration change only (SLR.7). Eve
 adapters, so a forgotten profile can no longer lose data; the in-memory adapters keep the acceptance
 suite fast and independent of a schema. Cost: every port is implemented twice, so each one carries a
 shared contract test to stop the two from drifting.
+
+**Flyway owns the schema; Hibernate only validates**
+([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)). `ddl-auto: update` only ever added
+columns, so a type change or a data move could not ship. The same SQL migrations now build the
+schema on PostgreSQL and on H2, in dev and in every test, and a mapped table or column that no
+migration created fails the boot. Cost: every entity change needs a migration in SQL both
+databases accept, and `validate` does not check length, nullability or constraints, so review must.
 
 **Open Modulith modules, with ArchUnit as the cycle gate** (no ADR yet). The code began as a
 layered monolith whose contexts still share services and domain types, so closing the modules to

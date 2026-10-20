@@ -8,9 +8,15 @@ spring:
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
+  # Flyway owns the schema (ADR-007): it applies db/migration/V*.sql at startup, on PostgreSQL and on
+  # H2 alike, and Hibernate only checks its mapping against the result. A schema that Flyway did not
+  # create stops the boot: baseline-on-migrate stays off. Misnamed migration files fail instead of
+  # being skipped.
+  flyway:
+    validate-migration-naming: true
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     # No explicit dialect: Hibernate auto-detects it per connection (PostgreSQL on the
     # deploy/run target, H2 in dev and the @DataJpaTest contract tests), so one config

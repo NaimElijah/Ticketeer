@@ -2,7 +2,8 @@
 #
 # dev runs on the real JPA persistence path against in-memory H2 (no Postgres or
 # Docker needed locally): every aggregate's Jpa* repository is wired, as in every
-# run (ADR-005), and persists to H2; create-drop starts each boot with an empty schema.
+# run (ADR-005), and persists to H2. The database is in memory, so each boot starts empty and
+# Flyway builds the schema from the same migrations as PostgreSQL (ADR-007).
 #
 # Deploy/run uses the SAME repositories against Postgres (Supabase) by setting the
 # DB_* env vars — a config-only switch, no code change.
@@ -14,9 +15,6 @@ spring:
     username: sa
     password:
     driver-class-name: org.h2.Driver
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
 
 # Scenario init (ScenarioRunner) — boots the system from an editable command file.
 #   scenario:  the file to run (classpath:scenarios/*.scenario, or file:/abs/path/to/your.scenario)
@@ -25,7 +23,7 @@ spring:
 #   fail-fast: true = stop at the first unexpected error and fail startup (partial report still logged;
 #              the default outside dev); false = run all and boot anyway, so a broken demo line
 #              doesn't block local work
-# dev's H2 is create-drop (empty every boot), so reseed is the right default here — no wipe needed.
+# dev's H2 is in memory (empty every boot), so reseed is the right default here — no wipe needed.
 seed:
   scenario: classpath:scenarios/demo.scenario
   mode: reseed

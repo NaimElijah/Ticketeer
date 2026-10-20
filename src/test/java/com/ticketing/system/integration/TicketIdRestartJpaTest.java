@@ -52,7 +52,7 @@ import com.ticketing.system.shared.dto.VenueMapDTO;
  * exactly the state of a restarted process pointing at a populated database.
  */
 @SpringBootTest(properties =
-        "spring.datasource.url=jdbc:h2:mem:ticketidrestart;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
+        "spring.datasource.url=jdbc:h2:mem:ticketidrestart;DB_CLOSE_ON_EXIT=FALSE")
 @ActiveProfiles("test")
 @DirtiesContext
 class TicketIdRestartJpaTest {
