@@ -91,16 +91,18 @@ runtime scope, with versions managed by the Spring Boot 3.5.0 BOM (11.7.2).
 - **Type changes and data moves are possible.** #73 and #74 can ship as migrations, and so can a
   NOT NULL backfill for `receipt_lines.refund_state`.
 - **Migrations are exercised every day.** They run on every dev boot and in every JPA test context
-  on H2, and in CI on PostgreSQL. A mapping change without its migration fails the next test run.
+  on H2, and in CI on PostgreSQL. A new or retyped table or column without its migration fails
+  the next test run; the changes `validate` cannot see are listed below.
 - **The pipeline (#93) has a migration step to call,** whether it keeps startup migration or moves
   to a one-off task.
 
 **What this makes hard, and what is accepted:**
 
 - **Every entity change needs a migration.** Never edit an applied migration; add `V<n+1>`.
-- **`validate` has blind spots.** It checks tables, columns and types. It does not check
-  nullability, unique and foreign-key constraints, or the values in an enum's `ck_` check. Those are
-  the reviewer's job. Adding an enum constant needs a migration that drops and re-adds its `ck_`
+- **`validate` has blind spots.** It checks that every mapped table and column exists with a
+  compatible type. It does not check column length, nullability, unique and foreign-key
+  constraints, or the values in an enum's `ck_` check, so a new `length`, `nullable = false`,
+  `unique` or enum constant boots without its migration. Those are the reviewer's job. Adding an enum constant needs a migration that drops and re-adds its `ck_`
   constraint, or inserts of the new value fail.
 - **The SQL must stay portable between H2 and PostgreSQL.** A PostgreSQL-only feature (`jsonb`,
   partial indexes, `create index concurrently`) needs a decision first; see Revisit when.

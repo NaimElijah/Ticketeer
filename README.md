@@ -379,9 +379,9 @@ shared contract test to stop the two from drifting.
 **Flyway owns the schema; Hibernate only validates**
 ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)). `ddl-auto: update` only ever added
 columns, so a type change or a data move could not ship. The same SQL migrations now build the
-schema on PostgreSQL and on H2, in dev and in every test, and a mapping without its migration fails
-the boot. Cost: every entity change needs a migration in SQL both databases accept, and `validate`
-does not check nullability or constraints, so review must.
+schema on PostgreSQL and on H2, in dev and in every test, and a mapped table or column that no
+migration created fails the boot. Cost: every entity change needs a migration in SQL both
+databases accept, and `validate` does not check length, nullability or constraints, so review must.
 
 **Open Modulith modules, with ArchUnit as the cycle gate** (no ADR yet). The code began as a
 layered monolith whose contexts still share services and domain types, so closing the modules to
