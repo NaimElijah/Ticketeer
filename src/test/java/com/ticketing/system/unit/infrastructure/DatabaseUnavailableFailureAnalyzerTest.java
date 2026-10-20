@@ -84,6 +84,31 @@ class DatabaseUnavailableFailureAnalyzerTest {
         });
     }
 
+    // Flyway keeps the driver's SQLException as the cause, as it does for the connection failure above.
+    @Test
+    void GivenRejectedCredentials_WhenFlywayFailsToSignIn_ThenAnalysisNamesTheDatasource() {
+        SQLException wrongPassword = new SQLException("password authentication failed for user \"ticketing\"", "28P01");
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Unable to obtain connection from database", wrongPassword));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(UNREACHABLE_URL);
+        assertThat(analysis.getAction()).contains("DB_USER").contains("DB_PASSWORD");
+    }
+
+    @Test
+    void GivenMissingDatabase_WhenFlywayFailsToConnect_ThenAnalysisNamesTheDatasource() {
+        SQLException missingDatabase = new SQLException("database \"ticketing\" does not exist", "3D000");
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Unable to obtain connection from database", missingDatabase));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(UNREACHABLE_URL);
+        assertThat(analysis.getAction()).contains("DB_NAME");
+    }
+
     @Test
     void GivenSqlFailureThatIsNotAConnectionFailure_WhenAnalyzed_ThenNoAnalysis() {
         SQLException missingTable = new SQLException("relation \"users\" does not exist", "42P01");
