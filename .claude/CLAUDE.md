@@ -161,8 +161,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
 - Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
-- `logback-spring.xml` has a catch-all `!dev & !test & !acceptance` block, so a new runtime profile gets appenders without a block of its own. A new profile that needs different logging gets its own block and an exclusion in the catch-all: blocks that both match merge (root gets both blocks' appenders, logback ignores a duplicate, and the later block's levels win), and a run that matches none is silent (36ac7924).
-- `src/test/resources/application-acceptance.yml` exists, but nothing activates it.
+- `logback-spring.xml` has a catch-all `!dev & !test` block, so a new runtime profile gets appenders without a block of its own. A new profile that needs different logging gets its own block and an exclusion in the catch-all: blocks that both match merge (root gets both blocks' appenders, logback ignores a duplicate, and the later block's levels win), and a run that matches none is silent (36ac7924).
 
 ## Conventions
 

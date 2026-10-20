@@ -18,7 +18,7 @@
         </encoder>
     </appender>
 
-    <!-- Rolling file appender — for production / acceptance runs. -->
+    <!-- Rolling file appender — for production and dev runs. -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/event-ticket-system.log</file>
         <encoder>
@@ -37,7 +37,7 @@
          appenders at all (36ac7924). The exclusions keep the profiles below on their own settings:
          blocks that both match merge, so root would get both blocks' appenders (a test run would gain
          FILE) and the later block's levels would win. AOP entry/exit tracing stays off. -->
-    <springProfile name="!dev &amp; !test &amp; !acceptance">
+    <springProfile name="!dev &amp; !test">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
             <appender-ref ref="FILE"/>
@@ -60,16 +60,6 @@
     <springProfile name="test">
         <root level="WARN">
             <appender-ref ref="CONSOLE"/>
-        </root>
-        <logger name="com.ticketing.system" level="DEBUG"/>
-        <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
-    </springProfile>
-
-    <!-- Acceptance profile: INFO, console + file. -->
-    <springProfile name="acceptance">
-        <root level="INFO">
-            <appender-ref ref="CONSOLE"/>
-            <appender-ref ref="FILE"/>
         </root>
         <logger name="com.ticketing.system" level="DEBUG"/>
         <logger name="com.ticketing.system.shared.logging" level="DEBUG"/>
