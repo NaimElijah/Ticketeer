@@ -40,8 +40,9 @@ public class ReceiptLine implements InvariantChecked {
     @Column(name = "seat_number")
     private String seatNumber;
 
-    // Nullable on purpose: ddl-auto "update" cannot add a NOT NULL column to a receipt_lines table that
-    // already has rows, and there are no versioned migrations yet (#31). A null reads as NONE.
+    // Nullable because ddl-auto "update" could not add a NOT NULL column to a populated receipt_lines
+    // table (ADR-001), and the Flyway baseline kept the column as it was. A null reads as NONE until
+    // #175 backfills the column and makes it NOT NULL.
     @Enumerated(EnumType.STRING)
     @Column(name = "refund_state")
     private LineRefundState refundState;

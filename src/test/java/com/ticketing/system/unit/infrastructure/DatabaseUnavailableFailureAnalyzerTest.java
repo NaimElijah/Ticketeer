@@ -2,6 +2,7 @@ package com.ticketing.system.unit.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.diagnostics.FailureAnalysis;
@@ -26,9 +28,10 @@ import com.ticketing.system.bootstrap.DatabaseUnavailableFailureAnalyzer;
 /**
  * The startup report for an unreachable database (#28, ADR-005).
  *
- * <p>The first test boots the real DataSource and Hibernate auto-configuration against a closed
- * local port, so the analyzer is checked against the failure Hibernate actually raises. A Hibernate
- * upgrade that changes that failure turns this test red instead of silently restoring the
+ * <p>Two tests boot the real auto-configuration against a closed local port, so the analyzer is
+ * checked against the failures actually raised: Hibernate's, when it is the first to connect, and
+ * Flyway's, which connects first in the application (ADR-007). A Hibernate or Flyway upgrade that
+ * changes its failure turns a test red instead of silently restoring a raw stack trace or the
  * misleading "set hibernate.dialect" report. Another test loads the analyzers the way Spring Boot
  * does, so a broken {@code META-INF/spring.factories} entry fails too.
  */
@@ -56,6 +59,64 @@ class DatabaseUnavailableFailureAnalyzerTest {
             assertThat(analysis.getDescription()).contains(UNREACHABLE_URL);
             assertThat(analysis.getAction()).contains("DB_HOST").contains("dev");
         });
+    }
+
+    // The application's own startup order: Flyway migrates before Hibernate starts (ADR-007), so an
+    // unreachable database fails inside Flyway and Hibernate's dialect error never happens.
+    @Test
+    void GivenUnreachableDatabase_WhenFlywayRunsFirst_ThenAnalysisNamesTheDatasourceAndHowToFixIt() {
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class,
+                        FlywayAutoConfiguration.class, HibernateJpaAutoConfiguration.class))
+                .withPropertyValues(
+                        "spring.datasource.url=" + UNREACHABLE_URL,
+                        "spring.datasource.username=ticketing",
+                        "spring.datasource.password=unused");
+
+        runner.run(context -> {
+            assertThat(context).hasFailed();
+
+            FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL).analyze(context.getStartupFailure());
+
+            assertThat(analysis).isNotNull();
+            assertThat(analysis.getDescription()).contains(UNREACHABLE_URL);
+            assertThat(analysis.getAction()).contains("DB_HOST").contains("dev");
+        });
+    }
+
+    // Flyway keeps the driver's SQLException as the cause, as it does for the connection failure above.
+    @Test
+    void GivenRejectedCredentials_WhenFlywayFailsToSignIn_ThenAnalysisNamesTheDatasource() {
+        SQLException wrongPassword = new SQLException("password authentication failed for user \"ticketing\"", "28P01");
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Unable to obtain connection from database", wrongPassword));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(UNREACHABLE_URL);
+        assertThat(analysis.getAction()).contains("DB_USER").contains("DB_PASSWORD");
+    }
+
+    @Test
+    void GivenMissingDatabase_WhenFlywayFailsToConnect_ThenAnalysisNamesTheDatasource() {
+        SQLException missingDatabase = new SQLException("database \"ticketing\" does not exist", "3D000");
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Unable to obtain connection from database", missingDatabase));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(UNREACHABLE_URL);
+        assertThat(analysis.getAction()).contains("DB_NAME");
+    }
+
+    @Test
+    void GivenSqlFailureThatIsNotAConnectionFailure_WhenAnalyzed_ThenNoAnalysis() {
+        SQLException missingTable = new SQLException("relation \"users\" does not exist", "42P01");
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("migration failed", missingTable));
+
+        assertThat(analysis).isNull();
     }
 
     @Test

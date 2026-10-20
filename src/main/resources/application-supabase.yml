@@ -31,7 +31,3 @@ spring:
       keepalive-time: 300000           # ping idle connections every 5 min to keep them warm / detect dead ones
       initialization-fail-timeout: 0   # the pool itself starts without a connection, but Hibernate needs one
                                        # at boot, so an unreachable DB still stops startup (ADR-005)
-  jpa:
-    hibernate:
-      # First boot builds the whole schema from the @Entity mappings; later boots only add what's new.
-      ddl-auto: update

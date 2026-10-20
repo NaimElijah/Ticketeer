@@ -129,6 +129,21 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+
+		<!-- Flyway owns the schema: versioned SQL in db/migration, applied at startup, and Hibernate
+		     only validates against it (ADR-007). Versions come from the Boot BOM. flyway-core carries
+		     H2 support; PostgreSQL support has been a separate module since Flyway 10. runtime scope:
+		     no main code imports Flyway, only Boot's auto-configuration and the ITs. -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
