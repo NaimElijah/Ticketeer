@@ -32,7 +32,7 @@ UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
 `seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default) · `wipe` (delete, then stop) ·
 `reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
-on a persistent DB; dev's H2 is `create-drop`, already empty on every boot. A missing or unreadable
+on a persistent DB; dev's H2 is in memory, already empty on every boot. A missing or unreadable
 scenario file stops the boot in every profile. A failing scenario step stops it only while
 `seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Full reference: `SEED.md`.
 
@@ -121,7 +121,8 @@ subclasses (third test command above).
 - `@Transactional(readOnly = true)` on a path that writes drops the write under JPA without an error (b356bf57: the admin session vanished on the next request).
 - On the Jpa adapters, concurrency is optimistic (`@Version`). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the tx advice) re-types the commit-time `OptimisticLockingFailureException` into `ConcurrentReservationException`. Jpa `lockForUpdate`/`unlock` are no-ops **except** in `JpaOrderReceiptRepository`, which takes a real `PESSIMISTIC_WRITE` lock so concurrent refunds can't both reach the gateway.
 - Never mint IDs from an in-memory counter: it restarts at 1 on every boot and collides with persisted rows. Ticket IDs come from `TicketRepository.nextId` (seeded from the max existing id) inside the checkout transaction (6ce60ea1).
-- No migration tool: `ddl-auto: update` on Postgres (`create-drop` in dev). Hibernate adds tables and columns but never renames or drops, so entity changes must still read existing rows (example: the legacy refunded-order handling around ADR-001).
+- Flyway owns the schema (ADR-007): `src/main/resources/db/migration/V<n>__*.sql`, applied at startup on PostgreSQL **and** on H2 (dev, every Jpa/`test` context), with `ddl-auto: validate` everywhere. An `@Entity` change ships the next `V<n>` in the same commit; never edit one that has run (Flyway's checksum fails the boot). Write SQL both databases accept, keep migrations expand-only (add now, remove a release later), and name every constraint `uk_`/`ck_`/`fk_<table>_<column>`. `validate` checks only tables, columns and types, not nullability, uniques, FKs or enum `ck_` values: adding an enum constant needs a migration that drops and re-adds its `ck_` constraint, or inserts of it fail on a real database.
+- Each `test`-profile context gets its own H2 database (`testdb-${random.uuid}`), so nothing leaks between cached contexts; a test that needs a fixed name sets its own URL (`TicketIdRestartJpaTest`).
 - `LoggingAspect` traces every public method in `..application.service..` with argument *counts* only, but it logs exception messages at WARN, so keep PII out of exception messages.
 
 ### Platform lifecycle (UC-1 / UC-32)
@@ -153,7 +154,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | Profile | Effect |
 |---|---|
 | *(none)* | Jpa repos on Postgres via `DB_*`; boot fails if it is unreachable, never falls back to memory (ADR-005). Real WSEP; market auto-opens |
-| `dev` | Jpa repos on H2 in-memory `create-drop`; `seed.mode=reseed` with `demo.scenario`; `ui/dev` seeders; 8 s WSEP timeout |
+| `dev` | Jpa repos on in-memory H2, built by Flyway each boot; `seed.mode=reseed` with `demo.scenario`; `ui/dev` seeders; 8 s WSEP timeout |
 | `supabase` | Jpa repos on remote Postgres over SSL; `DB_HOST`/`DB_USER`/`DB_PASSWORD` required (`application-supabase.yml`) |
 | `test` | Suite profile (`src/test/resources/application-test.yml`): Jpa repos on H2, no runners/schedulers, `Stub*` WSEP |
 | `memory` | Only with `test`: swaps in the Memory repos. Inert on its own. `jpa` no longer exists; setting it does nothing |

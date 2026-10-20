@@ -17,7 +17,7 @@ Run the seeded dev app:
 
 ## How dev seeding works
 
-The `dev` profile runs the JPA repositories on in-memory **H2** (`create-drop`, so the schema is empty every boot)
+The `dev` profile runs the JPA repositories on in-memory **H2** (empty every boot; Flyway builds the schema from the migrations)
 and sets `seed.mode=reseed` (see `application-dev.yml`). The market opening is not dev-specific:
 `bootstrap/scheduling/MarketOpener` opens it on every boot outside the `test` profile, and
 `MarketSelfHealScheduler` keeps retrying if the external services are not reachable yet. On startup:
@@ -108,7 +108,7 @@ deleted and refuse — so a stray `SEED_MODE=reset` can never wipe a database on
 
 ```bash
 # Force a full wipe + reseed (needs the explicit opt-in). Mainly for a persistent DB —
-# dev's H2 is create-drop, so a normal `dev` boot already starts empty and reseeds.
+# dev's H2 is in memory, so a normal `dev` boot already starts empty and reseeds.
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--seed.mode=reset --seed.assume-yes=true"
 ```
 
