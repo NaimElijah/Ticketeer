@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +53,7 @@ class CompanyMembershipServiceTest {
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         companyEventStatsPort = mock(CompanyEventStatsPort.class);
-        membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
+        membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
         service = new CompanyManagementService(
                 companyRepository,
                 userRepository,
@@ -57,6 +61,19 @@ class CompanyMembershipServiceTest {
                 companyEventStatsPort,
                 membershipService,
                 mock(ApplicationEventPublisher.class));
+    }
+
+    // Appointments are stamped from the injected clock, as UTC wall time (ADR-008).
+    @Test
+    void GivenFixedClock_WhenOwnerAppointmentReceived_ThenItIsCreatedAtTheClock() {
+        Instant t0 = Instant.parse("2027-07-15T17:00:00Z");
+        CompanyMembershipService membership =
+                new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.fixed(t0, ZoneOffset.UTC));
+
+        membership.receiveOwnerAppointment(7, 3, 1);
+
+        assertEquals(LocalDateTime.ofInstant(t0, ZoneOffset.UTC),
+                membership.getPendingCompanyAppointment(7, 3).getCreatedAt());
     }
 
     @Test

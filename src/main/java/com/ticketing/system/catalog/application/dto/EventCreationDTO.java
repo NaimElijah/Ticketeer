@@ -1,5 +1,6 @@
 package com.ticketing.system.catalog.application.dto;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import com.ticketing.system.catalog.domain.EventCategory;
@@ -16,5 +17,6 @@ public record EventCreationDTO(
         Double rating,                
         Location location,             // might need to be LocationDTO
         List<ShowDate> showDates,      // might need to be List<ShowDateDTO>
+        ZoneId timeZone,               // the venue's zone the show dates are read in (ADR-008)
         PurchasePolicyDTO purchasePolicy
 ) {}

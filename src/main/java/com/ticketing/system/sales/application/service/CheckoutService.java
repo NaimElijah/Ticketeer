@@ -1,6 +1,7 @@
 package com.ticketing.system.sales.application.service;
 import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -84,6 +85,8 @@ public class CheckoutService {
     // OUTSIDE any transaction so a slow gateway never pins a DB connection. This template wraps only
     // the Phase-3 DB unit (tickets + receipt + RESERVED→SOLD confirm), between the external calls.
     private final TransactionTemplate transactionTemplate;
+    // "now" for hold expiry, pricing and receipts: UTC wall time (ADR-008).
+    private final Clock clock;
 
     // In-memory cache for completed checkouts to handle idempotency. Keyed by a
     // combination of buyer identity and idempotency key, since the same idempotency
@@ -113,7 +116,8 @@ public class CheckoutService {
             SessionManager sessionManager,
             UserRepository userRepository,
             MarketGate marketGate,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            Clock clock) {
         this.activeOrderRepository = activeOrderRepository;
         this.eventRepository = eventRepository;
         this.inventoryPort = inventoryPort;
@@ -126,6 +130,7 @@ public class CheckoutService {
         this.userRepository = userRepository;
         this.marketGate = marketGate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.clock = clock;
     }
 
     // Result of the atomic Phase-3 persistence unit, surfaced to the orchestrator once the
@@ -273,10 +278,11 @@ public class CheckoutService {
                 validateCanConfirmInventorySale(snapshotItems, orderKey);
 
                 int receiptId = orderReceiptRepository.nextId();
+                LocalDateTime purchasedAt = LocalDateTime.now(clock);   // the receipt and its lines share it
                 SavedTickets saved = saveTicketsAndBuildReceiptLines(capturedUserId, receiptId, pricedItems,
-                        issuanceResult);
+                        issuanceResult, purchasedAt);
                 saveMemberReceipt(capturedUserId, receiptId, capturedTotalPrice, saved.receiptLines(),
-                        capturedPaymentResult, issuanceResult);
+                        capturedPaymentResult, issuanceResult, purchasedAt);
 
                 // Point of no return: commit the sale last, once everything fallible has succeeded.
                 confirmInventorySale(snapshotItems, orderKey);
@@ -425,9 +431,11 @@ public class CheckoutService {
                 validateCanConfirmInventorySale(snapshotItems, orderKey);
 
                 int receiptId = orderReceiptRepository.nextId();
-                SavedTickets saved = saveTicketsAndBuildReceiptLines(null, receiptId, pricedItems, issuanceResult);
+                LocalDateTime purchasedAt = LocalDateTime.now(clock);   // the receipt and its lines share it
+                SavedTickets saved = saveTicketsAndBuildReceiptLines(null, receiptId, pricedItems, issuanceResult,
+                        purchasedAt);
                 saveGuestReceipt(guestEmail, guestSessionId, receiptId, capturedTotalPrice, saved.receiptLines(),
-                        capturedPaymentResult, issuanceResult);
+                        capturedPaymentResult, issuanceResult, purchasedAt);
 
                 // Point of no return: commit the sale last, once everything fallible has succeeded.
                 confirmInventorySale(snapshotItems, orderKey);
@@ -557,7 +565,7 @@ public class CheckoutService {
             throw new EntityNotFoundException("Active order not found");
         }
 
-        if (!order.validateCanCheckout()) {
+        if (!order.validateCanCheckout(LocalDateTime.now(clock))) {
             throw new InvalidStateTransitionException("Order cannot checkout");
         }
     }
@@ -605,7 +613,7 @@ public class CheckoutService {
     // overall purchase (e.g. "buy 2 get 1 free" or "10% off if you buy more than 3
     // tickets").
     private List<PricedCartLine> priceItemsOnce(List<CartLineItem> boughtItems) {
-        LocalDateTime pricingTime = LocalDateTime.now();
+        LocalDateTime pricingTime = LocalDateTime.now(clock);
 
         Map<Integer, Long> quantityByEvent = boughtItems.stream()
                 .collect(Collectors.groupingBy(CartLineItem::geteventId, Collectors.counting()));
@@ -874,7 +882,8 @@ public class CheckoutService {
             Integer holderUserId,
             int orderReceiptId,
             List<PricedCartLine> pricedItems,
-            IssuanceResultDTO issuanceResult) {
+            IssuanceResultDTO issuanceResult,
+            LocalDateTime purchasedAt) {
         List<ReceiptLine> receiptLines = new ArrayList<>();
         List<CheckoutResultDTO.IssuedTicketDTO> issuedTickets = new ArrayList<>();
 
@@ -908,7 +917,7 @@ public class CheckoutService {
                     item.geteventId(),
                     item.getzoneId(),
                     item.getSeatNumber(),
-                    LocalDateTime.now());
+                    purchasedAt);
 
             line.checkInvariants();
             receiptLines.add(line);
@@ -932,12 +941,14 @@ public class CheckoutService {
             double totalPrice,
             List<ReceiptLine> receiptLines,
             PaymentResultDTO paymentResult,
-            IssuanceResultDTO issuanceResult) {
+            IssuanceResultDTO issuanceResult,
+            LocalDateTime purchasedAt) {
         OrderReceipt receipt = OrderReceipt.forMember(
                 receiptId,
                 userId,
                 totalPrice,
                 receiptLines,
+                purchasedAt,
                 buildPurchaseTransactions(paymentResult, issuanceResult));
 
         orderReceiptRepository.save(receipt);
@@ -958,13 +969,15 @@ public class CheckoutService {
             double totalPrice,
             List<ReceiptLine> receiptLines,
             PaymentResultDTO paymentResult,
-            IssuanceResultDTO issuanceResult) {
+            IssuanceResultDTO issuanceResult,
+            LocalDateTime purchasedAt) {
         OrderReceipt receipt = OrderReceipt.forGuest(
                 guestEmail,
                 guestSessionId,
                 receiptId,
                 totalPrice,
                 receiptLines,
+                purchasedAt,
                 buildPurchaseTransactions(paymentResult, issuanceResult));
 
         orderReceiptRepository.save(receipt);

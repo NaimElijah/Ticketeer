@@ -1,5 +1,6 @@
 package com.ticketing.system.catalog.application.dto;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import com.ticketing.system.catalog.domain.EventCategory;
@@ -20,6 +21,7 @@ public record EventDetailDTO(
         String companyName,
         EventStatus status, // event status
         List<ShowDate> showDates,
+        ZoneId timeZone, // the zone showDates are wall-clock times in (ADR-008)
         List<String> artistsNames, // lineup (Event.getArtistsNames())
         double minPrice // cheapest ticket price across the event's zones (0 when it has no venue/zones)
 ) {

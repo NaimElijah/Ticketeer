@@ -1,6 +1,6 @@
 package com.ticketing.system.sales.application.dtoMappers;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -154,7 +154,7 @@ public class OrderReceiptMapper {
         String zoneName = resolveZoneName(event, line.getZoneId());
         String companyName = resolveCompanyName(event, companyRepository);
         String category = event == null ? null : event.category();
-        LocalDateTime eventStartsAt = event == null ? null : event.eventStartsAt();
+        ZonedDateTime eventStartsAt = event == null ? null : event.eventStartsAt();
         String venue = event == null ? null : event.venueLocation();
         String barcode = ticket == null ? null : ticket.getBarcode();
 

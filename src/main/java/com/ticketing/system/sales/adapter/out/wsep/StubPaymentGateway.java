@@ -11,6 +11,7 @@ import com.ticketing.system.shared.exception.RefundFailedException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +32,11 @@ public class StubPaymentGateway implements PaymentGateway {
     private final ConcurrentHashMap<String, PaymentRequestDTO> requestsByIdempotencyKey = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, PaymentResultDTO> chargesByIdempotencyKey = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, PaymentResultDTO> chargesByTransactionId = new ConcurrentHashMap<>();
+    private final Clock clock;
+
+    public StubPaymentGateway(Clock clock) {
+        this.clock = clock;
+    }
 
     @Override
     public String getId() {
@@ -70,7 +76,7 @@ public class StubPaymentGateway implements PaymentGateway {
                      GATEWAY_ID,
                      canonicalRequest.amount(),
                      canonicalRequest.currency(),
-                     LocalDateTime.now()
+                     LocalDateTime.now(clock)
              );
              chargesByTransactionId.put(transactionId, created);
              return created;
@@ -102,7 +108,7 @@ public class StubPaymentGateway implements PaymentGateway {
                 "refund-" + transactionIds.getAndIncrement(),
                 String.valueOf(paymentTransactionId),
                 amount,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 List.of(),
                 List.of());
     }

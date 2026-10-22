@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -187,6 +188,7 @@ class SystemIntegrityVerifierTest {
         VenueMap venueMap = new VenueMap(1, new Location("Belgium", "Brussels"), List.of(zone));
         return new Event(1, "Show", 4.5, List.of("Artist"), EventCategory.CONCERT, 10,
                 EventStatus.ON_SALE, venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"),
                 new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 

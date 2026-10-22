@@ -3,6 +3,7 @@ import com.ticketing.system.shared.external.SensitiveDataMasker; // transitional
 import com.ticketing.system.shared.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
 import com.ticketing.system.shared.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,9 +42,11 @@ public class WsepTicketIssuer implements TicketIssuer {
     private static final String FAILURE = "-1";
 
     private final WsepHttpClient http;
+    private final Clock clock;   // stamps issuances (UTC wall time, ADR-008)
 
-    public WsepTicketIssuer(WsepHttpClient http) {
+    public WsepTicketIssuer(WsepHttpClient http, Clock clock) {
         this.http = http;
+        this.clock = clock;
     }
 
     @Override
@@ -104,7 +107,7 @@ public class WsepTicketIssuer implements TicketIssuer {
         return new IssuanceResultDTO(
                 "wsep-issuance-" + UUID.randomUUID(),
                 ISSUER_ID,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 barcodes);
     }
 

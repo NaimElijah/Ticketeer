@@ -1,5 +1,7 @@
 package com.ticketing.system.organization.application.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -29,10 +31,15 @@ public class CompanyMembershipService {
 
     // Sole dependency — the appointment aggregate's repository (Memory or JPA per profile).
     private final CompanyAppointmentRepository appointmentRepository;
+    private final Clock clock;   // stamps new appointments (UTC wall time, ADR-008)
 
-    /** @param appointmentRepository the CompanyAppointment aggregate repository port */
-    public CompanyMembershipService(CompanyAppointmentRepository appointmentRepository) {
+    /**
+     * @param appointmentRepository the CompanyAppointment aggregate repository port
+     * @param clock                 the platform clock new appointments are stamped from
+     */
+    public CompanyMembershipService(CompanyAppointmentRepository appointmentRepository, Clock clock) {
         this.appointmentRepository = appointmentRepository;
+        this.clock = clock;
     }
 
     // ---------------------------------------------------------------------------
@@ -100,7 +107,8 @@ public class CompanyMembershipService {
                 companyId,
                 userId,
                 ownerId,
-                permissions);
+                permissions,
+                LocalDateTime.now(clock));
         appointmentRepository.save(appointment); // persist the new pending manager appointment
     }
 
@@ -122,7 +130,8 @@ public class CompanyMembershipService {
                 appointmentRepository.nextId(), // assigned id minted by storage
                 companyId,
                 userId,
-                appointerId);
+                appointerId,
+                LocalDateTime.now(clock));
         appointmentRepository.save(appointment); // persist the new pending owner appointment
     }
 
@@ -140,7 +149,8 @@ public class CompanyMembershipService {
                 appointmentRepository.nextId(), // assigned id minted by storage
                 companyId,
                 userId,
-                userId);
+                userId,
+                LocalDateTime.now(clock));
         appointmentRepository.save(appointment); // persist the active founder/owner appointment
     }
 

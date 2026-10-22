@@ -1,10 +1,13 @@
 package com.ticketing.system.unit.domain;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +42,9 @@ class EventTest extends BaseDomainTest {
     private final Location LOCATION = new Location("Belgium", "Brussels");
 
     private final List<String> ARTISTS = List.of("Artist 1", "Artist 2");
+    private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
+    // 16:30Z on 15 July 2027 is 19:30 in Jerusalem (IDT, UTC+3).
+    private static final Instant JERUSALEM_1930 = Instant.parse("2027-07-15T16:30:00Z");
 
     private InventoryZone zone;
     private Event event;
@@ -59,6 +65,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.SCHEDULED,
                 venueMap,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null,
                 new DiscountPolicy(0)));
 
@@ -75,6 +82,7 @@ class EventTest extends BaseDomainTest {
                 EVENT_ID, "Concert", 9.0, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.SCHEDULED, venueMap,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
     }
 
@@ -85,6 +93,7 @@ class EventTest extends BaseDomainTest {
                 EVENT_ID, "Concert", 4.5, List.of(), EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.SCHEDULED, venueMap,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
     }
 
@@ -94,7 +103,26 @@ class EventTest extends BaseDomainTest {
         assertThrows(IllegalStateException.class, () -> new Event(
                 EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.SCHEDULED, venueMap, List.of(),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
+    }
+
+    @Test
+    void GivenNoTimeZone_WhenConstructed_ThenThrowsIllegalState() {
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100)));
+        assertThrows(IllegalStateException.class, () -> new Event(
+                EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
+                EventStatus.SCHEDULED, venueMap,
+                List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                null,
+                null, new DiscountPolicy(0)));
+    }
+
+    @Test
+    void GivenNewTimeZone_WhenEditDetails_ThenTheEventIsInThatZone() {
+        event.editDetails(null, null, null, null, ZoneId.of("Europe/London"), null, Instant.now());
+
+        assertEquals(ZoneId.of("Europe/London"), event.getTimeZone());
     }
 
     // Member refund returns SOLD inventory to AVAILABLE and re-opens a sold-out event.
@@ -105,6 +133,7 @@ class EventTest extends BaseDomainTest {
         Event e = track(new Event(EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.ON_SALE, vm,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
 
         // Sell the event out.
@@ -128,7 +157,7 @@ class EventTest extends BaseDomainTest {
                 LocalDateTime.now().plusDays(40).plusHours(2));
 
         event.editDetails("New Name", "New Description", EventCategory.THEATER,
-                new Location("France", "Paris"), List.of(newShow));
+                new Location("France", "Paris"), null, List.of(newShow), Instant.now());
 
         assertEquals("New Name", event.getName());
         assertEquals("New Description", event.getDescription());
@@ -141,9 +170,10 @@ class EventTest extends BaseDomainTest {
     // Null arguments mean "leave this field alone".
     @Test
     void GivenNullArguments_WhenEditDetails_ThenNothingChanges() {
-        event.editDetails(null, null, null, null, null);
+        event.editDetails(null, null, null, null, null, null, Instant.now());
 
         assertEquals("Concert", event.getName());
+        assertEquals(ZoneId.of("Asia/Jerusalem"), event.getTimeZone());
         assertEquals(EventCategory.CONCERT, event.getCategory());
         assertEquals(LOCATION, event.getVenueMap().getLocation());
         assertEquals(1, event.getShowDates().size());
@@ -154,7 +184,7 @@ class EventTest extends BaseDomainTest {
     @Test
     void GivenEmptyShowDates_WhenEditDetails_ThenThrowsIllegalArgument() {
         assertThrows(IllegalArgumentException.class, () -> event.editDetails(
-                null, null, null, null, List.of()));
+                null, null, null, null, null, List.of(), Instant.now()));
     }
 
     @Test
@@ -162,7 +192,7 @@ class EventTest extends BaseDomainTest {
         event.transitionToOnSale();
 
         assertThrows(IllegalStateException.class, () -> event.editDetails(
-                "New Name", null, null, null, null));
+                "New Name", null, null, null, null, null, Instant.now()));
     }
 
     @Test
@@ -251,6 +281,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.SCHEDULED,
                 new VenueMap(1, LOCATION, List.of(standingZone)),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(15), LocalDateTime.now().plusDays(15).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 rejectingPolicy,
                 noDiscountPolicy()));
 
@@ -337,6 +368,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -359,6 +391,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -420,6 +453,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -457,6 +491,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -483,15 +518,28 @@ class EventTest extends BaseDomainTest {
 
     // -- hasFinishedAsOf (auto-completion predicate) ---------------------
 
-    // Drives the completion sweeper: true once `now` is strictly past the last show's end.
+    // Drives the completion sweeper: true once `now` is strictly past the last show's end, read in
+    // the event's zone. 23:00 in Jerusalem on 15 July 2027 (IDT, UTC+3) is 20:00:00Z.
     @Test
-    void GivenSingleShow_WhenHasFinishedAsOf_ThenStrictlyAfterEndTime() {
-        LocalDateTime end = LocalDateTime.now().plusDays(10);
-        Event e = eventWithShowDates(List.of(new ShowDate(end.minusHours(2), end)));
+    void GivenJerusalemShowEndingAt23LocalInSummer_WhenHasFinishedAsOf_ThenStrictlyAfter200000Z() {
+        LocalDateTime end = LocalDateTime.of(2027, 7, 15, 23, 0);
+        Event e = eventWithShowDates(List.of(new ShowDate(end.minusHours(3), end)));
 
-        assertFalse(e.hasFinishedAsOf(end.minusSeconds(1)), "before the show ends");
-        assertFalse(e.hasFinishedAsOf(end), "exactly at the end is not yet past (strict isAfter)");
-        assertTrue(e.hasFinishedAsOf(end.plusSeconds(1)), "after the show ends");
+        assertFalse(e.hasFinishedAsOf(Instant.parse("2027-07-15T19:59:59Z")), "before the show ends");
+        assertFalse(e.hasFinishedAsOf(Instant.parse("2027-07-15T20:00:00Z")),
+                "exactly at the end is not yet past (strict isAfter)");
+        assertTrue(e.hasFinishedAsOf(Instant.parse("2027-07-15T20:00:01Z")), "after the show ends");
+    }
+
+    // Israel leaves daylight saving at 02:00 on 31 October 2027, so 01:30 happens twice; java.time
+    // takes the earlier offset (UTC+3), which ends the show at 22:30:00Z on the 30th.
+    @Test
+    void GivenShowEndingInTheAutumnOverlap_WhenHasFinishedAsOf_ThenTheEarlierOffsetApplies() {
+        LocalDateTime end = LocalDateTime.of(2027, 10, 31, 1, 30);
+        Event e = eventWithShowDates(List.of(new ShowDate(end.minusHours(3), end)));
+
+        assertFalse(e.hasFinishedAsOf(Instant.parse("2027-10-30T22:30:00Z")));
+        assertTrue(e.hasFinishedAsOf(Instant.parse("2027-10-30T22:30:01Z")));
     }
 
     // A multi-leg event is finished only after its LATEST leg ends — uses max(endTime),
@@ -506,9 +554,52 @@ class EventTest extends BaseDomainTest {
                 new ShowDate(earlierEnd.minusHours(2), earlierEnd)));
 
         // Past the earlier leg but before the latest leg → not finished.
-        assertFalse(e.hasFinishedAsOf(earlierEnd.plusDays(1)));
+        assertFalse(e.hasFinishedAsOf(earlierEnd.plusDays(1).atZone(JERUSALEM).toInstant()));
         // Past the latest leg → finished.
-        assertTrue(e.hasFinishedAsOf(lastEnd.plusSeconds(1)));
+        assertTrue(e.hasFinishedAsOf(lastEnd.plusSeconds(1).atZone(JERUSALEM).toInstant()));
+    }
+
+    // -- scheduling precondition (UC-19): a new or edited show starts after now at the venue --------
+
+    @Test
+    void GivenShowStartingAt19LocalInJerusalem_WhenRequireShowsStartAfter1930Local_ThenRejected() {
+        Event e = eventWithShowDates(List.of(
+                new ShowDate(LocalDateTime.of(2027, 7, 15, 19, 0), LocalDateTime.of(2027, 7, 15, 22, 0))));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> e.requireShowsStartAfter(JERUSALEM_1930));
+        assertEquals("Start time must be in the future", ex.getMessage());
+    }
+
+    @Test
+    void GivenShowStartingAt20LocalInJerusalem_WhenRequireShowsStartAfter1930Local_ThenAccepted() {
+        Event e = eventWithShowDates(List.of(
+                new ShowDate(LocalDateTime.of(2027, 7, 15, 20, 0), LocalDateTime.of(2027, 7, 15, 23, 0))));
+
+        assertDoesNotThrow(() -> e.requireShowsStartAfter(JERUSALEM_1930));
+    }
+
+    @Test
+    void GivenPastShow_WhenEditDetails_ThenRejectedAndNothingChanges() {
+        ShowDate before = event.getShowDates().get(0);
+        ShowDate past = new ShowDate(LocalDateTime.of(2027, 7, 15, 19, 0), LocalDateTime.of(2027, 7, 15, 22, 0));
+
+        assertThrows(IllegalArgumentException.class, () -> event.editDetails("Renamed", null, null, null,
+                null, List.of(past), JERUSALEM_1930));
+
+        assertEquals("Concert", event.getName());
+        assertEquals(List.of(before), event.getShowDates());
+    }
+
+    @Test
+    void GivenZoneChangeThatPutsTheShowInThePast_WhenEditDetails_ThenRejected() {
+        // 19:00 in London is 18:00Z, after 16:30Z; the same wall time in Jerusalem is 16:00Z, before it.
+        Event e = scheduledEventInZone(ZoneId.of("Europe/London"),
+                new ShowDate(LocalDateTime.of(2027, 7, 15, 19, 0), LocalDateTime.of(2027, 7, 15, 22, 0)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> e.editDetails(null, null, null, null, JERUSALEM, null, JERUSALEM_1930));
+        assertEquals(ZoneId.of("Europe/London"), e.getTimeZone());
     }
 
     // -- ON_SALE / SOLD_OUT -> COMPLETED transition ----------------------
@@ -572,6 +663,12 @@ class EventTest extends BaseDomainTest {
 
     // test helper functions:
 
+    private Event scheduledEventInZone(ZoneId timeZone, ShowDate show) {
+        return track(new Event(EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
+                EventStatus.SCHEDULED, new VenueMap(1, LOCATION, List.of(track(new StandingZone(ZONE_ID, "VIP", 10, 100)))),
+                List.of(show), timeZone, acceptingPurchasePolicy(), noDiscountPolicy()));
+    }
+
     private Event eventWithShowDates(List<ShowDate> showDates) {
         return track(new Event(
                 EVENT_ID,
@@ -583,6 +680,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.ON_SALE,
                 new VenueMap(1, LOCATION, List.of(track(new StandingZone(ZONE_ID, "VIP", 10, 100)))),
                 showDates,
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
     }
@@ -740,6 +838,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.DRAFT,
                 new VenueMap(1, LOCATION, List.of()),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
     }
@@ -755,6 +854,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.SCHEDULED,
                 new VenueMap(1, LOCATION, zones),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
     }

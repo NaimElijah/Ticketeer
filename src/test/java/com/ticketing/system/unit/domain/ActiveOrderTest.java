@@ -23,6 +23,9 @@ import com.ticketing.system.sales.domain.CartLineItem;
 // Unit tests for the ActiveOrder aggregate.
 class ActiveOrderTest extends BaseDomainTest {
 
+    // The hold is judged against this instant, as UTC wall time from the injected clock (ADR-008).
+    private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private final int USER_ID = 1;
     private final int EVENT_ID = 10;
     private final int ZONE_ID = 5;
@@ -55,9 +58,9 @@ class ActiveOrderTest extends BaseDomainTest {
         int numberOfThreads = 20;
         int quantityPerRemove = 1;
 
-        ActiveOrder realActiveOrder = track(new ActiveOrder(USER_ID));
+        ActiveOrder realActiveOrder = track(new ActiveOrder(USER_ID, NOW));
 
-        realActiveOrder.addStandingReservation(EVENT_ID, ZONE_ID, initialTickets, 100.0, LocalDateTime.now());
+        realActiveOrder.addStandingReservation(EVENT_ID, ZONE_ID, initialTickets, 100.0, NOW);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
 
@@ -96,7 +99,7 @@ class ActiveOrderTest extends BaseDomainTest {
             assertEquals(true, finished);
             assertEquals(initialTickets, successCount.get());
             assertEquals(numberOfThreads - initialTickets, failureCount.get());
-            assertEquals(0, realActiveOrder.countTickets(EVENT_ID, ZONE_ID));
+            assertEquals(0, realActiveOrder.countTickets(EVENT_ID, ZONE_ID, NOW));
 
         } finally {
             executorService.shutdownNow();
@@ -105,11 +108,11 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenStandingReservation_WhenAddStandingReservation_ThenCreatesQuantityLineItemsWithNullSeatNumber() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 3, 100.0, LocalDateTime.now());
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 3, 100.0, NOW);
 
-        assertEquals(3, order.countTickets(EVENT_ID, ZONE_ID));
+        assertEquals(3, order.countTickets(EVENT_ID, ZONE_ID, NOW));
         assertEquals(3, order.getItems().size());
 
         for (CartLineItem item : order.getItems()) {
@@ -122,14 +125,14 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenSeatSelection_WhenAddSeatedReservation_ThenCreatesOneLinePerSeat() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addSeatedReservation(
                 EVENT_ID,
                 ZONE_ID,
                 List.of("A1", "A2", "A3"),
                 120.0,
-                LocalDateTime.now());
+                NOW);
 
         assertEquals(3, order.getItems().size());
         assertEquals(List.of("A1", "A2", "A3"),
@@ -138,28 +141,28 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenDuplicateSeats_WhenAddSeatedReservation_ThenThrowsException() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         assertThrows(IllegalArgumentException.class, () -> order.addSeatedReservation(
                 EVENT_ID,
                 ZONE_ID,
                 List.of("A1", "A1"),
                 120.0,
-                LocalDateTime.now()));
+                NOW));
 
         assertTrue(order.getItems().isEmpty());
     }
 
     @Test
     void GivenSeatedReservation_WhenRemoveSeats_ThenOnlySelectedSeatsRemoved() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addSeatedReservation(
                 EVENT_ID,
                 ZONE_ID,
                 List.of("A1", "A2", "A3"),
                 120.0,
-                LocalDateTime.now());
+                NOW);
 
         order.removeSeats(EVENT_ID, ZONE_ID, List.of("A2"));
 
@@ -170,14 +173,14 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenMissingSeat_WhenRemoveSeats_ThenThrowsAndOrderUnchanged() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addSeatedReservation(
                 EVENT_ID,
                 ZONE_ID,
                 List.of("A1", "A2"),
                 120.0,
-                LocalDateTime.now());
+                NOW);
 
         assertThrows(IllegalArgumentException.class, () -> order.removeSeats(EVENT_ID, ZONE_ID, List.of("A3")));
 
@@ -188,10 +191,10 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenMixedStandingAndSeatedItems_WhenReturnToStock_ThenReturnsAllItemsAndClearsOrder() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, LocalDateTime.now());
-        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1", "A2"), 120.0, LocalDateTime.now());
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW);
+        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1", "A2"), 120.0, NOW);
 
         List<CartLineItem> returned = order.ReturnToStock();
 
@@ -206,7 +209,7 @@ class ActiveOrderTest extends BaseDomainTest {
                 ZONE_ID,
                 "A7",
                 120.0,
-                LocalDateTime.now());
+                NOW);
 
         ActiveOrderDTO.CartLineDTO dto = item.toDTO();
 
@@ -218,8 +221,8 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenDuplicateSeatNumbers_WhenRemoveSeats_ThenThrowsAndCartUnchanged() {
-        ActiveOrder order = new ActiveOrder(1);
-        order.addSeatedReservation(10, 2, List.of("A1", "A2"), 100, LocalDateTime.now());
+        ActiveOrder order = new ActiveOrder(1, NOW);
+        order.addSeatedReservation(10, 2, List.of("A1", "A2"), 100, NOW);
 
         assertThrows(IllegalArgumentException.class,
                 () -> order.removeSeats(10, 2, List.of("A1", "A1")));
@@ -230,75 +233,75 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenItemsNearExpiry_WhenRenewReservationTimers_ThenAllTimersResetToFullWindow() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         // Added 9 minutes ago -> ~1 minute left on the 10-minute window.
-        LocalDateTime nineMinutesAgo = LocalDateTime.now().minusMinutes(9);
+        LocalDateTime nineMinutesAgo = NOW.minusMinutes(9);
         order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, nineMinutesAgo);
         order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1"), 120.0, nineMinutesAgo);
 
-        assertTrue(order.getRemainingTime().getSeconds() < 120,
+        assertTrue(order.getRemainingTime(NOW).getSeconds() < 120,
                 "precondition: cart should be near expiry before renewal");
 
-        order.renewReservationTimers(LocalDateTime.now());
+        order.renewReservationTimers(NOW);
 
         // Every line item now has a fresh ~10-minute window.
-        assertTrue(order.getRemainingTime().getSeconds() > 590,
+        assertTrue(order.getRemainingTime(NOW).getSeconds() > 590,
                 "all timers should be reset close to the full 10-minute window");
         for (CartLineItem item : order.getItems()) {
-            assertTrue(item.getRemainingTime().getSeconds() > 590);
-            assertFalse(item.isExpired());
+            assertTrue(item.getRemainingTime(NOW).getSeconds() > 590);
+            assertFalse(item.isExpired(NOW));
         }
     }
 
     @Test
     void GivenCheckoutInProgress_WhenRenewReservationTimers_ThenThrows() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, LocalDateTime.now());
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW);
         order.markCheckoutInProgress();
 
         assertThrows(IllegalStateException.class,
-                () -> order.renewReservationTimers(LocalDateTime.now()));
+                () -> order.renewReservationTimers(NOW));
     }
 
     @Test
     void GivenLineItem_WhenRenew_ThenAddedAtUpdatedAndTimerFresh() {
-        LocalDateTime nineMinutesAgo = LocalDateTime.now().minusMinutes(9);
+        LocalDateTime nineMinutesAgo = NOW.minusMinutes(9);
         CartLineItem item = new CartLineItem(EVENT_ID, ZONE_ID, "A7", 120.0, nineMinutesAgo);
 
-        assertTrue(item.getRemainingTime().getSeconds() < 120);
+        assertTrue(item.getRemainingTime(NOW).getSeconds() < 120);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = NOW;
         item.renew(now);
 
         assertEquals(now, item.getAddedAt());
-        assertTrue(item.getRemainingTime().getSeconds() > 590);
+        assertTrue(item.getRemainingTime(NOW).getSeconds() > 590);
     }
 
     // R1: a buyer must be able to manually remove an EXPIRED standing line (previously the !isExpired
     // filter made expired lines invisible to removal, so they could only be cleared by the sweeper).
     @Test
     void GivenExpiredStandingLine_WhenRemoveStandingSpots_ThenLineRemoved() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, LocalDateTime.now().minusMinutes(30));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(30));
 
         // Precondition: the lines are genuinely expired.
-        assertTrue(order.getItems().get(0).isExpired());
+        assertTrue(order.getItems().get(0).isExpired(NOW));
 
         order.removeStandingSpots(EVENT_ID, ZONE_ID, 2);
 
-        assertEquals(0, order.countTickets(EVENT_ID, ZONE_ID));
+        assertEquals(0, order.countTickets(EVENT_ID, ZONE_ID, NOW));
         assertTrue(order.isEmpty());
     }
 
     // R1: same for an expired SEATED line.
     @Test
     void GivenExpiredSeatedLine_WhenRemoveSeats_ThenSeatRemoved() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
         order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2"), 120.0,
-                LocalDateTime.now().minusMinutes(30));
+                NOW.minusMinutes(30));
 
-        assertTrue(order.getItems().get(0).isExpired());
+        assertTrue(order.getItems().get(0).isExpired(NOW));
 
         order.removeSeats(EVENT_ID, ZONE_ID, List.of("A1"));
 

@@ -16,6 +16,7 @@ import com.ticketing.system.ui.layouts.PlatformAdminLayout;
 import com.ticketing.system.ui.presenters.admin.GlobalHistoryPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
@@ -23,7 +24,6 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -46,6 +46,7 @@ public class GlobalHistoryView extends LkPage {
     private static final String STATUS_REFUNDED = "Refunded";
 
     private final GlobalHistoryPresenter presenter;
+    private final DisplayTime displayTime;
     private final List<PurchaseRecordDTO> records;
 
     private LkFilterChip dateChip;
@@ -55,8 +56,9 @@ public class GlobalHistoryView extends LkPage {
     private Div statsSlot;
     private Div gridSlot;
 
-    public GlobalHistoryView(GlobalHistoryPresenter presenter) {
+    public GlobalHistoryView(GlobalHistoryPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
         this.records = presenter.loadAllRecords();
 
         title("Global Purchase History");
@@ -103,7 +105,8 @@ public class GlobalHistoryView extends LkPage {
         if (r.purchasedAt() == null) return false;
         // Calendar-correct windows ("This quarter"/"This year" start on the quarter/year boundary),
         // shared with the Company Sales page filter.
-        LocalDateTime from = SalesDateRange.startOf(sel.iterator().next(), LocalDate.now());
+        // The range starts at midnight in the platform zone; purchase times are UTC (ADR-008).
+        LocalDateTime from = displayTime.toRecorded(SalesDateRange.startOf(sel.iterator().next(), displayTime.today()));
         return from == null || !r.purchasedAt().isBefore(from);
     }
 
@@ -168,7 +171,7 @@ public class GlobalHistoryView extends LkPage {
 
     private void recordRow(LkGrid grid, PurchaseRecordDTO r) {
         Map<String, Object> row = new LinkedHashMap<>();
-        row.put("date", r.purchasedAt() == null ? "—" : r.purchasedAt().format(DATE_FMT));
+        row.put("date", r.purchasedAt() == null ? "—" : displayTime.format(r.purchasedAt(), DATE_FMT));
         row.put("buyer", Lk.mono(buyerLabel(r)));
         Span ev = new Span();
         ev.getElement().setProperty("innerHTML", "<b>" + escape(distinctLabel(r, this::eventOf, "events")) + "</b>");

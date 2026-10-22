@@ -1,6 +1,6 @@
 package com.ticketing.system.catalog.application.service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -15,7 +15,6 @@ import com.ticketing.system.shared.exception.*;
 
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
-import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.shared.dto.CompanySummaryDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -141,9 +140,10 @@ public class CatalogService {
 
     // *HELPER METHOD* — earliest show start for an event, or null if it somehow has no show dates
     // (an Event invariant requires >=1, so the null branch only guards against future changes).
-    private LocalDateTime earliestShowStart(Event event) {
+    // Compared as instants: events at venues in different zones sort by when they really start.
+    private Instant earliestShowStart(Event event) {
         return event.getShowDates().stream()
-                .map(ShowDate::getStartTime)
+                .map(show -> show.startsAt(event.getTimeZone()))
                 .min(Comparator.naturalOrder())
                 .orElse(null);
     }

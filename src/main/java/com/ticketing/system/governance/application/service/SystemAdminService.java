@@ -1,6 +1,7 @@
 package com.ticketing.system.governance.application.service;
 import com.ticketing.system.governance.application.service.SystemIntegrityVerifier;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -68,6 +69,8 @@ public class SystemAdminService {
     private volatile PlatformStatus status = PlatformStatus.UNINITIALIZED;
     private volatile LocalDateTime lastInitializedAt;
     private volatile LocalDateTime lastOpenedAt;
+    // Stamps the lifecycle transitions above: UTC wall time (ADR-008).
+    private final Clock clock;
 
     public SystemAdminService(
             SessionManager sessionManager,
@@ -82,7 +85,8 @@ public class SystemAdminService {
             List<TicketIssuer> ticketIssuers,
             PasswordHasher passwordHasher,
             SystemIntegrityVerifier integrityVerifier,
-            PlatformAdminProperties platformAdmin
+            PlatformAdminProperties platformAdmin,
+            Clock clock
     ) {
         this.sessionManager = sessionManager;
         this.adminRepository = adminRepository;
@@ -98,6 +102,7 @@ public class SystemAdminService {
         this.integrityVerifier = integrityVerifier;
         this.defaultAdminUsername = platformAdmin.username();
         this.defaultAdminPassword = platformAdmin.password();
+        this.clock = clock;
     }
 
     // UC-1 — I.1.1 invariants + I.1.2 payment-gateway check + I.1.3 issuer check + I.1.4 default-admin.
@@ -126,7 +131,7 @@ public class SystemAdminService {
         // I.1.2 / I.1.3 — at least one payment service and one ticket-issuance service reachable.
         requireExternalServicesReachable();
 
-        this.lastInitializedAt = LocalDateTime.now();
+        this.lastInitializedAt = LocalDateTime.now(clock);
         this.status = PlatformStatus.READY;
         log.info("Platform initialized — status READY.");
     }
@@ -197,7 +202,7 @@ public class SystemAdminService {
         integrityVerifier.verify();
 
         this.status = PlatformStatus.OPEN;
-        this.lastOpenedAt = LocalDateTime.now();
+        this.lastOpenedAt = LocalDateTime.now(clock);
         log.info("Market opened.");
         return buildMarketState();
     }

@@ -2,6 +2,7 @@ package com.ticketing.system.sales.adapter.out.persistence;
 
 import com.ticketing.system.shared.persistence.RepositoryLocks;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -90,11 +91,11 @@ public class MemoryActiveOrderRepository implements ActiveOrderRepository {
     }
 
     @Override
-    public List<ActiveOrder> findExpired() {
+    public List<ActiveOrder> findExpired(LocalDateTime now) {
 
         List<ActiveOrder> result = new ArrayList<>();
         for (ActiveOrder cart : carts) {
-            if (cart.hasExpiredItem()) {
+            if (cart.hasExpiredItem(now)) {
                 result.add(cart);
             }
         }

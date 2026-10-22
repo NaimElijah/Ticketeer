@@ -3,6 +3,7 @@ package com.ticketing.system.sales.application.dto;
 import com.ticketing.system.sales.domain.TicketStatus;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 // Output of MemberAccountService.viewMyHistory() (UC-16).
@@ -45,7 +46,7 @@ public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
         String zoneName,       // resolved at mapping time; null if unresolved
         String companyName,    // resolved at mapping time; null if unresolved
         String category,       // event category; null if unresolved
-        LocalDateTime eventStartsAt, // first show date; null if unresolved
+        ZonedDateTime eventStartsAt, // first show date, at the venue in its zone; null if unresolved
         String venue,          // event location; null if unresolved
         String barcode,        // issued-ticket barcode; null if not yet issued
         boolean refunded       // this line's refund is recorded (#21)

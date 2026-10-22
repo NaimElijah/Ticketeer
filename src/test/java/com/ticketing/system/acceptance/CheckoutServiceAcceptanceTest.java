@@ -30,7 +30,10 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +44,10 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 public class CheckoutServiceAcceptanceTest {
+
+    // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
+    private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
+    private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
 
     private ActiveOrderRepository activeOrderRepository;
     private EventRepository eventRepository;
@@ -134,7 +141,8 @@ public class CheckoutServiceAcceptanceTest {
                 sessionManager,
                 userRepository,
                 marketGate,
-                TestTransactions.noOpManager()
+                TestTransactions.noOpManager(),
+                Clock.fixed(T0, ZoneOffset.UTC)
         );
 
         event1 = mock(Event.class);
@@ -194,7 +202,7 @@ public class CheckoutServiceAcceptanceTest {
     private ActiveOrder order(List<CartLineItem> items, boolean canCheckout) {
         ActiveOrder order = mock(ActiveOrder.class);
         when(order.getItems()).thenReturn(items);
-        when(order.validateCanCheckout()).thenReturn(canCheckout);
+        when(order.validateCanCheckout(any())).thenReturn(canCheckout);
         when(order.ReturnToStock()).thenReturn(items);
         when(order.isCheckoutInProgress()).thenReturn(true);
         when(order.getOrderKey()).thenReturn("acceptance-order-key");
@@ -207,7 +215,7 @@ public class CheckoutServiceAcceptanceTest {
                 "MockGateway",
                 10.0,
                 CURRENCY,
-                LocalDateTime.now()
+                NOW
         );
     }
 
@@ -221,7 +229,7 @@ public class CheckoutServiceAcceptanceTest {
         return new IssuanceResultDTO(
                 "iss-123",
                 "MockIssuer",
-                LocalDateTime.now(),
+                NOW,
                 barcodes
         );
     }
@@ -239,7 +247,7 @@ public class CheckoutServiceAcceptanceTest {
                         "refund-" + transactionId,
                         String.valueOf(transactionId),
                         amount,
-                        LocalDateTime.now(),
+                        NOW,
                         List.of(),
                         List.of()
                 );
@@ -250,7 +258,7 @@ public class CheckoutServiceAcceptanceTest {
     private void validPaymentAndIssuance(int ticketCount) {
         when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenAnswer(invocation -> {
             PaymentRequestDTO request = invocation.getArgument(0);
-            return new PaymentResultDTO(123, "MockGateway", request.amount(), CURRENCY, LocalDateTime.now());
+            return new PaymentResultDTO(123, "MockGateway", request.amount(), CURRENCY, NOW);
         });
         when(ticketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(issuanceResult(ticketCount));
     }
@@ -919,7 +927,8 @@ public class CheckoutServiceAcceptanceTest {
                 sessionManager,
                 userRepository,
                 marketGate,
-                TestTransactions.noOpManager()
+                TestTransactions.noOpManager(),
+                Clock.fixed(T0, ZoneOffset.UTC)
         );
     }
 
@@ -931,8 +940,8 @@ public class CheckoutServiceAcceptanceTest {
         MemoryActiveOrderRepository realRepo = new MemoryActiveOrderRepository();
         CheckoutService service = checkoutServiceWith(realRepo);
 
-        ActiveOrder firstOrder = new ActiveOrder(USER_ID);
-        firstOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, LocalDateTime.now());
+        ActiveOrder firstOrder = new ActiveOrder(USER_ID, NOW);
+        firstOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(firstOrder);
 
         service.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY + "-1", CURRENCY, PAYMENT_METHOD_TOKEN);
@@ -941,8 +950,8 @@ public class CheckoutServiceAcceptanceTest {
         assertNull(realRepo.getByUserId(USER_ID));
 
         // Buyer comes back and reserves again on the same account, then checks out a second time.
-        ActiveOrder secondOrder = new ActiveOrder(USER_ID);
-        secondOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, LocalDateTime.now());
+        ActiveOrder secondOrder = new ActiveOrder(USER_ID, NOW);
+        secondOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(secondOrder);
 
         CheckoutResultDTO secondResult = assertDoesNotThrow(() ->
@@ -961,16 +970,16 @@ public class CheckoutServiceAcceptanceTest {
         MemoryActiveOrderRepository realRepo = new MemoryActiveOrderRepository();
         CheckoutService service = checkoutServiceWith(realRepo);
 
-        ActiveOrder firstOrder = ActiveOrder.forGuest(guestSessionId);
-        firstOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, LocalDateTime.now());
+        ActiveOrder firstOrder = ActiveOrder.forGuest(guestSessionId, NOW);
+        firstOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(firstOrder);
 
         service.checkoutGuest(guestSessionId, guestEmail, IDEMPOTENCY_KEY + "-g1", CURRENCY, PAYMENT_METHOD_TOKEN, 30);
 
         assertTrue(realRepo.getBySessionId(guestSessionId).isEmpty());
 
-        ActiveOrder secondOrder = ActiveOrder.forGuest(guestSessionId);
-        secondOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, LocalDateTime.now());
+        ActiveOrder secondOrder = ActiveOrder.forGuest(guestSessionId, NOW);
+        secondOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(secondOrder);
 
         assertDoesNotThrow(() ->

@@ -17,9 +17,10 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // Single Clock bean injected wherever code needs "now" — session manager,
-    // session repository, future sweeper. Tests can override with Clock.fixed(...)
-    // for deterministic time.
+    // The one clock (ADR-008): every "now" in production code comes from this bean, in UTC, and
+    // HexagonalRulesTest fails the build on any other reading of the system clock or default zone.
+    // Recorded LocalDateTimes are UTC wall time only because this clock is UTC (ClockConfigTest).
+    // Tests pass Clock.fixed(...) for deterministic time.
     @Bean
     public Clock systemClock() {
         return Clock.systemUTC();

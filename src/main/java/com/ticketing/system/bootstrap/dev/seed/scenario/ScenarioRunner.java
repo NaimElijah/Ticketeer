@@ -2,6 +2,7 @@ package com.ticketing.system.bootstrap.dev.seed.scenario;
 
 import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
+import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.service.AuthenticationService;
@@ -35,6 +36,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 
@@ -97,6 +99,7 @@ public class ScenarioRunner implements ApplicationRunner {
     private final boolean assumeYes;
     private final String scenarioLocation;
     private final String adminUsername;
+    private final ZoneId timeZone;
     private final String datasourceUrl;
 
     // One reader for the whole interactive session: a fresh BufferedReader per prompt would
@@ -121,6 +124,7 @@ public class ScenarioRunner implements ApplicationRunner {
             java.time.Clock clock,
             SeedProperties seed,
             PlatformAdminProperties platformAdmin,
+            PlatformTimeProperties platformTime,
             @Value("${spring.datasource.url:unknown}") String datasourceUrl) {
         this.authenticationService = authenticationService;
         this.companyManagementService = companyManagementService;
@@ -142,6 +146,7 @@ public class ScenarioRunner implements ApplicationRunner {
         this.assumeYes = seed.assumeYes();
         this.scenarioLocation = seed.scenario();
         this.adminUsername = platformAdmin.username();
+        this.timeZone = platformTime.timeZone();
         this.datasourceUrl = datasourceUrl;
     }
 
@@ -275,7 +280,7 @@ public class ScenarioRunner implements ApplicationRunner {
         ScenarioOps ops = new ScenarioOps(
             authenticationService, companyManagementService, eventManagementService,
             reservationService, checkoutService, catalogService, messagingService,
-            userRepository, new DemoClock(clock));
+            userRepository, new DemoClock(clock), timeZone);
 
         log.info("running scenario '{}' ({} operations)", scenario, commands.size());
         try {

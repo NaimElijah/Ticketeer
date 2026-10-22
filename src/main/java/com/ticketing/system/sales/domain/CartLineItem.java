@@ -130,13 +130,17 @@ public class CartLineItem implements InvariantChecked {
         return seatNumber == null;
     }
 
-    public Duration getRemainingTime() {
+    /**
+     * @param now the current time, as UTC wall time from the injected clock (ADR-008)
+     * @return how much of the hold is left at {@code now}; zero once it has run out
+     */
+    public Duration getRemainingTime(LocalDateTime now) {
 
         if (addedAt == null) {
             return Duration.ZERO;
         }
 
-        Duration elapsedTime = Duration.between(addedAt, LocalDateTime.now());
+        Duration elapsedTime = Duration.between(addedAt, now);
 
         Duration remaining = expirationLimit.minus(elapsedTime);
 
@@ -149,8 +153,9 @@ public class CartLineItem implements InvariantChecked {
         }
     }
 
-    public boolean isExpired() {
-        return getRemainingTime().isZero();
+    /** @return whether the hold has run out at {@code now} (UTC wall time, ADR-008) */
+    public boolean isExpired(LocalDateTime now) {
+        return getRemainingTime(now).isZero();
     }
 
     public CartLineDTO toDTO() {

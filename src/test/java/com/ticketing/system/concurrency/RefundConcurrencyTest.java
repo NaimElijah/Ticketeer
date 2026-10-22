@@ -93,7 +93,7 @@ class RefundConcurrencyTest {
         // getPaymentTransactionId() is present and getTotalAmount() == TOTAL.
         ReceiptLine line = new ReceiptLine(101, TOTAL, 2, 1, "15", WHEN);
         TransactionRecord charge = TransactionRecord.paymentCharge(PAYMENT_TX, "stub", TOTAL, "ILS", WHEN);
-        orderReceiptRepository.save(OrderReceipt.forMember(RECEIPT_ID, BUYER_ID, TOTAL, List.of(line), List.of(charge)));
+        orderReceiptRepository.save(OrderReceipt.forMember(RECEIPT_ID, BUYER_ID, TOTAL, List.of(line), LocalDateTime.now(), List.of(charge)));
 
         buyerToken = jwtSessionManager.generateToken(BUYER_ID, "buyer");
     }

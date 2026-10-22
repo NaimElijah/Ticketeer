@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.presenters.company;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 
@@ -23,12 +25,20 @@ public class EventManagementPresenter {
 
     private final EventManagementService eventService;
     private final CompanyManagementService companyService;
+    private final PlatformTimeProperties platformTime;
 
     @Autowired
     public EventManagementPresenter(EventManagementService eventService,
-                                    CompanyManagementService companyService) {
+                                    CompanyManagementService companyService,
+                                    PlatformTimeProperties platformTime) {
         this.eventService = eventService;
         this.companyService = companyService;
+        this.platformTime = platformTime;
+    }
+
+    /** The zone a new event's form starts on: the platform's home zone ({@code platform.time-zone}). */
+    public ZoneId defaultTimeZone() {
+        return platformTime.timeZone();
     }
 
     public LoadOutcome load(String token, int eventId) {
@@ -63,12 +73,13 @@ public class EventManagementPresenter {
      * company) when it is one of them, otherwise the first (matching how
      * {@code CompanyEventListPresenter} picks the company for the event list the user came from).
      * Domain value objects ({@link Location}, {@link ShowDate}) are assembled here so the view stays
-     * free of domain construction.
+     * free of domain construction. {@code starts} and {@code ends} are wall-clock times at the venue,
+     * read in {@code timeZone} (ADR-008).
      */
     public CreateOutcome create(String token, Integer preferredCompanyId, String name,
                                 String description, String categoryName, String country, String city,
-                                LocalDateTime starts, LocalDateTime ends, List<String> artists,
-                                Double rating) {
+                                LocalDateTime starts, LocalDateTime ends, ZoneId timeZone,
+                                List<String> artists, Double rating) {
         if (token == null) return new CreateOutcome.NotAuthenticated();
 
         // Validate required inputs up front so bad/missing data surfaces as InvalidInput rather than
@@ -79,6 +90,7 @@ public class EventManagementPresenter {
                                    return new CreateOutcome.InvalidInput("A country and a city are required.");
         if (starts == null || ends == null)
                                    return new CreateOutcome.InvalidInput("A start and an end time are required.");
+        if (timeZone == null)      return new CreateOutcome.InvalidInput("A time zone is required.");
         if (artists == null || artists.isEmpty())
                                    return new CreateOutcome.InvalidInput("At least one artist is required.");
         if (rating == null)        return new CreateOutcome.InvalidInput("A rating (0–5) is required.");
@@ -100,6 +112,7 @@ public class EventManagementPresenter {
                 rating,                                 // required 0–5 rating set by the organizer
                 new Location(country, city),
                 List.of(new ShowDate(starts, ends)),
+                timeZone,
                 null);                                  // purchase policy — inherits company policy
             EventDetailDTO created = eventService.addEvent(token, request);
             return new CreateOutcome.Success(created.eventId());

@@ -1,6 +1,7 @@
 package com.ticketing.system.notifications.application.service;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,8 @@ public class NotificationService implements INotificationService {
 
     private final NotificationDispatchService dispatcher;
     private final NotificationRepository notificationRepository;
+    // Stamps every notification: UTC wall time (ADR-008).
+    private final Clock clock;
 
     @Override
     public void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> ticketIds) {
@@ -40,7 +43,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
                 "Purchase completed successfully. Total price: " + totalPrice,
-                LocalDateTime.now()
+                LocalDateTime.now(clock)
         );
         dispatcher.dispatch(notification);
     }
@@ -53,7 +56,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.PURCHASE_FAILED,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now()
+                LocalDateTime.now(clock)
         );
         dispatcher.dispatch(notification);
     }
@@ -69,7 +72,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.TICKET_RESERVATION_SUCCESS,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now()
+                LocalDateTime.now(clock)
         );
         dispatcher.dispatch(notification);
     }
@@ -85,7 +88,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.TICKET_RESERVATION_FAILURE,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now()
+                LocalDateTime.now(clock)
         );
         dispatcher.dispatch(notification);
     }
@@ -101,7 +104,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.REMOVE_TICKET_RESERVATION_FAILURE,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now()
+                LocalDateTime.now(clock)
         );
         dispatcher.dispatch(notification);
     }
@@ -117,7 +120,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.REMOVE_TICKET_RESERVATION_SUCCESS,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now()
+                LocalDateTime.now(clock)
         );
         dispatcher.dispatch(notification);
     }
@@ -131,7 +134,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.EVENT_CANCELLED,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 Map.<String, Object>of("eventId", eventId, "eventName", eventName)
         );
         dispatcher.dispatch(notification);
@@ -146,7 +149,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.MANAGER_REVOKED,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 Map.<String, Object>of("companyId", companyId, "companyName", companyName)
         );
         dispatcher.dispatch(notification);
@@ -161,7 +164,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.OWNER_APPOINTMENT_PENDING,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 Map.<String, Object>of("companyId", companyId, "companyName", companyName)
         );
         dispatcher.dispatch(notification);
@@ -176,7 +179,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.ROLE_CHANGED,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 Map.<String, Object>of("companyId", companyId, "companyName", companyName, "newRole", newRole)
         );
         dispatcher.dispatch(notification);
@@ -194,7 +197,7 @@ public class NotificationService implements INotificationService {
                 NotificationType.DIRECT_MESSAGE,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 Map.<String, Object>of(
                         "conversationId", conversationId,
                         "senderLabel", senderLabel,

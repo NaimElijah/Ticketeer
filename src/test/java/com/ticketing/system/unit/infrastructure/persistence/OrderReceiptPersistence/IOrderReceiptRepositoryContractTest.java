@@ -44,7 +44,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     private OrderReceipt member(int receiptId, int userId, int eventId) {
-        return OrderReceipt.forMember(receiptId, userId, 50.0, List.of(line(receiptId * 10, eventId)));
+        return OrderReceipt.forMember(receiptId, userId, 50.0, List.of(line(receiptId * 10, eventId)), LocalDateTime.now());
     }
 
     private Set<Integer> ids(List<OrderReceipt> rs) {
@@ -70,7 +70,7 @@ abstract class IOrderReceiptRepositoryContractTest {
 
     @Test
     void save_thenFindById_returnsTheGuestReceipt() {
-        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 2, 50.0, List.of(line(20, 5))));
+        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 2, 50.0, List.of(line(20, 5)), LocalDateTime.now()));
 
         OrderReceipt found = repo.findByOrderReceiptId(2).orElseThrow();
         assertTrue(found.isGuestReceipt());
@@ -84,7 +84,7 @@ abstract class IOrderReceiptRepositoryContractTest {
 
     @Test
     void save_persistsReceiptLinesAndTransactions() {
-        OrderReceipt r = OrderReceipt.forMember(1, 7, 100.0, List.of(line(10, 5), line(11, 5)));
+        OrderReceipt r = OrderReceipt.forMember(1, 7, 100.0, List.of(line(10, 5), line(11, 5)), LocalDateTime.now());
         r.addTransaction(TransactionRecord.paymentCharge(999, "WSEP", 100.0, "ILS", LocalDateTime.now()));
         repo.save(r);
 
@@ -101,7 +101,7 @@ abstract class IOrderReceiptRepositoryContractTest {
 
     @Test
     void GivenLinesInEveryRefundState_WhenSavedAndReloaded_ThenEachLineKeepsItsState() {
-        OrderReceipt r = OrderReceipt.forMember(1, 7, 150.0, List.of(line(10, 5), line(11, 6), line(12, 8)));
+        OrderReceipt r = OrderReceipt.forMember(1, 7, 150.0, List.of(line(10, 5), line(11, 6), line(12, 8)), LocalDateTime.now());
         r.claimRefundForEvent(5);
         r.completeEventRefund(5, TransactionRecord.refund("refund-1", "WSEP", 50.0, "ILS", LocalDateTime.now()));
         r.claimRefundForEvent(6);
@@ -120,7 +120,7 @@ abstract class IOrderReceiptRepositoryContractTest {
         repo.save(member(1, 7, 5));
         repo.save(member(2, 7, 6));
         repo.save(member(3, 9, 5));
-        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 4, 50.0, List.of(line(40, 5))));
+        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 4, 50.0, List.of(line(40, 5)), LocalDateTime.now()));
 
         assertEquals(Set.of(1, 2), ids(repo.findByHolderUserId(7)));
         assertTrue(repo.findByHolderUserId(123).isEmpty());

@@ -15,6 +15,7 @@ import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.datepicker.DatePicker;
@@ -31,6 +32,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -48,13 +50,14 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     // ---- data model ----
 
     private record EventRow(String name, String category, String venue,
-            String date, LocalDateTime startsAt, int priceCents,
+            String date, Instant startsAt, int priceCents,
             LkStatusDot.Tone tone, String status, String id,
             Double rating, List<String> artists) {
     }
 
     private final BrowseEventsPresenter presenter;
     private final SessionIdentity identity;
+    private final DisplayTime displayTime;
 
     // Filter option lists + label→value mappings live in CatalogFilterSupport (shared with the owner
     // event list); these aliases keep the in-view references terse.
@@ -108,9 +111,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Div gridSlot;
     private Span resultsCountSpan;
 
-    public BrowseEventsView(BrowseEventsPresenter presenter, SessionIdentity identity) {
+    public BrowseEventsView(BrowseEventsPresenter presenter, SessionIdentity identity, DisplayTime displayTime) {
         this.presenter = presenter;
         this.identity = identity;
+        this.displayTime = displayTime;
 
         List<EventRow> allEvents = presenter.search(identity.credential(), CatalogSearchFiltersDTO.empty())
                 .stream().map(BrowseEventsView::toRow).toList();
@@ -465,7 +469,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             from = customFromPicker.getValue();
             to   = customToPicker.getValue();
         } else {
-            CatalogFilterSupport.DateWindow dw = CatalogFilterSupport.dateWindow(filterDateRange, LocalDate.now());
+            CatalogFilterSupport.DateWindow dw = CatalogFilterSupport.dateWindow(filterDateRange, displayTime.today());
             from = dw.from();
             to   = dw.to();
         }
@@ -588,11 +592,13 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         LocalDateTime start = (dto.showDates() == null || dto.showDates().isEmpty())
                 ? null : dto.showDates().get(0).startsAt();
         String date = start == null ? "TBA" : start.format(DATE_FMT);
+        // "Soonest first" sorts by when shows really start, so venues in different zones interleave correctly.
+        Instant startsAt = start == null ? null : start.atZone(dto.timeZone()).toInstant();
         int priceCents = (int) Math.round(dto.minPrice() * 100);
         LkStatusDot.Tone tone = dto.soldOut() ? LkStatusDot.Tone.muted : LkStatusDot.Tone.ok;
         String status = dto.soldOut() ? "Sold out" : "On sale";
         return new EventRow(dto.name(), prettyCategory(dto.category()), dto.location(),
-                date, start, priceCents, tone, status, String.valueOf(dto.eventId()),
+                date, startsAt, priceCents, tone, status, String.valueOf(dto.eventId()),
                 dto.rating(), dto.artistsNames());
     }
 

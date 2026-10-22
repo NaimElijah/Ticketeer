@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.ui.dev.DevUserSeeder;
 
 /**
@@ -93,6 +95,7 @@ class ScenarioRunnerTest {
                 Clock.fixed(Instant.parse("2026-10-18T12:00:00Z"), ZoneOffset.UTC),
                 new SeedProperties(mode, failFast, false, scenario),
                 new PlatformAdminProperties("admin", "admin"),
+                new PlatformTimeProperties(ZoneId.of("Asia/Jerusalem")),
                 "jdbc:h2:mem:scenario-runner-test");
     }
 }

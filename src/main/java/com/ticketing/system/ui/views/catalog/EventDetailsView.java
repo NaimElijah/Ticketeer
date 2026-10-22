@@ -41,7 +41,7 @@ import java.util.Locale;
 public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT =
-            DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm", Locale.US);
+            DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm zzz", Locale.US);
 
     private final EventDetailsPresenter presenter;
     private final SessionIdentity sessionIdentity;
@@ -409,7 +409,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         StringBuilder sb = new StringBuilder();
         if (detail.showDates() != null && !detail.showDates().isEmpty()
                 && detail.showDates().get(0).getStartTime() != null) {
-            sb.append(DATE_FMT.format(detail.showDates().get(0).getStartTime()));
+            sb.append(DATE_FMT.format(detail.showDates().get(0).getStartTime().atZone(detail.timeZone())));
         }
         var loc = detail.location();
         if (loc != null) {

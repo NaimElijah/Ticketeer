@@ -15,7 +15,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +37,7 @@ import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAp
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -88,6 +93,9 @@ class EventManagementServiceTest {
         private final String COMPANY_1_NAME = "Company1";
         private final String COMPANY_1_DESCRIPTION = "A test production company1";
         private final Location LOCATION = new Location("Belgium", "Brussels");
+        private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
+        // 16:30Z on 15 July 2027 is 19:30 in Jerusalem (IDT, UTC+3).
+        private static final Instant JERUSALEM_1930 = Instant.parse("2027-07-15T16:30:00Z");
 
         private ProductionCompany company;
         private InventoryZone zone;
@@ -105,16 +113,10 @@ class EventManagementServiceTest {
                 eventSalesHistoryPort = mock(EventSalesHistoryPort.class);
                 userRepository = mock(UserRepository.class);
                 eventPublisher = mock(ApplicationEventPublisher.class);
-                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
 
-                eventService = new EventManagementService(
-                                mockEventRepo,
-                                mockCompanyRepo,
-                                sessionManager,
-                                eventSalesHistoryPort,
-                                userRepository,
-                                membershipService,
-                                eventPublisher);
+                // The fixtures below are dated relative to the real clock, so the shared service reads it.
+                eventService = serviceWith(Clock.systemUTC());
 
                 company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
                                 COMPANY_1_DESCRIPTION, 4.5);
@@ -131,6 +133,7 @@ class EventManagementServiceTest {
                                 venueMap,
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(10),
                                                 LocalDateTime.now().plusDays(10).plusHours(2))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0));
                 ownerUser = new User(OWNER_ID, "Owner Name", "owner@example.com", "hashedpassword", 50);
@@ -146,6 +149,11 @@ class EventManagementServiceTest {
                 membershipService.acceptInvitation(INVENTORY_MANAGER_ID, COMPANY_ID);
         }
 
+        private EventManagementService serviceWith(Clock clock) {
+                return new EventManagementService(mockEventRepo, mockCompanyRepo, sessionManager,
+                                eventSalesHistoryPort, userRepository, membershipService, eventPublisher, clock);
+        }
+
         // Catalog-only happy path for cancelEventAndRefund: valid owner, event, and company. The
         // refund/ticket/notification work now lives in the sales listener, so this no longer stubs any
         // sales port. A real OrderReceipt is still built and returned so idempotency tests can assert on it.
@@ -157,7 +165,7 @@ class EventManagementServiceTest {
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 ReceiptLine line = new ReceiptLine(1, 100.0, EVENT_ID, 1, "A1", java.time.LocalDateTime.now());
-                OrderReceipt realReceipt = OrderReceipt.forMember(99, OWNER_ID, 100.0, List.of(line));
+                OrderReceipt realReceipt = OrderReceipt.forMember(99, OWNER_ID, 100.0, List.of(line), LocalDateTime.now());
                 realReceipt.addTransaction(
                                 TransactionRecord.paymentCharge(42, "test-gateway", 100.0, "ILS",
                                                 java.time.LocalDateTime.now()));
@@ -280,6 +288,7 @@ class EventManagementServiceTest {
                                 EventStatus.DRAFT, venueMap,
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(10),
                                                 LocalDateTime.now().plusDays(10).plusHours(2))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -308,6 +317,73 @@ class EventManagementServiceTest {
                 // reserveStandingTicketsForMember(...)
                 // should not throw UnsupportedOperationException from PurchasePolicy
 
+        }
+
+        // -------------------------------------------------------------------------
+        // addEvent: a new show must start after now at the venue (UC-19, #74, ADR-008)
+        // -------------------------------------------------------------------------
+
+        @Test
+        void GivenShowStartingAt19LocalInJerusalem_WhenAddEventAt1930Local_ThenRejectedAsPast() {
+                stubOwnerCanAddEvents();
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+
+                IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.addEvent(
+                                OWNER_TOKEN, creationRequest(LocalDateTime.of(2027, 7, 15, 19, 0), JERUSALEM)));
+
+                assertEquals("Start time must be in the future", ex.getMessage());
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        @Test
+        void GivenShowStartingAt20LocalInJerusalem_WhenAddEventAt1930Local_ThenCreatedInThatZone() {
+                stubOwnerCanAddEvents();
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+
+                EventDetailDTO created = service.addEvent(
+                                OWNER_TOKEN, creationRequest(LocalDateTime.of(2027, 7, 15, 20, 0), JERUSALEM));
+
+                assertEquals(JERUSALEM, created.timeZone());
+                verify(mockEventRepo).save(any());
+        }
+
+        // The same 19:00 rejected in Jerusalem is still ahead at a venue on UTC (19:00Z > 16:30Z).
+        @Test
+        void GivenSameWallTimeAtAUtcVenue_WhenAddEventAt1630Utc_ThenCreated() {
+                stubOwnerCanAddEvents();
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+
+                EventDetailDTO created = service.addEvent(
+                                OWNER_TOKEN, creationRequest(LocalDateTime.of(2027, 7, 15, 19, 0), ZoneOffset.UTC));
+
+                assertEquals(ZoneOffset.UTC, created.timeZone());
+        }
+
+        @Test
+        void GivenPastShowInUpdate_WhenEditEventDetails_ThenRejectedAndNotSaved() {
+                stubOwnerCanAddEvents();
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+                ShowDateDTO past = new ShowDateDTO(LocalDateTime.of(2027, 7, 15, 19, 0), LocalDateTime.of(2027, 7, 15, 22, 0));
+
+                assertThrows(IllegalArgumentException.class, () -> service.editEventDetails(OWNER_TOKEN,
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null, null, List.of(past))));
+
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        private void stubOwnerCanAddEvents() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.nextId()).thenReturn(EVENT_ID + 1);
+                when(mockEventRepo.nextVenueMapId()).thenReturn(2);
+        }
+
+        private EventCreationDTO creationRequest(LocalDateTime start, ZoneId timeZone) {
+                return new EventCreationDTO(COMPANY_ID, "Gala", "desc", List.of("Artist1"), EventCategory.CONCERT,
+                                4.5, LOCATION, List.of(new ShowDate(start, start.plusHours(3))), timeZone, null);
         }
 
         @Test
@@ -400,6 +476,7 @@ class EventManagementServiceTest {
                                 EventCategory.MUSIC, COMPANY_ID, EventStatus.DRAFT, null,
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(10),
                                                 LocalDateTime.now().plusDays(10).plusHours(2))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -425,9 +502,23 @@ class EventManagementServiceTest {
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), "New Concert Name", null, null, null,
+                                                null,
                                                 null));
 
                 assertEquals("New Concert Name", event.getName());
+        }
+
+        @Test
+        void GivenOwnerAndNewTimeZone_WhenEditEventDetails_ThenTheEventIsInThatZone() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+
+                eventService.editEventDetails(OWNER_TOKEN, new EventUpdateDTO(String.valueOf(EVENT_ID), null, null,
+                                null, null, ZoneId.of("Europe/London"), null));
+
+                assertEquals(ZoneId.of("Europe/London"), event.getTimeZone());
         }
 
         @Test
@@ -438,7 +529,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
 
                 eventService.editEventDetails(OWNER_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "MUSIC", null, null));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "MUSIC", null, null, null));
 
                 assertEquals(EventCategory.MUSIC, event.getCategory());
         }
@@ -451,7 +542,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
 
                 eventService.editEventDetails(OWNER_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null, null));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null, null, null));
 
                 assertEquals("Concert", event.getName());
                 assertEquals(EventCategory.CONCERT, event.getCategory());
@@ -466,7 +557,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(INVENTORY_MANAGER_ID)).thenReturn(inventoryManagerUser);
 
                 eventService.editEventDetails(MANAGE_INVENTORY_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), "Manager Edited", null, null, null, null));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), "Manager Edited", null, null, null, null, null));
 
                 assertEquals("Manager Edited", event.getName());
         }
@@ -484,7 +575,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
 
                 assertThrows(RuntimeException.class, () -> eventService.editEventDetails(MANAGER_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), "Nope", null, null, null, null)));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), "Nope", null, null, null, null, null)));
                 assertEquals("Concert", event.getName());
         }
 
@@ -542,7 +633,7 @@ class EventManagementServiceTest {
                 when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
                 assertThrows(RuntimeException.class, () -> eventService.editEventDetails(INVALID_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null)));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null, null)));
         }
 
         @Test
@@ -552,7 +643,7 @@ class EventManagementServiceTest {
                 when(mockEventRepo.findById(EVENT_ID)).thenThrow(new RuntimeException("Event not found"));
 
                 assertThrows(RuntimeException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null)));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null, null)));
         }
 
         @Test
@@ -561,7 +652,7 @@ class EventManagementServiceTest {
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
 
                 assertThrows(IllegalArgumentException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
-                                new EventUpdateDTO("not-a-number", "New Name", null, null, null, null)));
+                                new EventUpdateDTO("not-a-number", "New Name", null, null, null, null, null)));
         }
 
         @Test
@@ -573,7 +664,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(99)).thenReturn(stranger);
 
                 assertThrows(RuntimeException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null)));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null, null)));
         }
 
         @Test
@@ -583,6 +674,7 @@ class EventManagementServiceTest {
                                 EventCategory.CONCERT, COMPANY_ID, EventStatus.ON_SALE, venueMap,
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(10),
                                                 LocalDateTime.now().plusDays(10).plusHours(2))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -590,7 +682,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
 
                 assertThrows(RuntimeException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
-                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null)));
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null, null)));
         }
 
         @Test
@@ -602,6 +694,7 @@ class EventManagementServiceTest {
 
                 assertThrows(IllegalArgumentException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "INVALID_CATEGORY", null,
+                                                null,
                                                 null)));
         }
 
@@ -612,6 +705,7 @@ class EventManagementServiceTest {
                                 EventCategory.CONCERT, COMPANY_ID, EventStatus.DRAFT, venueMap,
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(10),
                                                 LocalDateTime.now().plusDays(10).plusHours(2))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -620,6 +714,7 @@ class EventManagementServiceTest {
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), "Updated Draft Name", null, null, null,
+                                                null,
                                                 null));
 
                 assertEquals("Updated Draft Name", draftEvent.getName());
@@ -634,7 +729,7 @@ class EventManagementServiceTest {
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, "A brand new description", null,
-                                                null, null));
+                                                null, null, null));
 
                 assertEquals("A brand new description", event.getDescription());
         }
@@ -648,7 +743,7 @@ class EventManagementServiceTest {
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null,
-                                                new LocationDTO("France", "Paris"), null));
+                                                new LocationDTO("France", "Paris"), null, null));
 
                 assertEquals(new Location("France", "Paris"), event.getVenueMap().getLocation());
         }
@@ -664,6 +759,7 @@ class EventManagementServiceTest {
                 LocalDateTime newEnd = newStart.plusHours(3);
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null,
+                                                null,
                                                 List.of(new ShowDateDTO(newStart, newEnd))));
 
                 assertEquals(1, event.getShowDates().size());
@@ -678,6 +774,7 @@ class EventManagementServiceTest {
                                 EventCategory.CONCERT, COMPANY_ID, EventStatus.SCHEDULED, venueMap,
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(10),
                                                 LocalDateTime.now().plusDays(10).plusHours(2))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
@@ -828,6 +925,7 @@ class EventManagementServiceTest {
                                 EventStatus.SCHEDULED,
                                 null,
                                 event.getShowDates(),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0)
 
@@ -859,6 +957,7 @@ class EventManagementServiceTest {
                                 EventStatus.SCHEDULED,
                                 emptyVenueMap,
                                 event.getShowDates(),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0));
 
@@ -899,6 +998,7 @@ class EventManagementServiceTest {
                                 EventStatus.SCHEDULED,
                                 seatedVenueMap,
                                 event.getShowDates(),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0)
 
@@ -945,6 +1045,7 @@ class EventManagementServiceTest {
                                 EventStatus.SCHEDULED,
                                 seatedVenueMap,
                                 event.getShowDates(),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0));
 
@@ -998,6 +1099,7 @@ class EventManagementServiceTest {
                                 EventStatus.SCHEDULED,
                                 mixedVenueMap,
                                 event.getShowDates(),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0)
 
@@ -1141,6 +1243,7 @@ class EventManagementServiceTest {
                                 EventStatus.SCHEDULED,
                                 seatedVenueMap,
                                 event.getShowDates(),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0)
 
@@ -1179,7 +1282,7 @@ class EventManagementServiceTest {
 
                 Event gridEvent = new Event(
                                 EVENT_ID, "Concert", 4.5, List.of("Artist1"), EventCategory.CONCERT, COMPANY_ID,
-                                EventStatus.SCHEDULED, gridVenueMap, event.getShowDates(), null, new DiscountPolicy(0));
+                                EventStatus.SCHEDULED, gridVenueMap, event.getShowDates(), ZoneId.of("Asia/Jerusalem"), null, new DiscountPolicy(0));
 
                 when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);

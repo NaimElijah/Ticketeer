@@ -26,6 +26,10 @@ import org.junit.jupiter.api.Test;
 
 import org.mockito.ArgumentCaptor;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -41,6 +45,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 public class ReservationAcceptanceTests {
+
+    // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
+    private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
+    private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
 
     private ReservationService reservationService;
 
@@ -74,12 +82,13 @@ public class ReservationAcceptanceTests {
                 eventPublisher,
                 mock(UserRepository.class),
                 marketGate,
-                mock(ISystemMetrics.class)
+                mock(ISystemMetrics.class),
+                Clock.fixed(T0, ZoneOffset.UTC)
         );
 
         event = mock(Event.class, RETURNS_DEEP_STUBS);
         zone = mock(InventoryZone.class);
-        activeOrder = new ActiveOrder(1);
+        activeOrder = new ActiveOrder(1, NOW);
 
         when(sessionManager.validateToken("validToken")).thenReturn(true);
         when(sessionManager.extractUserId("validToken")).thenReturn(1);
@@ -222,7 +231,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
 
     // @Test
     // void GivenUserAlreadyHasReservationForEvent_WhenreserveStandingTicketsForMember_ThenThrowException() {
-    //     activeOrder.addStandingReservation(100, 1, 1, 50.0, java.time.LocalDateTime.now());
+    //     activeOrder.addStandingReservation(100, 1, 1, 50.0, NOW);
 
     //     String result;
 
@@ -281,7 +290,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
 
     @Test
     void GivenValidReservedTickets_WhenremoveReservedStandingSpotsForMember_ThenReturnReservationResult() {
-        activeOrder.addStandingReservation(100, 1, 3, 50.0, java.time.LocalDateTime.now());
+        activeOrder.addStandingReservation(100, 1, 3, 50.0, NOW);
 
         ReservationResultDTO result = reservationService.removeForMember(
                 "validToken",
@@ -362,7 +371,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
 
     @Test
     void GivenNotEnoughReservedTickets_WhenremoveReservedStandingSpotsForMember_ThenThrowException() {
-        activeOrder.addStandingReservation(100, 1, 1, 50.0, java.time.LocalDateTime.now());
+        activeOrder.addStandingReservation(100, 1, 1, 50.0, NOW);
 
         String result;
 

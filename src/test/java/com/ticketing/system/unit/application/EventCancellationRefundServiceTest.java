@@ -104,6 +104,7 @@ class EventCancellationRefundServiceTest {
             total += prices[i];
         }
         OrderReceipt receipt = OrderReceipt.forMember(receiptId, holderUserId, total, lines,
+                LocalDateTime.now(),
                 List.of(TransactionRecord.paymentCharge(chargeOf(receiptId), "test-gateway", total, "ILS", AT)));
         receipts.add(receipt);
         return receipt;
@@ -221,6 +222,7 @@ class EventCancellationRefundServiceTest {
         OrderReceipt receipt = OrderReceipt.forMember(1, 7, 100.0,
                 List.of(new ReceiptLine(10, 30.0, EVENT_ID, ZONE_ID, "A1", AT),
                         new ReceiptLine(11, 70.0, OTHER_EVENT_ID, ZONE_ID, "B1", AT)),
+                LocalDateTime.now(),
                 List.of(TransactionRecord.paymentCharge(chargeOf(1), "test-gateway", 100.0, "ILS", AT)));
         receipts.add(receipt);
         Ticket cancelledEventTicket = new Ticket(EVENT_ID, ZONE_ID, 1, "A1", 30.0, 10, "BC10");
@@ -249,7 +251,8 @@ class EventCancellationRefundServiceTest {
     @Test
     void GivenFreeTickets_WhenRefundCancelledEvent_ThenLinesAreRefundedWithoutAGatewayCall() {
         OrderReceipt receipt = OrderReceipt.forMember(1, 7, 0.0,
-                List.of(new ReceiptLine(10, 0.0, EVENT_ID, ZONE_ID, "A1", AT)));
+                List.of(new ReceiptLine(10, 0.0, EVENT_ID, ZONE_ID, "A1", AT)),
+                LocalDateTime.now());
         receipts.add(receipt);
 
         refundCancelledEvent();
@@ -261,7 +264,8 @@ class EventCancellationRefundServiceTest {
     @Test
     void GivenPaidReceiptWithoutACharge_WhenRefundCancelledEvent_ThenRefundFailsAndNothingIsClaimed() {
         OrderReceipt receipt = OrderReceipt.forMember(1, 7, 50.0,
-                List.of(new ReceiptLine(10, 50.0, EVENT_ID, ZONE_ID, "A1", AT)));
+                List.of(new ReceiptLine(10, 50.0, EVENT_ID, ZONE_ID, "A1", AT)),
+                LocalDateTime.now());
         receipts.add(receipt);
 
         assertThrows(RefundFailedException.class, this::refundCancelledEvent);

@@ -46,12 +46,14 @@ public interface InventoryCommandPort {
      * @param zoneId                 the zone within the event
      * @param selection              the standing quantity / seated seats to reserve
      * @param orderKey               the owning order's stable key (stamped onto the hold for ownership)
+     * @param holdUntil              when the buyer's hold runs out (UTC wall time, ADR-008); recorded on
+     *                               each reserved seat
      * @param buyerId                the buyer's user id, or {@code -1} for a guest (policy context)
      * @param buyerAge               the buyer's age, or {@code null} if unknown (policy context)
      * @param totalQuantityForPolicy the buyer's total quantity for this event after this add (MAX cap)
      * @return the zone's unit price, for the caller to record on its cart line
      */
-    double reserve(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey,
+    double reserve(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey, LocalDateTime holdUntil,
             int buyerId, Integer buyerAge, int totalQuantityForPolicy);
 
     /**
@@ -75,8 +77,9 @@ public interface InventoryCommandPort {
      * @param zoneId    the zone
      * @param selection the standing quantity / seated seats to re-reserve
      * @param orderKey  the owning order's key
+     * @param holdUntil when the restored hold runs out (UTC wall time, ADR-008)
      */
-    void restore(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey);
+    void restore(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey, LocalDateTime holdUntil);
 
     /**
      * Returns previously SOLD inventory to AVAILABLE stock (member/cancellation refund) for the given

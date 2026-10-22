@@ -1,6 +1,6 @@
 package com.ticketing.system.catalog.application.port.in;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
@@ -15,7 +15,8 @@ import java.util.List;
  * @param eventName     the event's display name, or {@code null} if unknown
  * @param companyId     the owning production company's id (so callers can resolve the company name)
  * @param category      the event category's string form, or {@code null}
- * @param eventStartsAt the first show date's start time, or {@code null} if the event has no schedule
+ * @param eventStartsAt the first show date's start, at the venue and in its zone (ADR-008), or
+ *                      {@code null} if the event has no schedule
  * @param venueLocation the venue location's string form, or {@code null} if no venue is configured
  * @param zones         the event's zones as (id, name) pairs, for zone-name resolution
  */
@@ -24,7 +25,7 @@ public record EventDisplayInfoDTO(
         String eventName,
         int companyId,
         String category,
-        LocalDateTime eventStartsAt,
+        ZonedDateTime eventStartsAt,
         String venueLocation,
         List<ZoneNameDTO> zones) {
 
