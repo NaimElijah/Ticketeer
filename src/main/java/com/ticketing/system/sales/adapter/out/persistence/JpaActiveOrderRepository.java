@@ -85,8 +85,8 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
     }
 
     @Override
-    public List<ActiveOrder> findExpired() {
-        LocalDateTime cutoff = LocalDateTime.now().minus(CartLineItem.getExpirationLimit());
+    public List<ActiveOrder> findExpired(LocalDateTime now) {
+        LocalDateTime cutoff = now.minus(CartLineItem.getExpirationLimit());
         return data.findWithItemAddedBefore(cutoff);
     }
 

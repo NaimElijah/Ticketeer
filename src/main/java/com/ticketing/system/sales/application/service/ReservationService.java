@@ -1,6 +1,7 @@
 package com.ticketing.system.sales.application.service;
 import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +50,7 @@ public class ReservationService {
     private final UserRepository userRepository;
     private final MarketGate marketGate; // queried to enforce the UC-32 market-open gate (dependency-inverted away from governance)
     private final ISystemMetrics systemMetrics;
+    private final Clock clock;
 
     public ReservationService(
             InventoryCommandPort inventoryPort,
@@ -57,7 +59,8 @@ public class ReservationService {
             ApplicationEventPublisher eventPublisher,
             UserRepository userRepository,
             MarketGate marketGate,
-            ISystemMetrics systemMetrics) {
+            ISystemMetrics systemMetrics,
+            Clock clock) {
         this.inventoryPort = inventoryPort;
         this.activeOrderRepository = activeOrderRepository;
         this.iSessionManager = iSessionManager;
@@ -65,6 +68,12 @@ public class ReservationService {
         this.userRepository = userRepository;
         this.marketGate = marketGate;
         this.systemMetrics = systemMetrics;
+        this.clock = clock;
+    }
+
+    // Holds and their expiry are UTC wall time read from the injected clock (ADR-008).
+    private LocalDateTime now() {
+        return LocalDateTime.now(clock);
     }
 
     // ---------------------------------------------------------------------
@@ -156,12 +165,14 @@ public class ReservationService {
             // reserves the (ownership-stamped) selection, saves the event, and releases the lock — then
             // returns the unit price to record on the cart line. Done before mutating the active order so
             // a reserve failure (e.g. not enough availability) leaves the cart untouched.
+            // One reading of the clock per reservation: the cart line's hold starts at it.
+            LocalDateTime addedAt = now();
             double pricePerTicket = inventoryPort.reserve(
                     eventId, zoneId, selection, activeOrder.getOrderKey(), buyerId, buyerAge, totalQuantity);
             inventoryReserved = true;
 
             // Now that we have successfully reserved the inventory, we can safely modify the active order to reflect the new reservation. If any of the validations for modifying the active order fail (e.g. trying to reserve more tickets than allowed by purchase policy, etc.), we will throw an exception and roll back the inventory reservation in the catch block, ensuring that we do not end up with an active order that has reservations that were not successfully made.
-            addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket);
+            addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket, addedAt);
             orderModified = true;
 
             activeOrderRepository.save(activeOrder);
@@ -169,7 +180,7 @@ public class ReservationService {
             notifySuccessAfterUnlock = true;
             systemMetrics.record(MetricType.RESERVATION);
             // Return the reservation result, which includes details about the reservation such as event ID, zone ID, quantity reserved, seat numbers if applicable, and the expiration time of the reservation (based on the current time plus the configured reservation timeout). This information can be used by the frontend to show the user their current reservations and how long they have before they expire, etc.
-            return buildReservationResult(eventId, zoneId, selection);
+            return buildReservationResult(eventId, zoneId, selection, addedAt);
 
         } catch (RuntimeException e) {
             // If any exception occurs during the reservation process, we need to roll back any actions that were taken to keep our data consistent. This includes releasing any inventory that was reserved and removing any reservations that were added to the active order. We also log the error for monitoring and debugging purposes, and rethrow the exception to indicate that the reservation failed. The frontend can catch this exception and show an appropriate error message to the user (e.g. "Failed to reserve tickets: not enough availability", "Failed to reserve tickets: event not found", "Failed to reserve tickets: invalid input", etc.).
@@ -280,7 +291,7 @@ public class ReservationService {
             notifySuccessAfterUnlock = true;
 
             // Return the reservation result, which includes details about the removed reservation such as event ID, zone ID, quantity removed, seat numbers if applicable, and the expiration time of the reservation (based on the current time plus the configured reservation timeout). This information can be used by the frontend to show the user their current reservations and how long they have before they expire, etc.
-            return buildReservationResult(eventId, zoneId, selection);
+            return buildReservationResult(eventId, zoneId, selection, now());
 
         } catch (RuntimeException e) {
             // If any exception occurs during the removal process, we need to roll back any actions that were taken to keep our data consistent. This includes re-reserving any inventory that was released and re-adding any reservations that were removed from the active order. We also log the error for monitoring and debugging purposes, and rethrow the exception to indicate that the removal failed. The frontend can catch this exception and show an appropriate error message to the user (e.g. "Failed to remove reservation: reservation not found in active order", "Failed to remove reservation: event not found", "Failed to remove reservation: invalid input", etc.).
@@ -331,8 +342,7 @@ public class ReservationService {
     // Adds the reserved selection to the active order via ActiveOrder's primitive (non-catalog.domain)
     // entry points, branching standing vs seated here so sales never handles a catalog InventorySelection.
     private void addOrderReservation(ActiveOrder order, int eventId, int zoneId, InventorySelectionDTO selection,
-            double price) {
-        LocalDateTime addedAt = LocalDateTime.now();
+            double price, LocalDateTime addedAt) {
         if (selection.isStandingSelection()) {
             order.addStandingReservation(eventId, zoneId, selection.getQuantity(), price, addedAt);
         } else {
@@ -544,7 +554,7 @@ public class ReservationService {
         */
         try {
             if (orderModified && activeOrder != null) {
-                addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket);
+                addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket, now());
                 activeOrderRepository.save(activeOrder);
             }
         } catch (RuntimeException rollbackFailure) {
@@ -584,13 +594,14 @@ public class ReservationService {
     }
 
     // Helper method to build the reservation result DTO that is returned by the reserve and remove methods, which includes details about the reservation such as event ID, zone ID, quantity reserved/removed, seat numbers if applicable, and the expiration time of the reservation (based on the current time plus the configured reservation timeout). This information can be used by the frontend to show the user their current reservations and how long they have before they expire, etc.
-    private ReservationResultDTO buildReservationResult(int eventId, int zoneId, InventorySelectionDTO selection) {
+    private ReservationResultDTO buildReservationResult(int eventId, int zoneId, InventorySelectionDTO selection,
+            LocalDateTime holdStart) {
         return new ReservationResultDTO(
                 eventId,
                 zoneId,
                 selection.getQuantity(),
                 selection.getSeatNumbers(),
-                LocalDateTime.now().plus(CartLineItem.getExpirationLimit()));
+                holdStart.plus(CartLineItem.getExpirationLimit()));
     }
 
     // method to restore an active order for a user (member) - this is used by the frontend when a user logs in or returns to the site after navigating away, to restore their active order and show them their current reservations in the cart. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we convert it to an ActiveOrderDTO and return it. If no active order is found, we return null. We also enrich the DTO with event names for better UX in the frontend, so that the frontend can show the event names directly in the cart without needing to make extra calls to get event details for each line item.
@@ -602,7 +613,7 @@ public class ReservationService {
             return null;
         }
         log.info("Active order found for userId={}, restoring ActiveOrderDTO", userId);
-        ActiveOrderDTO activeOrderDTO = activeOrder.toDTO();
+        ActiveOrderDTO activeOrderDTO = activeOrder.toDTO(now());
         // enrich the DTO with event and zone details for each line item (for better UX in the frontend; avoids extra calls from frontend to get event/zone details for each line)
         List<ActiveOrderDTO.CartLineDTO> enrichedLines = new ArrayList<>();
         for (ActiveOrderDTO.CartLineDTO line : activeOrderDTO.lines()) {
@@ -630,7 +641,7 @@ public class ReservationService {
         return activeOrderRepository.getBySessionId(sessionId)
                 .map(order -> {
                     log.info("Active order found for sessionId={}, restoring ActiveOrderDTO", sessionId);
-                    ActiveOrderDTO dto = order.toDTO();
+                    ActiveOrderDTO dto = order.toDTO(now());
                     List<ActiveOrderDTO.CartLineDTO> enrichedLines = new ArrayList<>();
                     for (ActiveOrderDTO.CartLineDTO line : dto.lines()) {
                         String eventName = eventNameFor(line.eventId());
@@ -669,9 +680,10 @@ public class ReservationService {
         activeOrderRepository.lockForUpdate(orderLockKey);
         try {
             ActiveOrder order = activeOrderRepository.getByUserId(userId);
+            LocalDateTime now = now();
             if (order != null && !order.isEmpty()
-                    && !order.isCheckoutInProgress() && !order.hasExpiredItem()) {
-                order.renewReservationTimers(LocalDateTime.now());
+                    && !order.isCheckoutInProgress() && !order.hasExpiredItem(now)) {
+                order.renewReservationTimers(now);
                 activeOrderRepository.save(order);
                 log.info("Renewed reservation timers on checkout entry for userId={}", userId);
             }
@@ -687,9 +699,10 @@ public class ReservationService {
         activeOrderRepository.lockForUpdate(orderLockKey);
         try {
             ActiveOrder order = activeOrderRepository.getBySessionId(sessionId).orElse(null);
+            LocalDateTime now = now();
             if (order != null && !order.isEmpty()
-                    && !order.isCheckoutInProgress() && !order.hasExpiredItem()) {
-                order.renewReservationTimers(LocalDateTime.now());
+                    && !order.isCheckoutInProgress() && !order.hasExpiredItem(now)) {
+                order.renewReservationTimers(now);
                 activeOrderRepository.save(order);
                 log.info("Renewed reservation timers on checkout entry for sessionId={}", sessionId);
             }
@@ -736,7 +749,7 @@ public class ReservationService {
 
             // Release any reserved inventory back to the events before deleting the active order.
             String orderKey = activeOrder.getOrderKey();
-            List<ActiveOrderDTO.CartLineDTO> lines = activeOrder.toDTO().lines();
+            List<ActiveOrderDTO.CartLineDTO> lines = activeOrder.toDTO(now()).lines();
 
             // Release each reserved line back to its event through the inventory port (the port acquires
             // the event buyer-lock, releases the ownership-stamped selection, and saves). Best-effort per

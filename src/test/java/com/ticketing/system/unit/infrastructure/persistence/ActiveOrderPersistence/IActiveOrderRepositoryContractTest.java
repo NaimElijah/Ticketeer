@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 
 // Contract tests every ActiveOrderRepository implementation must satisfy. Future
@@ -22,6 +24,9 @@ abstract class IActiveOrderRepositoryContractTest {
     protected abstract ActiveOrderRepository newRepository();
 
     private ActiveOrderRepository repo;
+
+    // The adapters judge expiry at the caller's now (UTC wall time from the injected clock, ADR-008).
+    private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     @BeforeEach
     void setUp() {
@@ -136,9 +141,29 @@ abstract class IActiveOrderRepositoryContractTest {
     @Test
     void findExpired_emptyWhenNoExpiredItems() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-G");
-        cart.addStandingReservation(1, 10, 1, 25.0, java.time.LocalDateTime.now());
+        cart.addStandingReservation(1, 10, 1, 25.0, NOW);
         repo.save(cart);
-        assertTrue(repo.findExpired().isEmpty());
+        assertTrue(repo.findExpired(NOW).isEmpty());
+    }
+
+    // Both adapters treat a hold as run out once a full hold has elapsed (Jpa: addedAt <= now - hold;
+    // Memory: no time left at now), judged at the caller's now rather than the system clock (#74).
+    @Test
+    void GivenItemAddedExactlyOneHoldBeforeNow_WhenFindExpired_ThenTheCartIsReturned() {
+        ActiveOrder cart = ActiveOrder.forGuest("sid-old");
+        cart.addStandingReservation(1, 10, 1, 25.0, NOW.minus(CartLineItem.getExpirationLimit()));
+        repo.save(cart);
+
+        assertEquals(1, repo.findExpired(NOW).size());
+    }
+
+    @Test
+    void GivenItemAddedJustUnderOneHoldBeforeNow_WhenFindExpired_ThenNothingIsReturned() {
+        ActiveOrder cart = ActiveOrder.forGuest("sid-fresh");
+        cart.addStandingReservation(1, 10, 1, 25.0, NOW.minus(CartLineItem.getExpirationLimit()).plusSeconds(1));
+        repo.save(cart);
+
+        assertTrue(repo.findExpired(NOW).isEmpty());
     }
 
     @Test

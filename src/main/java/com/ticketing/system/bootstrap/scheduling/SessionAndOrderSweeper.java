@@ -2,6 +2,8 @@ package com.ticketing.system.bootstrap.scheduling;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -83,7 +85,7 @@ public class SessionAndOrderSweeper {
     public void sweep() {
         Instant now = clock.instant();
         int sessionsCleaned = sweepExpiredSessions(now);
-        int ordersCleaned = sweepExpiredOrders();
+        int ordersCleaned = sweepExpiredOrders(now);
         if (sessionsCleaned > 0 || ordersCleaned > 0) {
             log.info("sweeper tick: {} session(s), {} order(s) cleaned up",
                     sessionsCleaned, ordersCleaned);
@@ -97,7 +99,7 @@ public class SessionAndOrderSweeper {
     public int sweepExpiredSessions(Instant now) {
         List<Session> expired = sessionRepository.findExpiredBefore(now);
         for (Session session : expired) {
-            cleanUpAttachedCart(session);
+            cleanUpAttachedCart(session, holdTime(now));
             sessionRepository.delete(session.getSessionId());
             // A swept-out guest session is a visitor exit (analytics, UC-46). Member
             // sessions persist their cart by userId, so they are not counted here.
@@ -108,15 +110,19 @@ public class SessionAndOrderSweeper {
         return expired.size();
     }
 
-    /** Returns the count of orders deleted. Public for the same reason. */
-    public int sweepExpiredOrders() {
-        List<ActiveOrder> expired = activeOrderRepository.findExpired();
+    /**
+     * Returns the count of orders deleted. Public for the same reason. A line's hold is judged
+     * against {@code now}, both in the scan and in the re-check under the lock.
+     */
+    public int sweepExpiredOrders(Instant now) {
+        LocalDateTime holdNow = holdTime(now);
+        List<ActiveOrder> expired = activeOrderRepository.findExpired(holdNow);
         for (ActiveOrder order : expired) {
             // requireStillExpired=true: only release/delete if the cart is still expired when we lock it
             // (a buyer may have manually removed the expired line since findExpired() scanned). Publish the
             // OrderExpired event only when we actually released, so a salvaged cart doesn't trigger a
             // spurious "your order expired" notification.
-            boolean released = releaseTicketsToInventory(order, true);
+            boolean released = releaseTicketsToInventory(order, true, holdNow);
             if (released) {
                 eventPublisher.publishEvent(new OrderExpiredEvent(order.getUserId(), order.getSessionId()));
             }
@@ -130,14 +136,19 @@ public class SessionAndOrderSweeper {
      * cart alone; it lives on by userId until logout-restoration or its
      * own line-item expiry sweep.
      */
-    private void cleanUpAttachedCart(Session session) {
+    // Cart holds are stamped in UTC wall time (ADR-008); sessions use Instant.
+    private static LocalDateTime holdTime(Instant now) {
+        return LocalDateTime.ofInstant(now, ZoneOffset.UTC);
+    }
+
+    private void cleanUpAttachedCart(Session session, LocalDateTime now) {
         if (session.isMember())
             return;
         Optional<ActiveOrder> cartOpt = activeOrderRepository.getBySessionId(session.getSessionId());
         if (cartOpt.isPresent()) {
             // requireStillExpired=false: the guest's session has ended, so release the attached cart
             // regardless of whether its line items have hit their own TTL yet.
-            releaseTicketsToInventory(cartOpt.get(), false);
+            releaseTicketsToInventory(cartOpt.get(), false, now);
         }
     }
 
@@ -156,7 +167,7 @@ public class SessionAndOrderSweeper {
      * Checkout failure already resets the order back to PRE_CHECKOUT.
      * Then the sweeper can clean it later if it is still expired.
      */
-    private boolean releaseTicketsToInventory(ActiveOrder order, boolean requireStillExpired) {
+    private boolean releaseTicketsToInventory(ActiveOrder order, boolean requireStillExpired, LocalDateTime now) {
         // Derive the same lock key that ReservationService / CheckoutService use.
         String orderLockKey = order.isMember()
                 ? "user:" + order.getUserId()
@@ -188,7 +199,7 @@ public class SessionAndOrderSweeper {
             // the expired line (R1) — or renewed the timers — between findExpired() and acquiring this lock,
             // leaving a healthy cart we must not destroy. The session-expiry path passes false (a guest's
             // attached cart is released when the session ends, regardless of item expiry).
-            if (requireStillExpired && !order.isEmpty() && !order.hasExpiredItem()) {
+            if (requireStillExpired && !order.isEmpty() && !order.hasExpiredItem(now)) {
                 log.info("Skipping active order {} — items no longer expired (raced with manual removal/renew)",
                         orderLockKey);
                 return false;

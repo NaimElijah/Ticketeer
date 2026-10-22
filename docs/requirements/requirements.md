@@ -181,7 +181,7 @@ cites; "a buyer has an active order" and "at most one per event" are one item (�
 | 7 | Every company and event has purchase and discount policies, defaulting to "no restrictions". | By construction: `NoPurchasePolicy` is the default |
 | 8 | A buyer has one active order collecting their tickets, and at most one per event at any time. | Saving a second cart for the same buyer replaces the first (`ActiveOrderRepository`); scanned by `SystemIntegrityVerifier` · `IActiveOrderRepositoryContractTest`, `SystemIntegrityVerifierTest` |
 | 9 | Adding a ticket to an active order locks it for a fixed time (for example 10 minutes). | `ReservationHoldConfig` reads `constants.ticket-reservation-duration` · `ReservationServiceTest` |
-| 10 | An order not completed within that time is cancelled and its tickets return to stock. | `SessionAndOrderSweeper` · `SessionAndOrderSweeperTest` |
+| 10 | An order not completed within that time is cancelled and its tickets return to stock. | `SessionAndOrderSweeper` and `ActiveOrderRepository.findExpired`, judged on the injected clock ([ADR-008](../ADRs/ADR-008-event-time-zones-and-one-clock.md)) · `SessionAndOrderSweeperTest`, `IActiveOrderRepositoryContractTest` |
 | 11 | An active order belongs to its buyer; nobody else can change it before it expires. | `ReservationService`, `CheckoutService` · `ReservationServiceTest` |
 | 12 | An event never sells more tickets than its inventory holds. | `StandingZone`, `SeatedZone`, `Ticket.reserve`, optimistic locking; scanned by `SystemIntegrityVerifier` · `ReservationConcurrencyTest`, `SystemIntegrityVerifierTest` |
 

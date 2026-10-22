@@ -16,7 +16,10 @@ import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -77,6 +81,9 @@ public class ReservationServiceTest {
     private final int EVENT_ID = 10;
     private final int ZONE_ID = 5;
     private final int QUANTITY = 2;
+    // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
+    private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
+    private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
 
     @BeforeEach
     void setUp() {
@@ -105,7 +112,8 @@ public class ReservationServiceTest {
                 eventPublisher,
                 mock(UserRepository.class),
                 marketGate,
-                mock(ISystemMetrics.class)
+                mock(ISystemMetrics.class),
+                Clock.fixed(T0, ZoneOffset.UTC)
         );
     }
 
@@ -129,8 +137,8 @@ public class ReservationServiceTest {
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-        when(activeOrder.hasReservationForEvent(EVENT_ID)).thenReturn(true);
-        when(activeOrder.countTickets(EVENT_ID, ZONE_ID)).thenReturn(QUANTITY);
+        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(true);
+        when(activeOrder.countTickets(eq(EVENT_ID), eq(ZONE_ID), any())).thenReturn(QUANTITY);
 
         ReservationResultDTO result = reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
@@ -231,6 +239,22 @@ public class ReservationServiceTest {
     }
 
     @Test
+    void GivenFixedClock_WhenReserve_ThenTheLineIsAddedAtTheClockAndExpiresOneHoldLater() {
+        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
+        when(zone.getAvailableAmount()).thenReturn(10);
+
+        ReservationResultDTO result = reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                InventorySelectionDTO.standing(QUANTITY));
+
+        verify(activeOrder).addStandingReservation(eq(EVENT_ID), eq(ZONE_ID), eq(QUANTITY), anyDouble(), eq(NOW));
+        assertEquals(NOW.plus(CartLineItem.getExpirationLimit()), result.getReservationExpiresAt());
+    }
+
+    @Test
     void GivenValidMemberRequest_WhenreserveStandingTicketsForMember_ThenReturnReservationResult() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -238,7 +262,7 @@ public class ReservationServiceTest {
         when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
 
-        when(activeOrder.hasReservationForEvent(EVENT_ID)).thenReturn(false);
+        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
         when(zone.getAvailableAmount()).thenReturn(10);
         when(zone.getprice()).thenReturn(100.0);
 
@@ -310,7 +334,7 @@ public class ReservationServiceTest {
         when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
 
-        when(activeOrder.hasReservationForEvent(EVENT_ID)).thenReturn(false);
+        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
 
         doThrow(new IllegalStateException("remaining 1 tickets available"))
                 .when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
@@ -345,7 +369,7 @@ public class ReservationServiceTest {
         when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(activeOrder));
 
-        when(activeOrder.hasReservationForEvent(EVENT_ID)).thenReturn(false);
+        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
         when(zone.getAvailableAmount()).thenReturn(10);
         when(zone.getprice()).thenReturn(100.0);
 
@@ -406,7 +430,7 @@ public class ReservationServiceTest {
         when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(activeOrder));
 
-        when(activeOrder.hasReservationForEvent(EVENT_ID)).thenReturn(false);
+        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
 
         doThrow(new IllegalStateException("remaining 1 tickets available"))
                 .when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
@@ -579,7 +603,7 @@ public class ReservationServiceTest {
                 ZONE_ID,
                 initialReservedTickets,
                 100.0,
-                LocalDateTime.now());
+                NOW);
 
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -629,7 +653,7 @@ public class ReservationServiceTest {
         assertEquals(true, finished);
         assertEquals(initialReservedTickets, successCount.get());
         assertEquals(numberOfThreads - initialReservedTickets, failureCount.get());
-        assertEquals(0, realActiveOrder.countTickets(EVENT_ID, ZONE_ID));
+        assertEquals(0, realActiveOrder.countTickets(EVENT_ID, ZONE_ID, NOW));
         assertEquals(0, realZone.getReservedAmount());
         assertEquals(capacity, realZone.getAvailableAmount());
     }
@@ -1002,7 +1026,7 @@ public class ReservationServiceTest {
         ActiveOrder realOrder = new ActiveOrder(USER_ID);
         seatedZone.reserve(InventorySelection.seated(List.of("A1", "A2", "A3"), realOrder.getOrderKey()));
 
-        realOrder.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2", "A3"), 120.0, LocalDateTime.now());
+        realOrder.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2", "A3"), 120.0, NOW);
 
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -1059,7 +1083,7 @@ public class ReservationServiceTest {
     @Test
     void GivenValidCartNearExpiry_WhenRenewReservationsForMemberCheckout_ThenTimersResetToFullWindow() {
         ActiveOrder realOrder = new ActiveOrder(USER_ID);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, LocalDateTime.now().minusMinutes(9));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(9));
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
@@ -1076,7 +1100,7 @@ public class ReservationServiceTest {
     @Test
     void GivenExpiredItem_WhenRenewReservationsForMemberCheckout_ThenTimersNotResetAndNotSaved() {
         ActiveOrder realOrder = new ActiveOrder(USER_ID);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, LocalDateTime.now().minusMinutes(20));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(20));
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
@@ -1090,7 +1114,7 @@ public class ReservationServiceTest {
     @Test
     void GivenCheckoutInProgress_WhenRenewReservationsForMemberCheckout_ThenTimersNotResetAndNotSaved() {
         ActiveOrder realOrder = new ActiveOrder(USER_ID);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, LocalDateTime.now().minusMinutes(9));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
         realOrder.markCheckoutInProgress();
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -1116,7 +1140,7 @@ public class ReservationServiceTest {
     void GivenValidGuestCartNearExpiry_WhenRenewReservationsForGuestCheckout_ThenTimersResetToFullWindow() {
         String sessionId = "guest-session";
         ActiveOrder realOrder = ActiveOrder.forGuest(sessionId);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, LocalDateTime.now().minusMinutes(9));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(realOrder));
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
@@ -1160,7 +1184,7 @@ public class ReservationServiceTest {
                 100,
                 EventStatus.SCHEDULED,
                 new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(inventoryZone)),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(2))),
+                List.of(new ShowDate(NOW.plusDays(10), NOW.plusDays(10).plusHours(2))),
                 ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy());

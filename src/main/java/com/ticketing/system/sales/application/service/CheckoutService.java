@@ -1,6 +1,7 @@
 package com.ticketing.system.sales.application.service;
 import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -84,6 +85,8 @@ public class CheckoutService {
     // OUTSIDE any transaction so a slow gateway never pins a DB connection. This template wraps only
     // the Phase-3 DB unit (tickets + receipt + RESERVED→SOLD confirm), between the external calls.
     private final TransactionTemplate transactionTemplate;
+    // "now" for hold expiry, pricing and receipts: UTC wall time (ADR-008).
+    private final Clock clock;
 
     // In-memory cache for completed checkouts to handle idempotency. Keyed by a
     // combination of buyer identity and idempotency key, since the same idempotency
@@ -113,7 +116,8 @@ public class CheckoutService {
             SessionManager sessionManager,
             UserRepository userRepository,
             MarketGate marketGate,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            Clock clock) {
         this.activeOrderRepository = activeOrderRepository;
         this.eventRepository = eventRepository;
         this.inventoryPort = inventoryPort;
@@ -126,6 +130,7 @@ public class CheckoutService {
         this.userRepository = userRepository;
         this.marketGate = marketGate;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.clock = clock;
     }
 
     // Result of the atomic Phase-3 persistence unit, surfaced to the orchestrator once the
@@ -557,7 +562,7 @@ public class CheckoutService {
             throw new EntityNotFoundException("Active order not found");
         }
 
-        if (!order.validateCanCheckout()) {
+        if (!order.validateCanCheckout(LocalDateTime.now(clock))) {
             throw new InvalidStateTransitionException("Order cannot checkout");
         }
     }
