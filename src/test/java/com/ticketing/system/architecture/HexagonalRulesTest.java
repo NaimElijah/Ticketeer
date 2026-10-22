@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -16,7 +17,10 @@ import java.time.OffsetTime;
 import java.time.Year;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
@@ -168,10 +172,11 @@ class HexagonalRulesTest {
 
     /**
      * ADR-008: every "now" comes from the one injected UTC {@link Clock}, and no zone comes from the
-     * JVM. Production code must not call or reference (e.g. {@code Instant::now}) {@code now()} or
-     * {@code now(ZoneId)} on a {@code java.time} type, both of which read the system clock, nor read
-     * the default zone. {@code System.currentTimeMillis()} is left out on purpose: its uses are
-     * zone-free browser countdowns and a cache TTL.
+     * JVM. Production code must not call or reference (e.g. {@code Instant::now}) anything that reads
+     * the system clock or the default zone: {@code now()}/{@code now(ZoneId)} on a {@code java.time}
+     * type, a {@code Clock.tick*(ZoneId)} or {@code InstantSource.system()} clock, {@code new Date()},
+     * {@code Calendar.getInstance}, or the default-zone lookups. {@code System.currentTimeMillis()} is
+     * left out on purpose: its uses are zone-free browser countdowns and a cache TTL.
      */
     @Test
     void GivenProductionCode_WhenScanned_ThenNothingReadsTheSystemClockOrDefaultZone() {
@@ -181,10 +186,7 @@ class HexagonalRulesTest {
     /** ADR-008: the Clock bean ({@code SecurityConfig.systemClock}) is the only system clock. */
     @Test
     void GivenProductionCode_WhenScanned_ThenOnlyTheClockBeanCreatesASystemClock() {
-        noClasses().that().doNotHaveFullyQualifiedName(SecurityConfig.class.getName())
-                .should().callMethod(Clock.class, "systemUTC")
-                .orShould().callMethod(Clock.class, "system", ZoneId.class)
-                .check(PRODUCTION_CLASSES);
+        ONLY_THE_CLOCK_BEAN_CREATES_A_SYSTEM_CLOCK.check(PRODUCTION_CLASSES);
     }
 
     // The class comment records a rule engine that silently checked nothing; these prove the clock
@@ -204,12 +206,34 @@ class HexagonalRulesTest {
         assertClockRuleFails(ReadsTheDefaultZone.class);
     }
 
+    @Test
+    void GivenANewDate_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(CreatesADate.class);
+    }
+
+    @Test
+    void GivenATickingSystemClock_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(CreatesATickingClock.class);
+    }
+
+    @Test
+    void GivenAReferenceToClockSystemUtcOutsideTheClockBean_WhenScanned_ThenTheBeanRuleFails() {
+        assertRuleFails(ONLY_THE_CLOCK_BEAN_CREATES_A_SYSTEM_CLOCK, ReferencesClockSystemUtc.class);
+    }
+
     private static void assertClockRuleFails(Class<?> offender) {
+        assertRuleFails(NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE, offender);
+    }
+
+    private static void assertRuleFails(ArchRule rule, Class<?> offender) {
         JavaClasses imported = new ClassFileImporter().importClasses(offender);
-        assertThatThrownBy(() -> NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE.check(imported))
+        assertThatThrownBy(() -> rule.check(imported))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining(offender.getSimpleName());
     }
+
+    // ArchUnit's name for a constructor access target.
+    private static final String CONSTRUCTOR = "<init>";
 
     private static final Set<String> CLOCK_READING_TYPES = Stream.of(Instant.class, LocalDate.class,
             LocalDateTime.class, LocalTime.class, OffsetDateTime.class, OffsetTime.class, ZonedDateTime.class,
@@ -231,12 +255,31 @@ class HexagonalRulesTest {
                 boolean defaultZone = (owner.equals(ZoneId.class.getName()) && name.equals("systemDefault"))
                         || (owner.equals(TimeZone.class.getName()) && name.equals("getDefault"))
                         || (owner.equals(Clock.class.getName()) && name.equals("systemDefaultZone"));
-                return systemNow || defaultZone;
+                // Clock.tick(Clock, Duration) derives from a given clock and is allowed; the
+                // tickSeconds/tickMillis/tickMinutes(ZoneId) factories tick on the system clock.
+                boolean otherSystemClock = (owner.equals(Clock.class.getName()) && name.startsWith("tick")
+                                && !name.equals("tick"))
+                        || (owner.equals(InstantSource.class.getName()) && name.equals("system"))
+                        || (owner.equals(Date.class.getName()) && name.equals(CONSTRUCTOR) && parameters.isEmpty())
+                        || (owner.equals(Calendar.class.getName()) && name.equals("getInstance"));
+                return systemNow || defaultZone || otherSystemClock;
             });
+
+    private static final DescribedPredicate<JavaAccess<?>> CREATE_A_SYSTEM_CLOCK =
+            DescribedPredicate.describe("create a system clock", access ->
+                    access.getTarget().getOwner().getName().equals(Clock.class.getName())
+                            && (access.getTarget().getName().equals("systemUTC")
+                                    || access.getTarget().getName().equals("system")));
 
     private static final ArchRule NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE = noClasses()
             .should().accessTargetWhere(READ_THE_SYSTEM_CLOCK_OR_DEFAULT_ZONE)
             .because("ADR-008: read time from the injected Clock; zones come from the event or platform.time-zone");
+
+    // accessTargetWhere, unlike callMethod, also matches method references such as Clock::systemUTC.
+    private static final ArchRule ONLY_THE_CLOCK_BEAN_CREATES_A_SYSTEM_CLOCK = noClasses()
+            .that().doNotHaveFullyQualifiedName(SecurityConfig.class.getName())
+            .should().accessTargetWhere(CREATE_A_SYSTEM_CLOCK)
+            .because("ADR-008: SecurityConfig.systemClock is the one clock everything else injects");
 
     // Fixtures for the self-tests above, one per way of reading the system clock.
     static class CallsLocalDateTimeNow {
@@ -254,6 +297,24 @@ class HexagonalRulesTest {
     static class ReadsTheDefaultZone {
         ZoneId read() {
             return ZoneId.systemDefault();
+        }
+    }
+
+    static class CreatesADate {
+        Date read() {
+            return new Date();
+        }
+    }
+
+    static class CreatesATickingClock {
+        Clock read() {
+            return Clock.tickSeconds(ZoneOffset.UTC);
+        }
+    }
+
+    static class ReferencesClockSystemUtc {
+        Supplier<Clock> read() {
+            return Clock::systemUTC;
         }
     }
 }

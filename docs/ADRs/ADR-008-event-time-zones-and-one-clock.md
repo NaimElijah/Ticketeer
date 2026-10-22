@@ -91,7 +91,9 @@ records it. `Seat.reservedUntil` stays informational:
 **6. Enforcement.**
 
 - `HexagonalRulesTest` fails the build when production code:
-  - calls `now()` or `now(ZoneId)` on a `java.time` type, which reads the system clock;
+  - calls or references `now()` or `now(ZoneId)` on a `java.time` type, which reads the system
+    clock, or another system-clock source (`Clock.tick*(ZoneId)`, `InstantSource.system()`,
+    `new Date()`, `Calendar.getInstance`);
   - reads the default zone (`ZoneId.systemDefault`, `TimeZone.getDefault`,
     `Clock.systemDefaultZone`);
   - creates a system clock anywhere but `SecurityConfig`.
