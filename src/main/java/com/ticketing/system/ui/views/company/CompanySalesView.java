@@ -17,6 +17,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.admin.SalesDateRange;
 import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
 import com.vaadin.flow.component.Component;
@@ -26,7 +27,6 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -44,6 +44,7 @@ public class CompanySalesView extends LkPage {
     private static final String NO_TOP_EVENT = "—";
 
     private final CompanySalesPresenter presenter;
+    private final DisplayTime displayTime;
     // Single body slot, rebuilt on every (re)load so the Refresh button can surface a
     // freshly-completed sale without a full page reload. Styled like the kit's .lk-page
     // body (flex column, 20px gap) because it replaces what used to be direct page children.
@@ -61,8 +62,9 @@ public class CompanySalesView extends LkPage {
     private String selectedRange = SalesDateRange.ALL_TIME;
     private LkFilterChip dateChip;
 
-    public CompanySalesView(CompanySalesPresenter presenter) {
+    public CompanySalesView(CompanySalesPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("Company Sales History");
         actions(new LkBtn("Refresh").variant(LkBtn.Variant.secondary)
@@ -110,9 +112,9 @@ public class CompanySalesView extends LkPage {
         gridSlot.add(buildGridCard(filtered));
     }
 
-    private static List<PurchaseHistoryDTO.PurchaseRecordDTO> filterByDate(
+    private List<PurchaseHistoryDTO.PurchaseRecordDTO> filterByDate(
             List<PurchaseHistoryDTO.PurchaseRecordDTO> records, String range) {
-        LocalDateTime from = SalesDateRange.startOf(range, LocalDate.now());
+        LocalDateTime from = SalesDateRange.startOf(range, displayTime.today());
         if (from == null) {
             return records;
         }

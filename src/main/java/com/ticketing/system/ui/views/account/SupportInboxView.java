@@ -15,6 +15,7 @@ import com.ticketing.system.ui.components.messaging.MdThread;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
 import com.vaadin.flow.component.Component;
@@ -26,8 +27,6 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,6 +49,7 @@ import java.util.List;
 public class SupportInboxView extends LkPage implements BeforeEnterObserver {
 
     private final SupportInboxPresenter presenter;
+    private final DisplayTime displayTime;
 
     /** Holds the master/detail split, or an empty/error banner, so {@link #reload()}
      *  can rebuild it in place without disturbing the page header/actions. */
@@ -61,8 +61,9 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     private String focusId;        // from ?c=, applied once on the next render
     private LkCard detailCard;
 
-    public SupportInboxView(SupportInboxPresenter presenter) {
+    public SupportInboxView(SupportInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("Support Inbox");
         subtitle("Your conversations with organizers and the TicketHub team.");
@@ -133,7 +134,7 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
         convRows.clear();
         for (ConversationDTO c : conversations) {
             MdConvRow row = new MdConvRow(iconFor(c.type()), c.subject(), whoFor(c),
-                relativeTime(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
+                displayTime.ageShort(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
             if (c.conversationId().equals(selectedId)) row.active();
             row.onSelect(() -> selectById(c.conversationId()));
             if (isLocked(c)) {
@@ -238,12 +239,12 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
 
     // -- Display mapping ------------------------------------------------------
 
-    private static List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
+    private List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
         String other = whoFor(conv);
         List<MdThread.Message> out = new ArrayList<>();
         for (MessageDTO m : conv.messages()) {
             boolean me = "MEMBER".equals(m.senderType());
-            out.add(new MdThread.Message(me ? "You" : other, relativeTime(m.sentAt()), me, m.body()));
+            out.add(new MdThread.Message(me ? "You" : other, displayTime.ageShort(m.sentAt()), me, m.body()));
         }
         return out;
     }
@@ -279,19 +280,5 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
         return status.charAt(0) + status.substring(1).toLowerCase();
-    }
-
-    /** Compact relative label from a timestamp: now / Nm / Nh / Nd / Nw. */
-    private static String relativeTime(LocalDateTime when) {
-        if (when == null) return "";
-        Duration d = Duration.between(when, LocalDateTime.now());
-        long mins = d.toMinutes();
-        if (mins < 1) return "now";
-        if (mins < 60) return mins + "m";
-        long hours = d.toHours();
-        if (hours < 24) return hours + "h";
-        long days = d.toDays();
-        if (days < 7) return days + "d";
-        return (days / 7) + "w";
     }
 }

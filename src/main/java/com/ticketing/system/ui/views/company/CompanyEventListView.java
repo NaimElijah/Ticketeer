@@ -22,6 +22,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.company.CompanySalesView;
 import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
 import com.vaadin.flow.component.Component;
@@ -61,6 +62,7 @@ public class CompanyEventListView extends LkPage {
     private static final DateTimeFormatter DATE_TIME_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a");
 
     private final CompanyEventListPresenter presenter;
+    private final DisplayTime displayTime;
     private final LkCard eventsCard = new LkCard().pad(0);
 
     // ---- filter state (mirrors /browse, minus company-rating; status is owner-only & client-side) ----
@@ -94,8 +96,9 @@ public class CompanyEventListView extends LkPage {
     private NumberField eventRatingMin;
     private NumberField eventRatingMax;
 
-    public CompanyEventListView(CompanyEventListPresenter presenter) {
+    public CompanyEventListView(CompanyEventListPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
         title("My Events");
         subtitle("All events under the selected company.");
         // "New Event" is an event-management action — hidden for a member who can't edit events
@@ -271,7 +274,7 @@ public class CompanyEventListView extends LkPage {
             from = customFromPicker.getValue();
             to   = customToPicker.getValue();
         } else {
-            CatalogFilterSupport.DateWindow dw = CatalogFilterSupport.dateWindow(filterDateRange, LocalDate.now());
+            CatalogFilterSupport.DateWindow dw = CatalogFilterSupport.dateWindow(filterDateRange, displayTime.today());
             from = dw.from();
             to   = dw.to();
         }

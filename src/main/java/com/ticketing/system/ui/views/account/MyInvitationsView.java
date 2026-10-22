@@ -16,6 +16,7 @@ import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Span;
@@ -23,8 +24,6 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -42,13 +41,15 @@ public class MyInvitationsView extends LkPage {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.ENGLISH);
 
     private final MyInvitationsPresenter presenter;
+    private final DisplayTime displayTime;
 
     /** Invitation content lives in its own container so an action can rebuild it
      *  in place ({@link #reload()}) without disturbing the page header. */
     private final LkCol content = new LkCol().gap(0);
 
-    public MyInvitationsView(MyInvitationsPresenter presenter) {
+    public MyInvitationsView(MyInvitationsPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("Invitations");
         subtitle("Accept a role to manage events for a production company.");
@@ -112,7 +113,7 @@ public class MyInvitationsView extends LkPage {
         row.put("role", new LkBadge(humanize(inv.role()), roleTone(inv.role())).small());
         row.put("by", inv.fromUsername());
         row.put("perms", Lk.muted(permissionLabels(inv)));
-        row.put("recv", relativeSent(inv.sentAt()));
+        row.put("recv", displayTime.ageInDays(inv.sentAt()));
 
         LkRow actions = new LkRow().gap(6).noWrap();
         actions.add(
@@ -226,18 +227,6 @@ public class MyInvitationsView extends LkPage {
             .orElse(enumName);
     }
 
-    /** Compact "received" label from the invitation timestamp. */
-    private static String relativeSent(LocalDateTime sentAt) {
-        if (sentAt == null) {
-            return "—";
-        }
-        long days = Duration.between(sentAt, LocalDateTime.now()).toDays();
-        if (days <= 0) return "today";
-        if (days == 1) return "yesterday";
-        if (days < 7) return days + " days ago";
-        long weeks = days / 7;
-        return weeks == 1 ? "1 week ago" : weeks + " weeks ago";
-    }
 
     private static String escape(String s) {
         return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");

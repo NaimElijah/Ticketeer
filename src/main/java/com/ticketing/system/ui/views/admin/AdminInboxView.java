@@ -17,14 +17,13 @@ import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,6 +40,7 @@ import java.util.List;
 public class AdminInboxView extends LkPage {
 
     private final AdminInboxPresenter presenter;
+    private final DisplayTime displayTime;
 
     /** Holds the master/detail split, or an empty/error banner, so {@link #reload()} can rebuild it. */
     private final Div content = new Div();
@@ -50,8 +50,9 @@ public class AdminInboxView extends LkPage {
     private String selectedId;
     private LkCard detailCard;
 
-    public AdminInboxView(AdminInboxPresenter presenter) {
+    public AdminInboxView(AdminInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("Admin Inbox");
         subtitle("Your conversations with members you've messaged.");
@@ -94,7 +95,7 @@ public class AdminInboxView extends LkPage {
         convRows.clear();
         for (ConversationDTO c : conversations) {
             MdConvRow row = new MdConvRow("comment", c.subject(), c.counterpartyDisplayName(),
-                relativeTime(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
+                displayTime.ageShort(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
             if (c.conversationId().equals(selectedId)) row.active();
             row.onSelect(() -> selectById(c.conversationId()));
             convRows.add(row);
@@ -199,12 +200,12 @@ public class AdminInboxView extends LkPage {
     // -- Display mapping ------------------------------------------------------
 
     /** Admin vantage: ADMIN messages are "You"; the member's messages show their username. */
-    private static List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
+    private List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
         List<MdThread.Message> out = new ArrayList<>();
         for (MessageDTO m : conv.messages()) {
             boolean me = "ADMIN".equals(m.senderType());
             String from = me ? "You" : conv.counterpartyDisplayName();
-            out.add(new MdThread.Message(from, relativeTime(m.sentAt()), me, m.body()));
+            out.add(new MdThread.Message(from, displayTime.ageShort(m.sentAt()), me, m.body()));
         }
         return out;
     }
@@ -220,18 +221,5 @@ public class AdminInboxView extends LkPage {
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
         return status.charAt(0) + status.substring(1).toLowerCase();
-    }
-
-    private static String relativeTime(LocalDateTime when) {
-        if (when == null) return "";
-        Duration d = Duration.between(when, LocalDateTime.now());
-        long mins = d.toMinutes();
-        if (mins < 1) return "now";
-        if (mins < 60) return mins + "m";
-        long hours = d.toHours();
-        if (hours < 24) return hours + "h";
-        long days = d.toDays();
-        if (days < 7) return days + "d";
-        return (days / 7) + "w";
     }
 }

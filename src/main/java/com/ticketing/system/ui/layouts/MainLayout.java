@@ -134,7 +134,7 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
                 .brand("TicketHub", LandingView.class)
                 .nav(nav, activeLabel)
                 .cart(CartView.class, cartSize, cartDeadlineMs)
-                .bell(new NotificationBellComponent(bellPresenter::markRead));
+                .bell(new NotificationBellComponent(bellPresenter::markRead, bellPresenter::relativeTime));
 
         if (signedIn) {
             bar.account(initials(name), name, buildMemberMenu(name));

@@ -10,8 +10,10 @@ import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.popover.PopoverPosition;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Self-contained bell icon + unread badge + notification dropdown.
@@ -21,9 +23,15 @@ import java.util.function.Consumer;
 public class NotificationBellComponent extends Span {
 
     private final Consumer<String> onRead;
+    private final Function<LocalDateTime, String> age;
 
-    public NotificationBellComponent(Consumer<String> onRead) {
+    /**
+     * @param onRead called with a notification id when the user marks it read
+     * @param age    renders a notification's creation time as a short age ("5m", "Yesterday")
+     */
+    public NotificationBellComponent(Consumer<String> onRead, Function<LocalDateTime, String> age) {
         this.onRead = onRead;
+        this.age = age;
         addAttachListener(e -> NotificationSession.setBell(this));
         addDetachListener(e -> NotificationSession.setBell(null));
         build();
@@ -74,7 +82,7 @@ public class NotificationBellComponent extends Span {
             refresh();
         };
 
-        add(new LkPopover(bell, LkNotifPanel.fromDTOs(notifs, onMarkAll, onMarkOne))
+        add(new LkPopover(bell, LkNotifPanel.fromDTOs(notifs, onMarkAll, onMarkOne, age))
                 .position(PopoverPosition.BOTTOM_END));
     }
 }

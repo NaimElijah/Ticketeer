@@ -15,6 +15,7 @@ import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.datepicker.DatePicker;
@@ -55,6 +56,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
     private final BrowseEventsPresenter presenter;
     private final SessionIdentity identity;
+    private final DisplayTime displayTime;
 
     // Filter option lists + label→value mappings live in CatalogFilterSupport (shared with the owner
     // event list); these aliases keep the in-view references terse.
@@ -108,9 +110,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Div gridSlot;
     private Span resultsCountSpan;
 
-    public BrowseEventsView(BrowseEventsPresenter presenter, SessionIdentity identity) {
+    public BrowseEventsView(BrowseEventsPresenter presenter, SessionIdentity identity, DisplayTime displayTime) {
         this.presenter = presenter;
         this.identity = identity;
+        this.displayTime = displayTime;
 
         List<EventRow> allEvents = presenter.search(identity.credential(), CatalogSearchFiltersDTO.empty())
                 .stream().map(BrowseEventsView::toRow).toList();
@@ -465,7 +468,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             from = customFromPicker.getValue();
             to   = customToPicker.getValue();
         } else {
-            CatalogFilterSupport.DateWindow dw = CatalogFilterSupport.dateWindow(filterDateRange, LocalDate.now());
+            CatalogFilterSupport.DateWindow dw = CatalogFilterSupport.dateWindow(filterDateRange, displayTime.today());
             from = dw.from();
             to   = dw.to();
         }
