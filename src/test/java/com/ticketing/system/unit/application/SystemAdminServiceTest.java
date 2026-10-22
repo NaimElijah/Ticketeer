@@ -370,7 +370,7 @@ class SystemAdminServiceTest {
         int ticketId = 1;
         double price = 99.0;
         ReceiptLine line1 = new ReceiptLine(1, 25.0, 25, 1, null, LocalDateTime.now());
-        OrderReceipt receipt = OrderReceipt.forMember(11, 1, price, List.of(line1));
+        OrderReceipt receipt = OrderReceipt.forMember(11, 1, price, List.of(line1), LocalDateTime.now());
         Ticket ticket = new Ticket(1, 1, 11, null, price, ticketId, "BARCODE");
         Event event = mock(Event.class);
         when(event.getName()).thenReturn("Rock Night");
@@ -398,8 +398,8 @@ class SystemAdminServiceTest {
     void givenMultipleReceipts_whenViewGlobalHistory_thenAllRecordsMapped() {
         ReceiptLine line1 = new ReceiptLine(1, 25.0, 25, 1, null, LocalDateTime.now());
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", LocalDateTime.now());
-        OrderReceipt receipt1 = OrderReceipt.forMember(11, 1, 50.0, List.of(line1));
-        OrderReceipt receipt2 = OrderReceipt.forMember(12, 2, 75.0, List.of(line2));
+        OrderReceipt receipt1 = OrderReceipt.forMember(11, 1, 50.0, List.of(line1), LocalDateTime.now());
+        OrderReceipt receipt2 = OrderReceipt.forMember(12, 2, 75.0, List.of(line2), LocalDateTime.now());
         Event event = mock(Event.class);
         when(event.getName()).thenReturn("Jazz Night");
 
@@ -437,7 +437,7 @@ class SystemAdminServiceTest {
     void givenReceiptWithMultipleTickets_whenViewGlobalHistory_thenTotalPaidIsSumOfTicketPrices() {
         ReceiptLine line1 = new ReceiptLine(1, 50.0, 25, 1, null, LocalDateTime.now());
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", LocalDateTime.now());
-        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 75.0, List.of(line1, line2));
+        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 75.0, List.of(line1, line2), LocalDateTime.now());
         Ticket t1 = new Ticket(1, 1, 11, null, 30.0, 1, "B1");
         Ticket t2 = new Ticket(1, 1, 11, null, 45.0, 2, "B2");
         Event event = mock(Event.class);
@@ -463,6 +463,7 @@ class SystemAdminServiceTest {
         ReceiptLine filteredEventLine = new ReceiptLine(1, 100.0, 25, 1, null, purchasedAt);
         ReceiptLine otherEventLine = new ReceiptLine(2, 200.0, 3, 1, "A2", purchasedAt);
         OrderReceipt receipt = OrderReceipt.forMember(11, 1, 300.0, List.of(filteredEventLine, otherEventLine),
+                LocalDateTime.now(),
                 List.of(TransactionRecord.paymentCharge(42, "test-gateway", 300.0, "ILS", purchasedAt),
                         TransactionRecord.ticketIssuance("ISS-42", "test-issuer", purchasedAt)));
 

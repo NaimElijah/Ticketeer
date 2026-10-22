@@ -58,7 +58,7 @@ class ActiveOrderTest extends BaseDomainTest {
         int numberOfThreads = 20;
         int quantityPerRemove = 1;
 
-        ActiveOrder realActiveOrder = track(new ActiveOrder(USER_ID));
+        ActiveOrder realActiveOrder = track(new ActiveOrder(USER_ID, NOW));
 
         realActiveOrder.addStandingReservation(EVENT_ID, ZONE_ID, initialTickets, 100.0, NOW);
 
@@ -108,7 +108,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenStandingReservation_WhenAddStandingReservation_ThenCreatesQuantityLineItemsWithNullSeatNumber() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addStandingReservation(EVENT_ID, ZONE_ID, 3, 100.0, NOW);
 
@@ -125,7 +125,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenSeatSelection_WhenAddSeatedReservation_ThenCreatesOneLinePerSeat() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addSeatedReservation(
                 EVENT_ID,
@@ -141,7 +141,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenDuplicateSeats_WhenAddSeatedReservation_ThenThrowsException() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         assertThrows(IllegalArgumentException.class, () -> order.addSeatedReservation(
                 EVENT_ID,
@@ -155,7 +155,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenSeatedReservation_WhenRemoveSeats_ThenOnlySelectedSeatsRemoved() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addSeatedReservation(
                 EVENT_ID,
@@ -173,7 +173,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenMissingSeat_WhenRemoveSeats_ThenThrowsAndOrderUnchanged() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addSeatedReservation(
                 EVENT_ID,
@@ -191,7 +191,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenMixedStandingAndSeatedItems_WhenReturnToStock_ThenReturnsAllItemsAndClearsOrder() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW);
         order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1", "A2"), 120.0, NOW);
@@ -221,7 +221,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenDuplicateSeatNumbers_WhenRemoveSeats_ThenThrowsAndCartUnchanged() {
-        ActiveOrder order = new ActiveOrder(1);
+        ActiveOrder order = new ActiveOrder(1, NOW);
         order.addSeatedReservation(10, 2, List.of("A1", "A2"), 100, NOW);
 
         assertThrows(IllegalArgumentException.class,
@@ -233,7 +233,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenItemsNearExpiry_WhenRenewReservationTimers_ThenAllTimersResetToFullWindow() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
         // Added 9 minutes ago -> ~1 minute left on the 10-minute window.
         LocalDateTime nineMinutesAgo = NOW.minusMinutes(9);
@@ -256,7 +256,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenCheckoutInProgress_WhenRenewReservationTimers_ThenThrows() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
         order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW);
         order.markCheckoutInProgress();
 
@@ -282,7 +282,7 @@ class ActiveOrderTest extends BaseDomainTest {
     // filter made expired lines invisible to removal, so they could only be cleared by the sweeper).
     @Test
     void GivenExpiredStandingLine_WhenRemoveStandingSpots_ThenLineRemoved() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
         order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(30));
 
         // Precondition: the lines are genuinely expired.
@@ -297,7 +297,7 @@ class ActiveOrderTest extends BaseDomainTest {
     // R1: same for an expired SEATED line.
     @Test
     void GivenExpiredSeatedLine_WhenRemoveSeats_ThenSeatRemoved() {
-        ActiveOrder order = track(new ActiveOrder(USER_ID));
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
         order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2"), 120.0,
                 NOW.minusMinutes(30));
 

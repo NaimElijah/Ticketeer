@@ -125,7 +125,7 @@ class CompanyAnalyticsServiceTest {
 
     /** The same lines, refunded: only a real receipt can move a line to REFUNDED. */
     private static List<ReceiptLine> refundedCopies(List<ReceiptLine> lines) {
-        OrderReceipt refunded = OrderReceipt.forMember(999, BUYER_ID, 0.0, lines);
+        OrderReceipt refunded = OrderReceipt.forMember(999, BUYER_ID, 0.0, lines, LocalDateTime.now());
         refunded.markRefunded();
         return refunded.getReceiptLines();
     }
@@ -197,6 +197,7 @@ class CompanyAnalyticsServiceTest {
     private static OrderReceipt orderWithEventRefunded(int receiptId, List<ReceiptLine> lines, int refundedEventId) {
         double total = lines.stream().mapToDouble(ReceiptLine::getPriceAtReservation).sum();
         OrderReceipt receipt = OrderReceipt.forMember(receiptId, BUYER_ID, total, lines,
+                LocalDateTime.now(),
                 List.of(TransactionRecord.paymentCharge(4200 + receiptId, "test-gateway", total, "ILS", LocalDateTime.now())));
         double refunded = receipt.claimRefundForEvent(refundedEventId).orElseThrow();
         receipt.completeEventRefund(refundedEventId,
@@ -481,6 +482,7 @@ class CompanyAnalyticsServiceTest {
         LocalDateTime purchasedAt = LocalDateTime.of(2026, 1, 15, 20, 0);
         OrderReceipt r = OrderReceipt.forMember(1, BUYER_ID, 300.0,
                 List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)),
+                LocalDateTime.now(),
                 List.of(TransactionRecord.paymentCharge(42, "test-gateway", 300.0, "ILS", purchasedAt),
                         TransactionRecord.ticketIssuance("ISS-42", "test-issuer", purchasedAt)));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));

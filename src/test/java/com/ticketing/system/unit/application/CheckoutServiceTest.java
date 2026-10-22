@@ -287,7 +287,7 @@ class CheckoutServiceTest {
     //////////////////////////////////////////////////////////added test for expired order with multiple tickets scenario after check1
 @Test
 void GivenExpiredOrderWithMultipleTickets_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone1 = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     InventoryZone zone2 = new StandingZone(ZONE_ID_2, "REGULAR", 5, 150.0);
@@ -346,7 +346,7 @@ void GivenExpiredOrderWithMultipleTickets_WhenCheckout_ThenClearCartAndReturnTic
 
     @Test
 void GivenOrderCannotCheckout_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     zone.reserve(InventorySelection.standing(1, orderKey));
@@ -384,7 +384,7 @@ void GivenOrderCannotCheckout_WhenCheckout_ThenClearCartAndReturnTicketsToStock(
 
    @Test
 void GivenPaymentFails_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     zone.reserve(InventorySelection.standing(1, orderKey));
@@ -433,7 +433,7 @@ void GivenPaymentFails_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
     // held across the save via Mockito InOrder: lockForBuyerOperation -> save -> unlockBuyerOperation.
     @Test
     void GivenPaymentFails_WhenCheckout_ThenInventoryReturnedUnderEventLock() {
-        ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+        ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
         String orderKey = activeOrder.getOrderKey();
         InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
         zone.reserve(InventorySelection.standing(1, orderKey));
@@ -466,7 +466,7 @@ void GivenPaymentFails_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
 
     @Test
 void GivenTicketIssuanceFailsAfterPayment_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     zone.reserve(InventorySelection.standing(1, orderKey));
@@ -525,7 +525,7 @@ void GivenTicketIssuanceFailsAfterPayment_WhenCheckout_ThenClearCartAndReturnTic
 
    @Test
 void GivenTicketIssuanceReturnsNullBarcodes_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     zone.reserve(InventorySelection.standing(1, orderKey));
@@ -587,7 +587,7 @@ void GivenTicketIssuanceReturnsNullBarcodes_WhenCheckout_ThenClearCartAndReturnT
     assertEquals(0, zone.getReservedAmount());
 }@Test
 void GivenTicketIssuanceReturnsEmptyBarcodes_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     zone.reserve(InventorySelection.standing(1, orderKey));
@@ -651,7 +651,7 @@ void GivenTicketIssuanceReturnsEmptyBarcodes_WhenCheckout_ThenClearCartAndReturn
 
    @Test
 void GivenMultipleTicketsButIssuerReturnsLessBarcodes_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone1 = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     InventoryZone zone2 = new StandingZone(ZONE_ID_2, "REGULAR", 5, 150.0);
@@ -741,7 +741,7 @@ void GivenMultipleTicketsButIssuerReturnsLessBarcodes_WhenCheckout_ThenClearCart
 }
    @Test
 void GivenPaymentRefundFails_WhenCheckout_ThenClearCartReturnTicketsToStockAndThrowRefundException() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     zone.reserve(InventorySelection.standing(1, orderKey));
@@ -801,7 +801,7 @@ void GivenPaymentRefundFails_WhenCheckout_ThenClearCartReturnTicketsToStockAndTh
 }
     @Test
 void GivenTicketFromDifferentEventDoesNotExist_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone1 = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
     InventoryZone zone3 = new StandingZone(ZONE_ID_3, "BALCONY", 5, 200.0);
@@ -1105,6 +1105,35 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                 receiptCaptor.getValue().getReceiptLines().stream().map(ReceiptLine::getTicketId).toList());
     }
 
+    // ADR-008: the receipt is stamped from the injected clock (T0 here), as UTC wall time.
+    @Test
+    void GivenFixedClock_WhenCheckoutSucceeds_ThenTheReceiptIsPurchasedAtTheClock() {
+        PaymentResultDTO paymentResult = new PaymentResultDTO(
+                PAYMENT_TRANSACTION_ID, "gateway", 250.0, "ILS", NOW);
+        IssuanceResultDTO issuanceResult = new IssuanceResultDTO(
+                ISSUANCE_TRANSACTION_ID, "issuer", NOW,
+                List.of(new BarcodeDTO("barcode-zone-1", "QR"), new BarcodeDTO("barcode-zone-2", "QR")));
+        when(mockOrder.validateCanCheckout(any())).thenReturn(true);
+        when(mockOrder.getItems()).thenReturn(List.of(itemEvent1Zone1, itemEvent1Zone2));
+        when(mockOrder.buy()).thenReturn(List.of(itemEvent1Zone1, itemEvent1Zone2));
+        when(event1.calculatePrice(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(250.0);
+        when(event1.calculatePriceforoneticket(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(125.0);
+        when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult);
+        when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(issuanceResult);
+        StandingZone zone1 = new StandingZone(ZONE_ID_1, "General", 100, 100.0);
+        zone1.reserve(InventorySelection.standing(1));
+        when(event1.getVenueMap().getZone(ZONE_ID_1)).thenReturn(zone1);
+        StandingZone zone2 = new StandingZone(ZONE_ID_2, "General", 100, 150.0);
+        zone2.reserve(InventorySelection.standing(1));
+        when(event1.getVenueMap().getZone(ZONE_ID_2)).thenReturn(zone2);
+
+        checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+        ArgumentCaptor<OrderReceipt> receiptCaptor = ArgumentCaptor.forClass(OrderReceipt.class);
+        verify(mockOrderReceiptRepo).save(receiptCaptor.capture());
+        assertEquals(NOW, receiptCaptor.getValue().getPurchaseTime());
+    }
+
    @Test
    void GivenTicketsFromDifferentEvents_WhenCheckout_ThenBuyAllTicketsAndSaveTicketsAndReceipt() {
            PaymentResultDTO paymentResult = new PaymentResultDTO(
@@ -1308,7 +1337,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
         
         @Test
         void GivenSuccessfulSeatedCheckout_WhenCheckout_ThenReservedSeatBecomesSold() {
-                ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+                ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
                 SeatedZone seatedZone = new SeatedZone(
                                 ZONE_ID_1,
                                 "Orchestra",
@@ -1353,7 +1382,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
         
         @Test
         void GivenTicketIssuanceFailsForSeatedOrder_WhenCheckout_ThenReservedSeatIsReleased() {
-                ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+                ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
                 SeatedZone seatedZone = new SeatedZone(
                                 ZONE_ID_1,
                                 "Orchestra",
@@ -1471,7 +1500,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                 // ticket + receipt persistence — the seat is still RESERVED when the save fails, so the
                 // rollback returns it to stock (AVAILABLE) and clears the cart, rather than stranding a
                 // SOLD seat. (Payment is refunded too; not asserted here.)
-                ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+                ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
                 SeatedZone seatedZone = new SeatedZone(
                                 ZONE_ID_1,
                                 "Orchestra",
@@ -1520,7 +1549,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
         // and the cart must still be cleared — the rollback loop no longer aborts on the first throw.
         @Test
         void GivenMultiEventRollbackWhereOneReleaseFails_WhenCheckout_ThenOtherEventsStillReleasedAndCartCleared() {
-                ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+                ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
                 String orderKey = activeOrder.getOrderKey();
 
                 // Event B is a real standing zone holding a live reservation under this order.
@@ -1560,7 +1589,7 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
 void GivenUserMeetsAgePolicy_WhenCheckout_ThenCheckoutSucceeds() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
     zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -1599,7 +1628,7 @@ void GivenUserMeetsAgePolicy_WhenCheckout_ThenCheckoutSucceeds() {
 void GivenUserTooYoungForAgePolicy_WhenCheckout_ThenThrowExceptionAndPaymentNotCharged_NoReceiptNoTicket_AndTicketReturnedToStock() {
     givenUserAge(17);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
     zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -1648,7 +1677,7 @@ void GivenUserTooYoungForAgePolicy_WhenCheckout_ThenThrowExceptionAndPaymentNotC
 void GivenQuantityWithinMaxTicketsPolicy_WhenCheckout_ThenCheckoutSucceeds() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
     zone.reserve(InventorySelection.standing(2, activeOrder.getOrderKey()));
 
@@ -1687,7 +1716,7 @@ void GivenQuantityWithinMaxTicketsPolicy_WhenCheckout_ThenCheckoutSucceeds() {
 void GivenQuantityExceedsMaxTicketsPolicy_WhenCheckout_ThenThrowExceptionAndPaymentNotCharged() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
     zone.reserve(InventorySelection.standing(3, activeOrder.getOrderKey()));
 
@@ -1734,7 +1763,7 @@ void GivenQuantityExceedsMaxTicketsPolicy_WhenCheckout_ThenThrowExceptionAndPaym
 void GivenQuantityBelowMinTicketsPolicy_WhenCheckout_ThenThrowExceptionAndPaymentNotCharged() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
     zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -1781,7 +1810,7 @@ void GivenQuantityBelowMinTicketsPolicy_WhenCheckout_ThenThrowExceptionAndPaymen
 void GivenOrPolicyAndOneConditionIsSatisfied_WhenCheckout_ThenCheckoutSucceeds() {
     givenUserAge(16);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
     zone.reserve(InventorySelection.standing(3, activeOrder.getOrderKey()));
 
@@ -1825,7 +1854,7 @@ void GivenOrPolicyAndOneConditionIsSatisfied_WhenCheckout_ThenCheckoutSucceeds()
 void GivenAndPolicyAndOneConditionIsNotSatisfied_WhenCheckout_ThenThrowExceptionAndPaymentNotCharged() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
     zone.reserve(InventorySelection.standing(3, activeOrder.getOrderKey()));
 
@@ -1877,7 +1906,7 @@ void GivenAndPolicyAndOneConditionIsNotSatisfied_WhenCheckout_ThenThrowException
 void GivenTicketsFromDifferentEventsAndSecondEventExceedsMaxPolicy_WhenCheckout_ThenFailWithoutPaymentTicketsOrReceiptAndReturnAllTicketsToStock() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zoneEvent1 = new StandingZone(ZONE_ID_1, "Event1 Zone", 10, 100.0);
     StandingZone zoneEvent2 = new StandingZone(ZONE_ID_3, "Event2 Zone", 10, 200.0);
 
@@ -1956,7 +1985,7 @@ void GivenTicketsFromDifferentEventsAndSecondEventExceedsMaxPolicy_WhenCheckout_
 void GivenTicketsFromDifferentEventsAndSecondEventAgePolicyFails_WhenCheckout_ThenFailWithoutPaymentTicketsOrReceiptAndReturnAllTicketsToStock() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zoneEvent1 = new StandingZone(ZONE_ID_1, "Event1 Zone", 10, 100.0);
     StandingZone zoneEvent2 = new StandingZone(ZONE_ID_3, "Event2 Zone", 10, 200.0);
 
@@ -2036,7 +2065,7 @@ void GivenTicketsFromDifferentEventsAndSecondEventAgePolicyFails_WhenCheckout_Th
 void GivenTicketsFromDifferentEventsAndSecondEventBelowMinPolicy_WhenCheckout_ThenFailWithoutPaymentTicketsOrReceiptAndReturnAllTicketsToStock() {
     givenUserAge(20);
 
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     StandingZone zoneEvent1 = new StandingZone(ZONE_ID_1, "Event1 Zone", 10, 100.0);
     StandingZone zoneEvent2 = new StandingZone(ZONE_ID_3, "Event2 Zone", 10, 200.0);
 
@@ -2386,7 +2415,7 @@ private AtomicBoolean trackReceiptSave() {
 
         StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
 
-        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID);
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
         activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW.minusMinutes(20));
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -2413,7 +2442,7 @@ private AtomicBoolean trackReceiptSave() {
 
         Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new AgePurchasePolicy(18));
 
-        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID);
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
         activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -2439,7 +2468,7 @@ private AtomicBoolean trackReceiptSave() {
 
         Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new AgePurchasePolicy(18));
 
-        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID);
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
         activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -2467,7 +2496,7 @@ private AtomicBoolean trackReceiptSave() {
 
         Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
 
-        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID);
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
         activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -2492,7 +2521,7 @@ private AtomicBoolean trackReceiptSave() {
 
         Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
 
-        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID);
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
         activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -2529,7 +2558,7 @@ private AtomicBoolean trackReceiptSave() {
 
         Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
 
-        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID);
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
         activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -2557,7 +2586,7 @@ private AtomicBoolean trackReceiptSave() {
 
         Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
 
-        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID);
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
         activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
@@ -2582,7 +2611,7 @@ private AtomicBoolean trackReceiptSave() {
     // and the buyer must be refunded. End state: no inventory SOLD anywhere, both zones available again.
     @Test
     void GivenConfirmFailsMidwayAcrossEvents_WhenCheckout_ThenConfirmedSaleCompensatedAndBuyerRefunded() {
-        ActiveOrder activeOrder = new ActiveOrder(USER_ID);
+        ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
         String orderKey = activeOrder.getOrderKey();
 
         StandingZone zone1 = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);

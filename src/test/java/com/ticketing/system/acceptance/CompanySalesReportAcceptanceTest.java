@@ -75,7 +75,8 @@ class CompanySalesReportAcceptanceTest {
     private void recordPurchase(AuthTokenDTO buyer, int eventId, double total) {
         orderReceiptRepository.save(OrderReceipt.forMember(
                 orderReceiptRepository.nextId(), buyer.userId(), total,
-                List.of(new ReceiptLine(1, total, eventId, 1, null, LocalDateTime.now()))));
+                List.of(new ReceiptLine(1, total, eventId, 1, null, LocalDateTime.now())),
+                LocalDateTime.now()));
     }
 
     private CompanySalesPresenter.Outcome.Success loadSuccess(AuthTokenDTO owner) {

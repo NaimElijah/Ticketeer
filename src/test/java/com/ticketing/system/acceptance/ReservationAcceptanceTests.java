@@ -88,7 +88,7 @@ public class ReservationAcceptanceTests {
 
         event = mock(Event.class, RETURNS_DEEP_STUBS);
         zone = mock(InventoryZone.class);
-        activeOrder = new ActiveOrder(1);
+        activeOrder = new ActiveOrder(1, NOW);
 
         when(sessionManager.validateToken("validToken")).thenReturn(true);
         when(sessionManager.extractUserId("validToken")).thenReturn(1);

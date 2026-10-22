@@ -474,7 +474,7 @@ public class ReservationService {
             ActiveOrder activeOrder = activeOrderRepository.getByUserId(buyer.userId());
             if (activeOrder == null) {
                 log.info("No active order found for userId={}, creating new ActiveOrder", buyer.userId());
-                activeOrder = new ActiveOrder(buyer.userId());
+                activeOrder = new ActiveOrder(buyer.userId(), now());
             }
             return activeOrder;
         }
@@ -482,7 +482,7 @@ public class ReservationService {
         return activeOrderRepository.getBySessionId(buyer.sessionId())
                 .orElseGet(() -> {
                     log.info("No active order found for sessionId={}, creating new ActiveOrder", buyer.sessionId());
-                    return ActiveOrder.forGuest(buyer.sessionId());
+                    return ActiveOrder.forGuest(buyer.sessionId(), now());
                 });
     }
 

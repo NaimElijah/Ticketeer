@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 
@@ -72,7 +73,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     @Test
     void clearSession_onMemberCart_succeeds() {
         // Member cart keeps userId after the session pointer clears — still valid.
-        ActiveOrder memberCart = track(ActiveOrder.forMember(42, "session-xyz"));
+        ActiveOrder memberCart = track(ActiveOrder.forMember(42, "session-xyz", LocalDateTime.now()));
 
         memberCart.clearSession();
 

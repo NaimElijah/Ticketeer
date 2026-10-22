@@ -196,7 +196,7 @@ class AuthAcceptanceTest {
         LoginDTO first = authService.login(new LoginRequestDTO("rest1", "Password1", firstSid));
 
         // Simulate an active cart on the first session.
-        ActiveOrder cart = ActiveOrder.forMember(first.authToken().userId(), firstSid);
+        ActiveOrder cart = ActiveOrder.forMember(first.authToken().userId(), firstSid, LocalDateTime.now());
         cart.addStandingReservation(1, 10, 1, 50.0, LocalDateTime.now());
         activeOrderRepository.save(cart);
 
@@ -266,7 +266,7 @@ class AuthAcceptanceTest {
         authService.register(new RegisterRequestDTO("link1", "link1@example.com", "Password1", sid, 20));
         LoginDTO session = authService.login(new LoginRequestDTO("link1", "Password1", sid));
 
-        ActiveOrder cart = ActiveOrder.forMember(session.authToken().userId(), sid);
+        ActiveOrder cart = ActiveOrder.forMember(session.authToken().userId(), sid, LocalDateTime.now());
         cart.addStandingReservation(2, 20, 2, 30.0, LocalDateTime.now());
         activeOrderRepository.save(cart);
 

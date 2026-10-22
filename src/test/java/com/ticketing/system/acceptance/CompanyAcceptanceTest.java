@@ -213,7 +213,8 @@ class CompanyAcceptanceTest {
         int receiptId = orderReceiptRepository.nextId();
         OrderReceipt receipt = OrderReceipt.forMember(
                 receiptId, owner.userId(), 80.0,
-                List.of(new ReceiptLine(1, 80.0, eventId, 1, null, LocalDateTime.now())));
+                List.of(new ReceiptLine(1, 80.0, eventId, 1, null, LocalDateTime.now())),
+                LocalDateTime.now());
         orderReceiptRepository.save(receipt);
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
@@ -239,10 +240,12 @@ class CompanyAcceptanceTest {
         int eventId = Integer.parseInt(event.eventId());
         orderReceiptRepository.save(OrderReceipt.forMember(
                 orderReceiptRepository.nextId(), owner.userId(), 50.0,
-                List.of(new ReceiptLine(1, 50.0, eventId, 1, null, LocalDateTime.now()))));
+                List.of(new ReceiptLine(1, 50.0, eventId, 1, null, LocalDateTime.now())),
+                LocalDateTime.now()));
         orderReceiptRepository.save(OrderReceipt.forMember(
                 orderReceiptRepository.nextId(), owner.userId(), 30.0,
-                List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now()))));
+                List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now())),
+                LocalDateTime.now()));
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
@@ -267,7 +270,8 @@ class CompanyAcceptanceTest {
         int receiptId = orderReceiptRepository.nextId();
         OrderReceipt receipt = OrderReceipt.forMember(
                 receiptId, owner.userId(), 60.0,
-                List.of(new ReceiptLine(1, 60.0, eventId, 1, null, LocalDateTime.now())));
+                List.of(new ReceiptLine(1, 60.0, eventId, 1, null, LocalDateTime.now())),
+                LocalDateTime.now());
         receipt.markRefunded();
         orderReceiptRepository.save(receipt);
 
@@ -296,6 +300,7 @@ class CompanyAcceptanceTest {
                 orderReceiptRepository.nextId(), buyer.userId(), 300.0,
                 List.of(new ReceiptLine(1, 100.0, eventId, 1, null, purchasedAt),
                         new ReceiptLine(2, 200.0, otherEventId, 1, null, purchasedAt)),
+                LocalDateTime.now(),
                 List.of(TransactionRecord.paymentCharge(4242, "test-gateway", 300.0, "ILS", purchasedAt),
                         TransactionRecord.ticketIssuance("ISS-4242", "test-issuer", purchasedAt))));
 

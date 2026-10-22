@@ -156,6 +156,7 @@ class SystemAnalyticsServiceTest {
         LocalDateTime boughtAt = LocalDateTime.now();
         OrderReceipt order = OrderReceipt.forMember(1, 7, 150.0,
                 List.of(new ReceiptLine(10, 100.0, 1, 1, null, boughtAt), new ReceiptLine(11, 50.0, 2, 1, null, boughtAt)),
+                boughtAt,
                 List.of(TransactionRecord.paymentCharge(4201, "test-gateway", 150.0, "ILS", boughtAt)));
         order.claimRefundForEvent(1);
         order.completeEventRefund(1, TransactionRecord.refund("refund-1", "test-gateway", 100.0, "ILS", boughtAt));
@@ -187,6 +188,7 @@ class SystemAnalyticsServiceTest {
     private static OrderReceipt fullyRefundedOrder(double total) {
         LocalDateTime boughtAt = LocalDateTime.now();
         OrderReceipt order = OrderReceipt.forMember(2, 7, total, List.of(new ReceiptLine(20, total, 1, 1, null, boughtAt)),
+                boughtAt,
                 List.of(TransactionRecord.paymentCharge(4202, "test-gateway", total, "ILS", boughtAt)));
         order.markRefunded(TransactionRecord.refund("refund-2", "test-gateway", total, "ILS", boughtAt));
         return order;

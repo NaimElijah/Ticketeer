@@ -89,12 +89,15 @@ public class ActiveOrder implements InvariantChecked {
         this.items = new ArrayList<>();
     }
 
-    public ActiveOrder(Integer userId, String sessionId) {
+    /**
+     * @param createdAt when the cart was opened, as UTC wall time from the injected clock (ADR-008)
+     */
+    public ActiveOrder(Integer userId, String sessionId, LocalDateTime createdAt) {
         this.userId = userId;
         this.sessionId = sessionId;
         this.status = ActiveOrderStatus.PRE_CHECKOUT;
         this.items = new ArrayList<>();
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = createdAt;
         checkInvariants();
     }
 
@@ -105,30 +108,30 @@ public class ActiveOrder implements InvariantChecked {
 
     /**
      * Legacy convenience for existing Member-only callers. Equivalent to
-     * {@code new ActiveOrder(userId, null)} — a Member cart in the
+     * {@code new ActiveOrder(userId, null, createdAt)} — a Member cart in the
      * between-sessions state. New code should prefer
-     * {@link #forMember(int, String)} or {@link #forGuest(String)}.
+     * {@link #forMember(int, String, LocalDateTime)} or {@link #forGuest(String, LocalDateTime)}.
      */
-    public ActiveOrder(int userId) {
-        this(Integer.valueOf(userId), null);
+    public ActiveOrder(int userId, LocalDateTime createdAt) {
+        this(Integer.valueOf(userId), null, createdAt);
     }
 
 
     /** Member cart attached to an active session. */
-    public static ActiveOrder forMember(int userId, String sessionId) {
+    public static ActiveOrder forMember(int userId, String sessionId, LocalDateTime createdAt) {
         if (sessionId == null) {
             throw new IllegalArgumentException("forMember requires a non-null sessionId");
         }
-        return new ActiveOrder(Integer.valueOf(userId), sessionId);
+        return new ActiveOrder(Integer.valueOf(userId), sessionId, createdAt);
     }
 
 
     /** Guest cart bound to a session (no userId yet). */
-    public static ActiveOrder forGuest(String sessionId) {
+    public static ActiveOrder forGuest(String sessionId, LocalDateTime createdAt) {
         if (sessionId == null) {
             throw new IllegalArgumentException("forGuest requires a non-null sessionId");
         }
-        return new ActiveOrder(null, sessionId);
+        return new ActiveOrder(null, sessionId, createdAt);
     }
 
 

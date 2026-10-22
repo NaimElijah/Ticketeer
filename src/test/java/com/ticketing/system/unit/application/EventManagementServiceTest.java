@@ -165,7 +165,7 @@ class EventManagementServiceTest {
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 ReceiptLine line = new ReceiptLine(1, 100.0, EVENT_ID, 1, "A1", java.time.LocalDateTime.now());
-                OrderReceipt realReceipt = OrderReceipt.forMember(99, OWNER_ID, 100.0, List.of(line));
+                OrderReceipt realReceipt = OrderReceipt.forMember(99, OWNER_ID, 100.0, List.of(line), LocalDateTime.now());
                 realReceipt.addTransaction(
                                 TransactionRecord.paymentCharge(42, "test-gateway", 100.0, "ILS",
                                                 java.time.LocalDateTime.now()));

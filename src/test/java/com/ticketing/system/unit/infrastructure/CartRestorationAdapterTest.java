@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -66,7 +67,7 @@ class CartRestorationAdapterTest {
     /** Case 1: a guest cart bound to the session is claimed for the now-authenticated member. */
     @Test
     void mergeGuestCartOnPromotion_whenGuestCartExists_promotesItToMember() {
-        ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid"); // real guest cart
+        ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid", LocalDateTime.now()); // real guest cart
         when(mockActiveOrderRepo.getBySessionId("preserved-sid")).thenReturn(Optional.of(guestCart));
 
         adapter.mergeGuestCartOnPromotion("preserved-sid", 7);
@@ -84,7 +85,7 @@ class CartRestorationAdapterTest {
     @Test
     void mergeGuestCartOnPromotion_whenNoGuestCartButOrphanedMemberCartExists_restoresIt() {
         when(mockActiveOrderRepo.getBySessionId("new-sid")).thenReturn(Optional.empty());
-        ActiveOrder priorCart = ActiveOrder.forMember(7, "old-stale-sid"); // stale-session member cart
+        ActiveOrder priorCart = ActiveOrder.forMember(7, "old-stale-sid", LocalDateTime.now()); // stale-session member cart
         when(mockActiveOrderRepo.getByUserId(7)).thenReturn(priorCart);
 
         adapter.mergeGuestCartOnPromotion("new-sid", 7);

@@ -71,7 +71,7 @@ public class OrderReceipt implements InvariantChecked {
     protected OrderReceipt() { }
 
     private OrderReceipt(int receiptId, Integer userid, String guestEmail, String guestSessionId, double totalPrice,
-            List<ReceiptLine> receiptLines, List<TransactionRecord> transactionRecords) {
+            List<ReceiptLine> receiptLines, LocalDateTime purchaseTime, List<TransactionRecord> transactionRecords) {
         if (receiptId <= 0) {
             throw new IllegalArgumentException("receiptId must be positive");
         }
@@ -109,7 +109,7 @@ public class OrderReceipt implements InvariantChecked {
         // returns an immutable view, so callers cannot mutate the internal list.
         this.receiptLines = new ArrayList<>(receiptLines);
         this.transactionRecords = new ArrayList<>();
-        this.purchaseTime = LocalDateTime.now();
+        this.purchaseTime = purchaseTime;
 
         if (transactionRecords != null) {
             transactionRecords.forEach(this::addTransaction);
@@ -118,8 +118,10 @@ public class OrderReceipt implements InvariantChecked {
         checkInvariants();
     }
 
-    public static OrderReceipt forMember(int receiptId, int userId, double totalAmount, List<ReceiptLine> receiptLines) {
-        return forMember(receiptId, userId, totalAmount, receiptLines, List.of());
+    // purchaseTime: when the purchase completed, as UTC wall time from the injected clock (ADR-008).
+    public static OrderReceipt forMember(int receiptId, int userId, double totalAmount, List<ReceiptLine> receiptLines,
+            LocalDateTime purchaseTime) {
+        return forMember(receiptId, userId, totalAmount, receiptLines, purchaseTime, List.of());
     }
 
     public static OrderReceipt forMember(
@@ -127,6 +129,7 @@ public class OrderReceipt implements InvariantChecked {
             int userId,
             double totalAmount,
             List<ReceiptLine> receiptLines,
+            LocalDateTime purchaseTime,
             List<TransactionRecord> transactionRecords
     ) {
         return new OrderReceipt(
@@ -136,16 +139,19 @@ public class OrderReceipt implements InvariantChecked {
                 null,
                 totalAmount,
                 receiptLines,
+                purchaseTime,
                 transactionRecords
         );
     }
 
-    public static OrderReceipt forGuest(String guestEmail, String guestSessionId, int receiptId, double totalAmount, List<ReceiptLine> receiptLines) {
-        return forGuest(guestEmail, guestSessionId, receiptId, totalAmount, receiptLines, List.of());
+    public static OrderReceipt forGuest(String guestEmail, String guestSessionId, int receiptId, double totalAmount,
+            List<ReceiptLine> receiptLines, LocalDateTime purchaseTime) {
+        return forGuest(guestEmail, guestSessionId, receiptId, totalAmount, receiptLines, purchaseTime, List.of());
     }
 
     public static OrderReceipt forGuest(String guestEmail, String guestSessionId, int receiptId,
-            double totalAmount, List<ReceiptLine> receiptLines, List<TransactionRecord> transactionRecords) {
+            double totalAmount, List<ReceiptLine> receiptLines, LocalDateTime purchaseTime,
+            List<TransactionRecord> transactionRecords) {
         return new OrderReceipt(
                 receiptId,
                 null,
@@ -153,6 +159,7 @@ public class OrderReceipt implements InvariantChecked {
                 guestSessionId,
                 totalAmount,
                 receiptLines,
+                purchaseTime,
                 transactionRecords
         );
     }

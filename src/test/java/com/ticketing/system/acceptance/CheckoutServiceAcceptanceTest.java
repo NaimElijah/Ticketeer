@@ -940,7 +940,7 @@ public class CheckoutServiceAcceptanceTest {
         MemoryActiveOrderRepository realRepo = new MemoryActiveOrderRepository();
         CheckoutService service = checkoutServiceWith(realRepo);
 
-        ActiveOrder firstOrder = new ActiveOrder(USER_ID);
+        ActiveOrder firstOrder = new ActiveOrder(USER_ID, NOW);
         firstOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(firstOrder);
 
@@ -950,7 +950,7 @@ public class CheckoutServiceAcceptanceTest {
         assertNull(realRepo.getByUserId(USER_ID));
 
         // Buyer comes back and reserves again on the same account, then checks out a second time.
-        ActiveOrder secondOrder = new ActiveOrder(USER_ID);
+        ActiveOrder secondOrder = new ActiveOrder(USER_ID, NOW);
         secondOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(secondOrder);
 
@@ -970,7 +970,7 @@ public class CheckoutServiceAcceptanceTest {
         MemoryActiveOrderRepository realRepo = new MemoryActiveOrderRepository();
         CheckoutService service = checkoutServiceWith(realRepo);
 
-        ActiveOrder firstOrder = ActiveOrder.forGuest(guestSessionId);
+        ActiveOrder firstOrder = ActiveOrder.forGuest(guestSessionId, NOW);
         firstOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(firstOrder);
 
@@ -978,7 +978,7 @@ public class CheckoutServiceAcceptanceTest {
 
         assertTrue(realRepo.getBySessionId(guestSessionId).isEmpty());
 
-        ActiveOrder secondOrder = ActiveOrder.forGuest(guestSessionId);
+        ActiveOrder secondOrder = ActiveOrder.forGuest(guestSessionId, NOW);
         secondOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 10.0, NOW);
         realRepo.save(secondOrder);
 

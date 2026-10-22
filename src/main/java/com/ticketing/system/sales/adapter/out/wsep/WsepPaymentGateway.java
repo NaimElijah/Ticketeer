@@ -5,6 +5,7 @@ import com.ticketing.system.shared.external.WsepHttpClient; // transitional: sha
 
 import java.net.ConnectException;
 import java.net.http.HttpConnectTimeoutException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -45,9 +46,11 @@ public class WsepPaymentGateway implements PaymentGateway {
     private static final String FAILURE = "-1";
 
     private final WsepHttpClient http;
+    private final Clock clock;   // stamps charges and refunds (UTC wall time, ADR-008)
 
-    public WsepPaymentGateway(WsepHttpClient http) {
+    public WsepPaymentGateway(WsepHttpClient http, Clock clock) {
         this.http = http;
+        this.clock = clock;
     }
 
     @Override
@@ -113,7 +116,7 @@ public class WsepPaymentGateway implements PaymentGateway {
                 GATEWAY_ID,
                 request.amount(),
                 request.currency(),
-                LocalDateTime.now());
+                LocalDateTime.now(clock));
     }
 
     @Override
@@ -148,7 +151,7 @@ public class WsepPaymentGateway implements PaymentGateway {
                 "wsep-refund-" + paymentTransactionId,
                 String.valueOf(paymentTransactionId),
                 amount,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 List.of(),
                 List.of());
     }

@@ -63,7 +63,7 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     void GivenReceiptRefundedBeforeLineStateExisted_WhenLoaded_ThenItCountsAsFullyRefunded() {
         repository.save(OrderReceipt.forMember(1, 7, 100.0, List.of(
                 new ReceiptLine(10, 50.0, 5, 1, "A1", LocalDateTime.now()),
-                new ReceiptLine(11, 50.0, 6, 1, "A2", LocalDateTime.now()))));
+                new ReceiptLine(11, 50.0, 6, 1, "A2", LocalDateTime.now())), LocalDateTime.now()));
         jdbc.update("update receipts set is_refunded = true where receipt_id = 1");
         jdbc.update("update receipt_lines set refund_state = null where receipt_id = 1");
 
@@ -86,7 +86,7 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
         LocalDateTime at = LocalDateTime.now();
         OrderReceipt partly = OrderReceipt.forMember(2, 7, 100.0, List.of(
                 new ReceiptLine(20, 50.0, 5, 1, "B1", at),
-                new ReceiptLine(21, 50.0, 6, 1, "B2", at)));
+                new ReceiptLine(21, 50.0, 6, 1, "B2", at)), LocalDateTime.now());
         partly.claimRefundForEvent(5);
         partly.completeEventRefund(5, TransactionRecord.refund("refund-5", "WSEP", 50.0, "ILS", at));
         repository.save(partly);

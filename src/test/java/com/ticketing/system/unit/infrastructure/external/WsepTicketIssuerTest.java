@@ -11,6 +11,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -27,7 +30,8 @@ import com.ticketing.system.sales.adapter.out.wsep.WsepTicketIssuer;
 class WsepTicketIssuerTest {
 
     private final WsepHttpClient http = mock(WsepHttpClient.class);
-    private final WsepTicketIssuer issuer = new WsepTicketIssuer(http);
+    private final WsepTicketIssuer issuer = new WsepTicketIssuer(http,
+            Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC));
 
     private IssuanceRequestDTO twoTicketRequest() {
         return new IssuanceRequestDTO(42, null, List.of(

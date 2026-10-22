@@ -623,7 +623,7 @@ public class ReservationServiceTest {
         int numberOfThreads = 20;
         int quantityPerRemove = 1;
 
-        ActiveOrder realActiveOrder = new ActiveOrder(USER_ID);
+        ActiveOrder realActiveOrder = new ActiveOrder(USER_ID, NOW);
         InventoryZone realZone = new StandingZone(ZONE_ID, "VIP", capacity, 100.0);
         realZone.reserve(InventorySelection.standing(initialReservedTickets, realActiveOrder.getOrderKey()));
 
@@ -1052,7 +1052,7 @@ public class ReservationServiceTest {
                         new Seat("A2", 1, 0),
                         new Seat("A3", 2, 0)));
         Event realEvent = createEventWithZone(seatedZone);
-        ActiveOrder realOrder = new ActiveOrder(USER_ID);
+        ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
         seatedZone.reserve(InventorySelection.seated(List.of("A1", "A2", "A3"), realOrder.getOrderKey()));
 
         realOrder.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2", "A3"), 120.0, NOW);
@@ -1111,7 +1111,7 @@ public class ReservationServiceTest {
 
     @Test
     void GivenValidCartNearExpiry_WhenRenewReservationsForMemberCheckout_ThenTimersResetToFullWindow() {
-        ActiveOrder realOrder = new ActiveOrder(USER_ID);
+        ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(9));
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -1128,7 +1128,7 @@ public class ReservationServiceTest {
 
     @Test
     void GivenExpiredItem_WhenRenewReservationsForMemberCheckout_ThenTimersNotResetAndNotSaved() {
-        ActiveOrder realOrder = new ActiveOrder(USER_ID);
+        ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(20));
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -1142,7 +1142,7 @@ public class ReservationServiceTest {
 
     @Test
     void GivenCheckoutInProgress_WhenRenewReservationsForMemberCheckout_ThenTimersNotResetAndNotSaved() {
-        ActiveOrder realOrder = new ActiveOrder(USER_ID);
+        ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
         realOrder.markCheckoutInProgress();
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
@@ -1168,7 +1168,7 @@ public class ReservationServiceTest {
     @Test
     void GivenValidGuestCartNearExpiry_WhenRenewReservationsForGuestCheckout_ThenTimersResetToFullWindow() {
         String sessionId = "guest-session";
-        ActiveOrder realOrder = ActiveOrder.forGuest(sessionId);
+        ActiveOrder realOrder = ActiveOrder.forGuest(sessionId, NOW);
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(realOrder));
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
