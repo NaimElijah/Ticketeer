@@ -86,10 +86,13 @@ vaadin:
 
 # Default System Admin (UC-1 / I.1.4) — auto-created at initialization when none exists.
 # Defaults live here only; override in production via env, and never ship the default password.
+# time-zone (ADR-008): an IANA id. New events default to it, seeded events use it, and the UI shows
+# recorded timestamps and "today" in it. Changing it never moves an existing event's times.
 platform:
   admin:
     username: ${PLATFORM_ADMIN_USERNAME:admin}
     password: ${PLATFORM_ADMIN_PASSWORD:admin}
+  time-zone: ${PLATFORM_TIME_ZONE:Asia/Jerusalem}
 
 # WSEP external systems (UC-33 payment / UC-34 issuance). WsepPaymentGateway /
 # WsepTicketIssuer back the PaymentGateway / TicketIssuer ports in every real run

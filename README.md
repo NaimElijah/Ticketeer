@@ -204,9 +204,9 @@ set these:
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
-`wsep`, `platform.admin`, `seed` and `market` groups bind to validated records. A value out of
-bounds, such as a zero hold, a negative TTL, a blank admin password or a malformed WSEP URL, stops
-the boot with a report naming the property
+`wsep`, `platform.admin`, `platform.time-zone`, `seed` and `market` groups bind to validated
+records. A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an
+unknown time zone or a malformed WSEP URL, stops the boot with a report naming the property
 ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource,
 `JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) and `ANALYTICS_*`
 ([#165](https://github.com/NaimElijah/Ticketeer/issues/165)) are not validated yet.
@@ -224,9 +224,9 @@ java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.import=f
 `import` reads one named file. A key set in the file replaces the bundled entry, `${VAR:default}`
 placeholder included. An environment variable still wins only when its name is the property's own
 name in environment form, as with `WSEP_BASE_URL`, `SESSION_*`, `PLATFORM_ADMIN_*`, `JWT_SECRET` and
-`SEED_*`. `TICKET_RESERVATION_DURATION`, `ORDER_EXPIRATION_DURATION`, `DB_*` and `DB_POOL_SIZE` are
-read only through the bundled placeholder, so a file that sets their key overrides them. Set each
-value in one place.
+`SEED_*`. `TICKET_RESERVATION_DURATION`, `ORDER_EXPIRATION_DURATION`, `PLATFORM_TIME_ZONE`, `DB_*`
+and `DB_POOL_SIZE` are read only through the bundled placeholder, so a file that sets their key
+overrides them. Set each value in one place.
 
 > [!NOTE]
 > With no profile at all, the app runs on PostgreSQL through the `DB_*` variables. If it cannot
@@ -249,6 +249,7 @@ value in one place.
 | `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
+| `PLATFORM_TIME_ZONE` | IANA zone that new and seeded events default to, and that the UI shows recorded times and "today" in ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)) | `Asia/Jerusalem` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
 | `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |
 | `SEED_FAIL_FAST` | A failing scenario step stops the boot | `true` (`false` under `dev`) |

@@ -2,9 +2,12 @@ package com.ticketing.system.unit.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.ZoneId;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.validation.BindValidationException;
@@ -20,6 +23,7 @@ import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.sales.config.ReservationHoldProperties;
+import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.config.WsepProperties;
 
 /**
@@ -34,7 +38,8 @@ class InitPropertiesValidationTest {
 
     @EnableConfigurationProperties({
             ReservationHoldProperties.class, SessionProperties.class, LockoutProperties.class,
-            WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class, SeedProperties.class})
+            WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class, SeedProperties.class,
+            PlatformTimeProperties.class})
     static class InitProperties {
     }
 
@@ -49,6 +54,17 @@ class InitPropertiesValidationTest {
             assertThat(context.getBean(PlatformAdminProperties.class).username()).isEqualTo("admin");
             assertThat(context.getBean(MarketProperties.class).selfHealDelayMs()).isEqualTo(30000);
             assertThat(context.getBean(SeedProperties.class).mode()).isEqualTo(SeedProperties.Mode.OFF);
+            assertThat(context.getBean(PlatformTimeProperties.class).timeZone()).isEqualTo(ZoneId.of("Asia/Jerusalem"));
+        });
+    }
+
+    @ParameterizedTest(name = "platform.time-zone=''{0}''")
+    @ValueSource(strings = {"Mars/Olympus", ""})
+    void GivenInvalidTimeZone_WhenContextStarts_ThenFailsNamingTheProperty(String zone) {
+        runner.withPropertyValues("platform.time-zone=" + zone).run(context -> {
+            assertThat(context).hasFailed();
+            BindException bindFailure = causeOfType(context.getStartupFailure(), BindException.class);
+            assertThat(bindFailure.getProperty().getName()).hasToString("platform.time-zone");
         });
     }
 
