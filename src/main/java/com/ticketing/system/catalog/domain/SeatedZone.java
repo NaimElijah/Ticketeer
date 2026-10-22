@@ -168,10 +168,9 @@ public class SeatedZone extends InventoryZone {
                 }
             }
 
-            // Commit — stamp each seat with the holding order key.
-            java.time.LocalDateTime reservedUntil = java.time.LocalDateTime.now().plusMinutes(10);
+            // Commit — stamp each seat with the holding order key and when its hold runs out.
             for (String label : sorted) {
-                seats.get(label).markReservedBy(orderKey, reservedUntil);
+                seats.get(label).markReservedBy(orderKey, selection.getHoldUntil());
             }
             checkInvariants();
         } finally {

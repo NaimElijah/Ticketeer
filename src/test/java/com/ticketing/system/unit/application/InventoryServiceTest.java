@@ -64,6 +64,7 @@ class InventoryServiceTest {
     private static final int STANDING_ZONE = 2;
     private static final int COMPANY_ID = 100;
     private static final String ORDER_KEY = "order-1";
+    private static final LocalDateTime HOLD_UNTIL = LocalDateTime.of(2027, 7, 15, 17, 10);
 
     @BeforeEach
     void setUp() {
@@ -86,7 +87,7 @@ class InventoryServiceTest {
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(activeCompany());
 
         double price = service.reserve(EVENT_ID, SEATED_ZONE,
-                InventorySelectionDTO.seated(List.of("A1", "A2")), ORDER_KEY, 42, 30, 2);
+                InventorySelectionDTO.seated(List.of("A1", "A2")), ORDER_KEY, HOLD_UNTIL, 42, 30, 2);
 
         assertThat(price).isEqualTo(120.0);
         // Strict ordering: buyer-lock first, policy before the mutation, save under the lock, unlock last.
@@ -101,6 +102,7 @@ class InventoryServiceTest {
         verify(event).reserveInventory(eq(SEATED_ZONE), sel.capture());
         assertThat(sel.getValue().getSeatNumbers()).containsExactly("A1", "A2");
         assertThat(sel.getValue().getOrderKey()).isEqualTo(ORDER_KEY);
+        assertThat(sel.getValue().getHoldUntil()).isEqualTo(HOLD_UNTIL);
     }
 
     /** A policy rejection is raised BEFORE any inventory mutation, and the lock is still released. */
@@ -114,7 +116,7 @@ class InventoryServiceTest {
                 .when(event).validateEffectivePolicy(any(), any(PurchaseContext.class));
 
         assertThatThrownBy(() -> service.reserve(EVENT_ID, STANDING_ZONE,
-                InventorySelectionDTO.standing(2), ORDER_KEY, 42, 30, 2))
+                InventorySelectionDTO.standing(2), ORDER_KEY, HOLD_UNTIL, 42, 30, 2))
                 .isInstanceOf(PolicyViolationException.class);
 
         verify(event, never()).reserveInventory(anyInt(), any());
@@ -128,7 +130,7 @@ class InventoryServiceTest {
         when(eventRepository.findById(EVENT_ID)).thenReturn(null);
 
         assertThatThrownBy(() -> service.reserve(EVENT_ID, SEATED_ZONE,
-                InventorySelectionDTO.standing(1), ORDER_KEY, -1, null, 1))
+                InventorySelectionDTO.standing(1), ORDER_KEY, HOLD_UNTIL, -1, null, 1))
                 .isInstanceOf(IllegalArgumentException.class);
 
         verify(eventRepository).unlockBuyerOperation(EVENT_ID);
@@ -161,7 +163,7 @@ class InventoryServiceTest {
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
-        service.restore(EVENT_ID, SEATED_ZONE, InventorySelectionDTO.seated(List.of("A1")), ORDER_KEY);
+        service.restore(EVENT_ID, SEATED_ZONE, InventorySelectionDTO.seated(List.of("A1")), ORDER_KEY, HOLD_UNTIL);
 
         verify(event).reserveInventory(eq(SEATED_ZONE), any(InventorySelection.class));
         verify(eventRepository).save(event);

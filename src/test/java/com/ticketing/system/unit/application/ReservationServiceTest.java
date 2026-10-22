@@ -17,6 +17,7 @@ import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -236,6 +237,34 @@ public class ReservationServiceTest {
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
 
         assertEquals("Not enough reserved tickets to remove", exception.getMessage());
+    }
+
+    // Each reserved seat records when its hold runs out: the configured hold after the clock, the
+    // same instant the cart line expires at (#74; it used to be a hard-coded 10 minutes from the JVM clock).
+    @Test
+    void GivenConfiguredHoldOfSevenMinutes_WhenSeatsReserved_ThenEachSeatIsHeldUntilTheClockPlusSeven() {
+        Duration configuredHold = CartLineItem.getExpirationLimit();
+        CartLineItem.setExpirationLimit(Duration.ofMinutes(7));
+        try {
+            SeatedZone stalls = new SeatedZone(ZONE_ID, "Stalls", 100.0,
+                    List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
+            when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+            when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+            when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+            when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(stalls);
+            when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
+            when(activeOrder.getOrderKey()).thenReturn("user:" + USER_ID);
+            doAnswer(inv -> stalls.reserve(inv.getArgument(1)))
+                    .when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+
+            reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                    InventorySelectionDTO.seated(List.of("A1", "A2")));
+
+            assertEquals(NOW.plusMinutes(7), stalls.getSeatByLabel("A1").getReservedUntil());
+            assertEquals(NOW.plusMinutes(7), stalls.getSeatByLabel("A2").getReservedUntil());
+        } finally {
+            CartLineItem.setExpirationLimit(configuredHold);
+        }
     }
 
     @Test

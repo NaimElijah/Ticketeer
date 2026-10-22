@@ -58,9 +58,13 @@ public class Seat implements InvariantChecked {
     /** Non-null only while status == RESERVED; identifies the holding ActiveOrder. */
     @Column(name = "reserved_by_order_key")
     private String reservedByOrderKey;
-    /** When the hold expires (informational — enforcement is in the sweep job). */
+    /**
+     * When the hold runs out, as UTC wall time (ADR-008): the cart line's addedAt plus the configured
+     * hold. Informational only: the sweep job enforces expiry on the cart line, and renewing the hold
+     * at checkout entry does not move it.
+     */
     @Column(name = "reserved_until")
-    private LocalDateTime reservedUntil; //TODO: when going to checkout, this should be set to {time now} + {reservation timeout period}.
+    private LocalDateTime reservedUntil;
 
     @Version
     private Long version;

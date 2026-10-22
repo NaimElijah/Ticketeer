@@ -76,6 +76,11 @@ public class ReservationService {
         return LocalDateTime.now(clock);
     }
 
+    // When a hold starting at addedAt runs out: the configured hold (constants.ticket-reservation-duration).
+    private static LocalDateTime holdUntil(LocalDateTime addedAt) {
+        return addedAt.plus(CartLineItem.getExpirationLimit());
+    }
+
     // ---------------------------------------------------------------------
     // Public API - use these methods from new code/controllers/tests
     // ---------------------------------------------------------------------
@@ -165,10 +170,11 @@ public class ReservationService {
             // reserves the (ownership-stamped) selection, saves the event, and releases the lock — then
             // returns the unit price to record on the cart line. Done before mutating the active order so
             // a reserve failure (e.g. not enough availability) leaves the cart untouched.
-            // One reading of the clock per reservation: the cart line's hold starts at it.
+            // One reading of the clock per reservation: the cart line's hold starts at it, and the
+            // reserved seats record the same expiry the line will have.
             LocalDateTime addedAt = now();
-            double pricePerTicket = inventoryPort.reserve(
-                    eventId, zoneId, selection, activeOrder.getOrderKey(), buyerId, buyerAge, totalQuantity);
+            double pricePerTicket = inventoryPort.reserve(eventId, zoneId, selection, activeOrder.getOrderKey(),
+                    holdUntil(addedAt), buyerId, buyerAge, totalQuantity);
             inventoryReserved = true;
 
             // Now that we have successfully reserved the inventory, we can safely modify the active order to reflect the new reservation. If any of the validations for modifying the active order fail (e.g. trying to reserve more tickets than allowed by purchase policy, etc.), we will throw an exception and roll back the inventory reservation in the catch block, ensuring that we do not end up with an active order that has reservations that were not successfully made.
@@ -538,9 +544,10 @@ public class ReservationService {
         * If inventory was released, put it back under the same order ownership key. restore(...)
         * re-reserves WITHOUT re-running the purchase policy (this is a compensating action).
         */
+        LocalDateTime readdedAt = now();   // the restored hold and the re-added cart line start together
         try {
             if (inventoryReleased && activeOrder != null) {
-                inventoryPort.restore(eventId, zoneId, selection, activeOrder.getOrderKey());
+                inventoryPort.restore(eventId, zoneId, selection, activeOrder.getOrderKey(), holdUntil(readdedAt));
             }
         } catch (RuntimeException rollbackFailure) {
             log.error("Rollback failed while re-reserving inventory after remove failure. eventId={}, zoneId={}",
@@ -554,7 +561,7 @@ public class ReservationService {
         */
         try {
             if (orderModified && activeOrder != null) {
-                addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket, now());
+                addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket, readdedAt);
                 activeOrderRepository.save(activeOrder);
             }
         } catch (RuntimeException rollbackFailure) {
@@ -601,7 +608,7 @@ public class ReservationService {
                 zoneId,
                 selection.getQuantity(),
                 selection.getSeatNumbers(),
-                holdStart.plus(CartLineItem.getExpirationLimit()));
+                holdUntil(holdStart));
     }
 
     // method to restore an active order for a user (member) - this is used by the frontend when a user logs in or returns to the site after navigating away, to restore their active order and show them their current reservations in the cart. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we convert it to an ActiveOrderDTO and return it. If no active order is found, we return null. We also enrich the DTO with event names for better UX in the frontend, so that the frontend can show the event names directly in the cart without needing to make extra calls to get event details for each line item.
