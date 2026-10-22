@@ -32,6 +32,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -49,7 +50,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     // ---- data model ----
 
     private record EventRow(String name, String category, String venue,
-            String date, LocalDateTime startsAt, int priceCents,
+            String date, Instant startsAt, int priceCents,
             LkStatusDot.Tone tone, String status, String id,
             Double rating, List<String> artists) {
     }
@@ -591,11 +592,13 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         LocalDateTime start = (dto.showDates() == null || dto.showDates().isEmpty())
                 ? null : dto.showDates().get(0).startsAt();
         String date = start == null ? "TBA" : start.format(DATE_FMT);
+        // "Soonest first" sorts by when shows really start, so venues in different zones interleave correctly.
+        Instant startsAt = start == null ? null : start.atZone(dto.timeZone()).toInstant();
         int priceCents = (int) Math.round(dto.minPrice() * 100);
         LkStatusDot.Tone tone = dto.soldOut() ? LkStatusDot.Tone.muted : LkStatusDot.Tone.ok;
         String status = dto.soldOut() ? "Sold out" : "On sale";
         return new EventRow(dto.name(), prettyCategory(dto.category()), dto.location(),
-                date, start, priceCents, tone, status, String.valueOf(dto.eventId()),
+                date, startsAt, priceCents, tone, status, String.valueOf(dto.eventId()),
                 dto.rating(), dto.artistsNames());
     }
 

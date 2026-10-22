@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +29,7 @@ class LandingPresenterTest {
 
     private static EventSummaryDTO event(int id, String name) {
         return new EventSummaryDTO(id, name, "ON_SALE", 4.5, "Acme", "MUSIC",
-            "Tel Aviv", List.of(), 80.0, 250.0, false, List.of(name));
+            "Tel Aviv", List.of(), ZoneId.of("Asia/Jerusalem"), 80.0, 250.0, false, List.of(name));
     }
 
     @Test

@@ -34,6 +34,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Route(value = "my-account", layout = MainLayout.class)
@@ -42,7 +43,7 @@ import java.util.Map;
 public class MyAccountView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
-    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
 
     private final PurchaseHistoryDTO history;
     private final RefundPresenter refundPresenter;

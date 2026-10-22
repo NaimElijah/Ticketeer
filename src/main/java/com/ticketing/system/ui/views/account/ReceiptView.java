@@ -33,6 +33,7 @@ import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * Full-page receipt for one member-owned order (#276). Reached by clicking
@@ -51,7 +52,7 @@ import java.time.format.DateTimeFormatter;
 public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
-    private static final DateTimeFormatter EVENT_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm");
+    private static final DateTimeFormatter EVENT_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
 
     private final ReceiptPresenter presenter;
     private final RefundPresenter refundPresenter;

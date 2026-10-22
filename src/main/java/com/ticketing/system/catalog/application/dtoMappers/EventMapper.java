@@ -33,6 +33,7 @@ public class EventMapper {
                 event.getCategory().toString(),
                 event.getVenueMap().getLocation().toString(),
                 event.getShowDates().stream().map(sd -> new ShowDateDTO(sd.getStartTime(), sd.getEndTime())).toList(),
+                event.getTimeZone(),
                 minPrice,
                 maxPrice,
                 event.getStatus() == EventStatus.SOLD_OUT,

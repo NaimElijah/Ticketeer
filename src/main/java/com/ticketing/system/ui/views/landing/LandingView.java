@@ -34,7 +34,7 @@ import java.util.Objects;
 public class LandingView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT =
-        DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.ENGLISH);
+        DateTimeFormatter.ofPattern("d MMM · HH:mm zzz", Locale.ENGLISH);
 
     private final LandingPresenter presenter;
 
@@ -139,7 +139,7 @@ public class LandingView extends LkPage {
         if (first == null) {
             return location;
         }
-        String when = DATE_FMT.format(first);
+        String when = DATE_FMT.format(first.atZone(e.timeZone()));
         return location.isBlank() ? when : location + " · " + when;
     }
 

@@ -44,6 +44,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -59,7 +60,8 @@ public class CompanyEventListView extends LkPage {
             STATUS_ALL, "Draft", "Scheduled", "On sale", "Sold out", "Cancelled", "Completed");
 
     /** Human-readable start date + time, e.g. "Jul 19, 2026 · 5:41 PM" (no ISO "T"/seconds gibberish). */
-    private static final DateTimeFormatter DATE_TIME_FMT = DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a");
+    private static final DateTimeFormatter DATE_TIME_FMT =
+            DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a zzz", Locale.US);
 
     private final CompanyEventListPresenter presenter;
     private final DisplayTime displayTime;
@@ -354,7 +356,7 @@ public class CompanyEventListView extends LkPage {
         row.put("name", name);
 
         String date = ev.showDates() != null && !ev.showDates().isEmpty()
-            ? ev.showDates().get(0).getStartTime().format(DATE_TIME_FMT) : "—";
+            ? ev.showDates().get(0).getStartTime().atZone(ev.timeZone()).format(DATE_TIME_FMT) : "—";
         row.put("date", date);
 
         String venue = ev.location() != null ? ev.location().toString() : "—";
