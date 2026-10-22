@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +50,15 @@ public abstract class IEventRepositoryContractTest {
         VenueMap venueMap = new VenueMap(id, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
         ShowDate showDate = new ShowDate(FUTURE_START, FUTURE_END);
         return new Event(id, name, rating, List.of("Artist A"), category, companyId, status,
-                venueMap, List.of(showDate), new NoPurchasePolicy(), new DiscountPolicy(0));
+                venueMap, List.of(showDate), ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
+    }
+
+    // An ON_SALE event at a venue in the given time zone.
+    protected Event buildEventInZone(int id, ZoneId timeZone) {
+        VenueMap venueMap = new VenueMap(id, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
+        return new Event(id, "Zoned Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)), timeZone,
+                new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 
     // An event whose zones span several prices (cheapest = 30); used for the "cheapest price" filter tests.
@@ -60,7 +69,7 @@ public abstract class IEventRepositoryContractTest {
                 new StandingZone(3, "Premium", 100, 100)));
         ShowDate showDate = new ShowDate(FUTURE_START, FUTURE_END);
         return new Event(id, "Tiered Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
-                EventStatus.ON_SALE, venueMap, List.of(showDate), new NoPurchasePolicy(), new DiscountPolicy(0));
+                EventStatus.ON_SALE, venueMap, List.of(showDate), ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 
     // === save ===
@@ -82,6 +91,13 @@ public abstract class IEventRepositoryContractTest {
         assertNotNull(found);
         assertEquals(1, found.getId());
         assertEquals("Rock Night", found.getName());
+    }
+
+    @Test
+    void GivenEventInLondon_WhenSavedAndFound_ThenItsTimeZoneIsLondon() {
+        eventRepo.save(buildEventInZone(1, ZoneId.of("Europe/London")));
+
+        assertEquals(ZoneId.of("Europe/London"), eventRepo.findById(1).getTimeZone());
     }
 
     // === findByCompanyId ===
@@ -211,6 +227,7 @@ public abstract class IEventRepositoryContractTest {
         Event event = new Event(1, "Concert", 4.5, List.of("John Doe", "Jane Smith"),
                 EventCategory.CONCERT, 10, EventStatus.ON_SALE, vm,
                 List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"),
                 new NoPurchasePolicy(), new DiscountPolicy(0));
         eventRepo.save(event);
 
@@ -230,6 +247,7 @@ public abstract class IEventRepositoryContractTest {
         Event theaterEvent = new Event(2, "Hamlet2", 4.5, List.of("Actor B"),
                 EventCategory.THEATER, 10, EventStatus.ON_SALE, vm,
                 List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"),
                 new NoPurchasePolicy(), new DiscountPolicy(0));
         eventRepo.save(theaterEvent);
 
@@ -270,6 +288,7 @@ public abstract class IEventRepositoryContractTest {
         Event event = new Event(1, "Night Out", 4.5, List.of("Coldplay"),
                 EventCategory.CONCERT, 10, EventStatus.ON_SALE, vm,
                 List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"),
                 new NoPurchasePolicy(), new DiscountPolicy(0));
         eventRepo.save(event);
 

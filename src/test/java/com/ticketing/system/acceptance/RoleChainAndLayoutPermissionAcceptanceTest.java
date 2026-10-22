@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -175,6 +176,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
                 companyId, name, "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(ev.eventId());
         ZoneConfigDTO zone = new ZoneConfigDTO("Standing", false, capacity, null, price,

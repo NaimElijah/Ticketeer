@@ -155,6 +155,7 @@ public class EventManagementService {
                 EventStatus.DRAFT,
                 venueMap,
                 request.showDates(),
+                request.timeZone(),
                 eventSpecificPurchasePolicy ,
                 discountPolicy);
         eventRepository.save(newEvent);
@@ -224,6 +225,7 @@ public class EventManagementService {
             company.getName(),
             event.getStatus(),
             event.getShowDates(),
+            event.getTimeZone(),
             event.getArtistsNames(),
             EventMapper.minZonePrice(event)
             );
@@ -408,7 +410,8 @@ public class EventManagementService {
                             .map(sd -> new ShowDate(sd.startsAt(), sd.endsAt()))
                             .toList();
 
-            event.editDetails(update.name(), update.description(), newCategory, newLocation, newShowDates);
+            event.editDetails(update.name(), update.description(), newCategory, newLocation, update.timeZone(),
+                    newShowDates);
             eventRepository.save(event);
 
             log.info("Event {} details updated by user {}", eventId, userId);

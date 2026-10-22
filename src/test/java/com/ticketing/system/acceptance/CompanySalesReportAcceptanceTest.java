@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,7 @@ class CompanySalesReportAcceptanceTest {
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
         return Integer.parseInt(event.eventId());
     }

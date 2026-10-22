@@ -20,6 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -2149,6 +2150,7 @@ void GivenTicketsFromDifferentEventsAndSecondEventBelowMinPolicy_WhenCheckout_Th
                 EventStatus.ON_SALE,
                 new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(zone)),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()
         );
@@ -2225,6 +2227,7 @@ private Event createRealEventWithPolicyAndZone(int eventId, InventoryZone zone, 
             EventStatus.ON_SALE,
             new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(zone)),
             List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(2))),
+            ZoneId.of("Asia/Jerusalem"),
             purchasePolicy,
             noDiscountPolicy()
     );

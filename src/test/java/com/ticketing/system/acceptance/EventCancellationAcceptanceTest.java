@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -225,7 +226,7 @@ class EventCancellationAcceptanceTest {
         LocalDateTime start = LocalDateTime.now().plusDays(10);
         EventDetailDTO event = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Cancelled Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
-                new Location("Israel", "Tel Aviv"), List.of(new ShowDate(start, start.plusHours(3))), null));
+                new Location("Israel", "Tel Aviv"), List.of(new ShowDate(start, start.plusHours(3))), ZoneId.of("Asia/Jerusalem"), null));
         int eventId = Integer.parseInt(event.eventId());
         ZoneConfigDTO standing = new ZoneConfigDTO("Standing", false, 100, null, TICKET_PRICE, new GridPlacementDTO(1, 1, 1, 1));
         eventManagementService.configureVenueMap(owner.token(), companyId,

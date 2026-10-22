@@ -77,6 +77,7 @@ public final class ScenarioOps {
     private final MessagingService messaging;
     private final UserRepository userRepository;
     private final DemoClock clock;
+    private final ZoneId timeZone;
 
     private final Map<String, OpHandler> registry = new LinkedHashMap<>();
     private int seq = 0;
@@ -89,7 +90,8 @@ public final class ScenarioOps {
             CatalogService catalogService,
             MessagingService messaging,
             UserRepository userRepository,
-            DemoClock clock) {
+            DemoClock clock,
+            ZoneId timeZone) {
         this.auth = auth;
         this.companyService = companyService;
         this.eventService = eventService;
@@ -99,6 +101,7 @@ public final class ScenarioOps {
         this.messaging = messaging;
         this.userRepository = userRepository;
         this.clock = clock;
+        this.timeZone = timeZone;
         buildRegistry();
     }
 
@@ -270,12 +273,12 @@ public final class ScenarioOps {
         EventCategory category = EventCategory.valueOf(cmd.named("category", "CONCERT").toUpperCase());
         int days = cmd.intNamed("days", 30);
         String city = cmd.named("city", "Tel Aviv");
-        LocalDateTime start = LocalDateTime.ofInstant(clock.plusDays(days), ZoneId.systemDefault());
+        LocalDateTime start = LocalDateTime.ofInstant(clock.plusDays(days), timeZone);
         ShowDate show = new ShowDate(start, start.plusHours(3));
 
         EventDetailDTO created = eventService.addEvent(token, new EventCreationDTO(
                 companyId, name, name + " — seeded event", List.of(headliner(name)), category,
-                cmd.doubleNamed("rating"), new Location("Israel", city), List.of(show), nonePolicy()));
+                cmd.doubleNamed("rating"), new Location("Israel", city), List.of(show), timeZone, nonePolicy()));
         int eventId = Integer.parseInt(created.eventId());
         eventService.configureVenueMap(token, companyId, buildVenueMap(created.eventId(), city + " venue", zones));
         if (cmd.boolNamed("publish", false)) {

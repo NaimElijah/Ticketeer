@@ -56,6 +56,7 @@ public class EventMapper {
                 companyName,
                 event.getStatus(),
                 event.getShowDates(),
+                event.getTimeZone(),
                 event.getArtistsNames(),
                 minZonePrice(event));
     }

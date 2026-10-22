@@ -163,6 +163,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
                     blankToNull(description.getValue()),
                     category.getValue(),                 // null = leave category alone
                     buildLocation(),                     // null = leave location alone
+                    null,                                // null = leave the time zone alone
                     buildShowDates()                     // null = leave schedule alone
                 ))) {
             case EventManagementPresenter.SaveOutcome.Success ignored ->
@@ -206,7 +207,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
         switch (presenter.create(AuthSession.token(), CurrentCompanies.currentCompanyId(),
                 name, blankToNull(description.getValue()), category.getValue(),
-                co, ci, start.getValue(), end.getValue(), artistList, rating.getValue())) {
+                co, ci, start.getValue(), end.getValue(), presenter.defaultTimeZone(), artistList,
+                rating.getValue())) {
             case EventManagementPresenter.CreateOutcome.Success ok -> {
                 Toasts.success("Event created as a draft — configure the venue map and publish when ready.");
                 UI.getCurrent().navigate("owner/events/" + ok.eventId());

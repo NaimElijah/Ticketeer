@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.SCHEDULED,
                 venueMap,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null,
                 new DiscountPolicy(0)));
 
@@ -75,6 +77,7 @@ class EventTest extends BaseDomainTest {
                 EVENT_ID, "Concert", 9.0, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.SCHEDULED, venueMap,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
     }
 
@@ -85,6 +88,7 @@ class EventTest extends BaseDomainTest {
                 EVENT_ID, "Concert", 4.5, List.of(), EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.SCHEDULED, venueMap,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
     }
 
@@ -94,7 +98,26 @@ class EventTest extends BaseDomainTest {
         assertThrows(IllegalStateException.class, () -> new Event(
                 EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.SCHEDULED, venueMap, List.of(),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
+    }
+
+    @Test
+    void GivenNoTimeZone_WhenConstructed_ThenThrowsIllegalState() {
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100)));
+        assertThrows(IllegalStateException.class, () -> new Event(
+                EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
+                EventStatus.SCHEDULED, venueMap,
+                List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                null,
+                null, new DiscountPolicy(0)));
+    }
+
+    @Test
+    void GivenNewTimeZone_WhenEditDetails_ThenTheEventIsInThatZone() {
+        event.editDetails(null, null, null, null, ZoneId.of("Europe/London"), null);
+
+        assertEquals(ZoneId.of("Europe/London"), event.getTimeZone());
     }
 
     // Member refund returns SOLD inventory to AVAILABLE and re-opens a sold-out event.
@@ -105,6 +128,7 @@ class EventTest extends BaseDomainTest {
         Event e = track(new Event(EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
                 EventStatus.ON_SALE, vm,
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null, new DiscountPolicy(0)));
 
         // Sell the event out.
@@ -128,7 +152,7 @@ class EventTest extends BaseDomainTest {
                 LocalDateTime.now().plusDays(40).plusHours(2));
 
         event.editDetails("New Name", "New Description", EventCategory.THEATER,
-                new Location("France", "Paris"), List.of(newShow));
+                new Location("France", "Paris"), null, List.of(newShow));
 
         assertEquals("New Name", event.getName());
         assertEquals("New Description", event.getDescription());
@@ -141,9 +165,10 @@ class EventTest extends BaseDomainTest {
     // Null arguments mean "leave this field alone".
     @Test
     void GivenNullArguments_WhenEditDetails_ThenNothingChanges() {
-        event.editDetails(null, null, null, null, null);
+        event.editDetails(null, null, null, null, null, null);
 
         assertEquals("Concert", event.getName());
+        assertEquals(ZoneId.of("Asia/Jerusalem"), event.getTimeZone());
         assertEquals(EventCategory.CONCERT, event.getCategory());
         assertEquals(LOCATION, event.getVenueMap().getLocation());
         assertEquals(1, event.getShowDates().size());
@@ -154,7 +179,7 @@ class EventTest extends BaseDomainTest {
     @Test
     void GivenEmptyShowDates_WhenEditDetails_ThenThrowsIllegalArgument() {
         assertThrows(IllegalArgumentException.class, () -> event.editDetails(
-                null, null, null, null, List.of()));
+                null, null, null, null, null, List.of()));
     }
 
     @Test
@@ -162,7 +187,7 @@ class EventTest extends BaseDomainTest {
         event.transitionToOnSale();
 
         assertThrows(IllegalStateException.class, () -> event.editDetails(
-                "New Name", null, null, null, null));
+                "New Name", null, null, null, null, null));
     }
 
     @Test
@@ -251,6 +276,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.SCHEDULED,
                 new VenueMap(1, LOCATION, List.of(standingZone)),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(15), LocalDateTime.now().plusDays(15).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 rejectingPolicy,
                 noDiscountPolicy()));
 
@@ -337,6 +363,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -359,6 +386,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -420,6 +448,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -457,6 +486,7 @@ class EventTest extends BaseDomainTest {
                 List.of(new ShowDate(
                         LocalDateTime.now().plusDays(30),
                         LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
 
@@ -583,6 +613,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.ON_SALE,
                 new VenueMap(1, LOCATION, List.of(track(new StandingZone(ZONE_ID, "VIP", 10, 100)))),
                 showDates,
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
     }
@@ -740,6 +771,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.DRAFT,
                 new VenueMap(1, LOCATION, List.of()),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
     }
@@ -755,6 +787,7 @@ class EventTest extends BaseDomainTest {
                 EventStatus.SCHEDULED,
                 new VenueMap(1, LOCATION, zones),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(30), LocalDateTime.now().plusDays(30).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
     }

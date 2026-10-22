@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 
@@ -200,6 +201,7 @@ class EventCompletionSweeperTest {
                 status,
                 new VenueMap(1, LOCATION, List.of(zone)),
                 List.of(new ShowDate(showEnd.minusHours(2), showEnd)),
+                ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy());
     }

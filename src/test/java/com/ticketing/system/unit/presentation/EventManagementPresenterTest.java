@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.Location;
+import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 
@@ -36,6 +38,7 @@ import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 class EventManagementPresenterTest {
 
     private static final String TOKEN = "owner-token";
+    private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
 
     private EventManagementService eventService;
     private CompanyManagementService companyService;
@@ -45,7 +48,8 @@ class EventManagementPresenterTest {
     void setUp() {
         eventService = mock(EventManagementService.class);
         companyService = mock(CompanyManagementService.class);
-        presenter = new EventManagementPresenter(eventService, companyService);
+        presenter = new EventManagementPresenter(eventService, companyService,
+                new PlatformTimeProperties(JERUSALEM));
     }
 
     private static MyCompanyDTO company(int id) {
@@ -63,7 +67,7 @@ class EventManagementPresenterTest {
     private EventManagementPresenter.CreateOutcome createWith(Integer preferredCompanyId,
                                                              LocalDateTime starts, LocalDateTime ends) {
         return presenter.create(TOKEN, preferredCompanyId, "Gala Night", "A great show",
-                EventCategory.COMEDY.name(), "Israel", "Tel Aviv", starts, ends, List.of("Headliner"), 4.5);
+                EventCategory.COMEDY.name(), "Israel", "Tel Aviv", starts, ends, JERUSALEM, List.of("Headliner"), 4.5);
     }
 
     @Test
@@ -113,6 +117,7 @@ class EventManagementPresenterTest {
     void create_nullToken_returnsNotAuthenticated() {
         EventManagementPresenter.CreateOutcome outcome = presenter.create(null, 1, "Gala", "d",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
+                JERUSALEM,
                 List.of("Headliner"), 4.5);
 
         assertInstanceOf(EventManagementPresenter.CreateOutcome.NotAuthenticated.class, outcome);
@@ -133,7 +138,7 @@ class EventManagementPresenterTest {
         // Required inputs are validated before any service call, so a null category maps to
         // InvalidInput (not a leaked NPE → Failure) and touches neither service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
-                null, "Israel", "Tel Aviv", futureStart(), futureEnd(), List.of("Headliner"), 4.5);
+                null, "Israel", "Tel Aviv", futureStart(), futureEnd(), JERUSALEM, List.of("Headliner"), 4.5);
 
         assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
         verifyNoInteractions(companyService, eventService);
@@ -144,6 +149,7 @@ class EventManagementPresenterTest {
         // Rating is validated up front (0–5), so a bad value maps to InvalidInput and touches no service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
+                JERUSALEM,
                 List.of("Headliner"), 6.0);
 
         assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
@@ -155,10 +161,40 @@ class EventManagementPresenterTest {
         // Rating is required — a null rating maps to InvalidInput and touches no service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
+                JERUSALEM,
                 List.of("Headliner"), null);
 
         assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
         verifyNoInteractions(companyService, eventService);
+    }
+
+    @Test
+    void GivenNoTimeZone_WhenCreate_ThenInvalidInputAndNoServiceCall() {
+        EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
+                EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(), null,
+                List.of("Headliner"), 4.5);
+
+        assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
+        verifyNoInteractions(companyService, eventService);
+    }
+
+    @Test
+    void GivenChosenTimeZone_WhenCreate_ThenTheRequestCarriesIt() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("5"));
+        ZoneId london = ZoneId.of("Europe/London");
+
+        presenter.create(TOKEN, null, "Gala", "desc", EventCategory.COMEDY.name(), "UK", "London",
+                futureStart(), futureEnd(), london, List.of("Headliner"), 4.5);
+
+        ArgumentCaptor<EventCreationDTO> request = ArgumentCaptor.forClass(EventCreationDTO.class);
+        verify(eventService).addEvent(eq(TOKEN), request.capture());
+        assertEquals(london, request.getValue().timeZone());
+    }
+
+    @Test
+    void GivenPlatformZone_WhenDefaultTimeZone_ThenItIsThePlatformZone() {
+        assertEquals(JERUSALEM, presenter.defaultTimeZone());
     }
 
     @Test
@@ -185,6 +221,6 @@ class EventManagementPresenterTest {
     private static EventDetailDTO detailWithId(String id) {
         return new EventDetailDTO(id, "Gala Night", null, "A great show", EventCategory.COMEDY,
                 new Location("Israel", "Tel Aviv"), "1", "Company 1", EventStatus.DRAFT,
-                List.of(), List.of("Headliner"), 0.0);
+                List.of(), JERUSALEM, List.of("Headliner"), 0.0);
     }
 }

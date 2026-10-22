@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -123,6 +124,7 @@ class ReservationConcurrencyTest {
         Event event = new Event(eventId, "Concurrency Concert", 4.5, List.of("Artist"),
                 EventCategory.MUSIC, COMPANY_ID, EventStatus.ON_SALE, venue,
                 List.of(new ShowDate(LocalDateTime.of(2099, 6, 1, 18, 0), LocalDateTime.of(2099, 6, 1, 22, 0))),
+                ZoneId.of("Asia/Jerusalem"),
                 new NoPurchasePolicy(), new DiscountPolicy(0));
         eventRepository.save(event);
     }

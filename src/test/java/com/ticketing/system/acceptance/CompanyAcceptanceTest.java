@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.Disabled;
@@ -127,6 +128,7 @@ class CompanyAcceptanceTest {
                                 List.of(new ShowDate(
                                                 LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(30))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null);
                 EventDetailDTO event = eventManagementService.addEvent(owner.token(), eventRequest);
 
@@ -185,6 +187,7 @@ class CompanyAcceptanceTest {
                 EventCategory.CONCERT, 4.0,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
@@ -203,6 +206,7 @@ class CompanyAcceptanceTest {
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
 
         int eventId = Integer.parseInt(event.eventId());
@@ -229,6 +233,7 @@ class CompanyAcceptanceTest {
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Haifa"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
 
         int eventId = Integer.parseInt(event.eventId());
@@ -255,6 +260,7 @@ class CompanyAcceptanceTest {
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Jerusalem"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
 
         int eventId = Integer.parseInt(event.eventId());
@@ -308,6 +314,7 @@ class CompanyAcceptanceTest {
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
         return Integer.parseInt(event.eventId());
         }
@@ -509,6 +516,7 @@ class CompanyAcceptanceTest {
                                 new Location("Germany", "Berlin"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(4))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 EventDetailDTO result = eventManagementService.getEventDetail(owner.token(),
@@ -540,6 +548,7 @@ class CompanyAcceptanceTest {
                                 new Location("France", "Paris"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(3))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 EventDetailDTO result = eventManagementService.getEventDetail(manager.token(),
@@ -562,6 +571,7 @@ class CompanyAcceptanceTest {
                                 new Location("Spain", "Madrid"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(3))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 assertThrows(RuntimeException.class,
@@ -585,10 +595,11 @@ class CompanyAcceptanceTest {
                                 new Location("Italy", "Rome"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(3))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 eventManagementService.editEventDetails(owner.token(),
-                                new EventUpdateDTO(created.eventId(), "Updated Name", null, null, null, null));
+                                new EventUpdateDTO(created.eventId(), "Updated Name", null, null, null, null, null));
 
                 Event stored = eventRepository.findById(Integer.parseInt(created.eventId()));
                 assertEquals("Updated Name", stored.getName());
@@ -606,10 +617,11 @@ class CompanyAcceptanceTest {
                                 new Location("Japan", "Tokyo"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(3))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 eventManagementService.editEventDetails(owner.token(),
-                                new EventUpdateDTO(created.eventId(), null, null, "SPORTS", null, null));
+                                new EventUpdateDTO(created.eventId(), null, null, "SPORTS", null, null, null));
 
                 Event stored = eventRepository.findById(Integer.parseInt(created.eventId()));
                 assertEquals(EventCategory.SPORTS, stored.getCategory());
@@ -627,10 +639,11 @@ class CompanyAcceptanceTest {
                                 new Location("Brazil", "Rio"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(3))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 eventManagementService.editEventDetails(owner.token(),
-                                new EventUpdateDTO(created.eventId(), "New Name", null, "THEATER", null, null));
+                                new EventUpdateDTO(created.eventId(), "New Name", null, "THEATER", null, null, null));
 
                 Event stored = eventRepository.findById(Integer.parseInt(created.eventId()));
                 assertEquals("New Name", stored.getName());
@@ -655,11 +668,13 @@ class CompanyAcceptanceTest {
                                 new Location("UK", "London"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(3))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 assertThrows(RuntimeException.class,
                                 () -> eventManagementService.editEventDetails(manager.token(),
                                                 new EventUpdateDTO(created.eventId(), "Blocked Edit", null, null, null,
+                                                                null,
                                                                 null)));
         }
 
@@ -675,12 +690,14 @@ class CompanyAcceptanceTest {
                                 new Location("Italy", "Rome"),
                                 List.of(new ShowDate(LocalDateTime.now().plusDays(1),
                                                 LocalDateTime.now().plusDays(1).plusHours(3))),
+                                ZoneId.of("Asia/Jerusalem"),
                                 null));
 
                 LocalDateTime newStart = LocalDateTime.now().plusDays(20);
                 eventManagementService.editEventDetails(owner.token(), new EventUpdateDTO(
                                 created.eventId(), "Full Edit Renamed", "updated desc", "THEATER",
                                 new LocationDTO("France", "Paris"),
+                                null,
                                 List.of(new ShowDateDTO(newStart, newStart.plusHours(2)))));
 
                 EventDetailDTO result = eventManagementService.getEventDetail(owner.token(),

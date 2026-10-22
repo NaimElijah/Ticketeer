@@ -1,5 +1,6 @@
 package com.ticketing.system.shared.dto;
 
+import java.time.ZoneId;
 import java.util.List;
 
 // Input to EventManagementService.editEventDetails() (UC-19).
@@ -12,5 +13,6 @@ public record EventUpdateDTO(
     String description,           // nullable
     String category,              // nullable
     LocationDTO location,         // nullable
+    ZoneId timeZone,              // nullable — the zone the show dates are read in (ADR-008)
     List<ShowDateDTO> showDates   // nullable — null means leave alone; non-empty replaces the schedule
 ) {}

@@ -26,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -78,6 +79,7 @@ class PurchasePolicyAcceptanceTest {
                                 LocalDateTime.now().plusDays(30),
                                 LocalDateTime.now().plusDays(30).plusHours(3)
                         )),
+                        ZoneId.of("Asia/Jerusalem"),
                         null
                 ));
         eventId = Integer.parseInt(event.eventId());

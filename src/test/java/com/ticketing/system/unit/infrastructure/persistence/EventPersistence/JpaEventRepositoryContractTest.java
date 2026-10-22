@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
 
 import com.ticketing.system.catalog.domain.DiscountPolicy;
@@ -48,6 +50,9 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     @Autowired
     private SpringDataEventRepository data;
 
+    @Autowired
+    private TestEntityManager entityManager;
+
     @BeforeEach
     void cleanTable() {
         data.deleteAll();
@@ -56,6 +61,16 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     @Override
     protected EventRepository newRepository() {
         return repository;
+    }
+
+    // Flush and clear so the zone is read back from events.time_zone, not the persistence context.
+    @Test
+    void GivenEventInLondon_WhenFlushedAndReloaded_ThenTimeZoneComesBackFromTheColumn() {
+        repository.save(buildEventInZone(1, ZoneId.of("Europe/London")));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertEquals(ZoneId.of("Europe/London"), repository.findById(1).getTimeZone());
     }
 
     @Test
@@ -71,6 +86,7 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
         Event event = new Event(eventId, "Concert", 4.5, List.of("Coldplay"), EventCategory.MUSIC, 7,
                 EventStatus.ON_SALE, venue, List.of(new ShowDate(
                         LocalDateTime.of(2099, 6, 1, 18, 0), LocalDateTime.of(2099, 6, 1, 22, 0))),
+                ZoneId.of("Asia/Jerusalem"),
                 policy, new DiscountPolicy(0));
         repository.save(event);
 

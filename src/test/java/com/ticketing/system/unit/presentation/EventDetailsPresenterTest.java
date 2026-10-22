@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +44,7 @@ class EventDetailsPresenterTest {
     private static EventDetailDTO detail() {
         return new EventDetailDTO("1", "Coldplay", 4.8, "Music of the Spheres",
                 EventCategory.MUSIC, new Location("Israel", "Tel Aviv"), "10", "Live Nation",
-                EventStatus.ON_SALE, List.of(), List.of("Coldplay"), 75.0);
+                EventStatus.ON_SALE, List.of(), ZoneId.of("Asia/Jerusalem"), List.of("Coldplay"), 75.0);
     }
 
     private static VenueMapDTO venueMap() {
