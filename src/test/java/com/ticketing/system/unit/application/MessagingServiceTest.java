@@ -10,6 +10,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,6 +62,8 @@ class MessagingServiceTest {
     private static final String ADMIN_TOKEN = "admin-tok";
     private static final int ADMIN_ID = 1;
     private static final int COMPANY_ID = 5;
+    // Messages are stamped from the injected clock, as UTC wall time (ADR-008).
+    private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
 
     private ConversationRepository conversationRepository;
     private SessionManager sessionManager;
@@ -79,7 +85,7 @@ class MessagingServiceTest {
         membershipService = mock(CompanyMembershipService.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new MessagingService(conversationRepository, sessionManager, adminRepository,
-                userRepository, companyRepository, membershipService, eventPublisher);
+                userRepository, companyRepository, membershipService, eventPublisher, Clock.fixed(T0, ZoneOffset.UTC));
 
         stubToken(MEMBER_TOKEN, MEMBER_ID);
         stubToken(MEMBER2_TOKEN, MEMBER2_ID);
@@ -122,6 +128,14 @@ class MessagingServiceTest {
     }
 
     // --- startConversation (II.3.10) ---
+
+    @Test
+    void GivenFixedClock_WhenStartConversation_ThenTheConversationIsStampedAtTheClock() {
+        ConversationDTO dto = service.startConversation(MEMBER_TOKEN, inquiryReq());
+
+        assertEquals(LocalDateTime.ofInstant(T0, ZoneOffset.UTC), dto.createdAt());
+        assertEquals(LocalDateTime.ofInstant(T0, ZoneOffset.UTC), dto.lastMessageAt());
+    }
 
     @Test
     void startConversation_createsInquiry_andNotifiesCompanyOwners() {

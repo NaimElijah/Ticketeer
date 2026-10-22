@@ -113,7 +113,7 @@ class EventManagementServiceTest {
                 eventSalesHistoryPort = mock(EventSalesHistoryPort.class);
                 userRepository = mock(UserRepository.class);
                 eventPublisher = mock(ApplicationEventPublisher.class);
-                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
 
                 // The fixtures below are dated relative to the real clock, so the shared service reads it.
                 eventService = serviceWith(Clock.systemUTC());

@@ -77,7 +77,8 @@ public class CompanyAppointment implements InvariantChecked {
             int inviterId,
             CompanyRole role,
             AppointmentStatus status,
-            List<Permission> permissions) {
+            List<Permission> permissions,
+            LocalDateTime createdAt) {
         this.appointmentId = appointmentId;
         this.companyId = companyId;
         this.targetId = targetId;
@@ -91,7 +92,7 @@ public class CompanyAppointment implements InvariantChecked {
         this.permissions = (permissions == null || permissions.isEmpty())
                 ? EnumSet.noneOf(Permission.class)
                 : EnumSet.copyOf(permissions);
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = createdAt;
         checkInvariants();
     }
 
@@ -126,7 +127,8 @@ public class CompanyAppointment implements InvariantChecked {
             int appointmentId,
             int companyId,
             int targetId,
-            int inviterId) {
+            int inviterId,
+            LocalDateTime createdAt) {
         return new CompanyAppointment(
                 appointmentId,
                 companyId,
@@ -135,7 +137,8 @@ public class CompanyAppointment implements InvariantChecked {
                 CompanyRole.Owner,
                 AppointmentStatus.ACTIVE, // active because the founder is active immediately, used when opening a
                                           // company.
-                null);
+                null,
+                createdAt);
     }
 
     public static CompanyAppointment ManagerAppointment(
@@ -143,7 +146,8 @@ public class CompanyAppointment implements InvariantChecked {
             int companyId,
             int targetId,
             int inviterId,
-            List<Permission> permissions) {
+            List<Permission> permissions,
+            LocalDateTime createdAt) {
         return new CompanyAppointment(
                 appointmentId,
                 companyId,
@@ -151,14 +155,16 @@ public class CompanyAppointment implements InvariantChecked {
                 inviterId,
                 CompanyRole.Manager,
                 AppointmentStatus.PENDING,
-                permissions);
+                permissions,
+                createdAt);
     }
 
     public static CompanyAppointment OwnerAppointment(
             int appointmentId,
             int companyId,
             int targetId,
-            int inviterId) {
+            int inviterId,
+            LocalDateTime createdAt) {
         return new CompanyAppointment(
                 appointmentId,
                 companyId,
@@ -166,7 +172,8 @@ public class CompanyAppointment implements InvariantChecked {
                 inviterId,
                 CompanyRole.Owner,
                 AppointmentStatus.PENDING,
-                null);
+                null,
+                createdAt);
     }
 
     public void setPermissions(EnumSet<Permission> newPermissions) {

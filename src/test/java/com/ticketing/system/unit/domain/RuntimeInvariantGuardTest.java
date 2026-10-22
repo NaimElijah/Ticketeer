@@ -45,7 +45,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     @Test
     void setPermissions_emptySetOnManager_throwsAndRollsBack() {
         CompanyAppointment manager = track(CompanyAppointment.ManagerAppointment(
-                7, COMPANY_ID, TARGET_ID, INVITER_ID, List.of(Permission.MANAGE_INVENTORY)));
+                7, COMPANY_ID, TARGET_ID, INVITER_ID, List.of(Permission.MANAGE_INVENTORY), LocalDateTime.now()));
 
         // Manager must keep at least one permission — the raw setter used to allow this.
         assertThrows(IllegalStateException.class,
