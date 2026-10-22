@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, dev]
 
+# Least privilege for GITHUB_TOKEN: the jobs only check out and read the repository. Artifact upload and
+# the Maven cache use the runner's own token, not this one.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build, test and package
