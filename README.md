@@ -320,7 +320,10 @@ About 1,500 test methods, organised by what they boot:
 tests only, because the app then serves no views.
 
 **What gates a merge:** pull requests into `main` and `dev` need the CI check (`mvn -B verify` on
-Temurin 21) and CodeQL to pass. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
+Temurin 21, with the JVM in UTC) and CodeQL to pass. A second job, "Test in Asia/Jerusalem", runs
+the same suite with the JVM at UTC+2/+3, so code that depends on the server's zone fails there
+([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)); it does not gate a merge until the
+branch ruleset lists it. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
 ([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
 PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them

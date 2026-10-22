@@ -22,14 +22,50 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Build + test (mvn -B verify)
-        run: mvn -B verify
+      # The JVM zone is explicit so this job and the one below differ only in it (ADR-008).
+      - name: Build + test (mvn -B verify, JVM in UTC)
+        run: mvn -B verify "-DargLine=-Duser.timezone=UTC"
 
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+          if-no-files-found: ignore
+
+  test-jerusalem:
+    # The same suite with the JVM at UTC+2/+3 (#74, ADR-008): code that reads the JVM's zone passes in
+    # UTC and fails here. Not a required check until the branch ruleset lists it; keep this name stable.
+    name: Test in Asia/Jerusalem
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Test (mvn -B -Pno-vaadin verify, JVM in Asia/Jerusalem)
+        run: mvn -B -Pno-vaadin verify "-DargLine=-Duser.timezone=Asia/Jerusalem"
+
+      # Guards against the zone silently not reaching the forked test JVM, which would make this job
+      # a second UTC run.
+      - name: Check the tests ran in Asia/Jerusalem
+        run: grep -q 'name="user.timezone" value="Asia/Jerusalem"' target/surefire-reports/TEST-*.xml
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-jerusalem
           path: |
             target/surefire-reports/
             target/failsafe-reports/
