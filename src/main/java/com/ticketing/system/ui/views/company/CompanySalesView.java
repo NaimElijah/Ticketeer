@@ -114,7 +114,8 @@ public class CompanySalesView extends LkPage {
 
     private List<PurchaseHistoryDTO.PurchaseRecordDTO> filterByDate(
             List<PurchaseHistoryDTO.PurchaseRecordDTO> records, String range) {
-        LocalDateTime from = SalesDateRange.startOf(range, displayTime.today());
+        // The range starts at midnight in the platform zone; purchase times are UTC (ADR-008).
+        LocalDateTime from = displayTime.toRecorded(SalesDateRange.startOf(range, displayTime.today()));
         if (from == null) {
             return records;
         }
@@ -166,7 +167,7 @@ public class CompanySalesView extends LkPage {
             Map<String, Object> row = new LinkedHashMap<>();
 
             String date = r.purchasedAt() != null
-                    ? r.purchasedAt().format(DATE_FMT) : "—";
+                    ? displayTime.format(r.purchasedAt(), DATE_FMT) : "—";
             row.put("date", date);
 
             String eventName = r.tickets().stream()

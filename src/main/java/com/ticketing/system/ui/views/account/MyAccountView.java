@@ -20,6 +20,7 @@ import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -48,9 +49,11 @@ public class MyAccountView extends LkPage {
     private final PurchaseHistoryDTO history;
     private final RefundPresenter refundPresenter;
     private final SessionIdentity sessionIdentity;
+    private final DisplayTime displayTime;
 
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
-                         SessionIdentity sessionIdentity) {
+                         SessionIdentity sessionIdentity, DisplayTime displayTime) {
+        this.displayTime = displayTime;   // the rows below are rendered during construction
         this.history = presenter.loadHistory();
         this.refundPresenter = refundPresenter;
         this.sessionIdentity = sessionIdentity;
@@ -132,7 +135,7 @@ public class MyAccountView extends LkPage {
         idSpan.getElement().setProperty("innerHTML", "<b>#" + r.orderReceiptId() + "</b>");
         row.put("id", idSpan);
         row.put("evt", orderEventLabel(r));
-        row.put("date", r.purchasedAt() == null ? "—" : r.purchasedAt().format(DATE_FMT));
+        row.put("date", r.purchasedAt() == null ? "—" : displayTime.format(r.purchasedAt(), DATE_FMT));
         row.put("total", money(r.totalPaid()));
         row.put("status", switch (r.refundStatus()) {
             case NONE    -> new LkStatusDot(LkStatusDot.Tone.ok, "Paid");

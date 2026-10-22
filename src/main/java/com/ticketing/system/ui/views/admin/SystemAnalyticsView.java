@@ -16,6 +16,7 @@ import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.DetachEvent;
@@ -26,6 +27,9 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.PermitAll;
+
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * System Analytics dashboard (UC-46 / #43, #279). Admin-only page reached from
@@ -46,6 +50,8 @@ import jakarta.annotation.security.PermitAll;
 public class SystemAnalyticsView extends LkPage {
 
     private final SystemAnalyticsPresenter presenter;
+    private final DisplayTime displayTime;
+    private static final DateTimeFormatter OPENED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.US);
 
     private final LkBadge statusBadge = new LkBadge("—");
     private final Span marketDetail = new Span();
@@ -53,8 +59,9 @@ public class SystemAnalyticsView extends LkPage {
 
     private Registration pollRegistration;
 
-    public SystemAnalyticsView(SystemAnalyticsPresenter presenter) {
+    public SystemAnalyticsView(SystemAnalyticsPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("System Analytics");
         subtitle("Real-time and historical platform performance metrics.");
@@ -134,7 +141,7 @@ public class SystemAnalyticsView extends LkPage {
             market.paymentGatewayHealthy() ? "healthy" : "down",
             market.ticketIssuerHealthy() ? "healthy" : "down",
             market.defaultAdminPresent() ? "present" : "missing",
-            market.lastOpenedAt() == null ? "" : " · Last opened: " + market.lastOpenedAt()));
+            market.lastOpenedAt() == null ? "" : " · Last opened: " + displayTime.format(market.lastOpenedAt(), OPENED_FMT)));
     }
 
     private static LkBadge.Tone toneFor(String status) {

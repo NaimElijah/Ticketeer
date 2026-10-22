@@ -149,7 +149,7 @@ public class MyInvitationsView extends LkPage {
         row.put("company", c);
         row.put("role", humanize(inv.role()));
         row.put("outcome", new LkStatusDot(outcomeTone(inv.status()), outcomeLabel(inv.status())));
-        row.put("date", inv.sentAt() == null ? "—" : DATE.format(inv.sentAt()));
+        row.put("date", inv.sentAt() == null ? "—" : displayTime.format(inv.sentAt(), DATE));
         grid.row(row);
     }
 

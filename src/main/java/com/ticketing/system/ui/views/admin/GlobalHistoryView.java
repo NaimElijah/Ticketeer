@@ -105,7 +105,8 @@ public class GlobalHistoryView extends LkPage {
         if (r.purchasedAt() == null) return false;
         // Calendar-correct windows ("This quarter"/"This year" start on the quarter/year boundary),
         // shared with the Company Sales page filter.
-        LocalDateTime from = SalesDateRange.startOf(sel.iterator().next(), displayTime.today());
+        // The range starts at midnight in the platform zone; purchase times are UTC (ADR-008).
+        LocalDateTime from = displayTime.toRecorded(SalesDateRange.startOf(sel.iterator().next(), displayTime.today()));
         return from == null || !r.purchasedAt().isBefore(from);
     }
 
@@ -170,7 +171,7 @@ public class GlobalHistoryView extends LkPage {
 
     private void recordRow(LkGrid grid, PurchaseRecordDTO r) {
         Map<String, Object> row = new LinkedHashMap<>();
-        row.put("date", r.purchasedAt() == null ? "—" : r.purchasedAt().format(DATE_FMT));
+        row.put("date", r.purchasedAt() == null ? "—" : displayTime.format(r.purchasedAt(), DATE_FMT));
         row.put("buyer", Lk.mono(buyerLabel(r)));
         Span ev = new Span();
         ev.getElement().setProperty("innerHTML", "<b>" + escape(distinctLabel(r, this::eventOf, "events")) + "</b>");

@@ -232,7 +232,7 @@ class VaadinSmokeTest {
         ReceiptPresenter presenter = mock(ReceiptPresenter.class);
         RefundPresenter refundPresenter = mock(RefundPresenter.class);
         SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new ReceiptView(presenter, refundPresenter, sessionIdentity),
+        assertDoesNotThrow(() -> new ReceiptView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),
             "ReceiptView failed to construct");
     }
 
@@ -244,7 +244,7 @@ class VaadinSmokeTest {
         when(presenter.loadHistory()).thenReturn(new PurchaseHistoryDTO(List.of()));
         RefundPresenter refundPresenter = mock(RefundPresenter.class);
         SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new MyAccountView(presenter, refundPresenter, sessionIdentity),
+        assertDoesNotThrow(() -> new MyAccountView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),
             "MyAccountView failed to construct");
     }
 
@@ -281,7 +281,7 @@ class VaadinSmokeTest {
         SystemAnalyticsDTO analytics = new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
         when(presenter.load()).thenReturn(
             new SystemAnalyticsPresenter.Outcome.Success(market, analytics));
-        assertDoesNotThrow(() -> new SystemAnalyticsView(presenter),
+        assertDoesNotThrow(() -> new SystemAnalyticsView(presenter, context.getBean(DisplayTime.class)),
             "SystemAnalyticsView failed to construct");
     }
 
@@ -436,7 +436,7 @@ class VaadinSmokeTest {
             LocalDateTime.now(), "Maintenance window", 82481);
         when(presenter.load(any())).thenReturn(
             new AdminSendMessagesPresenter.Outcome.Success(List.of(row)));
-        assertDoesNotThrow(() -> new AdminSendMessagesView(presenter),
+        assertDoesNotThrow(() -> new AdminSendMessagesView(presenter, context.getBean(DisplayTime.class)),
             "AdminSendMessagesView failed to construct");
     }
 

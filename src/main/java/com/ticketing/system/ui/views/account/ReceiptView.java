@@ -22,6 +22,7 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -57,13 +58,15 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     private final ReceiptPresenter presenter;
     private final RefundPresenter refundPresenter;
     private final SessionIdentity sessionIdentity;
+    private final DisplayTime displayTime;
 
     private final Div bodyHolder = new Div();
     private int receiptId;
 
     public ReceiptView(ReceiptPresenter presenter, RefundPresenter refundPresenter,
-            SessionIdentity sessionIdentity) {
+            SessionIdentity sessionIdentity, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
         this.refundPresenter = refundPresenter;
         this.sessionIdentity = sessionIdentity;
         add(bodyHolder);
@@ -122,7 +125,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     // ---- header ----
 
     private String headerSubtitle(PurchaseRecordDTO receipt) {
-        String when = receipt.purchasedAt() == null ? "—" : receipt.purchasedAt().format(DATE_FMT);
+        String when = receipt.purchasedAt() == null ? "—" : displayTime.format(receipt.purchasedAt(), DATE_FMT);
         TransactionRecordDTO charge = paymentCharge(receipt);
         return charge == null ? when : when + "  ·  Transaction " + charge.externalTransactionId();
     }
@@ -188,7 +191,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         TransactionRecordDTO refundTx = refundTransaction(receipt);
         if (refundTx != null) {
             Span note = Lk.muted("Refunded " + money(refundTx.amount())
-                    + (refundTx.timestamp() == null ? "" : " on " + refundTx.timestamp().format(DATE_FMT)));
+                    + (refundTx.timestamp() == null ? "" : " on " + displayTime.format(refundTx.timestamp(), DATE_FMT)));
             note.getStyle().set("font-size", "12.5px").set("display", "block");
             col.add(note);
         }
@@ -221,7 +224,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         row.add(
                 statBlock("Status", statusBadge),
                 statBlock("Date",
-                        new Span(receipt.purchasedAt() == null ? "—" : receipt.purchasedAt().format(DATE_FMT))),
+                        new Span(receipt.purchasedAt() == null ? "—" : displayTime.format(receipt.purchasedAt(), DATE_FMT))),
                 statBlock("Items", new Span(ticketCount + " ticket" + (ticketCount == 1 ? "" : "s"))),
                 statBlock("Total", totalSpan));
         card.add(row);
