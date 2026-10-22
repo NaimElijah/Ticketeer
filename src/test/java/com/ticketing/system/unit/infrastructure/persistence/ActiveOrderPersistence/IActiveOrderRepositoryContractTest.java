@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 
 // Contract tests every ActiveOrderRepository implementation must satisfy. Future
@@ -23,6 +25,9 @@ abstract class IActiveOrderRepositoryContractTest {
 
     private ActiveOrderRepository repo;
 
+    // The adapters judge expiry at the caller's now (UTC wall time from the injected clock, ADR-008).
+    private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     @BeforeEach
     void setUp() {
         repo = newRepository();
@@ -30,7 +35,7 @@ abstract class IActiveOrderRepositoryContractTest {
 
     @Test
     void save_thenGetByUserId_returnsMemberCart() {
-        ActiveOrder member = ActiveOrder.forMember(5, "sid-A");
+        ActiveOrder member = ActiveOrder.forMember(5, "sid-A", NOW);
         repo.save(member);
 
         ActiveOrder found = repo.getByUserId(5);
@@ -46,7 +51,7 @@ abstract class IActiveOrderRepositoryContractTest {
 
     @Test
     void save_thenGetBySessionId_returnsGuestCart() {
-        ActiveOrder guest = ActiveOrder.forGuest("sid-G");
+        ActiveOrder guest = ActiveOrder.forGuest("sid-G", NOW);
         repo.save(guest);
 
         Optional<ActiveOrder> found = repo.getBySessionId("sid-G");
@@ -62,7 +67,7 @@ abstract class IActiveOrderRepositoryContractTest {
     @Test
     void getBySessionId_returnsMemberCartWhenSessionMatches() {
         // Member cart with active session — same lookup path as Guest.
-        ActiveOrder member = ActiveOrder.forMember(7, "sid-M");
+        ActiveOrder member = ActiveOrder.forMember(7, "sid-M", NOW);
         repo.save(member);
 
         Optional<ActiveOrder> found = repo.getBySessionId("sid-M");
@@ -82,7 +87,7 @@ abstract class IActiveOrderRepositoryContractTest {
 
     @Test
     void delete_removesCart() {
-        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A");
+        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
         repo.save(cart);
         assertNotNull(repo.getByUserId(5));
 
@@ -92,7 +97,7 @@ abstract class IActiveOrderRepositoryContractTest {
 
     @Test
     void delete_unknownIsNoOp() {
-        ActiveOrder cart = ActiveOrder.forMember(99, "sid-Z");
+        ActiveOrder cart = ActiveOrder.forMember(99, "sid-Z", NOW);
         assertDoesNotThrow(() -> repo.delete(cart));
         assertDoesNotThrow(() -> repo.delete(null));
     }
@@ -101,11 +106,11 @@ abstract class IActiveOrderRepositoryContractTest {
     void save_sameMemberTwiceCollapsesIdentity() {
         // D9a edge: re-saving a Member cart (e.g., after promotion) replaces
         // any prior cart with the same userId.
-        ActiveOrder cartV1 = ActiveOrder.forMember(5, "sid-A");
+        ActiveOrder cartV1 = ActiveOrder.forMember(5, "sid-A", NOW);
         cartV1.addStandingReservation(1, 10, 1, 50.0, java.time.LocalDateTime.now());
         repo.save(cartV1);
 
-        ActiveOrder cartV2 = ActiveOrder.forMember(5, "sid-B");
+        ActiveOrder cartV2 = ActiveOrder.forMember(5, "sid-B", NOW);
         repo.lockForUpdate("user:5");
         try {
             repo.save(cartV2);
@@ -122,8 +127,8 @@ abstract class IActiveOrderRepositoryContractTest {
     void save_guestAndMemberWithSameSessionId_stayDistinct() {
         // Edge: a Guest cart and a Member cart that happen to share a sessionId
         // should remain distinct rows (different identities).
-        ActiveOrder guest = ActiveOrder.forGuest("shared-sid");
-        ActiveOrder member = ActiveOrder.forMember(5, "shared-sid");
+        ActiveOrder guest = ActiveOrder.forGuest("shared-sid", NOW);
+        ActiveOrder member = ActiveOrder.forMember(5, "shared-sid", NOW);
         repo.save(guest);
         repo.save(member);
 
@@ -135,16 +140,50 @@ abstract class IActiveOrderRepositoryContractTest {
 
     @Test
     void findExpired_emptyWhenNoExpiredItems() {
-        ActiveOrder cart = ActiveOrder.forGuest("sid-G");
-        cart.addStandingReservation(1, 10, 1, 25.0, java.time.LocalDateTime.now());
+        ActiveOrder cart = ActiveOrder.forGuest("sid-G", NOW);
+        cart.addStandingReservation(1, 10, 1, 25.0, NOW);
         repo.save(cart);
-        assertTrue(repo.findExpired().isEmpty());
+        assertTrue(repo.findExpired(NOW).isEmpty());
+    }
+
+    // Both adapters treat a hold as run out once a full hold has elapsed (Jpa: addedAt <= now - hold;
+    // Memory: no time left at now), judged at the caller's now rather than the system clock (#74).
+    @Test
+    void GivenItemAddedExactlyOneHoldBeforeNow_WhenFindExpired_ThenTheCartIsReturned() {
+        ActiveOrder cart = ActiveOrder.forGuest("sid-old", NOW);
+        cart.addStandingReservation(1, 10, 1, 25.0, NOW.minus(CartLineItem.getExpirationLimit()));
+        repo.save(cart);
+
+        assertEquals(1, repo.findExpired(NOW).size());
+    }
+
+    // Recorded times are UTC wall time (ADR-008), so they may fall in the hour a JVM zone skips when its
+    // clocks go forward: Asia/Jerusalem has no 02:00-03:00 on 26 March 2027. Storage must not move such a
+    // time. This bites only on a JVM in such a zone, which CI's "Test in Asia/Jerusalem" job runs.
+    @Test
+    void GivenItemAddedInTheHourTheJvmZoneSkips_WhenFindExpired_ThenItExpiresOneHoldLater() {
+        LocalDateTime addedAt = LocalDateTime.of(2027, 3, 26, 2, 50);
+        ActiveOrder cart = ActiveOrder.forGuest("sid-gap", addedAt);
+        cart.addStandingReservation(1, 10, 1, 25.0, addedAt);
+        repo.save(cart);
+
+        LocalDateTime tenMinutesLater = LocalDateTime.of(2027, 3, 26, 3, 0).plus(CartLineItem.getExpirationLimit());
+        assertEquals(1, repo.findExpired(tenMinutesLater).size());
+    }
+
+    @Test
+    void GivenItemAddedJustUnderOneHoldBeforeNow_WhenFindExpired_ThenNothingIsReturned() {
+        ActiveOrder cart = ActiveOrder.forGuest("sid-fresh", NOW);
+        cart.addStandingReservation(1, 10, 1, 25.0, NOW.minus(CartLineItem.getExpirationLimit()).plusSeconds(1));
+        repo.save(cart);
+
+        assertTrue(repo.findExpired(NOW).isEmpty());
     }
 
     @Test
     void findAll_returnsEveryCart() {
-        repo.save(ActiveOrder.forMember(5, "sid-M"));
-        repo.save(ActiveOrder.forGuest("sid-G"));
+        repo.save(ActiveOrder.forMember(5, "sid-M", NOW));
+        repo.save(ActiveOrder.forGuest("sid-G", NOW));
 
         java.util.List<ActiveOrder> all = repo.findAll();
         assertEquals(2, all.size());
@@ -158,7 +197,7 @@ abstract class IActiveOrderRepositoryContractTest {
     @Test
     void save_persistsCartItems() {
         // A member cart with items survives save/reload (the "cart survives a restart" acceptance).
-        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A");
+        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
         cart.addStandingReservation(1, 10, 2, 50.0, java.time.LocalDateTime.now());          // 2 standing
         cart.addSeatedReservation(1, 11, java.util.List.of("A1"), 75.0, java.time.LocalDateTime.now()); // 1 seated
         repo.save(cart);

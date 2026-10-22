@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,7 +68,7 @@ public class CompanyManagementServiceTest {
                 sessionManager = mock(SessionManager.class);
                 companyEventStatsPort = mock(CompanyEventStatsPort.class);
                 eventPublisher = mock(ApplicationEventPublisher.class);
-                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
 
                 companyService = new CompanyManagementService(
                                 mockCompanyRepo,

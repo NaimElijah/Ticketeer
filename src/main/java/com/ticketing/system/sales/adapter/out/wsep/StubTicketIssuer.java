@@ -9,6 +9,7 @@ import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,12 @@ import java.util.UUID;
 public class StubTicketIssuer implements TicketIssuer {
     //* can change to be however wanted, this is a stub so we can do what we need with it */
     private static final String ISSUER_ID = "stub-ticket-issuer";
+
+    private final Clock clock;
+
+    public StubTicketIssuer(Clock clock) {
+        this.clock = clock;
+    }
 
     @Override
     public String getId() {
@@ -53,7 +60,7 @@ public class StubTicketIssuer implements TicketIssuer {
         return new IssuanceResultDTO(
                 "issuance-" + UUID.randomUUID(),
                 ISSUER_ID,
-                LocalDateTime.now(),
+                LocalDateTime.now(clock),
                 barcodes);
     }
 

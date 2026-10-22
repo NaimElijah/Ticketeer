@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.domain;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -181,6 +182,18 @@ public class InventoryZoneTest extends BaseDomainTest {
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A3"));
         assertEquals(1, seatedZone.getAvailableAmount());
         assertEquals(2, seatedZone.getReservedAmount());
+    }
+
+    @Test
+    void GivenHoldUntil_WhenSeatedZoneReserves_ThenEverySeatRecordsIt() {
+        SeatedZone seatedZone = track(new SeatedZone(1, "Orchestra", 120.0,
+                List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0))));
+        LocalDateTime holdUntil = LocalDateTime.of(2027, 7, 15, 17, 10);
+
+        seatedZone.reserve(InventorySelection.seated(List.of("A1", "A2"), "test-order", holdUntil));
+
+        assertEquals(holdUntil, seatedZone.getSeatByLabel("A1").getReservedUntil());
+        assertEquals(holdUntil, seatedZone.getSeatByLabel("A2").getReservedUntil());
     }
 
     @Test

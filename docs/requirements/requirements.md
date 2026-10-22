@@ -127,7 +127,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 
 | ID | UC | Requirement | Status | Enforced by · tested by |
 |---|---|---|---|---|
-| II.4.1 | UC-19 | Manage events and inventory: add, edit and remove events; show dates; seated zones with rows and seats; standing-zone capacities. | Built | `EventManagementService`, `Event` · `EventManagementServiceTest`, `EventTest` |
+| II.4.1 | UC-19 | Manage events and inventory: add, edit and remove events; show dates; seated zones with rows and seats; standing-zone capacities. | Built; show dates are in the event's time zone (#74) | `EventManagementService`, `Event`, `ShowDate`, `EventCompletionSweeper` · `EventManagementServiceTest`, `EventTest`, `ShowDateTest`, `EventCompletionSweeperTest` |
 | II.4.2 | UC-20 | Configure the venue map; every map zone links to an inventory zone, and the map shows free and taken places live. | Built | `EventManagementService.configureVenueMap`, `VenueMap` · `EventManagementServiceTest`, `VenueMapTest`, `InventoryZoneTest` |
 | II.4.3 | UC-21 | Set purchase methods and purchase and discount policies. | Partial: purchase policies are built; discounts are one percentage per event; conditional, coupon and composed discounts are #67; the lottery purchase method is #72 | `EventManagementService.setEventPolicies`, `PurchasePolicy`, `DiscountPolicy` · `PurchasePolicyAcceptanceTest`, `PurchasePolicyEnforcementAcceptanceTest` |
 | II.4.4 | — | Receive buyer inquiries and answer them. | Built | `MessagingService` · `MessagingAcceptanceTest` |
@@ -180,8 +180,8 @@ cites; "a buyer has an active order" and "at most one per event" are one item (�
 | 6 | An active company has at least one owner. | The Founder can be neither removed nor resign (`ProductionCompany`, `CompanyManagementService.RevokeAppointment`; no test covers these guards); scanned by `SystemIntegrityVerifier` · `SystemIntegrityVerifierTest` |
 | 7 | Every company and event has purchase and discount policies, defaulting to "no restrictions". | By construction: `NoPurchasePolicy` is the default |
 | 8 | A buyer has one active order collecting their tickets, and at most one per event at any time. | Saving a second cart for the same buyer replaces the first (`ActiveOrderRepository`); scanned by `SystemIntegrityVerifier` · `IActiveOrderRepositoryContractTest`, `SystemIntegrityVerifierTest` |
-| 9 | Adding a ticket to an active order locks it for a fixed time (for example 10 minutes). | `ReservationHoldConfig` reads `constants.ticket-reservation-duration` · `ReservationServiceTest` |
-| 10 | An order not completed within that time is cancelled and its tickets return to stock. | `SessionAndOrderSweeper` · `SessionAndOrderSweeperTest` |
+| 9 | Adding a ticket to an active order locks it for a fixed time (for example 10 minutes). | `ReservationHoldConfig` reads `constants.ticket-reservation-duration`; each reserved seat records the expiry its cart line had when it was reserved; renewing the hold at checkout entry does not move it (`InventorySelection.holdUntil`) · `ReservationServiceTest`, `InventoryZoneTest` |
+| 10 | An order not completed within that time is cancelled and its tickets return to stock. | `SessionAndOrderSweeper` and `ActiveOrderRepository.findExpired`, judged on the injected clock ([ADR-008](../ADRs/ADR-008-event-time-zones-and-one-clock.md)) · `SessionAndOrderSweeperTest`, `IActiveOrderRepositoryContractTest` |
 | 11 | An active order belongs to its buyer; nobody else can change it before it expires. | `ReservationService`, `CheckoutService` · `ReservationServiceTest` |
 | 12 | An event never sells more tickets than its inventory holds. | `StandingZone`, `SeatedZone`, `Ticket.reserve`, optimistic locking; scanned by `SystemIntegrityVerifier` · `ReservationConcurrencyTest`, `SystemIntegrityVerifierTest` |
 
@@ -237,6 +237,22 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   admin closing a company cancels them.
 - An inactive company's events leave search results and cannot be bought.
 - Cancelling a membership cancels all of that member's roles. A suspended user can only view.
+
+### Time and event schedule
+
+- Show times are wall-clock times at the venue, read in the event's IANA time zone. A new event
+  defaults to `platform.time-zone`. Every comparison with "now" turns a show time into an instant
+  first, so no answer depends on the server's zone ([ADR-008](../ADRs/ADR-008-event-time-zones-and-one-clock.md);
+  `ShowDate.startsAt`, `ShowDate.endsAt` · `ShowDateTest`).
+- A new or edited show must start after the current time at the venue. A show that has already
+  happened stays valid (`Event.requireShowsStartAfter`, `Event.editDetails` · `EventTest`,
+  `EventManagementServiceTest`).
+- A live event completes once its last show has ended at the venue (UC-19;
+  `EventCompletionSweeper`, `Event.hasFinishedAsOf` · `EventCompletionSweeperTest`, `EventTest`).
+- No behaviour depends on the server's time zone. Every "now" comes from one UTC clock, and the UI
+  shows recorded times and "today" in `platform.time-zone` (`SecurityConfig.systemClock`,
+  `DisplayTime` · `HexagonalRulesTest`, `ClockConfigTest`, `DisplayTimeTest`; CI runs the suite in UTC
+  and in Asia/Jerusalem).
 
 ### Purchase flow
 

@@ -3,10 +3,14 @@ package com.ticketing.system.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Arrays;
+import java.util.Comparator;
+
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -35,7 +39,6 @@ import com.ticketing.system.support.PostgresContainers;
 @DirtiesContext
 class SchemaMigrationIT {
 
-    private static final String BASELINE_VERSION = "1";
     private static final String FOREIGN_SCHEMA = "legacy";
 
     @Container
@@ -52,10 +55,14 @@ class SchemaMigrationIT {
     private Environment environment;
 
     @Test
-    void GivenCleanPostgres_WhenContextStarts_ThenBaselineIsAppliedAndMappingValidates() {
+    void GivenCleanPostgres_WhenContextStarts_ThenEveryMigrationIsAppliedAndMappingValidates() {
         MigrationInfo current = flyway.info().current();
+        MigrationVersion newest = Arrays.stream(flyway.info().all())
+                .map(MigrationInfo::getVersion)
+                .max(Comparator.naturalOrder())
+                .orElseThrow();
 
-        assertThat(current.getVersion().getVersion()).isEqualTo(BASELINE_VERSION);
+        assertThat(current.getVersion()).isEqualTo(newest);
         assertThat(current.getState()).isEqualTo(MigrationState.SUCCESS);
         assertThat(flyway.info().pending()).isEmpty();
         // Any other mode would build or patch the schema itself and hide a missing migration.

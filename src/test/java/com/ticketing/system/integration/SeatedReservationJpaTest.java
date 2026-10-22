@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -91,7 +92,7 @@ class SeatedReservationJpaTest {
 
         // The dev @Scheduled completion sweep runs ~60s after boot, before a buyer reserves. A
         // future-dated event must survive it (only events whose last show has ended get COMPLETED).
-        eventCompletionSweeper.completeFinishedEvents(java.time.LocalDateTime.now(java.time.Clock.systemUTC()));
+        eventCompletionSweeper.completeFinishedEvents(java.time.Clock.systemUTC().instant());
 
         assertEquals(EventStatus.ON_SALE, eventRepository.findById(eventId).getStatus(),
                 "a future-dated event must NOT be auto-completed by the sweeper");
@@ -119,6 +120,7 @@ class SeatedReservationJpaTest {
                 companyId, "Seated Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(ev.eventId());
         List<SeatConfigDTO> seats = List.of(

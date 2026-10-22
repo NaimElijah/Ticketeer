@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -68,7 +69,7 @@ class ManagerPermissionMatrixAcceptanceTest {
 
         // CANNOT: edit metadata / change status (MANAGE_INVENTORY) or policies (EDIT_POLICIES).
         assertMissingPermission(() -> eventManagementService.editEventDetails(m.token(),
-                new EventUpdateDTO(String.valueOf(f.eventId), "Hacked", null, null, null, null)), "MANAGE_INVENTORY");
+                new EventUpdateDTO(String.valueOf(f.eventId), "Hacked", null, null, null, null, null)), "MANAGE_INVENTORY");
         assertMissingPermission(() -> eventManagementService.changeEventStatus(m.token(), f.eventId, EventStatus.ON_SALE),
                 "MANAGE_INVENTORY");
         assertMissingPermission(() -> eventManagementService.setEventPolicies(m.token(),
@@ -82,12 +83,13 @@ class ManagerPermissionMatrixAcceptanceTest {
 
         // CAN: edit metadata, change status (Scheduled -> On sale), create a new event.
         eventManagementService.editEventDetails(m.token(),
-                new EventUpdateDTO(String.valueOf(f.eventId), "Renamed by Manager", null, null, null, null));
+                new EventUpdateDTO(String.valueOf(f.eventId), "Renamed by Manager", null, null, null, null, null));
         eventManagementService.changeEventStatus(m.token(), f.eventId, EventStatus.ON_SALE);
         EventDetailDTO created = eventManagementService.addEvent(m.token(), new EventCreationDTO(
                 f.companyId, "Manager-Created", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(5), LocalDateTime.now().plusDays(5).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
         assertNotNull(created.eventId(), "a MANAGE_INVENTORY manager can create events");
 
@@ -113,7 +115,7 @@ class ManagerPermissionMatrixAcceptanceTest {
 
         // CANNOT: edit metadata (MANAGE_INVENTORY) or venue (CONFIGURE_VENUE).
         assertMissingPermission(() -> eventManagementService.editEventDetails(m.token(),
-                new EventUpdateDTO(String.valueOf(f.eventId), "Nope", null, null, null, null)), "MANAGE_INVENTORY");
+                new EventUpdateDTO(String.valueOf(f.eventId), "Nope", null, null, null, null, null)), "MANAGE_INVENTORY");
         assertMissingPermission(() -> eventManagementService.configureVenueMap(m.token(), f.companyId,
                 new VenueMapConfigDTO(String.valueOf(f.eventId), "X", 1, 1, List.of(standingZone("Z", 10)))),
                 "CONFIGURE_VENUE");
@@ -132,6 +134,7 @@ class ManagerPermissionMatrixAcceptanceTest {
                 companyId, "Matrix Event", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(ev.eventId());
         eventManagementService.configureVenueMap(owner.token(), companyId,

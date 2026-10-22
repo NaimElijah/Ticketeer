@@ -20,6 +20,7 @@ import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -34,6 +35,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Route(value = "my-account", layout = MainLayout.class)
@@ -42,14 +44,16 @@ import java.util.Map;
 public class MyAccountView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
-    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
 
     private final PurchaseHistoryDTO history;
     private final RefundPresenter refundPresenter;
     private final SessionIdentity sessionIdentity;
+    private final DisplayTime displayTime;
 
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
-                         SessionIdentity sessionIdentity) {
+                         SessionIdentity sessionIdentity, DisplayTime displayTime) {
+        this.displayTime = displayTime;   // the rows below are rendered during construction
         this.history = presenter.loadHistory();
         this.refundPresenter = refundPresenter;
         this.sessionIdentity = sessionIdentity;
@@ -131,7 +135,7 @@ public class MyAccountView extends LkPage {
         idSpan.getElement().setProperty("innerHTML", "<b>#" + r.orderReceiptId() + "</b>");
         row.put("id", idSpan);
         row.put("evt", orderEventLabel(r));
-        row.put("date", r.purchasedAt() == null ? "—" : r.purchasedAt().format(DATE_FMT));
+        row.put("date", r.purchasedAt() == null ? "—" : displayTime.format(r.purchasedAt(), DATE_FMT));
         row.put("total", money(r.totalPaid()));
         row.put("status", switch (r.refundStatus()) {
             case NONE    -> new LkStatusDot(LkStatusDot.Tone.ok, "Paid");

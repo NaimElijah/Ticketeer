@@ -114,8 +114,7 @@ public class Conversation implements InvariantChecked {
     public static Conversation start(ConversationType type,
                                      int initiatorId, ParticipantType initiatorType,
                                      int counterpartyId, ParticipantType counterpartyType,
-                                     String subject, String firstMessageBody) {
-        LocalDateTime now = LocalDateTime.now();
+                                     String subject, String firstMessageBody, LocalDateTime now) {
         Message first = new Message(UUID.randomUUID().toString(),
                 initiatorId, initiatorType, firstMessageBody, now);
         List<Message> messages = new ArrayList<>();
@@ -140,7 +139,7 @@ public class Conversation implements InvariantChecked {
     // Append a new message. Updates lastMessageAt and may transition status (OPEN→RESPONDED, etc).
     // Throws ConversationClosedException if status is CLOSED or RESOLVED.
     // Throws InvalidParticipantException if sender is not initiator or counterparty.
-    public void addMessage(int senderId, ParticipantType senderType, String body) {
+    public void addMessage(int senderId, ParticipantType senderType, String body, LocalDateTime now) {
         if (isClosed()) {
             throw new ConversationClosedException(conversationId);
         }
@@ -162,7 +161,6 @@ public class Conversation implements InvariantChecked {
         if (!involvesParticipant(senderId, senderType)) {
             throw new InvalidParticipantException(senderId, conversationId);
         }
-        LocalDateTime now = LocalDateTime.now();
         messages.add(new Message(UUID.randomUUID().toString(), senderId, senderType, body, now));
         this.lastMessageAt = now;
         // Auto status flip between the two sides: the initiator re-opens; the other side responds.

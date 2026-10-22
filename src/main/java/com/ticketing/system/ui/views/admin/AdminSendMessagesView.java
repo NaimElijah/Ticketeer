@@ -19,6 +19,7 @@ import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter.S
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
@@ -51,6 +52,7 @@ public class AdminSendMessagesView extends LkPage {
     private static final DateTimeFormatter SENT_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
 
     private final AdminSendMessagesPresenter presenter;
+    private final DisplayTime displayTime;
 
     private final TextField subject = new TextField("Subject");
     private final TextArea body = new TextArea("Body");
@@ -66,8 +68,9 @@ public class AdminSendMessagesView extends LkPage {
     /** History grid lives in its own slot so it can reload in place after a send. */
     private final Div historySlot = new Div();
 
-    public AdminSendMessagesView(AdminSendMessagesPresenter presenter) {
+    public AdminSendMessagesView(AdminSendMessagesPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("Outreach System Members");
         subtitle("Send a message to individual members, all members, or all producers.");
@@ -242,7 +245,7 @@ public class AdminSendMessagesView extends LkPage {
 
         for (SentOutreach a : history) {
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("sent", a.sentAt() == null ? "—" : a.sentAt().format(SENT_FMT));
+            row.put("sent", a.sentAt() == null ? "—" : displayTime.format(a.sentAt(), SENT_FMT));
             Span subj = new Span(a.subject() == null ? "" : a.subject());
             subj.getStyle().set("font-weight", "600");
             row.put("subj", subj);

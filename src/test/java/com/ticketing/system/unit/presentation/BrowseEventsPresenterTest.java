@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +33,7 @@ class BrowseEventsPresenterTest {
 
     private static EventSummaryDTO summary() {
         return new EventSummaryDTO(1, "Coldplay", "ON_SALE", 4.8, "Live Nation",
-                "CONCERT", "Tel Aviv, Israel", List.of(), 90.0, 250.0, false, List.of("Coldplay"));
+                "CONCERT", "Tel Aviv, Israel", List.of(), ZoneId.of("Asia/Jerusalem"), 90.0, 250.0, false, List.of("Coldplay"));
     }
 
     @Test

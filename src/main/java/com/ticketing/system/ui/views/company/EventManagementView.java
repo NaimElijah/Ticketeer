@@ -24,6 +24,7 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
@@ -37,7 +38,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -48,11 +49,15 @@ import java.util.List;
 @RequireCapability(Capability.EDIT_COMPANY_EVENTS)
 public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
+    private static final String VENUE_TIME_HINT = "Local time at the venue";
+
     private final TextField title = new TextField("Title");
     private final Select<String> category = new Select<>();
     private final TextField country = new TextField("Country");
     private final TextField city = new TextField("City");
     private final LkTextRows artists = new LkTextRows("Artists", "+ Add artist").placeholder("e.g. The Beatles");
+    /** The venue's zone; the start and end pickers are wall-clock times in it (ADR-008). */
+    private final ComboBox<ZoneId> timeZone = new ComboBox<>("Time zone");
     private final DateTimePicker start = new DateTimePicker("Starts");
     private final DateTimePicker end = new DateTimePicker("Ends");
     private final NumberField rating = new NumberField("Rating (0–5)");
@@ -93,6 +98,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             subtitle("Create the event as a draft, then configure its venue and publish it.");
             saveBtn.label("Create Event");
             artists.readOnly(false);
+            timeZone.setValue(presenter.defaultTimeZone());
             // Linked editors, status and the danger zone all act on a persisted event.
             sideCol.setVisible(false);
         } else {
@@ -122,6 +128,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             country.setValue(ev.location().country() != null ? ev.location().country() : "");
             city.setValue(ev.location().city() != null ? ev.location().city() : "");
         }
+        timeZone.setValue(ev.timeZone());
         loadedShowDates = ev.showDates() != null ? ev.showDates() : List.of();
         if (!loadedShowDates.isEmpty()) {
             start.setValue(loadedShowDates.get(0).getStartTime());
@@ -163,6 +170,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
                     blankToNull(description.getValue()),
                     category.getValue(),                 // null = leave category alone
                     buildLocation(),                     // null = leave location alone
+                    timeZone.getValue(),                 // null = leave the time zone alone
                     buildShowDates()                     // null = leave schedule alone
                 ))) {
             case EventManagementPresenter.SaveOutcome.Success ignored ->
@@ -192,12 +200,9 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             Toasts.failure("The end time must be after the start time.");
             return;
         }
-        // Match the domain ShowDate rule, which rejects a start at or before "now" (not just before).
-        LocalDateTime now = LocalDateTime.now();
-        if (!start.getValue().isAfter(now)) {
-            Toasts.failure("The start time must be in the future.");
-            return;
-        }
+        // Whether the start is still ahead depends on the venue's zone, so the service judges it
+        // against the injected clock and the presenter surfaces its reason.
+        if (timeZone.getValue() == null) { Toasts.failure("Please choose the venue's time zone."); return; }
 
         List<String> artistList = artists.getValues();
         if (artistList.isEmpty()) { Toasts.failure("Please list at least one artist."); return; }
@@ -206,7 +211,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
         switch (presenter.create(AuthSession.token(), CurrentCompanies.currentCompanyId(),
                 name, blankToNull(description.getValue()), category.getValue(),
-                co, ci, start.getValue(), end.getValue(), artistList, rating.getValue())) {
+                co, ci, start.getValue(), end.getValue(), timeZone.getValue(), artistList,
+                rating.getValue())) {
             case EventManagementPresenter.CreateOutcome.Success ok -> {
                 Toasts.success("Event created as a draft — configure the venue map and publish when ready.");
                 UI.getCurrent().navigate("owner/events/" + ok.eventId());
@@ -277,7 +283,14 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
         artists.setWidthFull();
 
+        timeZone.setItems(ZoneId.getAvailableZoneIds().stream().sorted().map(ZoneId::of).toList());
+        timeZone.setItemLabelGenerator(ZoneId::getId);
+        timeZone.setRequired(true);
+        timeZone.setWidthFull();
+
+        start.setHelperText(VENUE_TIME_HINT);
         start.setWidthFull();
+        end.setHelperText(VENUE_TIME_HINT);
         end.setWidthFull();
 
         rating.setMin(0);
@@ -294,7 +307,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
                 .set("display", "grid")
                 .set("grid-template-columns", "repeat(auto-fit, minmax(min(100%, 220px), 1fr))")
                 .set("gap", "14px");
-        grid.add(title, category, country, city, start, end, rating);
+        grid.add(title, category, country, city, timeZone, start, end, rating);
 
         LkCol col = new LkCol().gap(14);
         col.add(grid, artists, description);

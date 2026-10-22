@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -38,7 +39,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
     // Helper — mints an id and builds a PENDING manager appointment with the given permissions.
     private CompanyAppointment manager(int companyId, int targetId, int inviterId, List<Permission> permissions) {
-        return CompanyAppointment.ManagerAppointment(repo.nextId(), companyId, targetId, inviterId, permissions);
+        return CompanyAppointment.ManagerAppointment(repo.nextId(), companyId, targetId, inviterId, permissions, LocalDateTime.now());
     }
 
     @Test

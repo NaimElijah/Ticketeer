@@ -1,7 +1,7 @@
 package com.ticketing.system.bootstrap.scheduling;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,16 +40,16 @@ public class EventCompletionSweeper {
 
     @Scheduled(fixedDelayString = "${event-completion.fixed-delay-ms:60000}")
     public void sweep() {
-        int completed = completeFinishedEvents(LocalDateTime.now(clock));
+        int completed = completeFinishedEvents(clock.instant());
         if (completed > 0) {
             log.info("event-completion tick: {} event(s) marked COMPLETED", completed);
         }
     }
 
     /**
-     * Completes every live event whose last show has ended as of {@code now}.
-     * Returns the number of events transitioned. Public so unit tests can drive the
-     * sweep independently of the {@code @Scheduled} cadence.
+     * Completes every live event whose last show has ended as of {@code now}, reading each event's
+     * show times in its own zone (ADR-008). Returns the number of events transitioned. Public so
+     * unit tests can drive the sweep independently of the {@code @Scheduled} cadence.
      *
      * <p>Concurrency safety does NOT rely on {@code lockForUpdate} — that is a no-op on the JPA
      * repository (it locks only under the in-memory repo). Each candidate is re-read and
@@ -59,7 +59,7 @@ public class EventCompletionSweeper {
      * status only (no inventory side effects), and the {@code @Scheduled} pool is single-threaded —
      * so there is no lock-ordering concern with the multi-event {@code SessionAndOrderSweeper}.
      */
-    public int completeFinishedEvents(LocalDateTime now) {
+    public int completeFinishedEvents(Instant now) {
         // Scan first, then re-read + re-validate each candidate before transitioning it below.
         List<Event> candidates = new ArrayList<>();
         candidates.addAll(eventRepository.findByStatus(EventStatus.ON_SALE));

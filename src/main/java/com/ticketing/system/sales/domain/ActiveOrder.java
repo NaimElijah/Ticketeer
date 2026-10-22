@@ -89,12 +89,15 @@ public class ActiveOrder implements InvariantChecked {
         this.items = new ArrayList<>();
     }
 
-    public ActiveOrder(Integer userId, String sessionId) {
+    /**
+     * @param createdAt when the cart was opened, as UTC wall time from the injected clock (ADR-008)
+     */
+    public ActiveOrder(Integer userId, String sessionId, LocalDateTime createdAt) {
         this.userId = userId;
         this.sessionId = sessionId;
         this.status = ActiveOrderStatus.PRE_CHECKOUT;
         this.items = new ArrayList<>();
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = createdAt;
         checkInvariants();
     }
 
@@ -105,30 +108,30 @@ public class ActiveOrder implements InvariantChecked {
 
     /**
      * Legacy convenience for existing Member-only callers. Equivalent to
-     * {@code new ActiveOrder(userId, null)} — a Member cart in the
+     * {@code new ActiveOrder(userId, null, createdAt)} — a Member cart in the
      * between-sessions state. New code should prefer
-     * {@link #forMember(int, String)} or {@link #forGuest(String)}.
+     * {@link #forMember(int, String, LocalDateTime)} or {@link #forGuest(String, LocalDateTime)}.
      */
-    public ActiveOrder(int userId) {
-        this(Integer.valueOf(userId), null);
+    public ActiveOrder(int userId, LocalDateTime createdAt) {
+        this(Integer.valueOf(userId), null, createdAt);
     }
 
 
     /** Member cart attached to an active session. */
-    public static ActiveOrder forMember(int userId, String sessionId) {
+    public static ActiveOrder forMember(int userId, String sessionId, LocalDateTime createdAt) {
         if (sessionId == null) {
             throw new IllegalArgumentException("forMember requires a non-null sessionId");
         }
-        return new ActiveOrder(Integer.valueOf(userId), sessionId);
+        return new ActiveOrder(Integer.valueOf(userId), sessionId, createdAt);
     }
 
 
     /** Guest cart bound to a session (no userId yet). */
-    public static ActiveOrder forGuest(String sessionId) {
+    public static ActiveOrder forGuest(String sessionId, LocalDateTime createdAt) {
         if (sessionId == null) {
             throw new IllegalArgumentException("forGuest requires a non-null sessionId");
         }
-        return new ActiveOrder(null, sessionId);
+        return new ActiveOrder(null, sessionId, createdAt);
     }
 
 
@@ -210,7 +213,7 @@ public class ActiveOrder implements InvariantChecked {
                 throw new IllegalArgumentException("Seat numbers must be non-empty");
             }
             // check that we're not adding duplicate seat numbers for the same event and zone that already exist in the active order.
-            this.checkThatNotAddingDuplicateSeatNumbersForEventAndZone(eventId, zoneId, seatNumbers);
+            this.checkThatNotAddingDuplicateSeatNumbersForEventAndZone(eventId, zoneId, seatNumbers, addedAt);
 
             for (String seatNumber : seatNumbers) {
                 items.add(new CartLineItem(eventId, zoneId, seatNumber, price, addedAt));
@@ -371,13 +374,14 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
+    // `now` is the new lines' addedAt: a seat already in the order counts only while its hold is live.
     private void checkThatNotAddingDuplicateSeatNumbersForEventAndZone(int eventId, int zoneId,
-            List<String> seatNumbers) {
+            List<String> seatNumbers, LocalDateTime now) {
         for (String seatNumber : seatNumbers) {
             boolean exists = items.stream().anyMatch(item -> item.geteventId() == eventId &&
                     item.getzoneId() == zoneId &&
                     seatNumber.equals(item.getSeatNumber()) &&
-                    !item.isExpired());
+                    !item.isExpired(now));
 
             if (exists) {
                 throw new IllegalArgumentException(
@@ -459,10 +463,11 @@ public class ActiveOrder implements InvariantChecked {
             return items.isEmpty();
         }
     }
-      public boolean hasExpiredItem() {
+    /** @return whether any line's hold has run out at {@code now} (UTC wall time, ADR-008) */
+    public boolean hasExpiredItem(LocalDateTime now) {
         synchronized (itemsLock) {
             for (CartLineItem item : items) {
-                if (item.isExpired()) {
+                if (item.isExpired(now)) {
                     return true;
                 }
             }
@@ -564,14 +569,14 @@ public class ActiveOrder implements InvariantChecked {
     }
 
     // returns the minimum remaining time among the items in the active order, which represents the time until the next item expires. If there are no items, returns Duration.ZERO.
-    public Duration getRemainingTime() {
+    public Duration getRemainingTime(LocalDateTime now) {
         synchronized (itemsLock) {
             if (items.isEmpty()) {
                 return Duration.ZERO;
             }
 
             return items.stream()
-                    .map(CartLineItem::getRemainingTime)
+                    .map(item -> item.getRemainingTime(now))
                     .min(Duration::compareTo)
                     .orElse(Duration.ZERO);
         }
@@ -622,7 +627,8 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
-  public boolean validateCanCheckout() {
+    /** Checks the order can be checked out at {@code now}: not already in checkout, not empty, no hold run out. */
+    public boolean validateCanCheckout(LocalDateTime now) {
         synchronized (itemsLock) {
             if (status == ActiveOrderStatus.CHECKOUT_IN_PROGRESS) {
                 throw new IllegalStateException("Order is already being checked out");
@@ -633,7 +639,7 @@ public class ActiveOrder implements InvariantChecked {
             }
 
             for (CartLineItem item : items) {
-                if (item.isExpired()) {
+                if (item.isExpired(now)) {
                     throw new IllegalStateException("Cannot checkout because one or more tickets expired");
                 }
             }
@@ -664,10 +670,11 @@ public class ActiveOrder implements InvariantChecked {
     }
 
 
- public boolean hasReservationForEvent(int eventId) {
+    /** @return whether the order holds a live (not run out at {@code now}) line for the event */
+    public boolean hasReservationForEvent(int eventId, LocalDateTime now) {
         synchronized (itemsLock) {
             for (CartLineItem item : items) {
-                if (item.geteventId() == eventId && !item.isExpired()) {
+                if (item.geteventId() == eventId && !item.isExpired(now)) {
                     return true;
                 }
             }
@@ -712,17 +719,18 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
-    public int countTickets(int eventId, int zoneId) {
+    /** @return the number of live (not run out at {@code now}) tickets for the event and zone */
+    public int countTickets(int eventId, int zoneId, LocalDateTime now) {
         synchronized (itemsLock) {
-            return countTicketsWithoutLock(eventId, zoneId);
+            return countTicketsWithoutLock(eventId, zoneId, now);
         }
     }
     
-    private int countTicketsWithoutLock(int eventId, int zoneId) {
+    private int countTicketsWithoutLock(int eventId, int zoneId, LocalDateTime now) {
         int count = 0;
 
         for (CartLineItem item : items) {
-            if (item.geteventId() == eventId && item.getzoneId() == zoneId && !item.isExpired()) {
+            if (item.geteventId() == eventId && item.getzoneId() == zoneId && !item.isExpired(now)) {
                 count = count + 1;
             }
         }
@@ -732,7 +740,8 @@ public class ActiveOrder implements InvariantChecked {
 
     
 
-    public ActiveOrderDTO toDTO() {
+    /** @param now the current time, for the remaining hold the DTO reports (UTC wall time, ADR-008) */
+    public ActiveOrderDTO toDTO(LocalDateTime now) {
         synchronized (itemsLock) {
             List<ActiveOrderDTO.CartLineDTO> lineDTOs = new ArrayList<>();
 
@@ -744,7 +753,7 @@ public class ActiveOrder implements InvariantChecked {
                     userIdOrNull(),
                     sessionId,
                     getCreatedAt(),
-                    this.getRemainingTime().getSeconds(),
+                    this.getRemainingTime(now).getSeconds(),
                     this.getRegularTotalPrice(),
                     lineDTOs
             );

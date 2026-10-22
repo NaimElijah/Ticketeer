@@ -11,6 +11,10 @@ import static org.mockito.Mockito.when;
 
 import java.net.ConnectException;
 import java.net.http.HttpTimeoutException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -41,7 +45,8 @@ class WsepPaymentGatewayTest {
     private static final String CVV = "777";
 
     private final WsepHttpClient http = mock(WsepHttpClient.class);
-    private final WsepPaymentGateway gateway = new WsepPaymentGateway(http);
+    private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
+    private final WsepPaymentGateway gateway = new WsepPaymentGateway(http, Clock.fixed(T0, ZoneOffset.UTC));
 
     private PaymentRequestDTO request() {
         CardDetailsDTO card = new CardDetailsDTO(FULL_PAN, CVV, 11, 2031, "Jane Holder");
@@ -71,6 +76,8 @@ class WsepPaymentGatewayTest {
         assertEquals("wsep-payment-gateway", result.gatewayName());
         assertEquals(100.0, result.chargedAmount());
         assertEquals("USD", result.currency());
+        // Stamped from the injected clock, as UTC wall time (ADR-008).
+        assertEquals(LocalDateTime.ofInstant(T0, ZoneOffset.UTC), result.chargedAt());
 
         ArgumentCaptor<WsepHttpClient.Form> captor = ArgumentCaptor.forClass(WsepHttpClient.Form.class);
         verify(http).post(captor.capture());

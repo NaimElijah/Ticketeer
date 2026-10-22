@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -650,6 +651,20 @@ class CatalogServiceTest {
         assertEquals("Event 2", results.get(1).name());
     }
 
+    // 20:00 in Jerusalem (17:00Z) starts before 18:30 in London (17:30Z), though its wall time is later.
+    @Test
+    void GivenEventsInDifferentZones_WhenUpcomingOnSale_ThenTheSoonestInstantComesFirst() {
+        ProductionCompany active = createMockCompany("Acme", 4.5);
+        Event london = scheduledEvent(1, 10, LocalDateTime.of(2027, 7, 15, 18, 30), ZoneId.of("Europe/London"));
+        Event jerusalem = scheduledEvent(2, 10, LocalDateTime.of(2027, 7, 15, 20, 0), ZoneId.of("Asia/Jerusalem"));
+        when(mockEventRepository.findByStatus(EventStatus.SCHEDULED)).thenReturn(List.of(london, jerusalem));
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(active);
+
+        List<EventSummaryDTO> results = catalogService.upcomingOnSale(5);
+
+        assertEquals(List.of("Event 2", "Event 1"), results.stream().map(EventSummaryDTO::name).toList());
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -907,6 +922,10 @@ class CatalogServiceTest {
     // A SCHEDULED event with a single show date at {start} (for upcomingOnSale
     // ordering).
     private Event scheduledEvent(int id, int companyId, LocalDateTime start) {
+        return scheduledEvent(id, companyId, start, ZoneId.of("Asia/Jerusalem"));
+    }
+
+    private Event scheduledEvent(int id, int companyId, LocalDateTime start, ZoneId timeZone) {
         Event mockEvent = mock(Event.class);
         when(mockEvent.getId()).thenReturn(id);
         when(mockEvent.getName()).thenReturn("Event " + id);
@@ -916,10 +935,8 @@ class CatalogServiceTest {
         when(mockEvent.getCompanyId()).thenReturn(companyId);
         when(mockEvent.getVenueMap()).thenReturn(
                 new VenueMap(id, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50))));
-        ShowDate showDate = mock(ShowDate.class);
-        when(showDate.getStartTime()).thenReturn(start);
-        when(showDate.getEndTime()).thenReturn(start.plusHours(2));
-        when(mockEvent.getShowDates()).thenReturn(List.of(showDate));
+        when(mockEvent.getShowDates()).thenReturn(List.of(new ShowDate(start, start.plusHours(2))));
+        when(mockEvent.getTimeZone()).thenReturn(timeZone);
         return mockEvent;
     }
 }

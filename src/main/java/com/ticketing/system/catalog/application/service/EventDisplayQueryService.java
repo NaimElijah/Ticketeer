@@ -1,6 +1,6 @@
 package com.ticketing.system.catalog.application.service;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -42,7 +42,7 @@ public class EventDisplayQueryService implements CatalogEventDisplayPort {
         // Flatten each display field, guarding every nested reference so a partially-configured event
         // (e.g. no venue map yet) still projects cleanly with null fields rather than throwing.
         String category = event.getCategory() == null ? null : event.getCategory().toString();
-        LocalDateTime startsAt = resolveEventStart(event);
+        ZonedDateTime startsAt = resolveEventStart(event);
         String venueLocation = (event.getVenueMap() == null || event.getVenueMap().getLocation() == null)
                 ? null
                 : event.getVenueMap().getLocation().toString();
@@ -67,12 +67,12 @@ public class EventDisplayQueryService implements CatalogEventDisplayPort {
         }
     }
 
-    /** The first show date's start time, or {@code null} when the event has no schedule. */
-    private LocalDateTime resolveEventStart(Event event) {
+    /** The first show date's start at the venue, or {@code null} when the event has no schedule. */
+    private ZonedDateTime resolveEventStart(Event event) {
         if (event.getShowDates() == null || event.getShowDates().isEmpty()) {
             return null;
         }
-        return event.getShowDates().get(0).getStartTime();
+        return event.getShowDates().get(0).getStartTime().atZone(event.getTimeZone());
     }
 
     /** Projects each zone to a sales-safe (id, name) pair; empty when no venue map is configured. */

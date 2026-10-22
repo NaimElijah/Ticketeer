@@ -17,6 +17,7 @@ import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -25,8 +26,6 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteParameters;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -52,6 +51,7 @@ public class AdminComplaintQueueView extends LkPage {
     private static final List<String> STATUS_OPTIONS = List.of(ALL, "Open", "Resolved");
 
     private final AdminComplaintQueuePresenter presenter;
+    private final DisplayTime displayTime;
 
     /** Holds the filter row + master/detail split, or an empty/error banner, so it can be
      *  rebuilt in place without disturbing the page header. */
@@ -63,8 +63,9 @@ public class AdminComplaintQueueView extends LkPage {
     private String statusFilter = ALL;   // status group (All/Open/Resolved); re-queried on change
     private LkCard detailCard;
 
-    public AdminComplaintQueueView(AdminComplaintQueuePresenter presenter) {
+    public AdminComplaintQueueView(AdminComplaintQueuePresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("Complaint Queue");
         subtitle("Member complaints opened via Conversation type=COMPLAINT.");
@@ -126,7 +127,7 @@ public class AdminComplaintQueueView extends LkPage {
         convRows.clear();
         for (ConversationDTO c : complaints) {
             MdConvRow row = new MdConvRow("warning", c.subject(), c.initiatorDisplayName(),
-                relativeTime(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
+                displayTime.ageShort(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
             if (c.conversationId().equals(selectedId)) row.active();
             row.onSelect(() -> selectById(c.conversationId()));
             convRows.add(row);
@@ -210,12 +211,12 @@ public class AdminComplaintQueueView extends LkPage {
     // -- Display mapping ------------------------------------------------------
 
     /** From the admin's vantage point, ADMIN messages are "You"; the other side is the member. */
-    private static List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
+    private List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
         List<MdThread.Message> out = new ArrayList<>();
         for (MessageDTO m : conv.messages()) {
             boolean me = "ADMIN".equals(m.senderType());
             String from = me ? "You" : conv.initiatorDisplayName();
-            out.add(new MdThread.Message(from, relativeTime(m.sentAt()), me, m.body()));
+            out.add(new MdThread.Message(from, displayTime.ageShort(m.sentAt()), me, m.body()));
         }
         return out;
     }
@@ -232,19 +233,5 @@ public class AdminComplaintQueueView extends LkPage {
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
         return status.charAt(0) + status.substring(1).toLowerCase();
-    }
-
-    /** Compact relative label from a timestamp: now / Nm / Nh / Nd / Nw. */
-    private static String relativeTime(LocalDateTime when) {
-        if (when == null) return "";
-        Duration d = Duration.between(when, LocalDateTime.now());
-        long mins = d.toMinutes();
-        if (mins < 1) return "now";
-        if (mins < 60) return mins + "m";
-        long hours = d.toHours();
-        if (hours < 24) return hours + "h";
-        long days = d.toDays();
-        if (days < 7) return days + "d";
-        return (days / 7) + "w";
     }
 }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -38,7 +39,7 @@ abstract class IConversationRepositoryContractTest {
     /** INQUIRY: member (initiator) -> company (counterparty), first message from the member. */
     private Conversation inquiry(int memberId, int companyId, String subject, String firstBody) {
         return Conversation.start(ConversationType.INQUIRY, memberId, ParticipantType.MEMBER,
-                companyId, ParticipantType.COMPANY, subject, firstBody);
+                companyId, ParticipantType.COMPANY, subject, firstBody, LocalDateTime.now());
     }
 
     private Set<String> ids(List<Conversation> cs) {
@@ -92,7 +93,7 @@ abstract class IConversationRepositoryContractTest {
     @Test
     void save_persistsMessagesInOrderWithReadState() {
         Conversation c = inquiry(5, 10, "Help", "first");
-        c.addMessage(10, ParticipantType.COMPANY, "reply");
+        c.addMessage(10, ParticipantType.COMPANY, "reply", LocalDateTime.now());
         repo.save(c);
 
         Conversation found = repo.findById(c.getConversationId()).orElseThrow();
@@ -111,7 +112,7 @@ abstract class IConversationRepositoryContractTest {
     @Test
     void countUnreadForMember_derivesFromMessageReadState() {
         Conversation c = inquiry(5, 10, "Help", "from member");
-        c.addMessage(10, ParticipantType.COMPANY, "reply"); // company -> member: unread for member 5
+        c.addMessage(10, ParticipantType.COMPANY, "reply", LocalDateTime.now()); // company -> member: unread for member 5
         repo.save(c);
 
         assertEquals(1, repo.countUnreadForMember(5)); // the company reply

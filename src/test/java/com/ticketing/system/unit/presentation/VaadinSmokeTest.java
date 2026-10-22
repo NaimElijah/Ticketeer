@@ -17,6 +17,7 @@ import com.ticketing.system.ui.components.venue.VkStandingZone;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
 import com.ticketing.system.ui.layouts.MainLayout;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
 import com.ticketing.system.ui.views.admin.AdminComplaintRespondView;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
@@ -205,10 +206,10 @@ class VaadinSmokeTest {
         // presenter, so resolve it from the Spring context.
         assertDoesNotThrow(
             () -> new BrowseEventsView(context.getBean(BrowseEventsPresenter.class),
-                context.getBean(SessionIdentity.class)),
+                context.getBean(SessionIdentity.class), context.getBean(DisplayTime.class)),
             "BrowseEventsView (root route) failed to construct");
         assertDoesNotThrow(
-            () -> new GlobalHistoryView(context.getBean(GlobalHistoryPresenter.class)),
+            () -> new GlobalHistoryView(context.getBean(GlobalHistoryPresenter.class), context.getBean(DisplayTime.class)),
             "GlobalHistoryView (admin route) failed to construct");
     }
 
@@ -231,7 +232,7 @@ class VaadinSmokeTest {
         ReceiptPresenter presenter = mock(ReceiptPresenter.class);
         RefundPresenter refundPresenter = mock(RefundPresenter.class);
         SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new ReceiptView(presenter, refundPresenter, sessionIdentity),
+        assertDoesNotThrow(() -> new ReceiptView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),
             "ReceiptView failed to construct");
     }
 
@@ -243,7 +244,7 @@ class VaadinSmokeTest {
         when(presenter.loadHistory()).thenReturn(new PurchaseHistoryDTO(List.of()));
         RefundPresenter refundPresenter = mock(RefundPresenter.class);
         SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new MyAccountView(presenter, refundPresenter, sessionIdentity),
+        assertDoesNotThrow(() -> new MyAccountView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),
             "MyAccountView failed to construct");
     }
 
@@ -280,7 +281,7 @@ class VaadinSmokeTest {
         SystemAnalyticsDTO analytics = new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
         when(presenter.load()).thenReturn(
             new SystemAnalyticsPresenter.Outcome.Success(market, analytics));
-        assertDoesNotThrow(() -> new SystemAnalyticsView(presenter),
+        assertDoesNotThrow(() -> new SystemAnalyticsView(presenter, context.getBean(DisplayTime.class)),
             "SystemAnalyticsView failed to construct");
     }
 
@@ -302,7 +303,7 @@ class VaadinSmokeTest {
         ManagerListPresenter presenter = mock(ManagerListPresenter.class);
         when(presenter.loadRoster(any())).thenReturn(
             new ManagerListPresenter.Outcome.Success("Acme", List.of(), List.of()));
-        assertDoesNotThrow(() -> new ManagerListView(presenter),
+        assertDoesNotThrow(() -> new ManagerListView(presenter, context.getBean(DisplayTime.class)),
             "ManagerListView failed to construct");
     }
 
@@ -314,7 +315,7 @@ class VaadinSmokeTest {
         MyInvitationsPresenter presenter = mock(MyInvitationsPresenter.class);
         when(presenter.load(any())).thenReturn(
             new MyInvitationsPresenter.Outcome.Success(List.of(), List.of()));
-        assertDoesNotThrow(() -> new MyInvitationsView(presenter),
+        assertDoesNotThrow(() -> new MyInvitationsView(presenter, context.getBean(DisplayTime.class)),
             "MyInvitationsView failed to construct");
     }
 
@@ -367,7 +368,7 @@ class VaadinSmokeTest {
             "alice", "TicketHub Support");
         when(presenter.load(any())).thenReturn(
             new SupportInboxPresenter.Outcome.Success(List.of(conv)));
-        assertDoesNotThrow(() -> new SupportInboxView(presenter),
+        assertDoesNotThrow(() -> new SupportInboxView(presenter, context.getBean(DisplayTime.class)),
             "SupportInboxView failed to construct");
     }
 
@@ -386,7 +387,7 @@ class VaadinSmokeTest {
             "alice", "Acme");
         when(presenter.loadFor(any(), any())).thenReturn(
             new CompanyInquiryInboxPresenter.Outcome.Success(List.of(company), company, List.of(conv)));
-        assertDoesNotThrow(() -> new CompanyInquiryInboxView(presenter),
+        assertDoesNotThrow(() -> new CompanyInquiryInboxView(presenter, context.getBean(DisplayTime.class)),
             "CompanyInquiryInboxView failed to construct");
     }
 
@@ -405,7 +406,7 @@ class VaadinSmokeTest {
             "alice", "TicketHub Support");
         when(presenter.load(any(), any())).thenReturn(
             new AdminComplaintQueuePresenter.Outcome.Success(List.of(conv)));
-        assertDoesNotThrow(() -> new AdminComplaintQueueView(presenter),
+        assertDoesNotThrow(() -> new AdminComplaintQueueView(presenter, context.getBean(DisplayTime.class)),
             "AdminComplaintQueueView failed to construct");
     }
 
@@ -421,7 +422,7 @@ class VaadinSmokeTest {
             "TicketHub Support", "alice");
         when(presenter.load(any())).thenReturn(
             new AdminInboxPresenter.Outcome.Success(List.of(conv)));
-        assertDoesNotThrow(() -> new AdminInboxView(presenter),
+        assertDoesNotThrow(() -> new AdminInboxView(presenter, context.getBean(DisplayTime.class)),
             "AdminInboxView failed to construct");
     }
 
@@ -435,7 +436,7 @@ class VaadinSmokeTest {
             LocalDateTime.now(), "Maintenance window", 82481);
         when(presenter.load(any())).thenReturn(
             new AdminSendMessagesPresenter.Outcome.Success(List.of(row)));
-        assertDoesNotThrow(() -> new AdminSendMessagesView(presenter),
+        assertDoesNotThrow(() -> new AdminSendMessagesView(presenter, context.getBean(DisplayTime.class)),
             "AdminSendMessagesView failed to construct");
     }
 
@@ -453,7 +454,7 @@ class VaadinSmokeTest {
         // Admin complaint respond page. The constructor only adds the content shell (load happens in
         // beforeEnter), so a bare mock presenter exercises construction.
         AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
-        assertDoesNotThrow(() -> new AdminComplaintRespondView(presenter),
+        assertDoesNotThrow(() -> new AdminComplaintRespondView(presenter, context.getBean(DisplayTime.class)),
             "AdminComplaintRespondView failed to construct");
     }
 
@@ -462,7 +463,7 @@ class VaadinSmokeTest {
         // Company inquiry respond page. The constructor only adds the content shell (load happens in
         // beforeEnter), so a bare mock presenter exercises construction.
         CompanyInquiryInboxPresenter presenter = mock(CompanyInquiryInboxPresenter.class);
-        assertDoesNotThrow(() -> new CompanyInquiryRespondView(presenter),
+        assertDoesNotThrow(() -> new CompanyInquiryRespondView(presenter, context.getBean(DisplayTime.class)),
             "CompanyInquiryRespondView failed to construct");
     }
 

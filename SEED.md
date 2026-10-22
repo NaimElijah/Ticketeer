@@ -197,3 +197,6 @@ Each line ends up PASS, SKIPPED, FAIL or BLOCKED in the end-of-run `SeedReport` 
 `DemoClock` captures `clock.instant()` once at run start; every event/reservation/notification timestamp
 is computed as an offset from that anchor (`anchor.plusDays(N)`, `anchor.minusHours(N)`, …). Boot on a
 different day and all dates shift accordingly — there are no hard-coded calendar dates.
+
+A seeded event's time zone is `platform.time-zone` (`Asia/Jerusalem` by default), and its show starts
+at the anchor plus `days=` read as wall-clock time in that zone (ADR-008).

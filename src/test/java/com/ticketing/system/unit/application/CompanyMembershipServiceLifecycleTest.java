@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,7 +35,7 @@ class CompanyMembershipServiceLifecycleTest {
 
     @BeforeEach
     void setUp() {
-        membership = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
+        membership = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
         defaultPermissions = new ArrayList<>();
         defaultPermissions.add(Permission.CONFIGURE_VENUE);
         defaultPermissions.add(Permission.MANAGE_INVENTORY);

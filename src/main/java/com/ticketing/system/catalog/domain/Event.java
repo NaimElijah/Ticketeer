@@ -1,7 +1,9 @@
 
 package com.ticketing.system.catalog.domain;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -72,6 +74,10 @@ public class Event implements InvariantChecked {
     @ElementCollection(fetch = FetchType.EAGER)
     @jakarta.persistence.CollectionTable(name = "event_show_dates", joinColumns = @JoinColumn(name = "event_id"))
     private List<ShowDate> showDates;
+    // The IANA zone the show dates are wall-clock times in (ADR-008). It lives on the event rather
+    // than the VenueMap because the map may be null in DRAFT while show dates are already mandatory.
+    @Column(name = "time_zone", nullable = false, length = 64)
+    private ZoneId timeZone;
     @Convert(converter = PurchasePolicyJsonConverter.class)
     @Column(name = "purchase_policy", columnDefinition = "text", nullable = false)
     private PurchasePolicy purchasePolicy;
@@ -94,15 +100,19 @@ public class Event implements InvariantChecked {
     // Description-less constructor — kept for existing callers/tests. Delegates with a null
     // description (description is optional and carries no invariant).
     public Event(int id, String name, Double rating, List<String> artistsNames, EventCategory category, int comapnyid,
-            EventStatus status, VenueMap venueMap, List<ShowDate> showDates, PurchasePolicy PurchasePolicy,
-         DiscountPolicy discountPolicy) {
-        this(id, name, null, rating, artistsNames, category, comapnyid, status, venueMap, showDates,
+            EventStatus status, VenueMap venueMap, List<ShowDate> showDates, ZoneId timeZone,
+            PurchasePolicy PurchasePolicy, DiscountPolicy discountPolicy) {
+        this(id, name, null, rating, artistsNames, category, comapnyid, status, venueMap, showDates, timeZone,
                 PurchasePolicy, discountPolicy);
     }
 
+    /**
+     * @param showDates wall-clock times at the venue, read in {@code timeZone}
+     * @param timeZone  the venue's IANA zone (ADR-008); required
+     */
     public Event(int id, String name, String description, Double rating, List<String> artistsNames,
             EventCategory category, int comapnyid, EventStatus status, VenueMap venueMap, List<ShowDate> showDates,
-            PurchasePolicy PurchasePolicy, DiscountPolicy discountPolicy) {
+            ZoneId timeZone, PurchasePolicy PurchasePolicy, DiscountPolicy discountPolicy) {
         // Invariants are enforced by checkInvariants() at the end of construction
         // (single source of truth). Collection copies are null-safe so a null input
         // reaches checkInvariants() as a clean IllegalStateException instead of an NPE here.
@@ -116,6 +126,7 @@ public class Event implements InvariantChecked {
         this.status = status;
         this.venueMap = venueMap;
         this.showDates = showDates == null ? null : new ArrayList<>(showDates);
+        this.timeZone = timeZone;
         // purchasePolicy defaults to NoPurchasePolicy when not supplied.
         this.purchasePolicy = PurchasePolicy == null ? new NoPurchasePolicy() : PurchasePolicy;
         // Discount Policies are not currently in the implementation plan so in the creation of the event we manually,
@@ -520,10 +531,20 @@ public class Event implements InvariantChecked {
     // the mutated fields are non-final, so concurrent reads depend on the service's lock discipline.
     // Each argument is null-coalesced: null means "leave this field alone". The service is
     // responsible for converting LocationDTO/ShowDateDTO into the domain Location/ShowDate passed here.
+    // A new time zone re-reads the existing show dates in that zone (ADR-008). A changed schedule or
+    // zone must still start after `now` at the venue; it is checked before any field changes, so a
+    // rejected edit leaves the aggregate untouched (the in-memory repository hands out live objects).
     public void editDetails(String newName, String newDescription, EventCategory newCategory,
-            Location newLocation, List<ShowDate> newShowDates) {
+            Location newLocation, ZoneId newTimeZone, List<ShowDate> newShowDates, Instant now) {
         if (status != EventStatus.DRAFT && status != EventStatus.SCHEDULED) {
             throw new IllegalStateException("Event details can only be edited while in DRAFT or SCHEDULED state");
+        }
+        if (newShowDates != null && newShowDates.isEmpty()) {
+            throw new IllegalArgumentException("showDates cannot be empty; an event must have at least one show date");
+        }
+        if (newShowDates != null || newTimeZone != null) {
+            requireStartsAfter(newShowDates != null ? newShowDates : showDates,
+                    newTimeZone != null ? newTimeZone : timeZone, now);
         }
         if (newName != null && !newName.isBlank()) {
             this.name = newName;
@@ -537,12 +558,12 @@ public class Event implements InvariantChecked {
         if (newLocation != null && this.venueMap != null) {
             this.venueMap.setLocation(newLocation);
         }
+        if (newTimeZone != null) {
+            this.timeZone = newTimeZone;
+        }
         if (newShowDates != null) {
-            // null means "leave the schedule alone"; an explicitly empty list is rejected
+            // null means "leave the schedule alone"; an explicitly empty list was rejected above
             // rather than silently ignored, since an event must always have >=1 show date.
-            if (newShowDates.isEmpty()) {
-                throw new IllegalArgumentException("showDates cannot be empty; an event must have at least one show date");
-            }
             this.showDates = List.copyOf(newShowDates);
         }
         checkInvariants();
@@ -581,17 +602,39 @@ public class Event implements InvariantChecked {
         return List.copyOf(showDates);
     }
 
+    /** @return the IANA zone the show dates are wall-clock times in (ADR-008) */
+    public ZoneId getTimeZone() {
+        return timeZone;
+    }
+
     // True once the event's last show has ended as of `now` — drives auto-completion
-    // (ON_SALE / SOLD_OUT -> COMPLETED). A multi-leg event finishes only after its latest leg.
-    public boolean hasFinishedAsOf(LocalDateTime now) {
+    // (ON_SALE / SOLD_OUT -> COMPLETED). A multi-leg event finishes only after its latest leg. The
+    // show times are read in the event's zone, so the answer does not depend on the server's zone.
+    public boolean hasFinishedAsOf(Instant now) {
         if (showDates == null || showDates.isEmpty()) {
             return false;
         }
-        LocalDateTime lastEnd = showDates.stream()
-                .map(ShowDate::getEndTime)
+        Instant lastEnd = showDates.stream()
+                .map(show -> show.endsAt(timeZone))
                 .max(Comparator.naturalOrder())
                 .orElse(null);
         return lastEnd != null && now.isAfter(lastEnd);
+    }
+
+    /**
+     * The precondition for scheduling this event (UC-19): every show starts after {@code now} at the
+     * venue. Checked when an event is created; {@link #editDetails} checks a changed schedule itself.
+     *
+     * @throws IllegalArgumentException if a show starts at or before {@code now}
+     */
+    public void requireShowsStartAfter(Instant now) {
+        requireStartsAfter(showDates, timeZone, now);
+    }
+
+    private static void requireStartsAfter(List<ShowDate> shows, ZoneId zone, Instant now) {
+        for (ShowDate show : shows) {
+            show.requireStartsAfter(now, zone);
+        }
     }
 
     public VenueMap getVenueMap() {
@@ -700,6 +743,9 @@ public class Event implements InvariantChecked {
         }
         if (showDates == null || showDates.isEmpty()) {
             throw new IllegalStateException("Event invariant violated: showDates list must be non-empty");
+        }
+        if (timeZone == null) {
+            throw new IllegalStateException("Event invariant violated: timeZone must not be null");
         }
         if (purchasePolicy == null) {
             throw new IllegalStateException("Event invariant violated: purchasePolicy must not be null");

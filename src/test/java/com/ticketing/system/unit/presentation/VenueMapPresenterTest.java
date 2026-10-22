@@ -9,6 +9,7 @@ import com.ticketing.system.ui.presenters.company.VenueMapPresenter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +96,6 @@ class VenueMapPresenterTest {
     private static EventDetailDTO eventInCompany(int companyId) {
         return new EventDetailDTO(String.valueOf(EVENT_ID), "Show", null, null, null, null,
                 String.valueOf(companyId), "Company " + companyId, EventStatus.SCHEDULED,
-                List.of(), List.of(), 0.0);
+                List.of(), ZoneId.of("Asia/Jerusalem"), List.of(), 0.0);
     }
 }

@@ -6,10 +6,10 @@ import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Notification dropdown panel — header + scrollable list + footer link.
@@ -146,10 +146,15 @@ public class LkNotifPanel extends Div {
         Map.entry("REMOVE_TICKET_RESERVATION_FAILURE", "Failed to remove reservation")
     );
 
-    /** Build a real notification panel from the DTOs delivered on login (UC-37). */
+    /**
+     * Build a real notification panel from the DTOs delivered on login (UC-37).
+     *
+     * @param age renders each notification's creation time as a short age ("5m", "Yesterday")
+     */
     public static LkNotifPanel fromDTOs(List<NotificationDTO> notifications,
                                          Runnable onMarkAllRead,
-                                         Consumer<String> onRowClick) {
+                                         Consumer<String> onRowClick,
+                                         Function<LocalDateTime, String> age) {
         if (notifications == null || notifications.isEmpty()) {
             return new LkNotifPanel("Notifications", List.of(
                 new Item("", "bell", "You're all caught up", "No new notifications", "", false, null)
@@ -161,7 +166,7 @@ public class LkNotifPanel extends Div {
                 TYPE_ICON.getOrDefault(n.type(), "bell"),
                 TYPE_TITLE.getOrDefault(n.type(), "Notification"),
                 n.message() == null ? "" : n.message(),
-                relativeTime(n.createdAt()),
+                age.apply(n.createdAt()),
                 !"READ".equals(n.status()),
                 null
             ))
@@ -169,19 +174,6 @@ public class LkNotifPanel extends Div {
         LkNotifPanel panel = new LkNotifPanel("Notifications", items, "View all notifications", onRowClick);
         if (onMarkAllRead != null) panel.onMarkAllRead(onMarkAllRead);
         return panel;
-    }
-
-    private static String relativeTime(LocalDateTime createdAt) {
-        if (createdAt == null) return "";
-        LocalDateTime now = LocalDateTime.now();
-        long minutes = ChronoUnit.MINUTES.between(createdAt, now);
-        if (minutes < 1)   return "Just now";
-        if (minutes < 60)  return minutes + "m";
-        long hours = ChronoUnit.HOURS.between(createdAt, now);
-        if (hours < 24)    return hours + "h";
-        long days = ChronoUnit.DAYS.between(createdAt, now);
-        if (days == 1)     return "Yesterday";
-        return days + "d";
     }
 
     private static String escape(String s) {

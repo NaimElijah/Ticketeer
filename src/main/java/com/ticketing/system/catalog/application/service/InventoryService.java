@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -61,7 +62,8 @@ public class InventoryService implements InventoryCommandPort {
     /** {@inheritDoc} SELF-LOCKING single-event reserve; validates the RESERVE-stage effective policy first. */
     @Override
     public double reserve(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey,
-            int buyerId, Integer buyerAge, int totalQuantityForPolicy) {
+            LocalDateTime holdUntil, int buyerId, Integer buyerAge, int totalQuantityForPolicy) {
+        Objects.requireNonNull(holdUntil, "holdUntil");
         // Acquire the shared event buyer-lock INSIDE the port; the caller already holds the active-order
         // lock, so the global order-before-event acquisition order is preserved.
         eventRepository.lockForBuyerOperation(eventId);
@@ -75,7 +77,7 @@ public class InventoryService implements InventoryCommandPort {
             ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId()); // owning company
             event.validateEffectivePolicy(company == null ? null : company.getPurchasePolicy(), context); // throws on rejection
             double pricePerTicket = zone.getprice();                // unit price for the caller's cart line
-            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey)); // mutate inventory (ownership-stamped)
+            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey, holdUntil)); // mutate inventory (ownership-stamped)
             eventRepository.save(event);                            // persist under the held lock
             return pricePerTicket;                                  // hand the price back to sales
         } finally {
@@ -91,7 +93,7 @@ public class InventoryService implements InventoryCommandPort {
             Event event = getEventOrThrow(eventId);                 // load + existence check
             InventoryZone zone = getZoneOrThrow(event, zoneId);     // zone existence check + price source
             double pricePerTicket = zone.getprice();                // captured for the caller's rollback re-add
-            event.releaseInventory(zoneId, toDomainSelection(selection, orderKey)); // release the held selection
+            event.releaseInventory(zoneId, toDomainSelection(selection, orderKey, null)); // release the held selection
             eventRepository.save(event);                            // persist under the held lock
             return pricePerTicket;                                  // unit price back to sales
         } finally {
@@ -101,11 +103,13 @@ public class InventoryService implements InventoryCommandPort {
 
     /** {@inheritDoc} SELF-LOCKING re-reserve WITHOUT policy — compensates a remove that already released. */
     @Override
-    public void restore(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey) {
+    public void restore(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey,
+            LocalDateTime holdUntil) {
+        Objects.requireNonNull(holdUntil, "holdUntil");
         eventRepository.lockForBuyerOperation(eventId);             // event lock inside the port
         try {
             Event event = getEventOrThrow(eventId);                 // load + existence check
-            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey)); // re-reserve (no policy re-check)
+            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey, holdUntil)); // re-reserve (no policy re-check)
             eventRepository.save(event);                            // persist under the held lock
         } finally {
             eventRepository.unlockBuyerOperation(eventId);          // release the buyer-lock
@@ -361,12 +365,16 @@ public class InventoryService implements InventoryCommandPort {
         return zone;
     }
 
-    /** Translates a sales-safe selection DTO + owning order key into the domain value object at the boundary. */
-    private InventorySelection toDomainSelection(InventorySelectionDTO selection, String orderKey) {
+    /**
+     * Translates a sales-safe selection DTO + owning order key into the domain value object at the
+     * boundary; {@code holdUntil} is null where no hold is recorded (a release).
+     */
+    private InventorySelection toDomainSelection(InventorySelectionDTO selection, String orderKey,
+            LocalDateTime holdUntil) {
         if (selection.isStandingSelection()) {
-            return InventorySelection.standing(selection.getQuantity(), orderKey);
+            return InventorySelection.standing(selection.getQuantity(), orderKey, holdUntil);
         }
-        return InventorySelection.seated(selection.getSeatNumbers(), orderKey);
+        return InventorySelection.seated(selection.getSeatNumbers(), orderKey, holdUntil);
     }
 
     /** Builds an ownership-less selection (SOLD-return path) from a zone's refund lines. */

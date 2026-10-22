@@ -1,5 +1,7 @@
 package com.ticketing.system.messaging.application.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -69,6 +71,8 @@ public class MessagingService {
     // Publisher for cross-context integration events (NewMessageNotice); the notifications
     // context listens for these instead of messaging calling it directly.
     private final ApplicationEventPublisher eventPublisher;
+    // Stamps messages and conversations: UTC wall time (ADR-008).
+    private final Clock clock;
 
     public MessagingService(
             ConversationRepository conversationRepository,
@@ -77,7 +81,8 @@ public class MessagingService {
             UserRepository userRepository,
             ProductionCompanyRepository companyRepository,
             CompanyMembershipService companyMembershipService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            Clock clock
     ) {
         this.conversationRepository = conversationRepository;
         this.sessionManager = sessionManager;
@@ -86,6 +91,7 @@ public class MessagingService {
         this.companyRepository = companyRepository;
         this.companyMembershipService = companyMembershipService;
         this.eventPublisher = eventPublisher;
+        this.clock = clock;
     }
 
     // Which side of a conversation the authenticated caller is acting as.
@@ -106,7 +112,7 @@ public class MessagingService {
                 ConversationType.INQUIRY,
                 memberId, ParticipantType.MEMBER,
                 companyId, ParticipantType.COMPANY,
-                request.subject(), request.firstMessageBody());
+                request.subject(), request.firstMessageBody(), LocalDateTime.now(clock));
         conversationRepository.save(conversation);
 
         // Bridge — a member opened an inquiry; notify the company's owners.
@@ -136,7 +142,7 @@ public class MessagingService {
                         "Complaints are not a chat — they accept a single admin response only");
             }
             sender = resolveCallerSide(caller, conversation);
-            conversation.addMessage(sender.id(), sender.type(), request.body());
+            conversation.addMessage(sender.id(), sender.type(), request.body(), LocalDateTime.now(clock));
             conversationRepository.save(conversation);
         } finally {
             conversationRepository.unlock(conversationId);
@@ -161,7 +167,7 @@ public class MessagingService {
                 ConversationType.COMPLAINT,
                 memberId, ParticipantType.MEMBER,
                 GROUP_SENTINEL, ParticipantType.ADMIN_GROUP,
-                request.subject(), body);
+                request.subject(), body, LocalDateTime.now(clock));
         conversationRepository.save(conversation);
 
         // Bridge — notify all admins a complaint was filed.
@@ -188,7 +194,7 @@ public class MessagingService {
             }
             // The admin's reply is the complaint's terminal response: append it, then resolve.
             // The lock serializes concurrent admins; the domain rejects a second admin reply.
-            conversation.addMessage(adminId, ParticipantType.ADMIN, request.body());
+            conversation.addMessage(adminId, ParticipantType.ADMIN, request.body(), LocalDateTime.now(clock));
             conversation.transitionToResolved();
             conversationRepository.save(conversation);
         } finally {
@@ -237,7 +243,7 @@ public class MessagingService {
                     ConversationType.DIRECT,
                     adminId, ParticipantType.ADMIN,
                     memberId, ParticipantType.MEMBER,
-                    request.subject(), request.body());
+                    request.subject(), request.body(), LocalDateTime.now(clock));
             conversationRepository.save(conversation);
             publishNewMessage(memberId, conversation.getConversationId(),
                     senderLabel(ParticipantType.ADMIN), request.subject(), request.body());

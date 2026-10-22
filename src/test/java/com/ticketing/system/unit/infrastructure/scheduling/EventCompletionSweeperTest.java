@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 
@@ -33,24 +34,25 @@ import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.bootstrap.scheduling.EventCompletionSweeper;
 
 /**
- * Drives {@link EventCompletionSweeper#completeFinishedEvents(LocalDateTime)} directly with a
- * controllable {@code now} (mirrors {@code SessionAndOrderSweeperTest}). Real {@link Event}
- * aggregates are used so the actual {@code hasFinishedAsOf} / {@code transitionToCompleted}
- * domain logic is exercised end-to-end; only the repository is mocked.
- *
- * <p>{@link ShowDate}'s public ctor forbids past dates, so every event is built with a
- * future show date and each test picks {@code now} before/after that date to simulate the
- * show having ended or not.
+ * Drives {@link EventCompletionSweeper#completeFinishedEvents(Instant)} directly with a
+ * controllable {@code now} (mirrors {@code SessionAndOrderSweeperTest}), and {@code sweep()} through
+ * a fixed clock. Real {@link Event} aggregates are used so the actual {@code hasFinishedAsOf} /
+ * {@code transitionToCompleted} domain logic is exercised end-to-end; only the repository is mocked.
+ * Every event is at a venue in Jerusalem, so each {@code now} is the instant of a Jerusalem wall time.
  */
 class EventCompletionSweeperTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
+    private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
     private static final Location LOCATION = new Location("Israel", "Tel Aviv");
+    // A 20:00–23:00 show at a venue in Jerusalem. In summer (IDT, UTC+3) it ends at 20:00:00Z; in
+    // winter (IST, UTC+2) at 21:00:00Z.
+    private static final LocalDateTime SUMMER_SHOW_END = LocalDateTime.of(2027, 7, 15, 23, 0);
+    private static final LocalDateTime WINTER_SHOW_END = LocalDateTime.of(2027, 12, 15, 23, 0);
 
-    private static final LocalDateTime SHOW_END = LocalDateTime.now().plusDays(10);
-    private static final LocalDateTime AFTER_SHOW = SHOW_END.plusDays(1);
-    // Derived from SHOW_END (not a fresh now()) so the ordering BEFORE_SHOW < SHOW_END is explicit and clock-stable.
-    private static final LocalDateTime BEFORE_SHOW = SHOW_END.minusDays(1);
+    private static final LocalDateTime SHOW_END = LocalDateTime.of(2027, 3, 10, 22, 0);
+    private static final Instant AFTER_SHOW = SHOW_END.plusDays(1).atZone(JERUSALEM).toInstant();
+    private static final Instant BEFORE_SHOW = SHOW_END.minusDays(1).atZone(JERUSALEM).toInstant();
 
     private EventRepository eventRepo;
     private EventCompletionSweeper sweeper;
@@ -169,7 +171,56 @@ class EventCompletionSweeperTest {
         verify(eventRepo).save(ok);
     }
 
+    // -- the venue's zone decides when a show has ended (#74, ADR-008) --------
+
+    @Test
+    void GivenJerusalemShowEndingAt23LocalInSummer_WhenSweptAt195959Z_ThenStillOnSale() {
+        Event e = liveEventAt(7, SUMMER_SHOW_END);
+
+        sweeperAt("2027-07-15T19:59:59Z").sweep();
+
+        assertEquals(EventStatus.ON_SALE, e.getStatus());
+    }
+
+    @Test
+    void GivenJerusalemShowEndingAt23LocalInSummer_WhenSweptAt200001Z_ThenCompleted() {
+        Event e = liveEventAt(8, SUMMER_SHOW_END);
+
+        sweeperAt("2027-07-15T20:00:01Z").sweep();
+
+        assertEquals(EventStatus.COMPLETED, e.getStatus());
+    }
+
+    @Test
+    void GivenJerusalemShowEndingAt23LocalInWinter_WhenSweptAt205959Z_ThenStillOnSale() {
+        Event e = liveEventAt(9, WINTER_SHOW_END);
+
+        sweeperAt("2027-12-15T20:59:59Z").sweep();
+
+        assertEquals(EventStatus.ON_SALE, e.getStatus());
+    }
+
+    @Test
+    void GivenJerusalemShowEndingAt23LocalInWinter_WhenSweptAt210001Z_ThenCompleted() {
+        Event e = liveEventAt(10, WINTER_SHOW_END);
+
+        sweeperAt("2027-12-15T21:00:01Z").sweep();
+
+        assertEquals(EventStatus.COMPLETED, e.getStatus());
+    }
+
     // -- helpers ---------------------------------------------------------
+
+    private EventCompletionSweeper sweeperAt(String instant) {
+        return new EventCompletionSweeper(eventRepo, Clock.fixed(Instant.parse(instant), ZoneOffset.UTC));
+    }
+
+    private Event liveEventAt(int id, LocalDateTime showEnd) {
+        Event e = onSaleEvent(id, showEnd);
+        when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
+        when(eventRepo.findById(id)).thenReturn(e);
+        return e;
+    }
 
     private Event onSaleEvent(int id, LocalDateTime showEnd) {
         return buildEvent(id, EventStatus.ON_SALE, showEnd, 10);
@@ -199,7 +250,8 @@ class EventCompletionSweeperTest {
                 100,
                 status,
                 new VenueMap(1, LOCATION, List.of(zone)),
-                List.of(new ShowDate(showEnd.minusHours(2), showEnd)),
+                List.of(new ShowDate(showEnd.minusHours(3), showEnd)),
+                JERUSALEM,
                 acceptingPurchasePolicy(),
                 noDiscountPolicy());
     }

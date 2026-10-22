@@ -17,6 +17,7 @@ import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -26,8 +27,6 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,12 +43,14 @@ import java.util.List;
 public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObserver {
 
     private final CompanyInquiryInboxPresenter presenter;
+    private final DisplayTime displayTime;
     private final Div content = new Div();
 
     private String conversationId;
 
-    public CompanyInquiryRespondView(CompanyInquiryInboxPresenter presenter) {
+    public CompanyInquiryRespondView(CompanyInquiryInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
         title("Respond to Inquiry");
         add(content);
     }
@@ -134,12 +135,12 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
     // -- Display mapping ------------------------------------------------------
 
     /** Company vantage: COMPANY messages are "You"; the member's messages show their username. */
-    private static List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
+    private List<MdThread.Message> toThreadMessages(ConversationDTO conv) {
         List<MdThread.Message> out = new ArrayList<>();
         for (MessageDTO m : conv.messages()) {
             boolean me = "COMPANY".equals(m.senderType());
             String from = me ? "You" : conv.initiatorDisplayName();
-            out.add(new MdThread.Message(from, relativeTime(m.sentAt()), me, m.body()));
+            out.add(new MdThread.Message(from, displayTime.ageShort(m.sentAt()), me, m.body()));
         }
         return out;
     }
@@ -151,18 +152,5 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
         return status.charAt(0) + status.substring(1).toLowerCase();
-    }
-
-    private static String relativeTime(LocalDateTime when) {
-        if (when == null) return "";
-        Duration d = Duration.between(when, LocalDateTime.now());
-        long mins = d.toMinutes();
-        if (mins < 1) return "now";
-        if (mins < 60) return mins + "m";
-        long hours = d.toHours();
-        if (hours < 24) return hours + "h";
-        long days = d.toDays();
-        if (days < 7) return days + "d";
-        return (days / 7) + "w";
     }
 }

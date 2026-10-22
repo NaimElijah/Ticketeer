@@ -1,6 +1,7 @@
 package com.ticketing.system.sales.application.port.out;
 import com.ticketing.system.sales.domain.ActiveOrder;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,8 +40,13 @@ public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> 
     /** Delete by reference. Idempotent: deleting an unknown cart is a no-op. */
     void delete(ActiveOrder activeOrder);
 
-    /** Sweep query for UC-2 / Phase 5: returns carts with any expired items. */
-    List<ActiveOrder> findExpired();
+    /**
+     * Sweep query for UC-2 / Phase 5: returns carts holding any item whose hold had run out by
+     * {@code now}, that is, added at or before {@code now} minus the hold duration.
+     *
+     * @param now the sweeper's current time, as UTC wall time from the injected clock (ADR-008)
+     */
+    List<ActiveOrder> findExpired(LocalDateTime now);
 
     // #372 — full enumeration for the boot-time integrity scan (<=1 active order per buyer/event).
     List<ActiveOrder> findAll();

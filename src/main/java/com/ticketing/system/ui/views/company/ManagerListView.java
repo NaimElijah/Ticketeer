@@ -22,6 +22,7 @@ import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Span;
@@ -29,8 +30,6 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,13 +43,15 @@ import java.util.stream.Collectors;
 public class ManagerListView extends LkPage {
 
     private final ManagerListPresenter presenter;
+    private final DisplayTime displayTime;
 
     /** Roster content lives in its own container so an action can rebuild it
      *  in place ({@link #reload()}) without disturbing the page header/actions. */
     private final LkCol content = new LkCol().gap(0);
 
-    public ManagerListView(ManagerListPresenter presenter) {
+    public ManagerListView(ManagerListPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
+        this.displayTime = displayTime;
 
         title("Managers");
         subtitle("Roster and permissions for your production company.");
@@ -176,7 +177,7 @@ public class ManagerListView extends LkPage {
             .col("Status",  "status");
 
         for (AppointmentInfoDTO p : pending) {
-            pendingRow(grid, p.targetUsername(), p.role(), relativeSent(p.createdAt()));
+            pendingRow(grid, p.targetUsername(), p.role(), displayTime.ageInDays(p.createdAt()));
         }
         grid.build();
         card.add(grid);
@@ -210,18 +211,5 @@ public class ManagerListView extends LkPage {
             .reduce((a, b) -> a + " " + b)
             .map(s -> Character.toUpperCase(s.charAt(0)) + s.substring(1))
             .orElse(enumName);
-    }
-
-    /** Compact "sent" label from the appointment timestamp. */
-    private static String relativeSent(LocalDateTime createdAt) {
-        if (createdAt == null) {
-            return "—";
-        }
-        long days = Duration.between(createdAt, LocalDateTime.now()).toDays();
-        if (days <= 0) return "today";
-        if (days == 1) return "yesterday";
-        if (days < 7) return days + " days ago";
-        long weeks = days / 7;
-        return weeks == 1 ? "1 week ago" : weeks + " weeks ago";
     }
 }
