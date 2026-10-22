@@ -62,6 +62,10 @@ Other forces:
   columns would not be expand-only (ADR-007), and no consumer outside the JVM reads them yet.
 - **Rows written before this change are not converted.** Nothing is deployed, and the Supabase data
   is not kept (#97).
+- **JDBC binds `java.time` values directly** (`hibernate.type.java_time_use_direct_jdbc`). Through
+  `java.sql.Timestamp`, a `LocalDateTime` is read in the JVM's zone, so a UTC wall time in the hour
+  that zone skips when its clocks go forward would be stored an hour late. That would make the JPA
+  and in-memory adapters disagree on a non-UTC JVM (`IActiveOrderRepositoryContractTest`).
 
 **3. There is one `Clock` bean, and it is UTC** (`SecurityConfig.systemClock`).
 

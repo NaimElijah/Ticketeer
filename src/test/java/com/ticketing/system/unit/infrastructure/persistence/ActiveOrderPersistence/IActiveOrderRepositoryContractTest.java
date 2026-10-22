@@ -157,6 +157,20 @@ abstract class IActiveOrderRepositoryContractTest {
         assertEquals(1, repo.findExpired(NOW).size());
     }
 
+    // Recorded times are UTC wall time (ADR-008), so they may fall in the hour a JVM zone skips when its
+    // clocks go forward: Asia/Jerusalem has no 02:00-03:00 on 26 March 2027. Storage must not move such a
+    // time. This bites only on a JVM in such a zone, which CI's "Test in Asia/Jerusalem" job runs.
+    @Test
+    void GivenItemAddedInTheHourTheJvmZoneSkips_WhenFindExpired_ThenItExpiresOneHoldLater() {
+        LocalDateTime addedAt = LocalDateTime.of(2027, 3, 26, 2, 50);
+        ActiveOrder cart = ActiveOrder.forGuest("sid-gap", addedAt);
+        cart.addStandingReservation(1, 10, 1, 25.0, addedAt);
+        repo.save(cart);
+
+        LocalDateTime tenMinutesLater = LocalDateTime.of(2027, 3, 26, 3, 0).plus(CartLineItem.getExpirationLimit());
+        assertEquals(1, repo.findExpired(tenMinutesLater).size());
+    }
+
     @Test
     void GivenItemAddedJustUnderOneHoldBeforeNow_WhenFindExpired_ThenNothingIsReturned() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-fresh", NOW);

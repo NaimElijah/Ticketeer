@@ -21,6 +21,11 @@ spring:
     # No explicit dialect: Hibernate auto-detects it per connection (PostgreSQL on the
     # deploy/run target, H2 in dev and the @DataJpaTest contract tests), so one config
     # serves every backend — a config-only switch to the cloud DB.
+    # Bind java.time values with JDBC setObject/getObject, not through java.sql.Timestamp. Timestamp
+    # reads a LocalDateTime in the JVM's zone, so a UTC wall time in the hour that zone skips when its
+    # clocks go forward would be stored an hour late (ADR-008).
+    properties:
+      hibernate.type.java_time_use_direct_jdbc: true
 
   # Keep Boot's applicationTaskExecutor: Boot 3.5 stops creating it once any Executor bean exists,
   # and the notifications module defines its own (notificationExecutor, ADR-004).
