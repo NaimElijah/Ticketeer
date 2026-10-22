@@ -14,8 +14,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +60,8 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 class SystemAdminServiceTest {
 
     private static final String ADMIN_TOKEN = "admin-token";
+    // Lifecycle transitions are stamped from the injected clock, as UTC wall time (ADR-008).
+    private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
     private static final int ADMIN_USER_ID = 1;
 
     private SessionManager sessionManager;
@@ -98,7 +103,8 @@ class SystemAdminServiceTest {
                 List.of(),
                 passwordHasher,
                 integrityVerifier,
-                new PlatformAdminProperties("admin", "admin")
+                new PlatformAdminProperties("admin", "admin"),
+                Clock.fixed(T0, ZoneOffset.UTC)
         );
         when(sessionManager.validateToken(ADMIN_TOKEN)).thenReturn(true);
         when(sessionManager.isAdminToken(ADMIN_TOKEN)).thenReturn(true);
@@ -197,6 +203,15 @@ class SystemAdminServiceTest {
         assertEquals("OPEN", state.currentStatus());
         assertNotNull(state.lastOpenedAt());
         assertTrue(svc.isMarketOpen());
+    }
+
+    @Test
+    void GivenFixedClock_WhenOpenMarket_ThenLastOpenedAtIsTheClock() {
+        SystemAdminService svc = readyService();
+
+        MarketStateDTO state = svc.openMarket(openRequest());
+
+        assertEquals(LocalDateTime.ofInstant(T0, ZoneOffset.UTC), state.lastOpenedAt());
     }
 
     @Test
@@ -503,7 +518,7 @@ class SystemAdminServiceTest {
                 sessionManager, adminRepository, orderReceiptRepository,
                 ticketRepository, eventRepository, eventDisplayPort, companyRepository, userRepository,
                 gateways, issuers, passwordHasher,
-                integrityVerifier, new PlatformAdminProperties("admin", "admin"));
+                integrityVerifier, new PlatformAdminProperties("admin", "admin"), Clock.fixed(T0, ZoneOffset.UTC));
     }
 
     private PaymentGateway reachablePayment() {

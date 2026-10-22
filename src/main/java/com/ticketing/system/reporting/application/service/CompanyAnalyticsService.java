@@ -4,6 +4,7 @@ package com.ticketing.system.reporting.application.service;
 import com.ticketing.system.catalog.application.service.CompanyRatings;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -65,6 +66,8 @@ public class CompanyAnalyticsService {
     private final CompanyMembershipService companyMembershipService;
     // Session/token port — every company-scoped read authenticates its caller (#22).
     private final SessionManager sessionManager;
+    // The 30-day window ends now on this clock; purchase times are UTC wall time (ADR-008).
+    private final Clock clock;
 
     public CompanyAnalyticsService(
             EventRepository eventRepository,
@@ -75,7 +78,8 @@ public class CompanyAnalyticsService {
             ProductionCompanyRepository companyRepository,
             UserRepository userRepository,
             CompanyMembershipService companyMembershipService,
-            SessionManager sessionManager) {
+            SessionManager sessionManager,
+            Clock clock) {
         this.eventRepository = eventRepository;
         this.eventDisplayPort = eventDisplayPort;
         this.orderReceiptRepository = orderReceiptRepository;
@@ -85,6 +89,7 @@ public class CompanyAnalyticsService {
         this.userRepository = userRepository;
         this.companyMembershipService = companyMembershipService;
         this.sessionManager = sessionManager;
+        this.clock = clock;
     }
 
     /**
@@ -118,7 +123,7 @@ public class CompanyAnalyticsService {
         List<Integer> eventIds = eventRepository.findIdsByCompany(companyId);
         if (!eventIds.isEmpty()) {
             Set<Integer> companyEventIds = new HashSet<>(eventIds);
-            LocalDateTime cutoff = LocalDateTime.now().minusDays(WINDOW_DAYS);
+            LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(WINDOW_DAYS);
             for (OrderReceipt receipt : orderReceiptRepository.findByEventIds(eventIds)) {
                 if (receipt.getPurchaseTime() == null || receipt.getPurchaseTime().isBefore(cutoff)) {
                     continue;

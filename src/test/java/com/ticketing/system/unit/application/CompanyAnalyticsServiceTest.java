@@ -11,7 +11,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +51,9 @@ import com.ticketing.system.shared.exception.UserNotFoundException;
 class CompanyAnalyticsServiceTest {
 
     private static final int COMPANY_ID = 10;
+    // The 30-day window ends at this instant; purchase times are stamped relative to it (ADR-008).
+    private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
+    private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
     // The company's two events; 999 belongs to a different company.
     private static final int EVENT_A = 100;
     private static final int EVENT_B = 101;
@@ -87,7 +93,8 @@ class CompanyAnalyticsServiceTest {
         userRepository = mock(UserRepository.class);
         membershipService = mock(CompanyMembershipService.class);
         sessionManager = mock(SessionManager.class);
-        service = new CompanyAnalyticsService(eventRepository, eventDisplayPort, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, membershipService, sessionManager);
+        service = new CompanyAnalyticsService(eventRepository, eventDisplayPort, orderReceiptRepository, conversationRepository, ticketRepository, companyRepository, userRepository, membershipService, sessionManager,
+                Clock.fixed(T0, ZoneOffset.UTC));
     }
 
     private static ProductionCompany company() {
@@ -113,7 +120,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     private static ReceiptLine line(int ticketId, double price, int eventId) {
-        return new ReceiptLine(ticketId, price, eventId, 1, null, LocalDateTime.now());
+        return new ReceiptLine(ticketId, price, eventId, 1, null, NOW);
     }
 
     private static OrderReceipt receipt(boolean refunded, LocalDateTime purchasedAt, List<ReceiptLine> lines) {
@@ -125,7 +132,7 @@ class CompanyAnalyticsServiceTest {
 
     /** The same lines, refunded: only a real receipt can move a line to REFUNDED. */
     private static List<ReceiptLine> refundedCopies(List<ReceiptLine> lines) {
-        OrderReceipt refunded = OrderReceipt.forMember(999, BUYER_ID, 0.0, lines, LocalDateTime.now());
+        OrderReceipt refunded = OrderReceipt.forMember(999, BUYER_ID, 0.0, lines, NOW);
         refunded.markRefunded();
         return refunded.getReceiptLines();
     }
@@ -157,9 +164,23 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
+    void GivenSalesEitherSideOfThirtyDaysBeforeTheClock_WhenDashboard_ThenOnlyTheRecentOneCounts() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt outside = receipt(false, NOW.minusDays(31), List.of(line(1, 50.0, EVENT_A)));
+        OrderReceipt inside = receipt(false, NOW.minusDays(29), List.of(line(2, 20.0, EVENT_A)));
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(outside, inside));
+
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
+
+        assertEquals(1, stats.ticketsSold30d());
+        assertEquals(20.0, stats.revenue30d());
+    }
+
+    @Test
     void dashboard_aggregatesLiveCountersForTheCompany() {
         givenOwner();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = NOW;
 
         when(eventRepository.findActiveByCompany(COMPANY_ID))
             .thenReturn(List.of(mock(Event.class), mock(Event.class))); // 2 ON_SALE
@@ -197,11 +218,11 @@ class CompanyAnalyticsServiceTest {
     private static OrderReceipt orderWithEventRefunded(int receiptId, List<ReceiptLine> lines, int refundedEventId) {
         double total = lines.stream().mapToDouble(ReceiptLine::getPriceAtReservation).sum();
         OrderReceipt receipt = OrderReceipt.forMember(receiptId, BUYER_ID, total, lines,
-                LocalDateTime.now(),
-                List.of(TransactionRecord.paymentCharge(4200 + receiptId, "test-gateway", total, "ILS", LocalDateTime.now())));
+                NOW,
+                List.of(TransactionRecord.paymentCharge(4200 + receiptId, "test-gateway", total, "ILS", NOW)));
         double refunded = receipt.claimRefundForEvent(refundedEventId).orElseThrow();
         receipt.completeEventRefund(refundedEventId,
-                TransactionRecord.refund("refund-" + receiptId, "test-gateway", refunded, "ILS", LocalDateTime.now()));
+                TransactionRecord.refund("refund-" + receiptId, "test-gateway", refunded, "ILS", NOW));
         return receipt;
     }
 
@@ -322,7 +343,7 @@ class CompanyAnalyticsServiceTest {
         givenMember(TARGET_TOKEN, TARGET_USER_ID, Permission.RESPOND_TO_INQUIRIES);
         when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of(mock(Event.class)));
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
-        OrderReceipt sale = receipt(false, LocalDateTime.now().minusDays(1), List.of(line(1, 50.0, EVENT_A)));
+        OrderReceipt sale = receipt(false, NOW.minusDays(1), List.of(line(1, 50.0, EVENT_A)));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(sale));
         when(conversationRepository.findByCompanyAsCounterparty(COMPANY_ID)).thenReturn(List.of());
 
@@ -393,7 +414,7 @@ class CompanyAnalyticsServiceTest {
     void GivenManagerWithViewSales_WhenSalesHistory_ThenReturnsCompanySales() {
         givenMember(TARGET_TOKEN, TARGET_USER_ID, Permission.VIEW_SALES);
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
-        OrderReceipt r = fullReceipt(false, LocalDateTime.now().minusDays(1), List.of(line(1, 40.0, EVENT_A)), 1);
+        OrderReceipt r = fullReceipt(false, NOW.minusDays(1), List.of(line(1, 40.0, EVENT_A)), 1);
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
         when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
 
@@ -429,9 +450,9 @@ class CompanyAnalyticsServiceTest {
     void salesHistory_twoReceipts_returnsTwoRecords() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
-        OrderReceipt r1 = fullReceipt(false, LocalDateTime.now().minusDays(1),
+        OrderReceipt r1 = fullReceipt(false, NOW.minusDays(1),
                 List.of(line(1, 50.0, EVENT_A)), 1);
-        OrderReceipt r2 = fullReceipt(false, LocalDateTime.now().minusDays(2),
+        OrderReceipt r2 = fullReceipt(false, NOW.minusDays(2),
                 List.of(line(2, 30.0, EVENT_A)), 2);
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r1, r2));
         when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
@@ -445,7 +466,7 @@ class CompanyAnalyticsServiceTest {
     void salesHistory_refundedReceiptIsIncluded() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
-        OrderReceipt r = fullReceipt(true, LocalDateTime.now().minusDays(3),
+        OrderReceipt r = fullReceipt(true, NOW.minusDays(3),
                 List.of(line(1, 40.0, EVENT_A)), 1);
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
         when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
@@ -461,7 +482,7 @@ class CompanyAnalyticsServiceTest {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         // receipt contains one line for EVENT_A and one for a different company's event
-        OrderReceipt r = fullReceipt(false, LocalDateTime.now().minusDays(1),
+        OrderReceipt r = fullReceipt(false, NOW.minusDays(1),
                 List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)), 1);
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
         when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of());
@@ -482,7 +503,7 @@ class CompanyAnalyticsServiceTest {
         LocalDateTime purchasedAt = LocalDateTime.of(2026, 1, 15, 20, 0);
         OrderReceipt r = OrderReceipt.forMember(1, BUYER_ID, 300.0,
                 List.of(line(1, 100.0, EVENT_A), line(2, 200.0, OTHER_COMPANY_EVENT)),
-                LocalDateTime.now(),
+                NOW,
                 List.of(TransactionRecord.paymentCharge(42, "test-gateway", 300.0, "ILS", purchasedAt),
                         TransactionRecord.ticketIssuance("ISS-42", "test-issuer", purchasedAt)));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(r));
