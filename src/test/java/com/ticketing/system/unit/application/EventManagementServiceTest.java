@@ -15,8 +15,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +37,7 @@ import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAp
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -89,6 +93,9 @@ class EventManagementServiceTest {
         private final String COMPANY_1_NAME = "Company1";
         private final String COMPANY_1_DESCRIPTION = "A test production company1";
         private final Location LOCATION = new Location("Belgium", "Brussels");
+        private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
+        // 16:30Z on 15 July 2027 is 19:30 in Jerusalem (IDT, UTC+3).
+        private static final Instant JERUSALEM_1930 = Instant.parse("2027-07-15T16:30:00Z");
 
         private ProductionCompany company;
         private InventoryZone zone;
@@ -108,14 +115,8 @@ class EventManagementServiceTest {
                 eventPublisher = mock(ApplicationEventPublisher.class);
                 membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository());
 
-                eventService = new EventManagementService(
-                                mockEventRepo,
-                                mockCompanyRepo,
-                                sessionManager,
-                                eventSalesHistoryPort,
-                                userRepository,
-                                membershipService,
-                                eventPublisher);
+                // The fixtures below are dated relative to the real clock, so the shared service reads it.
+                eventService = serviceWith(Clock.systemUTC());
 
                 company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
                                 COMPANY_1_DESCRIPTION, 4.5);
@@ -146,6 +147,11 @@ class EventManagementServiceTest {
                 membershipService.receiveManagerAppointment(INVENTORY_MANAGER_ID, COMPANY_ID, OWNER_ID,
                                 List.of(Permission.MANAGE_INVENTORY));
                 membershipService.acceptInvitation(INVENTORY_MANAGER_ID, COMPANY_ID);
+        }
+
+        private EventManagementService serviceWith(Clock clock) {
+                return new EventManagementService(mockEventRepo, mockCompanyRepo, sessionManager,
+                                eventSalesHistoryPort, userRepository, membershipService, eventPublisher, clock);
         }
 
         // Catalog-only happy path for cancelEventAndRefund: valid owner, event, and company. The
@@ -311,6 +317,73 @@ class EventManagementServiceTest {
                 // reserveStandingTicketsForMember(...)
                 // should not throw UnsupportedOperationException from PurchasePolicy
 
+        }
+
+        // -------------------------------------------------------------------------
+        // addEvent: a new show must start after now at the venue (UC-19, #74, ADR-008)
+        // -------------------------------------------------------------------------
+
+        @Test
+        void GivenShowStartingAt19LocalInJerusalem_WhenAddEventAt1930Local_ThenRejectedAsPast() {
+                stubOwnerCanAddEvents();
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+
+                IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.addEvent(
+                                OWNER_TOKEN, creationRequest(LocalDateTime.of(2027, 7, 15, 19, 0), JERUSALEM)));
+
+                assertEquals("Start time must be in the future", ex.getMessage());
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        @Test
+        void GivenShowStartingAt20LocalInJerusalem_WhenAddEventAt1930Local_ThenCreatedInThatZone() {
+                stubOwnerCanAddEvents();
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+
+                EventDetailDTO created = service.addEvent(
+                                OWNER_TOKEN, creationRequest(LocalDateTime.of(2027, 7, 15, 20, 0), JERUSALEM));
+
+                assertEquals(JERUSALEM, created.timeZone());
+                verify(mockEventRepo).save(any());
+        }
+
+        // The same 19:00 rejected in Jerusalem is still ahead at a venue on UTC (19:00Z > 16:30Z).
+        @Test
+        void GivenSameWallTimeAtAUtcVenue_WhenAddEventAt1630Utc_ThenCreated() {
+                stubOwnerCanAddEvents();
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+
+                EventDetailDTO created = service.addEvent(
+                                OWNER_TOKEN, creationRequest(LocalDateTime.of(2027, 7, 15, 19, 0), ZoneOffset.UTC));
+
+                assertEquals(ZoneOffset.UTC, created.timeZone());
+        }
+
+        @Test
+        void GivenPastShowInUpdate_WhenEditEventDetails_ThenRejectedAndNotSaved() {
+                stubOwnerCanAddEvents();
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                EventManagementService service = serviceWith(Clock.fixed(JERUSALEM_1930, ZoneOffset.UTC));
+                ShowDateDTO past = new ShowDateDTO(LocalDateTime.of(2027, 7, 15, 19, 0), LocalDateTime.of(2027, 7, 15, 22, 0));
+
+                assertThrows(IllegalArgumentException.class, () -> service.editEventDetails(OWNER_TOKEN,
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null, null, List.of(past))));
+
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        private void stubOwnerCanAddEvents() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.nextId()).thenReturn(EVENT_ID + 1);
+                when(mockEventRepo.nextVenueMapId()).thenReturn(2);
+        }
+
+        private EventCreationDTO creationRequest(LocalDateTime start, ZoneId timeZone) {
+                return new EventCreationDTO(COMPANY_ID, "Gala", "desc", List.of("Artist1"), EventCategory.CONCERT,
+                                4.5, LOCATION, List.of(new ShowDate(start, start.plusHours(3))), timeZone, null);
         }
 
         @Test

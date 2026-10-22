@@ -127,7 +127,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 
 | ID | UC | Requirement | Status | Enforced by · tested by |
 |---|---|---|---|---|
-| II.4.1 | UC-19 | Manage events and inventory: add, edit and remove events; show dates; seated zones with rows and seats; standing-zone capacities. | Built | `EventManagementService`, `Event` · `EventManagementServiceTest`, `EventTest` |
+| II.4.1 | UC-19 | Manage events and inventory: add, edit and remove events; show dates; seated zones with rows and seats; standing-zone capacities. | Built; show dates are in the event's time zone (#74) | `EventManagementService`, `Event`, `ShowDate`, `EventCompletionSweeper` · `EventManagementServiceTest`, `EventTest`, `ShowDateTest`, `EventCompletionSweeperTest` |
 | II.4.2 | UC-20 | Configure the venue map; every map zone links to an inventory zone, and the map shows free and taken places live. | Built | `EventManagementService.configureVenueMap`, `VenueMap` · `EventManagementServiceTest`, `VenueMapTest`, `InventoryZoneTest` |
 | II.4.3 | UC-21 | Set purchase methods and purchase and discount policies. | Partial: purchase policies are built; discounts are one percentage per event; conditional, coupon and composed discounts are #67; the lottery purchase method is #72 | `EventManagementService.setEventPolicies`, `PurchasePolicy`, `DiscountPolicy` · `PurchasePolicyAcceptanceTest`, `PurchasePolicyEnforcementAcceptanceTest` |
 | II.4.4 | — | Receive buyer inquiries and answer them. | Built | `MessagingService` · `MessagingAcceptanceTest` |
@@ -237,6 +237,18 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   admin closing a company cancels them.
 - An inactive company's events leave search results and cannot be bought.
 - Cancelling a membership cancels all of that member's roles. A suspended user can only view.
+
+### Time and event schedule
+
+- Show times are wall-clock times at the venue, read in the event's IANA time zone. A new event
+  defaults to `platform.time-zone`. Every comparison with "now" turns a show time into an instant
+  first, so no answer depends on the server's zone ([ADR-008](../ADRs/ADR-008-event-time-zones-and-one-clock.md);
+  `ShowDate.startsAt`, `ShowDate.endsAt` · `ShowDateTest`).
+- A new or edited show must start after the current time at the venue. A show that has already
+  happened stays valid (`Event.requireShowsStartAfter`, `Event.editDetails` · `EventTest`,
+  `EventManagementServiceTest`).
+- A live event completes once its last show has ended at the venue (UC-19;
+  `EventCompletionSweeper`, `Event.hasFinishedAsOf` · `EventCompletionSweeperTest`, `EventTest`).
 
 ### Purchase flow
 

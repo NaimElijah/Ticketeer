@@ -1,6 +1,7 @@
 
 package com.ticketing.system.catalog.domain;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -530,11 +531,20 @@ public class Event implements InvariantChecked {
     // the mutated fields are non-final, so concurrent reads depend on the service's lock discipline.
     // Each argument is null-coalesced: null means "leave this field alone". The service is
     // responsible for converting LocationDTO/ShowDateDTO into the domain Location/ShowDate passed here.
-    // A new time zone re-reads the existing show dates in that zone (ADR-008).
+    // A new time zone re-reads the existing show dates in that zone (ADR-008). A changed schedule or
+    // zone must still start after `now` at the venue; it is checked before any field changes, so a
+    // rejected edit leaves the aggregate untouched (the in-memory repository hands out live objects).
     public void editDetails(String newName, String newDescription, EventCategory newCategory,
-            Location newLocation, ZoneId newTimeZone, List<ShowDate> newShowDates) {
+            Location newLocation, ZoneId newTimeZone, List<ShowDate> newShowDates, Instant now) {
         if (status != EventStatus.DRAFT && status != EventStatus.SCHEDULED) {
             throw new IllegalStateException("Event details can only be edited while in DRAFT or SCHEDULED state");
+        }
+        if (newShowDates != null && newShowDates.isEmpty()) {
+            throw new IllegalArgumentException("showDates cannot be empty; an event must have at least one show date");
+        }
+        if (newShowDates != null || newTimeZone != null) {
+            requireStartsAfter(newShowDates != null ? newShowDates : showDates,
+                    newTimeZone != null ? newTimeZone : timeZone, now);
         }
         if (newName != null && !newName.isBlank()) {
             this.name = newName;
@@ -552,11 +562,8 @@ public class Event implements InvariantChecked {
             this.timeZone = newTimeZone;
         }
         if (newShowDates != null) {
-            // null means "leave the schedule alone"; an explicitly empty list is rejected
+            // null means "leave the schedule alone"; an explicitly empty list was rejected above
             // rather than silently ignored, since an event must always have >=1 show date.
-            if (newShowDates.isEmpty()) {
-                throw new IllegalArgumentException("showDates cannot be empty; an event must have at least one show date");
-            }
             this.showDates = List.copyOf(newShowDates);
         }
         checkInvariants();
@@ -601,16 +608,33 @@ public class Event implements InvariantChecked {
     }
 
     // True once the event's last show has ended as of `now` — drives auto-completion
-    // (ON_SALE / SOLD_OUT -> COMPLETED). A multi-leg event finishes only after its latest leg.
-    public boolean hasFinishedAsOf(LocalDateTime now) {
+    // (ON_SALE / SOLD_OUT -> COMPLETED). A multi-leg event finishes only after its latest leg. The
+    // show times are read in the event's zone, so the answer does not depend on the server's zone.
+    public boolean hasFinishedAsOf(Instant now) {
         if (showDates == null || showDates.isEmpty()) {
             return false;
         }
-        LocalDateTime lastEnd = showDates.stream()
-                .map(ShowDate::getEndTime)
+        Instant lastEnd = showDates.stream()
+                .map(show -> show.endsAt(timeZone))
                 .max(Comparator.naturalOrder())
                 .orElse(null);
         return lastEnd != null && now.isAfter(lastEnd);
+    }
+
+    /**
+     * The precondition for scheduling this event (UC-19): every show starts after {@code now} at the
+     * venue. Checked when an event is created; {@link #editDetails} checks a changed schedule itself.
+     *
+     * @throws IllegalArgumentException if a show starts at or before {@code now}
+     */
+    public void requireShowsStartAfter(Instant now) {
+        requireStartsAfter(showDates, timeZone, now);
+    }
+
+    private static void requireStartsAfter(List<ShowDate> shows, ZoneId zone, Instant now) {
+        for (ShowDate show : shows) {
+            show.requireStartsAfter(now, zone);
+        }
     }
 
     public VenueMap getVenueMap() {

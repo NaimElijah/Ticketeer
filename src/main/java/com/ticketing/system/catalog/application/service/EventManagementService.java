@@ -1,5 +1,6 @@
 package com.ticketing.system.catalog.application.service;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,6 +79,7 @@ public class EventManagementService {
     // EventCancelledEvent that the sales context's listener turns into the refund flow, and the
     // notifications context ultimately raises holder notices — catalog never calls either directly.
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
     private int currentVenueMapIdCounter;
 
     public EventManagementService(
@@ -87,7 +89,8 @@ public class EventManagementService {
             EventSalesHistoryPort eventSalesHistoryPort,
             UserRepository userRepository,
             CompanyMembershipService companyMembershipService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            Clock clock) {
         this.eventRepository = eventRepository;                 // catalog event persistence/locking
         this.companyRepository = companyRepository;             // company lookups for auth/ownership
         this.sessionManager = sessionManager;                   // token validation/user-id extraction
@@ -95,6 +98,7 @@ public class EventManagementService {
         this.userRepository = userRepository;                   // caller existence checks
         this.companyMembershipService = companyMembershipService; // company-membership permission checks
         this.eventPublisher = eventPublisher;                   // cross-context event publishing
+        this.clock = clock;                                     // "now" for the schedule precondition
         this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
                                            // here for now.
     }
@@ -158,6 +162,7 @@ public class EventManagementService {
                 request.timeZone(),
                 eventSpecificPurchasePolicy ,
                 discountPolicy);
+        newEvent.requireShowsStartAfter(clock.instant());
         eventRepository.save(newEvent);
 
         log.info("Event {} created successfully with ID {}", request.name(), newEventId);
@@ -411,7 +416,7 @@ public class EventManagementService {
                             .toList();
 
             event.editDetails(update.name(), update.description(), newCategory, newLocation, update.timeZone(),
-                    newShowDates);
+                    newShowDates, clock.instant());
             eventRepository.save(event);
 
             log.info("Event {} details updated by user {}", eventId, userId);

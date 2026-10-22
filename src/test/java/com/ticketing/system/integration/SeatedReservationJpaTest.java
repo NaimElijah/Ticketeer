@@ -92,7 +92,7 @@ class SeatedReservationJpaTest {
 
         // The dev @Scheduled completion sweep runs ~60s after boot, before a buyer reserves. A
         // future-dated event must survive it (only events whose last show has ended get COMPLETED).
-        eventCompletionSweeper.completeFinishedEvents(java.time.LocalDateTime.now(java.time.Clock.systemUTC()));
+        eventCompletionSweeper.completeFinishedEvents(java.time.Clock.systemUTC().instant());
 
         assertEquals(EventStatus.ON_SALE, eventRepository.findById(eventId).getStatus(),
                 "a future-dated event must NOT be auto-completed by the sweeper");

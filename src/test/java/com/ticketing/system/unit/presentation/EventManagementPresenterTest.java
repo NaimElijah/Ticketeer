@@ -197,16 +197,20 @@ class EventManagementPresenterTest {
         assertEquals(JERUSALEM, presenter.defaultTimeZone());
     }
 
+    // Whether a start is in the past depends on the venue's zone, so the service judges it with the
+    // injected clock (ADR-008); the presenter only maps the rejection to InvalidInput with its reason.
     @Test
-    void create_pastShowDate_returnsInvalidInput() {
+    void GivenServiceRejectsAPastStart_WhenCreate_ThenInvalidInputWithTheReason() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        when(eventService.addEvent(eq(TOKEN), any()))
+                .thenThrow(new IllegalArgumentException("Start time must be in the future"));
 
-        // A past start makes the domain ShowDate constructor reject the request before addEvent.
         EventManagementPresenter.CreateOutcome outcome =
                 createWith(null, LocalDateTime.now().minusDays(1), futureEnd());
 
-        assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
-        verifyNoInteractions(eventService);
+        EventManagementPresenter.CreateOutcome.InvalidInput invalid =
+                assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
+        assertEquals("Start time must be in the future", invalid.reason());
     }
 
     @Test
