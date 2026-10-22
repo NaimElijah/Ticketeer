@@ -3,6 +3,26 @@ package com.ticketing.system.architecture;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.MonthDay;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.Year;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -10,10 +30,15 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import com.ticketing.system.shared.config.SecurityConfig;
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.AccessTarget;
+import com.tngtech.archunit.core.domain.JavaAccess;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -140,4 +165,95 @@ class HexagonalRulesTest {
                                     + " an @Async @TransactionalEventListener"));
                 }
             };
+
+    /**
+     * ADR-008: every "now" comes from the one injected UTC {@link Clock}, and no zone comes from the
+     * JVM. Production code must not call or reference (e.g. {@code Instant::now}) {@code now()} or
+     * {@code now(ZoneId)} on a {@code java.time} type, both of which read the system clock, nor read
+     * the default zone. {@code System.currentTimeMillis()} is left out on purpose: its uses are
+     * zone-free browser countdowns and a cache TTL.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenNothingReadsTheSystemClockOrDefaultZone() {
+        NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE.check(PRODUCTION_CLASSES);
+    }
+
+    /** ADR-008: the Clock bean ({@code SecurityConfig.systemClock}) is the only system clock. */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenOnlyTheClockBeanCreatesASystemClock() {
+        noClasses().that().doNotHaveFullyQualifiedName(SecurityConfig.class.getName())
+                .should().callMethod(Clock.class, "systemUTC")
+                .orShould().callMethod(Clock.class, "system", ZoneId.class)
+                .check(PRODUCTION_CLASSES);
+    }
+
+    // The class comment records a rule engine that silently checked nothing; these prove the clock
+    // rule fails on each way of reading the system clock, a method reference included.
+    @Test
+    void GivenACallToLocalDateTimeNow_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(CallsLocalDateTimeNow.class);
+    }
+
+    @Test
+    void GivenAReferenceToInstantNow_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(ReferencesInstantNow.class);
+    }
+
+    @Test
+    void GivenAReadOfTheDefaultZone_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(ReadsTheDefaultZone.class);
+    }
+
+    private static void assertClockRuleFails(Class<?> offender) {
+        JavaClasses imported = new ClassFileImporter().importClasses(offender);
+        assertThatThrownBy(() -> NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE.check(imported))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(offender.getSimpleName());
+    }
+
+    private static final Set<String> CLOCK_READING_TYPES = Stream.of(Instant.class, LocalDate.class,
+            LocalDateTime.class, LocalTime.class, OffsetDateTime.class, OffsetTime.class, ZonedDateTime.class,
+            Year.class, YearMonth.class, MonthDay.class)
+            .map(Class::getName)
+            .collect(Collectors.toUnmodifiableSet());
+
+    private static final DescribedPredicate<JavaAccess<?>> READ_THE_SYSTEM_CLOCK_OR_DEFAULT_ZONE =
+            DescribedPredicate.describe("read the system clock or the JVM's default time zone", access -> {
+                if (!(access.getTarget() instanceof AccessTarget.CodeUnitAccessTarget target)) {
+                    return false;
+                }
+                String owner = target.getOwner().getName();
+                String name = target.getName();
+                List<JavaClass> parameters = target.getRawParameterTypes();
+                // now() and now(ZoneId) read the system clock; now(Clock) is the allowed form.
+                boolean systemNow = name.equals("now") && CLOCK_READING_TYPES.contains(owner)
+                        && (parameters.isEmpty() || parameters.get(0).isEquivalentTo(ZoneId.class));
+                boolean defaultZone = (owner.equals(ZoneId.class.getName()) && name.equals("systemDefault"))
+                        || (owner.equals(TimeZone.class.getName()) && name.equals("getDefault"))
+                        || (owner.equals(Clock.class.getName()) && name.equals("systemDefaultZone"));
+                return systemNow || defaultZone;
+            });
+
+    private static final ArchRule NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE = noClasses()
+            .should().accessTargetWhere(READ_THE_SYSTEM_CLOCK_OR_DEFAULT_ZONE)
+            .because("ADR-008: read time from the injected Clock; zones come from the event or platform.time-zone");
+
+    // Fixtures for the self-tests above, one per way of reading the system clock.
+    static class CallsLocalDateTimeNow {
+        LocalDateTime read() {
+            return LocalDateTime.now();
+        }
+    }
+
+    static class ReferencesInstantNow {
+        Supplier<Instant> read() {
+            return Instant::now;
+        }
+    }
+
+    static class ReadsTheDefaultZone {
+        ZoneId read() {
+            return ZoneId.systemDefault();
+        }
+    }
 }

@@ -249,6 +249,10 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   `EventManagementServiceTest`).
 - A live event completes once its last show has ended at the venue (UC-19;
   `EventCompletionSweeper`, `Event.hasFinishedAsOf` · `EventCompletionSweeperTest`, `EventTest`).
+- No behaviour depends on the server's time zone. Every "now" comes from one UTC clock, and the UI
+  shows recorded times and "today" in `platform.time-zone` (`SecurityConfig.systemClock`,
+  `DisplayTime` · `HexagonalRulesTest`, `ClockConfigTest`, `DisplayTimeTest`; CI runs the suite in UTC
+  and in Asia/Jerusalem).
 
 ### Purchase flow
 
