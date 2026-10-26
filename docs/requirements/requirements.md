@@ -13,14 +13,16 @@ Ticketeer is an event-management and ticket-sales platform.
   inventory, and set purchase and discount policies.
 - **Guests and members** browse events, hold tickets for a limited time, and buy them in an
   all-or-nothing checkout against external payment and ticket-issuing services.
-- **System admins** initialize the platform, open and close the market, and oversee purchase
-  history, complaints and analytics.
+- **System admins** open and close the market and oversee purchase history, complaints and
+  analytics; the platform initializes itself at startup (I.1).
 
 The platform started as the Ben-Gurion University Software Engineering Workshop 2026 course
 project, delivered in versions V0–V3. This repository continues it towards a production launch,
-planned as milestones M1–M7 on the project board.
+planned as GitHub milestones M0–M8 (M0 audits the system; M8 adds ML and AI features, whose
+requirements #134 will add).
 
-In scope: every requirement below whose status is Built, Partial or Deferred. Out of scope: see
+In scope: every requirement below whose status is Built, Partial or Deferred; an entry marked TODO
+stays undecided until its open question is answered. Out of scope: see
 [Non-goals](#non-goals).
 
 ### Sources
@@ -43,6 +45,8 @@ Where the course documents contradict each other or leave a gap, the item is lis
   is keyed on them.
 - **`SLR.n`** — the general document's service-level requirements 1–8; `SLR.8.2` is item 8.2.
   Code citing "V3 Req 5/6/7" means SLR.5/6/7 as restated in Version 3.
+- **`Vn x.y`** — item x.y of course version n's requirements (`version_0.pdf` … `Version_3.pdf`);
+  `Vn appendix n` and `Vn impl n` name its appendix and implementation-guideline items.
 - **`UC-n`** — the team's use-case book, kept outside this repository. Code and Javadoc cite these
   most often; the tables below map them to course IDs.
 - **Use-case sub-IDs** such as `II.3.0.1`, `II.4.8.3` and `II.6.3.2` come from the same book. A few
@@ -50,10 +54,19 @@ Where the course documents contradict each other or leave a gap, the item is lis
 
   | Code says | Course ID | Meaning |
   |---|---|---|
+  | `I.1.1`–`I.1.4` | I.1 | UC-1 steps: invariants, payment service, ticket issuer, default admin |
+  | `I.2.1`, `I.2.2` | I.2 | UC-32 steps: invariants, external services |
   | `II.1.4` | II.1.3 | Register |
   | `II.1.5` | II.1.4 | Log in |
   | `II.3.0.x` | II.3 (unnumbered "exit" item) | A member's order survives a disconnect |
   | `II.3.10` | II.3.7 | Send an inquiry to a company |
+  | `I.5.1`, `I.5.2`, `I.5.3` | I.5.a, I.5.b, I.5.c | Alerts to producers, buyers and all members |
+  | `II.6.3.1`, `II.6.3.2` | II.6.3.a, II.6.3.b | Complaint handling; proactive system messages |
+
+  The letter suffixes in `I.5.a`–`I.5.c` and `II.6.3.a`–`II.6.3.b` are this document's splits of
+  one course item into separately testable entries; the code numbers the same splits (table
+  above). `II.2.1 (policies)` holds an obligation the general document states in its system
+  description rather than in II.2.1 itself.
 
 - **`§1 #n`, `§2 #n`, `§3 #n`** — the [business-rule](#business-rules-and-invariants) numbering,
   cited by `SystemIntegrityVerifier`.
@@ -71,6 +84,9 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | **Deferred** | Not built; planned in the linked issue. |
 | **Non-goal** | Deliberately not built. |
 | **TODO** | Undecided; see [Open questions](#open-questions). |
+| **Not upheld** | A business rule the code breaks today; the reason and the issue are named. |
+| **Not enforced** | A business rule nothing prevents breaking; the issue is named. |
+| `TODO <TestName>` in an *Enforced by* cell | The requirement is decided, but the named test does not exist yet. The linked issue writes it; otherwise the test-suite scan (#189) does. |
 
 ## Functional requirements
 

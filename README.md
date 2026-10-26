@@ -395,8 +395,9 @@ graph and layering rules, not as type-level encapsulation.
 ## Status and limitations
 
 **Pre-production.** The course versions V0–V3 are delivered, and
-[requirements.md](docs/requirements/requirements.md) marks each requirement Built, Partial or
-Deferred. The road to a production launch is on the
+[requirements.md](docs/requirements/requirements.md) gives each requirement a status (Built,
+Partial, Deferred, …) and names the class and test that enforce it. The road to a production
+launch is on the
 [milestones](https://github.com/NaimElijah/Ticketeer/milestones), among them correctness
 close-out, production readiness, the engineering baseline, AWS delivery and go-live.
 
