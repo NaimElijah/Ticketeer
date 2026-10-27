@@ -210,8 +210,8 @@ cites; "a buyer has an active order" and "at most one per event" are one item (�
 
 | # | Rule | Enforced by · tested by |
 |---|---|---|
-| 1 | When the platform initializes or the market opens, at least one payment service answers the handshake. | `SystemAdminService.initializePlatform`, `SystemAdminService.openMarket` · `SystemAdminServiceTest` (`givenNoReachablePaymentGateway_whenInitializePlatform_thenThrows`, `givenPaymentDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady`) |
-| 2 | When the platform initializes or the market opens, at least one ticket-issuing service answers the handshake. | `SystemAdminService.initializePlatform`, `SystemAdminService.openMarket` · `SystemAdminServiceTest` (`givenNoReachableTicketIssuer_whenInitializePlatform_thenThrows`, `givenIssuerDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady`) |
+| 1 | When the platform initializes or the market opens, at least one payment service is reachable. | `SystemAdminService.initializePlatform`, `SystemAdminService.openMarket` · `SystemAdminServiceTest` (`givenNoReachablePaymentGateway_whenInitializePlatform_thenThrows`, `givenPaymentDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady`) |
+| 2 | When the platform initializes or the market opens, at least one ticket-issuing service is reachable. | `SystemAdminService.initializePlatform`, `SystemAdminService.openMarket` · `SystemAdminServiceTest` (`givenNoReachableTicketIssuer_whenInitializePlatform_thenThrows`, `givenIssuerDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady`) |
 
 ### §3 Commercial integrity rules
 
