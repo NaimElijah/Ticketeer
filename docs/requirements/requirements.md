@@ -325,14 +325,15 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   `MinTicketsPurchasePolicy`, `MaxTicketsPurchasePolicy` · `PurchasePolicyAcceptanceTest`).
 - Discounts (V2) are percentages. There are three kinds:
   - simple;
-  - conditional, which applies only while its condition holds; V2 requires at least a minimum or
-    maximum number of tickets and a date range;
+  - conditional, which applies only while its condition holds; V2 requires ticket-count (minimum
+    or maximum) and date-range conditions;
   - coupon, which applies when the buyer enters a code at checkout within its validity.
 
   Discounts combine by **maximum** (no double discounts) or **sum**, to any depth. Only one
   percentage per event is built (`DiscountPolicy`); the rest is #67.
-- A discount applies to a whole company, one event, or one show of an event (V2). Deferred (#67);
-  the wider scopes in the general document are [OQ-24](#open-questions).
+- A discount applies to a whole company, one event, or one show of an event (V2). Partial: event
+  scope is built; company and show scope are #67. The wider scopes in the general document are
+  [OQ-24](#open-questions).
 - When a policy refuses a purchase, the UI explains why, for example "Tickets for this event can
   be bought from age 18" (V2, service level 3.5).
 
