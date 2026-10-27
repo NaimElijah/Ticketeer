@@ -45,8 +45,9 @@ Where the course documents contradict each other or leave a gap, the item is lis
   is keyed on them.
 - **`SLR.n`** — the general document's service-level requirements 1–8; `SLR.8.2` is item 8.2.
   Code citing "V3 Req 5/6/7" means SLR.5/6/7 as restated in Version 3.
-- **`Vn x.y`** — item x.y of course version n's requirements (`version_0.pdf` … `Version_3.pdf`);
-  `Vn appendix n` and `Vn impl n` name its appendix and implementation-guideline items.
+- **`Vn x.y`** — item x.y of course version n's requirements list (`version_0.pdf` …
+  `Version_3.pdf`); `Vn impl x.y` is item x.y of its implementation-emphases list, and
+  `Vn appendix n` its appendix. ADR-006 predates this scheme and writes `V3 4.c` for `V3 impl 4.c`.
 - **`UC-n`** — the team's use-case book, kept outside this repository. Code and Javadoc cite these
   most often; the tables below map them to course IDs.
 - **Use-case sub-IDs** such as `II.3.0.1`, `II.4.8.3` and `II.6.3.2` come from the same book. A few
@@ -361,19 +362,19 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 | ID | Requirement | Status | Enforced by · tested by |
 |---|---|---|---|
 | V1 1.d | Keep an event log of the use cases invoked and an error log, always available. | Partial: see SLR.8 | — |
-| V1 5 | CI runs every test before code reaches `main`. | Built | `.github/workflows/ci.yml` |
-| V1 6.a | Concurrency tests start many threads at once against a sensitive operation and check the state afterwards, whichever locking is used. | Partial: on H2 only (#171) | `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `EventCancellationRefundConcurrencyTest` |
-| V1 6.b | Acceptance tests reach the system through the application layer only. | Partial: 12 of the 16 acceptance classes also read or seed repositories directly; the test-suite scan (#189) audits it | `acceptance/` |
+| V1 impl 5 | CI runs every test before code reaches `main`. | Built | `.github/workflows/ci.yml` |
+| V1 impl 6.a | Concurrency tests start many threads at once against a sensitive operation and check the state afterwards, whichever locking is used. | Partial: on H2 only (#171) | `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `EventCancellationRefundConcurrencyTest` |
+| V1 impl 6.b | Acceptance tests reach the system through the application layer only. | Partial: 12 of the 16 acceptance classes also read or seed repositories directly; the test-suite scan (#189) audits it | `acceptance/` |
 | V2 3.a | Report test coverage automatically, for example with JaCoCo. | Deferred (#45); exempted under V2 Tier B in the course project | — |
 | V2 3.b | Tests cover every requirement, including real-time and delayed alerts. | Partial: 50 tests are `@Disabled` (#52) | — |
-| V2 1, V3 6 | A communication component maps HTTP requests to the application layer. | TODO: [OQ-25](#open-questions) | — |
+| V2 1, V3 impl 6 | A communication component maps HTTP requests to the application layer. | TODO: [OQ-25](#open-questions) | — |
 | V3 2.a.i | Initialize from external configuration files; database connection details live in configuration, not code. | Partial: every value in `application.yml` can be overridden from the environment or an external file (`spring.config.import`, `--spring.config.additional-location`); most initialization parameters bind to validated records, and an out-of-bounds value stops startup ([ADR-003](../ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Still unvalidated: `analytics.*`, `sweeper.fixed-delay-ms`, `notifications.poll-delay-ms` and `event-completion.fixed-delay-ms` (#165), and `jwt.secret` (#34). `constants.order-expiration-duration` is read by no code (#166). The queue threshold, the course's example parameter, does not exist yet (#71) | `application.yml`, `ReservationHoldProperties`, `SessionProperties`, `LockoutProperties`, `WsepProperties`, `PlatformAdminProperties`, `MarketProperties` · `InitPropertiesValidationTest` |
 | V3 2.a.ii | Optionally initialize from an initial-state file that replays use cases through the application layer. If any step fails, initialization fails. | Built: the `.scenario` engine runs in every profile except `test` when `seed.mode` is set. A missing or unreadable file stops startup in every profile; a failing step stops it while `seed.fail-fast` is on, the default everywhere but `dev` ([ADR-003](../ADRs/ADR-003-fatal-and-self-healing-init-failures.md)) | `ScenarioRunner`, `ScenarioOps`, `SeedProperties` · `ScenarioRunnerTest` |
 | V3 2.b | Connect to the real external payment and ticket-issuing systems. | Built (WSEP); Stripe replaces WSEP payments in #98 | `WsepPaymentGateway`, `WsepTicketIssuer` · `WsepPaymentGatewayTest`, `WsepTicketIssuerTest` |
 | V3 impl 3 | The README explains how to initialize the system and defines the configuration and initial-state file formats. | Built | `README.md` (configuration), `SEED.md` ("Scenario file format") |
-| V3 4.a | Resilience tests cover the external systems and the database. | Built | `WsepHttpClientRetryTest`, `DbOutageRecoveryIT` |
-| V3 4.b | Tests prove the system does not start after an invalid initialization. | Built: invalid configuration, a failed platform initialization and a failing initial-state file each stop startup; a WSEP outage does not, and self-heals ([ADR-003](../ADRs/ADR-003-fatal-and-self-healing-init-failures.md)) | `InitPropertiesValidationTest`, `PlatformInitializationRunnerTest`, `ScenarioRunnerTest`, `SystemAdminServiceTest`, `MarketSelfHealSchedulerTest` |
-| V3 4.c | Tests use a dedicated configuration and never reach the real external systems or the production database. | Built: the `test` profile and `application-test.yml` swap in stub gateways; the `*IT` classes use a throwaway PostgreSQL container per class | `application-test.yml`, `PostgresContainers` · every test that runs under the `test` profile, and every `*IT` |
+| V3 impl 4.a | Resilience tests cover the external systems and the database. | Built | `WsepHttpClientRetryTest`, `DbOutageRecoveryIT` |
+| V3 impl 4.b | Tests prove the system does not start after an invalid initialization. | Built: invalid configuration, a failed platform initialization and a failing initial-state file each stop startup; a WSEP outage does not, and self-heals ([ADR-003](../ADRs/ADR-003-fatal-and-self-healing-init-failures.md)) | `InitPropertiesValidationTest`, `PlatformInitializationRunnerTest`, `ScenarioRunnerTest`, `SystemAdminServiceTest`, `MarketSelfHealSchedulerTest` |
+| V3 impl 4.c | Tests use a dedicated configuration and never reach the real external systems or the production database. | Built: the `test` profile and `application-test.yml` swap in stub gateways; the `*IT` classes use a throwaway PostgreSQL container per class | `application-test.yml`, `PostgresContainers` · every test that runs under the `test` profile, and every `*IT` |
 | V3 appendix 3 | Use the ORM's built-in cache. | TODO: [OQ-12](#open-questions), evaluated in #33 | — |
 | V3 appendix 4 | Each use case runs as one transaction. | Partial: most application services are one `@Transactional` method. Checkout calls the external services outside the transaction and commits afterwards (ADR pending, #44). Event-cancellation refunds claim and record each receipt in its own short transaction around the gateway call ([ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md)). The member refund holds the receipt's row lock across the gateway call by design (upstream `AdamSimkinbgu/event-ticket-system#410`; see ADR-001) | `CheckoutService`, `EventCancellationRefundService`, `RefundService` |
 
