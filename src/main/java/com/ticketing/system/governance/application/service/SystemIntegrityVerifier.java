@@ -70,7 +70,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>§1 #3 admin is a Member — the team models admins as a disjoint pool (documented override).</li>
  *   <li>§1 #7 default policies — not scanned: the purchase-policy default holds by construction
- *       ({@code NoPurchasePolicy}); a company discount policy is not built yet (#67).</li>
+ *       ({@code NoPurchasePolicy}); a company discount policy is not built yet (NaimElijah/Ticketeer#67).</li>
  * </ul>
  *
  * <p><b>V1/V2 note:</b> the in-memory repos are empty when this runs at boot (runner is
