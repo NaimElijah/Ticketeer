@@ -87,7 +87,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | **TODO** | Undecided; see [Open questions](#open-questions). |
 | **Not upheld** | A business rule the code breaks today; the reason and the issue are named. |
 | **Not enforced** | A business rule nothing prevents breaking; the issue is named. |
-| `TODO <TestName>` in an *Enforced by* cell | The requirement is decided, but the named test does not exist yet. The linked issue writes it; otherwise the test-suite scan (#189) does. |
+| `TODO <TestName>` in an *Enforced by* cell | The requirement is decided, but the named test does not exist yet, or exists only as an empty `@Disabled` stub ("implement and enable"). The linked issue writes it; otherwise the test-suite scan (#189) does. |
 
 ## Functional requirements
 
@@ -177,7 +177,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | II.6.2 | — | Cancel a membership, which cancels all of the member's roles in every company. | Deferred (#66) | — |
 | II.6.3.a | — | View members' complaints and reply to them. | Built; a complaint takes one admin reply, which resolves it, and the member cannot answer ([OQ-20](#open-questions)) | `MessagingService.viewAllComplaints`, `MessagingService.respondToComplaint` · `MessagingServiceTest`, `MessagingAcceptanceTest` |
 | II.6.3.b | — | Send system messages to producers and to buyers. | Built | `MessagingService.sendOutreach` · `MessagingServiceTest`, `MessagingAcceptanceTest` |
-| II.6.4 | UC-31 | See the global purchase history, by buyer or by company and event. | Partial: with a company or event filter, the figures still count the other companies' lines of each matching order (#131) | `SystemAdminService.viewGlobalHistory`, `SalesSummaryCalculator` · `SystemAdminServiceTest`, `SalesSummaryCalculatorTest`; TODO enable `givenNonAdmin_whenViewGlobalHistory_thenRejected` (`@Disabled`) |
+| II.6.4 | UC-31 | See the global purchase history, by buyer or by company and event. | Partial: with a company or event filter, the figures still count the other companies' lines of each matching order (#131) | `SystemAdminService.viewGlobalHistory`, `SalesSummaryCalculator` · `SystemAdminServiceTest`, `SalesSummaryCalculatorTest`; TODO implement and enable `givenNonAdmin_whenViewGlobalHistory_thenRejected` (`@Disabled`, empty) |
 | II.6.5 | UC-46 | See live and historical analytics: visitor entries and exits, registrations, reservations and purchases. | Partial: entry, exit, registration and reservation counts are held in memory for 2 hours and reset on restart (`InMemorySystemMetrics`); only purchases, read from receipts, have longer history ([OQ-21](#open-questions), #195) | `SystemAnalyticsService.computeAnalytics`, `SystemAnalyticsService.adminOverview`, `InMemorySystemMetrics` · `SystemAnalyticsServiceTest`, `EventCancellationAcceptanceTest` |
 | II.6.6 | — | See all active queues live, change the admission rate, and clear a queue after a fault. | Deferred (#71) | — |
 | II.6.7 | — | Suspend a user for a period or permanently; a suspended user can only view (V2). | Deferred (#66) | — |
