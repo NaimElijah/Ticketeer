@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -310,6 +311,45 @@ class AuthenticationServiceTest {
                 () -> service.register(new RegisterRequestDTO("alice", "not-an-email", "Password1", "guest-1", 56)));
         verify(mockUserRepo, never()).existsByUsername(any());
         verify(mockSessionRepo, never()).findById(any());
+    }
+
+    // ----------------------------------------------------------------------
+    // Register — error messages never carry the email address (SLR.2).
+    // LoggingAspect logs every application-service exception message at WARN,
+    // so an address in the message would reach production logs. Usernames in
+    // messages and log lines are open question OQ-26 in requirements.md.
+    // ----------------------------------------------------------------------
+
+    @Test
+    void GivenTakenEmail_WhenRegister_ThenErrorMessageOmitsTheEmail() {
+        String takenEmail = "dana.levi@example.com";
+        String localPart = "dana.levi";
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.existsByUsername("alice")).thenReturn(false);
+        when(mockUserRepo.findByEmail(takenEmail))
+                .thenReturn(Optional.of(new User(1, "other", takenEmail, "HASH", 59)));
+
+        DuplicateEmailException thrown = assertThrows(DuplicateEmailException.class,
+                () -> service.register(new RegisterRequestDTO("alice", takenEmail, "Password1", "guest-1", 56)));
+
+        String message = String.valueOf(thrown.getMessage());
+        assertFalse(message.contains(localPart),
+                "DuplicateEmailException message must not contain the email address or its local part, but was: "
+                        + message);
+    }
+
+    @Test
+    void GivenMalformedEmail_WhenRegister_ThenErrorMessageOmitsTheEmail() {
+        String malformedEmail = "dana.levi@example";
+        String localPart = "dana.levi";
+
+        InvalidEmailFormatException thrown = assertThrows(InvalidEmailFormatException.class,
+                () -> service.register(new RegisterRequestDTO("alice", malformedEmail, "Password1", "guest-1", 56)));
+
+        String message = String.valueOf(thrown.getMessage());
+        assertFalse(message.contains(localPart),
+                "InvalidEmailFormatException message must not contain the submitted address or its local part, but was: "
+                        + message);
     }
 
     // ----------------------------------------------------------------------
