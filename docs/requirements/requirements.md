@@ -364,7 +364,7 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 |---|---|---|---|
 | V1 1.d | Keep an event log of the use cases invoked and an error log, always available. | Partial: see SLR.8 | — |
 | V1 impl 5 | CI runs every test before code reaches `main`. | Built | `.github/workflows/ci.yml` |
-| V1 impl 6.a | Concurrency tests start many threads at once against a sensitive operation and check the state afterwards, whichever locking is used. | Partial: on H2 only (#171) | `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `EventCancellationRefundConcurrencyTest` |
+| V1 impl 6.a | Concurrency tests start many threads at once against a sensitive operation and check the state afterwards, whichever locking is used. | Built; that they run on H2 only is SLR.1's gap (#171) | `ReservationConcurrencyTest`, `RefundConcurrencyTest`, `EventCancellationRefundConcurrencyTest` |
 | V1 impl 6.b | Acceptance tests reach the system through the application layer only. | Partial: 12 of the 16 acceptance classes also read or seed repositories directly; the test-suite scan (#189) audits it | `acceptance/` |
 | V2 3.a | Report test coverage automatically, for example with JaCoCo. | Deferred (#45); exempted under V2 Tier B in the course project | — |
 | V2 3.b | Tests cover every requirement, including real-time and delayed alerts. | Partial: 50 tests are `@Disabled` (#52) | — |
