@@ -72,7 +72,7 @@ class RegisterPresenterTest {
 
     @Test
     void duplicateEmail_returnsEmailTaken() {
-        doThrow(new DuplicateEmailException("adam@x.com")).when(authenticationService).register(any());
+        doThrow(new DuplicateEmailException()).when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
             presenter.attemptRegister("adam", "adam@x.com", "password1", 22, "guest-sid");
@@ -96,7 +96,7 @@ class RegisterPresenterTest {
 
     @Test
     void invalidEmail_returnsInvalidEmail() {
-        doThrow(new InvalidEmailFormatException("not-an-email"))
+        doThrow(new InvalidEmailFormatException())
             .when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =

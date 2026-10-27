@@ -187,7 +187,7 @@ public class AuthenticationService {
             throw new DuplicateUsernameException(request.username());
         }
         if (userRepository.findByEmail(request.email()).isPresent()) {
-            throw new DuplicateEmailException(request.email());
+            throw new DuplicateEmailException();
         }
 
         // 4. Create user.
@@ -206,7 +206,7 @@ public class AuthenticationService {
 
     private static void validateEmail(String email) {
         if (email == null || !EMAIL_PATTERN.matcher(email).matches()) {
-            throw new InvalidEmailFormatException(email);
+            throw new InvalidEmailFormatException();
         }
     }
 

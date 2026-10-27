@@ -244,7 +244,7 @@ overrides them. Set each value in one place.
 | `SESSION_GUEST_IDLE_TIMEOUT_MINUTES` | Guest-session idle timeout | `30` |
 | `AUTH_LOCKOUT_MAX_ATTEMPTS` · `AUTH_LOCKOUT_LOCK_MINUTES` | Login lockout; `0` attempts disables it | `5` · `15` |
 | `TICKET_RESERVATION_DURATION` | Ticket hold, in minutes | `10` |
-| `ORDER_EXPIRATION_DURATION` | Active-order lifetime, in minutes | `60` |
+| `ORDER_EXPIRATION_DURATION` | Read by no code yet (#166); the hold time is `TICKET_RESERVATION_DURATION` | `60` |
 | `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window · dashboard refresh (`0` stops it) | `5` · `5000` |
 | `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
@@ -395,8 +395,9 @@ graph and layering rules, not as type-level encapsulation.
 ## Status and limitations
 
 **Pre-production.** The course versions V0–V3 are delivered, and
-[requirements.md](docs/requirements/requirements.md) marks each requirement Built, Partial or
-Deferred. The road to a production launch is on the
+[requirements.md](docs/requirements/requirements.md) gives each requirement a status (Built,
+Partial, Deferred, …) and names the class and test that enforce it. The road to a production
+launch is on the
 [milestones](https://github.com/NaimElijah/Ticketeer/milestones), among them correctness
 close-out, production readiness, the engineering baseline, AWS delivery and go-live.
 
