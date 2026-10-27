@@ -87,7 +87,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | **TODO** | Undecided; see [Open questions](#open-questions). |
 | **Not upheld** | A business rule the code breaks today; the reason and the issue are named. |
 | **Not enforced** | A business rule nothing prevents breaking; the issue is named. |
-| `TODO <TestName>` in an *Enforced by* cell | The requirement is decided, but the named test does not exist yet, or exists only as an empty `@Disabled` stub ("implement and enable"). The linked issue writes it; otherwise the test-suite scan (#189) does. |
+| `TODO <TestName>` in an *Enforced by* cell | The requirement is decided, but the named test does not exist yet, or exists only as an empty `@Disabled` stub ("implement and enable"). The linked issue writes it; otherwise the test-suite scan (#189) does. A **Built** entry may name such a test for a case its named tests do not cover yet. |
 
 ## Functional requirements
 
