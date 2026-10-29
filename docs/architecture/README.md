@@ -61,6 +61,8 @@ Both gates run on every build and are **green**:
   - each context's domain depends only on its own context and `shared`;
   - the application layer never depends on adapters;
   - no backend context, `reporting` included, depends on `ui`;
+  - `ui` uses other modules only through their application API, never their `application.port.out`
+    or `adapter` packages;
   - each module depends only on the modules its entry in the test's module map allows: the graph
     above, plus the one `identity → notifications` class pair;
   - **`bounded_contexts_are_acyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is

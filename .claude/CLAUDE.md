@@ -111,10 +111,11 @@ Seams: `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`, `EventSales
 Events are in-process, with no outbox and no Modulith event registry. Catalog → sales (`EventCancelledEvent`) is a synchronous `@EventListener`, because the cancel call must see refund failures. Every `shared/event` notice is consumed by `NotificationEventListener` with `@Async("notificationExecutor")` + `@TransactionalEventListener(fallbackExecution = true)`: after commit, on one `notify-` thread, never delivered for a rolled-back transaction (ADR-004). Publishers don't catch notification failures, so a new notice consumer must follow the same pattern; `HexagonalRulesTest` fails the build otherwise. A Spring test that reads notifications must wait for them (Awaitility).
 
 **Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity and its
-allowances, each domain inside its context, application-not-adapter, no-backend→ui, the module map,
+allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui reaches other
+modules only through their application API (no `application.port.out`, no `adapter`), the module map,
 `bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules;
-the clock, module-map, domain-context and domain-allowance rules each have self-tests that prove they
-fail on a fixture) and `ModularityTests`
+the clock, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
+they fail on a fixture) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by
 copying from `target/`; git has CRLF and the generator writes LF, so a naive diff shows every line.

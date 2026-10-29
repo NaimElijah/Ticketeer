@@ -52,6 +52,9 @@ import com.ticketing.system.architecture.fixture.identity.application.service.Au
 import com.ticketing.system.architecture.fixture.notifications.NotificationsTypeUsingOrganization;
 import com.ticketing.system.architecture.fixture.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.architecture.fixture.sales.domain.SalesDomainTypeUsingCatalogDomain;
+import com.ticketing.system.architecture.fixture.ui.UiTypeUsingADrivenPort;
+import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnAdapter;
+import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnApplicationService;
 import com.ticketing.system.architecture.fixture.undocumented.UndocumentedModuleType;
 import com.ticketing.system.shared.config.SecurityConfig;
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -208,8 +211,41 @@ class HexagonalRulesTest {
         DOMAIN_USES_JACKSON_ONLY_IN_ATTRIBUTE_CONVERTERS.check(PRODUCTION_CLASSES);
     }
 
+    /**
+     * {@code ui/package-info.java}: the UI is the single driving adapter and depends on every bounded
+     * context's <em>inbound</em> application API. A driving adapter calls application services; a
+     * context's {@code application.port.out} ports are its own driven side, and its adapters sit
+     * behind them, so a view or presenter using either bypasses the use case (its authorisation,
+     * transaction and invariants) and couples the UI to how the context stores and integrates.
+     *
+     * <p>{@code application.service}, {@code application.port.in}, {@code application.dto},
+     * {@code application.event} and, for now, {@code domain} types stay open to the UI; the domain
+     * types are tracked separately in #208.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenTheUiUsesOnlyTheBackendsApplicationApi() {
+        uiUsesOnlyTheBackendsApplicationApi(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
     // The class comment records a rule engine that silently checked nothing; these prove each graph
     // rule fails on an offender and that its one exception stays as narrow as documented.
+    @Test
+    void GivenAUiClassUsingADrivenPort_WhenScanned_ThenTheUiApplicationApiRuleFails() {
+        assertRuleFails(uiUsesOnlyTheBackendsApplicationApi(FIXTURE_ROOT), UiTypeUsingADrivenPort.class);
+    }
+
+    @Test
+    void GivenAUiClassUsingAnAdapter_WhenScanned_ThenTheUiApplicationApiRuleFails() {
+        assertRuleFails(uiUsesOnlyTheBackendsApplicationApi(FIXTURE_ROOT), UiTypeUsingAnAdapter.class);
+    }
+
+    @Test
+    void GivenAUiClassUsingAnApplicationService_WhenScanned_ThenTheUiApplicationApiRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(UiTypeUsingAnApplicationService.class);
+        assertThatCode(() -> uiUsesOnlyTheBackendsApplicationApi(FIXTURE_ROOT).check(imported))
+                .doesNotThrowAnyException();
+    }
+
     @Test
     void GivenNotificationsDependingOnOrganization_WhenScanned_ThenTheModuleGraphRuleFails() {
         assertRuleFails(modulesDependOnlyAlongTheDocumentedGraph(FIXTURE_ROOT),
@@ -317,6 +353,17 @@ class HexagonalRulesTest {
 
     private static final String DOMAIN_LAYER = "domain";
 
+    private static final String UI_MODULE = "ui";
+
+    // A context's driven side, below its module package: closed to the UI at any depth.
+    private static final List<String> LAYERS_CLOSED_TO_THE_UI = List.of("application.port.out", "adapter");
+
+    private static ArchRule uiUsesOnlyTheBackendsApplicationApi(String root) {
+        return classes().that(resideInModule(root, UI_MODULE))
+                .should(notDependOnAnotherModulesDrivenSide(root))
+                .because("ui/package-info.java: the UI depends on each bounded context's inbound application API");
+    }
+
     private static ArchRule modulesDependOnlyAlongTheDocumentedGraph(String root) {
         return classes().that(resideInAModule(root))
                 .should(dependOnlyOnTheirAllowedModules(root))
@@ -366,10 +413,34 @@ class HexagonalRulesTest {
     }
 
     private static boolean isDomainPackage(String packageName, String root) {
-        return moduleOf(packageName, root).map(module -> {
-            String domain = root + "." + module + "." + DOMAIN_LAYER;
-            return packageName.equals(domain) || packageName.startsWith(domain + ".");
-        }).orElse(false);
+        return moduleOf(packageName, root)
+                .map(module -> isInOrBelow(packageName, root + "." + module + "." + DOMAIN_LAYER))
+                .orElse(false);
+    }
+
+    private static boolean isInOrBelow(String packageName, String ancestor) {
+        return packageName.equals(ancestor) || packageName.startsWith(ancestor + ".");
+    }
+
+    private static DescribedPredicate<JavaClass> resideInModule(String root, String module) {
+        return DescribedPredicate.describe("reside in module " + module + " under " + root,
+                javaClass -> isInOrBelow(javaClass.getPackageName(), root + "." + module));
+    }
+
+    private static ArchCondition<JavaClass> notDependOnAnotherModulesDrivenSide(String root) {
+        return new ArchCondition<>("not depend on another module's " + LAYERS_CLOSED_TO_THE_UI + " packages") {
+            @Override
+            public void check(JavaClass origin, ConditionEvents events) {
+                String module = moduleOf(origin.getPackageName(), root).orElseThrow();
+                dependencyTargetsOf(origin).forEach(target -> moduleOf(target.getPackageName(), root)
+                        .filter(targetModule -> !targetModule.equals(module))
+                        .filter(targetModule -> LAYERS_CLOSED_TO_THE_UI.stream().anyMatch(layer ->
+                                isInOrBelow(target.getPackageName(), root + "." + targetModule + "." + layer)))
+                        .ifPresent(targetModule -> events.add(SimpleConditionEvent.violated(origin,
+                                origin.getName() + " depends on " + target.getName() + ", but the ui may use "
+                                        + targetModule + " only through its application API"))));
+            }
+        };
     }
 
     // The classes an origin depends on, arrays reduced to their element type so that a Foo[] field
