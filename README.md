@@ -148,7 +148,7 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | Layer | Technology | Version | Why |
 |---|---|---:|---|
 | Language | Java | 21 | Records for the immutable DTOs and integration notices |
-| Framework | Spring Boot | 3.5.0 | Transactions, profiles and AOP, with the domain kept free of Spring |
+| Framework | Spring Boot | 3.5.16 | Transactions, profiles and AOP, with the domain kept free of Spring |
 | UI | Vaadin Flow | 24.7.0 | Server-side Java views, so one language and one process from view to database |
 | Modularity | Spring Modulith | 1.4.1 | Module model, verification and generated module docs |
 | Architecture tests | ArchUnit | 1.4.1 | Fails the build on a layer violation or a module cycle |

@@ -7,7 +7,7 @@ this file holds what a coding session needs on top of them.
 ## What this is
 
 Event management and ticketing platform: producers run companies and events, buyers browse and buy
-tickets. Spring Boot 3.5.0 + Vaadin Flow 24.7.0 + Spring Modulith 1.4.1 monolith, Java 21, Maven
+tickets. Spring Boot 3.5.16 + Vaadin Flow 24.7.0 + Spring Modulith 1.4.1 monolith, Java 21, Maven
 wrapper (Maven 3.9.14). It extends an upstream BGU course project (`AdamSimkinbgu/event-ticket-system`);
 history before July 2026 is imported from there. Roadmap: GitHub milestones on `NaimElijah/Ticketeer`.
 

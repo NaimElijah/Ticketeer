@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.0</version>
+		<version>3.5.16</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.ticketing</groupId>
@@ -44,11 +44,6 @@
 		<spring-modulith.version>1.4.1</spring-modulith.version>
 		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. -->
 		<archunit.version>1.4.1</archunit.version>
-		<!-- Overrides Boot 3.5.0's managed 1.21.0: Docker Engine 29 answers its Docker client with
-		     HTTP 400, and every container start fails with "Could not find a valid Docker environment".
-		     1.21.4, the latest 1.21.x, works with it (both checked against Engine 29.8; ADR-006).
-		     Drop the override once the Boot upgrade (#40) manages 1.21.4 or later. -->
-		<testcontainers.version>1.21.4</testcontainers.version>
 	</properties>
 
 	<!-- Vaadin BOM manages versions for the entire Vaadin Flow stack -->
@@ -188,7 +183,8 @@
 
 		<!-- Testcontainers: the *IT classes run against a throwaway PostgreSQL container, the
 		     production dialect, instead of H2 (ADR-006). @ServiceConnection wires the container
-		     into the Spring datasource. -->
+		     into the Spring datasource. The version comes from the Boot BOM, 1.21.4 since Boot 3.5.16.
+		     It must not drop below 1.21.4: Docker Engine 29 answers older clients with HTTP 400. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-testcontainers</artifactId>
