@@ -9,9 +9,10 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      # A Boot parent bump and the libraries its BOM manages move together.
+      # The Boot parent and the Spring Modulith BOM move together. (Libraries the Boot BOM manages
+      # without a version in this pom, Flyway for one, are invisible to Dependabot.)
       spring:
-        patterns: ["org.springframework*", "org.flywaydb*"]
+        patterns: ["org.springframework*"]
       vaadin:
         patterns: ["com.vaadin*"]
     ignore:
@@ -22,6 +23,13 @@ updates:
       # ArchUnit stays at the version spring-modulith-core is built against (pom.xml); it moves
       # when Modulith does, by hand, not on its own release.
       - dependency-name: "com.tngtech.archunit:archunit"
+      # Jackson and Netty are pinned to patched releases of the lines Boot 3.5 was built against
+      # (pom.xml, ADR-009). Their next minors (Jackson 2.22, Netty 4.2) are not drop-in under Boot
+      # 3.5, so only their patches are proposed.
+      - dependency-name: "com.fasterxml.jackson:jackson-bom"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "io.netty:netty-bom"
+        update-types: ["version-update:semver-minor"]
       # The project stays on the Boot 3.5 / Spring 6 / Hibernate 6 lines until the planned major
       # upgrade (ADR-009); Dependabot would otherwise propose Boot 4 and every library's next major.
       - dependency-name: "*"
