@@ -154,7 +154,7 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | Architecture tests | ArchUnit | 1.4.2 | Fails the build on a layer violation or a module cycle |
 | Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a configuration switch |
 | Schema migrations | Flyway | Boot-managed (11.7.2) | Versioned SQL applied at startup; Hibernate only validates ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)) |
-| Auth | jjwt + BCrypt | 0.12.6 | Signed session tokens and hashed passwords |
+| Auth | jjwt + BCrypt | 0.13.0 | Signed session tokens and hashed passwords |
 | Build | Maven wrapper | 3.9.14 | The pinned build tool ships in the repo |
 
 ## Quick start

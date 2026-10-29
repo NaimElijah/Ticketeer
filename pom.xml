@@ -43,7 +43,7 @@
 		<tomcat.version>10.1.61</tomcat.version>
 		<jackson-bom.version>2.21.8</jackson-bom.version>
 		<postgresql.version>42.7.14</postgresql.version>
-		<jjwt.version>0.12.6</jjwt.version>
+		<jjwt.version>0.13.0</jjwt.version>
 		<!-- Vaadin Flow (V2-F-01). 24.10.7 is the last free Vaadin 24 release: free maintenance ended
 		     2026-06-16, and 24.10.8 and later need a Vaadin subscription even though Maven Central
 		     serves them. Don't raise this inside 24.x; leave 24 only for 25, which needs Boot 4
@@ -121,7 +121,8 @@
 			<artifactId>spring-security-crypto</artifactId>
 		</dependency>
 
-		<!-- JWT (ISessionManager impl) — jjwt per lecture 2's TokenService example -->
+		<!-- JWT (JwtSessionManager): signs and verifies the session tokens. The three artifacts move
+		     together through jjwt.version; justification in ADR-009. -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>
