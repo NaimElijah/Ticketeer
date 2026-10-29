@@ -23,6 +23,8 @@ import com.ticketing.system.identity.adapter.out.persistence.MemorySessionReposi
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 import com.ticketing.system.identity.config.SessionProperties;
 
+import io.jsonwebtoken.security.WeakKeyException;
+
 class JwtSessionManagerTest {
 
     // JwtSessionManager reads only the member TTL; the guest idle timeout is irrelevant here.
@@ -110,6 +112,65 @@ class JwtSessionManagerTest {
                 Clock.fixed(issuedAt.plus(Duration.ofHours(2)), ZoneOffset.UTC));
 
         assertThrows(SessionExpiredException.class, () -> twoHoursLater.validateToken(token));
+    }
+
+    @Test
+    void GivenInjectedClockOneSecondBeforeExp_WhenValidate_ThenTrue() {
+        Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
+        SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
+        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
+        JwtSessionManager justBeforeExp = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt.plus(Duration.ofMinutes(60)).minusSeconds(1), ZoneOffset.UTC));
+
+        assertTrue(justBeforeExp.validateToken(token));
+    }
+
+    @Test
+    void GivenInjectedClockOneSecondAfterExp_WhenValidate_ThenThrowsSessionExpired() {
+        Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
+        SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
+        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
+        JwtSessionManager justAfterExp = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt.plus(Duration.ofMinutes(60)).plusSeconds(1), ZoneOffset.UTC));
+
+        assertThrows(SessionExpiredException.class, () -> justAfterExp.validateToken(token));
+    }
+
+    @Test
+    void GivenTokenPastExpiryOnInjectedClock_WhenInvalidate_ThenSessionRowDeleted() {
+        Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
+        // The repository's clock stays at issue time, so the row still counts as live to it and
+        // only invalidate() can make it disappear.
+        SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
+        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
+        JwtSessionManager twoHoursLater = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt.plus(Duration.ofHours(2)), ZoneOffset.UTC));
+        assertTrue(shared.existsByUserId(42));
+
+        twoHoursLater.invalidate(token);
+
+        assertFalse(shared.existsByUserId(42));
+    }
+
+    @Test
+    void GivenTamperedSignatureToken_WhenInvalidate_ThenOriginalSessionStillValid() {
+        String token = manager.generateToken(42, "alice");
+        // Same header and payload, so the same sid, but a signature that no longer verifies.
+        String tampered = token + "AAAA";
+
+        manager.invalidate(tampered);
+
+        assertTrue(manager.validateToken(token));
+    }
+
+    @Test
+    void GivenSecretShorterThan256Bits_WhenConstruct_ThenThrowsWeakKey() {
+        // 31 bytes: one short of the 256 bits HS256 needs.
+        assertThrows(WeakKeyException.class, () -> new JwtSessionManager(
+                "only-31-bytes-of-secret-materia", sessionTtl(60), sessions, clock));
     }
 
     @Test
