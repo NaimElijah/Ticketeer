@@ -64,7 +64,16 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 
 DDD + hexagonal modular monolith. Each top-level package under `com.ticketing.system` is a Spring
 Modulith `@ApplicationModule` (all `Type.OPEN`; Modulith validates the model, ArchUnit is the gate).
-Cross-context calls go through ports and events, never into another context's internals.
+Cross-context calls should go through ports and events, and new code must. Existing code still
+reaches into other contexts:
+- identity has no inbound port, so its `SessionManager`, `UserRepository` and `User` are used
+  everywhere;
+- catalog, messaging and reporting call organization's `CompanyMembershipService`;
+- catalog, messaging, sales' `OrderReceiptMapper` and governance read `ProductionCompany`, through
+  organization's repository port or as the entity;
+- sales takes catalog's `EventRepository` for the buyer lock.
+
+#54 replaces these, #53 the notifications call, and #55 closes the modules.
 
 Dependencies (acyclic, and each edge allowed by `HexagonalRulesTest`'s module map):
 `shared ← identity ← organization ← catalog ← sales`, and `organization ← messaging`. `notifications`
@@ -84,12 +93,12 @@ wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstra
 | `sales` | ActiveOrder, OrderReceipt, Ticket, checkout, reservations, refunds, WSEP adapters |
 | `messaging` | Conversations, support inquiries |
 | `notifications` | Consumes `shared/event` notices after commit on the `notify-` thread (`adapter/in/event`, ADR-004) |
-| `governance` | Platform lifecycle, market state, system analytics/integrity; implements sales' `MarketGate` |
+| `governance` | Platform lifecycle, market state, system analytics/integrity; implements sales' `MarketGate`; creates the default admin at init (writes identity's `Admin` directly, #54) |
 | `reporting` | CQRS read side (purchase history, company dashboards), read by `ui` |
 | `ui` | The single Vaadin driving adapter |
 | `bootstrap` | Composition root: lifecycle runners, `@Scheduled` sweepers, dev seed/`.scenario` engine |
 
-Context layout: `domain/` · `application/{port/in, port/out, service, dto}` · `adapter/in/event` ·
+Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoMappers}` · `adapter/in/event` ·
 `adapter/out/<persistence|wsep|security|…>`. Repository ports sit in `application/port/out`, not
 `domain`. An `adapter/out/<context>` package implements a port owned by that other context (e.g.
 `sales/adapter/out/catalog`). `governance` and `reporting` have no domain. Domain classes double as
@@ -126,9 +135,9 @@ subclasses (third test command above).
 ### Transactions and concurrency
 
 - `@Transactional` sits on the application services (~15) and on Jpa adapter methods, never in `domain` or `ui`.
-- Keep WSEP calls outside the DB transaction (V3-TX-02). `CheckoutService`, `RefundService` and `EventCancellationRefundService` wrap only the DB steps in a programmatic `TransactionTemplate`; follow that pattern for any new external call.
+- Keep WSEP calls outside the DB transaction (V3-TX-02). `CheckoutService` and `EventCancellationRefundService` wrap only the DB steps in a programmatic `TransactionTemplate`; follow that pattern for any new external call. `RefundService` is the exception: it holds the receipt's row lock across the gateway refund by design (`AdamSimkinbgu/event-ticket-system#410`; `requirements.md` V3 appendix 4). It needs an ADR (#44), and #130 redesigns it. Don't copy it.
 - `@Transactional(readOnly = true)` on a path that writes drops the write under JPA without an error (b356bf57: the admin session vanished on the next request).
-- On the Jpa adapters, concurrency is optimistic (`@Version`). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the tx advice) re-types the commit-time `OptimisticLockingFailureException` into `ConcurrentReservationException`. Jpa `lockForUpdate`/`unlock` are no-ops **except** in `JpaOrderReceiptRepository`, which takes a real `PESSIMISTIC_WRITE` lock so concurrent refunds can't both reach the gateway.
+- On the Jpa adapters, concurrency is optimistic (`@Version`). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the tx advice) re-types the commit-time `OptimisticLockingFailureException` into `ConcurrentReservationException`, for methods in `..application.service..` only (a bootstrap sweeper's own `@Transactional` sees the raw exception). Jpa `lockForUpdate`/`unlock` are no-ops **except** in `JpaOrderReceiptRepository`, which takes a real `PESSIMISTIC_WRITE` lock so concurrent refunds can't both reach the gateway.
 - Never mint IDs from an in-memory counter: it restarts at 1 on every boot and collides with persisted rows. Ticket IDs come from `TicketRepository.nextId` (seeded from the max existing id) inside the checkout transaction (6ce60ea1).
 - Flyway owns the schema (ADR-007): `src/main/resources/db/migration/V<n>__*.sql`, applied at startup on PostgreSQL **and** on H2 (dev, every Jpa/`test` context), with `ddl-auto: validate` everywhere. An `@Entity` change ships the next `V<n>` in the same commit; never edit one that has run (Flyway's checksum fails the boot). Write SQL both databases accept, keep migrations expand-only (add now, remove a release later), and name every constraint `uk_`/`ck_`/`fk_<table>_<column>`. `validate` checks only tables, columns and types, not length, nullability, uniques, FKs or enum `ck_` values: adding an enum constant needs a migration that drops and re-adds its `ck_` constraint, or inserts of it fail.
 - Each `test`-profile context gets its own H2 database (`testdb-${random.uuid}`), so nothing leaks between cached contexts; a test that needs a fixed name sets its own URL (`TicketIdRestartJpaTest`).
@@ -140,7 +149,7 @@ An in-memory state machine in `SystemAdminService` (governance, not persisted):
 `UNINITIALIZED → READY → OPEN ↔ CLOSED`.
 - `PlatformInitializationRunner` (`@Order(0)`) calls `initializePlatform()`. It needs a reachable WSEP `PaymentGateway` *and* `TicketIssuer` plus a System Admin, then moves to READY. Only a WSEP outage (`ExternalServiceUnavailableException`) is logged and left to self-heal; every other init failure propagates and stops the boot (ADR-003).
 - `bootstrap/scheduling/MarketOpener` opens the market on **every** non-test boot, and `MarketSelfHealScheduler` keeps retrying (it never reopens a market an admin closed). While CLOSED, `ReservationService`/`CheckoutService` refuse via `MarketGate`.
-- Under `test`, none of these runners, schedulers or real WSEP clients exist (`@Profile("!test")`); tests drive init themselves against `Stub*` gateways.
+- Under `test`, none of these runners, schedulers or real WSEP clients exist (`@Profile("!test")`); tests drive init themselves against `Stub*` gateways. The `bootstrap/scheduling` sweepers and the notification poller are still beans under `test`, but nothing schedules them, because `SchedulingConfig`'s `@EnableScheduling` is `!test`; a test calls them directly.
 
 ### External services (WSEP)
 
