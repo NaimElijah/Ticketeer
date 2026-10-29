@@ -51,7 +51,7 @@
 		<vaadin.version>24.10.7</vaadin.version>
 		<!-- Spring Modulith 1.4.x is the line compiled against Spring Boot 3.5 (per the official
 		     compatibility matrix); it enforces the bounded-context module boundaries. -->
-		<spring-modulith.version>1.4.1</spring-modulith.version>
+		<spring-modulith.version>1.4.14</spring-modulith.version>
 		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. -->
 		<archunit.version>1.4.1</archunit.version>
 	</properties>
