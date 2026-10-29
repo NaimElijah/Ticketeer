@@ -36,7 +36,8 @@ import lombok.extern.slf4j.Slf4j;
  * needs an admin to re-open the market for the reseed's checkouts.
  *
  * <p><strong>DESTRUCTIVE.</strong> Only invoked from a {@code wipe}/{@code reset} run, which is
- * opt-in (default {@code seed.mode=off}) and gated behind an interactive confirmation in the runner.
+ * opt-in (default {@code seed.mode=off}) and refused by {@code ScenarioRunner} unless
+ * {@code seed.assume-yes=true}, an environment flag rather than a console prompt.
  */
 @Component
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
