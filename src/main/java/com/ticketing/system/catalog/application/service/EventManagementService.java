@@ -769,6 +769,7 @@ public class EventManagementService {
     }
 
     // Permanently removes a CANCELED event. Only callable by a user with MANAGE_INVENTORY.
+    @Transactional
     public void deleteEvent(String token, int eventId) {
         int userId = validateTokenAndGetUserId(token);
         eventRepository.lockForUpdate(eventId);
@@ -795,6 +796,7 @@ public class EventManagementService {
 
     // Owner/Manager changes an event's status to a target state (non-cancel transitions only).
     // Cancel with refund pipeline uses cancelEventAndRefund.
+    @Transactional
     public void changeEventStatus(String token, int eventId, EventStatus targetStatus) {
         int userId = validateTokenAndGetUserId(token);
         eventRepository.lockForUpdate(eventId);
