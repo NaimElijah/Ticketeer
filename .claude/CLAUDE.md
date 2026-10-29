@@ -7,7 +7,7 @@ this file holds what a coding session needs on top of them.
 ## What this is
 
 Event management and ticketing platform: producers run companies and events, buyers browse and buy
-tickets. Spring Boot 3.5.16 + Vaadin Flow 24.7.0 + Spring Modulith 1.4.1 monolith, Java 21, Maven
+tickets. Spring Boot 3.5.16 + Vaadin Flow 24.10.7 + Spring Modulith 1.4.1 monolith, Java 21, Maven
 wrapper (Maven 3.9.14). It extends an upstream BGU course project (`AdamSimkinbgu/event-ticket-system`);
 history before July 2026 is imported from there. Roadmap: GitHub milestones on `NaimElijah/Ticketeer`.
 
@@ -44,7 +44,7 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 ./mvnw -Pno-vaadin test "-Dtest=*UserRepositoryContractTest"     # Memory + Jpa adapter of one port
 ```
 
-- `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which can NPE on Windows with 24.7.0. Tests only; the app then serves no views.
+- `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which tests don't need. Tests only; the app then serves no views. The Windows NPE it once worked around no longer reproduces (24.7.0 and 24.10.7, #40).
 - **Don't run the full suite locally.** About 1650 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
 - CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`, with the JVM in UTC ("Build, test and package", the required check), and again with `-Pno-vaadin` in Asia/Jerusalem ("Test in Asia/Jerusalem", not required yet). There is no format, lint or dependency-audit step.
 - To run tests in another JVM zone locally, add `"-DargLine=-Duser.timezone=Asia/Jerusalem"` (or `UTC`). It reaches the surefire and failsafe forks, and overrides any `argLine` the pom gains later (e.g. a JaCoCo agent), so CI's command must then append to it.

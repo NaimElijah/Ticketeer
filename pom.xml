@@ -44,8 +44,11 @@
 		<jackson-bom.version>2.21.8</jackson-bom.version>
 		<postgresql.version>42.7.14</postgresql.version>
 		<jjwt.version>0.12.6</jjwt.version>
-		<!-- Vaadin Flow (V2-F-01) - compatible with Spring Boot 3.5 -->
-		<vaadin.version>24.7.0</vaadin.version>
+		<!-- Vaadin Flow (V2-F-01). 24.10.7 is the last free Vaadin 24 release: free maintenance ended
+		     2026-06-16, and 24.10.8 and later need a Vaadin subscription even though Maven Central
+		     serves them. Don't raise this inside 24.x; leave 24 only for 25, which needs Boot 4
+		     (ADR-009). -->
+		<vaadin.version>24.10.7</vaadin.version>
 		<!-- Spring Modulith 1.4.x is the line compiled against Spring Boot 3.5 (per the official
 		     compatibility matrix); it enforces the bounded-context module boundaries. -->
 		<spring-modulith.version>1.4.1</spring-modulith.version>
@@ -153,7 +156,8 @@
 		</dependency>
 
 		<!-- Vaadin Flow (V2-F-01) — version managed by vaadin-bom above.
-		     Pulls in vaadin-flow-components, vaadin-spring, and the dev server. -->
+		     Pulls in vaadin-core (the Apache-2.0 components only), vaadin-spring, Hilla (unused here)
+		     and, through vaadin-dev, the dev server. -->
 		<dependency>
 			<groupId>com.vaadin</groupId>
 			<artifactId>vaadin-spring-boot-starter</artifactId>
@@ -318,10 +322,11 @@
 				</plugins>
 			</build>
 		</profile>
-		<!-- Skip the Vaadin prepare-frontend goal (Windows workaround for the
-		     reflections-library NPE in Vaadin 24.7.0). Activate with -Pno-vaadin.
-		     Compile-only shortcut: frontend assets are NOT prepared when this profile
-		     is active, so the app won't serve Vaadin views. Use for test runs only. -->
+		<!-- Skip the Vaadin prepare-frontend goal, which test runs don't need. Activate with
+		     -Pno-vaadin. It began as a workaround for a Windows NPE in prepare-frontend; that NPE no
+		     longer reproduces on 24.7.0 or 24.10.7 (#40). Compile-only shortcut: frontend assets are
+		     NOT prepared when this profile is active, so the app won't serve Vaadin views. Use for
+		     test runs only. -->
 		<profile>
 			<id>no-vaadin</id>
 			<build>
