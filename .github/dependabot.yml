@@ -19,6 +19,9 @@ updates:
       # serves them, and 25.x needs Spring Boot 4 (ADR-009).
       - dependency-name: "com.vaadin:*"
         versions: [">24.10.7"]
+      # ArchUnit stays at the version spring-modulith-core is built against (pom.xml); it moves
+      # when Modulith does, by hand, not on its own release.
+      - dependency-name: "com.tngtech.archunit:archunit"
       # The project stays on the Boot 3.5 / Spring 6 / Hibernate 6 lines until the planned major
       # upgrade (ADR-009); Dependabot would otherwise propose Boot 4 and every library's next major.
       - dependency-name: "*"
