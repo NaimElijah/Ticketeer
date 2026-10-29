@@ -16,7 +16,9 @@ permissions:
 jobs:
   submit-graph:
     name: Submit dependency graph
-    # A fork's pull request gets a read-only token, and the snapshot API needs contents: write.
+    # A fork's pull request gets a read-only token, and the snapshot API needs contents: write. The
+    # write token is limited to code from this repository: anyone who can push a branch here could
+    # edit this workflow anyway. The job runs only the action's own Maven goal, not the build.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
@@ -40,7 +42,10 @@ jobs:
 
   review:
     name: Dependency review
-    if: github.event_name == 'pull_request'
+    # Runs even when the submission was skipped (a fork) or failed, so the review is never silently
+    # absent. Without a submitted snapshot it falls back to GitHub's parse of the manifest, which
+    # sees only direct dependencies.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     needs: submit-graph
     runs-on: ubuntu-latest
 
