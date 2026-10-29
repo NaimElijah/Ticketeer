@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -86,6 +88,28 @@ class JwtSessionManagerTest {
         JwtSessionManager expiredManager = new JwtSessionManager(SECRET, sessionTtl(-1), expiredSessions, expiredClock);
         String token = expiredManager.generateToken(42, "alice");
         assertThrows(SessionExpiredException.class, () -> expiredManager.validateToken(token));
+    }
+
+    @Test
+    void GivenClockFixedYearsBeforeRealTime_WhenValidateFreshToken_ThenTrue() {
+        Clock past = Clock.fixed(Instant.parse("2020-01-01T00:00:00Z"), ZoneOffset.UTC);
+        JwtSessionManager pastManager =
+                new JwtSessionManager(SECRET, sessionTtl(60), new MemorySessionRepository(past), past);
+        String token = pastManager.generateToken(42, "alice");
+
+        assertTrue(pastManager.validateToken(token));
+    }
+
+    @Test
+    void GivenInjectedClockPastTokenExpiry_WhenValidate_ThenThrowsSessionExpired() {
+        Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
+        SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
+        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
+        JwtSessionManager twoHoursLater = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+                Clock.fixed(issuedAt.plus(Duration.ofHours(2)), ZoneOffset.UTC));
+
+        assertThrows(SessionExpiredException.class, () -> twoHoursLater.validateToken(token));
     }
 
     @Test

@@ -57,6 +57,9 @@ public class JwtSessionManager implements SessionManager {
     private final long expirationMillis;
     private final SessionRepository sessions;
     private final Clock clock;
+    // jjwt checks exp against the system clock unless told otherwise; the token's exp is stamped
+    // from the injected clock, so both sides must read the same one (ADR-008).
+    private final io.jsonwebtoken.Clock jwtClock;
 
     public JwtSessionManager(
             @Value("${jwt.secret}") String secret,
@@ -67,6 +70,7 @@ public class JwtSessionManager implements SessionManager {
         this.expirationMillis = Duration.ofMinutes(sessionProperties.memberTtlMinutes()).toMillis();
         this.sessions = sessions;
         this.clock = clock;
+        this.jwtClock = () -> Date.from(clock.instant());
     }
 
 
@@ -225,6 +229,7 @@ public class JwtSessionManager implements SessionManager {
         try {
             claims = Jwts.parser()
                     .verifyWith(signingKey)
+                    .clock(jwtClock)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
@@ -256,6 +261,7 @@ public class JwtSessionManager implements SessionManager {
         try {
             return Jwts.parser()
                     .verifyWith(signingKey)
+                    .clock(jwtClock)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
