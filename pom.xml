@@ -36,6 +36,13 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<!-- Same-line patches over what Boot 3.5.16 manages. The 3.5 line gets no OSS release after
+		     2026-06-30, and its managed Tomcat 10.1.55, Jackson 2.21.4 and pgjdbc 42.7.11 carry
+		     critical and high advisories that these patches fix (ADR-009). Drop each override when
+		     the Boot it comes with manages that version or later. -->
+		<tomcat.version>10.1.61</tomcat.version>
+		<jackson-bom.version>2.21.8</jackson-bom.version>
+		<postgresql.version>42.7.14</postgresql.version>
 		<jjwt.version>0.12.6</jjwt.version>
 		<!-- Vaadin Flow (V2-F-01) - compatible with Spring Boot 3.5 -->
 		<vaadin.version>24.7.0</vaadin.version>
