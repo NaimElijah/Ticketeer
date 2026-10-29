@@ -18,7 +18,8 @@ jobs:
     name: Submit dependency graph
     # A fork's pull request gets a read-only token, and the snapshot API needs contents: write. The
     # write token is limited to code from this repository: anyone who can push a branch here could
-    # edit this workflow anyway. The job runs only the action's own Maven goal, not the build.
+    # edit this workflow anyway. The action runs this branch's mvnw with its .mvn/ config, and Maven
+    # loads any build extension the pom declares (none today), but not the build lifecycle.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
@@ -42,14 +43,22 @@ jobs:
 
   review:
     name: Dependency review
-    # Runs even when the submission was skipped (a fork) or failed, so the review is never silently
-    # absent. Without a submitted snapshot it falls back to GitHub's parse of the manifest, which
-    # sees only direct dependencies.
+    # Runs even when the submission was skipped (a fork), so the review is never silently absent.
+    # Without a submitted snapshot it falls back to GitHub's parse of the manifest, which sees only
+    # direct dependencies.
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     needs: submit-graph
     runs-on: ubuntu-latest
 
     steps:
+      # A failed submission would otherwise let the review pass on the manifest parse alone, which
+      # misses every transitive and BOM-managed change.
+      - name: Refuse to review without the submitted graph
+        if: needs.submit-graph.result == 'failure'
+        run: |
+          echo "::error::Submit dependency graph failed, so the review would see only direct dependencies."
+          exit 1
+
       - name: Review the dependency changes
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
