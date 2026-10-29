@@ -261,7 +261,7 @@ overrides them. Set each value in one place.
 | `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default |
 | `test` | The test suite's profile: JPA repositories on H2, stub WSEP, no boot runners or schedulers |
 | `memory` | Tests only, together with `test`: swaps in the in-memory repositories. Does nothing on its own |
-| `production` · `no-vaadin` | Maven build profiles: bundle the frontend · skip Vaadin's frontend step |
+| `production` · `no-vaadin` | Maven build profiles: bundle the frontend and leave the dev-only libraries (Vaadin's dev server, H2) out of the jar · skip Vaadin's frontend step |
 
 </details>
 
@@ -323,7 +323,9 @@ because the app then serves no views.
 Temurin 21, with the JVM in UTC) and CodeQL to pass. A second job, "Test in Asia/Jerusalem", runs
 the same suite with the JVM at UTC+2/+3, so code that depends on the server's zone fails there
 ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)); it does not gate a merge until the
-branch ruleset lists it. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
+branch ruleset lists it. A third, "Production artifact", packages with `-Pproduction` and fails if
+the jar carries H2 or Vaadin's dev tooling ([#79](https://github.com/NaimElijah/Ticketeer/issues/79));
+it does not gate a merge yet either. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
 ([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
 PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them
@@ -333,7 +335,7 @@ PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs
 
 **Not deployed.** The `supabase` profile connects to a Supabase PostgreSQL database over SSL, and
 AWS delivery is planned in milestone M5. `./mvnw -Pproduction package` builds the runnable jar
-with the minified frontend.
+with the minified frontend, and without the dev-only libraries: Vaadin's dev server and H2.
 
 | Concern | Today |
 |---|---|

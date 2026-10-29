@@ -81,3 +81,38 @@ jobs:
             target/surefire-reports/
             target/failsafe-reports/
           if-no-files-found: ignore
+
+  production-artifact:
+    # The -Pproduction jar is what a deploy runs, and it must not carry the dev-only libraries (#79):
+    # Vaadin's dev server, dev bundle and Copilot, and the H2 engine. Not a required check yet.
+    name: Production artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No job pushes, so later steps have no use for a persisted token.
+          persist-credentials: false
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # The tests run in the build job; this one only proves what the production jar contains.
+      - name: Package (mvn -B -Pproduction -DskipTests package)
+        run: mvn -B -Pproduction -DskipTests package
+
+      - name: Check the jar holds no dev-only library
+        run: |
+          jar=$(ls target/*.jar)
+          libs=$(unzip -Z1 "$jar" 'BOOT-INF/lib/*')
+          # A listing that missed the libraries would pass the check below vacuously.
+          grep -q '^BOOT-INF/lib/vaadin-core-' <<< "$libs"
+          if grep -E '^BOOT-INF/lib/(h2|vaadin-dev|vaadin-dev-server|vaadin-dev-bundle|copilot)-[0-9]' <<< "$libs"; then
+            echo "::error file=pom.xml::The production jar contains a dev-only library; see the production profile (#79)."
+            exit 1
+          fi

@@ -316,11 +316,41 @@
 	<profiles>
 		<!-- Production profile (V2-F-01).
 		     Activate with -Pproduction. Bundles + minifies frontend assets at compile time.
-		     Dev mode (default) hot-reloads the frontend from a dev server instead. -->
+		     Dev mode (default) hot-reloads the frontend from a dev server instead.
+		     It also keeps the dev-only libraries out of the jar (#79; CI checks it):
+		     - vaadin-dev (dev server, dev bundle, Copilot), excluded where vaadin-core brings it in,
+		       as Vaadin's production-build docs do;
+		     - H2, which only the dev profile and the tests run on. Without it, a datasource URL that
+		       points at H2 fails the boot for want of a driver instead of running on an in-memory
+		       database. -->
 		<profile>
 			<id>production</id>
+			<dependencies>
+				<dependency>
+					<groupId>com.vaadin</groupId>
+					<artifactId>vaadin-core</artifactId>
+					<exclusions>
+						<exclusion>
+							<groupId>com.vaadin</groupId>
+							<artifactId>vaadin-dev</artifactId>
+						</exclusion>
+					</exclusions>
+				</dependency>
+			</dependencies>
 			<build>
 				<plugins>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+						<configuration>
+							<excludes combine.children="append">
+								<exclude>
+									<groupId>com.h2database</groupId>
+									<artifactId>h2</artifactId>
+								</exclude>
+							</excludes>
+						</configuration>
+					</plugin>
 					<plugin>
 						<groupId>com.vaadin</groupId>
 						<artifactId>vaadin-maven-plugin</artifactId>
