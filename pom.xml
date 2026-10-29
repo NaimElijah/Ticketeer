@@ -74,6 +74,15 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<!-- Testcontainers declares commons-compress 1.24.0 one level nearer than Vaadin's
+			     flow-server declares 1.27.1, so Maven's nearest-wins rule put 1.24.0, with two OSV
+			     advisories, on the runtime classpath although Testcontainers is test-only. Pin the
+			     version flow-server, the runtime user, asks for. -->
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-compress</artifactId>
+				<version>1.27.1</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
