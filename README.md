@@ -325,11 +325,12 @@ the same suite with the JVM at UTC+2/+3, so code that depends on the server's zo
 ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)); it does not gate a merge until the
 branch ruleset lists it. A third, "Production artifact", packages with `-Pproduction`, fails if
 the jar carries H2 or Vaadin's dev tooling ([#79](https://github.com/NaimElijah/Ticketeer/issues/79)),
-and boots the jar against PostgreSQL; it does not gate a merge yet either. On every pull request,
-"Dependency review" fails on a dependency with a known high or critical advisory, and Dependabot
-proposes updates weekly once its configuration is on `main`
+and boots the jar against PostgreSQL; it does not gate a merge yet either. "Dependency review"
+fails a pull request that adds or upgrades to a dependency with a known high or critical
+advisory, and Dependabot proposes updates weekly once its configuration is on `main`
 ([ADR-010](docs/ADRs/ADR-010-dependency-review-as-the-vulnerability-gate.md)); the review does not
-gate a merge yet ([#200](https://github.com/NaimElijah/Ticketeer/issues/200)). Coverage is not measured yet, and CI calls `mvn`, not the wrapper
+gate a merge yet ([#200](https://github.com/NaimElijah/Ticketeer/issues/200)). Coverage is not
+measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
 ([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
 PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them
@@ -422,6 +423,9 @@ Known limitations:
   patched library versions on top, and two critical `spring-webmvc` advisories in features the app
   doesn't use are accepted ([ADR-009](docs/ADRs/ADR-009-direct-dependency-inventory.md),
   [#199](https://github.com/NaimElijah/Ticketeer/issues/199)).
+- Nothing yet watches the merged dependency tree for new advisories: the dependency review sees
+  only what a pull request changes, and Dependabot alerts are off
+  ([#202](https://github.com/NaimElijah/Ticketeer/issues/202)).
 
 The full status of every requirement, with the issue for each gap, is in
 [requirements.md](docs/requirements/requirements.md).
