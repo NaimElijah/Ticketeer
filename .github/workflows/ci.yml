@@ -147,8 +147,11 @@ jobs:
           WSEP_HANDSHAKE_ATTEMPTS: '1'
         run: |
           java -jar "$(ls target/*.jar)" > app.log 2>&1 &
+          pid=$!
           for attempt in $(seq 1 60); do
             if curl -fs http://localhost:8080/actuator/health | grep -q '"UP"'; then break; fi
+            # A jar that died at startup won't come up; report it now instead of after the timeout.
+            kill -0 "$pid" 2>/dev/null || break
             sleep 3
           done
           if ! curl -fs http://localhost:8080/actuator/health | grep -q '"UP"' || ! curl -fs -o /dev/null http://localhost:8080/; then
