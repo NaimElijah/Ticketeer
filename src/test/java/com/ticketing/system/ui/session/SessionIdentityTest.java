@@ -17,7 +17,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.vaadin.flow.server.VaadinSession;
@@ -110,17 +110,17 @@ class SessionIdentityTest {
     }
 
     // The only two places that know how SessionIdentity checks a token, so swapping its dependency
-    // (SessionManager today) touches these and nothing else.
+    // (identity's AuthenticationService) touches these and nothing else.
     private static SessionIdentity identityWhoseTokenValidates() {
-        SessionManager sessionManager = mock(SessionManager.class);
-        when(sessionManager.validateToken(MEMBER_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(MEMBER_TOKEN)).thenReturn(MEMBER_USER_ID);
-        return new SessionIdentity(sessionManager);
+        AuthenticationService authenticationService = mock(AuthenticationService.class);
+        when(authenticationService.validateToken(MEMBER_TOKEN)).thenReturn(true);
+        when(authenticationService.extractUserId(MEMBER_TOKEN)).thenReturn(MEMBER_USER_ID);
+        return new SessionIdentity(authenticationService);
     }
 
     private static SessionIdentity identityWhoseTokenIsRejectedWith(RuntimeException rejection) {
-        SessionManager sessionManager = mock(SessionManager.class);
-        when(sessionManager.validateToken(MEMBER_TOKEN)).thenThrow(rejection);
-        return new SessionIdentity(sessionManager);
+        AuthenticationService authenticationService = mock(AuthenticationService.class);
+        when(authenticationService.validateToken(MEMBER_TOKEN)).thenThrow(rejection);
+        return new SessionIdentity(authenticationService);
     }
 }

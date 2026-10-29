@@ -2,7 +2,7 @@ package com.ticketing.system.ui.session;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 
@@ -14,10 +14,10 @@ import com.ticketing.system.shared.exception.SessionExpiredException;
 @Component
 public class SessionIdentity {
 
-    private final SessionManager sessionManager;
+    private final AuthenticationService authenticationService;
 
-    public SessionIdentity(SessionManager sessionManager) {
-        this.sessionManager = sessionManager;
+    public SessionIdentity(AuthenticationService authenticationService) {
+        this.authenticationService = authenticationService;
     }
 
     public boolean isMember() {
@@ -34,7 +34,7 @@ public class SessionIdentity {
 
     public int memberUserId() {
         String token = liveMemberToken();
-        return token != null ? sessionManager.extractUserId(token) : 0;
+        return token != null ? authenticationService.extractUserId(token) : 0;
     }
 
     public String credential() {
@@ -53,7 +53,7 @@ public class SessionIdentity {
             return null;
         }
         try {
-            return sessionManager.validateToken(token) ? token : null;
+            return authenticationService.validateToken(token) ? token : null;
         } catch (SessionExpiredException | InvalidTokenException e) {
             return null;
         }
