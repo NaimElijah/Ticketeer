@@ -76,9 +76,10 @@ course provides, until a Stripe test-mode adapter replaces it ([#98](https://git
 ## Architecture
 
 A DDD + hexagonal modular monolith. Each top-level package under `com.ticketing.system` is a
-Spring Modulith module. Contexts talk through ports (interfaces owned by one side) and
-events, never through another context's internals. The module graph is acyclic, and the build
-fails if that stops being true.
+Spring Modulith module. Contexts are meant to talk through ports (interfaces owned by one side)
+and events. Some still reach into another context's repository ports, entities and services; #54
+replaces those. The module graph is acyclic, and each module may depend only on the modules it
+reaches by following the arrows below. The build fails if either stops being true.
 
 ```mermaid
 flowchart TD
@@ -396,8 +397,8 @@ databases accept, and `validate` does not check length, nullability or constrain
 
 **Open Modulith modules, with ArchUnit as the cycle gate** (no ADR yet). The code began as a
 layered monolith whose contexts still share services and domain types, so closing the modules to
-named-interface ports is a larger follow-on. Cost: module boundaries are enforced as an acyclic
-graph and layering rules, not as type-level encapsulation.
+named-interface ports is a larger follow-on. Cost: module boundaries are enforced as a fixed,
+acyclic module graph and layering rules, not as type-level encapsulation.
 
 ## Status and limitations
 

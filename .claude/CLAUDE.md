@@ -66,12 +66,14 @@ DDD + hexagonal modular monolith. Each top-level package under `com.ticketing.sy
 Modulith `@ApplicationModule` (all `Type.OPEN`; Modulith validates the model, ArchUnit is the gate).
 Cross-context calls go through ports and events, never into another context's internals.
 
-Dependencies (acyclic, enforced): `shared ← identity ← organization ← catalog ← sales`, and
-`organization ← messaging`. `notifications` depends only on `shared`. `governance` and `reporting` read
-across the backend contexts. `ui` uses every backend module; `bootstrap` uses everything including `ui`;
-nothing depends on either. Known exception, due to move behind an inbound port: `identity`
-(`AuthenticationService`, flagged in code) and `bootstrap` (`NotificationPollingScheduler`) call
-`notifications`' `NotificationDispatchService` directly.
+Dependencies (acyclic, and each edge allowed by `HexagonalRulesTest`'s module map):
+`shared ← identity ← organization ← catalog ← sales`, and `organization ← messaging`. `notifications`
+depends only on `shared`. `governance` and `reporting` depend on the backend contexts, not on each
+other. `ui` uses every backend module; `bootstrap` may use everything including `ui`; nothing depends
+on either. A new module fails the build until it is added to that map and to this paragraph. Known
+exception, due to move behind an inbound port (#53): `identity`'s `AuthenticationService` calls
+`notifications`' `NotificationDispatchService` directly. The map allows that one class pair, nothing
+wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstrap's edges allow.
 
 | Module | Holds |
 |---|---|
@@ -91,14 +93,19 @@ Context layout: `domain/` · `application/{port/in, port/out, service, dto}` · 
 `adapter/out/<persistence|wsep|security|…>`. Repository ports sit in `application/port/out`, not
 `domain`. An `adapter/out/<context>` package implements a port owned by that other context (e.g.
 `sales/adapter/out/catalog`). `governance` and `reporting` have no domain. Domain classes double as
-the JPA entities: `HexagonalRulesTest` deliberately allows `jakarta.persistence` in `domain`.
+the JPA entities, so `HexagonalRulesTest` allows `jakarta.persistence` and `org.hibernate.annotations`
+in `domain`, and Jackson only inside JPA `AttributeConverter` classes (the JSON column converters). A
+context's `domain` depends only on its own context and `shared`.
 
 Seams: `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`, `EventSalesHistoryPort`,
 `InventoryCommandPort`, `CatalogEventDisplayPort`, `EventCancelledEvent`, the `shared/event` notices.
 Events are in-process, with no outbox and no Modulith event registry. Catalog → sales (`EventCancelledEvent`) is a synchronous `@EventListener`, because the cancel call must see refund failures. Every `shared/event` notice is consumed by `NotificationEventListener` with `@Async("notificationExecutor")` + `@TransactionalEventListener(fallbackExecution = true)`: after commit, on one `notify-` thread, never delivered for a rolled-back transaction (ADR-004). Publishers don't catch notification failures, so a new notice consumer must follow the same pattern; `HexagonalRulesTest` fails the build otherwise. A Spring test that reads notifications must wait for them (Awaitility).
 
-**Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity,
-application-not-adapter, no-backend→ui, `bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit) and `ModularityTests`
+**Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity and its
+allowances, each domain inside its context, application-not-adapter, no-backend→ui, the module map,
+`bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules;
+the clock, module-map, domain-context and domain-allowance rules each have self-tests that prove they
+fail on a fixture) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by
 copying from `target/`; git has CRLF and the generator writes LF, so a naive diff shows every line.

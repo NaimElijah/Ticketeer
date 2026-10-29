@@ -54,11 +54,18 @@ through ports/events (e.g. `MarketGate`, `CompanyEventStatsPort`, `CartRestorati
 
 Both gates run on every build and are **green**:
 
-- **ArchUnit hexagonal + acyclicity rules** (`HexagonalRulesTest`) — **enforced**: the domain is free
-  of Spring/Vaadin and the outer layers; the application layer never depends on adapters; no backend
-  context depends on `ui`; and **`bounded_contexts_are_acyclic()`** proves the module graph is a DAG
-  (via ArchUnit slices — the same cycle engine Spring Modulith uses, run *without* the open-module
-  exemption, so it is the substantive cycle guarantee).
+- **ArchUnit hexagonal, direction and acyclicity rules** (`HexagonalRulesTest`) — **enforced**:
+  - the domain is free of Spring, Vaadin and the outer layers. Of the persistence stack it may use only
+    `jakarta.persistence`, `org.hibernate.annotations`, and Jackson inside JPA `AttributeConverter`
+    classes;
+  - each context's domain depends only on its own context and `shared`;
+  - the application layer never depends on adapters;
+  - no backend context, `reporting` included, depends on `ui`;
+  - each module depends only on the modules its entry in the test's module map allows: the graph
+    above, plus the one `identity → notifications` class pair;
+  - **`bounded_contexts_are_acyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is
+    the same cycle engine Spring Modulith uses, run *without* the open-module exemption, so it is the
+    substantive cycle guarantee.
 - **Spring Modulith `verify()`** (`ModularityTests.verifiesModuleBoundaries`) — **enabled** and green.
   The modules are declared *open*, so Modulith validates the module model and cycle-freedom at its
   level; full type-level encapsulation (closed modules exposing only named-interface ports) is
