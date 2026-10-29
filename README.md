@@ -329,7 +329,7 @@ and boots the jar against PostgreSQL; it does not gate a merge yet either. On ev
 "Dependency review" fails on a dependency with a known high or critical advisory, and Dependabot
 proposes updates weekly once its configuration is on `main`
 ([ADR-010](docs/ADRs/ADR-010-dependency-review-as-the-vulnerability-gate.md)); the review does not
-gate a merge yet. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
+gate a merge yet ([#200](https://github.com/NaimElijah/Ticketeer/issues/200)). Coverage is not measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
 ([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
 PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them
