@@ -1,0 +1,34 @@
+# Weekly update pull requests into dev, the integration branch (#47, ADR-010). Dependabot reads this
+# file from the default branch, so it takes effect once it reaches main.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # A Boot parent bump and the libraries its BOM manages move together.
+      spring:
+        patterns: ["org.springframework*", "org.flywaydb*"]
+      vaadin:
+        patterns: ["com.vaadin*"]
+    ignore:
+      # 24.10.7 is the last free Vaadin 24; later 24.10.x need a subscription, although Maven Central
+      # serves them, and 25.x needs Spring Boot 4 (ADR-009).
+      - dependency-name: "com.vaadin:*"
+        versions: [">24.10.7"]
+      # The project stays on the Boot 3.5 / Spring 6 / Hibernate 6 lines until the planned major
+      # upgrade (ADR-009); Dependabot would otherwise propose Boot 4 and every library's next major.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

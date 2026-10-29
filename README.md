@@ -325,7 +325,10 @@ the same suite with the JVM at UTC+2/+3, so code that depends on the server's zo
 ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)); it does not gate a merge until the
 branch ruleset lists it. A third, "Production artifact", packages with `-Pproduction` and fails if
 the jar carries H2 or Vaadin's dev tooling ([#79](https://github.com/NaimElijah/Ticketeer/issues/79));
-it does not gate a merge yet either. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
+it does not gate a merge yet either. On every pull request, "Dependency review" fails on a dependency
+with a known high or critical advisory, and Dependabot proposes updates weekly
+([ADR-010](docs/ADRs/ADR-010-dependency-review-as-the-vulnerability-gate.md)); the review does not
+gate a merge yet. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
 ([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
 PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them
