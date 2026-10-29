@@ -1,0 +1,73 @@
+name: Dependency audit
+
+# Fails a pull request that adds or upgrades to a dependency with a known high or critical advisory
+# (#47, ADR-010). GitHub's own parse of pom.xml sees only the direct dependencies, so the first job
+# submits the tree Maven actually resolves, BOM-managed and transitive versions included, and the
+# second reviews the pull request against it.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  submit-graph:
+    name: Submit dependency graph
+    # A fork's pull request gets a read-only token, and the snapshot API needs contents: write. The
+    # write token is limited to code from this repository: anyone who can push a branch here could
+    # edit this workflow anyway. The action runs this branch's mvnw with its .mvn/ config, and Maven
+    # loads any build extension the pom declares (none today), but not the build lifecycle.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the dependency snapshot API; nothing in this job pushes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Submit the resolved Maven dependency tree
+        uses: advanced-security/maven-dependency-submission-action@a64327a7329c9939cf675e458452febe1894a70c # v6.0.1
+
+  review:
+    name: Dependency review
+    # Runs even when the submission was skipped (a fork), so the review is never silently absent.
+    # Without a submitted snapshot it falls back to GitHub's parse of the manifest, which sees only
+    # direct dependencies.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    needs: submit-graph
+    runs-on: ubuntu-latest
+
+    steps:
+      # A failed submission would otherwise let the review pass on the manifest parse alone, which
+      # misses every transitive and BOM-managed change.
+      - name: Refuse to review without the submitted graph
+        if: needs.submit-graph.result == 'failure'
+        run: |
+          echo "::error::Submit dependency graph failed, so the review would see only direct dependencies."
+          exit 1
+
+      - name: Review the dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          # Test-scope libraries run in CI too, so they are held to the same bar.
+          fail-on-scopes: runtime, development
+          # The submission above can land after this job starts.
+          retry-on-snapshot-warnings: true
+          # Accepted risks only, each with its reason in ADR-009: Spring Framework 6.2.19, the last
+          # 6.2 release, has two critical spring-webmvc advisories fixed only in 7.0.9, for XsltView
+          # and for SSE with view fragments. Nothing on the classpath uses either feature.
+          allow-ghsas: GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8

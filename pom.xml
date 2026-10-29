@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.0</version>
+		<version>3.5.16</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.ticketing</groupId>
@@ -36,19 +36,29 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<jjwt.version>0.12.6</jjwt.version>
-		<!-- Vaadin Flow (V2-F-01) - compatible with Spring Boot 3.5 -->
-		<vaadin.version>24.7.0</vaadin.version>
+		<!-- Same-line patches over what Boot 3.5.16 manages. The 3.5 line gets no OSS release after
+		     2026-06-30, and its managed Tomcat 10.1.55, Jackson 2.21.4 and pgjdbc 42.7.11 carry
+		     critical and high advisories that these patches fix (ADR-009). Drop each override when
+		     the Boot it comes with manages that version or later. -->
+		<tomcat.version>10.1.61</tomcat.version>
+		<jackson-bom.version>2.21.8</jackson-bom.version>
+		<postgresql.version>42.7.14</postgresql.version>
+		<!-- Netty reaches only the dev classpath, through Vaadin Copilot, and the production profile
+		     drops it with vaadin-dev; 4.1.135 still carries a critical and several high advisories. -->
+		<netty.version>4.1.139.Final</netty.version>
+		<jjwt.version>0.13.0</jjwt.version>
+		<!-- Vaadin Flow (V2-F-01). 24.10.7 is the last free Vaadin 24 release: free maintenance ended
+		     2026-06-16, and 24.10.8 and later need a Vaadin subscription even though Maven Central
+		     serves them. Don't raise this inside 24.x; leave 24 only for 25, which needs Boot 4
+		     (ADR-009). -->
+		<vaadin.version>24.10.7</vaadin.version>
 		<!-- Spring Modulith 1.4.x is the line compiled against Spring Boot 3.5 (per the official
 		     compatibility matrix); it enforces the bounded-context module boundaries. -->
-		<spring-modulith.version>1.4.1</spring-modulith.version>
-		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. -->
-		<archunit.version>1.4.1</archunit.version>
-		<!-- Overrides Boot 3.5.0's managed 1.21.0: Docker Engine 29 answers its Docker client with
-		     HTTP 400, and every container start fails with "Could not find a valid Docker environment".
-		     1.21.4, the latest 1.21.x, works with it (both checked against Engine 29.8; ADR-006).
-		     Drop the override once the Boot upgrade (#40) manages 1.21.4 or later. -->
-		<testcontainers.version>1.21.4</testcontainers.version>
+		<spring-modulith.version>1.4.14</spring-modulith.version>
+		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. Keep it at the version
+		     spring-modulith-core is built against (1.4.2 for Modulith 1.4.14): both declare it for the
+		     test classpath, and the nearer pin here wins. -->
+		<archunit.version>1.4.2</archunit.version>
 	</properties>
 
 	<!-- Vaadin BOM manages versions for the entire Vaadin Flow stack -->
@@ -66,6 +76,57 @@
 				<groupId>org.springframework.modulith</groupId>
 				<artifactId>spring-modulith-bom</artifactId>
 				<version>${spring-modulith.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<!-- Testcontainers declares commons-compress 1.24.0 one level nearer than Vaadin's
+			     flow-server declares 1.27.1, so Maven's nearest-wins rule put 1.24.0, with two OSV
+			     advisories, on the runtime classpath although Testcontainers is test-only. Pin the
+			     version flow-server, the runtime user, asks for. -->
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-compress</artifactId>
+				<version>1.27.1</version>
+			</dependency>
+			<!-- Vaadin 24.10.7, the last free 24.x, ships jsoup 1.20.1 (flow-server) and Guava 33.4.0
+			     (Hilla's javaparser), both with high advisories (ADR-009). jsoup 1.23.2 is the version
+			     Vaadin's own later 24.10 releases moved flow-server to; Guava 33.7.2 is the first fix.
+			     Drop both with the move to Vaadin 25 (#199). -->
+			<dependency>
+				<groupId>org.jsoup</groupId>
+				<artifactId>jsoup</artifactId>
+				<version>1.23.2</version>
+			</dependency>
+			<dependency>
+				<groupId>com.google.guava</groupId>
+				<artifactId>guava</artifactId>
+				<version>33.7.2-jre</version>
+			</dependency>
+			<!-- Only Boot's BOM reads the Tomcat, Jackson, pgjdbc and Netty properties above, and
+			     Dependabot doesn't follow a property into a parent's BOM, so it would never propose
+			     their next patches. Declared here at the same properties, they resolve exactly as
+			     before and become visible to Dependabot. -->
+			<dependency>
+				<groupId>org.apache.tomcat.embed</groupId>
+				<artifactId>tomcat-embed-core</artifactId>
+				<version>${tomcat.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson</groupId>
+				<artifactId>jackson-bom</artifactId>
+				<version>${jackson-bom.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.postgresql</groupId>
+				<artifactId>postgresql</artifactId>
+				<version>${postgresql.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-bom</artifactId>
+				<version>${netty.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -105,7 +166,8 @@
 			<artifactId>spring-security-crypto</artifactId>
 		</dependency>
 
-		<!-- JWT (ISessionManager impl) — jjwt per lecture 2's TokenService example -->
+		<!-- JWT (JwtSessionManager): signs and verifies the session tokens. The three artifacts move
+		     together through jjwt.version; justification in ADR-009. -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>
@@ -151,7 +213,8 @@
 		</dependency>
 
 		<!-- Vaadin Flow (V2-F-01) — version managed by vaadin-bom above.
-		     Pulls in vaadin-flow-components, vaadin-spring, and the dev server. -->
+		     Pulls in vaadin-core (the Apache-2.0 components only), vaadin-spring, Hilla (unused here)
+		     and, through vaadin-dev, the dev server. -->
 		<dependency>
 			<groupId>com.vaadin</groupId>
 			<artifactId>vaadin-spring-boot-starter</artifactId>
@@ -164,13 +227,15 @@
 		</dependency>
 
 		<!-- Spring Modulith (bounded-context modules) — versions from the BOM above.
-		     starter-core: @ApplicationModule model at runtime.
+		     api: the @ApplicationModule annotations on each module's package-info, the only
+		     Modulith type main code uses. The runtime starter would ship spring-modulith-core,
+		     moments and ArchUnit in the jar for features this app doesn't use.
 		     starter-test: ApplicationModules.verify() + Documenter (diagram/canvas generation).
 		     The JPA event-publication registry (spring-modulith-starter-jpa) is deliberately
 		     left out: notices are delivered after commit without an outbox (ADR-004). -->
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>
-			<artifactId>spring-modulith-starter-core</artifactId>
+			<artifactId>spring-modulith-api</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>
@@ -178,17 +243,20 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- ArchUnit — hexagonal layering + naming rules enforced as JUnit 5 tests. -->
+		<!-- ArchUnit — hexagonal layering + naming rules enforced as JUnit 5 tests. The core
+		     library only: HexagonalRulesTest imports the classes and calls check() itself, so
+		     archunit-junit5's @ArchTest engine has nothing to run. -->
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
-			<artifactId>archunit-junit5</artifactId>
+			<artifactId>archunit</artifactId>
 			<version>${archunit.version}</version>
 			<scope>test</scope>
 		</dependency>
 
 		<!-- Testcontainers: the *IT classes run against a throwaway PostgreSQL container, the
 		     production dialect, instead of H2 (ADR-006). @ServiceConnection wires the container
-		     into the Spring datasource. -->
+		     into the Spring datasource. The version comes from the Boot BOM, 1.21.4 since Boot 3.5.16.
+		     It must not drop below 1.21.4: Docker Engine 29 answers older clients with HTTP 400. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-testcontainers</artifactId>
@@ -293,11 +361,41 @@
 	<profiles>
 		<!-- Production profile (V2-F-01).
 		     Activate with -Pproduction. Bundles + minifies frontend assets at compile time.
-		     Dev mode (default) hot-reloads the frontend from a dev server instead. -->
+		     Dev mode (default) hot-reloads the frontend from a dev server instead.
+		     It also keeps the dev-only libraries out of the jar (#79; CI checks it):
+		     - vaadin-dev (dev server, dev bundle, Copilot), excluded where vaadin-core brings it in,
+		       as Vaadin's production-build docs do;
+		     - H2, which only the dev profile and the tests run on. Without it, a datasource URL that
+		       points at H2 fails the boot for want of a driver instead of running on an in-memory
+		       database. -->
 		<profile>
 			<id>production</id>
+			<dependencies>
+				<dependency>
+					<groupId>com.vaadin</groupId>
+					<artifactId>vaadin-core</artifactId>
+					<exclusions>
+						<exclusion>
+							<groupId>com.vaadin</groupId>
+							<artifactId>vaadin-dev</artifactId>
+						</exclusion>
+					</exclusions>
+				</dependency>
+			</dependencies>
 			<build>
 				<plugins>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+						<configuration>
+							<excludes combine.children="append">
+								<exclude>
+									<groupId>com.h2database</groupId>
+									<artifactId>h2</artifactId>
+								</exclude>
+							</excludes>
+						</configuration>
+					</plugin>
 					<plugin>
 						<groupId>com.vaadin</groupId>
 						<artifactId>vaadin-maven-plugin</artifactId>
@@ -315,10 +413,11 @@
 				</plugins>
 			</build>
 		</profile>
-		<!-- Skip the Vaadin prepare-frontend goal (Windows workaround for the
-		     reflections-library NPE in Vaadin 24.7.0). Activate with -Pno-vaadin.
-		     Compile-only shortcut: frontend assets are NOT prepared when this profile
-		     is active, so the app won't serve Vaadin views. Use for test runs only. -->
+		<!-- Skip the Vaadin prepare-frontend goal, which test runs don't need. Activate with
+		     -Pno-vaadin. It began as a workaround for a Windows NPE in prepare-frontend; that NPE no
+		     longer reproduces on 24.7.0 or 24.10.7 (#40). Compile-only shortcut: frontend assets are
+		     NOT prepared when this profile is active, so the app won't serve Vaadin views. Use for
+		     test runs only. -->
 		<profile>
 			<id>no-vaadin</id>
 			<build>

@@ -148,14 +148,14 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | Layer | Technology | Version | Why |
 |---|---|---:|---|
 | Language | Java | 21 | Records for the immutable DTOs and integration notices |
-| Framework | Spring Boot | 3.5.0 | Transactions, profiles and AOP, with the domain kept free of Spring |
-| UI | Vaadin Flow | 24.7.0 | Server-side Java views, so one language and one process from view to database |
-| Modularity | Spring Modulith | 1.4.1 | Module model, verification and generated module docs |
-| Architecture tests | ArchUnit | 1.4.1 | Fails the build on a layer violation or a module cycle |
+| Framework | Spring Boot | 3.5.16 | Transactions, profiles and AOP, with the domain kept free of Spring |
+| UI | Vaadin Flow | 24.10.7 | Server-side Java views, so one language and one process from view to database |
+| Modularity | Spring Modulith | 1.4.14 | Module model, verification and generated module docs |
+| Architecture tests | ArchUnit | 1.4.2 | Fails the build on a layer violation or a module cycle |
 | Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a configuration switch |
 | Schema migrations | Flyway | Boot-managed (11.7.2) | Versioned SQL applied at startup; Hibernate only validates ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)) |
-| Auth | jjwt + BCrypt | 0.12.6 | Signed session tokens and hashed passwords |
-| Build | Maven wrapper | 3.9.14 | The pinned build tool ships in the repo |
+| Auth | jjwt + BCrypt | 0.13.0 | Signed session tokens and hashed passwords |
+| Build | Maven wrapper | 3.9.16 | The pinned build tool ships in the repo |
 
 ## Quick start
 
@@ -261,7 +261,7 @@ overrides them. Set each value in one place.
 | `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default |
 | `test` | The test suite's profile: JPA repositories on H2, stub WSEP, no boot runners or schedulers |
 | `memory` | Tests only, together with `test`: swaps in the in-memory repositories. Does nothing on its own |
-| `production` · `no-vaadin` | Maven build profiles: bundle the frontend · skip Vaadin's frontend step |
+| `production` · `no-vaadin` | Maven build profiles: bundle the frontend and leave the dev-only libraries (Vaadin's dev server, H2) out of the jar · skip Vaadin's frontend step |
 
 </details>
 
@@ -316,14 +316,21 @@ About 1,500 test methods, organised by what they boot:
 ./mvnw verify                                                          # everything CI runs; needs Docker
 ```
 
-`-Pno-vaadin` skips Vaadin's frontend preparation, which can fail on Windows with 24.7.0. Use it for
-tests only, because the app then serves no views.
+`-Pno-vaadin` skips Vaadin's frontend preparation, which the tests don't need. Use it for tests only,
+because the app then serves no views.
 
 **What gates a merge:** pull requests into `main` and `dev` need the CI check (`mvn -B verify` on
 Temurin 21, with the JVM in UTC) and CodeQL to pass. A second job, "Test in Asia/Jerusalem", runs
 the same suite with the JVM at UTC+2/+3, so code that depends on the server's zone fails there
 ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)); it does not gate a merge until the
-branch ruleset lists it. Coverage is not measured yet, and CI calls `mvn`, not the wrapper
+branch ruleset lists it. A third, "Production artifact", packages with `-Pproduction`, fails if
+the jar carries H2 or Vaadin's dev tooling ([#79](https://github.com/NaimElijah/Ticketeer/issues/79)),
+and boots the jar against PostgreSQL; it does not gate a merge yet either. "Dependency review"
+fails a pull request that adds or upgrades to a dependency with a known high or critical
+advisory, and Dependabot proposes updates weekly once its configuration is on `main`
+([ADR-010](docs/ADRs/ADR-010-dependency-review-as-the-vulnerability-gate.md)); the review does not
+gate a merge yet ([#200](https://github.com/NaimElijah/Ticketeer/issues/200)). Coverage is not
+measured yet, and CI calls `mvn`, not the wrapper
 ([#45](https://github.com/NaimElijah/Ticketeer/issues/45)). There is no formatter or linter
 ([#46](https://github.com/NaimElijah/Ticketeer/issues/46)). The `*IT` classes start a throwaway
 PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs` skips them
@@ -333,7 +340,7 @@ PostgreSQL container, so `verify` needs Docker, as the CI runner has; `-DskipITs
 
 **Not deployed.** The `supabase` profile connects to a Supabase PostgreSQL database over SSL, and
 AWS delivery is planned in milestone M5. `./mvnw -Pproduction package` builds the runnable jar
-with the minified frontend.
+with the minified frontend, and without the dev-only libraries: Vaadin's dev server and H2.
 
 | Concern | Today |
 |---|---|
@@ -412,6 +419,13 @@ Known limitations:
 - Money is a `double`, not integer minor units with a currency
   ([#73](https://github.com/NaimElijah/Ticketeer/issues/73)).
 - Alerts arrive by polling, not push ([#61](https://github.com/NaimElijah/Ticketeer/issues/61)).
+- Spring Boot 3.5 and Vaadin 24 are out of free support. The last free releases are pinned, with
+  patched library versions on top, and two critical `spring-webmvc` advisories in features the app
+  doesn't use are accepted ([ADR-009](docs/ADRs/ADR-009-direct-dependency-inventory.md),
+  [#199](https://github.com/NaimElijah/Ticketeer/issues/199)).
+- Nothing yet watches the merged dependency tree for new advisories: the dependency review sees
+  only what a pull request changes, and Dependabot alerts are off
+  ([#202](https://github.com/NaimElijah/Ticketeer/issues/202)).
 
 The full status of every requirement, with the issue for each gap, is in
 [requirements.md](docs/requirements/requirements.md).
