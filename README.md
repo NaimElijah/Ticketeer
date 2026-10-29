@@ -155,7 +155,7 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a configuration switch |
 | Schema migrations | Flyway | Boot-managed (11.7.2) | Versioned SQL applied at startup; Hibernate only validates ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)) |
 | Auth | jjwt + BCrypt | 0.13.0 | Signed session tokens and hashed passwords |
-| Build | Maven wrapper | 3.9.14 | The pinned build tool ships in the repo |
+| Build | Maven wrapper | 3.9.16 | The pinned build tool ships in the repo |
 
 ## Quick start
 
