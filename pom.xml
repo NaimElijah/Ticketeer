@@ -102,6 +102,34 @@
 				<artifactId>guava</artifactId>
 				<version>33.7.2-jre</version>
 			</dependency>
+			<!-- Only Boot's BOM reads the Tomcat, Jackson, pgjdbc and Netty properties above, and
+			     Dependabot doesn't follow a property into a parent's BOM, so it would never propose
+			     their next patches. Declared here at the same properties, they resolve exactly as
+			     before and become visible to Dependabot. -->
+			<dependency>
+				<groupId>org.apache.tomcat.embed</groupId>
+				<artifactId>tomcat-embed-core</artifactId>
+				<version>${tomcat.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson</groupId>
+				<artifactId>jackson-bom</artifactId>
+				<version>${jackson-bom.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.postgresql</groupId>
+				<artifactId>postgresql</artifactId>
+				<version>${postgresql.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-bom</artifactId>
+				<version>${netty.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
