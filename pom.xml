@@ -52,8 +52,10 @@
 		<!-- Spring Modulith 1.4.x is the line compiled against Spring Boot 3.5 (per the official
 		     compatibility matrix); it enforces the bounded-context module boundaries. -->
 		<spring-modulith.version>1.4.14</spring-modulith.version>
-		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. -->
-		<archunit.version>1.4.1</archunit.version>
+		<!-- ArchUnit — hexagonal layering/naming rules run as JUnit tests. Keep it at the version
+		     spring-modulith-core is built against (1.4.2 for Modulith 1.4.14): both are on the test
+		     classpath, and the nearer pin here wins. -->
+		<archunit.version>1.4.2</archunit.version>
 	</properties>
 
 	<!-- Vaadin BOM manages versions for the entire Vaadin Flow stack -->
@@ -195,10 +197,12 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- ArchUnit — hexagonal layering + naming rules enforced as JUnit 5 tests. -->
+		<!-- ArchUnit — hexagonal layering + naming rules enforced as JUnit 5 tests. The core
+		     library only: HexagonalRulesTest imports the classes and calls check() itself, so
+		     archunit-junit5's @ArchTest engine has nothing to run. -->
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
-			<artifactId>archunit-junit5</artifactId>
+			<artifactId>archunit</artifactId>
 			<version>${archunit.version}</version>
 			<scope>test</scope>
 		</dependency>
