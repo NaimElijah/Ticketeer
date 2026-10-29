@@ -30,7 +30,9 @@ import io.jsonwebtoken.security.Keys;
 /**
  * jjwt-backed implementation of {@link SessionManager}. UC-12 / UC-14.
  *
- * <p>Tokens are HS256-signed using {@code jwt.secret} from configuration and
+ * <p>Tokens are HMAC-signed with {@code jwt.secret}. jjwt picks HS256, HS384 or HS512 from the
+ * secret's length (the committed 70-byte dev default gives HS512) and refuses a secret shorter
+ * than 256 bits when this bean is built. Tokens
  * expire after {@code session.member-ttl-minutes} (the JWT's exp claim and
  * the Session row's expiresAt are always kept in sync by construction).
  * Revocation (UC-14) is recorded by deleting the corresponding {@link Session}
@@ -192,8 +194,9 @@ public class JwtSessionManager implements SessionManager {
     public void invalidate(String token) {
         if (token == null || token.isBlank()) return;
         try {
-            // Use raw parsing — we want to delete the session even if the JWT is
-            // signature-invalid or already-expired (idempotent revocation).
+            // Expiry-tolerant parsing: an expired token still revokes its session (idempotent
+            // revocation). A token whose signature fails names no session we can trust, so it
+            // throws and revokes nothing.
             Claims claims = parseJwtUnchecked(token);
             String sid = claims.get(CLAIM_SID, String.class);
             if (sid != null && !sid.isBlank()) {
@@ -252,10 +255,11 @@ public class JwtSessionManager implements SessionManager {
     }
 
     /**
-     * Decodes a JWT without enforcing signature or expiry semantics — only
-     * used by {@link #invalidate(String)} to recover the session id from
-     * tokens that may already be expired but should still be revoked
-     * idempotently.
+     * Decodes a JWT and verifies its signature, but tolerates an expired exp claim — only
+     * used by {@link #invalidate(String)} to recover the session id from tokens that may
+     * already be expired but should still be revoked idempotently.
+     *
+     * @throws JwtException if the token is malformed or its signature does not verify
      */
     private Claims parseJwtUnchecked(String token) {
         try {
