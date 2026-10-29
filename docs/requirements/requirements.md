@@ -197,7 +197,7 @@ cites; "a buyer has an active order" and "at most one per event" are one item (�
 | 2 | At least one system admin exists. | `SystemAdminService.initializePlatform` · `SystemAdminServiceTest` |
 | 3 | Every system admin is a member. | **Not upheld.** Admins are a separate pool, not members (`SystemIntegrityVerifier`). The deviation still needs its ADR (#44). |
 | 4 | Company owners and managers are members. | `CompanyManagementService.appointOwner`, `SystemIntegrityVerifier` · `SystemIntegrityVerifierTest` |
-| 5 | Only users who are currently visiting can act. | A valid session token on every write (`SessionManager`) · `JwtSessionManagerTest` (token validation only; no test asserts that every write is refused without a session) |
+| 5 | Only users who are currently visiting can act. | A valid session token on every write (`SessionManager`) · `JwtSessionManagerTest` (token validation, expiry against the injected clock and revocation only; no test asserts that every write is refused without a session) |
 | 6 | An active company has at least one owner. | The Founder can be neither removed nor resign (`ProductionCompany`, `CompanyManagementService.RevokeAppointment`; no test covers these guards); scanned by `SystemIntegrityVerifier` · `SystemIntegrityVerifierTest` |
 | 7 | Every company and every event has a purchase policy and a discount policy; where none is set, the purchase policy imposes no restriction and the discount policy gives no discount. | **Partial.** Purchase policy: `NoPurchasePolicy` by default on `ProductionCompany` and `Event`. Event discount: 0 % from `EventManagementService.addEvent`. Company discount: not built (#67). Purchase methods and their default (regular sale or lottery) are not modelled (#72). `IProductionCompanyRepositoryContractTest.save_roundTripsTheDefaultNoPurchasePolicy` asserts the company's purchase-policy default; TODO `GivenNewEvent_WhenAddEvent_ThenNoPurchaseRestrictionAndNoDiscount` for the event's defaults |
 | 8 | A buyer has one active order collecting their tickets, and at most one per event at any time. | Saving a second cart for the same buyer replaces the first (`ActiveOrderRepository`); scanned by `SystemIntegrityVerifier` · `IActiveOrderRepositoryContractTest`, `SystemIntegrityVerifierTest` |
@@ -277,8 +277,8 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   `EventCompletionSweeper`, `Event.hasFinishedAsOf` · `EventCompletionSweeperTest`, `EventTest`).
 - No behaviour depends on the server's time zone. Every "now" comes from one UTC clock, and the UI
   shows recorded times and "today" in `platform.time-zone` (`SecurityConfig.systemClock`,
-  `DisplayTime` · `HexagonalRulesTest`, `ClockConfigTest`, `DisplayTimeTest`; CI runs the suite in UTC
-  and in Asia/Jerusalem).
+  `DisplayTime` · `HexagonalRulesTest`, `ClockConfigTest`, `DisplayTimeTest`, and
+  `JwtSessionManagerTest` for session-token expiry; CI runs the suite in UTC and in Asia/Jerusalem).
 
 ### Purchase flow
 

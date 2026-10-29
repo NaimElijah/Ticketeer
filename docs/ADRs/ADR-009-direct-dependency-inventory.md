@@ -95,7 +95,8 @@ so they wait for #199.
   production-build documentation does.
 - It also leaves H2 out of the repackaged jar. A datasource URL pointing at H2 then fails the boot
   for want of a driver, rather than starting on an in-memory database.
-- The CI job `Production artifact` fails if either library comes back.
+- The CI job `Production artifact` fails if either library comes back. It also boots the jar
+  against PostgreSQL, so an override that breaks Boot or Vaadin at runtime fails CI too.
 - H2 keeps `runtime` scope for the dev profile and the tests.
 
 **5. The inventory.** These are the versions after this decision, with a justification for each:
@@ -120,7 +121,7 @@ so they wait for #199.
 | `spring-modulith-starter-test` (test) | 1.4.14 | `ApplicationModules.verify()` and the Documenter (`ModularityTests`) | as above | Apache-2.0 |
 | `com.tngtech.archunit:archunit` (test) | 1.4.2 | Hand-written dependency checks for `HexagonalRulesTest`. Kept at Modulith 1.4.14's own ArchUnit version | active; 1.5.1 latest | Apache-2.0 |
 | `spring-boot-testcontainers` (test) | Boot BOM | Manual datasource wiring per container (`@ServiceConnection`) | with Boot | Apache-2.0 |
-| `org.testcontainers:postgresql`, `junit-jupiter` (test) | Boot BOM (1.21.4) | Starting, pausing and wiring a real PostgreSQL (ADR-006). Docker Engine 29 needs 1.21.4 or later | 1.x frozen at 1.21.4; 2.x goes with Boot 4 | MIT |
+| `org.testcontainers:postgresql`, `junit-jupiter` (test) | Boot BOM (1.21.4; this retires ADR-006's version override) | Starting, pausing and wiring a real PostgreSQL (ADR-006). Docker Engine 29 needs 1.21.4 or later | 1.x frozen at 1.21.4; 2.x goes with Boot 4 | MIT |
 
 An OSV audit of all 285 resolved artifacts, test scope included, reports only the four advisories
 accepted in decision 3. The CI tooling is in ADR-010.

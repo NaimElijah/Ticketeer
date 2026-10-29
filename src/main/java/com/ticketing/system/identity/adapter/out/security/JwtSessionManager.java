@@ -32,9 +32,9 @@ import io.jsonwebtoken.security.Keys;
  *
  * <p>Tokens are HMAC-signed with {@code jwt.secret}. jjwt picks HS256, HS384 or HS512 from the
  * secret's length (the committed 70-byte dev default gives HS512) and refuses a secret shorter
- * than 256 bits when this bean is built. Tokens
- * expire after {@code session.member-ttl-minutes} (the JWT's exp claim and
- * the Session row's expiresAt are always kept in sync by construction).
+ * than 256 bits when this bean is built. Tokens expire after {@code session.member-ttl-minutes},
+ * checked against the injected clock (the JWT's exp claim and the Session row's expiresAt are
+ * always kept in sync by construction).
  * Revocation (UC-14) is recorded by deleting the corresponding {@link Session}
  * row through {@link SessionRepository}; revoked tokens fail every reader
  * because the Session existence check lives inside the central
