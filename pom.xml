@@ -43,6 +43,9 @@
 		<tomcat.version>10.1.61</tomcat.version>
 		<jackson-bom.version>2.21.8</jackson-bom.version>
 		<postgresql.version>42.7.14</postgresql.version>
+		<!-- Netty reaches only the dev classpath, through Vaadin Copilot, and the production profile
+		     drops it with vaadin-dev; 4.1.135 still carries a critical and several high advisories. -->
+		<netty.version>4.1.139.Final</netty.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<!-- Vaadin Flow (V2-F-01). 24.10.7 is the last free Vaadin 24 release: free maintenance ended
 		     2026-06-16, and 24.10.8 and later need a Vaadin subscription even though Maven Central
@@ -84,6 +87,20 @@
 				<groupId>org.apache.commons</groupId>
 				<artifactId>commons-compress</artifactId>
 				<version>1.27.1</version>
+			</dependency>
+			<!-- Vaadin 24.10.7, the last free 24.x, ships jsoup 1.20.1 (flow-server) and Guava 33.4.0
+			     (Hilla's javaparser), both with high advisories (ADR-009). jsoup 1.23.2 is the version
+			     Vaadin's own later 24.10 releases moved flow-server to; Guava 33.7.2 is the first fix.
+			     Drop both with the move to Vaadin 25 (#199). -->
+			<dependency>
+				<groupId>org.jsoup</groupId>
+				<artifactId>jsoup</artifactId>
+				<version>1.23.2</version>
+			</dependency>
+			<dependency>
+				<groupId>com.google.guava</groupId>
+				<artifactId>guava</artifactId>
+				<version>33.7.2-jre</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
