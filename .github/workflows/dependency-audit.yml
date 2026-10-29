@@ -63,9 +63,11 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
+          # Test-scope libraries run in CI too, so they are held to the same bar.
+          fail-on-scopes: runtime, development
           # The submission above can land after this job starts.
           retry-on-snapshot-warnings: true
           # Accepted risks only, each with its reason in ADR-009: Spring Framework 6.2.19, the last
           # 6.2 release, has two critical spring-webmvc advisories fixed only in 7.0.9, for XsltView
-          # and for SSE with view fragments. The app has no Spring MVC controllers or views.
+          # and for SSE with view fragments. Nothing on the classpath uses either feature.
           allow-ghsas: GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8

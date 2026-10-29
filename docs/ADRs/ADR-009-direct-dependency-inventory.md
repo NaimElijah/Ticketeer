@@ -75,10 +75,19 @@ is the last 6.2 release, and both advisories are fixed only in 7.0.9:
 - GHSA-pc63-qcmh-9cmg (CVE-2026-47884): improper path limitation in `XsltView`;
 - GHSA-j9f9-w8pj-32f8 (CVE-2026-47890): SSE stream corruption when rendering view fragments.
 
-They are accepted because the app uses neither feature. `src/main` has no `@Controller`,
-`@RestController`, request mapping, `ModelAndView`, `XsltView`, `SseEmitter` or fragment rendering.
-Its only HTTP surface is the Vaadin servlet, whose push runs over Atmosphere, not Spring SSE.
-`.github/workflows/dependency-audit.yml` allow-lists exactly these two (ADR-010).
+They are accepted because nothing on the classpath uses either feature:
+- the first needs an `XsltView` whose view name isn't set explicitly;
+- the second needs SSE with view fragments.
+
+`src/main` has no `XsltView`, `SseEmitter`, fragment rendering, `ModelAndView` or `ViewResolver`.
+Spring MVC still serves requests: Hilla's `EndpointController` (on the classpath through the Vaadin
+starter) and the actuator endpoints. But neither those, nor Boot's, Vaadin's or the actuator's own
+configuration, sets up an XSLT view or SSE fragment rendering. Vaadin push runs over Atmosphere,
+not Spring SSE.
+
+`.github/workflows/dependency-audit.yml` allow-lists exactly these two (ADR-010). The allow-list
+matches by advisory id, so it would also hide GHSA-j9f9-w8pj-32f8 in `spring-webflux`, which is not
+in the tree today.
 
 Two moderate advisories stay too, below the gate's threshold, in libraries the app reaches only
 through its framework. `src/main` imports neither.
@@ -157,8 +166,8 @@ accepted in decision 3. The CI tooling is in ADR-010.
 - #199 starts. It supersedes decisions 1 to 3, and the overrides and allow-listed advisories go
   with it;
 - an advisory affects a feature the app uses and no same-line patch exists;
-- the app gains a Spring MVC controller or view, an `XsltView`, SSE or fragment rendering
-  (decision 3 no longer holds);
+- an XSLT view resolver, or SSE with view-fragment rendering, appears in `src/main` or on the
+  classpath, or `spring-webflux` enters the tree (decision 3 no longer holds);
 - a Boot or Vaadin release the project may take manages any overridden library at or above its
   override (drop that override);
 - Vaadin changes the terms of 24.x, or a commercial Vaadin component is needed;
