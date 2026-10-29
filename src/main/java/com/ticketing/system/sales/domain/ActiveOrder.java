@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
-import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.CollectionTable;
@@ -143,52 +142,6 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
-    /**
-     * Generic reservation entry point used by application services.
-     * Standing/seated branching stays inside the domain object instead of being
-     * duplicated in ReservationService.
-     */
-    public void addReservation(int eventId, int zoneId, InventorySelection selection, double price,
-            LocalDateTime addedAt) {
-        ensureModifiable();
-        if (selection == null) {
-            throw new IllegalArgumentException("Inventory selection is required");
-        }
-
-        if (selection.isStandingSelection()) {
-            addStandingReservation(eventId, zoneId, selection.getQuantity(), price, addedAt);
-        } else {
-            addSeatedReservation(eventId, zoneId, selection.getSeatNumbers(), price, addedAt);
-        }
-    }
-
-    
-    /**
-     * Generic removal entry point used by application services.
-     */
-    public void removeReservation(int eventId, int zoneId, InventorySelection selection) {
-        ensureModifiable();
-        if (selection == null) {
-            throw new IllegalArgumentException("Inventory selection is required");
-        }
-
-        if (selection.isStandingSelection()) {
-            removeStandingSpots(eventId, zoneId, selection.getQuantity());
-        } else {
-            removeSeats(eventId, zoneId, selection.getSeatNumbers());
-        }
-    }
-
-
-
-
-
-
-
-
-
-
-
     // changed name from addReservation to addStandingReservation and added addSeatedReservation to support seated zones as well.
     public void addStandingReservation(int eventId, int zoneId, int quantity, double price, LocalDateTime addedAt) {
         synchronized (itemsLock) {
@@ -310,35 +263,9 @@ public class ActiveOrder implements InvariantChecked {
 
 
     /**
-     * Validation-only method. This is useful before releasing inventory from the event,
-     * so a bad remove request does not accidentally put tickets back in stock.
-     */
-    public void validateContainsReservation(int eventId, int zoneId, InventorySelection selection) {
-        if (selection == null) {
-            throw new IllegalArgumentException("Inventory selection is required");
-        }
-
-        synchronized (itemsLock) {
-            if (!hasReservationForEventWithoutLock(eventId)) {
-                throw new IllegalArgumentException("Active order does not contain this event");
-            }
-
-            if (selection.isStandingSelection()) {
-                int existingTickets = countStandingTicketsWithoutLock(eventId, zoneId);
-                if (existingTickets < selection.getQuantity()) {
-                    throw new IllegalArgumentException("Not enough reserved tickets to remove");
-                }
-            } else {
-                validateContainsSeats(eventId, zoneId, selection.getSeatNumbers());
-            }
-        }
-    }
-
-    /**
-     * Primitive-argument variant of {@link #validateContainsReservation(InventorySelection)} — an empty
-     * {@code seatNumbers} means a standing selection of {@code quantity}, otherwise a seated selection of
-     * the given seats. Lets sales' application services validate a cart before releasing inventory
-     * without constructing a {@code catalog.domain.InventorySelection}; behaviour is identical.
+     * Validation only: checks that this order holds the reservation before inventory is released, so a bad
+     * remove request never puts tickets back in stock. An empty {@code seatNumbers} means a standing
+     * selection of {@code quantity}, otherwise a seated selection of the given seats.
      *
      * @param eventId     the event the reservation must belong to
      * @param zoneId      the zone the reservation must belong to
