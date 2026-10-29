@@ -1,6 +1,8 @@
 package com.ticketing.system.catalog.application.service;
 
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -67,12 +69,19 @@ public class EventDisplayQueryService implements CatalogEventDisplayPort {
         }
     }
 
-    /** The first show date's start at the venue, or {@code null} when the event has no schedule. */
+    /** The earliest show's start at the venue, or {@code null} when the event has no schedule. */
     private ZonedDateTime resolveEventStart(Event event) {
         if (event.getShowDates() == null || event.getShowDates().isEmpty()) {
             return null;
         }
-        return event.getShowDates().get(0).getStartTime().atZone(event.getTimeZone());
+        // ADR-008: the earliest show is found by instant. The show list has no defined order (no
+        // @OrderColumn), so its first element is not the first show.
+        ZoneId zone = event.getTimeZone();
+        return event.getShowDates().stream()
+                .map(show -> show.startsAt(zone))
+                .min(Comparator.naturalOrder())
+                .orElseThrow()
+                .atZone(zone);
     }
 
     /** Projects each zone to a sales-safe (id, name) pair; empty when no venue map is configured. */
