@@ -7,8 +7,8 @@ this file holds what a coding session needs on top of them.
 ## What this is
 
 Event management and ticketing platform: producers run companies and events, buyers browse and buy
-tickets. Spring Boot 3.5.0 + Vaadin Flow 24.7.0 + Spring Modulith 1.4.1 monolith, Java 21, Maven
-wrapper (Maven 3.9.14). It extends an upstream BGU course project (`AdamSimkinbgu/event-ticket-system`);
+tickets. Spring Boot 3.5.16 + Vaadin Flow 24.10.7 + Spring Modulith 1.4.14 monolith, Java 21, Maven
+wrapper (Maven 3.9.16). It extends an upstream BGU course project (`AdamSimkinbgu/event-ticket-system`);
 history before July 2026 is imported from there. Roadmap: GitHub milestones on `NaimElijah/Ticketeer`.
 
 ## Commands
@@ -44,9 +44,10 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 ./mvnw -Pno-vaadin test "-Dtest=*UserRepositoryContractTest"     # Memory + Jpa adapter of one port
 ```
 
-- `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which can NPE on Windows with 24.7.0. Tests only; the app then serves no views.
+- `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which tests don't need. Tests only; the app then serves no views. The Windows NPE it once worked around no longer reproduces (24.7.0 and 24.10.7, #40).
 - **Don't run the full suite locally.** About 1650 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
-- CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`, with the JVM in UTC ("Build, test and package", the required check), and again with `-Pno-vaadin` in Asia/Jerusalem ("Test in Asia/Jerusalem", not required yet). There is no format, lint or dependency-audit step.
+- CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`, with the JVM in UTC ("Build, test and package", the required check), and again with `-Pno-vaadin` in Asia/Jerusalem ("Test in Asia/Jerusalem", not required yet). A third job, "Production artifact", packages with `-Pproduction`, fails if the jar holds H2 or Vaadin's dev tooling, and boots it against a PostgreSQL service until `/actuator/health` is UP (not required yet). `.github/workflows/dependency-audit.yml` submits the resolved Maven tree to the dependency graph, and on PRs its "Dependency review" fails a PR that adds or upgrades to a dependency with a high or critical advisory (not required yet, #200; accepted ones go in `allow-ghsas` with their ADR, ADR-010). Nothing watches the merged tree until Dependabot alerts are on (#202). Dependabot (`.github/dependabot.yml`) opens weekly update PRs into `dev`, ignoring majors, Jackson and Netty minors, Vaadin past 24.10.7 and ArchUnit (rules in ADR-010, reasons in ADR-009); it reads the file from `main`, so it starts once that file is promoted. There is no format or lint step.
+- `.mvn/wrapper/maven-wrapper.properties` pins `distributionSha256Sum`: bump it with `distributionUrl`, or `./mvnw` refuses the download. Apache publishes only SHA-512, so check the zip against that and compute the SHA-256 from the checked zip.
 - To run tests in another JVM zone locally, add `"-DargLine=-Duser.timezone=Asia/Jerusalem"` (or `UTC`). It reaches the surefire and failsafe forks, and overrides any `argLine` the pom gains later (e.g. a JaCoCo agent), so CI's command must then append to it.
 - `*IT` classes run under failsafe in `verify`, never under `test`, and need Docker (Testcontainers, ADR-006); `-DskipITs` skips them. One IT, without surefire or packaging: `./mvnw -Pno-vaadin test-compile failsafe:integration-test failsafe:verify "-Dit.test=DbOutageRecoveryIT"`. Each IT declares its own container from `support/PostgresContainers` (`@Container @ServiceConnection`). Under `test`, Hibernate detects the dialect, so an IT can point a `test` context at PostgreSQL.
 - Acceptance classes share one cached Spring context with in-memory state. A class that mutates shared pools (admins, users) needs `@DirtiesContext(classMode = AFTER_CLASS)`, as `MessagingAcceptanceTest` has; otherwise it passes locally and breaks under CI's ordering (87e6952e).
@@ -159,7 +160,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | `supabase` | Jpa repos on remote Postgres over SSL; `DB_HOST`/`DB_USER`/`DB_PASSWORD` required (`application-supabase.yml`) |
 | `test` | Suite profile (`src/test/resources/application-test.yml`): Jpa repos on H2, no runners/schedulers, `Stub*` WSEP |
 | `memory` | Only with `test`: swaps in the Memory repos. Inert on its own. `jpa` no longer exists; setting it does nothing |
-| `production`, `no-vaadin` | Maven build profiles: bundle the frontend / skip `prepare-frontend` |
+| `production`, `no-vaadin` | Maven build profiles: bundle the frontend and keep `vaadin-dev` and H2 out of the jar (#79) / skip `prepare-frontend` |
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
 - Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
