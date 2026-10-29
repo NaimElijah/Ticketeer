@@ -179,13 +179,15 @@
 		</dependency>
 
 		<!-- Spring Modulith (bounded-context modules) — versions from the BOM above.
-		     starter-core: @ApplicationModule model at runtime.
+		     api: the @ApplicationModule annotations on each module's package-info, the only
+		     Modulith type main code uses. The runtime starter would ship spring-modulith-core,
+		     moments and ArchUnit in the jar for features this app doesn't use.
 		     starter-test: ApplicationModules.verify() + Documenter (diagram/canvas generation).
 		     The JPA event-publication registry (spring-modulith-starter-jpa) is deliberately
 		     left out: notices are delivered after commit without an outbox (ADR-004). -->
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>
-			<artifactId>spring-modulith-starter-core</artifactId>
+			<artifactId>spring-modulith-api</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>
