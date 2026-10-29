@@ -17,6 +17,7 @@ import com.ticketing.system.shared.dto.MarketStateDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
+import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -30,6 +31,8 @@ import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
 class SystemAnalyticsPresenterTest {
 
     private static final String TOKEN = "admin-token";
+    private static final int RATE_WINDOW_MINUTES = 5;
+    private static final int REFRESH_INTERVAL_MS = 5000;
 
     private SystemAdminService adminService;
     private SystemAnalyticsService analyticsService;
@@ -39,7 +42,8 @@ class SystemAnalyticsPresenterTest {
     void setUp() {
         adminService = mock(SystemAdminService.class);
         analyticsService = mock(SystemAnalyticsService.class);
-        presenter = new SystemAnalyticsPresenter(adminService, analyticsService, 5000);
+        presenter = new SystemAnalyticsPresenter(adminService, analyticsService,
+                new AnalyticsProperties(RATE_WINDOW_MINUTES, REFRESH_INTERVAL_MS));
     }
 
     @Test

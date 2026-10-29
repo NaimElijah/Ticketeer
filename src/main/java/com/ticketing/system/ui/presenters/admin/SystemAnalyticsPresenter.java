@@ -1,7 +1,6 @@
 package com.ticketing.system.ui.presenters.admin;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
@@ -9,6 +8,7 @@ import com.ticketing.system.shared.dto.MarketStateDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
+import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -32,13 +32,13 @@ public class SystemAnalyticsPresenter {
     @Autowired
     public SystemAnalyticsPresenter(SystemAdminService systemAdminService,
                                     SystemAnalyticsService systemAnalyticsService,
-                                    @Value("${analytics.refresh-interval-ms:5000}") int refreshIntervalMs) {
+                                    AnalyticsProperties analyticsProperties) {
         this.systemAdminService = systemAdminService;
         this.systemAnalyticsService = systemAnalyticsService;
-        this.refreshIntervalMs = refreshIntervalMs;
+        this.refreshIntervalMs = analyticsProperties.refreshIntervalMs();
     }
 
-    /** Poll cadence (ms) the view uses to auto-refresh; {@code <= 0} disables auto-refresh. */
+    /** Poll cadence (ms) the view uses to auto-refresh; {@code 0} disables auto-refresh. */
     public int refreshIntervalMs() {
         return refreshIntervalMs;
     }

@@ -205,12 +205,12 @@ set these:
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
-`wsep`, `platform.admin`, `platform.time-zone`, `seed` and `market` groups bind to validated
-records. A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an
-unknown time zone or a malformed WSEP URL, stops the boot with a report naming the property
-([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource,
-`JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) and `ANALYTICS_*`
-([#165](https://github.com/NaimElijah/Ticketeer/issues/165)) are not validated yet.
+`wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
+`event-completion` and `notifications` groups bind to validated records. A value out of bounds,
+such as a zero hold, a negative TTL, a blank admin password, an unknown time zone, a malformed
+WSEP URL or a zero sweep delay, stops the boot with a report naming the property
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource and
+`JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) are not validated yet.
 
 **Settings can come from a file instead of the environment.** Spring Boot layers an external
 `application.yml` over the bundled defaults:
@@ -250,6 +250,9 @@ overrides them. Set each value in one place.
 | `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
+| `SWEEPER_FIXED_DELAY_MS` | Pause between sweeps that release expired sessions and carts | `60000` |
+| `EVENT_COMPLETION_FIXED_DELAY_MS` | Pause between sweeps that mark finished events completed | `60000` |
+| `NOTIFICATIONS_POLL_DELAY_MS` | Pause between pushes of new notifications to connected users | `60000` |
 | `PLATFORM_TIME_ZONE` | IANA zone that new and seeded events default to, and that the UI shows recorded times and "today" in ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)) | `Asia/Jerusalem` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
 | `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |

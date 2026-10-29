@@ -17,8 +17,12 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.validation.FieldError;
 
+import com.ticketing.system.bootstrap.config.EventCompletionProperties;
 import com.ticketing.system.bootstrap.config.MarketProperties;
+import com.ticketing.system.bootstrap.config.NotificationPollingProperties;
 import com.ticketing.system.bootstrap.config.SeedProperties;
+import com.ticketing.system.bootstrap.config.SweeperProperties;
+import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
@@ -39,7 +43,8 @@ class InitPropertiesValidationTest {
     @EnableConfigurationProperties({
             ReservationHoldProperties.class, SessionProperties.class, LockoutProperties.class,
             WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class, SeedProperties.class,
-            PlatformTimeProperties.class})
+            PlatformTimeProperties.class, AnalyticsProperties.class, SweeperProperties.class,
+            EventCompletionProperties.class, NotificationPollingProperties.class})
     static class InitProperties {
     }
 
@@ -55,6 +60,11 @@ class InitPropertiesValidationTest {
             assertThat(context.getBean(MarketProperties.class).selfHealDelayMs()).isEqualTo(30000);
             assertThat(context.getBean(SeedProperties.class).mode()).isEqualTo(SeedProperties.Mode.OFF);
             assertThat(context.getBean(PlatformTimeProperties.class).timeZone()).isEqualTo(ZoneId.of("Asia/Jerusalem"));
+            assertThat(context.getBean(AnalyticsProperties.class).rateWindowMinutes()).isEqualTo(5);
+            assertThat(context.getBean(AnalyticsProperties.class).refreshIntervalMs()).isEqualTo(5000);
+            assertThat(context.getBean(SweeperProperties.class).fixedDelayMs()).isEqualTo(60000);
+            assertThat(context.getBean(EventCompletionProperties.class).fixedDelayMs()).isEqualTo(60000);
+            assertThat(context.getBean(NotificationPollingProperties.class).pollDelayMs()).isEqualTo(60000);
         });
     }
 
@@ -73,6 +83,14 @@ class InitPropertiesValidationTest {
         runner.withPropertyValues("auth.lockout.max-attempts=0").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(LockoutProperties.class).maxAttempts()).isZero();
+        });
+    }
+
+    @Test
+    void GivenZeroAnalyticsRefreshInterval_WhenContextStarts_ThenBindsBecauseZeroDisablesTheAutoRefresh() {
+        runner.withPropertyValues("analytics.refresh-interval-ms=0").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(AnalyticsProperties.class).refreshIntervalMs()).isZero();
         });
     }
 
@@ -107,6 +125,11 @@ class InitPropertiesValidationTest {
             "platform.admin.password,               '',        password",
             "market.self-heal-delay-ms,             0,         selfHealDelayMs",
             "seed.scenario,                         '',        scenario",
+            "analytics.rate-window-minutes,         0,         rateWindowMinutes",
+            "analytics.refresh-interval-ms,         -1,        refreshIntervalMs",
+            "sweeper.fixed-delay-ms,                0,         fixedDelayMs",
+            "event-completion.fixed-delay-ms,       0,         fixedDelayMs",
+            "notifications.poll-delay-ms,           0,         pollDelayMs",
     })
     void GivenOutOfBoundsValue_WhenContextStarts_ThenFailsNamingTheField(String property, String value, String field) {
         runner.withPropertyValues(property + "=" + value).run(context -> {
