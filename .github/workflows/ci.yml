@@ -83,10 +83,25 @@ jobs:
           if-no-files-found: ignore
 
   production-artifact:
-    # The -Pproduction jar is what a deploy runs, and it must not carry the dev-only libraries (#79):
-    # Vaadin's dev server, dev bundle and Copilot, and the H2 engine. Not a required check yet.
+    # The -Pproduction jar is what a deploy runs. It must not carry the dev-only libraries (#79):
+    # Vaadin's dev server, dev bundle and Copilot, and the H2 engine. It must also start, because
+    # pom.xml overrides library versions under Boot and Vaadin that no test exercises in a running
+    # app (ADR-009). Not a required check yet.
     name: Production artifact
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # The image the *IT classes use (support/PostgresContainers).
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_DB: ticketing
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ticketing"
+          --health-interval 5s --health-timeout 5s --health-retries 12
 
     steps:
       - name: Checkout repository
@@ -111,8 +126,33 @@ jobs:
           jar=$(ls target/*.jar)
           libs=$(unzip -Z1 "$jar" 'BOOT-INF/lib/*')
           # A listing that missed the libraries would pass the check below vacuously.
-          grep -q '^BOOT-INF/lib/vaadin-core-' <<< "$libs"
-          if grep -E '^BOOT-INF/lib/(h2|vaadin-dev|vaadin-dev-server|vaadin-dev-bundle|copilot)-[0-9]' <<< "$libs"; then
+          if ! grep -q '^BOOT-INF/lib/vaadin-core-' <<< "$libs"; then
+            echo "::error::No vaadin-core in the BOOT-INF/lib listing of $jar; the check cannot run."
+            exit 1
+          fi
+          if grep -E '^BOOT-INF/lib/(h2|vaadin-dev|vaadin-dev-server|vaadin-dev-bundle|copilot|hilla-dev|ui-tests|netty)-[0-9a-z]' <<< "$libs"; then
             echo "::error file=pom.xml::The production jar contains a dev-only library; see the production profile (#79)."
+            exit 1
+          fi
+
+      - name: Boot the jar against PostgreSQL and check it serves
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: ticketing
+          DB_USER: postgres
+          DB_PASSWORD: ci-only
+          # No WSEP in CI: the handshake fails fast and the boot carries on without it (ADR-003).
+          WSEP_BASE_URL: http://127.0.0.1:1/
+          WSEP_HANDSHAKE_ATTEMPTS: '1'
+        run: |
+          java -jar "$(ls target/*.jar)" > app.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fs http://localhost:8080/actuator/health | grep -q '"UP"'; then break; fi
+            sleep 3
+          done
+          if ! curl -fs http://localhost:8080/actuator/health | grep -q '"UP"' || ! curl -fs -o /dev/null http://localhost:8080/; then
+            echo "::error::The production jar did not come up healthy and serve /."
+            cat app.log
             exit 1
           fi
