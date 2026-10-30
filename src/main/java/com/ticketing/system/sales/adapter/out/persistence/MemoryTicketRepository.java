@@ -63,7 +63,7 @@ public class MemoryTicketRepository implements TicketRepository {
         return result;
     }
 
-@Override
+    @Override
     public List<Ticket> findByOrderReceiptId(int orderReceiptId) {
         List<Ticket> result = new ArrayList<>();
         for (Ticket t : ticketsById.values()) {
