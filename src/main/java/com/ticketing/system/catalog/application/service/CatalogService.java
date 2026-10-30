@@ -509,11 +509,12 @@ public class CatalogService {
                 throw new EventNotFoundException(eventId);
             }
 
-            // Additional check to enforce company status is ACTIVE.
+            // Only a closed company's owners and the system admins may see its information, so on this
+            // public read its event is refused exactly like a missing one (II.2.2).
             ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
             if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
                 log.warn("Attempt to access venue map for eventId: {} from inactive company", eventId);
-                throw new CompanyClosedException(event.getCompanyId());
+                throw new EventNotFoundException(eventId);
             }
 
             // The map is part of the event's public page, so it is hidden exactly when the page is.
@@ -547,11 +548,12 @@ public class CatalogService {
             throw new EventNotFoundException(eventId);
         }
 
-        // Enforce company status is ACTIVE — closed companies' events are not publicly visible.
+        // Only a closed company's owners and the system admins may see its information, so on this
+        // public read its event is refused exactly like a missing one (II.2.2).
         ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
         if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
             log.warn("Attempt to access event detail for eventId: {} from inactive company", eventId);
-            throw new CompanyClosedException(event.getCompanyId());
+            throw new EventNotFoundException(eventId);
         }
 
         requirePubliclyListed(event, "getting event detail");

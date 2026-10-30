@@ -41,7 +41,6 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
@@ -577,19 +576,24 @@ class CatalogServiceTest {
                 () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID));
     }
 
-    // Events of a closed/inactive company are hidden.
+    // Events of a closed/inactive company are hidden, and refused exactly like a missing event (#187).
     @Test
-    void givenInactiveCompany_whenGetEventDetail_thenThrowsCompanyClosedException() {
+    void GivenInactiveCompany_WhenGetEventDetail_ThenThrowsEventNotFoundLikeAMissingEvent() {
         Event event = detailEvent(EVENT_ID, 10, EventStatus.ON_SALE);
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getStatus()).thenReturn(CompanyStatus.INACTIVE);
 
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event);
+        // First read finds the closed company's event; the second finds no event under the same id.
+        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event, (Event) null);
         when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
 
-        assertThrows(CompanyClosedException.class,
-                () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID));
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a closed company's event must be refused like a missing event");
     }
 
     // DRAFT / SCHEDULED events are not yet public — treated as not found.
@@ -1002,24 +1006,70 @@ class CatalogServiceTest {
         assertWellFormedNotFound(hidden);
     }
 
+    // Only a closed company's owners and the system admins may see its information, so on the public
+    // reads its event is refused exactly like a missing one, whatever the event's own status.
+
     @Test
-    void GivenEventOfInactiveCompany_WhenGetEventDetail_ThenCompanyClosedMessageNamesTheCompany() {
-        CatalogService catalog = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+    void GivenEventOfInactiveCompany_WhenGetEventDetail_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
 
-        CompanyClosedException thrown = assertThrows(CompanyClosedException.class,
-                () -> catalog.getEventDetail(VALID_TOKEN, EVENT_ID));
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
 
-        assertEquals("Company " + OWNER_COMPANY_ID + " is closed", thrown.getMessage());
+        assertEquals(missing, hidden, "a closed company's event must be refused like a missing event");
+        assertWellFormedNotFound(hidden);
     }
 
     @Test
-    void GivenEventOfInactiveCompany_WhenGetEventVenueMap_ThenCompanyClosedMessageNamesTheCompany() {
-        CatalogService catalog = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+    void GivenEventOfInactiveCompany_WhenGetEventVenueMap_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
 
-        CompanyClosedException thrown = assertThrows(CompanyClosedException.class,
-                () -> catalog.getEventVenueMap(VALID_TOKEN, EVENT_ID));
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
 
-        assertEquals("Company " + OWNER_COMPANY_ID + " is closed", thrown.getMessage());
+        assertEquals(missing, hidden, "a closed company's event map must be refused like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenScheduledEventOfInactiveCompany_WhenGetEventDetail_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a closed company's scheduled event must be refused like a missing event");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenScheduledEventOfInactiveCompany_WhenGetEventVenueMap_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden,
+                "a closed company's scheduled event map must be refused like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    // A catalog holding no event, on the credential and company stubs already set, so it leaves the
+    // owner's stubbed status as the test set it.
+    private CatalogService overNoEvent() {
+        return new CatalogService(mockSessionManager, new MemoryEventRepository(), mockCompanyRepository);
     }
 
     private CatalogService catalogOver(EventRepository events, CompanyStatus ownerStatus) {
