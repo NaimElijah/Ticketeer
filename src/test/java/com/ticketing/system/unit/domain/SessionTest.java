@@ -3,6 +3,7 @@ package com.ticketing.system.unit.domain;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.SessionKind;
 import com.ticketing.system.support.BaseDomainTest;
 
 class SessionTest extends BaseDomainTest {
@@ -154,6 +156,66 @@ class SessionTest extends BaseDomainTest {
     void isExpiredAt_rejectsNull() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertThrows(IllegalArgumentException.class, () -> s.isExpiredAt(null));
+    }
+
+    // ---- the row records its kind (#185): member and admin ids share one id space ----
+
+    @Test
+    void GivenNoUserId_WhenConstructed_ThenKindIsGuest() {
+        Session guest = track(new Session("sid", null, T0, T_EXPIRES));
+
+        assertEquals(SessionKind.GUEST, guest.getKind());
+    }
+
+    @Test
+    void GivenAUserId_WhenConstructed_ThenKindIsMember() {
+        Session member = track(new Session("sid", 5, T0, T_EXPIRES));
+
+        assertEquals(SessionKind.MEMBER, member.getKind());
+    }
+
+    @Test
+    void GivenAnAdminId_WhenAdminSessionCreated_ThenKindIsAdminAndTheRowNamesTheAdmin() {
+        Session admin = track(Session.admin("sid", 5, T0, T_EXPIRES));
+
+        assertEquals(SessionKind.ADMIN, admin.getKind());
+        assertEquals(5, admin.getUserId());
+        assertFalse(admin.isGuest(), "a guest row is exactly a row without a user id");
+        assertEquals(T0, admin.getCreatedAt());
+        assertEquals(T_EXPIRES, admin.getExpiresAt());
+    }
+
+    @Test
+    void GivenAMemberAndAnAdminWithTheSameId_WhenCreated_ThenTheirKindsDiffer() {
+        Session member = track(new Session("sid-member", 1, T0, T_EXPIRES));
+        Session admin = track(Session.admin("sid-admin", 1, T0, T_EXPIRES));
+
+        assertEquals(member.getUserId(), admin.getUserId());
+        assertNotEquals(member.getKind(), admin.getKind(),
+                "the kind must tell an admin row from a member row with the same id");
+    }
+
+    @Test
+    void GivenABlankSessionId_WhenAdminSessionCreated_ThenThrows() {
+        assertThrows(IllegalStateException.class, () -> Session.admin("  ", 5, T0, T_EXPIRES));
+    }
+
+    @Test
+    void GivenAGuestSession_WhenPromoted_ThenKindIsMember() {
+        Session s = track(new Session("sid", null, T0, T_EXPIRES));
+
+        s.promoteTo(7, T_EXPIRES.plusSeconds(60));
+
+        assertEquals(SessionKind.MEMBER, s.getKind());
+    }
+
+    @Test
+    void GivenAnAdminSession_WhenPromoted_ThenThrowsAndTheRowStaysAdmin() {
+        Session admin = track(Session.admin("sid", 5, T0, T_EXPIRES));
+
+        assertThrows(IllegalStateException.class, () -> admin.promoteTo(7, T_EXPIRES.plusSeconds(60)));
+        assertEquals(SessionKind.ADMIN, admin.getKind());
+        assertEquals(5, admin.getUserId());
     }
 
     @Test

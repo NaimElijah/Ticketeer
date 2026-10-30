@@ -440,22 +440,18 @@ public class SystemAdminService {
 
 
     // *HELPER METHOD* to enforce that the requester is a system admin. Throws if not.
+    // Only an admin token passes: a member whose id equals an admin's (both pools start at 1) holds a
+    // member token, which validateAdminToken rejects, so the adminRepository lookup never sees it.
     private void requireSystemAdmin(String token) {
-        if (!sessionManager.validateToken(token)) {
-            log.warn("Unauthorized access attempt with id: {}", sessionManager.extractUserId(token));
+        // false only for a missing token; every invalid token throws, and its id cannot be trusted.
+        if (!sessionManager.validateAdminToken(token)) {
+            log.warn("Unauthorized admin access attempt without a token");
             throw new UnauthorizedActionException("Invalid or non-admin token.");
         }
 
-        // The token must carry the ADMIN role. Without this, a member whose id happens to equal an
-        // admin's id (both pools start at 1) would pass the adminRepository lookup below.
-        if (!sessionManager.isAdminToken(token)) {
-            log.warn("Unauthorized access attempt (non-admin token) with id: {}", sessionManager.extractUserId(token));
-            throw new UnauthorizedActionException("Invalid or non-admin token.");
-        }
-
-        int userId = sessionManager.extractUserId(token);
-        if (adminRepository.findById(userId) == null) {
-            log.warn("Unauthorized access attempt with id: {}", userId);
+        int adminId = sessionManager.extractAdminId(token);
+        if (adminRepository.findById(adminId) == null) {
+            log.warn("Unauthorized access attempt with id: {}", adminId);
             throw new UnauthorizedActionException("Invalid or non-admin token.");
         }
     }

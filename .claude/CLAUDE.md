@@ -74,7 +74,7 @@ reaches into other contexts, mainly (#184's triage has the full table):
 - governance and reporting read sales', catalog's and messaging's repository ports and entities
   directly; governance also calls sales' `PaymentGateway`/`TicketIssuer` and writes identity's
   `Admin` (`AdminRepository`, `PasswordHasher`); reporting uses catalog's `CompanyRatings`;
-- messaging uses identity's `AdminRepository` and `Admin`;
+- messaging's and organization's admin gates read identity's `AdminRepository`;
 - sales takes catalog's `EventRepository` for the buyer lock.
 
 #54 replaces these, #53 the notifications call, and #55 closes the modules.
@@ -92,7 +92,7 @@ wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstra
 | Module | Holds |
 |---|---|
 | `shared` | Kernel: `DomainException` hierarchy, `IRepository`, `InvariantChecked`, AOP aspects, `RepositoryLocks`, `WsepHttpClient`, metrics, `Clock`/BCrypt beans, published-language DTOs (`shared/dto`), purchase-policy domain (`shared/domain/policy`), integration notices (`shared/event`) |
-| `identity` | User, Session, Admin, custom JWT auth (`JwtSessionManager`) |
+| `identity` | User, Session (typed by `SessionKind`), Admin, custom JWT auth (`JwtSessionManager`) |
 | `organization` | ProductionCompany + the `CompanyAppointment` aggregate (membership, roles, permissions) |
 | `catalog` | Event, venue maps, zones, seats, **inventory** (reserve/release/confirm via inbound `InventoryCommandPort`) |
 | `sales` | ActiveOrder, OrderReceipt, Ticket, checkout, reservations, refunds, WSEP adapters |
@@ -102,6 +102,13 @@ wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstra
 | `reporting` | CQRS read side (purchase history, company dashboards), read by `ui` |
 | `ui` | The single Vaadin driving adapter |
 | `bootstrap` | Composition root: lifecycle runners, `@Scheduled` sweepers, dev seed/`.scenario` engine |
+
+Session tokens ([ADR-012](../docs/ADRs/ADR-012-session-tokens-bound-to-typed-session-rows.md)): each `sessions` row has a `SessionKind` (`GUEST`, `MEMBER`, `ADMIN`; a guest row
+alone has no user id), and a JWT counts only while its `sub` and `role` match the live row it names.
+`SessionManager`'s member readers (`validateToken`, `extractUserId`, `tryExtractUserId`, `extractUsername`,
+`validateCredential`) reject an admin token as they reject a revoked one; its admin readers (`validateAdminToken`,
+`extractAdminId`, `isAdminToken`) reject a member token. Member paths call the member readers; an admin gate calls the
+admin readers and still checks `AdminRepository`. A raw session id is a credential only for a live guest row.
 
 Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoMappers, event}` · `adapter/in/event` ·
 `adapter/out/<persistence|wsep|security|…>`. Repository ports sit in `application/port/out`, not

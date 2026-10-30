@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.SessionKind;
 
 // Contract tests every SessionRepository implementation must satisfy. Future
 // JPA-backed adapter will subclass this with its own newRepository() factory;
@@ -138,5 +139,53 @@ abstract class ISessionRepositoryContractTest {
         Optional<Session> found = repo.findById("sid");
         assertTrue(found.isPresent());
         assertEquals(7, found.get().getUserId());
+    }
+
+    // ---- the session kind round-trips (#185) ----
+    // These tests are inherited, so the Jpa subclass runs them without a test transaction: each
+    // adapter call commits on its own, and every findById below reads the sessions table.
+
+    @Test
+    void GivenGuestSession_WhenSavedAndReloaded_ThenKindIsGuest() {
+        repo.save(new Session("sid-guest", null, T0, T_FAR_FUTURE));
+
+        assertEquals(SessionKind.GUEST, repo.findById("sid-guest").orElseThrow().getKind());
+    }
+
+    @Test
+    void GivenMemberSession_WhenSavedAndReloaded_ThenKindIsMember() {
+        repo.save(new Session("sid-member", 5, T0, T_FAR_FUTURE));
+
+        assertEquals(SessionKind.MEMBER, repo.findById("sid-member").orElseThrow().getKind());
+    }
+
+    @Test
+    void GivenAdminSession_WhenSavedAndReloaded_ThenKindIsAdminAndTheRowNamesTheAdmin() {
+        repo.save(Session.admin("sid-admin", 5, T0, T_FAR_FUTURE));
+
+        Session found = repo.findById("sid-admin").orElseThrow();
+        assertEquals(SessionKind.ADMIN, found.getKind());
+        assertEquals(5, found.getUserId());
+    }
+
+    @Test
+    void GivenSavedGuestSession_WhenPromotedSavedAndReloaded_ThenKindIsMember() {
+        repo.save(new Session("sid-promoted", null, T0, T_FAR_FUTURE));
+        Session loaded = repo.findById("sid-promoted").orElseThrow();
+        loaded.promoteTo(5, T_FAR_FUTURE);
+
+        repo.save(loaded);
+
+        assertEquals(SessionKind.MEMBER, repo.findById("sid-promoted").orElseThrow().getKind());
+    }
+
+    @Test
+    void GivenMemberSession_WhenAnAdminSessionWithTheSameIdIsSaved_ThenKindIsAdmin() {
+        repo.save(new Session("sid", 5, T0, T_FAR_FUTURE));
+
+        repo.save(Session.admin("sid", 5, T0, T_FAR_FUTURE));
+
+        assertEquals(SessionKind.ADMIN, repo.findById("sid").orElseThrow().getKind(),
+                "overwriting a session must overwrite its kind, as it overwrites its user id");
     }
 }

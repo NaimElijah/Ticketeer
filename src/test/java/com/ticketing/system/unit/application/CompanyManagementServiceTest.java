@@ -19,6 +19,7 @@ import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeD
 import com.ticketing.system.organization.application.dto.PermissionEditDTO;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
@@ -76,7 +77,8 @@ public class CompanyManagementServiceTest {
                                 sessionManager,
                                 companyEventStatsPort,
                                 membershipService,
-                                eventPublisher);
+                                eventPublisher,
+                                mock(AdminRepository.class));
 
                 defaultPermissions = new ArrayList<>();
                 defaultPermissions.add(Permission.CONFIGURE_VENUE);

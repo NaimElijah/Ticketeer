@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
@@ -60,7 +61,8 @@ class CompanyMembershipServiceTest {
                 mock(SessionManager.class),
                 companyEventStatsPort,
                 membershipService,
-                mock(ApplicationEventPublisher.class));
+                mock(ApplicationEventPublisher.class),
+                mock(AdminRepository.class));
     }
 
     // Appointments are stamped from the injected clock, as UTC wall time (ADR-008).

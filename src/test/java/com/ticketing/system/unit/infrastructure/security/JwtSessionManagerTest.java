@@ -6,11 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.Optional;
+
+import javax.crypto.SecretKey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +27,8 @@ import com.ticketing.system.identity.adapter.out.persistence.MemorySessionReposi
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 import com.ticketing.system.identity.config.SessionProperties;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.WeakKeyException;
 
 class JwtSessionManagerTest {
@@ -35,15 +41,39 @@ class JwtSessionManagerTest {
     private static final String SECRET =
         "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
 
+    private static final SecretKey TEST_KEY = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    // Claim names and role values of the token format JwtSessionManager issues.
+    private static final String CLAIM_USERNAME = "username";
+    private static final String CLAIM_SID = "sid";
+    private static final String CLAIM_ROLE = "role";
+    private static final String ROLE_MEMBER = "MEMBER";
+    private static final String ROLE_ADMIN = "ADMIN";
+
+    private static final Instant T0 = Instant.parse("2100-01-01T00:00:00Z");
+    // The same integer on purpose: member and admin ids share one id space.
+    private static final int MEMBER_ID = 1;
+    private static final int ADMIN_ID = 1;
+    private static final int OTHER_MEMBER_ID = 2;
+    private static final String MEMBER_SID = "member-sid";
+    private static final String GUEST_SID = "guest-sid";
+
     private Clock clock;
     private SessionRepository sessions;
     private JwtSessionManager manager;
+
+    // A manager on a fixed clock, for the token-to-row binding tests.
+    private SessionRepository boundSessions;
+    private JwtSessionManager boundManager;
 
     @BeforeEach
     void setUp() {
         clock = Clock.systemUTC();
         sessions = new MemorySessionRepository(clock);
         manager = new JwtSessionManager(SECRET, sessionTtl(60), sessions, clock);
+
+        Clock fixed = Clock.fixed(T0, ZoneOffset.UTC);
+        boundSessions = new MemorySessionRepository(fixed);
+        boundManager = new JwtSessionManager(SECRET, sessionTtl(60), boundSessions, fixed);
     }
 
     @Test
@@ -432,7 +462,245 @@ class JwtSessionManagerTest {
         assertFalse(manager.validateCredential("just-some-random-string"));
     }
 
+    // ---------------------------------------------------------------------
+    // A token is bound to the session row it names (#185). Member and admin ids share one integer
+    // space, so the row, not the token's own claims, decides whose session it is and of what kind.
+    // ---------------------------------------------------------------------
+
+    @Test
+    void GivenTokenWhoseSubjectDiffersFromItsSessionRow_WhenValidate_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(OTHER_MEMBER_ID, sidOf(memberToken), ROLE_MEMBER);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+                "a token naming another user's session row must not validate");
+    }
+
+    @Test
+    void GivenTokenWhoseSubjectDiffersFromItsSessionRow_WhenExtractUserId_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(OTHER_MEMBER_ID, sidOf(memberToken), ROLE_MEMBER);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.extractUserId(token),
+                "the user id must come from a token whose subject matches its session row");
+    }
+
+    @Test
+    void GivenAdminRoleOnAMemberSessionRow_WhenValidate_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(MEMBER_ID, sidOf(memberToken), ROLE_ADMIN);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+                "a role claim that does not match the row's kind must not validate");
+    }
+
+    @Test
+    void GivenAdminRoleOnAMemberSessionRow_WhenIsAdminToken_ThenFalse() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(MEMBER_ID, sidOf(memberToken), ROLE_ADMIN);
+
+        assertFalse(boundManager.isAdminToken(token),
+                "a member session row never makes a token an admin token, whatever its role claim says");
+    }
+
+    @Test
+    void GivenMemberRoleOnAnAdminSessionRow_WhenValidate_ThenThrowsInvalidToken() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+        String token = signedToken(ADMIN_ID, sidOf(adminToken), ROLE_MEMBER);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+                "an admin session row must not back a member token");
+    }
+
+    @Test
+    void GivenMemberRoleOnAnAdminSessionRow_WhenExtractUserId_ThenThrowsInvalidToken() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+        String token = signedToken(ADMIN_ID, sidOf(adminToken), ROLE_MEMBER);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.extractUserId(token),
+                "an admin session row must not yield a member user id");
+    }
+
+    @Test
+    void GivenJwtNamingAGuestSessionRow_WhenValidate_ThenThrowsInvalidToken() {
+        boundSessions.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+        String token = signedToken(MEMBER_ID, GUEST_SID, ROLE_MEMBER);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+                "a guest session's credential is its raw id, never a JWT");
+    }
+
+    @Test
+    void GivenJwtWhoseSessionRowHasExpired_WhenValidate_ThenRejected() {
+        // The row expired before the token's own exp claim, so only the row can reject it.
+        boundSessions.save(new Session(MEMBER_SID, MEMBER_ID, T0.minus(Duration.ofHours(2)),
+                T0.minus(Duration.ofHours(1))));
+        String token = signedToken(MEMBER_ID, MEMBER_SID, ROLE_MEMBER);
+
+        RuntimeException rejection = assertThrows(RuntimeException.class, () -> boundManager.validateToken(token),
+                "a token whose session row has expired must not validate");
+        assertTrue(rejection instanceof SessionExpiredException || rejection instanceof InvalidTokenException,
+                "expected SessionExpiredException or InvalidTokenException, got " + rejection);
+    }
+
+    @Test
+    void GivenMatchingSubjectRoleAndLiveMemberRow_WhenValidate_ThenTrue() {
+        // Control for the tests above: a correctly bound hand-built token is accepted, so the
+        // rejections are caused by the mismatch and not by how the test builds its tokens.
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(MEMBER_ID, sidOf(memberToken), ROLE_MEMBER);
+
+        assertTrue(boundManager.validateToken(token));
+        assertEquals(MEMBER_ID, boundManager.extractUserId(token));
+    }
+
+    // ---- member readers accept member tokens only ----
+
+    @Test
+    void GivenAdminToken_WhenValidateToken_ThenThrowsInvalidToken() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(adminToken),
+                "member paths must reject an admin token as they reject a revoked one");
+    }
+
+    @Test
+    void GivenAdminToken_WhenExtractUserId_ThenThrowsInvalidToken() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.extractUserId(adminToken),
+                "an admin id must never be read as a member id");
+    }
+
+    @Test
+    void GivenAdminToken_WhenTryExtractUserId_ThenEmpty() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertTrue(boundManager.tryExtractUserId(adminToken).isEmpty(),
+                "an admin token names no member");
+    }
+
+    @Test
+    void GivenAdminToken_WhenValidateCredential_ThenFalse() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertFalse(boundManager.validateCredential(adminToken),
+                "an admin token is not a buyer credential");
+    }
+
+    @Test
+    void GivenAdminToken_WhenIsAdminToken_ThenTrue() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertTrue(boundManager.isAdminToken(adminToken));
+    }
+
+    @Test
+    void GivenMemberToken_WhenIsAdminToken_ThenFalse() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(boundManager.isAdminToken(memberToken));
+    }
+
+    // ---- admin readers accept admin tokens only (new port methods) ----
+
+    @Test
+    void GivenAdminToken_WhenValidateAdminToken_ThenTrue() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertTrue(boundManager.validateAdminToken(adminToken));
+    }
+
+    @Test
+    void GivenAdminToken_WhenExtractAdminId_ThenTheAdminsId() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertEquals(ADMIN_ID, boundManager.extractAdminId(adminToken));
+    }
+
+    @Test
+    void GivenMemberToken_WhenValidateAdminToken_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(ADMIN_ID, "alice");
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateAdminToken(memberToken),
+                "a member token whose id equals an admin's must not pass as an admin token");
+    }
+
+    @Test
+    void GivenMemberToken_WhenExtractAdminId_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(ADMIN_ID, "alice");
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.extractAdminId(memberToken),
+                "a member id must never be read as an admin id");
+    }
+
+    @Test
+    void GivenNullOrBlank_WhenValidateAdminToken_ThenFalse() {
+        assertFalse(boundManager.validateAdminToken(null));
+        assertFalse(boundManager.validateAdminToken("   "));
+    }
+
+    @Test
+    void GivenRevokedAdminToken_WhenValidateAdminToken_ThenThrowsInvalidToken() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+        boundManager.invalidate(adminToken);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateAdminToken(adminToken));
+    }
+
+    // ---- validateCredential's raw path accepts only a live guest row ----
+
+    @Test
+    void GivenLiveMembersRawSessionId_WhenValidateCredential_ThenFalse() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(boundManager.validateCredential(sidOf(memberToken)),
+                "a member session's raw id is not a guest credential");
+    }
+
+    @Test
+    void GivenLiveAdminsRawSessionId_WhenValidateCredential_ThenFalse() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertFalse(boundManager.validateCredential(sidOf(adminToken)),
+                "an admin session's raw id is not a guest credential");
+    }
+
+    @Test
+    void GivenLiveGuestRowOnInjectedClock_WhenValidateCredential_ThenTrue() {
+        boundSessions.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+
+        assertTrue(boundManager.validateCredential(GUEST_SID));
+    }
+
+    @Test
+    void GivenGuestRowExpiredOnInjectedClock_WhenValidateCredential_ThenFalse() {
+        boundSessions.save(new Session(GUEST_SID, null, T0.minus(Duration.ofMinutes(30)), T0));
+
+        assertFalse(boundManager.validateCredential(GUEST_SID),
+                "a guest row is expired at its expiresAt instant");
+    }
+
     // ---- helpers ----
+
+    /** The sid claim, read with the test's own key so it does not depend on the manager's readers. */
+    private static String sidOf(String token) {
+        return Jwts.parser().verifyWith(TEST_KEY).clock(() -> Date.from(T0)).build()
+                .parseSignedClaims(token).getPayload().get(CLAIM_SID, String.class);
+    }
+
+    /** A token signed with the manager's own secret, so only its claims can make it invalid. */
+    private static String signedToken(int subject, String sid, String role) {
+        return Jwts.builder()
+                .subject(String.valueOf(subject))
+                .claim(CLAIM_USERNAME, "someone")
+                .claim(CLAIM_SID, sid)
+                .claim(CLAIM_ROLE, role)
+                .issuedAt(Date.from(T0))
+                .expiration(Date.from(T0.plus(Duration.ofHours(1))))
+                .signWith(TEST_KEY)
+                .compact();
+    }
 
     private int countSessionsForUser(int userId) {
         return sessionsForUser(userId).size();

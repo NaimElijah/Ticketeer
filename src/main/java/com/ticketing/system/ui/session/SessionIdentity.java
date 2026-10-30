@@ -14,6 +14,10 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
  * {@link GuestSession} id. Each method resolves the visitor afresh, with at most one
  * {@link AuthenticationService#liveMemberId} call.
  *
+ * <p>A signed-in admin is never a member, whatever the admin's id: admin and member ids share one id
+ * space, and member paths reject admin tokens. On member and buyer paths the admin is a guest on the
+ * {@link GuestSession} id, and the admin's stored token is left alone (ADR-012).
+ *
  * <p>Side effect: when the stored token is no longer live (expired or revoked), the first method to
  * notice calls {@link FreshGuestSession#restore()}, which drops the stored token and pins a new guest
  * session, so the visitor is answered as a guest on that fresh id and later calls see no token at all.
@@ -67,7 +71,9 @@ public class SessionIdentity {
 
     private Optional<LiveMember> liveMember() {
         String token = AuthSession.token();
-        if (token == null) {
+        // An admin token is checked first: liveMemberId answers "no member" for it, and taking that as a
+        // dead member token would restore a fresh guest session and sign the admin out.
+        if (token == null || AuthSession.isAdmin()) {
             return Optional.empty();
         }
         OptionalInt memberId = authenticationService.liveMemberId(token);

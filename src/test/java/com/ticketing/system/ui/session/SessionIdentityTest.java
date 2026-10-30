@@ -41,6 +41,10 @@ class SessionIdentityTest {
     private static final String GUEST_SESSION_ID = "guest-sid";
     private static final String FRESH_GUEST_SESSION_ID = "fresh-guest-sid";
     private static final int NO_MEMBER = 0;
+    private static final String ADMIN_TOKEN = "admin-jwt";
+    // Member and admin ids share one id space; the default admin is id 1.
+    private static final int ADMIN_USER_ID = 1;
+    private static final String ADMIN_NAME = "admin";
 
     private AuthenticationService authenticationService;
     private FreshGuestSession freshGuestSession;
@@ -152,6 +156,26 @@ class SessionIdentityTest {
         verify(authenticationService, never()).extractUserId(anyString());
     }
 
+    // ---- a stored admin token ---------------------------------------------------------------
+    // An admin is not a member, and not a member whose token died either: answering "not a member"
+    // must not sign the admin out by restoring a fresh guest session (#185).
+
+    @Test
+    void GivenAStoredAdminToken_WhenEveryQuestionIsAsked_ThenNotAMemberAndTheGuestSessionIsNeverRestored() {
+        storeSignedInAdmin();
+        when(authenticationService.liveMemberId(ADMIN_TOKEN)).thenReturn(OptionalInt.empty());
+        SessionIdentity identity = identity();
+
+        assertFalse(identity.isMember(), "an admin is not a member");
+        identity.memberToken();
+        identity.memberUserId();
+        identity.credential();
+        identity.guestSessionId();
+
+        verify(freshGuestSession, never()).restore();
+        assertEquals(ADMIN_TOKEN, AuthSession.token(), "the admin's sign-in must survive member-identity checks");
+    }
+
     // ---- arrangement --------------------------------------------------------------------------
 
     // The one place that knows SessionIdentity's dependencies, so a change to them touches only this.
@@ -163,6 +187,11 @@ class SessionIdentityTest {
         storeSignedInMember();
         when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.empty());
         return identity();
+    }
+
+    private static void storeSignedInAdmin() {
+        AuthSession.storeAuth(new AuthTokenDTO(ADMIN_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, ADMIN_USER_ID, ADMIN_NAME, true));
+        GuestSession.setSessionId(GUEST_SESSION_ID);
     }
 
     private static void storeSignedInMember() {

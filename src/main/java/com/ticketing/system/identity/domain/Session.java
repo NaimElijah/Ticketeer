@@ -6,22 +6,30 @@ import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * Session aggregate — the unified identity record for both Member and Guest
+ * Session aggregate — the unified identity record for Guest, Member and Admin
  * sessions. Part of the auth rework (see docs/auth-rework-plan.md).
  *
  * <ul>
- *   <li><b>Member session:</b> {@code userId != null}. Issued by
- *       {@code AuthenticationService.login}; the matching JWT carries
- *       {@code sid = sessionId}.</li>
- *   <li><b>Guest session:</b> {@code userId == null}. Started anonymously via
- *       {@code AuthenticationService.startGuestSession}; the raw sessionId is
- *       the credential (no JWT).</li>
+ *   <li><b>Guest session:</b> kind {@link SessionKind#GUEST}, {@code userId == null}.
+ *       Started anonymously via {@code AuthenticationService.startGuestSession}; the
+ *       raw sessionId is the credential (no JWT).</li>
+ *   <li><b>Member session:</b> kind {@link SessionKind#MEMBER}, {@code userId} is a
+ *       member id. Issued by {@code AuthenticationService.login}; the matching JWT
+ *       carries {@code sid = sessionId}.</li>
+ *   <li><b>Admin session:</b> kind {@link SessionKind#ADMIN}, {@code userId} is an
+ *       admin id. Created by {@link #admin}; the matching JWT carries the admin role.</li>
  * </ul>
+ *
+ * <p>Invariant: the kind is {@code GUEST} exactly when {@code userId} is null. Member
+ * and admin ids share one integer space, so only the kind tells a member row from an
+ * admin row with the same id (ADR-012).
  *
  * <p>A Guest session can be promoted to a Member session in-place via
  * {@link #promoteTo(int, Instant)} — the sessionId is preserved, so any cart
@@ -46,6 +54,10 @@ public class Session implements InvariantChecked {
     @Column(name = "user_id")
     private Integer userId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kind", nullable = false)
+    private SessionKind kind;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -61,22 +73,47 @@ public class Session implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected Session() { }
 
+    /**
+     * Creates a Guest session when {@code userId} is null, a Member session otherwise.
+     *
+     * @throws IllegalStateException if {@code sessionId} is blank or a timestamp is null
+     */
     public Session(String sessionId, Integer userId, Instant createdAt, Instant expiresAt) {
+        this(sessionId, userId, userId == null ? SessionKind.GUEST : SessionKind.MEMBER, createdAt, expiresAt);
+    }
+
+    private Session(String sessionId, Integer userId, SessionKind kind, Instant createdAt, Instant expiresAt) {
         this.sessionId = sessionId;
         this.userId = userId;
+        this.kind = kind;
         this.createdAt = createdAt;
         this.lastSeenAt = createdAt;
         this.expiresAt = expiresAt;
         checkInvariants();
     }
 
+    /**
+     * Creates an Admin session for {@code adminId}, under the same invariants as the public
+     * constructor.
+     *
+     * @throws IllegalStateException if {@code sessionId} is blank or a timestamp is null
+     */
+    public static Session admin(String sessionId, int adminId, Instant createdAt, Instant expiresAt) {
+        return new Session(sessionId, adminId, SessionKind.ADMIN, createdAt, expiresAt);
+    }
+
     public String getSessionId() {
         return sessionId;
     }
 
-    /** {@code null} for Guest sessions. */
+    /** {@code null} for Guest sessions; a member id or an admin id otherwise, as {@link #getKind()} says. */
     public Integer getUserId() {
         return userId;
+    }
+
+    /** Whose session this is: a guest's, a member's or an admin's. Never {@code null}. */
+    public SessionKind getKind() {
+        return kind;
     }
 
     public Instant getCreatedAt() {
@@ -100,28 +137,33 @@ public class Session implements InvariantChecked {
         return version;
     }
 
+    /** True for a Member session only; an Admin session is not a member's. */
     public boolean isMember() {
-        return userId != null;
+        return kind == SessionKind.MEMBER;
     }
 
+    /** True for a Guest session, the only kind without a user id. */
     public boolean isGuest() {
-        return userId == null;
+        return kind == SessionKind.GUEST;
     }
 
     /**
      * Promotes a Guest session to a Member session in-place. The sessionId is
      * preserved, so any cart attached to it survives.
      *
-     * @throws IllegalStateException if this session is already a Member
+     * @throws IllegalStateException if this session is not a Guest session (a Member
+     *     or an Admin session)
+     * @throws IllegalArgumentException if {@code newExpiresAt} is null
      */
     public void promoteTo(int newUserId, Instant newExpiresAt) {
-        if (this.userId != null) {
-            throw new IllegalStateException("session already a member");
+        if (kind != SessionKind.GUEST) {
+            throw new IllegalStateException("only a guest session can be promoted");
         }
         if (newExpiresAt == null) {
             throw new IllegalArgumentException("newExpiresAt must not be null");
         }
         this.userId = newUserId;
+        this.kind = SessionKind.MEMBER;
         this.expiresAt = newExpiresAt;
         checkInvariants();
     }
@@ -153,7 +195,7 @@ public class Session implements InvariantChecked {
     }
 
     /**
-     * Persistence support: copies the updatable state ({@code userId},
+     * Persistence support: copies the updatable state ({@code userId}, {@code kind},
      * {@code lastSeenAt}, {@code expiresAt}) from {@code source} onto this session,
      * preserving identity ({@code sessionId}, {@code createdAt}) and the JPA
      * {@code @Version}. Used by the JPA adapter to reproduce the in-memory
@@ -164,6 +206,7 @@ public class Session implements InvariantChecked {
      */
     public void overwriteFrom(Session source) {
         this.userId = source.userId;
+        this.kind = source.kind;
         this.lastSeenAt = source.lastSeenAt;
         this.expiresAt = source.expiresAt;
         checkInvariants();
@@ -193,6 +236,12 @@ public class Session implements InvariantChecked {
         }
         if (lastSeenAt.isBefore(createdAt)) {
             throw new IllegalStateException("Session invariant violated: lastSeenAt must be >= createdAt");
+        }
+        if (kind == null) {
+            throw new IllegalStateException("Session invariant violated: kind must not be null");
+        }
+        if ((kind == SessionKind.GUEST) != (userId == null)) {
+            throw new IllegalStateException("Session invariant violated: a guest session, and only a guest session, has no userId");
         }
         // Note: userId is intentionally NOT bounds-checked here. The Session domain stays
         // permissive about userId values — positive/zero/negative is the User aggregate's

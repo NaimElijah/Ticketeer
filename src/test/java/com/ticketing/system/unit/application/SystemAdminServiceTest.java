@@ -48,6 +48,7 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.shared.exception.InitializationIntegrityException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.MissingDefaultAdminException;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
@@ -106,9 +107,10 @@ class SystemAdminServiceTest {
                 new PlatformAdminProperties("admin", "admin"),
                 Clock.fixed(T0, ZoneOffset.UTC)
         );
-        when(sessionManager.validateToken(ADMIN_TOKEN)).thenReturn(true);
+        // An admin token passes the admin readers only; the member readers reject it (#185).
+        when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
         when(sessionManager.isAdminToken(ADMIN_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(ADMIN_TOKEN)).thenReturn(ADMIN_USER_ID);
+        when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(ADMIN_USER_ID);
         when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(new Admin(ADMIN_USER_ID, "admin", "hash", true));
     }
 
@@ -254,11 +256,27 @@ class SystemAdminServiceTest {
 
     @Test
     void givenNonAdminToken_whenOpenMarket_thenRejected() {
-        when(sessionManager.validateToken("member-token")).thenReturn(true);
-        when(sessionManager.isAdminToken("member-token")).thenReturn(false);
+        stubLiveMemberToken("member-token");
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", "member-token");
+        assertThrows(InvalidTokenException.class, () -> svc.openMarket(request));
+        assertEquals("READY", svc.viewMarketState().currentStatus());
+    }
+
+    @Test
+    void givenNoToken_whenOpenMarket_thenUnauthorized() {
+        SystemAdminService svc = readyService();
+        MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", null);
         assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(request));
+        assertEquals("READY", svc.viewMarketState().currentStatus());
+    }
+
+    @Test
+    void givenAdminTokenWhoseAdminNoLongerExists_whenOpenMarket_thenUnauthorized() {
+        when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(null);
+        SystemAdminService svc = readyService();
+        assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(openRequest()));
+        assertEquals("READY", svc.viewMarketState().currentStatus());
     }
 
     @Test
@@ -304,12 +322,21 @@ class SystemAdminServiceTest {
 
     @Test
     void givenNonAdminToken_whenCloseMarket_thenRejected() {
-        when(sessionManager.validateToken("member-token")).thenReturn(true);
-        when(sessionManager.isAdminToken("member-token")).thenReturn(false);
+        stubLiveMemberToken("member-token");
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
         MarketControlRequestDTO request = new MarketControlRequestDTO("CLOSE", "x", "member-token");
-        assertThrows(UnauthorizedActionException.class, () -> svc.closeMarket(request));
+        assertThrows(InvalidTokenException.class, () -> svc.closeMarket(request));
+        assertTrue(svc.isMarketOpen());
+    }
+
+    // A live member token, as the real SessionManager answers for it: valid on the member readers,
+    // rejected by the admin readers (#185).
+    private void stubLiveMemberToken(String token) {
+        when(sessionManager.validateToken(token)).thenReturn(true);
+        when(sessionManager.extractUserId(token)).thenReturn(ADMIN_USER_ID);
+        when(sessionManager.validateAdminToken(token)).thenThrow(new InvalidTokenException("session not found"));
+        when(sessionManager.extractAdminId(token)).thenThrow(new InvalidTokenException("session not found"));
     }
 
     // --- #455: ensureMarketOpen (system self-heal — no admin token, recovers from a boot-time outage) ---

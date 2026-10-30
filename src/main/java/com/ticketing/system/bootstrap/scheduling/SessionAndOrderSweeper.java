@@ -103,7 +103,7 @@ public class SessionAndOrderSweeper {
             sessionRepository.delete(session.getSessionId());
             // A swept-out guest session is a visitor exit (analytics, UC-46). Member
             // sessions persist their cart by userId, so they are not counted here.
-            if (!session.isMember()) {
+            if (session.isGuest()) {
                 systemMetrics.record(MetricType.VISITOR_EXIT);
             }
         }
@@ -142,7 +142,7 @@ public class SessionAndOrderSweeper {
     }
 
     private void cleanUpAttachedCart(Session session, LocalDateTime now) {
-        if (session.isMember())
+        if (!session.isGuest())
             return;
         Optional<ActiveOrder> cartOpt = activeOrderRepository.getBySessionId(session.getSessionId());
         if (cartOpt.isPresent()) {

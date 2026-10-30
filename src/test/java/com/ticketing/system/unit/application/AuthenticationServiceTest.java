@@ -27,6 +27,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
+import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -62,6 +64,9 @@ class AuthenticationServiceTest {
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
     private static final long GUEST_IDLE_MINUTES = 30;
     private static final long MEMBER_TTL_MINUTES = 1440;
+    // At least 256 bits, as JwtSessionManager requires of its HMAC secret.
+    private static final String JWT_TEST_SECRET =
+            "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
 
     private UserRepository mockUserRepo;
     private PasswordHasher mockHasher;
@@ -519,6 +524,25 @@ class AuthenticationServiceTest {
         OptionalInt memberId = assertDoesNotThrow(() -> service.liveMemberId("T"));
 
         assertEquals(OptionalInt.empty(), memberId, "a revoked or invalid token names no live member");
+    }
+
+    // Admin and member ids share one id space, so an admin token must never read as the member with
+    // the admin's id (#185). Runs on the real session manager: the answer depends on the token's kind.
+    @Test
+    void GivenAnAdminToken_WhenLiveMemberIdIsAsked_ThenEmpty() {
+        int sharedId = 1;
+        JwtSessionManager realSessionManager = new JwtSessionManager(JWT_TEST_SECRET,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES),
+                new MemorySessionRepository(fixedClock), fixedClock);
+        AuthenticationService serviceOnRealSessions = new AuthenticationService(
+                mockUserRepo, mockHasher, realSessionManager, mockCartRestorationPort, mockNotification,
+                mockSessionRepo, mock(ISystemMetrics.class),
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L));
+        String adminToken = realSessionManager.generateAdminToken(sharedId, "admin");
+
+        assertEquals(OptionalInt.empty(), serviceOnRealSessions.liveMemberId(adminToken),
+                "an admin token names no member, even when a member has the admin's id");
     }
 
     @Test

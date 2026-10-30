@@ -20,6 +20,7 @@ import com.ticketing.system.shared.dto.AppointmentResponseDTO;
 import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
 import com.ticketing.system.organization.application.dtoMappers.AppointmentInfoMapper;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -60,6 +61,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 public class CompanyManagementService {
+    private static final String ADMIN_REQUIRED = "Admin privileges required";
+
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final SessionManager sessionManager;
@@ -72,17 +75,21 @@ public class CompanyManagementService {
     // Publisher for cross-context integration events (role-change / appointment notices); the
     // notifications context listens for these instead of organization calling it directly.
     private final ApplicationEventPublisher eventPublisher;
+    // The admin pool, for the two admin-only reads: an admin token counts only while its admin exists.
+    private final AdminRepository adminRepository;
 
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
             SessionManager sessionManager, CompanyEventStatsPort companyEventStatsPort,
             CompanyMembershipService companyMembershipService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            AdminRepository adminRepository) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.sessionManager = sessionManager;
         this.companyEventStatsPort = companyEventStatsPort;
         this.companyMembershipService = companyMembershipService;
         this.eventPublisher = eventPublisher;
+        this.adminRepository = adminRepository;
     }
 
     // UC-23 — Owner appoints another Member as co-Owner (PENDING).
@@ -547,10 +554,7 @@ public class CompanyManagementService {
 
     // Admin-only: list every company in the system regardless of ownership.
     public List<ProductionCompanyDTO> adminListAllCompanies(String token) {
-        authenticate(token);
-        if (!sessionManager.isAdminToken(token)) {
-            throw new InvalidTokenException("Admin privileges required");
-        }
+        requireSystemAdmin(token);
         // Sort by companyId so the default selection (the presenter falls back to the first
         // entry) is deterministic — repository iteration order is not guaranteed.
         return companyRepository.findAll().stream()
@@ -563,10 +567,7 @@ public class CompanyManagementService {
 
     // Admin-only: build org tree for any company, bypassing the ownership check.
     public OrganizationalTreeNodeDTO adminViewOrgTree(String token, int companyId) {
-        authenticate(token);
-        if (!sessionManager.isAdminToken(token)) {
-            throw new InvalidTokenException("Admin privileges required");
-        }
+        requireSystemAdmin(token);
         ProductionCompany company = companyRepository.getCompanyById(companyId);
         if (company == null) {
             log.warn("Company {} not found", companyId);
@@ -686,6 +687,15 @@ public class CompanyManagementService {
             throw new InvalidTokenException("Invalid token");
         }
         return sessionManager.extractUserId(token);
+    }
+
+    // A live admin token whose admin still exists. Member tokens fail validateAdminToken, so a member
+    // whose id equals an admin's never reaches the adminRepository lookup.
+    private void requireSystemAdmin(String token) {
+        if (!sessionManager.validateAdminToken(token)
+                || adminRepository.findById(sessionManager.extractAdminId(token)) == null) {
+            throw new InvalidTokenException(ADMIN_REQUIRED);
+        }
     }
 
     private PurchasePolicy buildPurchasePolicyFromDTO(PurchasePolicyDTO dto) {

@@ -127,8 +127,8 @@ public class AuthenticationService {
 
     /**
      * Answers "is this stored token's session still live, and whose is it?" without throwing for the
-     * expected no. It checks what {@link #validateToken} checks (signature, expiry, the session row),
-     * not the token's role.
+     * expected no. It checks what {@link #validateToken} checks (signature, expiry, and that the token
+     * names a live member session row), so an admin token names no member.
      *
      * <p>{@link #validateToken} throws for an expired or revoked token. For a caller that holds a token
      * and only needs to know whether it is still live (the UI, on every request), that is an ordinary
@@ -137,7 +137,7 @@ public class AuthenticationService {
      *
      * @param token a signed-in visitor's JWT
      * @return the token's user id while it validates; empty when it has expired, is malformed, carries
-     *     a bad signature, has been revoked, or is {@code null}/blank
+     *     a bad signature, has been revoked, is not a member token, or is {@code null}/blank
      * @throws RuntimeException any other validation failure (e.g. the session store is unreachable),
      *     propagated unchanged
      */
@@ -449,7 +449,7 @@ public class AuthenticationService {
         }
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new GuestSessionRequiredException("guest session not found"));
-        if (session.isMember()) {
+        if (!session.isGuest()) {
             throw new GuestSessionRequiredException("session is not a guest session");
         }
         if (session.isExpiredAt(clock.instant())) {
