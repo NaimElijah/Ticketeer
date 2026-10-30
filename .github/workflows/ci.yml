@@ -150,11 +150,11 @@ jobs:
           # https, because the base URL is refused at binding otherwise; port 1 still refuses the connection.
           WSEP_BASE_URL: https://127.0.0.1:1/
           WSEP_HANDSHAKE_ATTEMPTS: '1'
-          # Throwaway CI-only values, not real secrets: a boot outside dev and test refuses the
-          # defaults committed in application.yml (CommittedDefaultSecretsGuard, #34).
-          JWT_SECRET: ci-only-throwaway-jwt-secret-e92bf9cc04b38624e5f09df0499b1092602b571fa1a2b1ca
-          PLATFORM_ADMIN_PASSWORD: ci-only-throwaway-admin-password
         run: |
+          # A boot outside dev and test refuses the secrets committed in application.yml
+          # (CommittedDefaultSecretsGuard, #34). Fresh random values each run, so no value in this
+          # file could be reused anywhere.
+          export JWT_SECRET="$(openssl rand -hex 64)" PLATFORM_ADMIN_PASSWORD="$(openssl rand -hex 16)"
           java -jar "$(ls target/*.jar)" > app.log 2>&1 &
           pid=$!
           for attempt in $(seq 1 60); do
