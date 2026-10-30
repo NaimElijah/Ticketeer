@@ -51,7 +51,7 @@ public class ManagerListPresenter {
             if (owned.isEmpty()) {
                 return new Outcome.NoCompany();
             }
-            Optional<ProductionCompanyDTO> selected = SelectedOwnedCompany.among(owned);
+            Optional<ProductionCompanyDTO> selected = SelectedCompany.among(owned, ProductionCompanyDTO::companyId);
             if (selected.isEmpty()) {
                 return new Outcome.ChooseCompany();
             }

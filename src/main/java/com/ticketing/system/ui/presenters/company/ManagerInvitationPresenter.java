@@ -40,7 +40,7 @@ public class ManagerInvitationPresenter {
         try {
             List<ProductionCompanyDTO> owned = companyService.findOwnedCompanies(token);
             if (owned.isEmpty()) return new Outcome.NoCompany();
-            Optional<ProductionCompanyDTO> selected = SelectedOwnedCompany.among(owned);
+            Optional<ProductionCompanyDTO> selected = SelectedCompany.among(owned, ProductionCompanyDTO::companyId);
             if (selected.isEmpty()) return new Outcome.ChooseCompany();
             int companyId = selected.get().companyId();
             int targetUserId = companyService.resolveUserId(inviteeUsername);
