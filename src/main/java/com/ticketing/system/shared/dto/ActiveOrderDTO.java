@@ -24,5 +24,16 @@ public record ActiveOrderDTO(
        
     }
 
-
+    /**
+     * Leaves out the guest session id, which is the guest's credential, so a logged cart or an
+     * exception message built from one does not carry it (SLR.2).
+     */
+    @Override
+    public String toString() {
+        return "ActiveOrderDTO[userId=" + userId
+                + ", createdAt=" + createdAt
+                + ", remainingSecondsBeforeExpiry=" + remainingSecondsBeforeExpiry
+                + ", currentTotalPrice=" + currentTotalPrice
+                + ", lines=" + lines + "]";
+    }
 }

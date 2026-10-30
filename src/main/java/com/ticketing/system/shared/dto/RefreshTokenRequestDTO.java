@@ -4,4 +4,14 @@ package com.ticketing.system.shared.dto;
 // UC-12 (token expired → client hits refresh endpoint).
 public record RefreshTokenRequestDTO(
     String refreshToken
-) {}
+) {
+
+    /**
+     * Leaves out the refresh token, which is a credential, so a logged request or an exception
+     * message built from one does not carry it (SLR.2).
+     */
+    @Override
+    public String toString() {
+        return "RefreshTokenRequestDTO[]";
+    }
+}

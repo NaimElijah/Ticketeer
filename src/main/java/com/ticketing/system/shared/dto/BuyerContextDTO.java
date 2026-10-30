@@ -20,4 +20,13 @@ public record BuyerContextDTO(Integer userId, String sessionId) {
         public boolean isGuest() {
             return userId == null;
         }
+
+        /**
+         * Leaves out the guest session id, which is the guest's credential, so a logged buyer or an
+         * exception message built from one does not carry it (SLR.2).
+         */
+        @Override
+        public String toString() {
+            return "BuyerContextDTO[userId=" + userId + "]";
+        }
 }
