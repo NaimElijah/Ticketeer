@@ -57,7 +57,7 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 | `unit/**` (except persistence), `ui/` | Nothing: plain JUnit + Mockito |
 | `unit/infrastructure/persistence/<Agg>Persistence/` | Abstract `IXxxRepositoryContractTest` + `Memory…`/`Jpa…` subclasses; Jpa = `@DataJpaTest @Import(JpaXxxRepository.class)`, no profile, on H2. `Postgres…IT` extends each Jpa subclass to run the same suite on a PostgreSQL container (failsafe). Admin and MemoryEvent subclasses are named `…RepositoryTest`; Admin's IT is `PostgresAdminRepositoryIT` |
 | `acceptance/` | `@SpringBootTest @ActiveProfiles({"test", PersistenceProfiles.MEMORY})`: Memory repos, `Stub*` WSEP |
-| `integration/`, `concurrency/` | `@SpringBootTest @ActiveProfiles("test")`: Jpa repos on H2 |
+| `integration/`, `concurrency/` | `@SpringBootTest @ActiveProfiles("test")`: Jpa repos on H2. Each `concurrency/` suite has a `Postgres…IT` subclass that runs it on a PostgreSQL container (#171); so do the cancel-during-checkout race and, PostgreSQL only, the concurrent-checkout race (`PostgresConcurrentCheckoutsOneZoneIT`), since H2 serialises what PostgreSQL runs together |
 | `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Modulith), `RepositoryAdapterProfileTest` (adapter per profile set) |
 
 ## Architecture
