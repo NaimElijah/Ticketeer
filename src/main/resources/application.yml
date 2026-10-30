@@ -3,7 +3,9 @@ spring:
   # datasource, and fails at startup if it is unreachable. Only the in-memory test suite
   # (`test` + `memory`) swaps the adapters out.
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketing}
+    # logServerErrorDetail=false keeps the server's DETAIL out of PgJDBC's exception messages: for a
+    # constraint violation it holds the row's values (an email, a username), and those messages are logged.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketing}?logServerErrorDetail=false
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver

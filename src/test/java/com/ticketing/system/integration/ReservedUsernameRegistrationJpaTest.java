@@ -16,7 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.shared.exception.DuplicateUsernameException;
+import com.ticketing.system.shared.exception.ReservedUsernameException;
 
 /**
  * UC-11 / #76: a member account must not take a name the platform reserves, whoever calls
@@ -24,9 +24,10 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
  * configured {@code platform.admin.username} is always reserved too. Matching ignores case and
  * surrounding whitespace, on both the configured names and the requested one.
  *
- * <p>A reserved name is refused as a taken one: {@code DuplicateUsernameException}, or a subtype of
- * it if the refusal needs its own type. This class sets its own reserved list and admin username, so
- * the names it expects to be refused cannot come from a hard-coded set.
+ * <p>A reserved name is refused with {@code ReservedUsernameException}, a
+ * {@code DuplicateUsernameException}, so a caller that handles a taken name handles a reserved one too.
+ * This class sets its own reserved list and admin username, so the names it expects to be refused
+ * cannot come from a hard-coded set.
  */
 @SpringBootTest(properties = {
         "identity.reserved-usernames=Box.Office, support",
@@ -78,7 +79,7 @@ class ReservedUsernameRegistrationJpaTest {
     }
 
     private void assertRefused(String username) {
-        assertThrows(DuplicateUsernameException.class, () -> authService.register(request(username)),
+        assertThrows(ReservedUsernameException.class, () -> authService.register(request(username)),
                 "'" + username + "' is reserved and must not be registered");
         String stored = username.trim();
         assertFalse(userRepository.existsByUsername(stored)

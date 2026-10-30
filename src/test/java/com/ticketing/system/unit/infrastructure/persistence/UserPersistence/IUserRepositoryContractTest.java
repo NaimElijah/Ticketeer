@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -119,6 +120,17 @@ abstract class IUserRepositoryContractTest {
 
         assertThrows(DuplicateUsernameException.class, () -> repo.save(sameName),
                 "a second user must not be saved under a username another user holds");
+    }
+
+    // One email, one user, held the same way: two registrations that both pass register's email check
+    // must not both create an account with it, and the loser gets the same answer the check gives.
+    @Test
+    void GivenSavedUser_WhenAnotherUserWithTheSameEmailIsSaved_ThenDuplicateEmailException() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+        User sameEmail = new User(repo.nextId(), "alicia", "alice@example.com", "HASH", 30);
+
+        assertThrows(DuplicateEmailException.class, () -> repo.save(sameEmail),
+                "a second user must not be saved under an email another user holds");
     }
 
     @Test

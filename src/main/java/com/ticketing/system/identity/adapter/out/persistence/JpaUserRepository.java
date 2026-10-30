@@ -11,6 +11,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
@@ -26,8 +27,8 @@ import com.ticketing.system.identity.domain.User;
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code User}'s
  * {@code @Version} optimistic lock. {@code save}/{@code updateUser} both delegate to Spring Data
  * (insert fresh / update loaded under {@code @Version}); {@code save} also flushes, so the
- * {@code uk_users_username} constraint is checked inside the adapter. Both are
- * {@code @Transactional} so the adapter is self-sufficient before the service layer gains
+ * {@code uk_users_username} and {@code uk_users_email} constraints are checked inside the adapter.
+ * Both are {@code @Transactional} so the adapter is self-sufficient before the service layer gains
  * transactions (#359).
  *
  * <p>{@link #nextId()} keeps the assigned-id design (the service mints the id, then constructs the
@@ -40,6 +41,8 @@ public class JpaUserRepository implements UserRepository {
 
     /** The unique constraint on {@code users.username}, added by migration V4. */
     private static final String USERNAME_UNIQUE_CONSTRAINT = "uk_users_username";
+    /** The unique constraint on {@code users.email}, in the baseline schema (V1). */
+    private static final String EMAIL_UNIQUE_CONSTRAINT = "uk_users_email";
 
     private final SpringDataUserRepository data;
     private final AtomicInteger idSequence = new AtomicInteger(0);
@@ -75,9 +78,9 @@ public class JpaUserRepository implements UserRepository {
     /**
      * {@inheritDoc}
      *
-     * <p>Flushes the insert, so a username another user holds fails here, as
-     * {@link DuplicateUsernameException}, rather than at a later flush or at commit, outside the
-     * adapter. Any other integrity violation, such as a taken email, propagates unchanged.
+     * <p>Flushes the insert, so a username or an email another user holds fails here, as
+     * {@link DuplicateUsernameException} or {@link DuplicateEmailException}, rather than at a later
+     * flush or at commit, outside the adapter. Any other integrity violation propagates unchanged.
      */
     @Override
     @Transactional
@@ -87,6 +90,9 @@ public class JpaUserRepository implements UserRepository {
         } catch (DataIntegrityViolationException e) {
             if (violates(e, USERNAME_UNIQUE_CONSTRAINT)) {
                 throw new DuplicateUsernameException(user.getUsername());
+            }
+            if (violates(e, EMAIL_UNIQUE_CONSTRAINT)) {
+                throw new DuplicateEmailException();
             }
             throw e;
         }

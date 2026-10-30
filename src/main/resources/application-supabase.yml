@@ -15,7 +15,8 @@
 # the refund FOR UPDATE coordinate across instances because they're enforced in Postgres.
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:postgres}?sslmode=require
+    # logServerErrorDetail=false: as in application.yml, no row values in logged exception messages.
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:postgres}?sslmode=require&logServerErrorDetail=false
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     hikari:

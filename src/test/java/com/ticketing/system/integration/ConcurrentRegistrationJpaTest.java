@@ -25,10 +25,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 
 /**
- * UC-11: two visitors who register one username at the same moment (#185). {@code register} checks
+ * UC-11: two visitors who register one username, or one email, at the same moment (#185). {@code register} checks
  * {@code existsByUsername} and then saves, so both can pass the check before either commits. Exactly
  * one may get the name: two rows with one username make {@code SystemIntegrityVerifier} refuse the
  * next boot.
@@ -42,6 +43,7 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
 class ConcurrentRegistrationJpaTest {
 
     private static final String USERNAME = "racing.registrant";
+    private static final String EMAIL = "racing.registrant@example.com";
     private static final String PASSWORD = "Password1";
     private static final int AGE = 30;
     private static final int REGISTRATIONS = 2;
@@ -77,6 +79,33 @@ class ConcurrentRegistrationJpaTest {
                 "the losing registration must fail with DuplicateUsernameException, but failed with " + failures.get(0));
         assertEquals(1, userRepository.findAll().stream().filter(u -> USERNAME.equals(u.getUsername())).count(),
                 "exactly one user row may hold the username");
+    }
+
+    // The same race for an email: register checks findByEmail and then saves, so both registrations
+    // can pass the check, and the users table's uk_users_email settles it.
+    @Test
+    void GivenTwoConcurrentRegistrationsOfOneEmail_WhenRegister_ThenExactlyOneSucceedsAndTheOtherGetsDuplicateEmail()
+            throws Exception {
+        CyclicBarrier bothChecked = new CyclicBarrier(REGISTRATIONS);
+        doAnswer(invocation -> {
+            Object found = invocation.callRealMethod();
+            awaitTheOtherRegistration(bothChecked);
+            return found;
+        }).when(userRepository).findByEmail(EMAIL);
+        List<RegisterRequestDTO> requests = List.of(
+                new RegisterRequestDTO("email.racer.a", EMAIL, PASSWORD, authService.startGuestSession().sessionId(), AGE),
+                new RegisterRequestDTO("email.racer.b", EMAIL, PASSWORD, authService.startGuestSession().sessionId(), AGE));
+
+        List<Throwable> outcomes = registerAtOnce(requests);
+
+        List<Throwable> failures = outcomes.stream().filter(outcome -> outcome != null).toList();
+        assertEquals(1, outcomes.size() - failures.size(),
+                "exactly one registration may take the email, but the outcomes were " + outcomes);
+        assertEquals(1, failures.size(), "the other registration must fail, but the outcomes were " + outcomes);
+        assertTrue(failures.get(0) instanceof DuplicateEmailException,
+                "the losing registration must fail with DuplicateEmailException, but failed with " + failures.get(0));
+        assertEquals(1, userRepository.findAll().stream().filter(u -> EMAIL.equals(u.getEmail())).count(),
+                "exactly one user row may hold the email");
     }
 
     /** Runs every request at once; each outcome is {@code null} for a success, else what it threw. */
