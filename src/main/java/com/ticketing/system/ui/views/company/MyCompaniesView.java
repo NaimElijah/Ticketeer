@@ -13,6 +13,8 @@ import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -29,6 +31,8 @@ import java.util.Map;
 @Route(value = "my-companies", layout = MainLayout.class)
 @PageTitle("My Companies · TicketHub")
 @PermitAll
+// A signed-in member's own data: an admin, who is no member, never reaches it (ADR-012).
+@RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyCompaniesView extends LkPage {
 
     public MyCompaniesView(MyCompaniesPresenter membershipPresenter) {
