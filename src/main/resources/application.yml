@@ -34,7 +34,8 @@ spring:
       mode: force
 
 # JWT signing secret (consumed by Infrastructure/security/JwtSessionManager — UC-12).
-# In production the secret MUST be supplied via environment variable, never committed.
+# In production the secret MUST be supplied via environment variable, never committed. Outside dev and
+# test the boot refuses this default (CommittedDefaultSecretsGuard repeats it, and its test pins the two).
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-please-override-in-prod-must-be-at-least-256-bits-long}
 
@@ -97,7 +98,8 @@ vaadin:
   allowed-packages: com.ticketing.system.ui
 
 # Default System Admin (UC-1 / I.1.4) — auto-created at initialization when none exists.
-# Defaults live here only; override in production via env, and never ship the default password.
+# Defaults live here only; override in production via env. Outside dev and test the boot refuses the
+# default password (CommittedDefaultSecretsGuard repeats it, and its test pins the two).
 # time-zone (ADR-008): an IANA id. New events default to it, seeded events use it, and the UI shows
 # recorded timestamps and "today" in it. Changing it never moves an existing event's times.
 platform:

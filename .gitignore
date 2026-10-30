@@ -80,3 +80,4 @@ logs/
 run-supabase.sh
 .env
 .env.*
+!.env.example
