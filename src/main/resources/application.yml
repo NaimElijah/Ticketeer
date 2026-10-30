@@ -28,6 +28,11 @@ spring:
     # clocks go forward would be stored an hour late (ADR-008).
     properties:
       hibernate.type.java_time_use_direct_jdbc: true
+      # Eager collections (a receipt's lines, an event's zones and seats, ...) are each loaded by a
+      # select of their own; this loads those of up to 64 owners per select, so a list of N receipts
+      # costs 3 statements instead of 1 + 2N (ReceiptBatchFetchJpaTest). It cuts statements, not rows:
+      # bounding the reads that load whole tables is #222.
+      hibernate.default_batch_fetch_size: 64
 
   # Keep Boot's applicationTaskExecutor: Boot 3.5 stops creating it once any Executor bean exists,
   # and the notifications module defines its own (notificationExecutor, ADR-004).
