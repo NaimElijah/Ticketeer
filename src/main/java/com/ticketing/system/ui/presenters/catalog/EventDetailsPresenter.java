@@ -8,7 +8,6 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 
@@ -40,7 +39,7 @@ public class EventDetailsPresenter {
         EventDetailDTO event;
         try {
             event = catalogService.getEventDetail(credential, eventId);
-        } catch (EventNotFoundException | CompanyClosedException e) {
+        } catch (EventNotFoundException e) {
             return new Outcome.NotFound("This event isn't available.");
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Your session has expired - please refresh and try again.");

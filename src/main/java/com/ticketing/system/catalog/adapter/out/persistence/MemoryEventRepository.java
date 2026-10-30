@@ -64,7 +64,7 @@ public class MemoryEventRepository implements EventRepository {
     @Override
     public Event findById(int eventId) {
         if (!events.containsKey(eventId)) {
-            throw new EventNotFoundException("Event with ID " + eventId + " not found");
+            throw new EventNotFoundException(eventId);
         }
         return events.get(eventId);
     }

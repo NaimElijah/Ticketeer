@@ -688,14 +688,14 @@ public class Event implements InvariantChecked {
         }
 
         if (!purchasePolicy.isSatisfiedBy(context)) {
-            throw new IllegalStateException(purchasePolicy.getFailureMessage());
+            throw new IllegalStateException(purchasePolicy.getFailureMessage(context));
         }
     }
 
     /**
      * Validate the effective purchase policy — the supplied company policy AND this
      * event's policy, composed into one {@link AndPurchasePolicy} structure. Both must
-     * hold; the composite's merged failure message is thrown on rejection.
+     * hold; a rejection's message names only the rules the context breaks.
      */
     public void validateEffectivePolicy(PurchasePolicy companyPolicy, PurchaseContext context) {
         if (context == null) {
@@ -710,8 +710,8 @@ public class Event implements InvariantChecked {
             // Typed domain exception (not IllegalStateException): the Presentation layer maps
             // PolicyViolationException -> PayOutcome.PolicyRejected so the buyer sees the clear,
             // specific reason ("Cannot purchase: you can buy at most 4 tickets") rather than the
-            // generic failure toast. The merged failure message is unchanged.
-            throw new PolicyViolationException(effective.getFailureMessage());
+            // generic failure toast.
+            throw new PolicyViolationException(effective.getFailureMessage(context));
         }
     }
 

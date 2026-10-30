@@ -1,8 +1,11 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when an external payment-gateway call fails (decline, timeout, unavailable).
-// CheckoutService catches and either retries (timeout/unavailable) or aborts checkout (decline).
-// UC-33; feeds UC-4 refund pipeline if charge succeeds but issuance fails.
+// Thrown when an external payment-gateway call fails (decline, timeout, unavailable) or its reply
+// fails CheckoutService's validation. UC-33.
+// A charge is never retried, whatever the cause: the failure does not say whether WSEP took the money,
+// so a second `pay` could double-charge (WsepHttpClient.postWithRetry is for the idempotent handshake
+// only). CheckoutService aborts the checkout instead: it returns the reserved tickets to stock and
+// refunds only when a charge result had come back (UC-4).
 public class PaymentGatewayException extends DomainException {
 
     public PaymentGatewayException(String reason) {

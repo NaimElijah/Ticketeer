@@ -99,7 +99,8 @@ catalog:
 
 
 # System Analytics dashboard (UC-46 / #43, #279).
-#  - rate-window-minutes: trailing window the per-minute rates are computed over.
+#  - rate-window-minutes: trailing window the per-minute rates are computed over;
+#    at most 120, the longest window the metrics answer (ISystemMetrics.MAX_WINDOW_MINUTES).
 #  - refresh-interval-ms: how often the dashboard auto-refreshes its KPIs in the
 #    browser (Vaadin poll). 0 disables auto-refresh (manual "Refresh" still works).
 analytics:

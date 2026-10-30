@@ -11,16 +11,25 @@ import java.time.Duration;
  * {@code SystemAnalyticsService} calls {@link #count(MetricType, Duration)} and
  * {@link #total(MetricType)} to compute live rates and throughput.
  *
- * <p>The adapter lives in Infrastructure (V1/V2: in-memory; swappable for a
- * durable / Micrometer-backed store in V3 without touching callers — ports &
- * adapters).
+ * <p>The only adapter is {@link InMemorySystemMetrics}, in this package; its counters reset on
+ * restart. A durable adapter could replace it without touching callers.
  */
 public interface ISystemMetrics {
+
+    /**
+     * The longest window, in minutes, that {@link #count} accepts from any adapter. An adapter keeps
+     * events at least this long; {@code AnalyticsProperties} caps its rate window at this value.
+     */
+    int MAX_WINDOW_MINUTES = 120;
 
     /** Records one occurrence of {@code type} at the current instant. */
     void record(MetricType type);
 
-    /** Number of {@code type} events recorded within the trailing {@code within} window. */
+    /**
+     * Number of {@code type} events recorded within the trailing {@code within} window.
+     *
+     * @throws IllegalArgumentException if {@code within} is longer than {@link #MAX_WINDOW_MINUTES}
+     */
     long count(MetricType type, Duration within);
 
     /** Cumulative number of {@code type} events recorded since startup. */

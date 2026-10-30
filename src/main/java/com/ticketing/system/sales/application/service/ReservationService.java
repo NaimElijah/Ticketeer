@@ -516,7 +516,9 @@ public class ReservationService {
     // Rollback / notifications / DTOs
     // ---------------------------------------------------------------------
 
-    // Helper method to roll back any changes made during the reservation or removal process if an exception occurs, in order to keep our data consistent. This includes releasing any inventory that was reserved and re-adding any reservations that were removed from the active order. We also log any exceptions that occur during the rollback process for monitoring and debugging purposes, but we do not rethrow those exceptions since we want to ensure that the original exception from the reservation or removal process is what gets propagated to indicate the failure of the operation, while still making a best effort to roll back any changes to keep our data consistent.
+    // Best-effort undo of a reserve that failed after the inventory hold: removes the cart line it added
+    // and releases the hold. A failing step is logged at WARN with its exception and not rethrown, so the
+    // caller rethrows the reserve's own failure; the WARN is the only trace of a seat or cart line left behind.
     private void rollbackReservationIfNeeded(ActiveOrder activeOrder, int eventId, int zoneId,
             InventorySelectionDTO selection, boolean inventoryReserved, boolean orderModified) {
 
@@ -529,8 +531,11 @@ public class ReservationService {
                 removeOrderReservation(activeOrder, eventId, zoneId, selection);
                 activeOrderRepository.save(activeOrder);
             }
-        } catch (RuntimeException ignored) {
-            // best-effort rollback; the main exception is rethrown by caller
+        } catch (RuntimeException rollbackFailure) {
+            log.warn("Rollback failed while removing cart lines after reserve failure. eventId={}, zoneId={}",
+                    eventId,
+                    zoneId,
+                    rollbackFailure);
         }
 
         try {
@@ -539,8 +544,11 @@ public class ReservationService {
                 // buyer-lock and verifies ownership via the order key). The order lock is still held.
                 inventoryPort.release(eventId, zoneId, selection, activeOrder.getOrderKey());
             }
-        } catch (RuntimeException ignored) {
-            // best-effort rollback; the main exception is rethrown by caller
+        } catch (RuntimeException rollbackFailure) {
+            log.warn("Rollback failed while releasing inventory after reserve failure. eventId={}, zoneId={}",
+                    eventId,
+                    zoneId,
+                    rollbackFailure);
         }
     }
 

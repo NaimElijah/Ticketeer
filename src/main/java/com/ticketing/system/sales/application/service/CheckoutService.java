@@ -530,7 +530,7 @@ public class CheckoutService {
 
         int userId = sessionManager.extractUserId(token);
         if (userId <= 0) {
-            throw new UserNotFoundException("Invalid user id in token");
+            throw new AuthenticationFailedException();
         }
 
         return userId;
@@ -1394,7 +1394,7 @@ public class CheckoutService {
         User user = userRepository.getUserById(userId);
 
         if (user == null) {
-            throw new UserNotFoundException("User not found: " + userId);
+            throw new UserNotFoundException(userId);
         }
 
         return user.getAge();

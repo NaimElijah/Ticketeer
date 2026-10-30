@@ -9,4 +9,14 @@ package com.ticketing.system.shared.dto;
  */
 public record LogoutRequestDTO(
     String token
-) {}
+) {
+
+    /**
+     * Leaves out the token, which is the session's credential, so a logged request or an exception
+     * message built from one does not carry it (SLR.2).
+     */
+    @Override
+    public String toString() {
+        return "LogoutRequestDTO[]";
+    }
+}

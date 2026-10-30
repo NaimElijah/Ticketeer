@@ -52,6 +52,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
+import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -268,6 +269,21 @@ class CheckoutServiceTest {
         assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(INVALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
         );
+    }
+
+    // #187: a live token that names no user is a failed sign-in, not a missing user, so the refusal
+    // says nothing about which user ids exist. checkoutMember wraps every pre-flight failure in its
+    // generic checkout failure, so the reason is the cause.
+    @Test
+    void GivenValidTokenNamingUserIdZero_WhenCheckoutMember_ThenAuthenticationFailsAndNothingIsCharged() {
+        when(mockiSessionManager.extractUserId(VALID_TOKEN)).thenReturn(0);
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        assertInstanceOf(AuthenticationFailedException.class, failed.getCause(),
+                "a token naming user id 0 must fail authentication, not report a missing user");
+        verify(mockPaymentGateway, never()).charge(any());
     }
 
     @Test

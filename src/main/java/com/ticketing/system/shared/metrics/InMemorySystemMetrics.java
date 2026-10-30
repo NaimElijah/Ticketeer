@@ -30,8 +30,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class InMemorySystemMetrics implements ISystemMetrics {
 
-    /** The longest window any caller asks for is one hour; keep slack and prune the rest. */
-    private static final Duration RETENTION = Duration.ofHours(2);
+    private static final Duration MAX_WINDOW = Duration.ofMinutes(MAX_WINDOW_MINUTES);
+
+    // Must be at least MAX_WINDOW: an instant older than the retention is already pruned, so a window
+    // reaching past it would undercount without saying so.
+    private static final Duration RETENTION = MAX_WINDOW;
 
     private final Clock clock;
     private final Map<MetricType, ConcurrentLinkedDeque<Instant>> events = new EnumMap<>(MetricType.class);
@@ -53,8 +56,17 @@ public class InMemorySystemMetrics implements ISystemMetrics {
         prune(type, now);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @throws IllegalArgumentException if {@code within} is longer than {@link #MAX_WINDOW_MINUTES}
+     */
     @Override
     public long count(MetricType type, Duration within) {
+        if (within.compareTo(MAX_WINDOW) > 0) {
+            throw new IllegalArgumentException(
+                    "Metrics window " + within + " is longer than the " + MAX_WINDOW + " maximum");
+        }
         Instant cutoff = clock.instant().minus(within);
         // The deque is append-ordered by time, so walk from the newest end and
         // stop at the first instant older than the cutoff — O(window), not O(retention).

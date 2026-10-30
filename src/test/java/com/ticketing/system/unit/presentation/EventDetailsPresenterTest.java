@@ -21,7 +21,6 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.Location;
-import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
@@ -73,16 +72,7 @@ class EventDetailsPresenterTest {
 
     @Test
     void load_eventNotFound_returnsNotFound() {
-        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new EventNotFoundException("nope"));
-
-        EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
-
-        assertInstanceOf(EventDetailsPresenter.Outcome.NotFound.class, outcome);
-    }
-
-    @Test
-    void load_companyClosed_returnsNotFound() {
-        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new CompanyClosedException("closed"));
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
 
