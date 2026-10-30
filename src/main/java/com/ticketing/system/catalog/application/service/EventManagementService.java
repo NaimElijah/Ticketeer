@@ -81,7 +81,7 @@ public class EventManagementService {
     // notifications context ultimately raises holder notices — catalog never calls either directly.
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-    // Server-side venue size caps (#185): the editor's field limits are advisory, so every write that
+    // Server-side venue size caps (OQ-27): the editor's field limits are advisory, so every write that
     // sizes a venue checks them here.
     private final VenueLimitsProperties venueLimits;
     private int currentVenueMapIdCounter;
@@ -104,7 +104,7 @@ public class EventManagementService {
         this.companyMembershipService = companyMembershipService; // company-membership permission checks
         this.eventPublisher = eventPublisher;                   // cross-context event publishing
         this.clock = clock;                                     // "now" for the schedule precondition
-        this.venueLimits = venueLimits;                         // venue size caps (#185)
+        this.venueLimits = venueLimits;                         // venue size caps (OQ-27)
         this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
                                            // here for now.
     }

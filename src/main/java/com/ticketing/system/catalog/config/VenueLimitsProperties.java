@@ -6,7 +6,7 @@ import org.springframework.validation.annotation.Validated;
 import jakarta.validation.constraints.Positive;
 
 /**
- * The largest venue map a producer may configure (UC-20, #185), bound from
+ * The largest venue map a producer may configure (UC-20, OQ-27), bound from
  * {@code catalog.venue-limits.*} and validated at startup (ADR-003). {@code EventManagementService}
  * enforces them on every write that sizes a venue, because the venue editor's field limits are
  * advisory and a client can send any size.

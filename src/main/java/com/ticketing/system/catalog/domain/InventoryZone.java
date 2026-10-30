@@ -49,7 +49,7 @@ import jakarta.persistence.Version;
 public abstract class InventoryZone implements InvariantChecked {
 
     /**
-     * The highest ticket price a zone may carry (#185). The zone invariants are the only check on a
+     * The highest ticket price a zone may carry (OQ-28). The zone invariants are the only check on a
      * price: the editor's field limits are advisory, and a client can send any number.
      */
     public static final double MAX_PRICE = 1_000_000.0;

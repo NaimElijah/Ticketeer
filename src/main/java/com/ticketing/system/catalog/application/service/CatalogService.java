@@ -516,7 +516,7 @@ public class CatalogService {
                 throw new CompanyClosedException("Event with ID " + eventId + " not found while getting venue map");
             }
 
-            // The map is part of the event's public page (#185), so it is hidden exactly when the page is.
+            // The map is part of the event's public page, so it is hidden exactly when the page is.
             requirePubliclyListed(event, "getting venue map");
 
             // see that event has a venue map
