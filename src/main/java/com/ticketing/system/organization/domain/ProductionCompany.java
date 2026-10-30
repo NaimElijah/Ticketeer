@@ -8,6 +8,7 @@ import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
@@ -37,6 +38,9 @@ import jakarta.persistence.Version;
 @Entity
 @Table(name = "companies")
 public class ProductionCompany implements InvariantChecked {
+    private static final String NAME_FIELD = "Company name";
+    private static final String DESCRIPTION_FIELD = "Company description";
+
     @Id
     private int companyId;
     /**
@@ -88,6 +92,8 @@ public class ProductionCompany implements InvariantChecked {
     protected ProductionCompany() { }
 
     public ProductionCompany(int companyId, int founderId, String name, CompanyStatus companyStatus, String description, Double rating) {
+        TextLimits.requireFits(NAME_FIELD, name);
+        TextLimits.requireFits(DESCRIPTION_FIELD, description);
         this.companyId = companyId;
         this.founderId = founderId;
         this.ownerIds = new ArrayList<>();
@@ -258,6 +264,7 @@ public class ProductionCompany implements InvariantChecked {
     public void setName(String name) {
         // Validate-before-commit: roll back if the new name is blank/null, so a rejected
         // call never leaves the company with a corrupted name.
+        TextLimits.requireFits(NAME_FIELD, name);
         String previous = this.name;
         this.name = name;
         try {
@@ -273,6 +280,7 @@ public class ProductionCompany implements InvariantChecked {
     }
 
     public void setDescription(String description) {
+        TextLimits.requireFits(DESCRIPTION_FIELD, description);
         this.description = description;
         checkInvariants();
     }

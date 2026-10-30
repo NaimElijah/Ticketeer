@@ -35,4 +35,14 @@ public class MaxTicketsPurchasePolicy implements PurchasePolicy, InvariantChecke
         return "You can buy at most " + maximumTickets + " tickets";
     }
     public int getMaximumTickets() { return maximumTickets; }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof MaxTicketsPurchasePolicy that && maximumTickets == that.maximumTickets;
+    }
+
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(maximumTickets);
+    }
 }

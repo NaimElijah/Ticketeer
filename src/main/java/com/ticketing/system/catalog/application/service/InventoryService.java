@@ -187,11 +187,11 @@ public class InventoryService implements InventoryCommandPort {
         event.validateEffectivePolicy(company == null ? null : company.getPurchasePolicy(), context); // throws on rejection
     }
 
-    /** {@inheritDoc} Pure read — each event must exist and be ON_SALE or SOLD_OUT. */
+    /** {@inheritDoc} Each event must exist and be ON_SALE or SOLD_OUT; holds each against a cancel until the caller's transaction ends. */
     @Override
     public void validateEventsOnSale(List<Integer> eventIds) {
         for (Integer eventId : eventIds) {
-            Event event = eventRepository.findById(eventId);       // load each event
+            Event event = eventRepository.findForSale(eventId);    // holds the event against a cancel until commit
             if (event == null) {
                 throw new EventNotFoundException("Event not found: " + eventId);
             }

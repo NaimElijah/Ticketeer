@@ -1,7 +1,6 @@
 package com.ticketing.system.unit.infrastructure.persistence.NotificationPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -46,6 +45,15 @@ abstract class INotificationRepositoryContractTest {
 
     private Set<String> ids(List<Notification> ns) {
         return ns.stream().map(Notification::getId).collect(Collectors.toSet());
+    }
+
+    // Both adapters store a message cut to its varchar(255) column, so neither refuses one the other keeps.
+    @Test
+    void GivenANotificationComposedWithAVeryLongName_WhenSaved_ThenItIsStoredCutToItsColumn() {
+        repo.save(new Notification("long", 5, NotificationType.EVENT_CANCELLED, NotificationStatus.PENDING,
+                "Event '" + "x".repeat(300) + "' has been cancelled.", T));
+
+        assertEquals(Notification.MAX_MESSAGE_LENGTH, repo.findById("long").getMessage().length());
     }
 
     @Test
@@ -120,10 +128,5 @@ abstract class INotificationRepositoryContractTest {
     void emptyData_roundTripsAsEmptyMap() {
         repo.save(note("n1", 5, NotificationStatus.PENDING)); // 6-arg ctor → empty data
         assertTrue(repo.findById("n1").getData().isEmpty());
-    }
-
-    @Test
-    void nextId_returnsDistinctValues() {
-        assertNotEquals(repo.nextId(), repo.nextId());
     }
 }

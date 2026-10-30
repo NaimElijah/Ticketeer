@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.messaging;
 
 import com.ticketing.system.shared.dto.CompanySummaryDTO;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkChip;
@@ -9,6 +10,7 @@ import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 import com.ticketing.system.ui.session.AuthSession;
@@ -89,10 +91,12 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
 
         subject.setPlaceholder("Brief summary of your question");
         subject.setRequired(true);
+        LkTextLimit.apply(subject);
         subject.setWidthFull();
         details.setPlaceholder("Write your question to the organizer…");
         details.setMinHeight("160px");
         details.setRequired(true);
+        LkTextLimit.apply(details);
         details.setWidthFull();
 
         LkCol col = new LkCol().gap(14);
@@ -180,7 +184,7 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
             case NewInquiryPresenter.ActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case NewInquiryPresenter.ActionOutcome.Failure fail ->
-                Toasts.failure("Could not submit the inquiry — please try again.");
+                Toasts.failure(Lk.withReason("Could not submit the inquiry", fail.reason()));
         }
     }
 }

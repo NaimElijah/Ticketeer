@@ -62,7 +62,7 @@ final class SeatedShowFixture {
         this.clock = clock;
     }
 
-    /** The show's id and its one seated zone, and an owner token able to read its venue map. */
+    /** The show's id and its one zone, seated or standing, and an owner token able to read its venue map. */
     record Show(int eventId, int zoneId, String ownerToken) {
     }
 
@@ -78,6 +78,21 @@ final class SeatedShowFixture {
 
     /** A new company with one ON_SALE show whose single seated zone holds {@link #SEATS}. */
     Show publishSeatedShow() {
+        List<SeatConfigDTO> seats = List.of(
+                new SeatConfigDTO(SEATS.get(0), 1, 0),
+                new SeatConfigDTO(SEATS.get(1), 2, 0),
+                new SeatConfigDTO(SEATS.get(2), 3, 0));
+        return publishShow(new ZoneConfigDTO("Orchestra", true, null, seats, SEAT_PRICE,
+                new GridPlacementDTO(1, 1, 1, 1)));
+    }
+
+    /** A published show whose one zone is standing, with room for {@code capacity}. */
+    Show publishStandingShow(int capacity) {
+        return publishShow(new ZoneConfigDTO("Floor", false, capacity, null, SEAT_PRICE,
+                new GridPlacementDTO(1, 1, 1, 1)));
+    }
+
+    private Show publishShow(ZoneConfigDTO onlyZone) {
         AuthTokenDTO owner = registerAndLogin("showOwner");
         int companyId = companyService.registerCompany(
                 owner.token(), new CompanyRegistrationDTO("Co-" + uniqueSuffix(), "desc")).companyId();
@@ -88,14 +103,8 @@ final class SeatedShowFixture {
                 List.of(new ShowDate(showStart, showStart.plusHours(SHOW_HOURS))),
                 VENUE_ZONE,
                 null));
-        List<SeatConfigDTO> seats = List.of(
-                new SeatConfigDTO(SEATS.get(0), 1, 0),
-                new SeatConfigDTO(SEATS.get(1), 2, 0),
-                new SeatConfigDTO(SEATS.get(2), 3, 0));
-        ZoneConfigDTO seated = new ZoneConfigDTO("Orchestra", true, null, seats, SEAT_PRICE,
-                new GridPlacementDTO(1, 1, 1, 1));
         eventManagementService.configureVenueMap(owner.token(), companyId,
-                new VenueMapConfigDTO(event.eventId(), "Arena", 1, 1, List.of(seated)));
+                new VenueMapConfigDTO(event.eventId(), "Arena", 1, 1, List.of(onlyZone)));
         int eventId = Integer.parseInt(event.eventId());
         eventManagementService.publishEvent(owner.token(), companyId, eventId);
         return new Show(eventId, zone(owner.token(), eventId).getId(), owner.token());
@@ -125,8 +134,8 @@ final class SeatedShowFixture {
     }
 
     private InventoryZoneDTO zone(String token, int eventId) {
+        // Every show this fixture publishes has exactly one zone, seated or standing.
         return catalogService.getEventVenueMap(token, eventId).inventoryZones().stream()
-                .filter(z -> "SEATED".equals(z.getZoneType()))
                 .findFirst().orElseThrow();
     }
 

@@ -63,35 +63,6 @@ public class MemoryTicketRepository implements TicketRepository {
         return result;
     }
 
-
-    @Override
-    public List<Ticket> findAvailableInZone(int eventId, int zoneId, int quantity) {
-        List<Ticket> result = new ArrayList<>();
-        for (Ticket t : ticketsById.values()) {
-            if (t.getEventId() == eventId
-                    && t.getZoneId() == zoneId
-                    && t.isAvailable()
-                    && quantity > result.size()) {
-                result.add(t);
-            }
-        }
-        return result;
-    }
-
-    @Override
-    public int countAvailableInZone(int eventId, int zoneId) {
-        int count = 0;
-        for (Ticket t : ticketsById.values()) {
-            if (t.getEventId() == eventId && t.getZoneId() == zoneId && t.isAvailable())
-                count++;
-        }
-        return count;
-    }
-    
-
-
-
-
     @Override
     public List<Ticket> findByOrderReceiptId(int orderReceiptId) {
         List<Ticket> result = new ArrayList<>();
@@ -99,21 +70,5 @@ public class MemoryTicketRepository implements TicketRepository {
             if (t.getOrderReceiptId() == orderReceiptId) result.add(t);
         }
         return result;
-    }
-
-    @Override
-    public List<Ticket> findByHolderUserId(int holderUserId) {
-        Integer target = holderUserId;
-        List<Ticket> result = new ArrayList<>();
-        for (Ticket t : ticketsById.values()) {
-            if (target.equals(t.getHolderUserId())) result.add(t);
-        }
-        return result;
-    }
-
-    @Override
-    public void saveAll(List<Ticket> tickets) {
-        if (tickets == null) return;
-        for (Ticket t : tickets) save(t);
     }
 }

@@ -110,7 +110,8 @@ final class EventSearchSpecification {
             predicates.add(cb.greaterThanOrEqualTo(showDate.get("startTime"), filters.fromDate().atStartOfDay()));
         }
         if (filters.toDate() != null) {
-            predicates.add(cb.lessThanOrEqualTo(showDate.get("startTime"), filters.toDate().atTime(23, 59, 59)));
+            // The end date runs up to the next midnight, as the in-memory adapter compares whole dates.
+            predicates.add(cb.lessThan(showDate.get("startTime"), filters.toDate().plusDays(1).atStartOfDay()));
         }
         sub.select(cb.literal(1)).where(predicates.toArray(new Predicate[0]));
         return sub;

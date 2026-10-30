@@ -22,8 +22,8 @@ import com.ticketing.system.messaging.domain.ParticipantType;
 /**
  * Contract every {@link ConversationRepository} implementation must satisfy. The Memory and JPA
  * adapters each subclass this with their own {@link #newRepository()} factory; the tests are reused.
- * The messages/read-state/unread-count tests pin the acceptance: the ordered message thread, the
- * per-message read flag, and the derived unread count survive save/reload on both adapters.
+ * The messages/read-state test pins the acceptance: the ordered message thread and the
+ * per-message read flag survive save/reload on both adapters.
  */
 abstract class IConversationRepositoryContractTest {
 
@@ -104,23 +104,8 @@ abstract class IConversationRepositoryContractTest {
         assertFalse(messages.get(1).isRead());
 
         // member 5 reads the company's reply, then we persist and reload
-        found.markMessageRead(messages.get(1).getMessageId(), 5);
+        found.markMessageRead(messages.get(1).getMessageId(), 5, ParticipantType.MEMBER);
         repo.save(found);
         assertTrue(repo.findById(c.getConversationId()).orElseThrow().getMessages().get(1).isRead());
-    }
-
-    @Test
-    void countUnreadForMember_derivesFromMessageReadState() {
-        Conversation c = inquiry(5, 10, "Help", "from member");
-        c.addMessage(10, ParticipantType.COMPANY, "reply", LocalDateTime.now()); // company -> member: unread for member 5
-        repo.save(c);
-
-        assertEquals(1, repo.countUnreadForMember(5)); // the company reply
-        assertEquals(0, repo.countUnreadForMember(10)); // 10 is the company, not a MEMBER participant
-
-        String replyId = c.getMessages().get(1).getMessageId();
-        c.markMessageRead(replyId, 5);
-        repo.save(c);
-        assertEquals(0, repo.countUnreadForMember(5));
     }
 }

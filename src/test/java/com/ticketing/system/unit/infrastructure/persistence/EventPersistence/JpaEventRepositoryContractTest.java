@@ -1,15 +1,22 @@
 package com.ticketing.system.unit.infrastructure.persistence.EventPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.function.Supplier;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
@@ -28,6 +35,7 @@ import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
 import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicyJsonConverter;
 import com.ticketing.system.catalog.adapter.out.persistence.JpaEventRepository;
@@ -53,6 +61,9 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     @Autowired
     private TestEntityManager entityManager;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @BeforeEach
     void cleanTable() {
         data.deleteAll();
@@ -63,6 +74,22 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
         return repository;
     }
 
+    // These inherited tests run without a test transaction, and findForSale's lock needs the caller's.
+    @Override
+    protected <T> T inSaleTransaction(Supplier<T> call) {
+        return new TransactionTemplate(transactionManager).execute(status -> call.get());
+    }
+
+    // The shared lock lasts as long as its transaction, so one opened for this call alone would end before
+    // the sale it protects; the adapter refuses to run without the caller's (ADR-015).
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenNoTransaction_WhenAnEventIsLoadedForSale_ThenItIsRefused() {
+        repository.save(buildEventInZone(1, ZoneId.of("Asia/Jerusalem")));
+
+        assertThrows(IllegalTransactionStateException.class, () -> repository.findForSale(1));
+    }
+
     // Flush and clear so the zone is read back from events.time_zone, not the persistence context.
     @Test
     void GivenEventInLondon_WhenFlushedAndReloaded_ThenTimeZoneComesBackFromTheColumn() {
@@ -71,6 +98,31 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
         entityManager.clear();
 
         assertEquals(ZoneId.of("Europe/London"), repository.findById(1).getTimeZone());
+    }
+
+    // Hibernate writes the policy column only when the new policy differs from the loaded one by equals,
+    // so a change that equals missed would be dropped without an error. AND to OR over the same rules is
+    // the closest pair.
+    @Test
+    void GivenAStoredPurchasePolicy_WhenReplacedByOneOverTheSameRules_ThenTheReloadedEventHasTheNewOne() {
+        PurchasePolicy all = new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(4));
+        PurchasePolicy either = new OrPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(4));
+        Event event = buildEventInZone(1, ZoneId.of("Asia/Jerusalem"));
+        event.setPurchasePolicy(all);
+        repository.save(event);
+        entityManager.flush();
+        entityManager.clear();
+
+        Event loaded = repository.findById(1);
+        loaded.setPurchasePolicy(either);
+        repository.save(loaded);
+        entityManager.flush();
+        entityManager.clear();
+
+        // Compared as JSON, not by equals, which is what this test doubts.
+        PurchasePolicyJsonConverter converter = new PurchasePolicyJsonConverter();
+        assertEquals(converter.convertToDatabaseColumn(either),
+                converter.convertToDatabaseColumn(repository.findById(1).getPurchasePolicy()));
     }
 
     @Test

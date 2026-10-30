@@ -102,17 +102,23 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
         content.add(card);
     }
 
-    private void handleReply(String text) {
-        switch (presenter.reply(AuthSession.token(), conversationId, text)) {
+    /** Sends the reply and says whether it went, so the reply bar keeps the text when it did not. */
+    private boolean handleReply(String text) {
+        return switch (presenter.reply(AuthSession.token(), conversationId, text)) {
             case CompanyInquiryInboxPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Reply sent.");
                 reload(); // refresh thread + status
+                yield true;
             }
-            case CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
+            case CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated ignored -> {
                 Toasts.failure("Your session has expired — please sign in again.");
-            case CompanyInquiryInboxPresenter.ActionOutcome.Failure fail ->
-                Toasts.failure("Could not send your reply — please try again.");
-        }
+                yield false;
+            }
+            case CompanyInquiryInboxPresenter.ActionOutcome.Failure fail -> {
+                Toasts.failure(Lk.withReason("Could not send your reply", fail.reason()));
+                yield false;
+            }
+        };
     }
 
     private void handleClose() {

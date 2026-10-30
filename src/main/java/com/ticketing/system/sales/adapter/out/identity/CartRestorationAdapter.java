@@ -97,8 +97,8 @@ public class CartRestorationAdapter implements CartRestorationPort {
                         log.info("guest cart left unclaimed: member order is in checkout userId={}", userId);
                         return;
                     }
-                    // The save below would delete this cart without releasing its holds (the repository
-                    // collapses carts by userId), stranding its seats as RESERVED. Re-takes the user: lock
+                    // The save below refuses to replace a cart of the same user that still holds lines,
+                    // so its holds are released and the cart deleted first. Re-takes the user: lock
                     // already held here (reentrant), then the event locks, so lock order is unchanged.
                     reservationService.abandonActiveOrder(BuyerContextDTO.member(userId));
                 }

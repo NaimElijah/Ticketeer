@@ -26,8 +26,10 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * Unit tests for {@link EventManagementPresenter#create}. The create flow assembles an
@@ -221,6 +223,33 @@ class EventManagementPresenterTest {
         EventManagementPresenter.CreateOutcome.InvalidInput invalid =
                 assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
         assertEquals("Start time must be in the future", invalid.reason());
+    }
+
+    // The view shows the InvalidInput reason, so it must pass the same filter as every other reason.
+    @Test
+    void GivenTheServiceRefusesWithoutAMessage_WhenCreate_ThenInvalidInputCarriesTheGenericText() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        when(eventService.addEvent(eq(TOKEN), any())).thenThrow(new IllegalStateException());
+
+        EventManagementPresenter.CreateOutcome outcome = createWith(null, futureStart(), futureEnd());
+
+        EventManagementPresenter.CreateOutcome.InvalidInput invalid =
+                assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, invalid.reason());
+    }
+
+    // The domain bounds the name to its column (#186); the view shows this reason on Failure.
+    @Test
+    void GivenTheDomainRefusesTheName_WhenCreate_ThenFailureCarriesTheDomainReason() {
+        String reason = "Event name can be at most 255 characters.";
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        when(eventService.addEvent(eq(TOKEN), any())).thenThrow(new BusinessRuleViolationException(reason));
+
+        EventManagementPresenter.CreateOutcome outcome = createWith(null, futureStart(), futureEnd());
+
+        EventManagementPresenter.CreateOutcome.Failure failure =
+                assertInstanceOf(EventManagementPresenter.CreateOutcome.Failure.class, outcome);
+        assertEquals(reason, failure.reason());
     }
 
     @Test

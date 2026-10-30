@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
@@ -26,7 +27,9 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * Seat and InventoryZone carry their own {@code @Version} so two buyers reserving different seats (or
  * a buyer vs. a structural edit touching a different entity) never false-conflict. A genuine conflict
  * fails the losing commit, and {@code OptimisticLockTranslationAspect} re-types it into
- * {@code ConcurrentReservationException}; nothing retries it automatically (C1, #359).
+ * {@code ConcurrentReservationException}. The one pessimistic lock is {@link #findForSale}'s shared row
+ * lock, which a sale holds so a cancel waits for it (ADR-015); checkout Phase 3 also runs again after
+ * a lost race ({@code CheckoutService.runPhase3}).
  *
  * <p>{@code searchAll}/{@code searchONSALE} push the 18-filter catalogue search down into a Criteria
  * {@link Specification} (see {@link EventSearchSpecification}). {@code nextId}/{@code nextVenueMapId}
@@ -84,6 +87,14 @@ public class JpaEventRepository implements EventRepository {
     @Override
     public Event findById(int eventId) {
         return data.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event with ID " + eventId + " not found"));
+    }
+
+    // MANDATORY: a lock taken in a transaction of its own would end before the sale it protects.
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Event findForSale(int eventId) {
+        return data.findByIdForShare(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event with ID " + eventId + " not found"));
     }
 

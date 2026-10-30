@@ -1,6 +1,6 @@
 # ADR-001: Refund state per receipt line, with resumable event-cancellation refunds
 
-- **Status:** Accepted
+- **Status:** Accepted. Since V6 (#175), `refund_state` is NOT NULL and a line written before this decision reads `NONE` from its row, so the nullable column described under Context no longer exists. The legacy whole-receipt rule stays.
 - **Date:** 2026-10-15
 - **Issue:** #20 (cancellation refunds not atomic or resumable); applied by #21 (line-level revenue)
 

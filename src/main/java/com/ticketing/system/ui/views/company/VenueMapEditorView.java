@@ -13,6 +13,7 @@ import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.components.venue.VkSeatBlock;
 import com.ticketing.system.ui.components.venue.VkVenueMap;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
@@ -277,6 +278,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         LkCard card = new LkCard("Edit Zone").pad(20);
 
         zoneNameField.setWidthFull();
+        LkTextLimit.apply(zoneNameField);
         priceField.setPrefixComponent(new Span("$"));
         priceField.setWidthFull();
 

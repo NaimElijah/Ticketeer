@@ -120,10 +120,12 @@ checkout without a cycle.
 `CheckoutService.checkoutMember`, which refuses at once if `MarketGate` reports the market closed.
 It freezes the cart, then prices it and calls WSEP to charge and to issue the tickets, holding no
 lock and no database transaction across either HTTP call. A single `TransactionTemplate` unit then
-re-validates the hold, writes the tickets and the `OrderReceipt`, and confirms the seats RESERVED →
-SOLD through catalog's `InventoryCommandPort`. If that unit fails, for example on a `@Version`
-conflict when two buyers race for one seat, it rolls back, and the service returns the seats to stock
-and refunds the charge. On success it publishes a `PurchaseCompletedNotice`, which `notifications`
+holds a shared lock on each event, so a cancel waits for the sale, re-validates the hold, writes the
+tickets and the `OrderReceipt`, and confirms the seats RESERVED → SOLD through catalog's
+`InventoryCommandPort` ([ADR-015](docs/ADRs/ADR-015-sales-hold-a-shared-lock-on-their-events.md)). If
+that unit loses a concurrency race, for example to another sale in the same standing zone, it runs
+again, up to three attempts in all. If it still fails, it rolls back, and the service returns the
+seats to stock and refunds the charge. On success it publishes a `PurchaseCompletedNotice`, which `notifications`
 turns into an alert after the purchase commits, on a background thread, so a slow or failing alert
 never delays or fails the checkout ([ADR-004](docs/ADRs/ADR-004-no-outbox-for-notifications.md)).
 
@@ -207,7 +209,7 @@ set these:
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
 `wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
-`event-completion`, `notifications`, `identity` and `catalog.venue-limits` groups bind to validated records.
+`event-completion`, `notifications`, `identity`, `catalog.venue-limits` and `database` groups bind to validated records.
 A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an unknown
 time zone, a malformed WSEP URL or a zero sweep delay, stops the boot with a report naming the
 property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Outside `dev` and
@@ -264,6 +266,7 @@ overrides them. Set each value in one place.
 | `CATALOG_VENUE_MAX_GRID_SIZE` · `CATALOG_VENUE_MAX_SEATS_PER_ZONE` · `CATALOG_VENUE_MAX_STANDING_CAPACITY` · `CATALOG_VENUE_MAX_SEATS_PER_MAP` | The largest venue map a producer may save: grid rows and columns · seats in one seated zone · places in one standing zone · seats on the whole map (standing places not counted) | `12` · `49500` · `1000000` · `100000` |
 | `PLATFORM_TIME_ZONE` | IANA zone that new and seeded events default to, and that the UI shows recorded times and "today" in ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)) | `Asia/Jerusalem` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
+| `DB_SOCKET_TIMEOUT` | How long a PostgreSQL statement may wait for an answer before it fails, so a hung database cannot hold pool connections. It bounds every statement: keep it above the slowest legitimate query, above `WSEP_REQUEST_TIMEOUT_SECONDS` (a refund holds its receipt's lock across the payment call, and a second refund waits for it), and above the longest migration statement | `30s` |
 | `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |
 | `SEED_FAIL_FAST` | A failing scenario step stops the boot | `true` (`false` under `dev`) |
 
@@ -271,7 +274,7 @@ overrides them. Set each value in one place.
 |---|---|
 | *(none)* | JPA repositories on PostgreSQL through `DB_*`, real WSEP, market opened at boot; needs `JWT_SECRET` and `PLATFORM_ADMIN_PASSWORD` set to non-default values |
 | `dev` | JPA repositories on in-memory H2, empty every boot and built by the Flyway migrations; replays `demo.scenario`, adds the dev panel |
-| `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default |
+| `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default; one app instance at a time, since ids come from per-instance counters (#108) |
 | `test` | The test suite's profile: JPA repositories on H2, stub WSEP, no boot runners or schedulers |
 | `memory` | Tests only, together with `test`: swaps in the in-memory repositories. Does nothing on its own |
 | `production` · `no-vaadin` | Maven build profiles: bundle the frontend and leave the dev-only libraries (Vaadin's dev server, H2) out of the jar; Hilla is excluded in every build (ADR-013) · skip Vaadin's frontend step |
@@ -293,7 +296,10 @@ through a pull request. A release is a separate promotion PR from `dev` to `main
    both adapters under `adapter/out/persistence`, and add the behaviour to that port's contract
    test. If an `@Entity` changes, add the next `V<n>__<description>.sql` to
    `src/main/resources/db/migration`, in SQL that both PostgreSQL and H2 accept. Never edit one that
-   has already run ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)).
+   has already run ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)). A new foreign key, or
+   a column a query starts filtering on, needs its index in the same migration: PostgreSQL does not
+   index foreign keys on its own. `SchemaMigrationIT` fails for a foreign key without an index; add a
+   newly filtered column to its list of queried columns.
 4. Add a presenter in `ui/presenters` and a thin `@Route` view in `ui/views`.
 
 `HexagonalRulesTest` fails the build if a dependency points the wrong way.
@@ -311,15 +317,15 @@ in [SEED.md](SEED.md#scenario-file-format):
 
 ## Testing
 
-About 1,500 test methods, organised by what they boot:
+About 2,100 test methods, organised by what they boot:
 
 | Layer | Covers | Boots |
 |---|---|---|
 | `unit/` · `ui/` | Domain rules, services and presenters with mocked ports, both adapters of every repository port | Nothing, or `@DataJpaTest` on H2 for the JPA contract tests |
 | `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
-| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats and refunds | Spring under `test`: JPA repositories on H2 |
+| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats, checkouts, cancellations and refunds | Spring under `test`: JPA repositories on H2; each `concurrency/` suite, and the checkout, cancellation and first-reservation races, also run on PostgreSQL as `Postgres…IT` |
 | `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith) and `RepositoryAdapterProfileTest` (which adapter each profile set selects) | Nothing |
-| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database (`SchemaMigrationIT`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
+| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database, with an index on every foreign key and listed queried column (`SchemaMigrationIT`), the concurrency suites and the checkout, cancellation and first-reservation races (`Postgres…IT` in `concurrency/` and `integration/`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
 ```bash
 ./mvnw -Pno-vaadin test "-Dtest=ReservationServiceTest"                # one class

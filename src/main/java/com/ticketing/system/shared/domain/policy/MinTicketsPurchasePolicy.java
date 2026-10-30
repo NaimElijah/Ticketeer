@@ -42,4 +42,14 @@ public class MinTicketsPurchasePolicy implements PurchasePolicy, InvariantChecke
         
     }
     public int getMinimumTickets() { return minimumTickets; }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof MinTicketsPurchasePolicy that && minimumTickets == that.minimumTickets;
+    }
+
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(minimumTickets);
+    }
 }

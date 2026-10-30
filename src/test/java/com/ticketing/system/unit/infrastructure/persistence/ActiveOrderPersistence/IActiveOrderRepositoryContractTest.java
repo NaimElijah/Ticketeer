@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 
 // Contract tests every ActiveOrderRepository implementation must satisfy. Future
 // JPA-backed adapter will subclass this with its own newRepository() factory;
@@ -105,9 +107,8 @@ abstract class IActiveOrderRepositoryContractTest {
     @Test
     void save_sameMemberTwiceCollapsesIdentity() {
         // D9a edge: re-saving a Member cart (e.g., after promotion) replaces
-        // any prior cart with the same userId.
+        // any prior cart with the same userId that holds nothing.
         ActiveOrder cartV1 = ActiveOrder.forMember(5, "sid-A", NOW);
-        cartV1.addStandingReservation(1, 10, 1, 50.0, java.time.LocalDateTime.now());
         repo.save(cartV1);
 
         ActiveOrder cartV2 = ActiveOrder.forMember(5, "sid-B", NOW);
@@ -121,6 +122,47 @@ abstract class IActiveOrderRepositoryContractTest {
         // Only one cart for user 5 — the second one wins.
         assertEquals("sid-B", repo.getByUserId(5).getSessionId());
         assertEquals(0, repo.getByUserId(5).getItems().size());
+    }
+
+    // Deleting a cart that still holds lines would leave its seats reserved under an order key that no
+    // cart holds, so nothing would ever release them. Its buyer's lines are released first (the login
+    // merge abandons the replaced cart), or the save is refused as a concurrent change.
+    @Test
+    void GivenAnotherCartOfTheMemberHoldingLines_WhenSavingANewCart_ThenTheSaveIsRefusedAndTheFirstCartStays() {
+        ActiveOrder holding = ActiveOrder.forMember(5, "sid-A", NOW);
+        holding.addStandingReservation(1, 10, 1, 50.0, NOW);
+        repo.save(holding);
+
+        ActiveOrder second = ActiveOrder.forMember(5, "sid-B", NOW);
+        repo.lockForUpdate("user:5");
+        try {
+            assertThrows(ConcurrentReservationException.class, () -> repo.save(second));
+        } finally {
+            repo.unlock("user:5");
+        }
+
+        ActiveOrder kept = repo.getByUserId(5);
+        assertEquals(holding.getOrderKey(), kept.getOrderKey(), "the cart holding lines stays");
+        assertEquals(1, kept.getItems().size());
+    }
+
+    @Test
+    void GivenAnotherGuestCartOfTheSessionHoldingLines_WhenSavingANewGuestCart_ThenTheSaveIsRefusedAndTheFirstCartStays() {
+        ActiveOrder holding = ActiveOrder.forGuest("sid-G", NOW);
+        holding.addStandingReservation(1, 10, 1, 50.0, NOW);
+        repo.save(holding);
+
+        ActiveOrder second = ActiveOrder.forGuest("sid-G", NOW);
+        repo.lockForUpdate("sess:sid-G");
+        try {
+            assertThrows(ConcurrentReservationException.class, () -> repo.save(second));
+        } finally {
+            repo.unlock("sess:sid-G");
+        }
+
+        ActiveOrder kept = repo.getBySessionId("sid-G").orElseThrow();
+        assertEquals(holding.getOrderKey(), kept.getOrderKey(), "the cart holding lines stays");
+        assertEquals(1, kept.getItems().size());
     }
 
     @Test

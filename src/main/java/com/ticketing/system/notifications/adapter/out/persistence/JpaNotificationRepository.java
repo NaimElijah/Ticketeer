@@ -1,7 +1,6 @@
 package com.ticketing.system.notifications.adapter.out.persistence;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
@@ -29,7 +28,6 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 public class JpaNotificationRepository implements NotificationRepository {
 
     private final SpringDataNotificationRepository data;
-    private final AtomicInteger idSequence = new AtomicInteger(1);
 
     public JpaNotificationRepository(SpringDataNotificationRepository data) {
         this.data = data;
@@ -63,12 +61,5 @@ public class JpaNotificationRepository implements NotificationRepository {
     @Override
     public List<Notification> findByRecipient(int recipientUserId) {
         return data.findByRecipientUserId(recipientUserId);
-    }
-
-    @Override
-    public int nextId() {
-        // Vestigial: no caller uses notification nextId() (ids are UUIDs). Kept only to
-        // satisfy the port; an in-memory counter is enough since the value is never persisted.
-        return idSequence.getAndIncrement();
     }
 }

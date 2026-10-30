@@ -20,6 +20,10 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    # An EntityManager, and its connection, lives as long as its transaction, never as long as a web
+    # request. Every association is loaded eagerly, so nothing needs a session after its service
+    # returns (OpenInViewJpaTest).
+    open-in-view: false
     # No explicit dialect: Hibernate auto-detects it per connection (PostgreSQL on the
     # deploy/run target, H2 in dev and the @DataJpaTest contract tests), so one config
     # serves every backend — a config-only switch to the cloud DB.
@@ -28,12 +32,25 @@ spring:
     # clocks go forward would be stored an hour late (ADR-008).
     properties:
       hibernate.type.java_time_use_direct_jdbc: true
+      # Eager collections (a receipt's lines, an event's zones and seats, ...) are each loaded by a
+      # select of their own; this loads those of up to 64 owners per select, so a list of N receipts
+      # costs 3 statements instead of 1 + 2N (ReceiptBatchFetchJpaTest). It cuts statements, not rows:
+      # bounding the reads that load whole tables is #222.
+      hibernate.default_batch_fetch_size: 64
 
   # Keep Boot's applicationTaskExecutor: Boot 3.5 stops creating it once any Executor bean exists,
   # and the notifications module defines its own (notificationExecutor, ADR-004).
   task:
     execution:
       mode: force
+
+# PostgreSQL driver bounds (SLR.6, #173), applied only to a PostgreSQL datasource (PostgresDriverSettings).
+# socket-timeout ends a statement whose answer never comes, as when the database hangs or its host
+# disappears. It bounds every statement, so it must exceed the slowest legitimate query (the reporting
+# reads), the longest migration statement, and wsep.request-timeout-seconds: a refund holds its
+# receipt's row lock across the payment call, and a second refund of that receipt waits for it.
+database:
+  socket-timeout: ${DB_SOCKET_TIMEOUT:30s}
 
 # JWT signing secret (consumed by Infrastructure/security/JwtSessionManager — UC-12).
 # In production the secret MUST be supplied via environment variable, never committed. Outside dev and
