@@ -62,9 +62,11 @@ following, and `.claude/CLAUDE.md` (Architecture) and the root `README.md` state
 ## Consequences
 
 **What this makes easy:**
-- A new cross-module edge is an explicit, reviewed change to the map and to `.claude/CLAUDE.md`
-  together. The build fails until both agree.
-- The documented graph and the enforced one cannot drift apart unnoticed.
+- A new cross-module edge is an explicit, reviewed change. The build fails until the map allows
+  the edge, and review keeps `.claude/CLAUDE.md` and the README graph in step, because nothing
+  checks them.
+- The enforced graph lives in one map, so a drift between it and the docs is a visible diff in
+  review, not a silent gap.
 - Every rule is proven to fail on an offender, so a rule that quietly stops matching is caught.
 
 **What this makes hard, and what is accepted:**
