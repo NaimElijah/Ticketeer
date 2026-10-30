@@ -15,7 +15,8 @@ import jakarta.validation.constraints.NotNull;
  *
  * @param socketTimeout how long a read may wait for the database's answer before it fails. It frees the
  *     pool connection of a read in flight when the database hangs or its host disappears (SLR.6, #173),
- *     so it must be longer than the slowest legitimate query
+ *     so it must be longer than the slowest legitimate query. The driver takes whole seconds, so a
+ *     fraction of a second rounds up
  */
 @Validated
 @ConfigurationProperties(prefix = "database")
