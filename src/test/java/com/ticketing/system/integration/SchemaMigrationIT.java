@@ -101,8 +101,12 @@ class SchemaMigrationIT {
         assertThat(unindexed).as("foreign-key columns that lead no index").isEmpty();
     }
 
-    // The columns the Spring Data repositories filter on that no primary key, unique constraint or
-    // foreign-key index already covers.
+    // The selective columns the Spring Data repositories filter on that no primary key, unique constraint
+    // or foreign-key index already covers. The list is kept by hand, so a newly filtered column must be
+    // added here. Left out on purpose, with no index: conversation type and status and company status,
+    // which have a handful of values (V5), and companies.founder_id (findByFounderId) and sessions.user_id
+    // (existsByUserIdAndKindAndExpiresAtAfter, behind SessionManager.isOnline), which no production code
+    // queries yet. The first caller of either adds its index and its entry here.
     @Test
     void GivenMigratedPostgres_WhenListingQueriedColumns_ThenEachLeadsAnIndex() {
         List<String> queried = List.of(
