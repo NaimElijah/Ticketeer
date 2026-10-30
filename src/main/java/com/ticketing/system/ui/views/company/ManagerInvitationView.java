@@ -107,6 +107,9 @@ private final ManagerInvitationPresenter presenter;
                 Toasts.failure("Your session has expired — please sign in again.");
             case ManagerInvitationPresenter.Outcome.NoCompany ignored ->
                 Toasts.failure("You don't own a company — register one first.");
+            case ManagerInvitationPresenter.Outcome.ChooseCompany ignored ->
+                Toasts.failure("Choose the company in the workspace's Company selector, "
+                    + "or under My companies, then come back.");
             case ManagerInvitationPresenter.Outcome.UserNotFound u ->
                 Toasts.failure("User \"" + u.username() + "\" was not found.");
             case ManagerInvitationPresenter.Outcome.Failure fail ->

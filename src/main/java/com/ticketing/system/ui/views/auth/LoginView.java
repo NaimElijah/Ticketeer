@@ -70,14 +70,6 @@ public class LoginView extends LkAuthCard {
         add(social);
 
         foot("Don't have an account?", "Create one →", RegisterView.class);
-
-        // TEMP (dev, #290): discreet path to the dedicated admin sign-in during development.
-        // Drop this link for a real deployment — admins just bookmark /admin/sign-in.
-        Anchor adminLink = new Anchor("admin/sign-in", "Admin sign-in →");
-        adminLink.addClassName("bz-link");
-        adminLink.getStyle().set("display", "block").set("margin-top", "10px")
-            .set("text-align", "center").set("font-size", "12.5px");
-        add(adminLink);
     }
 
     private Anchor forgotPasswordLink() {

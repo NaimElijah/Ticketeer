@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter.Outcome;
@@ -15,12 +16,14 @@ import org.junit.jupiter.api.Test;
 class UsernameAvailabilityPresenterTest {
 
     private MemberQueryService memberQueryService;
+    private AuthenticationService authenticationService;
     private UsernameAvailabilityPresenter presenter;
 
     @BeforeEach
     void setUp() {
         memberQueryService = mock(MemberQueryService.class);
-        presenter = new UsernameAvailabilityPresenter(memberQueryService);
+        authenticationService = mock(AuthenticationService.class);
+        presenter = new UsernameAvailabilityPresenter(memberQueryService, authenticationService);
     }
 
     @Test
@@ -43,7 +46,10 @@ class UsernameAvailabilityPresenterTest {
 
     @Test
     void adminPoolName_returnsAdminReserved() {
-        // AuthSession.ADMIN_USERNAMES includes "admin", "platform.admin", "bar.miyara"
+        // Which names are reserved is the identity service's answer, the one register enforces.
+        when(authenticationService.isUsernameReserved("admin")).thenReturn(true);
+        when(authenticationService.isUsernameReserved("platform.admin")).thenReturn(true);
+
         assertInstanceOf(Outcome.AdminReserved.class, presenter.check("admin"));
         assertInstanceOf(Outcome.AdminReserved.class, presenter.check("platform.admin"));
     }

@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 class LandingPresenterTest {
 
@@ -51,13 +53,23 @@ class LandingPresenterTest {
     }
 
     @Test
-    void load_serviceThrows_returnsFailureWithMessage() {
+    void load_serviceFailsInternally_returnsGenericFailure() {
         when(catalogService.featured(4)).thenThrow(new RuntimeException("catalog down"));
 
         LandingPresenter.Outcome outcome = presenter.load();
 
         LandingPresenter.Outcome.Failure fail =
             assertInstanceOf(LandingPresenter.Outcome.Failure.class, outcome);
-        assertEquals("catalog down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void load_ruleViolated_returnsFailureWithTheRulesMessage() {
+        BusinessRuleViolationException rule = new BusinessRuleViolationException("The catalog is closed for maintenance.");
+        when(catalogService.featured(4)).thenThrow(rule);
+
+        LandingPresenter.Outcome.Failure fail =
+            assertInstanceOf(LandingPresenter.Outcome.Failure.class, presenter.load());
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

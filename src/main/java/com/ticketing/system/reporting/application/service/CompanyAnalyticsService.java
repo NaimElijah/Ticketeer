@@ -96,8 +96,8 @@ public class CompanyAnalyticsService {
      * Live dashboard counters for one company, as seen by the calling member. Returns zeros for a
      * fresh company with no events.
      *
-     * <p>Figures the caller may not see are withheld as {@code null}: revenue
-     * needs {@link Permission#VIEW_SALES} and open inquiries need
+     * <p>Figures the caller may not see are withheld as {@code null}: revenue and tickets sold
+     * need {@link Permission#VIEW_SALES} and open inquiries need
      * {@link Permission#RESPOND_TO_INQUIRIES}. Owners hold both implicitly.
      *
      * @param token     the caller's session token
@@ -146,8 +146,8 @@ public class CompanyAnalyticsService {
 
         log.debug("Dashboard for company {}: {} active events, {} tickets/30d, {} revenue/30d, {} open inquiries, rating {}",
                 companyId, activeEvents, ticketsSold, revenue, openInquiries, rating);
-        return new CompanyDashboardDTO(activeEvents, ticketsSold, canViewSales ? revenue : null,
-                openInquiries, rating);
+        return new CompanyDashboardDTO(activeEvents, canViewSales ? ticketsSold : null,
+                canViewSales ? revenue : null, openInquiries, rating);
     }
 
     private int countOpenInquiries(int companyId) {

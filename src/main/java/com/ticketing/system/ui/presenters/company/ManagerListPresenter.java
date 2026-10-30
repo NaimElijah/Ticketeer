@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.presenters.company;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,7 @@ import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code ManagerListView}. Holds no Vaadin imports so the
@@ -19,10 +21,10 @@ import com.ticketing.system.organization.domain.Permission;
  * is unit-testable in isolation (the view reads the token from {@code AuthSession}
  * and passes it in, mirroring {@code LoginPresenter}).
  *
- * <p>Resolves the owner's company from the auth token (no dependency on the
- * still-mock current-company holder; replaced by a real selector in V2-CADMIN-05),
- * then loads the active-manager and pending-invitation rosters for it. Returns a
- * typed {@link Outcome} so the view's job is a switch over the sealed hierarchy.
+ * <p>Resolves the company selected in the workspace ({@code CurrentCompanies}) among the
+ * companies the token's owner owns, then loads the active-manager and pending-invitation
+ * rosters for it. Returns a typed {@link Outcome} so the view's job is a switch over the
+ * sealed hierarchy.
  */
 @Component
 public class ManagerListPresenter {
@@ -35,9 +37,10 @@ public class ManagerListPresenter {
     }
 
     /**
-     * Loads the manager roster for the signed-in owner's company. When the user
-     * owns several companies the first is used — a multi-company switcher is future
-     * work (matches {@code OwnerDashboardView}'s first-company default).
+     * Loads the manager roster of the selected company.
+     *
+     * @return {@link Outcome.NoCompany} when the caller owns no company; {@link Outcome.ChooseCompany}
+     *     when they own one or more but none of them is selected, or the selection is one they do not own
      */
     public Outcome loadRoster(String token) {
         if (token == null) {
@@ -48,7 +51,11 @@ public class ManagerListPresenter {
             if (owned.isEmpty()) {
                 return new Outcome.NoCompany();
             }
-            ProductionCompanyDTO company = owned.get(0);
+            Optional<ProductionCompanyDTO> selected = SelectedCompany.among(owned, ProductionCompanyDTO::companyId);
+            if (selected.isEmpty()) {
+                return new Outcome.ChooseCompany();
+            }
+            ProductionCompanyDTO company = selected.get();
             List<AppointmentInfoDTO> active =
                 companyManagementService.listManagers(token, company.companyId());
             List<AppointmentInfoDTO> pending =
@@ -57,7 +64,7 @@ public class ManagerListPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -80,7 +87,7 @@ public class ManagerListPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -100,7 +107,7 @@ public class ManagerListPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -110,7 +117,10 @@ public class ManagerListPresenter {
                        List<AppointmentInfoDTO> activeManagers,
                        List<AppointmentInfoDTO> pendingInvitations) implements Outcome { }
         record NotAuthenticated() implements Outcome { }
+        /** The caller owns no company. */
         record NoCompany() implements Outcome { }
+        /** The caller owns a company, but none of theirs is selected in the workspace. */
+        record ChooseCompany() implements Outcome { }
         record Failure(String reason) implements Outcome { }
     }
 

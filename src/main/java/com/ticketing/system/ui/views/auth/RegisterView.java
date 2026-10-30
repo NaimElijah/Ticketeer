@@ -7,7 +7,6 @@ import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
-import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.GuestSession;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
@@ -58,6 +57,7 @@ public class RegisterView extends LkAuthCard {
         EmailField email = new EmailField("Email");
         email.setPlaceholder("you@email.com");
         email.setRequired(true);
+        email.setMaxLength(RegisterPresenter.MAX_EMAIL_LENGTH);
         email.setWidthFull();
 
         IntegerField age = new IntegerField("Age");
@@ -106,16 +106,20 @@ public class RegisterView extends LkAuthCard {
             case UsernameAvailabilityPresenter.Outcome.InvalidFormat ignored -> {
                 field.setSuffixComponent(statusIcon(VaadinIcon.CLOSE_CIRCLE, "var(--lumo-error-color)"));
                 field.setHelperText("3–32 characters · letters, digits, . _ -");
+                field.setErrorMessage(null);
                 field.setInvalid(true);
             }
+            // An error message, not helper text, so assistive technology announces it with the invalid state.
             case UsernameAvailabilityPresenter.Outcome.AdminReserved ignored -> {
                 field.setSuffixComponent(statusIcon(VaadinIcon.CLOSE_CIRCLE, "var(--lumo-error-color)"));
-                field.setHelperText("Reserved for the platform-admin pool.");
+                field.setHelperText(null);
+                field.setErrorMessage("Reserved — please choose another.");
                 field.setInvalid(true);
             }
             case UsernameAvailabilityPresenter.Outcome.Taken ignored -> {
                 field.setSuffixComponent(statusIcon(VaadinIcon.CLOSE_CIRCLE, "var(--lumo-error-color)"));
-                field.setHelperText("Username taken — please choose another.");
+                field.setHelperText(null);
+                field.setErrorMessage("Username taken — please choose another.");
                 field.setInvalid(true);
             }
             case UsernameAvailabilityPresenter.Outcome.Available ignored -> {
@@ -149,8 +153,8 @@ public class RegisterView extends LkAuthCard {
             Toasts.failure("Passwords don't match.");
             return;
         }
-        if (AuthSession.isAdminUsername(username.getValue())) {
-            Toasts.failure("That username is reserved for the platform-admin pool.");
+        if (usernameAvailability.isReserved(username.getValue())) {
+            Toasts.failure("That username is reserved — please choose another.");
             return;
         }
 

@@ -14,11 +14,17 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.SessionKind;
 
-// Contract tests every SessionRepository implementation must satisfy. Future
-// JPA-backed adapter will subclass this with its own newRepository() factory;
-// tests are reused.
+/**
+ * Contract tests every {@link SessionRepository} adapter must satisfy; each adapter's subclass supplies
+ * the repository. Liveness ({@code existsByUserId}) is judged against {@link #NOW}, the instant the
+ * subclasses fix the adapter's clock at.
+ */
 abstract class ISessionRepositoryContractTest {
+
+    /** The adapter clock's instant in every subclass: after T_PAST_PLUS_ONE, before T_FAR_FUTURE. */
+    static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
 
     protected abstract SessionRepository newRepository();
 
@@ -95,6 +101,14 @@ abstract class ISessionRepositoryContractTest {
         assertFalse(repo.existsByUserId(0));
     }
 
+    // An admin's id can equal a member's (ADR-012), and isOnline asks about members only.
+    @Test
+    void GivenLiveAdminSessionWithTheSameId_WhenExistsByUserId_ThenFalse() {
+        repo.save(Session.admin("sid-admin", 5, T0, T_FAR_FUTURE));
+
+        assertFalse(repo.existsByUserId(5), "an admin's live session must not count as member 5 being online");
+    }
+
     @Test
     void existsByUserId_trueWithMultipleSessionsForSameUser() {
         // Q4 — allow-multiple Member sessions per userId (multi-device login).
@@ -138,5 +152,55 @@ abstract class ISessionRepositoryContractTest {
         Optional<Session> found = repo.findById("sid");
         assertTrue(found.isPresent());
         assertEquals(7, found.get().getUserId());
+    }
+
+    // ---- the session kind round-trips (#185) ----
+    // These tests are inherited, so the Jpa subclass runs them without a test transaction: each
+    // adapter call commits on its own, and every findById below reads the sessions table.
+    // (@DataJpaTest's test transaction does not reach the test methods inherited from this class: a
+    // TestEntityManager call in one fails with "No transactional EntityManager found".)
+
+    @Test
+    void GivenGuestSession_WhenSavedAndReloaded_ThenKindIsGuest() {
+        repo.save(new Session("sid-guest", null, T0, T_FAR_FUTURE));
+
+        assertEquals(SessionKind.GUEST, repo.findById("sid-guest").orElseThrow().getKind());
+    }
+
+    @Test
+    void GivenMemberSession_WhenSavedAndReloaded_ThenKindIsMember() {
+        repo.save(new Session("sid-member", 5, T0, T_FAR_FUTURE));
+
+        assertEquals(SessionKind.MEMBER, repo.findById("sid-member").orElseThrow().getKind());
+    }
+
+    @Test
+    void GivenAdminSession_WhenSavedAndReloaded_ThenKindIsAdminAndTheRowNamesTheAdmin() {
+        repo.save(Session.admin("sid-admin", 5, T0, T_FAR_FUTURE));
+
+        Session found = repo.findById("sid-admin").orElseThrow();
+        assertEquals(SessionKind.ADMIN, found.getKind());
+        assertEquals(5, found.getUserId());
+    }
+
+    @Test
+    void GivenSavedGuestSession_WhenPromotedSavedAndReloaded_ThenKindIsMember() {
+        repo.save(new Session("sid-promoted", null, T0, T_FAR_FUTURE));
+        Session loaded = repo.findById("sid-promoted").orElseThrow();
+        loaded.promoteTo(5, T_FAR_FUTURE);
+
+        repo.save(loaded);
+
+        assertEquals(SessionKind.MEMBER, repo.findById("sid-promoted").orElseThrow().getKind());
+    }
+
+    @Test
+    void GivenMemberSession_WhenAnAdminSessionWithTheSameIdIsSaved_ThenKindIsAdmin() {
+        repo.save(new Session("sid", 5, T0, T_FAR_FUTURE));
+
+        repo.save(Session.admin("sid", 5, T0, T_FAR_FUTURE));
+
+        assertEquals(SessionKind.ADMIN, repo.findById("sid").orElseThrow().getKind(),
+                "overwriting a session must overwrite its kind, as it overwrites its user id");
     }
 }

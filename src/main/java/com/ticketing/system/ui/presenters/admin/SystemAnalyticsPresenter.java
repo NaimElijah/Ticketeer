@@ -12,11 +12,14 @@ import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code SystemAnalyticsView} (UC-46 / #43, #279). Vaadin-free
  * POJO: combines the market snapshot ({@link SystemAdminService#viewMarketState()})
- * with the live platform metrics ({@link SystemAnalyticsService#computeAnalytics()})
+ * with the live platform metrics ({@link SystemAnalyticsService#computeAnalytics(String)}, read with
+ * the signed-in admin's token)
  * and translates market open/close calls into a sealed outcome the view switches on.
  *
  * <p>Mirrors {@code OwnerDashboardPresenter}, which likewise combines two
@@ -47,10 +50,10 @@ public class SystemAnalyticsPresenter {
     public Outcome load() {
         try {
             MarketStateDTO market = systemAdminService.viewMarketState();
-            SystemAnalyticsDTO analytics = systemAnalyticsService.computeAnalytics();
+            SystemAnalyticsDTO analytics = systemAnalyticsService.computeAnalytics(AuthSession.token());
             return new Outcome.Success(market, analytics);
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -77,7 +80,7 @@ public class SystemAnalyticsPresenter {
         } catch (MarketNotOpenException | InvalidStateTransitionException e) {
             return new MarketActionOutcome.Rejected(e.getMessage());
         } catch (RuntimeException e) {
-            return new MarketActionOutcome.Failure(e.getMessage());
+            return new MarketActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -86,5 +87,43 @@ class FreshGuestSessionTest {
 
         assertNull(GuestSession.sessionId(), "the member's dead session id must not stay pinned");
         assertNull(AuthSession.token(), "the member's token is dropped even when no guest session starts");
+    }
+
+    // ---- sign-out leaves nothing of the previous visitor -------------------------------------
+
+    @Test
+    void GivenRecentSearches_WhenRestored_ThenTheyAreCleared() {
+        RecentSearches.add("jazz night");
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+
+        freshGuestSession.restore();
+
+        assertEquals(List.of(), RecentSearches.get(), "the previous visitor's recent searches must be dropped");
+    }
+
+    // ---- renewing only the guest session ---------------------------------------------------
+    // renewGuest() replaces a dead guest session id and nothing else: it must not sign anyone out
+    // (an admin on the storefront is a guest there, ADR-012).
+
+    private static final String ADMIN_TOKEN = "admin-jwt";
+    private static final int ADMIN_USER_ID = 1;
+    private static final String DEAD_GUEST_SESSION_ID = "dead-guest-sid";
+
+    @Test
+    void GivenASignedInAdminWithADeadGuestSession_WhenGuestRenewed_ThenOnlyTheGuestSessionIdIsReplaced() {
+        AuthSession.storeAuth(new AuthTokenDTO(ADMIN_TOKEN, 0L, ADMIN_USER_ID, "admin", true));
+        GuestSession.setSessionId(DEAD_GUEST_SESSION_ID);
+        RecentSearches.add("jazz night");
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+
+        freshGuestSession.renewGuest();
+
+        assertEquals(FRESH_GUEST_SESSION_ID, GuestSession.sessionId(), "a fresh guest session is pinned");
+        assertEquals(ADMIN_TOKEN, AuthSession.token(), "the admin's token stays");
+        assertTrue(AuthSession.isAdmin(), "the admin stays signed in as an admin");
+        assertEquals(COMPANY_ID, CurrentCompanies.currentCompanyId(), "the current company stays");
+        assertEquals(List.of("jazz night"), RecentSearches.get(), "the recent searches stay");
     }
 }

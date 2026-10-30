@@ -17,11 +17,14 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Takes the member's token (the view passes {@code SessionIdentity.memberToken()}, which is
  * {@code null} for guests → an auth {@link Outcome.Failure}). A receipt that belongs to another
- * account surfaces as {@link Outcome.Forbidden} (the issue's "403").
+ * account gives the same {@link Outcome.NotFound} as a missing id, so a member cannot tell which
+ * receipt ids exist on other accounts.
  */
 @Slf4j
 @Component
 public class ReceiptPresenter {
+
+    private static final String RECEIPT_NOT_FOUND_MESSAGE = "We couldn't find that receipt.";
 
     private final MemberAccountService memberAccountService;
 
@@ -32,10 +35,8 @@ public class ReceiptPresenter {
     public Outcome load(String token, int receiptId) {
         try {
             return new Outcome.Success(memberAccountService.viewMyReceipt(token, receiptId));
-        } catch (EntityNotFoundException e) {
-            return new Outcome.NotFound("We couldn't find that receipt.");
-        } catch (UnauthorizedActionException e) {
-            return new Outcome.Forbidden("This receipt belongs to another account.");
+        } catch (EntityNotFoundException | UnauthorizedActionException e) {
+            return new Outcome.NotFound(RECEIPT_NOT_FOUND_MESSAGE);
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Please sign in to view this receipt.");
         } catch (RuntimeException e) {
@@ -48,7 +49,6 @@ public class ReceiptPresenter {
     public sealed interface Outcome {
         record Success(PurchaseRecordDTO receipt) implements Outcome { }
         record NotFound(String message)  implements Outcome { }
-        record Forbidden(String message) implements Outcome { }
         record Failure(String message)   implements Outcome { }
     }
 }

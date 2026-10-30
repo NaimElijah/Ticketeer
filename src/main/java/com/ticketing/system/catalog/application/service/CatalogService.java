@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -154,11 +155,12 @@ public class CatalogService {
     //* UC-7: Search the catalog with filters, returning a list of EventSummaryDTOs. Accepts either a JWT (Member) or a raw sessionId (Guest) — 
     //* catalog search is open to anyone with an active session per UC-3 / UC-7 (auth rework #181 / Phase 4.3).
     public List<EventSummaryDTO> searchGlobal(String credential, CatalogSearchFiltersDTO filters) {
-        log.info("Starting global search with filters: {}", filters);
+        log.info("Starting global search with filters set: {}", filtersInUse(filters));
         // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
-            log.warn("Invalid credential provided while performing global search with filters: {}", filters);
-            throw new InvalidTokenException("Invalid credential provided while performing global search with filters: " + filters);
+            log.warn("Invalid credential provided while performing global search with filters set: {}",
+                    filtersInUse(filters));
+            throw new InvalidTokenException("Invalid credential provided while performing global search");
         }
         // Normalize and validate the filters, THROWING ---> IllegalArgumentException for invalid ranges or dates.
         CatalogSearchFiltersDTO effectiveFilters = normalizeAndValidateCatalogFilters(filters);
@@ -203,7 +205,8 @@ public class CatalogService {
             results.add(mapper.convertEventToEventSummaryDTO(event, productionCompanyRepository));
         }
 
-        log.info("Global search with filters: {} returning {} results", effectiveFilters, results.size());
+        log.info("Global search with filters set: {} returning {} results",
+                filtersInUse(effectiveFilters), results.size());
         return results;
     }
 
@@ -213,11 +216,12 @@ public class CatalogService {
 
     //* the searchByCompany method is similar to searchGlobal but scoped to a specific company and without company-rating filters.
     public List<EventSummaryDTO> searchByCompany(String credential, int companyId, CatalogSearchFiltersDTO filters) {
-        log.info("Starting company-scoped search for companyId: {} with filters: {}", companyId, filters);
+        log.info("Starting company-scoped search for companyId: {} with filters set: {}",
+                companyId, filtersInUse(filters));
         // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
-            log.warn("Invalid credential provided while performing company-scoped search for companyId: {} with filters: {}",
-                    companyId, filters);
+            log.warn("Invalid credential provided while performing company-scoped search for companyId: {} with filters set: {}",
+                    companyId, filtersInUse(filters));
             throw new InvalidTokenException("Invalid credential provided while performing company-scoped search for companyId: " + companyId);
         }
 
@@ -245,8 +249,8 @@ public class CatalogService {
             results.add(mapper.convertEventToEventSummaryDTO(event, productionCompanyRepository));
         }
 
-        log.info("Company-scoped search for companyId: {} with filters: {} returning {} results",
-                companyId, effectiveFilters, results.size());
+        log.info("Company-scoped search for companyId: {} with filters set: {} returning {} results",
+                companyId, filtersInUse(effectiveFilters), results.size());
 
         return results;
     }
@@ -317,8 +321,38 @@ public class CatalogService {
             if (i < artists.size()) { results.add(artists.get(i)); added = true; if (results.size() == limit) break; }
             if (i < venues.size())  { results.add(venues.get(i));  added = true; if (results.size() == limit) break; }
         }
-        log.info("Top-bar search for '{}' returning {} results", q, results.size());
+        log.info("Top-bar search of {} characters returning {} results", q.length(), results.size());
         return results;
+    }
+
+    // A buyer can type anything into a search field, an email address included, so the search logs
+    // name the filters in use and never their values.
+    private static List<String> filtersInUse(CatalogSearchFiltersDTO filters) {
+        if (filters == null) {
+            return List.of();
+        }
+        Map<String, Object> byName = new LinkedHashMap<>();
+        byName.put("eventName", filters.eventName());
+        byName.put("artistName", filters.artistName());
+        byName.put("category", filters.category());
+        byName.put("keywords", filters.keywords());
+        byName.put("minPrice", filters.minPrice());
+        byName.put("maxPrice", filters.maxPrice());
+        byName.put("fromDate", filters.fromDate());
+        byName.put("toDate", filters.toDate());
+        byName.put("location", filters.location());
+        byName.put("minEventRating", filters.minEventRating());
+        byName.put("maxEventRating", filters.maxEventRating());
+        byName.put("minCompanyRating", filters.minCompanyRating());
+        byName.put("maxCompanyRating", filters.maxCompanyRating());
+        return byName.entrySet().stream()
+                .filter(filter -> isSet(filter.getValue()))
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    private static boolean isSet(Object filterValue) {
+        return filterValue != null && !(filterValue instanceof String text && text.isBlank());
     }
 
     //* Active production companies whose name contains the (case-insensitive) query substring,
@@ -481,7 +515,10 @@ public class CatalogService {
                 log.warn("Attempt to access venue map for eventId: {} from inactive company", eventId);
                 throw new CompanyClosedException("Event with ID " + eventId + " not found while getting venue map");
             }
-            
+
+            // The map is part of the event's public page, so it is hidden exactly when the page is.
+            requirePubliclyListed(event, "getting venue map");
+
             // see that event has a venue map
             if (event.getVenueMap() == null) {
                 log.warn("Null venue map for event while getting venue map: {}", eventId);
@@ -517,15 +554,21 @@ public class CatalogService {
             throw new CompanyClosedException("Event with ID " + eventId + " not found while getting event detail");
         }
 
-        // DRAFT / SCHEDULED events are not yet public; ON_SALE / SOLD_OUT / CANCELED / COMPLETED are viewable
-        // (the buyer page renders a status badge and disables purchasing for the non-purchasable ones).
-        if (event.getStatus() == EventStatus.DRAFT || event.getStatus() == EventStatus.SCHEDULED) {
-            log.warn("Attempt to access non-public event detail (status {}) for eventId: {}", event.getStatus(), eventId);
-            throw new EventNotFoundException("Event with ID " + eventId + " not found while getting event detail");
-        }
+        requirePubliclyListed(event, "getting event detail");
 
         log.info("Event detail found for eventId: {} and being returned", eventId);
         return new EventMapper().toEventDetailDTO(event, company.getName());
+    }
+
+    // DRAFT / SCHEDULED events are not yet public; ON_SALE / SOLD_OUT / CANCELED / COMPLETED are viewable
+    // (the buyer page renders a status badge and disables purchasing for the non-purchasable ones). A
+    // hidden event is reported as not found, so a caller cannot tell it from one that does not exist.
+    private void requirePubliclyListed(Event event, String operation) {
+        if (event.getStatus() == EventStatus.DRAFT || event.getStatus() == EventStatus.SCHEDULED) {
+            log.warn("Attempt to access non-public event (status {}) while {} for eventId: {}",
+                    event.getStatus(), operation, event.getId());
+            throw new EventNotFoundException("Event with ID " + event.getId() + " not found while " + operation);
+        }
     }
 
 }

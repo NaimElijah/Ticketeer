@@ -174,7 +174,8 @@ class EventCancellationAcceptanceTest {
         CheckoutResultDTO order = checkoutService.checkoutMember(buyer.token(), "idem-cancel-" + SEQ.incrementAndGet(),
                 "ILS", new CardDetailsDTO("4111111111111111", "123", 12, 2030, "Demo Buyer"));
         double eachCompanysShare = TICKET_PRICE * TICKETS_BOUGHT;
-        double platformRevenueBefore = systemAnalyticsService.adminOverview().revenue30d();
+        String adminToken = authService.signInAsAdmin("admin", "admin").token();
+        double platformRevenueBefore = systemAnalyticsService.adminOverview(adminToken).revenue30d();
 
         eventManagementService.cancelEventAndRefund(cancellingOwner.token(), cancelled.eventId());
 
@@ -190,7 +191,7 @@ class EventCancellationAcceptanceTest {
         assertEquals(0, cancelledDashboard.ticketsSold30d());
         assertEquals(0.0, cancelledDashboard.revenue30d());
 
-        assertEquals(platformRevenueBefore - eachCompanysShare, systemAnalyticsService.adminOverview().revenue30d(), 1e-9);
+        assertEquals(platformRevenueBefore - eachCompanysShare, systemAnalyticsService.adminOverview(adminToken).revenue30d(), 1e-9);
         assertFalse(orderReceiptRepository.findByOrderReceiptId(order.orderReceiptId()).orElseThrow().isFullyRefunded());
     }
 

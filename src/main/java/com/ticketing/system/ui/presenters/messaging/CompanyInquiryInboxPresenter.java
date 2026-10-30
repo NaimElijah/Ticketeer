@@ -11,6 +11,7 @@ import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code CompanyInquiryInboxView} (#268). Holds no Vaadin imports so the
@@ -65,7 +66,7 @@ public class CompanyInquiryInboxPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -79,7 +80,7 @@ public class CompanyInquiryInboxPresenter {
         } catch (InvalidTokenException e) {
             return new SingleOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new SingleOutcome.Failure(e.getMessage());
+            return new SingleOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -97,7 +98,7 @@ public class CompanyInquiryInboxPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -116,7 +117,7 @@ public class CompanyInquiryInboxPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

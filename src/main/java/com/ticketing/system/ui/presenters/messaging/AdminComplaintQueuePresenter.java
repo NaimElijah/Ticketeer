@@ -10,6 +10,7 @@ import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code AdminComplaintQueueView} (#269). Holds no Vaadin imports so the
@@ -57,7 +58,7 @@ public class AdminComplaintQueuePresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -83,7 +84,7 @@ public class AdminComplaintQueuePresenter {
         } catch (InvalidTokenException e) {
             return new SingleOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new SingleOutcome.Failure(e.getMessage());
+            return new SingleOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -104,7 +105,7 @@ public class AdminComplaintQueuePresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

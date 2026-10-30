@@ -30,7 +30,17 @@ public interface UserRepository extends IRepository<User, Integer> {
     /** Mints a fresh userId. Storage owns ID generation rather than the service. UC-11. */
     int nextId();
 
-    /** Persists a newly-registered User. UC-11. */
+    /**
+     * Persists a newly-registered User, or saves an existing one again. UC-11.
+     *
+     * <p>The uniqueness checks and the write are one step, so of two concurrent saves of one
+     * username, or of one email, exactly one succeeds (business rule §1 #1).
+     *
+     * @throws com.ticketing.system.shared.exception.DuplicateUsernameException if another user,
+     *     one with a different id, already holds {@code user}'s username
+     * @throws com.ticketing.system.shared.exception.DuplicateEmailException if another user, one
+     *     with a different id, already holds {@code user}'s email; the username is checked first
+     */
     void save(User user);
 
     /** Removes a user by id. Defensive — II.6.2.x is cancelled in v0. */

@@ -6,8 +6,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +41,6 @@ import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
-import com.ticketing.system.shared.exception.IdempotencyConflictException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
@@ -88,13 +87,19 @@ public class CheckoutService {
     // "now" for hold expiry, pricing and receipts: UTC wall time (ADR-008).
     private final Clock clock;
 
-    // In-memory cache for completed checkouts to handle idempotency. Keyed by a
-    // combination of buyer identity and idempotency key, since the same idempotency
-    // key could be used
-    // by different users (e.g. if they copy-paste it from a confirmation page). In
-    // a real implementation this would likely be a distributed cache like Redis
-    // with an expiration time.
-    private final ConcurrentMap<String, IdempotencyCacheEntry> completedCheckoutsByIdempotencyKey = new ConcurrentHashMap<>();
+    // Completed checkouts by idempotency key, each tagged with its buyer so a key reused by another buyer
+    // is a conflict rather than a replay. Bounded, and in memory, so lost on restart (SLR.7).
+    private final CheckoutIdempotencyCache idempotencyCache =
+            new CheckoutIdempotencyCache(CheckoutIdempotencyCache.DEFAULT_CAPACITY);
+
+    // The checkout attempts running in this process, counted by order key. An attempt is counted just before
+    // it saves the order frozen (CHECKOUT_IN_PROGRESS), so no other attempt can see the order frozen without
+    // that count, and uncounted when it ends, however it ends. A frozen order with no count was frozen by an
+    // attempt that is gone (the process restarted during its external calls), so a retry may roll it back.
+    // A count, not a set: on the Jpa adapter the order lock is a no-op, so two attempts can both validate
+    // the order and be counted, and the one whose save then loses on @Version must not uncount the one
+    // still running. In memory, so it holds for one instance only.
+    private final ConcurrentHashMap<String, Integer> attemptsInFlight = new ConcurrentHashMap<>();
 
     // idempotency means that if the same buyer (member or guest) submits the same
     // checkout request (identified by idempotency key) multiple times, only the
@@ -180,6 +185,10 @@ public class CheckoutService {
         PaymentResultDTO paymentResult = null;
         double totalPrice = 0.0;
         boolean inventorySaleConfirmed = false;
+        // frozeOrder: this call's save froze the order. frozenOrderKey: this call is counted in
+        // attemptsInFlight, from just before that save until finally.
+        boolean frozeOrder = false;
+        String frozenOrderKey = null;
         boolean checkoutSucceeded = false;
         List<ReceiptLine> receiptLinesToNotifyAfterUnlock = null;
 
@@ -199,9 +208,9 @@ public class CheckoutService {
             // Idempotency short-circuit BEFORE the market gate: a completed purchase must be returned even
             // if the market has since closed (C1). (Pre-flight validation failures above are still wrapped
             // by the catch as a checkout failure, matching the existing contract.)
-            CheckoutResultDTO cached = getCachedCheckoutResult(idempotencyKey, buyerKey);
-            if (cached != null) {
-                return cached;
+            Optional<CheckoutResultDTO> cached = idempotencyCache.find(idempotencyKey, buyerKey);
+            if (cached.isPresent()) {
+                return cached.get();
             }
 
             // UC-32 / I.2.1 — no money moves while the market is closed (checked after the idempotency
@@ -229,7 +238,10 @@ public class CheckoutService {
             // (e.g. inventory management) to treat this order differently while it is in
             // this state.
             order.markCheckoutInProgress();
+            countAttemptInFlight(orderKey);
+            frozenOrderKey = orderKey;
             activeOrderRepository.save(order);
+            frozeOrder = true;
 
             activeOrderRepository.unlock(orderLockKey);
 
@@ -301,7 +313,7 @@ public class CheckoutService {
 
             CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult,
                     persisted.issuedTickets());
-            cacheCheckoutResult(idempotencyKey, buyerKey, result);
+            idempotencyCache.putIfAbsent(idempotencyKey, buyerKey, result);
 
             receiptLinesToNotifyAfterUnlock = receiptLines;
             checkoutSucceeded = true;
@@ -314,13 +326,16 @@ public class CheckoutService {
             throw marketClosed;
         } catch (Exception e) {
             handleCheckoutFailure(order, userId, orderLockKey, paymentResult, totalPrice, inventorySaleConfirmed,
-                    e);
+                    frozeOrder, e);
             // failure handling does not mutate inventory without locks
             // checkout failure handling will: reset CHECKOUT_IN_PROGRESS safely, refund
             // payment if needed, not release inventory without locks, not clear the cart
             // unsafely.
             throw new RuntimeException("Checkout failed, tickets returned to stock", e);
         } finally {
+            if (frozenOrderKey != null) {
+                uncountAttemptInFlight(frozenOrderKey);
+            }
             unlockEvents(lockedEventIds);
 
             if (orderLockKey != null && activeOrderRepository != null) {
@@ -352,6 +367,10 @@ public class CheckoutService {
         PaymentResultDTO paymentResult = null;
         double totalPrice = 0.0;
         boolean inventorySaleConfirmed = false;
+        // frozeOrder: this call's save froze the order. frozenOrderKey: this call is counted in
+        // attemptsInFlight, from just before that save until finally.
+        boolean frozeOrder = false;
+        String frozenOrderKey = null;
 
         String orderLockKey = null;
         List<Integer> lockedEventIds = List.of();
@@ -366,9 +385,9 @@ public class CheckoutService {
 
             String buyerKey = guestBuyerKey(guestSessionId, guestEmail);
 
-            CheckoutResultDTO cached = getCachedCheckoutResult(idempotencyKey, buyerKey);
-            if (cached != null) {
-                return cached;
+            Optional<CheckoutResultDTO> cached = idempotencyCache.find(idempotencyKey, buyerKey);
+            if (cached.isPresent()) {
+                return cached.get();
             }
 
             requireMarketOpen();
@@ -388,7 +407,10 @@ public class CheckoutService {
             String orderKey = order.getOrderKey();
 
             order.markCheckoutInProgress();
+            countAttemptInFlight(orderKey);
+            frozenOrderKey = orderKey;
             activeOrderRepository.save(order);
+            frozeOrder = true;
 
             activeOrderRepository.unlock(orderLockKey);
 
@@ -453,7 +475,7 @@ public class CheckoutService {
 
             CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult,
                     persisted.issuedTickets());
-            cacheCheckoutResult(idempotencyKey, buyerKey, result);
+            idempotencyCache.putIfAbsent(idempotencyKey, buyerKey, result);
 
             return result;
 
@@ -461,10 +483,13 @@ public class CheckoutService {
             // Pre-Phase-1 gate failure: nothing reserved or charged, nothing to roll back. Propagate raw.
             throw marketClosed;
         } catch (Exception e) {
-            handleGuestCheckoutFailure(order, guestSessionId, orderLockKey, paymentResult, totalPrice,
-                    inventorySaleConfirmed, e);
+            handleGuestCheckoutFailure(order, orderLockKey, paymentResult, totalPrice,
+                    inventorySaleConfirmed, frozeOrder, e);
             throw new RuntimeException("Checkout failed, tickets returned to stock", e);
         } finally {
+            if (frozenOrderKey != null) {
+                uncountAttemptInFlight(frozenOrderKey);
+            }
             unlockEvents(lockedEventIds);
             if (orderLockKey != null) {
                 try {
@@ -524,9 +549,10 @@ public class CheckoutService {
     }
 
     // Liveness check — the guest session must still be valid. Runs after the idempotency short-circuit so
-    // a completed purchase can be replayed without a live session.
+    // a completed purchase can be replayed without a live session. Only a live guest row's raw id passes;
+    // a member's token or session id is no guest credential (ADR-012, decision 4).
     private void validateGuestSessionLive(String guestSessionId) {
-        if (!sessionManager.validateCredential(guestSessionId)) {
+        if (!sessionManager.validateGuestSession(guestSessionId)) {
             throw new SessionExpiredException();
         }
     }
@@ -1063,6 +1089,7 @@ public class CheckoutService {
             PaymentResultDTO paymentResult,
             double totalPrice,
             boolean inventorySaleConfirmed,
+            boolean frozeOrder,
             Exception originalFailure) {
         log.error(
                 "Checkout failed. userId={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
@@ -1073,10 +1100,10 @@ public class CheckoutService {
                 originalFailure);
 
         // Reset the CHECKOUT_IN_PROGRESS status, return the reserved inventory to stock, and clear the cart
-        // atomically under one lock scope. The guard inside the helper skips the rollback once the sale is
-        // confirmed SOLD (a release would throw and the order is still CHECKOUT_IN_PROGRESS). Mirrors
-        // handleGuestCheckoutFailure.
-        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed);
+        // atomically under one lock scope. The guards inside the helper skip the rollback once the sale is
+        // confirmed SOLD (a release would throw and the order is still CHECKOUT_IN_PROGRESS), and when another
+        // attempt still in flight froze the order. Mirrors handleGuestCheckoutFailure.
+        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed, frozeOrder);
 
         if (inventorySaleConfirmed) {
             log.error(
@@ -1097,39 +1124,40 @@ public class CheckoutService {
     }
 
     // We handle guest checkout failures by logging the error with relevant
-    // information (guest session ID, total price, whether payment was done, whether
+    // information (the order key, total price, whether payment was done, whether
     // inventory sale was confirmed) and then attempting to roll back any changes
     // that were made during the checkout process. If the inventory sale was not
     // confirmed, we try to return the reserved tickets back to stock. If the
     // payment was done, we try to refund the payment. Since we don't have a user ID
     // for guests, we cannot send a notification about the failure, but we log
-    // enough information to allow for manual follow-up if needed. This method
+    // enough information to allow for manual follow-up if needed. The guest's
+    // session id is never logged: it is the guest's credential. This method
     // centralizes all the error handling and rollback logic for guest checkouts in
     // one place, making it easier to maintain and ensuring that we consistently
     // handle failures across different failure points in the checkout process.
     private void handleGuestCheckoutFailure(
             ActiveOrder order,
-            String guestSessionId,
             String orderLockKey,
             PaymentResultDTO paymentResult,
             double totalPrice,
             boolean inventorySaleConfirmed,
+            boolean frozeOrder,
             Exception originalFailure) {
         log.error(
-                "Guest checkout failed. guestSessionId={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
-                guestSessionId,
+                "Guest checkout failed. orderKey={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
+                orderKeyOf(order),
                 totalPrice,
                 paymentResult != null,
                 inventorySaleConfirmed,
                 originalFailure);
 
         // Roll back inventory + cart + status atomically under one lock scope (see handleCheckoutFailure).
-        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed);
+        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed, frozeOrder);
 
         if (inventorySaleConfirmed) {
             log.error(
-                    "Guest checkout failed after inventory was confirmed as SOLD. Manual recovery may be required. guestSessionId={}",
-                    guestSessionId);
+                    "Guest checkout failed after inventory was confirmed as SOLD. Manual recovery may be required. orderKey={}",
+                    orderKeyOf(order));
         }
 
         // Refund only if the sale did NOT commit. Once inventory is confirmed SOLD the purchase is final;
@@ -1137,6 +1165,14 @@ public class CheckoutService {
         if (paymentResult != null && !inventorySaleConfirmed) {
             safelyRefundPayment(paymentResult, totalPrice);
         }
+    }
+
+    private void countAttemptInFlight(String orderKey) {
+        attemptsInFlight.merge(orderKey, 1, Integer::sum);
+    }
+
+    private void uncountAttemptInFlight(String orderKey) {
+        attemptsInFlight.computeIfPresent(orderKey, (key, attempts) -> attempts == 1 ? null : attempts - 1);
     }
 
     // Atomic checkout-failure rollback: under a single order-write-lock + event-read-lock scope, reset the
@@ -1148,12 +1184,14 @@ public class CheckoutService {
     private void rollbackReservedInventoryAtomically(
             String orderLockKey,
             ActiveOrder fallbackOrder,
-            boolean inventorySaleConfirmed) {
+            boolean inventorySaleConfirmed,
+            boolean frozeOrder) {
         // Skip when the sale already committed (inventory is SOLD — a release would throw while the order is
         // still CHECKOUT_IN_PROGRESS) or there is no key to lock by (failure before Phase 1 acquired the order,
-        // so nothing was reserved for this checkout to roll back). A Phase-1 validation failure still rolls
-        // back: the status reset below is guarded by isCheckoutInProgress(), so it is simply skipped while the
-        // reserved tickets are still returned to stock and the cart is cleared.
+        // so nothing was reserved for this checkout to roll back). A Phase-1 validation failure on an order
+        // that is not in checkout (e.g. an expired hold) still rolls back: its reserved tickets are returned
+        // to stock and the cart is cleared. One that failed because another attempt still in flight froze
+        // the order is skipped below, once the order is re-read.
         if (inventorySaleConfirmed || orderLockKey == null) {
             return;
         }
@@ -1169,6 +1207,18 @@ public class CheckoutService {
             if (order == null) {
                 return;
             }
+            // Frozen by another attempt still in flight: resetting it, releasing its seats or clearing it
+            // would let that attempt charge for seats it no longer holds. An order frozen by an attempt
+            // that is no longer running (the process restarted during its external calls) has no count in
+            // attemptsInFlight, so a retry rolls it back and the buyer can start over. The count may include
+            // this attempt, when its own freeze lost to another's; the order is then that other's. The
+            // count is this process's only, so with several instances an attempt running on another one
+            // looks dead here; the expiry sweeper never releases a frozen order (NaimElijah/Ticketeer#214).
+            if (order.isCheckoutInProgress() && !frozeOrder && attemptsInFlight.containsKey(order.getOrderKey())) {
+                log.warn("Checkout rollback skipped: the order is in another attempt's checkout. orderKey={}",
+                        order.getOrderKey());
+                return;
+            }
 
             // Lock the order's events (sorted, for consistent ordering) so releaseInventory + save are legal.
             lockedEventIds = extractSortedEventIds(order.getItems());
@@ -1181,12 +1231,18 @@ public class CheckoutService {
             }
             returnTicketsToStock(order);
         } catch (RuntimeException rollbackFailure) {
-            // Already in the failure path — log, never mask the original checkout failure.
-            log.error("Atomic checkout rollback failed for orderLockKey={}", orderLockKey, rollbackFailure);
+            // Already in the failure path — log, never mask the original checkout failure. A guest's lock
+            // key embeds the session id, the guest's credential, so the line names the order instead.
+            log.error("Atomic checkout rollback failed for orderKey={}", orderKeyOf(fallbackOrder), rollbackFailure);
         } finally {
             unlockEvents(lockedEventIds);
             activeOrderRepository.unlock(orderLockKey);
         }
+    }
+
+    /** The order's own key, never derived from a session id, so it is safe to log; null without an order. */
+    private static String orderKeyOf(ActiveOrder order) {
+        return order == null ? null : order.getOrderKey();
     }
 
     private ActiveOrder getOrderByLockKey(String orderLockKey) {
@@ -1256,43 +1312,6 @@ public class CheckoutService {
                     totalPrice,
                     refundFailure);
         }
-    }
-
-    // We check the idempotency cache for a completed checkout result using the
-    // idempotency key and the buyer key. If there is an existing cache entry for
-    // the idempotency key, we check if the buyer key matches. If it does not match,
-    // we throw an IdempotencyConflictException to indicate that there is a conflict
-    // with the idempotency key being used by a different buyer. If it matches, we
-    // return the cached checkout result. If there is no existing cache entry for
-    // the idempotency key, we return null to indicate that there is no cached
-    // result and that we should proceed with processing the checkout as normal.
-    private CheckoutResultDTO getCachedCheckoutResult(String idempotencyKey, String buyerKey) {
-        IdempotencyCacheEntry existing = completedCheckoutsByIdempotencyKey.get(idempotencyKey);
-
-        if (existing == null) {
-            return null;
-        }
-
-        if (!existing.buyerKey().equals(buyerKey)) {
-            throw new IdempotencyConflictException(idempotencyKey);
-        }
-
-        return existing.result();
-    }
-
-    // We cache the checkout result in the idempotency cache by associating the
-    // idempotency key with a new cache entry that contains the buyer key and the
-    // checkout result. This allows us to return the same checkout result for
-    // subsequent requests that use the same idempotency key and buyer key, while
-    // also ensuring that if there is a conflict with the idempotency key being used
-    // by a different buyer, we can detect it and throw an appropriate exception. By
-    // using putIfAbsent, we ensure that we do not overwrite an existing cache entry
-    // if one already exists for the same idempotency key, which helps maintain the
-    // integrity of our idempotency handling.
-    private void cacheCheckoutResult(String idempotencyKey, String buyerKey, CheckoutResultDTO result) {
-        completedCheckoutsByIdempotencyKey.putIfAbsent(
-                idempotencyKey,
-                new IdempotencyCacheEntry(buyerKey, result));
     }
 
     // We generate a unique key for a member buyer based on their user ID. This key
@@ -1367,14 +1386,6 @@ public class CheckoutService {
     private record PricedCartLine(
             CartLineItem item,
             double finalPrice) {
-    }
-
-    // This is the value stored in the idempotency cache. It includes the buyerKey
-    // to detect conflicts (same idempotency key used by different buyers) and the
-    // actual checkout result to return for repeated requests.
-    private record IdempotencyCacheEntry(
-            String buyerKey,
-            CheckoutResultDTO result) {
     }
 
 }

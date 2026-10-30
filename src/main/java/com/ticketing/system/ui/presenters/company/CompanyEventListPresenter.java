@@ -12,6 +12,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 public class CompanyEventListPresenter {
@@ -39,7 +40,7 @@ public class CompanyEventListPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -109,7 +110,7 @@ public class CompanyEventListPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -121,7 +122,7 @@ public class CompanyEventListPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -133,7 +134,7 @@ public class CompanyEventListPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

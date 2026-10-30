@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.security;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.ui.session.AuthSession;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinServiceInitListener;
 import com.vaadin.flow.server.VaadinSession;
@@ -12,8 +13,12 @@ import org.springframework.stereotype.Component;
  * is destroyed (browser closed, tab killed, session timeout). This ensures
  * notifications the user never opened are re-delivered on the next login.
  *
- * Reads auth state directly from session attributes to avoid relying on
- * VaadinSession.getCurrent(), which is not set in a session-destroy context.
+ * Reads auth state from the session it is handed, through AuthSession's session-taking
+ * readers, because VaadinSession.getCurrent() is not set in a session-destroy context.
+ *
+ * An admin's session is skipped: notifications are addressed by bare user id, and
+ * admin ids share the member id space, so reverting by the admin's id would touch
+ * the notifications of the member with that id (ADR-012).
  */
 @Component
 @Slf4j
@@ -31,9 +36,8 @@ public class NotificationSessionListener implements VaadinServiceInitListener {
             VaadinSession session = e.getSession();
             session.lock();
             try {
-                Boolean signedIn = (Boolean) session.getAttribute("authSession.signedIn");
-                if (!Boolean.TRUE.equals(signedIn)) return;
-                Integer userId = (Integer) session.getAttribute("authSession.userId");
+                if (!AuthSession.isSignedIn(session) || AuthSession.isAdmin(session)) return;
+                Integer userId = AuthSession.userId(session);
                 if (userId == null) return;
                 notificationService.revertSentToPending(userId);
             } catch (Exception ex) {

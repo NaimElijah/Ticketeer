@@ -1,6 +1,6 @@
 # ADR-007: Manage the schema with Flyway migrations; Hibernate only validates
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR-012](ADR-012-session-tokens-bound-to-typed-session-rows.md), whose `V3` is a recorded exception to the expand-only rule
 - **Date:** 2026-10-20
 - **Issue:** #31 (versioned schema migrations; `ddl-auto: validate` on Postgres)
 

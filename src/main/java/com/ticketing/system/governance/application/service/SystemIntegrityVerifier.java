@@ -161,8 +161,9 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #1 — usernames are system-wide unique. The column has no DB UNIQUE constraint (unlike email),
-    // so a duplicate can physically exist; flag it.
+    // #1 — usernames are system-wide unique. On the Jpa adapters uk_users_username (V4) already
+    // forbids a duplicate; this scan still covers the Memory adapter and any row written around the
+    // adapters.
     private void verifyUniqueUsernames() {
         Set<String> seen = new HashSet<>();
         for (User user : userRepository.findAll()) {

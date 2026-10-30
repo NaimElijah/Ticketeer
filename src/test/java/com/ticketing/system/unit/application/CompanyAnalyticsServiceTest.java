@@ -351,8 +351,24 @@ class CompanyAnalyticsServiceTest {
 
         assertNull(stats.revenue30d());
         assertEquals(1, stats.activeEvents());
-        assertEquals(1, stats.ticketsSold30d());
+        assertNull(stats.ticketsSold30d());
         assertEquals(0, stats.openInquiries());
+    }
+
+    @Test
+    void GivenManagerWithoutViewSales_WhenDashboard_ThenTicketsSoldIsWithheld() {
+        // Tickets sold is sales data, like revenue: a manager without VIEW_SALES sees neither.
+        givenMember(TARGET_TOKEN, TARGET_USER_ID, Permission.RESPOND_TO_INQUIRIES);
+        when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of(mock(Event.class)));
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt sale = receipt(false, NOW.minusDays(1), List.of(line(1, 50.0, EVENT_A)));
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(sale));
+        when(conversationRepository.findByCompanyAsCounterparty(COMPANY_ID)).thenReturn(List.of());
+
+        CompanyDashboardDTO stats = service.dashboard(TARGET_TOKEN, COMPANY_ID);
+
+        assertNull(stats.ticketsSold30d(),
+                "tickets sold must be withheld without VIEW_SALES, but was " + stats.ticketsSold30d());
     }
 
     @Test

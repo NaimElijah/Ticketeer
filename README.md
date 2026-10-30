@@ -201,17 +201,23 @@ set these:
 | `SPRING_PROFILES_ACTIVE` | `supabase` for Supabase over SSL; plain PostgreSQL needs no profile | none: PostgreSQL through `DB_*` | No |
 | `DB_HOST` · `DB_PORT` · `DB_NAME` | PostgreSQL location | `localhost` · `5432` · `ticketing` | Yes |
 | `DB_USER` · `DB_PASSWORD` | PostgreSQL credentials | `postgres` · `postgres` | Yes |
-| `JWT_SECRET` | Token signing key, 256 bits or more | a dev-only value | Yes |
-| `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes |
-| `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
+| `JWT_SECRET` | Token signing key, 256 bits or more | a dev-only value | Yes, outside `dev` and `test`: the boot stops on the committed default |
+| `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes; outside `dev` and `test` the boot stops on the committed default password |
+| `WSEP_BASE_URL` | The external payment and ticket-issuing service; must be an `https://` URL, or the boot stops | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
 `wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
-`event-completion` and `notifications` groups bind to validated records. A value out of bounds,
-such as a zero hold, a negative TTL, a blank admin password, an unknown time zone, a malformed
-WSEP URL or a zero sweep delay, stops the boot with a report naming the property
-([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource and
-`JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) are not validated yet.
+`event-completion`, `notifications`, `identity` and `catalog.venue-limits` groups bind to validated records.
+A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an unknown
+time zone, a malformed WSEP URL or a zero sweep delay, stops the boot with a report naming the
+property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Outside `dev` and
+`test`, a `JWT_SECRET` or `PLATFORM_ADMIN_PASSWORD` left at the default committed in
+`application.yml` stops the boot too, naming the variable to set
+([#34](https://github.com/NaimElijah/Ticketeer/issues/34)). A default admin already stored with the
+committed password gets `PLATFORM_ADMIN_PASSWORD` instead at boot, and any other admin still on it
+stops the boot ([ADR-014](docs/ADRs/ADR-014-committed-default-secrets-are-fatal-outside-dev-and-test.md)).
+The datasource is not validated yet.
+[`.env.example`](.env.example) lists the variables a deployment sets.
 
 **Settings can come from a file instead of the environment.** Spring Boot layers an external
 `application.yml` over the bundled defaults:
@@ -243,8 +249,9 @@ overrides them. Set each value in one place.
 | Variable | Purpose | Default |
 |---|---|---|
 | `SESSION_MEMBER_TTL_MINUTES` | Absolute member-session lifetime | `1440` |
-| `SESSION_GUEST_IDLE_TIMEOUT_MINUTES` | Guest-session idle timeout | `30` |
-| `AUTH_LOCKOUT_MAX_ATTEMPTS` · `AUTH_LOCKOUT_LOCK_MINUTES` | Login lockout; `0` attempts disables it | `5` · `15` |
+| `SESSION_GUEST_IDLE_TIMEOUT_MINUTES` | Guest-session lifetime, counted from its start; nothing extends it yet, and the UI replaces an expired one ([OQ-8](docs/requirements/requirements.md#open-questions)) | `30` |
+| `AUTH_LOCKOUT_MAX_ATTEMPTS` · `AUTH_LOCKOUT_LOCK_MINUTES` | Login lockout: attempts allowed in a window of that many minutes from the first failure; `0` attempts disables it | `5` · `15` |
+| `IDENTITY_RESERVED_USERNAMES` | Comma-separated usernames no member may register, ignoring case; `PLATFORM_ADMIN_USERNAME` is always reserved too | `admin,platform.admin` |
 | `TICKET_RESERVATION_DURATION` | Ticket hold, in minutes | `10` |
 | `ORDER_EXPIRATION_DURATION` | Read by no code yet (#166); the hold time is `TICKET_RESERVATION_DURATION` | `60` |
 | `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window · dashboard refresh (`0` stops it) | `5` · `5000` |
@@ -254,6 +261,7 @@ overrides them. Set each value in one place.
 | `SWEEPER_FIXED_DELAY_MS` | Pause between sweeps that release expired sessions and carts | `60000` |
 | `EVENT_COMPLETION_FIXED_DELAY_MS` | Pause between sweeps that mark finished events completed | `60000` |
 | `NOTIFICATIONS_POLL_DELAY_MS` | Pause between pushes of new notifications to connected users | `60000` |
+| `CATALOG_VENUE_MAX_GRID_SIZE` · `CATALOG_VENUE_MAX_SEATS_PER_ZONE` · `CATALOG_VENUE_MAX_STANDING_CAPACITY` · `CATALOG_VENUE_MAX_SEATS_PER_MAP` | The largest venue map a producer may save: grid rows and columns · seats in one seated zone · places in one standing zone · seats on the whole map (standing places not counted) | `12` · `49500` · `1000000` · `100000` |
 | `PLATFORM_TIME_ZONE` | IANA zone that new and seeded events default to, and that the UI shows recorded times and "today" in ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)) | `Asia/Jerusalem` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
 | `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |
@@ -261,12 +269,12 @@ overrides them. Set each value in one place.
 
 | Profile | Effect |
 |---|---|
-| *(none)* | JPA repositories on PostgreSQL through `DB_*`, real WSEP, market opened at boot |
+| *(none)* | JPA repositories on PostgreSQL through `DB_*`, real WSEP, market opened at boot; needs `JWT_SECRET` and `PLATFORM_ADMIN_PASSWORD` set to non-default values |
 | `dev` | JPA repositories on in-memory H2, empty every boot and built by the Flyway migrations; replays `demo.scenario`, adds the dev panel |
 | `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default |
 | `test` | The test suite's profile: JPA repositories on H2, stub WSEP, no boot runners or schedulers |
 | `memory` | Tests only, together with `test`: swaps in the in-memory repositories. Does nothing on its own |
-| `production` · `no-vaadin` | Maven build profiles: bundle the frontend and leave the dev-only libraries (Vaadin's dev server, H2) out of the jar · skip Vaadin's frontend step |
+| `production` · `no-vaadin` | Maven build profiles: bundle the frontend and leave the dev-only libraries (Vaadin's dev server, H2) out of the jar; Hilla is excluded in every build (ADR-013) · skip Vaadin's frontend step |
 
 </details>
 
@@ -329,7 +337,8 @@ Temurin 21, with the JVM in UTC) and CodeQL to pass. A second job, "Test in Asia
 the same suite with the JVM at UTC+2/+3, so code that depends on the server's zone fails there
 ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)); it does not gate a merge until the
 branch ruleset lists it. A third, "Production artifact", packages with `-Pproduction`, fails if
-the jar carries H2 or Vaadin's dev tooling ([#79](https://github.com/NaimElijah/Ticketeer/issues/79)),
+the jar carries H2 or Vaadin's dev tooling ([#79](https://github.com/NaimElijah/Ticketeer/issues/79))
+or Hilla ([ADR-013](docs/ADRs/ADR-013-hilla-excluded-from-the-vaadin-starter.md)),
 and boots the jar against PostgreSQL; it does not gate a merge yet either. "Dependency review"
 fails a pull request that adds or upgrades to a dependency with a known high or critical
 advisory, and Dependabot proposes updates weekly once its configuration is on `main`
@@ -421,8 +430,8 @@ Known limitations:
   forgets them ([#24](https://github.com/NaimElijah/Ticketeer/issues/24),
   [#25](https://github.com/NaimElijah/Ticketeer/issues/25),
   [#39](https://github.com/NaimElijah/Ticketeer/issues/39)).
-- The committed defaults include dev-only secrets, and nothing refuses them outside `dev`
-  ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)).
+- The datasource settings are not validated at boot, and with no profile they fall back to the
+  committed `postgres`/`postgres` credentials.
 - Money is a `double`, not integer minor units with a currency
   ([#73](https://github.com/NaimElijah/Ticketeer/issues/73)).
 - Alerts arrive by polling, not push ([#61](https://github.com/NaimElijah/Ticketeer/issues/61)).

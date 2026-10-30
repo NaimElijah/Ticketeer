@@ -92,6 +92,9 @@ public class ReservationAcceptanceTests {
 
         when(sessionManager.validateToken("validToken")).thenReturn(true);
         when(sessionManager.extractUserId("validToken")).thenReturn(1);
+        // "guest-session" names a live guest session; reserveForGuest accepts only those (#185).
+        when(sessionManager.validateCredential("guest-session")).thenReturn(true);
+        when(sessionManager.validateGuestSession("guest-session")).thenReturn(true);
 
         when(eventRepository.findById(100)).thenReturn(event);
         when(event.getVenueMap().getZone(1)).thenReturn(zone);

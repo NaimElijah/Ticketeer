@@ -134,6 +134,10 @@ jobs:
             echo "::error file=pom.xml::The production jar contains a dev-only library; see the production profile (#79)."
             exit 1
           fi
+          if grep -E '^BOOT-INF/lib/hilla(-[a-z-]+)?-[0-9]' <<< "$libs"; then
+            echo "::error file=pom.xml::The production jar contains Hilla, which the starter's exclusion keeps out (ADR-013)."
+            exit 1
+          fi
 
       - name: Boot the jar against PostgreSQL and check it serves
         env:
@@ -143,9 +147,14 @@ jobs:
           DB_USER: postgres
           DB_PASSWORD: ci-only
           # No WSEP in CI: the handshake fails fast and the boot carries on without it (ADR-003).
-          WSEP_BASE_URL: http://127.0.0.1:1/
+          # https, because the base URL is refused at binding otherwise; port 1 still refuses the connection.
+          WSEP_BASE_URL: https://127.0.0.1:1/
           WSEP_HANDSHAKE_ATTEMPTS: '1'
         run: |
+          # A boot outside dev and test refuses the secrets committed in application.yml
+          # (CommittedDefaultSecretsGuard, #34). Fresh random values each run, so no value in this
+          # file could be reused anywhere.
+          export JWT_SECRET="$(openssl rand -hex 64)" PLATFORM_ADMIN_PASSWORD="$(openssl rand -hex 16)"
           java -jar "$(ls target/*.jar)" > app.log 2>&1 &
           pid=$!
           for attempt in $(seq 1 60); do

@@ -23,6 +23,8 @@ import com.ticketing.system.shared.dto.InvitationDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 
 class MyInvitationsPresenterTest {
 
@@ -69,14 +71,14 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void load_serviceThrows_returnsFailureWithMessage() {
+    void load_serviceFailsInternally_returnsGenericFailure() {
         when(service.listMyInvitations(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         MyInvitationsPresenter.Outcome outcome = presenter.load(TOKEN);
 
         MyInvitationsPresenter.Outcome.Failure fail =
             assertInstanceOf(MyInvitationsPresenter.Outcome.Failure.class, outcome);
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -123,7 +125,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void accept_serviceThrows_returnsFailureWithMessage() {
+    void accept_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("no pending appointment"))
             .when(service).respondToAppointment(anyString(), any());
 
@@ -131,7 +133,7 @@ class MyInvitationsPresenterTest {
 
         MyInvitationsPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("no pending appointment", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -142,5 +144,15 @@ class MyInvitationsPresenterTest {
         MyInvitationsPresenter.ActionOutcome outcome = presenter.decline(TOKEN, 7);
 
         assertInstanceOf(MyInvitationsPresenter.ActionOutcome.NotAuthenticated.class, outcome);
+    }
+
+    @Test
+    void accept_noPendingInvitation_returnsFailureWithTheRulesMessage() {
+        AppointmentNotFoundException rule = new AppointmentNotFoundException("No pending invitation for this company");
+        doThrow(rule).when(service).respondToAppointment(anyString(), any());
+
+        MyInvitationsPresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Failure.class, presenter.accept(TOKEN, 7));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

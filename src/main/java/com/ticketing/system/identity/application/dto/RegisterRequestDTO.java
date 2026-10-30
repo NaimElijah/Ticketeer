@@ -12,4 +12,14 @@ public record RegisterRequestDTO(
     String rawPassword,
     String guestSessionId,
     int age
-) {}
+) {
+
+    /**
+     * Leaves out the password, the guest session id (the guest's credential) and the email address,
+     * so a logged request or an exception message built from one carries none of them (SLR.2).
+     */
+    @Override
+    public String toString() {
+        return "RegisterRequestDTO[username=" + username + ", age=" + age + "]";
+    }
+}

@@ -6,27 +6,50 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
+import com.ticketing.system.identity.adapter.out.security.BcryptPasswordHasher;
+import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
+import com.ticketing.system.identity.config.IdentityProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -50,18 +73,27 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.ReservedUsernameException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.testutil.AdjustableClock;
+import com.ticketing.system.testutil.LogCapture;
 
 class AuthenticationServiceTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
     private static final long GUEST_IDLE_MINUTES = 30;
     private static final long MEMBER_TTL_MINUTES = 1440;
+    // At least 256 bits, as JwtSessionManager requires of its HMAC secret.
+    private static final String JWT_TEST_SECRET =
+            "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
+    private static final IdentityProperties IDENTITY =
+            new IdentityProperties(List.of("admin", "platform.admin"), "admin");
+    private static final String HASH_FROM_THE_HASHER = "$2a$10$hash-the-mock-hasher-returns-for-any-input";
 
     private UserRepository mockUserRepo;
     private PasswordHasher mockHasher;
@@ -83,11 +115,17 @@ class AuthenticationServiceTest {
         mockSessionRepo = mock(SessionRepository.class);
         mockAdminRepo = mock(AdminRepository.class);
         fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
+        // The service may hash a throwaway secret when it is built (its dummy hash for unknown
+        // usernames), so the mock answers with a hash and forgets that call: each test sees only the
+        // hasher calls its own action makes.
+        when(mockHasher.hash(any())).thenReturn(HASH_FROM_THE_HASHER);
         service = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
-                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L));
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
+                IDENTITY);
+        clearInvocations(mockHasher);
     }
 
     /**
@@ -136,6 +174,8 @@ class AuthenticationServiceTest {
 
     @Test
     void endGuestSession_deletesRow() {
+        mockValidGuestSession("guest-1");
+
         service.endGuestSession("guest-1");
         verify(mockSessionRepo, times(1)).delete("guest-1");
     }
@@ -305,6 +345,69 @@ class AuthenticationServiceTest {
         verify(mockUserRepo, never()).save(any(User.class));
     }
 
+    // Two registrations can both pass existsByUsername; the repository refuses the second at save
+    // (#185), and register must pass that refusal on without touching the guest session.
+    @Test
+    void GivenUsernameTakenAfterTheCheck_WhenRegister_ThenTheRepositorysDuplicateUsernameExceptionPropagates() {
+        Session guest = mockValidGuestSession("guest-1");
+        when(mockUserRepo.existsByUsername("alice")).thenReturn(false);
+        when(mockUserRepo.findByEmail("alice@example.com")).thenReturn(Optional.empty());
+        when(mockUserRepo.nextId()).thenReturn(42);
+        when(mockHasher.hash("Password1")).thenReturn("HASHED");
+        DuplicateUsernameException refusal = new DuplicateUsernameException("alice");
+        doThrow(refusal).when(mockUserRepo).save(any(User.class));
+
+        DuplicateUsernameException thrown = assertThrows(DuplicateUsernameException.class,
+                () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", "guest-1", 56)));
+
+        assertEquals(refusal, thrown);
+        verify(mockSessionRepo, never()).save(guest);
+    }
+
+    // ----------------------------------------------------------------------
+    // Reserved usernames (#76): identity.reserved-usernames plus the default admin's username,
+    // matched ignoring case and surrounding whitespace.
+    // ----------------------------------------------------------------------
+
+    private static final IdentityProperties CUSTOM_RESERVED =
+            new IdentityProperties(List.of("Box.Office", " support ", " "), "Root.Admin");
+
+    @Test
+    void GivenConfiguredReservedName_WhenIsUsernameReserved_ThenTrueWhateverItsCaseOrPadding() {
+        AuthenticationService reserving = newService(fixedClock, new LockoutProperties(5, 15L), CUSTOM_RESERVED);
+
+        assertTrue(reserving.isUsernameReserved("box.office"));
+        assertTrue(reserving.isUsernameReserved("SUPPORT"));
+        assertTrue(reserving.isUsernameReserved("  Support  "));
+    }
+
+    @Test
+    void GivenPlatformAdminUsername_WhenIsUsernameReserved_ThenTrue() {
+        AuthenticationService reserving = newService(fixedClock, new LockoutProperties(5, 15L), CUSTOM_RESERVED);
+
+        assertTrue(reserving.isUsernameReserved("root.admin"));
+    }
+
+    @Test
+    void GivenUnreservedOrNullOrBlankName_WhenIsUsernameReserved_ThenFalse() {
+        AuthenticationService reserving = newService(fixedClock, new LockoutProperties(5, 15L), CUSTOM_RESERVED);
+
+        assertFalse(reserving.isUsernameReserved("box.office.fan"));
+        assertFalse(reserving.isUsernameReserved("admin"), "only the configured names are reserved");
+        assertFalse(reserving.isUsernameReserved(null));
+        assertFalse(reserving.isUsernameReserved(" "), "a blank configured entry reserves nothing");
+    }
+
+    @Test
+    void GivenReservedUsername_WhenRegister_ThenReservedUsernameExceptionAndNothingSaved() {
+        mockValidGuestSession("guest-1");
+
+        assertThrows(ReservedUsernameException.class,
+                () -> service.register(new RegisterRequestDTO(" Admin ", "a@example.com", "Password1", "guest-1", 56)));
+        verifyNoInteractions(mockHasher);
+        verify(mockUserRepo, never()).save(any(User.class));
+    }
+
     @Test
     void givenBadEmailAndTakenUsername_whenRegister_thenFormatFailsFirst() {
         // Ordering check: format validators run before any repo lookup OR session
@@ -459,7 +562,7 @@ class AuthenticationServiceTest {
         // Same exception type as wrong-password — no enumeration leak.
         assertThrows(AuthenticationFailedException.class,
                 () -> service.login(new LoginRequestDTO("ghost", "whatever", "guest-1")));
-        verifyNoInteractions(mockHasher);
+        verify(mockHasher, times(1)).matches(any(), any());
         verify(mockSessionManager, never()).generateTokenForSession(any(), any());
     }
 
@@ -519,6 +622,26 @@ class AuthenticationServiceTest {
         OptionalInt memberId = assertDoesNotThrow(() -> service.liveMemberId("T"));
 
         assertEquals(OptionalInt.empty(), memberId, "a revoked or invalid token names no live member");
+    }
+
+    // Admin and member ids share one id space, so an admin token must never read as the member with
+    // the admin's id (#185). Runs on the real session manager: the answer depends on the token's kind.
+    @Test
+    void GivenAnAdminToken_WhenLiveMemberIdIsAsked_ThenEmpty() {
+        int sharedId = 1;
+        JwtSessionManager realSessionManager = new JwtSessionManager(JWT_TEST_SECRET,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES),
+                new MemorySessionRepository(fixedClock), fixedClock);
+        AuthenticationService serviceOnRealSessions = new AuthenticationService(
+                mockUserRepo, mockHasher, realSessionManager, mockCartRestorationPort, mockNotification,
+                mockSessionRepo, mock(ISystemMetrics.class),
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
+                IDENTITY);
+        String adminToken = realSessionManager.generateAdminToken(sharedId, "admin");
+
+        assertEquals(OptionalInt.empty(), serviceOnRealSessions.liveMemberId(adminToken),
+                "an admin token names no member, even when a member has the admin's id");
     }
 
     @Test
@@ -631,5 +754,464 @@ class AuthenticationServiceTest {
         // 6th attempt is blocked even with the correct password.
         when(mockHasher.matches("pw", "hashed")).thenReturn(true);
         assertThrows(AccountLockedException.class, () -> service.signInAsAdmin("admin", "pw"));
+    }
+
+    // ----------------------------------------------------------------------
+    // Session ids never reach the log (#185). A guest's raw session id is the guest's credential
+    // (Session), and login keeps the same id for the member session, so no line may carry it at any
+    // level. A non-reversible reference is fine.
+    // ----------------------------------------------------------------------
+
+    private static final String SESSION_ID = "4b1f9c2e-7a35-4d8e-9f60-session-under-test";
+
+    private LogCapture logs;
+
+    @AfterEach
+    void detachLogCapture() {
+        if (logs != null) {
+            logs.close();
+        }
+    }
+
+    @Test
+    void GivenNoSession_WhenStartGuestSession_ThenNoLogEventCarriesTheSessionId() {
+        logs = LogCapture.of(AuthenticationService.class);
+
+        String sessionId = service.startGuestSession().sessionId();
+
+        assertTrue(logs.eventCount() > 0, "control: starting a guest session logs, so the capture sees its logger");
+        assertEquals(List.of(), logs.eventsContaining(sessionId),
+                "the new guest session id is the guest's credential and must not be logged");
+    }
+
+    @Test
+    void GivenGuestSession_WhenEndGuestSession_ThenNoLogEventCarriesTheSessionId() {
+        mockValidGuestSession(SESSION_ID);
+        logs = LogCapture.of(AuthenticationService.class);
+
+        service.endGuestSession(SESSION_ID);
+
+        assertTrue(logs.eventCount() > 0, "control: ending a guest session logs, so the capture sees its logger");
+        assertEquals(List.of(), logs.eventsContaining(SESSION_ID),
+                "the ended guest session id must not be logged");
+    }
+
+    @Test
+    void GivenValidCredentials_WhenLogin_ThenNoLogEventCarriesTheSessionId() {
+        mockValidGuestSession(SESSION_ID);
+        User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
+        when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(mockHasher.matches("Password1", "STORED_HASH")).thenReturn(true);
+        when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("TOK");
+        logs = LogCapture.of(AuthenticationService.class);
+
+        service.login(new LoginRequestDTO("alice", "Password1", SESSION_ID));
+
+        assertTrue(logs.eventCount() > 0, "control: a login logs, so the capture sees its logger");
+        assertEquals(List.of(), logs.eventsContaining(SESSION_ID),
+                "login keeps the guest's session id for the member session, so it must not be logged");
+    }
+
+    // ----------------------------------------------------------------------
+    // Register — the email check is bounded (#185). RFC 5321 caps a forward path at 254 characters,
+    // so anything longer is rejected before the format check, whose backtracking grows with the input.
+    // ----------------------------------------------------------------------
+
+    private static final int MAX_EMAIL_LENGTH = 254;
+    // A length check rejects the input in microseconds; the format check on it took about 3 s when
+    // measured. 500 ms leaves a slow CI runner over a hundred times what the bounded check needs.
+    private static final Duration BOUNDED_EMAIL_CHECK = Duration.ofMillis(500);
+
+    @Test
+    void GivenEmailWith20000DotsBetweenAts_WhenRegister_ThenInvalidEmailFormat() {
+        String email = "a@" + ".".repeat(20_000) + "@";
+        RegisterRequestDTO request = new RegisterRequestDTO("alice", email, "Password1", "guest-1", 56);
+
+        assertTimeoutPreemptively(BOUNDED_EMAIL_CHECK,
+                () -> assertThrows(InvalidEmailFormatException.class, () -> service.register(request)),
+                "an over-long email must be rejected by its length, before the format check runs");
+    }
+
+    @Test
+    void GivenWellFormedEmailOf255Characters_WhenRegister_ThenInvalidEmailFormat() {
+        String email = wellFormedEmailOfLength(MAX_EMAIL_LENGTH + 1);
+
+        assertThrows(InvalidEmailFormatException.class,
+                () -> service.register(new RegisterRequestDTO("alice", email, "Password1", "guest-1", 56)),
+                "an email longer than " + MAX_EMAIL_LENGTH + " characters must be rejected");
+        verify(mockUserRepo, never()).save(any(User.class));
+    }
+
+    @Test
+    void GivenWellFormedEmailOf254Characters_WhenRegister_ThenRegistered() {
+        String email = wellFormedEmailOfLength(MAX_EMAIL_LENGTH);
+        givenRegistrationWillSucceed("guest-1");
+
+        assertDoesNotThrow(
+                () -> service.register(new RegisterRequestDTO("alice", email, "Password1", "guest-1", 56)),
+                "an email of exactly " + MAX_EMAIL_LENGTH + " characters is within the limit");
+        verify(mockUserRepo, times(1)).save(any(User.class));
+    }
+
+    /** A {@code local@domain.com} address of exactly {@code length} characters. */
+    private static String wellFormedEmailOfLength(int length) {
+        String local = "a".repeat(64);
+        String tld = ".com";
+        String domain = "b".repeat(length - local.length() - 1 - tld.length());
+        String email = local + "@" + domain + tld;
+        assertEquals(length, email.length(), "test fixture: email length");
+        return email;
+    }
+
+    private void givenRegistrationWillSucceed(String guestSessionId) {
+        mockValidGuestSession(guestSessionId);
+        when(mockUserRepo.existsByUsername(any())).thenReturn(false);
+        when(mockUserRepo.findByEmail(any())).thenReturn(Optional.empty());
+        when(mockUserRepo.nextId()).thenReturn(42);
+        when(mockHasher.hash(any())).thenReturn("HASHED");
+    }
+
+    // ----------------------------------------------------------------------
+    // Register — BCrypt reads at most 72 bytes of a password and the hasher throws past that, so
+    // register rejects a password whose UTF-8 encoding is longer, as a weak password (#185). The
+    // limit is in bytes, not characters: a Hebrew letter takes two.
+    // ----------------------------------------------------------------------
+
+    private static final int BCRYPT_MAX_PASSWORD_BYTES = 72;
+    private static final String HEBREW_ALEF = "א";
+
+    @Test
+    void GivenAsciiPasswordOf73Bytes_WhenRegister_ThenWeakPassword() {
+        String password = passwordOfUtf8Bytes("a".repeat(72) + "1", BCRYPT_MAX_PASSWORD_BYTES + 1);
+        givenRegistrationWillSucceed("guest-1");
+
+        assertThrows(WeakPasswordException.class,
+                () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", password, "guest-1", 56)));
+        verify(mockUserRepo, never()).save(any(User.class));
+    }
+
+    @Test
+    void GivenHebrewPasswordOf37CharactersAnd73Bytes_WhenRegister_ThenWeakPassword() {
+        String password = passwordOfUtf8Bytes(HEBREW_ALEF.repeat(36) + "1", BCRYPT_MAX_PASSWORD_BYTES + 1);
+        givenRegistrationWillSucceed("guest-1");
+
+        assertThrows(WeakPasswordException.class,
+                () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", password, "guest-1", 56)),
+                "the limit is 72 UTF-8 bytes, so 37 characters that are mostly two-byte are already too many");
+        verify(mockUserRepo, never()).save(any(User.class));
+    }
+
+    @Test
+    void GivenAsciiPasswordOf72Bytes_WhenRegister_ThenRegistered() {
+        String password = passwordOfUtf8Bytes("a".repeat(71) + "1", BCRYPT_MAX_PASSWORD_BYTES);
+        givenRegistrationWillSucceed("guest-1");
+
+        assertDoesNotThrow(
+                () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", password, "guest-1", 56)));
+        verify(mockHasher, times(1)).hash(password);
+    }
+
+    @Test
+    void GivenHebrewPasswordOf72Bytes_WhenRegister_ThenRegistered() {
+        // 35 two-byte letters and two digits. The password rules need a digit, and no one-byte
+        // character fits beside 36 Hebrew letters in 72 bytes.
+        String password = passwordOfUtf8Bytes(HEBREW_ALEF.repeat(35) + "12", BCRYPT_MAX_PASSWORD_BYTES);
+        givenRegistrationWillSucceed("guest-1");
+
+        assertDoesNotThrow(
+                () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", password, "guest-1", 56)));
+        verify(mockHasher, times(1)).hash(password);
+    }
+
+    private static String passwordOfUtf8Bytes(String password, int expectedBytes) {
+        assertEquals(expectedBytes, password.getBytes(StandardCharsets.UTF_8).length, "test fixture: UTF-8 length");
+        return password;
+    }
+
+    // ----------------------------------------------------------------------
+    // Login — an unknown username costs the same password check as a known one (#185), so the
+    // response time does not tell which usernames exist.
+    // ----------------------------------------------------------------------
+
+    @Test
+    void GivenUnknownUsername_WhenLogin_ThenPasswordHasherRunsOnce() {
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        assertThrows(AuthenticationFailedException.class,
+                () -> service.login(new LoginRequestDTO("ghost", "whatever", "guest-1")));
+
+        verify(mockHasher, times(1)).matches(eq("whatever"), argThat(hash -> hash != null && !hash.isBlank()));
+    }
+
+    @Test
+    void GivenUnknownAdminUsername_WhenSignInAsAdmin_ThenPasswordHasherRunsOnce() {
+        when(mockAdminRepo.findByUsername("ghost")).thenReturn(null);
+
+        assertThrows(AuthenticationFailedException.class, () -> service.signInAsAdmin("ghost", "whatever"));
+
+        verify(mockHasher, times(1)).matches(eq("whatever"), argThat(hash -> hash != null && !hash.isBlank()));
+    }
+
+    // The hash an unknown username is checked against comes from the injected hasher, so it always
+    // costs what a real member's hash costs, whatever the hasher's configuration (#185).
+
+    private static final String BCRYPT_COST_10_HASH = "^\\$2[aby]\\$10\\$.{53}$";
+
+    @Test
+    void GivenRealBcryptHasher_WhenUnknownUsernameLogsIn_ThenTheCheckedHashIsACost10HashTheHasherMade() {
+        BcryptPasswordHasher realHasher = spy(new BcryptPasswordHasher(new BCryptPasswordEncoder()));
+        List<String> hashesMade = recordHashesMadeBy(realHasher);
+        AuthenticationService onRealHasher = serviceWithHasher(realHasher);
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        assertThrows(AuthenticationFailedException.class,
+                () -> onRealHasher.login(new LoginRequestDTO("ghost", "whatever", "guest-1")));
+
+        ArgumentCaptor<String> checkedHash = ArgumentCaptor.forClass(String.class);
+        verify(realHasher, times(1)).matches(eq("whatever"), checkedHash.capture());
+        assertTrue(checkedHash.getValue().matches(BCRYPT_COST_10_HASH),
+                "the dummy hash must be a BCrypt hash at cost 10, but was " + checkedHash.getValue());
+        assertEquals(List.of(checkedHash.getValue()), hashesMade,
+                "the dummy hash must be the one the injected hasher made");
+    }
+
+    @Test
+    void GivenServiceBuiltOnce_WhenTwoUnknownUsernamesLogIn_ThenTheHasherMadeOneDummyHashAtConstruction() {
+        BcryptPasswordHasher realHasher = spy(new BcryptPasswordHasher(new BCryptPasswordEncoder()));
+        List<String> hashesMade = recordHashesMadeBy(realHasher);
+        AuthenticationService onRealHasher = serviceWithHasher(realHasher);
+        assertEquals(1, hashesMade.size(), "the dummy hash is made once, when the service is built");
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.findByUsername(any())).thenReturn(Optional.empty());
+
+        assertThrows(AuthenticationFailedException.class,
+                () -> onRealHasher.login(new LoginRequestDTO("ghost-1", "whatever", "guest-1")));
+        assertThrows(AuthenticationFailedException.class,
+                () -> onRealHasher.login(new LoginRequestDTO("ghost-2", "whatever", "guest-1")));
+
+        assertEquals(1, hashesMade.size(), "an unknown username must not cost a hash of its own");
+        verify(realHasher, times(2)).matches(eq("whatever"), eq(hashesMade.get(0)));
+    }
+
+    private static List<String> recordHashesMadeBy(PasswordHasher hasher) {
+        List<String> made = new ArrayList<>();
+        doAnswer(invocation -> {
+            String hash = (String) invocation.callRealMethod();
+            made.add(hash);
+            return hash;
+        }).when(hasher).hash(any());
+        return made;
+    }
+
+    private AuthenticationService serviceWithHasher(PasswordHasher hasher) {
+        return new AuthenticationService(
+                mockUserRepo, hasher, mockSessionManager, mockCartRestorationPort, mockNotification,
+                mockSessionRepo, mock(ISystemMetrics.class),
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
+                IDENTITY);
+    }
+
+    // ----------------------------------------------------------------------
+    // Lockout (SLR.2, #185) — failures are counted in a window that starts at a key's first failure
+    // and lasts auth.lockout.lock-minutes. Once the window passes, the count starts from zero, so a
+    // key that never reached the limit does not stay in memory forever.
+    // ----------------------------------------------------------------------
+
+    private static final int MAX_ATTEMPTS = 5;
+    private static final long LOCK_MINUTES = 15;
+    private static final String RIGHT_PASSWORD = "Password1";
+    private static final String WRONG_PASSWORD = "wrong-password";
+
+    @Test
+    void GivenFewerThanMaxFailures_WhenTheLockWindowHasPassed_ThenTheCountStartsFromZero() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(clock);
+
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+        clock.advance(Duration.ofMinutes(LOCK_MINUTES + 1));
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "failures from a window that has passed must not count towards the lock");
+    }
+
+    @Test
+    void GivenFailuresSpreadOverTheWindow_WhenTheWindowSinceTheFirstFailurePasses_ThenTheCountStartsFromZero() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(clock);
+
+        failLogins(lockoutService, 1);
+        clock.advance(Duration.ofMinutes(LOCK_MINUTES - 5));
+        failLogins(lockoutService, MAX_ATTEMPTS - 2);
+        clock.advance(Duration.ofMinutes(6));
+        failLogins(lockoutService, 1);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "the window runs from the first failure, so the failure after it opens a new count");
+    }
+
+    @Test
+    void GivenMaxMinusOneFailures_WhenOneMoreFailsInsideTheWindow_ThenLocked() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(clock);
+
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+        clock.advance(Duration.ofMinutes(LOCK_MINUTES - 1));
+        failLogins(lockoutService, 1);
+
+        assertThrows(AccountLockedException.class,
+                () -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                MAX_ATTEMPTS + " failures inside one window must lock the account");
+    }
+
+    // The locked message rounds the time left in the window up to whole minutes.
+    @Test
+    void GivenLockWithNinetySecondsLeft_WhenLogin_ThenTheMessageSaysAboutTwoMinutes() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(clock);
+        failLogins(lockoutService, MAX_ATTEMPTS);
+        clock.advance(Duration.ofMinutes(LOCK_MINUTES).minusSeconds(90));
+
+        AccountLockedException locked = assertThrows(AccountLockedException.class,
+                () -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")));
+
+        assertEquals("Too many failed attempts. Try again in about 2 minutes.", locked.getMessage());
+    }
+
+    // With the limit at N, every attempt beyond the N-th inside the window is refused before its
+    // password is checked, even when the attempts arrive together.
+
+    private static final int CONCURRENT_MAX_ATTEMPTS = 3;
+    private static final int ATTEMPTS_OVER_THE_LIMIT = 4;
+    private static final long CONCURRENCY_AWAIT_SECONDS = 5;
+
+    @Test
+    void GivenMaxAttemptsN_WhenMoreThanNWrongMemberPasswordsArriveTogether_ThenExactlyNPasswordVerifications()
+            throws InterruptedException {
+        AuthenticationService lockoutService = newService(fixedClock,
+                new LockoutProperties(CONCURRENT_MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+
+        int verifications = passwordVerificationsUnderSimultaneousAttempts(
+                CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT,
+                () -> lockoutService.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")));
+
+        assertEquals(CONCURRENT_MAX_ATTEMPTS, verifications,
+                "expected exactly " + CONCURRENT_MAX_ATTEMPTS + " password verifications for "
+                        + (CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT)
+                        + " simultaneous attempts, but there were " + verifications);
+    }
+
+    @Test
+    void GivenMaxAttemptsN_WhenMoreThanNWrongAdminPasswordsArriveTogether_ThenExactlyNPasswordVerifications()
+            throws InterruptedException {
+        AuthenticationService lockoutService = newService(fixedClock,
+                new LockoutProperties(CONCURRENT_MAX_ATTEMPTS, LOCK_MINUTES));
+        when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "hashed", true));
+
+        int verifications = passwordVerificationsUnderSimultaneousAttempts(
+                CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT,
+                () -> lockoutService.signInAsAdmin("admin", WRONG_PASSWORD));
+
+        assertEquals(CONCURRENT_MAX_ATTEMPTS, verifications,
+                "expected exactly " + CONCURRENT_MAX_ATTEMPTS + " password verifications for "
+                        + (CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT)
+                        + " simultaneous attempts, but there were " + verifications);
+    }
+
+    /**
+     * Runs {@code attempts} wrong-password sign-ins at once and counts the password checks. Each
+     * check is held open until every attempt has either reached its own check or finished, so no
+     * attempt records its failure before the others have passed the lock check: every attempt let
+     * through to the hasher is counted, however the threads are scheduled. If an implementation
+     * makes attempts wait for each other, the hold gives up after a bounded wait.
+     */
+    private int passwordVerificationsUnderSimultaneousAttempts(int attempts, Runnable attempt)
+            throws InterruptedException {
+        AtomicInteger verifications = new AtomicInteger();
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch settled = new CountDownLatch(attempts);
+        CountDownLatch release = new CountDownLatch(1);
+        ThreadLocal<Boolean> reachedHasher = ThreadLocal.withInitial(() -> false);
+        ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
+        when(mockHasher.matches(any(), any())).thenAnswer(invocation -> {
+            verifications.incrementAndGet();
+            reachedHasher.set(true);
+            settled.countDown();
+            release.await(CONCURRENCY_AWAIT_SECONDS, TimeUnit.SECONDS);
+            return false;
+        });
+
+        ExecutorService pool = Executors.newFixedThreadPool(attempts);
+        try {
+            for (int i = 0; i < attempts; i++) {
+                pool.submit(() -> {
+                    try {
+                        start.await();
+                        attempt.run();
+                    } catch (AuthenticationFailedException | AccountLockedException expected) {
+                        // A refused sign-in is the expected outcome of every attempt.
+                    } catch (Throwable t) {
+                        unexpected.add(t);
+                    } finally {
+                        if (!reachedHasher.get()) {
+                            settled.countDown();
+                        }
+                    }
+                });
+            }
+            start.countDown();
+            settled.await(CONCURRENCY_AWAIT_SECONDS, TimeUnit.SECONDS);
+            release.countDown();
+        } finally {
+            pool.shutdown();
+        }
+        assertTrue(pool.awaitTermination(CONCURRENCY_AWAIT_SECONDS * 2, TimeUnit.SECONDS),
+                "the sign-in attempts did not finish");
+        assertEquals(List.of(), List.copyOf(unexpected), "an attempt failed with something other than a refusal");
+        return verifications.get();
+    }
+
+    private AuthenticationService newService(Clock clock, LockoutProperties lockout) {
+        return newService(clock, lockout, IDENTITY);
+    }
+
+    private AuthenticationService newService(Clock clock, LockoutProperties lockout, IdentityProperties identity) {
+        AuthenticationService built = new AuthenticationService(
+                mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
+                mockSessionRepo, mock(ISystemMetrics.class),
+                clock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity);
+        clearInvocations(mockHasher);
+        return built;
+    }
+
+    /** Member alice, whose password is {@link #RIGHT_PASSWORD}; every session id names a fresh guest. */
+    private void givenMemberAliceWithAnyGuestSession(Clock clock) {
+        User alice = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
+        when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(alice));
+        when(mockHasher.matches(any(), eq("STORED_HASH")))
+                .thenAnswer(invocation -> RIGHT_PASSWORD.equals(invocation.getArgument(0)));
+        when(mockSessionRepo.findById(any())).thenAnswer(invocation -> {
+            Instant now = clock.instant();
+            return Optional.of(new Session(invocation.getArgument(0), null, now,
+                    now.plus(GUEST_IDLE_MINUTES, ChronoUnit.MINUTES)));
+        });
+        when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("TOK");
+    }
+
+    private static void failLogins(AuthenticationService target, int times) {
+        for (int i = 0; i < times; i++) {
+            assertThrows(AuthenticationFailedException.class,
+                    () -> target.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")),
+                    "a wrong password inside an unlocked window is refused as a failed sign-in, not a lock");
+        }
     }
 }

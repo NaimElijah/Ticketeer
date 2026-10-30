@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,12 +42,14 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.messaging.domain.ConversationStatus;
 import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.messaging.adapter.out.persistence.MemoryConversationRepository;
 
 class MessagingServiceTest {
@@ -91,10 +94,13 @@ class MessagingServiceTest {
         stubToken(MEMBER2_TOKEN, MEMBER2_ID);
         stubToken(OWNER_TOKEN, OWNER_ID);
         stubToken(OUTSIDER_TOKEN, OUTSIDER_ID);
-        stubToken(ADMIN_TOKEN, ADMIN_ID);
-        // Only the admin token carries the ADMIN role claim; member tokens default to false, which is
-        // what the admin gate (requireSystemAdmin / resolveCallerSide) now also checks.
+        // The admin token passes the admin readers only. The member readers reject it as the real
+        // SessionManager does (#185, ADR-012): as a revoked token, with InvalidTokenException.
+        when(sessionManager.validateToken(ADMIN_TOKEN)).thenThrow(new InvalidTokenException("not a member token"));
+        when(sessionManager.extractUserId(ADMIN_TOKEN)).thenThrow(new InvalidTokenException("not a member token"));
         when(sessionManager.isAdminToken(ADMIN_TOKEN)).thenReturn(true);
+        when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
+        when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
 
         when(adminRepository.findById(ADMIN_ID)).thenReturn(admin());
         when(adminRepository.findAll()).thenReturn(List.of(admin()));
@@ -175,14 +181,42 @@ class MessagingServiceTest {
 
     // --- submitComplaint (II.3.3) ---
 
+    // Admins learn of a complaint from their complaint queue, not from a notice (#185).
     @Test
-    void submitComplaint_createsComplaintToAdminGroup_andNotifiesAdmins() {
+    void submitComplaint_createsComplaintToAdminGroup_andListsItInTheAdminQueue() {
         ConversationDTO dto = service.submitComplaint(MEMBER_TOKEN,
                 new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Where is it?", null));
 
         assertEquals("COMPLAINT", dto.type());
         assertEquals("ADMIN_GROUP", dto.counterpartyType());
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(ADMIN_ID, dto.conversationId(), "Refund"));
+        assertTrue(service.viewAllComplaints(ADMIN_TOKEN, null).stream()
+                        .anyMatch(c -> dto.conversationId().equals(c.conversationId()) && "Refund".equals(c.subject())),
+                "the complaint reaches the admins through their queue");
+    }
+
+    // Notifications carry only a recipient user id, and member and admin ids share one id space, so a
+    // notice addressed to an admin's id lands in the inbox of the member with that id. Admins have no
+    // notification inbox, so messaging addresses none to them (#185).
+    @Test
+    void GivenAMember_WhenTheyFileAComplaint_ThenNoNewMessageNoticeIsAddressedToAnAdminsId() {
+        service.submitComplaint(MEMBER_TOKEN, new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Where is it?", null));
+
+        verify(eventPublisher, never()).publishEvent(publishedNewMessageTo(ADMIN_ID, null, null));
+    }
+
+    @Test
+    void GivenAnAdminsDirectThread_WhenTheMemberReplies_ThenNoNewMessageNoticeIsAddressedToAnAdminsId() {
+        Conversation thread = Conversation.start(ConversationType.DIRECT,
+                ADMIN_ID, ParticipantType.ADMIN, MEMBER_ID, ParticipantType.MEMBER,
+                "Maintenance", "We will be down tonight.", LocalDateTime.ofInstant(T0, ZoneOffset.UTC));
+        conversationRepository.save(thread);
+
+        service.sendMessage(MEMBER_TOKEN,
+                new SendMessageRequestDTO(thread.getConversationId(), 0, null, "Thanks for the heads up."));
+
+        assertEquals(2, conversationRepository.findById(thread.getConversationId()).orElseThrow().getMessages().size(),
+                "the reply itself is still recorded");
+        verify(eventPublisher, never()).publishEvent(publishedNewMessageTo(ADMIN_ID, null, null));
     }
 
     // --- respondToComplaint (II.6.3.1) ---

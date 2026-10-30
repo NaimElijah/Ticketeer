@@ -95,12 +95,22 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_preferredNotOwned_returnsNoCompany() {
+    void create_preferredNotOwned_returnsChooseCompany() {
         // A selected company the caller doesn't own must not silently retarget to another company.
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1), company(2)));
 
-        assertInstanceOf(EventManagementPresenter.CreateOutcome.NoCompany.class,
+        assertInstanceOf(EventManagementPresenter.CreateOutcome.ChooseCompany.class,
                 createWith(99, futureStart(), futureEnd()));
+        verifyNoInteractions(eventService);
+    }
+
+    // The caller's companies are unordered, so the first can be any of them and is never a default.
+    @Test
+    void GivenTwoCompaniesAndNoSelection_WhenCreate_ThenChooseCompanyAndNothingCreated() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1), company(2)));
+
+        assertInstanceOf(EventManagementPresenter.CreateOutcome.ChooseCompany.class,
+                createWith(null, futureStart(), futureEnd()));
         verifyNoInteractions(eventService);
     }
 

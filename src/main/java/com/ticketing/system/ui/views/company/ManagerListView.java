@@ -71,6 +71,9 @@ public class ManagerListView extends LkPage {
             case ManagerListPresenter.Outcome.Success ok -> renderRosters(ok);
             case ManagerListPresenter.Outcome.NoCompany ignored -> content.add(banner(
                 "You don't own a production company yet. Register one to manage its team."));
+            case ManagerListPresenter.Outcome.ChooseCompany ignored -> content.add(banner(
+                "Choose the company in the workspace's Company selector, "
+                    + "or under My companies, then come back."));
             case ManagerListPresenter.Outcome.NotAuthenticated ignored -> content.add(banner(
                 "Your session has expired — please sign in again."));
             case ManagerListPresenter.Outcome.Failure fail -> content.add(banner(
@@ -79,6 +82,7 @@ public class ManagerListView extends LkPage {
     }
 
     private void renderRosters(ManagerListPresenter.Outcome.Success ok) {
+        subtitle("Roster and permissions for " + ok.companyName() + ".");
         content.add(Lk.h2("Active Managers"));
         content.add(buildActiveCard(ok.activeManagers()));
         content.add(Lk.h2("Pending Invitations"));

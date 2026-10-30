@@ -1,7 +1,10 @@
 package com.ticketing.system.integration;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +16,8 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
+import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.SessionKind;
 
 /**
  * Regression test for the admin "session expired" bug: {@code AuthenticationService.signInAsAdmin}
@@ -50,9 +55,12 @@ class AdminSessionPersistenceJpaTest {
         assertNotNull(token.token());
 
         // The admin Session row must have been flushed: its token validates and the row is findable.
-        assertTrue(authService.validateToken(token.token()),
+        // An admin token passes the admin readers only; member readers reject it (#185).
+        assertTrue(sessionManager.validateAdminToken(token.token()),
                 "admin token must validate — its backing Session row must be persisted");
-        assertTrue(sessionRepository.findById(sessionManager.extractSessionId(token.token())).isPresent(),
+        Optional<Session> row = sessionRepository.findById(sessionManager.extractSessionId(token.token()));
+        assertTrue(row.isPresent(),
                 "admin Session row must be persisted (was lost under @Transactional(readOnly=true))");
+        assertEquals(SessionKind.ADMIN, row.get().getKind(), "the persisted row must record that it is an admin's");
     }
 }

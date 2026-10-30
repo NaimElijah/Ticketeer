@@ -10,9 +10,11 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.MarketStateDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.governance.application.service.SystemAdminService;
@@ -22,6 +24,8 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
 
 /**
  * Unit tests for {@link SystemAnalyticsPresenter} (UC-46 / #43, #279). Both
@@ -33,6 +37,7 @@ class SystemAnalyticsPresenterTest {
     private static final String TOKEN = "admin-token";
     private static final int RATE_WINDOW_MINUTES = 5;
     private static final int REFRESH_INTERVAL_MS = 5000;
+    private static final int ADMIN_ID = 1;
 
     private SystemAdminService adminService;
     private SystemAnalyticsService analyticsService;
@@ -40,10 +45,17 @@ class SystemAnalyticsPresenterTest {
 
     @BeforeEach
     void setUp() {
+        MapBackedVaadinSession.install();
+        AuthSession.storeAuth(new AuthTokenDTO(TOKEN, 0L, ADMIN_ID, "admin", true));
         adminService = mock(SystemAdminService.class);
         analyticsService = mock(SystemAnalyticsService.class);
         presenter = new SystemAnalyticsPresenter(adminService, analyticsService,
                 new AnalyticsProperties(RATE_WINDOW_MINUTES, REFRESH_INTERVAL_MS));
+    }
+
+    @AfterEach
+    void tearDown() {
+        MapBackedVaadinSession.uninstall();
     }
 
     @Test
@@ -51,7 +63,7 @@ class SystemAnalyticsPresenterTest {
         MarketStateDTO market = marketState("OPEN");
         SystemAnalyticsDTO analytics = zeroAnalytics();
         when(adminService.viewMarketState()).thenReturn(market);
-        when(analyticsService.computeAnalytics()).thenReturn(analytics);
+        when(analyticsService.computeAnalytics(TOKEN)).thenReturn(analytics);
 
         SystemAnalyticsPresenter.Outcome outcome = presenter.load();
 

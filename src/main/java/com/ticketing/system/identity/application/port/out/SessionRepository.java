@@ -23,7 +23,8 @@ public interface SessionRepository extends IRepository<Session, String> {
 
     /**
      * Returns {@code true} iff at least one non-expired Member session exists
-     * for {@code userId}. Used by {@code SessionManager.isOnline} (UC-35/36).
+     * for {@code userId}; Guest and Admin rows never count, since an admin's id can
+     * equal a member's (ADR-012). Used by {@code SessionManager.isOnline} (UC-35/36).
      *
      * <p>With multi-device login (Q4), several sessions may share a userId;
      * this method only answers presence, not multiplicity.

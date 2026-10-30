@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.presentation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
@@ -61,13 +62,31 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_otherMembersReceipt_returnsForbidden() {
+    void load_otherMembersReceipt_returnsNotFound() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
                 .thenThrow(new UnauthorizedActionException("view receipt " + RECEIPT_ID, 42));
 
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
 
-        assertInstanceOf(ReceiptPresenter.Outcome.Forbidden.class, outcome);
+        assertInstanceOf(ReceiptPresenter.Outcome.NotFound.class, outcome);
+    }
+
+    @Test
+    void GivenAnotherMembersReceiptId_WhenView_ThenSameOutcomeAsAMissingId() {
+        // Answering differently would tell a member which receipt ids exist on other accounts.
+        int missingId = RECEIPT_ID;
+        int otherMembersId = RECEIPT_ID + 1;
+        when(memberAccountService.viewMyReceipt(TOKEN, missingId))
+                .thenThrow(new EntityNotFoundException("OrderReceipt", missingId));
+        when(memberAccountService.viewMyReceipt(TOKEN, otherMembersId))
+                .thenThrow(new UnauthorizedActionException("view receipt " + otherMembersId, 42));
+
+        ReceiptPresenter.Outcome missing = presenter.load(TOKEN, missingId);
+        ReceiptPresenter.Outcome otherMembers = presenter.load(TOKEN, otherMembersId);
+
+        assertInstanceOf(ReceiptPresenter.Outcome.NotFound.class, missing);
+        assertEquals(missing, otherMembers,
+                "another member's receipt must look exactly like a missing one");
     }
 
     @Test

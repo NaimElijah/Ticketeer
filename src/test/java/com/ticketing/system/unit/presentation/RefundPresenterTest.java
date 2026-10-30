@@ -66,12 +66,30 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_otherMembersOrder_returnsForbidden() {
+    void requestRefund_otherMembersOrder_returnsNotFound() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new UnauthorizedActionException("refund order " + ORDER_ID, 42));
 
-        assertInstanceOf(RefundPresenter.Outcome.Forbidden.class,
+        assertInstanceOf(RefundPresenter.Outcome.NotFound.class,
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
+    }
+
+    @Test
+    void GivenAnotherMembersReceiptId_WhenRequestRefund_ThenSameOutcomeAsAMissingId() {
+        // Answering differently would tell a member which order ids exist on other accounts.
+        int missingId = ORDER_ID;
+        int otherMembersId = ORDER_ID + 1;
+        when(refundService.requestRefund(TOKEN, missingId, "reason"))
+                .thenThrow(new EntityNotFoundException("OrderReceipt", missingId));
+        when(refundService.requestRefund(TOKEN, otherMembersId, "reason"))
+                .thenThrow(new UnauthorizedActionException("refund order " + otherMembersId, 42));
+
+        RefundPresenter.Outcome missing = presenter.requestRefund(TOKEN, missingId, "reason");
+        RefundPresenter.Outcome otherMembers = presenter.requestRefund(TOKEN, otherMembersId, "reason");
+
+        assertInstanceOf(RefundPresenter.Outcome.NotFound.class, missing);
+        assertEquals(missing, otherMembers,
+                "another member's order must look exactly like a missing one");
     }
 
     @Test

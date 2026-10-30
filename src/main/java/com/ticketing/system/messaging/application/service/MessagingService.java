@@ -23,7 +23,6 @@ import com.ticketing.system.messaging.application.dtoMappers.ConversationMapper;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.NewMessageNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
@@ -50,8 +49,10 @@ import lombok.extern.slf4j.Slf4j;
 // inbox), II.6.3.1 (admin complaint queue), II.6.3.2 (admin announcements).
 //
 // All write paths fire the messaging→notification bridge AFTER releasing the conversation
-// lock: members are notified of admin/producer messages; company owners of new inquiries;
-// admins of new complaints.
+// lock: members are notified of admin/producer messages; company owners of new inquiries.
+// Admins are never notified: a notice names its recipient by bare user id, admin ids share the
+// member id space, so a notice to an admin's id would reach the member with that id (ADR-012).
+// Admins see complaints and replies in their queue and inbox instead.
 @Service
 @Slf4j
 public class MessagingService {
@@ -170,8 +171,7 @@ public class MessagingService {
                 request.subject(), body, LocalDateTime.now(clock));
         conversationRepository.save(conversation);
 
-        // Bridge — notify all admins a complaint was filed.
-        notifyAllAdmins(conversation, senderLabel(ParticipantType.MEMBER), body);
+        // No notice: the complaint reaches admins through their complaint queue (see class comment).
         log.info("Complaint {} submitted by member {}", conversation.getConversationId(), memberId);
         return toDTO(conversation, memberId);
     }
@@ -376,23 +376,30 @@ public class MessagingService {
         return sessionManager.extractUserId(token);
     }
 
-    // The authenticated caller: their id plus whether their token carries the ADMIN role claim.
-    // The claim — not adminRepository membership — is the authoritative admin signal (see isAdmin).
+    // The authenticated caller: an admin token names an admin id, any other token goes through the
+    // member path, which rejects everything but a live member token. Member and admin ids share one
+    // id space, so the id alone never says which kind of caller it is.
     private Caller authenticateCaller(String token) {
-        return new Caller(authenticate(token), sessionManager.isAdminToken(token));
+        if (sessionManager.isAdminToken(token)) {
+            return new Caller(sessionManager.extractAdminId(token), true);
+        }
+        return new Caller(authenticate(token), false);
     }
 
     private record Caller(int id, boolean adminToken) {}
 
+    // A live admin token whose admin still exists. Any other token fails as the member path fails
+    // it, and a live member token is unauthorized here.
     private int requireSystemAdmin(String token) {
-        int callerId = authenticate(token);
-        // Require the ADMIN role claim, not just adminRepository membership: member and admin id
-        // pools overlap, so a member token whose id collides with an admin's would otherwise pass
-        // this gate (mirrors SystemAdminService.requireSystemAdmin).
-        if (!sessionManager.isAdminToken(token) || !isAdmin(callerId)) {
-            throw new UnauthorizedActionException("messaging admin operation", callerId);
+        if (!sessionManager.isAdminToken(token)) {
+            int memberId = authenticate(token);
+            throw new UnauthorizedActionException("messaging admin operation", memberId);
         }
-        return callerId;
+        int adminId = sessionManager.extractAdminId(token);
+        if (!isAdmin(adminId)) {
+            throw new UnauthorizedActionException("messaging admin operation", adminId);
+        }
+        return adminId;
     }
 
     private boolean isAdmin(int id) {
@@ -406,8 +413,13 @@ public class MessagingService {
         // 1. Admin acting within an admin-involved thread (complaint queue or admin-authored).
         //    Requires an ADMIN-role token, not just adminRepository membership: the member/admin id
         //    pools overlap, so a colliding member token must not be treated as ADMIN here.
-        if (caller.adminToken() && isAdmin(callerId) && involvesAdmin(conversation, callerId)) {
-            return new CallerSide(callerId, ParticipantType.ADMIN);
+        if (caller.adminToken()) {
+            if (isAdmin(callerId) && involvesAdmin(conversation, callerId)) {
+                return new CallerSide(callerId, ParticipantType.ADMIN);
+            }
+            // An admin acts only as an admin, never as the member or company owner who shares the
+            // admin's id, so steps 2 and 3 do not apply.
+            throw notAParticipant(callerId, conversation);
         }
         // 2. Member acting as themselves.
         if (matchesMember(conversation, callerId)) {
@@ -418,7 +430,11 @@ public class MessagingService {
         if (companyId != null && callerActsForCompany(callerId, companyId)) {
             return new CallerSide(companyId, ParticipantType.COMPANY);
         }
-        throw new InvalidParticipantException(
+        throw notAParticipant(callerId, conversation);
+    }
+
+    private static InvalidParticipantException notAParticipant(int callerId, Conversation conversation) {
+        return new InvalidParticipantException(
                 "Caller " + callerId + " is not a participant in conversation " + conversation.getConversationId());
     }
 
@@ -477,7 +493,8 @@ public class MessagingService {
                     notifyCompanyOwners(company, conversation, label, body);
                 }
             }
-            case ADMIN, ADMIN_GROUP -> notifyAllAdmins(conversation, label, body);
+            // Admins are never notified (see class comment); the reply shows in their inbox or queue.
+            case ADMIN, ADMIN_GROUP -> { }
             default -> { /* SYSTEM — no single recipient to notify */ }
         }
     }
@@ -497,13 +514,6 @@ public class MessagingService {
                 publishNewMessage(ownerId, conversation.getConversationId(), senderLabel,
                         conversation.getSubject(), body);
             }
-        }
-    }
-
-    private void notifyAllAdmins(Conversation conversation, String senderLabel, String body) {
-        for (Admin admin : adminRepository.findAll()) {
-            publishNewMessage(admin.getId(), conversation.getConversationId(), senderLabel,
-                    conversation.getSubject(), body);
         }
     }
 

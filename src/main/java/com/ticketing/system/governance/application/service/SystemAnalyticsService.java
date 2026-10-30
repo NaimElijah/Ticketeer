@@ -9,9 +9,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.governance.config.AnalyticsProperties;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -30,9 +34,12 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Pure query service. Visitor / registration / reservation activity comes
  * from the live {@link ISystemMetrics} counters; purchases are derived from the
  * immutable {@link OrderReceipt} history (real timestamps), so no checkout
- * instrumentation is needed. No token is taken — the admin route is
- * access-gated, mirroring {@code SystemAdminService.viewMarketState()}. Market
- * status itself is supplied separately by {@code SystemAdminService}.
+ * instrumentation is needed. Market status itself is supplied separately by
+ * {@code SystemAdminService}.
+ *
+ * <p>Both reads are admin-only and take the caller's token: this service is the boundary that
+ * enforces it, not the admin route's capability check. The gate is a live admin token, which is bound
+ * to an admin's session row (ADR-012, decision 3).
  */
 @Service
 @Slf4j
@@ -47,6 +54,7 @@ public class SystemAnalyticsService {
     private final ProductionCompanyRepository companyRepository;
     private final EventRepository eventRepository;
     private final ConversationRepository conversationRepository;
+    private final SessionManager sessionManager;
     private final Clock clock;
     private final int windowMinutes;
 
@@ -56,6 +64,7 @@ public class SystemAnalyticsService {
             ProductionCompanyRepository companyRepository,
             EventRepository eventRepository,
             ConversationRepository conversationRepository,
+            SessionManager sessionManager,
             Clock clock,
             AnalyticsProperties analyticsProperties) {
         this.metrics = metrics;
@@ -63,12 +72,21 @@ public class SystemAnalyticsService {
         this.companyRepository = companyRepository;
         this.eventRepository = eventRepository;
         this.conversationRepository = conversationRepository;
+        this.sessionManager = sessionManager;
         this.clock = clock;
         this.windowMinutes = analyticsProperties.rateWindowMinutes();
     }
 
-    /** Builds the live analytics snapshot: rates over the trailing window, throughput over the hour. */
-    public SystemAnalyticsDTO computeAnalytics() {
+    /**
+     * Builds the live analytics snapshot: rates over the trailing window, throughput over the hour.
+     *
+     * @param adminToken the caller's admin token
+     * @throws UnauthorizedActionException if the token is missing
+     * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
+     * @throws SessionExpiredException     if the token's session has expired
+     */
+    public SystemAnalyticsDTO computeAnalytics(String adminToken) {
+        requireSystemAdmin(adminToken);
         Duration window = Duration.ofMinutes(windowMinutes);
         Duration hour = Duration.ofMinutes(THROUGHPUT_WINDOW_MINUTES);
 
@@ -120,9 +138,15 @@ public class SystemAnalyticsService {
     /**
      * Headline counters for the admin workspace landing page (#279): active companies, live
      * (ON_SALE) events, open (non-closed) complaints, and non-refunded revenue over the trailing
-     * 30 days. No token — the admin route is access-gated, like {@link #computeAnalytics()}.
+     * 30 days.
+     *
+     * @param adminToken the caller's admin token
+     * @throws UnauthorizedActionException if the token is missing
+     * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
+     * @throws SessionExpiredException     if the token's session has expired
      */
-    public AdminOverviewDTO adminOverview() {
+    public AdminOverviewDTO adminOverview(String adminToken) {
+        requireSystemAdmin(adminToken);
         int activeCompanies = companyRepository.findActive().size();
         int liveEvents = eventRepository.findByStatus(EventStatus.ON_SALE).size();
         int openComplaints = (int) conversationRepository.findByType(ConversationType.COMPLAINT).stream()
@@ -151,6 +175,14 @@ public class SystemAnalyticsService {
     private List<OrderReceipt> allReceipts() {
         return orderReceiptRepository.findGlobal(
                 new GlobalHistoryFiltersDTO(null, null, null, null, null));
+    }
+
+    private void requireSystemAdmin(String adminToken) {
+        // false only for a missing token; every invalid token throws.
+        if (!sessionManager.validateAdminToken(adminToken)) {
+            log.warn("Unauthorized analytics access attempt without a token");
+            throw new UnauthorizedActionException("Invalid or non-admin token.");
+        }
     }
 
     private double perMinute(long countInWindow) {

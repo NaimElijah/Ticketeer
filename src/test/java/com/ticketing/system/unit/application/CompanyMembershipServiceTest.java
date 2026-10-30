@@ -2,6 +2,7 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,7 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 /**
  * Exercises {@link CompanyManagementService}'s membership read paths ({@code listForUser},
@@ -140,5 +143,24 @@ class CompanyMembershipServiceTest {
         when(userRepository.getUserById(USER_ID)).thenReturn(user);
 
         assertFalse(service.isOwnerOf(USER_ID, COMPANY_ID));
+    }
+
+    // Only the owner who appointed a manager may change the manager's permissions; another owner is
+    // refused as an unauthorised action, and the permissions stay as they were.
+    @Test
+    void GivenManagerAppointedByAnotherOwner_WhenModifyManagerPermissions_ThenUnauthorizedActionAndUnchanged() {
+        int appointerId = 1;
+        int otherOwnerId = 2;
+        membershipService.receiveManagerAppointment(USER_ID, COMPANY_ID, appointerId, List.of(Permission.VIEW_SALES));
+        membershipService.acceptInvitation(USER_ID, COMPANY_ID);
+
+        UnauthorizedActionException refused = assertThrows(UnauthorizedActionException.class,
+                () -> membershipService.modifyManagerPermissions(USER_ID, COMPANY_ID, otherOwnerId,
+                        List.of(Permission.EDIT_POLICIES)));
+
+        assertEquals("Not authorized to perform action: Only the original appointer can modify manager permissions",
+                refused.getMessage());
+        assertEquals(Set.of(Permission.VIEW_SALES),
+                membershipService.getActiveCompanyAppointment(USER_ID, COMPANY_ID).getPermissions());
     }
 }

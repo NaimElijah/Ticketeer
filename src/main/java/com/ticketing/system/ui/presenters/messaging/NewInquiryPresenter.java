@@ -11,6 +11,7 @@ import com.ticketing.system.shared.dto.StartConversationRequestDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code NewInquiryView} (II.3.10 — a member opens an inquiry with a company).
@@ -34,7 +35,7 @@ public class NewInquiryPresenter {
         try {
             return new SearchOutcome.Success(catalogService.searchCompaniesByName(query));
         } catch (RuntimeException e) {
-            return new SearchOutcome.Failure(e.getMessage());
+            return new SearchOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -50,7 +51,7 @@ public class NewInquiryPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

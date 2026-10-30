@@ -4,6 +4,7 @@ import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeD
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -51,7 +52,7 @@ public class OrgTreePresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

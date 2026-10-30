@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.SessionKind;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 import jakarta.persistence.EntityManager;
@@ -38,7 +39,7 @@ import jakarta.persistence.PersistenceContext;
  * delegations inherit Spring Data's read-only tx.
  *
  * <p>{@code existsByUserId}'s "now" comes from the injected {@link Clock} (parity with
- * {@code MemorySessionRepository}), and the non-expired filter runs in SQL.
+ * {@code MemorySessionRepository}), and the member-kind and non-expired filters run in SQL.
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
@@ -87,7 +88,7 @@ public class JpaSessionRepository implements SessionRepository {
 
     @Override
     public boolean existsByUserId(int userId) {
-        return data.existsByUserIdAndExpiresAtAfter(userId, clock.instant());
+        return data.existsByUserIdAndKindAndExpiresAtAfter(userId, SessionKind.MEMBER, clock.instant());
     }
 
     @Override

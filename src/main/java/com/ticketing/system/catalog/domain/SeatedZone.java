@@ -519,8 +519,9 @@ public class SeatedZone extends InventoryZone {
         if (name == null || name.isBlank()) {
             throw new IllegalStateException("SeatedZone invariant violated: name must be non-blank");
         }
-        if (price < 0) {
-            throw new IllegalStateException("SeatedZone invariant violated: price must be >= 0 (was " + price + ")");
+        if (!isPriceInBounds(price)) {
+            throw new IllegalStateException("SeatedZone invariant violated: price must be finite and in [0, "
+                    + MAX_PRICE + "] (was " + price + ")");
         }
         if (seats == null) {
             throw new IllegalStateException("SeatedZone invariant violated: seats map must not be null");

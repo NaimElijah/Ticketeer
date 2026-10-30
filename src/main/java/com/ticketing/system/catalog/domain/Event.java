@@ -9,8 +9,10 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -261,7 +263,7 @@ public class Event implements InvariantChecked {
     // this is simply a setter for the venue map.
     public void configureVenueMap(VenueMap venueMap, int incomingCompanyId) {
         if (comapnyid != incomingCompanyId) {
-            throw new RuntimeException("Unauthorized to configure venue map");
+            throw new UnauthorizedActionException("configure the venue map of another company's event");
         }
 
         if (venueMap == null) {
@@ -380,13 +382,13 @@ public class Event implements InvariantChecked {
     private void validateCanEditExistingVenueInventory(int incomingCompanyId) {
         validateCanEditInventoryForCompany(incomingCompanyId);
         if (this.venueMap == null) {
-            throw new RuntimeException("Venue map must be initialized first");
+            throw new BusinessRuleViolationException("Venue map must be initialized first");
         }
     }
 
     private void validateCanEditInventoryForCompany(int incomingCompanyId) {
         if (comapnyid != incomingCompanyId) {
-            throw new RuntimeException("Unauthorized to edit event inventory, only company that owns the event can edit inventory");
+            throw new UnauthorizedActionException("edit event inventory, only company that owns the event can edit inventory");
         }
         if (status != EventStatus.DRAFT && status != EventStatus.SCHEDULED) {
             throw new IllegalStateException("Inventory can only be edited while event is DRAFT or SCHEDULED");

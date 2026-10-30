@@ -22,6 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.organization.domain.CompanyStatus;
@@ -77,6 +78,9 @@ class ReservationConcurrencyTest {
 
     @Autowired
     private ReservationService reservationService;
+    // Mints the live guest sessions the buyers reserve on; reserveForGuest accepts no other id (#185).
+    @Autowired
+    private AuthenticationService authenticationService;
     @Autowired
     private EventRepository eventRepository;
     @Autowired
@@ -132,7 +136,7 @@ class ReservationConcurrencyTest {
     @Test
     void givenManyGuestsReserveTheSameSeatConcurrently_thenExactlyOneWinsAndTheSeatIsNotOversold()
             throws InterruptedException {
-        Outcome outcome = runConcurrentReserves("seat", seatedZoneId,
+        Outcome outcome = runConcurrentReserves(seatedZoneId,
                 InventorySelectionDTO.seated(List.of(CONTESTED_SEAT)));
 
         assertExactlyOneWinner(outcome);
@@ -145,7 +149,7 @@ class ReservationConcurrencyTest {
     @Test
     void givenManyGuestsReserveTheSameStandingPlaceConcurrently_thenExactlyOneWinsAndTheZoneIsNotOversold()
             throws InterruptedException {
-        Outcome outcome = runConcurrentReserves("stand", standingZoneId, InventorySelectionDTO.standing(1));
+        Outcome outcome = runConcurrentReserves(standingZoneId, InventorySelectionDTO.standing(1));
 
         assertExactlyOneWinner(outcome);
 
@@ -155,7 +159,7 @@ class ReservationConcurrencyTest {
     }
 
     /** Fires CONCURRENT_BUYERS guest reservations at the same unit simultaneously and tallies them. */
-    private Outcome runConcurrentReserves(String buyerPrefix, int zoneId, InventorySelectionDTO selection)
+    private Outcome runConcurrentReserves(int zoneId, InventorySelectionDTO selection)
             throws InterruptedException {
         ExecutorService pool = Executors.newFixedThreadPool(CONCURRENT_BUYERS);
         CountDownLatch armed = new CountDownLatch(CONCURRENT_BUYERS);
@@ -165,7 +169,8 @@ class ReservationConcurrencyTest {
         ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
 
         for (int i = 0; i < CONCURRENT_BUYERS; i++) {
-            String guestSessionId = buyerPrefix + "-guest-" + i;
+            // Minted before the workers start, so the session writes are not part of the race.
+            String guestSessionId = authenticationService.startGuestSession().sessionId();
             pool.submit(() -> {
                 try {
                     armed.countDown();
