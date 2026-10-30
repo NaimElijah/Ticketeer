@@ -118,7 +118,9 @@ Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoM
 `sales/adapter/out/catalog`). `governance` and `reporting` have no domain. Domain classes double as
 the JPA entities, so `HexagonalRulesTest` allows `jakarta.persistence` and `org.hibernate.annotations`
 in `domain`, and Jackson only inside JPA `AttributeConverter` classes (the JSON column converters). A
-context's `domain` depends only on its own context and `shared`.
+type stored through a converter needs value equality: Hibernate compares a converted copy with
+`equals`, so without it the owning row is rewritten, and its `@Version` bumped, on every flush
+(`PolicyValueEqualityTest`). A context's `domain` depends only on its own context and `shared`.
 
 Seams: `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`, `EventSalesHistoryPort`,
 `InventoryCommandPort`, `CatalogEventDisplayPort`, `EventCancelledEvent`, the `shared/event` notices.

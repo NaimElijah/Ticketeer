@@ -1,5 +1,7 @@
 package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
 
+import java.util.Objects;
+
 import com.ticketing.system.shared.InvariantChecked;
 
 /**
@@ -44,4 +46,15 @@ public class OrPurchasePolicy implements PurchasePolicy, InvariantChecked {
     }
     public PurchasePolicy getLeftPolicy()  { return leftPolicy; }
     public PurchasePolicy getRightPolicy() { return rightPolicy; }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof OrPurchasePolicy that
+                && leftPolicy.equals(that.leftPolicy) && rightPolicy.equals(that.rightPolicy);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(leftPolicy, rightPolicy);
+    }
 }

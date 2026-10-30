@@ -44,4 +44,14 @@ public class AgePurchasePolicy implements PurchasePolicy, InvariantChecked {
         return "You must be at least " + minimumAge + " years old to buy tickets";
     }
     public int getMinimumAge() { return minimumAge; }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof AgePurchasePolicy that && minimumAge == that.minimumAge;
+    }
+
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(minimumAge);
+    }
 }
