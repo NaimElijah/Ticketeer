@@ -45,7 +45,7 @@ import java.util.Locale;
  * nor uses
  * {@code try/catch} — it switches on the presenter's sealed {@code Outcome}. A
  * receipt that isn't
- * the signed-in member's renders a 403 banner.
+ * the signed-in member's renders the same not-found banner as a missing one.
  */
 @Route(value = "receipt/:receiptId", layout = MainLayout.class)
 @PageTitle("Receipt · TicketHub")

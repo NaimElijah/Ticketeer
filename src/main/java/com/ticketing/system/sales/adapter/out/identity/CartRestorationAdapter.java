@@ -22,7 +22,11 @@ import lombok.extern.slf4j.Slf4j;
  * <p>The adapter carries no {@code @Transactional} of its own: it is called from
  * {@code AuthenticationService.login}, which is already {@code @Transactional}, so the
  * lock/lookup/save merge below runs inside that login transaction (atomic with the
- * session promotion) — preserving the pre-migration behavior.
+ * session promotion) — preserving the pre-migration behavior. Abandoning a replaced member cart
+ * therefore commits its inventory releases with the login too: under JPA's optimistic locking, a
+ * login that races another buyer's reservation in the same zone fails with
+ * {@code ConcurrentReservationException} and can be retried. Moving the release out of the login
+ * transaction would strand the held seats again.
  */
 @Component
 @Slf4j

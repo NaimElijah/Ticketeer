@@ -168,7 +168,7 @@ public class Session implements InvariantChecked {
         checkInvariants();
     }
 
-    /** Records activity. Used by the idle-timeout flow for Guest sessions. */
+    /** Records activity. Registration touches a Guest session; nothing reads it yet (OQ-8). */
     public void touch(Instant now) {
         if (now == null) {
             throw new IllegalArgumentException("now must not be null");
@@ -185,7 +185,7 @@ public class Session implements InvariantChecked {
         }
     }
 
-    /** Extends the expiry. Used by the idle-timeout flow when a Guest is active. */
+    /** Extends the expiry. Nothing calls it yet: a sliding guest expiry is not built (OQ-8). */
     public void extendExpiry(Instant newExpiresAt) {
         if (newExpiresAt == null) {
             throw new IllegalArgumentException("newExpiresAt must not be null");

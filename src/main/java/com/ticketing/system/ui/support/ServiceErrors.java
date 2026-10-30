@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  * for a failed service call? Business rules are signalled with {@link DomainException} and, in much
  * of the code, with {@link IllegalArgumentException} / {@link IllegalStateException}, so all three
  * pass their message through. Retyping those rule violations as {@code DomainException} would let
- * the helper narrow to domain exceptions alone.
+ * the helper narrow to domain exceptions alone (NaimElijah/Ticketeer#219).
  */
 @Slf4j
 public final class ServiceErrors {

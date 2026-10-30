@@ -35,8 +35,8 @@ Forces:
 **Exclude `com.vaadin:hilla` from `vaadin-spring-boot-starter`.**
 - `hilla-dev` comes only through `vaadin-dev`, which the `production` profile already excludes, so
   it needs no exclusion of its own.
-- CI's production-artifact check now refuses any `hilla` jar in `BOOT-INF/lib`, so Hilla cannot
-  return unnoticed.
+- CI's "Production artifact" job now fails on any `hilla` jar in `BOOT-INF/lib`. That job does not
+  gate a merge yet (#200), so a red run there must be read before merging.
 
 The production runtime goes from 190 to 159 artifacts, as listed by
 `./mvnw -Pproduction dependency:list -DincludeScope=runtime`; `org.jetbrains:annotations` also

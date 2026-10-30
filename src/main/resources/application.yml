@@ -40,7 +40,8 @@ jwt:
   secret: ${JWT_SECRET:dev-only-secret-please-override-in-prod-must-be-at-least-256-bits-long}
 
 # Session TTLs (auth rework / unified Session aggregate).
-# Member sessions are absolute; Guest sessions are idle-bounded. The JWT's exp
+# Both are absolute lifetimes counted from the session's start: nothing extends a guest session yet
+# (OQ-8), and the UI replaces an expired one. The JWT's exp
 # claim and the Session row's expiresAt are kept in sync by JwtSessionManager.
 session:
   member-ttl-minutes: ${SESSION_MEMBER_TTL_MINUTES:1440}
