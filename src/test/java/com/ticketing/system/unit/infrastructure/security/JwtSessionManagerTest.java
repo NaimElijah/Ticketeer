@@ -26,6 +26,7 @@ import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.testutil.LogCapture;
 
@@ -71,11 +72,11 @@ class JwtSessionManagerTest {
     void setUp() {
         clock = Clock.systemUTC();
         sessions = new MemorySessionRepository(clock);
-        manager = new JwtSessionManager(SECRET, sessionTtl(60), sessions, clock);
+        manager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), sessions, clock);
 
         Clock fixed = Clock.fixed(T0, ZoneOffset.UTC);
         boundSessions = new MemorySessionRepository(fixed);
-        boundManager = new JwtSessionManager(SECRET, sessionTtl(60), boundSessions, fixed);
+        boundManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), boundSessions, fixed);
     }
 
     @Test
@@ -119,7 +120,7 @@ class JwtSessionManagerTest {
         // Negative expiration → token is issued already past its exp claim.
         Clock expiredClock = Clock.systemUTC();
         SessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
-        JwtSessionManager expiredManager = new JwtSessionManager(SECRET, sessionTtl(-1), expiredSessions, expiredClock);
+        JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), expiredSessions, expiredClock);
         String token = expiredManager.generateToken(42, "alice");
         assertThrows(SessionExpiredException.class, () -> expiredManager.validateToken(token));
     }
@@ -128,7 +129,7 @@ class JwtSessionManagerTest {
     void GivenClockFixedYearsBeforeRealTime_WhenValidateFreshToken_ThenTrue() {
         Clock past = Clock.fixed(Instant.parse("2020-01-01T00:00:00Z"), ZoneOffset.UTC);
         JwtSessionManager pastManager =
-                new JwtSessionManager(SECRET, sessionTtl(60), new MemorySessionRepository(past), past);
+                new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), new MemorySessionRepository(past), past);
         String token = pastManager.generateToken(42, "alice");
 
         assertTrue(pastManager.validateToken(token));
@@ -138,9 +139,9 @@ class JwtSessionManagerTest {
     void GivenInjectedClockPastTokenExpiry_WhenValidate_ThenThrowsSessionExpired() {
         Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager twoHoursLater = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager twoHoursLater = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofHours(2)), ZoneOffset.UTC));
 
         assertThrows(SessionExpiredException.class, () -> twoHoursLater.validateToken(token));
@@ -150,9 +151,9 @@ class JwtSessionManagerTest {
     void GivenInjectedClockOneSecondBeforeExp_WhenValidate_ThenTrue() {
         Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager justBeforeExp = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager justBeforeExp = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofMinutes(60)).minusSeconds(1), ZoneOffset.UTC));
 
         assertTrue(justBeforeExp.validateToken(token));
@@ -162,9 +163,9 @@ class JwtSessionManagerTest {
     void GivenInjectedClockOneSecondAfterExp_WhenValidate_ThenThrowsSessionExpired() {
         Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager justAfterExp = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager justAfterExp = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofMinutes(60)).plusSeconds(1), ZoneOffset.UTC));
 
         assertThrows(SessionExpiredException.class, () -> justAfterExp.validateToken(token));
@@ -176,9 +177,9 @@ class JwtSessionManagerTest {
         // The repository's clock stays at issue time, so the row still counts as live to it and
         // only invalidate() can make it disappear.
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager twoHoursLater = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager twoHoursLater = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofHours(2)), ZoneOffset.UTC));
         assertTrue(shared.existsByUserId(42));
 
@@ -202,7 +203,7 @@ class JwtSessionManagerTest {
     void GivenSecretShorterThan256Bits_WhenConstruct_ThenThrowsWeakKey() {
         // 31 bytes: one short of the 256 bits HS256 needs.
         assertThrows(WeakKeyException.class, () -> new JwtSessionManager(
-                "only-31-bytes-of-secret-materia", sessionTtl(60), sessions, clock));
+                new JwtProperties("only-31-bytes-of-secret-materia"), sessionTtl(60), sessions, clock));
     }
 
     @Test

@@ -50,6 +50,7 @@ import com.ticketing.system.identity.adapter.out.persistence.MemorySessionReposi
 import com.ticketing.system.identity.adapter.out.security.BcryptPasswordHasher;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 import com.ticketing.system.identity.config.IdentityProperties;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -629,7 +630,7 @@ class AuthenticationServiceTest {
     @Test
     void GivenAnAdminToken_WhenLiveMemberIdIsAsked_ThenEmpty() {
         int sharedId = 1;
-        JwtSessionManager realSessionManager = new JwtSessionManager(JWT_TEST_SECRET,
+        JwtSessionManager realSessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET),
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES),
                 new MemorySessionRepository(fixedClock), fixedClock);
         AuthenticationService serviceOnRealSessions = new AuthenticationService(

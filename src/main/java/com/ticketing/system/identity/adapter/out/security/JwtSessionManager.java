@@ -11,10 +11,10 @@ import java.util.UUID;
 import javax.crypto.SecretKey;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
@@ -31,9 +31,9 @@ import io.jsonwebtoken.security.Keys;
 /**
  * jjwt-backed implementation of {@link SessionManager}. UC-12 / UC-14.
  *
- * <p>Tokens are HMAC-signed with {@code jwt.secret}. jjwt picks HS256, HS384 or HS512 from the
- * secret's length (the committed 70-byte dev default gives HS512) and refuses a secret shorter
- * than 256 bits when this bean is built. Tokens expire after {@code session.member-ttl-minutes},
+ * <p>Tokens are HMAC-signed with {@code jwt.secret} ({@link JwtProperties}, which refuses a secret
+ * shorter than 256 bits at binding). jjwt picks HS256, HS384 or HS512 from the secret's length (the
+ * committed 70-byte dev default gives HS512). Tokens expire after {@code session.member-ttl-minutes},
  * checked against the injected clock (the JWT's exp claim and the Session row's expiresAt are
  * always kept in sync by construction).
  * Revocation (UC-14) is recorded by deleting the corresponding {@link Session}
@@ -69,11 +69,11 @@ public class JwtSessionManager implements SessionManager {
     private final io.jsonwebtoken.Clock jwtClock;
 
     public JwtSessionManager(
-            @Value("${jwt.secret}") String secret,
+            JwtProperties jwtProperties,
             SessionProperties sessionProperties,
             SessionRepository sessions,
             Clock clock) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.signingKey = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
         this.expirationMillis = Duration.ofMinutes(sessionProperties.memberTtlMinutes()).toMillis();
         this.sessions = sessions;
         this.clock = clock;

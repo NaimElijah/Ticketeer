@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.context.properties.ConfigurationPropertiesBean;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.validation.BindValidationException;
@@ -223,6 +225,47 @@ class InitPropertiesValidationTest {
         runner.withPropertyValues("wsep.base-url=https://wsep.example.com/").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(WsepProperties.class).baseUrl()).isEqualTo("https://wsep.example.com/");
+        });
+    }
+
+    // ---- jwt.secret (#187) ----
+    // The HMAC secret binds to a @Validated record in identity's config package, like every other
+    // init parameter, so a blank secret or one shorter than the 256 bits (32 bytes) jjwt's HS256
+    // needs stops the context by its property name rather than as a WeakKeyException from deep inside
+    // JwtSessionManager. The runner scans that package, so it binds whichever record carries the key.
+
+    private static final int MIN_JWT_SECRET_BYTES = 32;
+
+    private final ApplicationContextRunner identityConfigRunner = new ApplicationContextRunner()
+            .withInitializer(new ConfigDataApplicationContextInitializer())
+            .withUserConfiguration(IdentityConfigScan.class);
+
+    @ConfigurationPropertiesScan(basePackageClasses = IdentityProperties.class)
+    static class IdentityConfigScan {
+    }
+
+    @ParameterizedTest(name = "jwt.secret of {0} characters")
+    @ValueSource(ints = {0, MIN_JWT_SECRET_BYTES - 1})
+    void GivenJwtSecretBlankOrShorterThan32Bytes_WhenContextStarts_ThenFailsNamingTheSecret(int length) {
+        identityConfigRunner.withPropertyValues("jwt.secret=" + "s".repeat(length)).run(context -> {
+            assertThat(context).as("a jwt.secret of %d characters must stop the boot", length).hasFailed();
+            Throwable root = NestedExceptionUtils.getRootCause(context.getStartupFailure());
+            assertThat(root).isInstanceOf(BindValidationException.class);
+            ValidationErrors errors = ((BindValidationException) root).getValidationErrors();
+            assertThat(errors.getName()).hasToString("jwt");
+            assertThat(errors.getAllErrors())
+                    .extracting(error -> ((FieldError) error).getField())
+                    .containsOnly("secret");
+        });
+    }
+
+    @Test
+    void GivenJwtSecretOfExactly32Bytes_WhenContextStarts_ThenARecordBindsIt() {
+        identityConfigRunner.withPropertyValues("jwt.secret=" + "s".repeat(MIN_JWT_SECRET_BYTES)).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(ConfigurationPropertiesBean.getAll(context.getSourceApplicationContext()).values())
+                    .as("a @ConfigurationProperties record must bind the jwt prefix")
+                    .anySatisfy(bean -> assertThat(bean.getAnnotation().prefix()).isEqualTo("jwt"));
         });
     }
 

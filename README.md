@@ -209,8 +209,8 @@ set these:
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
 `wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
-`event-completion`, `notifications`, `identity`, `catalog.venue-limits` and `database` groups bind to validated records.
-A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an unknown
+`event-completion`, `notifications`, `identity`, `jwt`, `catalog.venue-limits` and `database` groups bind to validated records.
+A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, a JWT secret under 32 characters, an unknown
 time zone, a malformed WSEP URL or a zero sweep delay, stops the boot with a report naming the
 property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Outside `dev` and
 `test`, a `JWT_SECRET` or `PLATFORM_ADMIN_PASSWORD` left at the default committed in
