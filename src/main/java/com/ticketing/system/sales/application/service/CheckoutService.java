@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionCallback;
@@ -62,6 +62,9 @@ import com.ticketing.system.identity.domain.User;
 @Slf4j
 public class CheckoutService {
 
+    // How many times Phase 3 runs before a lost concurrency race fails the checkout (see runPhase3).
+    private static final int PHASE3_ATTEMPTS = 3;
+
     private final ActiveOrderRepository activeOrderRepository;
     // Retained ONLY for the Phase-3 event buyer-lock (lockEvents/unlockEvents): the lock must be held in
     // sales across the whole validate -> persist -> confirm section, spanning several port calls plus
@@ -86,8 +89,6 @@ public class CheckoutService {
     // OUTSIDE any transaction so a slow gateway never pins a DB connection. This template wraps only
     // the Phase-3 DB unit (tickets + receipt + RESERVED→SOLD confirm), between the external calls.
     private final TransactionTemplate transactionTemplate;
-    // How many times Phase 3 runs before a lost version race fails the checkout (see runPhase3).
-    private static final int PHASE3_ATTEMPTS = 3;
     // "now" for hold expiry, pricing and receipts: UTC wall time (ADR-008).
     private final Clock clock;
 
@@ -282,9 +283,9 @@ public class CheckoutService {
             // Re-validate, persist tickets + receipt, then the irreversible RESERVED→SOLD confirm —
             // all committed together or not at all. The WSEP charge/issue already ran in Phase 2,
             // OUTSIDE this (and any) transaction, so no DB connection is held across an HTTP call.
-            // If anything here fails — including a @Version conflict at commit when two buyers race
-            // the same seat — the whole unit rolls back, inventorySaleConfirmed stays false, and the
-            // catch below returns the inventory to stock and refunds the charge via the existing path.
+            // A unit that loses a concurrency race runs again (runPhase3). If it still fails, the whole
+            // unit rolls back, inventorySaleConfirmed stays false, and the catch below returns the
+            // inventory to stock and refunds the charge via the existing path.
             final int capturedUserId = userId;
             final double capturedTotalPrice = totalPrice;
             final PaymentResultDTO capturedPaymentResult = paymentResult;
@@ -614,21 +615,21 @@ public class CheckoutService {
                 .toList();
     }
 
-    //
-    // Two sales in one standing zone both move the zone's reserved and sold counts, so whichever commits
-    // second loses on the zone's @Version, though the zone had room for both. Failing then would refund a
-    // charge for nothing. Phase 3 is database work only, it re-reads and re-validates everything, and each
-    // attempt's transaction rolls back whole, so running it again is safe. Any other failure, and the last
-    // lost race, still fail the checkout.
+    // Phase 3 can lose a race it would win a moment later, and failing then refunds a charge for nothing:
+    // two sales in one standing zone both move the zone's counts, so the second to commit loses on its
+    // @Version; on PostgreSQL a sale can also be a deadlock victim or wait out a lock (ADR-015). Phase 3 is
+    // database work only, it re-reads and re-validates everything, and each attempt's transaction rolls
+    // back whole, so running it again is safe. Any other failure, and the last lost race, still fail the
+    // checkout. A busy standing zone can exhaust the attempts; queueing its sales is #227.
     private <T> T runPhase3(TransactionCallback<T> phase3) {
         for (int attempt = 1; ; attempt++) {
             try {
                 return transactionTemplate.execute(phase3);
-            } catch (OptimisticLockingFailureException lostRace) {
+            } catch (ConcurrencyFailureException lostRace) {
                 if (attempt == PHASE3_ATTEMPTS) {
                     throw lostRace;
                 }
-                log.info("Checkout Phase 3 lost a version race; running it again. attempt={}", attempt);
+                log.info("Checkout Phase 3 lost a concurrency race; running it again. attempt={}", attempt);
             }
         }
     }

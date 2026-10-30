@@ -44,6 +44,7 @@ import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -856,6 +857,22 @@ void GivenPhase3LosesOneVersionRace_WhenCheckout_ThenPhase3RunsAgainAndThePurcha
     assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId());
     verify(mockOrderReceiptRepo, times(2)).save(any());
     verify(mockPaymentGateway, times(1)).charge(any(PaymentRequestDTO.class));
+    verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+}
+
+// On PostgreSQL a sale can also be the victim of a deadlock, or wait out a lock: Phase 3 is just as safe to
+// run again after a pessimistic failure as after a lost version race.
+@Test
+void GivenPhase3IsADeadlockVictimOnce_WhenCheckout_ThenPhase3RunsAgainAndThePurchaseSucceedsWithOneCharge() {
+    arrangeOneStandingLineCheckout();
+    doThrow(new PessimisticLockingFailureException("deadlock detected"))
+            .doNothing()
+            .when(mockOrderReceiptRepo).save(any());
+
+    CheckoutResultDTO result = checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+    assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId());
+    verify(mockOrderReceiptRepo, times(2)).save(any());
     verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
 }
 
