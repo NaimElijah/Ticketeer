@@ -32,7 +32,13 @@ import com.ticketing.system.shared.dto.CardDetailsDTO;
  * carry their own, so that buyers reserving or buying in one event never conflict on the event itself.
  * A reservation or a checkout that rewrote the event row would bump its version, and every other buyer
  * operation on that event committing at the same time would then fail, a checkout only after its
- * charge. Runs on the Jpa adapters over H2.
+ * charge.
+ *
+ * <p>The exception is the sell-out flip: taking an event's last place sets it SOLD_OUT, and freeing one
+ * sets it back ON_SALE, so those operations do write the event row and, on PostgreSQL, wait for the
+ * sales holding its shared lock (ADR-015). A checkout never writes it, not even of the last places: a
+ * sale writing the row it holds a shared lock on would deadlock against the other sales holding it.
+ * Runs on the Jpa adapters over H2.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -88,11 +94,41 @@ class BuyerOperationEventVersionJpaTest {
         assertVersionsUnchanged(eventVersion, companyVersion);
     }
 
+    @Test
+    void GivenAPublishedShow_WhenAMemberReservesItsLastSeats_ThenTheEventIsSoldOutAndOnlyItsRowIsWritten() {
+        long eventVersion = eventVersion();
+        long companyVersion = companyVersion();
+
+        reservationService.reserveForMember(member.token(), show.eventId(), show.zoneId(),
+                InventorySelectionDTO.seated(SeatedShowFixture.SEATS));
+
+        assertAll(
+                () -> assertEquals("SOLD_OUT", eventStatus()),
+                () -> assertEquals(eventVersion + 1, eventVersion(), "the sell-out flip writes the event row"),
+                () -> assertEquals(companyVersion, companyVersion(), "it leaves the company row alone"));
+    }
+
+    @Test
+    void GivenTheLastSeatsReserved_WhenTheMemberChecksOut_ThenTheEventAndCompanyVersionsAreUnchanged() {
+        reservationService.reserveForMember(member.token(), show.eventId(), show.zoneId(),
+                InventorySelectionDTO.seated(SeatedShowFixture.SEATS));
+        long eventVersion = eventVersion();
+        long companyVersion = companyVersion();
+
+        checkoutService.checkoutMember(member.token(), "version-" + UUID.randomUUID(), CURRENCY, CARD);
+
+        assertVersionsUnchanged(eventVersion, companyVersion);
+    }
+
     private void assertVersionsUnchanged(long eventVersion, long companyVersion) {
         assertAll(
                 () -> assertEquals(eventVersion, eventVersion(), "a buyer operation must not rewrite the event row"),
                 () -> assertEquals(companyVersion, companyVersion(),
                         "a buyer operation must not rewrite the company row"));
+    }
+
+    private String eventStatus() {
+        return jdbc.queryForObject("select status from events where id = ?", String.class, show.eventId());
     }
 
     private long eventVersion() {

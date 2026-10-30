@@ -17,8 +17,8 @@ Forces:
 
 ## Decision
 
-- **A sale holds a shared row lock on each of its events until it commits.** `EventRepository.findForSale` loads the event with `PESSIMISTIC_READ` (`FOR SHARE` on PostgreSQL). It requires the caller's transaction (`MANDATORY`), and checkout Phase 3's `validateEventsOnSale` calls it first, in sorted event order. Sales share the lock, so they run together. A write to the event row waits for every sale holding it: a cancel's CANCELED, a lifecycle edit, or the completion sweeper. The cancel's refund then sees the sale's receipt.
-- **A sale never writes the event row,** so it cannot deadlock by upgrading the shared lock. Purchase and discount policies have value equality, so Hibernate no longer rewrites the event or company row on every flush.
+- **A sale holds a shared row lock on each of its events until it commits.** `EventRepository.findForSale` loads the event with `PESSIMISTIC_READ` (`FOR SHARE` on PostgreSQL). It requires the caller's transaction (`MANDATORY`), and checkout Phase 3's `validateEventsOnSale` calls it first, in sorted event order. Sales share the lock, so they run together. A write to the event row waits for every sale holding it: a cancel's CANCELED, a lifecycle edit, the completion sweeper, or a buyer operation that flips the event between ON_SALE and SOLD_OUT (reserving its last place, or a release, expiry or refund that frees one). The cancel's refund then sees the sale's receipt.
+- **A sale never writes the event row,** not even when it sells the last places, so it cannot deadlock by upgrading the shared lock (`BuyerOperationEventVersionJpaTest`). Purchase and discount policies have value equality, so Hibernate no longer rewrites the event or company row on every flush.
 - **Phase 3 runs again after a lost race, up to three attempts in all** (`CheckoutService.runPhase3`). It retries on any `ConcurrencyFailureException`: a lost `@Version` race in a standing zone, a deadlock victim, a lock-wait timeout. Phase 3 is database work only, re-reads and re-validates everything, and rolls back whole, so running it again is safe. After the last attempt, the checkout fails and refunds as before.
 
 ## Consequences
@@ -29,7 +29,7 @@ Forces:
   - Two or three overlapping sales in one standing zone all succeed.
 - **Harder:**
   - **H2 has no shared row lock.** Hibernate's H2 dialect maps `PESSIMISTIC_READ` to `FOR UPDATE`, so in dev and in the H2 suites the Phase 3s of one event run one after another. Races that need them to overlap are tested on PostgreSQL only (`PostgresConcurrentCheckoutsOneZoneIT`, `PostgresCancelDuringCheckoutIT`).
-  - **A writer can be kept waiting.** PostgreSQL does not queue a new shared lock behind a writer that is already waiting, so during a long run of overlapping sales a cancel or a lifecycle edit waits until they stop. That wait is bounded by `database.socket-timeout`. Revisit at the load test (#108).
+  - **A writer can be kept waiting.** PostgreSQL does not queue a new shared lock behind a writer that is already waiting, so during a long run of overlapping sales a cancel, a lifecycle edit or a sell-out flip waits until they stop. That wait is bounded by `database.socket-timeout`, after which the writer fails: the buyer taking an event's last place sees the service as unavailable, and a sweeper tick that reopens a sold-out event rolls back every release in that tick. Revisit at the load test (#108).
   - **The retry has a bound.** More than three sales overlapping in one standing zone can still exhaust it and refund. Queueing standing-zone sales is #227.
   - **Each shared lock writes the event row's lock metadata,** so a hot event row is touched by every sale.
 
