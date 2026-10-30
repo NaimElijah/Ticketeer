@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-// Provides the BCryptPasswordEncoder bean used by Infrastructure/security/BcryptPasswordHasher.
+// Provides the BCryptPasswordEncoder bean that identity/adapter/out/security/BcryptPasswordHasher delegates to.
 // This is wiring config, not domain logic — it just hands the encoder to whoever asks for it.
 @Configuration
 public class SecurityConfig {
