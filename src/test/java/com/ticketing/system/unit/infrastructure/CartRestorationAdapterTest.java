@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -25,6 +26,7 @@ import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
+import com.ticketing.system.testutil.LogCapture;
 
 /**
  * Unit tests for {@link CartRestorationAdapter}, the sales-side implementation of identity's
@@ -158,5 +160,46 @@ class CartRestorationAdapterTest {
         ordered.verify(mockActiveOrderRepo).lockForUpdate("user:7");
         ordered.verify(mockActiveOrderRepo).unlock("user:7");
         ordered.verify(mockActiveOrderRepo).unlock("sess:sid-1");
+    }
+
+    // ----------------------------------------------------------------------
+    // The promoted session keeps the guest's session id, which was the guest's credential, so no
+    // log line carries it at any level (#185).
+    // ----------------------------------------------------------------------
+
+    private static final String LOGGED_SID = "c7d02f5e-promoted-sid-not-for-logs";
+    private static final LocalDateTime CART_CREATED = LocalDateTime.of(2026, 1, 1, 12, 0);
+
+    private LogCapture logs;
+
+    @AfterEach
+    void detachLogCapture() {
+        if (logs != null) {
+            logs.close();
+        }
+    }
+
+    @Test
+    void GivenGuestCart_WhenMergeGuestCartOnPromotion_ThenNoLogEventCarriesTheSessionId() {
+        ActiveOrder guestCart = ActiveOrder.forGuest(LOGGED_SID, CART_CREATED);
+        when(mockActiveOrderRepo.getBySessionId(LOGGED_SID)).thenReturn(Optional.of(guestCart));
+        logs = LogCapture.of(CartRestorationAdapter.class);
+
+        adapter.mergeGuestCartOnPromotion(LOGGED_SID, 7);
+
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_SID),
+                "promoting a guest cart must not log the session id");
+    }
+
+    @Test
+    void GivenOrphanedMemberCart_WhenMergeGuestCartOnPromotion_ThenNoLogEventCarriesTheSessionId() {
+        when(mockActiveOrderRepo.getBySessionId(LOGGED_SID)).thenReturn(Optional.empty());
+        when(mockActiveOrderRepo.getByUserId(7)).thenReturn(ActiveOrder.forMember(7, "old-sid", CART_CREATED));
+        logs = LogCapture.of(CartRestorationAdapter.class);
+
+        adapter.mergeGuestCartOnPromotion(LOGGED_SID, 7);
+
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_SID),
+                "re-attaching a member cart must not log the new session id");
     }
 }

@@ -462,7 +462,7 @@ public class CheckoutService {
             // Pre-Phase-1 gate failure: nothing reserved or charged, nothing to roll back. Propagate raw.
             throw marketClosed;
         } catch (Exception e) {
-            handleGuestCheckoutFailure(order, guestSessionId, orderLockKey, paymentResult, totalPrice,
+            handleGuestCheckoutFailure(order, orderLockKey, paymentResult, totalPrice,
                     inventorySaleConfirmed, frozeOrder, e);
             throw new RuntimeException("Checkout failed, tickets returned to stock", e);
         } finally {
@@ -1099,19 +1099,19 @@ public class CheckoutService {
     }
 
     // We handle guest checkout failures by logging the error with relevant
-    // information (guest session ID, total price, whether payment was done, whether
+    // information (the order key, total price, whether payment was done, whether
     // inventory sale was confirmed) and then attempting to roll back any changes
     // that were made during the checkout process. If the inventory sale was not
     // confirmed, we try to return the reserved tickets back to stock. If the
     // payment was done, we try to refund the payment. Since we don't have a user ID
     // for guests, we cannot send a notification about the failure, but we log
-    // enough information to allow for manual follow-up if needed. This method
+    // enough information to allow for manual follow-up if needed. The guest's
+    // session id is never logged: it is the guest's credential. This method
     // centralizes all the error handling and rollback logic for guest checkouts in
     // one place, making it easier to maintain and ensuring that we consistently
     // handle failures across different failure points in the checkout process.
     private void handleGuestCheckoutFailure(
             ActiveOrder order,
-            String guestSessionId,
             String orderLockKey,
             PaymentResultDTO paymentResult,
             double totalPrice,
@@ -1119,8 +1119,8 @@ public class CheckoutService {
             boolean frozeOrder,
             Exception originalFailure) {
         log.error(
-                "Guest checkout failed. guestSessionId={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
-                guestSessionId,
+                "Guest checkout failed. orderKey={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
+                orderKeyOf(order),
                 totalPrice,
                 paymentResult != null,
                 inventorySaleConfirmed,
@@ -1131,8 +1131,8 @@ public class CheckoutService {
 
         if (inventorySaleConfirmed) {
             log.error(
-                    "Guest checkout failed after inventory was confirmed as SOLD. Manual recovery may be required. guestSessionId={}",
-                    guestSessionId);
+                    "Guest checkout failed after inventory was confirmed as SOLD. Manual recovery may be required. orderKey={}",
+                    orderKeyOf(order));
         }
 
         // Refund only if the sale did NOT commit. Once inventory is confirmed SOLD the purchase is final;
@@ -1193,12 +1193,18 @@ public class CheckoutService {
             }
             returnTicketsToStock(order);
         } catch (RuntimeException rollbackFailure) {
-            // Already in the failure path — log, never mask the original checkout failure.
-            log.error("Atomic checkout rollback failed for orderLockKey={}", orderLockKey, rollbackFailure);
+            // Already in the failure path — log, never mask the original checkout failure. A guest's lock
+            // key embeds the session id, the guest's credential, so the line names the order instead.
+            log.error("Atomic checkout rollback failed for orderKey={}", orderKeyOf(fallbackOrder), rollbackFailure);
         } finally {
             unlockEvents(lockedEventIds);
             activeOrderRepository.unlock(orderLockKey);
         }
+    }
+
+    /** The order's own key, never derived from a session id, so it is safe to log; null without an order. */
+    private static String orderKeyOf(ActiveOrder order) {
+        return order == null ? null : order.getOrderKey();
     }
 
     private ActiveOrder getOrderByLockKey(String orderLockKey) {

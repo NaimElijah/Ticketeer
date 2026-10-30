@@ -155,8 +155,8 @@ public class ReservationService {
 
             // CheckoutService now marks orders as CHECKOUT_IN_PROGRESS and releases the order lock during Phase 2. ReservationService should reject reserve attempts against an order in that state; otherwise a concurrent reservation can mutate the cart while checkout is pricing/charging based on a snapshot, causing inconsistencies.
             if (activeOrder.isCheckoutInProgress()) {
-                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, sessionId={}",
-                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, buyer.isMember() ? null : buyer.sessionId());
+                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, orderKey={}",
+                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, activeOrder.getOrderKey());
                 throw new IllegalStateException("Cannot modify active order during checkout");
             }
 
@@ -264,8 +264,8 @@ public class ReservationService {
             // checkout is pricing/charging against. Fails fast here (before releasing inventory) instead of
             // letting the domain throw mid-flow and forcing a rollback — mirrors the guard in reserve(...).
             if (activeOrder.isCheckoutInProgress()) {
-                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, sessionId={}",
-                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, buyer.isMember() ? null : buyer.sessionId());
+                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, orderKey={}",
+                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, activeOrder.getOrderKey());
                 throw new IllegalStateException("Cannot modify active order during checkout");
             }
 
@@ -488,7 +488,7 @@ public class ReservationService {
 
         return activeOrderRepository.getBySessionId(buyer.sessionId())
                 .orElseGet(() -> {
-                    log.info("No active order found for sessionId={}, creating new ActiveOrder", buyer.sessionId());
+                    log.info("No active order found for guest, creating new ActiveOrder");
                     return ActiveOrder.forGuest(buyer.sessionId(), now());
                 });
     }
@@ -654,7 +654,7 @@ public class ReservationService {
     public ActiveOrderDTO restoreActiveOrderForGuest(String sessionId) {
         return activeOrderRepository.getBySessionId(sessionId)
                 .map(order -> {
-                    log.info("Active order found for sessionId={}, restoring ActiveOrderDTO", sessionId);
+                    log.info("Active order found for guest, restoring ActiveOrderDTO orderKey={}", order.getOrderKey());
                     ActiveOrderDTO dto = order.toDTO(now());
                     List<ActiveOrderDTO.CartLineDTO> enrichedLines = new ArrayList<>();
                     for (ActiveOrderDTO.CartLineDTO line : dto.lines()) {
@@ -667,7 +667,7 @@ public class ReservationService {
                             dto.remainingSecondsBeforeExpiry(), dto.currentTotalPrice(), enrichedLines);
                 })
                 .orElseGet(() -> {
-                    log.info("No active order found for sessionId={}, returning null", sessionId);
+                    log.info("No active order found for guest, returning null");
                     return null;
                 });
     }
@@ -718,7 +718,7 @@ public class ReservationService {
                     && !order.isCheckoutInProgress() && !order.hasExpiredItem(now)) {
                 order.renewReservationTimers(now);
                 activeOrderRepository.save(order);
-                log.info("Renewed reservation timers on checkout entry for sessionId={}", sessionId);
+                log.info("Renewed reservation timers on guest checkout entry orderKey={}", order.getOrderKey());
             }
         } finally {
             activeOrderRepository.unlock(orderLockKey);
@@ -752,7 +752,7 @@ public class ReservationService {
                 if (buyer.isMember()) {
                     log.info("No active order to abandon for userId={}", buyer.userId());
                 } else {
-                    log.info("No active order to abandon for sessionId={}", buyer.sessionId());
+                    log.info("No active order to abandon for guest");
                 }
                 return;
             }
@@ -789,7 +789,7 @@ public class ReservationService {
             if (buyer.isMember()) {
                 log.info("Abandoned active order for userId={}", buyer.userId());
             } else {
-                log.info("Abandoned active order for sessionId={}", buyer.sessionId());
+                log.info("Abandoned guest active order orderKey={}", orderKey);
             }
 
         } finally {

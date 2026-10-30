@@ -191,7 +191,7 @@ public class SessionAndOrderSweeper {
             // Note that this means expired orders that are CHECKOUT_IN_PROGRESS may not be cleaned up until their next expiration time 
             // (10 min after the last item was added), but this is an acceptable tradeoff to avoid disrupting active checkouts.
             if (order.isCheckoutInProgress()) {
-                log.info("Skipping expired active order {} because checkout is in progress", orderLockKey);
+                log.info("Skipping expired active order {} because checkout is in progress", order.getOrderKey());
                 return false;
             }
 
@@ -201,7 +201,7 @@ public class SessionAndOrderSweeper {
             // attached cart is released when the session ends, regardless of item expiry).
             if (requireStillExpired && !order.isEmpty() && !order.hasExpiredItem(now)) {
                 log.info("Skipping active order {} — items no longer expired (raced with manual removal/renew)",
-                        orderLockKey);
+                        order.getOrderKey());
                 return false;
             }
 
@@ -259,7 +259,7 @@ public class SessionAndOrderSweeper {
                             }
                         } catch (RuntimeException zoneReleaseFailure) {
                             log.warn("Sweeper: failed to release zone {} of event {} for order {}; continuing",
-                                    zoneId, eventEntry.getKey(), orderLockKey, zoneReleaseFailure);
+                                    zoneId, eventEntry.getKey(), order.getOrderKey(), zoneReleaseFailure);
                         }
                     }
 

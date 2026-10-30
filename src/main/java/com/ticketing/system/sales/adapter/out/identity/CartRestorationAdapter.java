@@ -100,14 +100,14 @@ public class CartRestorationAdapter implements CartRestorationPort {
                 }
                 guestCart.get().attachToUser(userId);        // claim it for the member
                 activeOrderRepository.save(guestCart.get()); // persist the promotion
-                log.debug("cart promoted to member userId={} sid={}", userId, sessionId);
+                log.debug("cart promoted to member userId={}", userId);
                 return; // guest cart wins (most recent intent) — done
             }
             ActiveOrder priorMemberCart = activeOrderRepository.getByUserId(userId); // orphaned member cart?
             if (priorMemberCart != null) {                    // restore a prior member cart onto the new session
                 priorMemberCart.attachToSession(sessionId);   // re-bind to the fresh session
                 activeOrderRepository.save(priorMemberCart);  // persist the re-attach
-                log.debug("member cart restored userId={} sid={}", userId, sessionId);
+                log.debug("member cart restored userId={}", userId);
             }
         } finally {
             activeOrderRepository.unlock(secondKey); // release in reverse acquisition order

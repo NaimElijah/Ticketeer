@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +49,8 @@ import java.util.List;
 import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.BuyerContextDTO;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -1206,6 +1209,84 @@ public class ReservationServiceTest {
         verify(activeOrderRepository).lockForUpdate("sess:" + sessionId);
         verify(activeOrderRepository).unlock("sess:" + sessionId);
         verify(activeOrderRepository).save(realOrder);
+    }
+
+    // --- A guest's session id is the guest's credential, so no log line carries it (#185) ---
+
+    private static final String LOGGED_GUEST_SID = LIVE_GUEST_SESSION_PREFIX + "-9e2a41c7-not-for-logs";
+
+    private LogCapture logs;
+
+    @AfterEach
+    void detachLogCapture() {
+        if (logs != null) {
+            logs.close();
+        }
+    }
+
+    @Test
+    void GivenGuestWithoutCart_WhenReserveForGuest_ThenNoLogEventCarriesTheSessionId() {
+        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
+        when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.empty());
+        when(zone.getAvailableAmount()).thenReturn(10);
+        when(zone.getprice()).thenReturn(100.0);
+        logs = LogCapture.of(ReservationService.class);
+
+        reservationService.reserveForGuest(LOGGED_GUEST_SID, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY));
+
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
+                "a guest reservation must not log the guest's session id");
+    }
+
+    @Test
+    void GivenGuestCartInCheckout_WhenReserveForGuest_ThenNoLogEventCarriesTheSessionId() {
+        when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.of(activeOrder));
+        when(activeOrder.isCheckoutInProgress()).thenReturn(true);
+        logs = LogCapture.of(ReservationService.class);
+
+        assertThrows(IllegalStateException.class, () -> reservationService.reserveForGuest(LOGGED_GUEST_SID,
+                EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
+                "a rejected guest reservation must not log the guest's session id");
+    }
+
+    @Test
+    void GivenGuestWithoutCart_WhenAbandonActiveOrder_ThenNoLogEventCarriesTheSessionId() {
+        when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.empty());
+        logs = LogCapture.of(ReservationService.class);
+
+        reservationService.abandonActiveOrder(BuyerContextDTO.guest(LOGGED_GUEST_SID));
+
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
+                "abandoning a guest's missing cart must not log the guest's session id");
+    }
+
+    @Test
+    void GivenGuestCart_WhenAbandonActiveOrder_ThenNoLogEventCarriesTheSessionId() {
+        ActiveOrder guestCart = ActiveOrder.forGuest(LOGGED_GUEST_SID, NOW);
+        when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.of(guestCart));
+        logs = LogCapture.of(ReservationService.class);
+
+        reservationService.abandonActiveOrder(BuyerContextDTO.guest(LOGGED_GUEST_SID));
+
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
+                "abandoning a guest's cart must not log the guest's session id");
+    }
+
+    @Test
+    void GivenGuestCart_WhenRenewReservationsForGuestCheckout_ThenNoLogEventCarriesTheSessionId() {
+        ActiveOrder guestCart = ActiveOrder.forGuest(LOGGED_GUEST_SID, NOW);
+        guestCart.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
+        when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.of(guestCart));
+        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        logs = LogCapture.of(ReservationService.class);
+
+        reservationService.renewReservationsForGuestCheckout(LOGGED_GUEST_SID);
+
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
+                "renewing a guest's holds must not log the guest's session id");
     }
 
     // helper test methods:

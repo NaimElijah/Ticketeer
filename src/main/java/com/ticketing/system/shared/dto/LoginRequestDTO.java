@@ -9,4 +9,14 @@ public record LoginRequestDTO(
     String username,
     String rawPassword,
     String guestSessionId
-) {}
+) {
+
+    /**
+     * Leaves out the password and the guest session id, which is the guest's credential, so a
+     * logged request or an exception message built from one carries neither (SLR.2).
+     */
+    @Override
+    public String toString() {
+        return "LoginRequestDTO[username=" + username + "]";
+    }
+}

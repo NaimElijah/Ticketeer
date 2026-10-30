@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import javax.crypto.SecretKey;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +27,7 @@ import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 import com.ticketing.system.identity.config.SessionProperties;
+import com.ticketing.system.testutil.LogCapture;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -679,6 +681,92 @@ class JwtSessionManagerTest {
 
         assertFalse(boundManager.validateCredential(GUEST_SID),
                 "a guest row is expired at its expiresAt instant");
+    }
+
+    // ---- session ids never reach the log (#185) ----
+    // A member session keeps the id its guest session had, and a guest's raw id is its credential,
+    // so neither revoking nor rejecting a token may log the id it names, at any level.
+
+    private LogCapture logs;
+
+    @AfterEach
+    void detachLogCapture() {
+        if (logs != null) {
+            logs.close();
+        }
+    }
+
+    @Test
+    void GivenMemberToken_WhenInvalidate_ThenNoLogEventCarriesTheSessionId() {
+        String token = boundManager.generateToken(MEMBER_ID, "alice");
+        String sid = sidOf(token);
+        logs = LogCapture.of(JwtSessionManager.class);
+
+        boundManager.invalidate(token);
+
+        assertEquals(java.util.List.of(), logs.eventsContaining(sid), "revoking a session must not log its id");
+    }
+
+    @Test
+    void GivenRevokedToken_WhenValidate_ThenNoLogEventCarriesTheSessionId() {
+        String token = boundManager.generateToken(MEMBER_ID, "alice");
+        String sid = sidOf(token);
+        boundManager.invalidate(token);
+        logs = LogCapture.of(JwtSessionManager.class);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+
+        assertEquals(java.util.List.of(), logs.eventsContaining(sid), "rejecting a revoked token must not log its id");
+    }
+
+    @Test
+    void GivenAdminToken_WhenValidateAsMember_ThenNoLogEventCarriesTheSessionId() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+        String sid = sidOf(adminToken);
+        logs = LogCapture.of(JwtSessionManager.class);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(adminToken));
+
+        assertEquals(java.util.List.of(), logs.eventsContaining(sid),
+                "rejecting a token of the other session kind must not log its id");
+    }
+
+    @Test
+    void GivenJwtNamingAGuestSessionRow_WhenValidate_ThenNoLogEventCarriesTheSessionId() {
+        boundSessions.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+        String token = signedToken(MEMBER_ID, GUEST_SID, ROLE_MEMBER);
+        logs = LogCapture.of(JwtSessionManager.class);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+
+        assertEquals(java.util.List.of(), logs.eventsContaining(GUEST_SID),
+                "the guest session id is the live guest's credential and must not be logged");
+    }
+
+    @Test
+    void GivenTokenWhoseSubjectDiffersFromItsSessionRow_WhenValidate_ThenNoLogEventCarriesTheSessionId() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String sid = sidOf(memberToken);
+        String token = signedToken(OTHER_MEMBER_ID, sid, ROLE_MEMBER);
+        logs = LogCapture.of(JwtSessionManager.class);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+
+        assertEquals(java.util.List.of(), logs.eventsContaining(sid),
+                "rejecting a token bound to another user's row must not log the row's id");
+    }
+
+    @Test
+    void GivenAdminRoleOnAMemberSessionRow_WhenValidate_ThenNoLogEventCarriesTheSessionId() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String sid = sidOf(memberToken);
+        String token = signedToken(MEMBER_ID, sid, ROLE_ADMIN);
+        logs = LogCapture.of(JwtSessionManager.class);
+
+        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+
+        assertEquals(java.util.List.of(), logs.eventsContaining(sid),
+                "rejecting a token whose role does not match its row must not log the row's id");
     }
 
     // ---- helpers ----

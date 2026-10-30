@@ -167,7 +167,7 @@ public class AuthenticationService {
         String sid = UUID.randomUUID().toString();
         sessionRepository.save(new Session(sid, null, now, expiry));
         systemMetrics.record(MetricType.VISITOR_ENTRY);
-        log.info("guest session started sid={}", sid);
+        log.info("guest session started");
         return new GuestSessionDTO(sid, now);
     }
 
@@ -182,7 +182,7 @@ public class AuthenticationService {
             return;
         sessionRepository.delete(sessionId);
         systemMetrics.record(MetricType.VISITOR_EXIT);
-        log.info("guest session ended sid={}", sessionId);
+        log.info("guest session ended");
     }
 
     // ------------------------------------------------------------------
@@ -316,8 +316,7 @@ public class AuthenticationService {
         String token = sessionManager.generateTokenForSession(session, user.getUsername());
         long expiresAt = sessionManager.extractExpiration(token);
 
-        log.info("member logged in: username={} id={} sid={}",
-                user.getUsername(), user.getUserId(), session.getSessionId());
+        log.info("member logged in: username={} id={}", user.getUsername(), user.getUserId());
 
         AuthTokenDTO authTokenDTO = new AuthTokenDTO(token, expiresAt, user.getUserId(), user.getUsername());
         ActiveOrderDTO activeOrderDTO = cartRestorationPort.restoreActiveOrder(user.getUserId());

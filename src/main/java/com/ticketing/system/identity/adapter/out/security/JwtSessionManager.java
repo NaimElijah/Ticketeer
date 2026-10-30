@@ -219,7 +219,7 @@ public class JwtSessionManager implements SessionManager {
             String sid = claims.get(CLAIM_SID, String.class);
             if (sid != null && !sid.isBlank()) {
                 sessions.delete(sid);
-                log.debug("session deleted sid={}", sid);
+                log.debug("session deleted");
             }
         } catch (Exception e) {
             // Malformed input — nothing to invalidate. Idempotent.
@@ -248,7 +248,7 @@ public class JwtSessionManager implements SessionManager {
     private Claims parseClaimsOfKind(String token, SessionKind kind) {
         BoundToken bound = parseBound(token);
         if (bound.session().getKind() != kind) {
-            log.debug("rejected token of another session kind sid={}", bound.session().getSessionId());
+            log.debug("rejected token of another session kind, wanted={} found={}", kind, bound.session().getKind());
             throw new InvalidTokenException(SESSION_NOT_FOUND);
         }
         return bound.claims();
@@ -289,19 +289,19 @@ public class JwtSessionManager implements SessionManager {
             throw new InvalidTokenException("token missing session id");
         }
         Session session = sessions.findById(sid).orElseThrow(() -> {
-            log.debug("rejected revoked token sid={}", sid);
+            log.debug("rejected revoked token");
             return new InvalidTokenException(SESSION_NOT_FOUND);
         });
         if (session.isGuest()) {
-            log.debug("rejected token naming a guest session sid={}", sid);
+            log.debug("rejected token naming a guest session");
             throw new InvalidTokenException("token names a guest session");
         }
         if (!String.valueOf(session.getUserId()).equals(claims.getSubject())) {
-            log.debug("rejected token whose subject is not its session's user sid={}", sid);
+            log.debug("rejected token whose subject is not its session's user");
             throw new InvalidTokenException("token subject does not match its session");
         }
         if (kindOfRole(claims.get(CLAIM_ROLE, String.class)) != session.getKind()) {
-            log.debug("rejected token whose role does not match its session's kind sid={}", sid);
+            log.debug("rejected token whose role does not match its session's kind");
             throw new InvalidTokenException("token role does not match its session");
         }
         if (session.isExpiredAt(clock.instant())) {

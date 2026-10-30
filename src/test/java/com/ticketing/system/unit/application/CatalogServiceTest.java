@@ -46,6 +46,7 @@ import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.dto.SeatDTO;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.testutil.LogCapture;
 
 class CatalogServiceTest {
 
@@ -774,6 +775,24 @@ class CatalogServiceTest {
         when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
 
         assertEquals(3, catalogService.search(VALID_TOKEN, "show", 3).size());
+    }
+
+    // A buyer can type anything into the search box, an email address included, so the log records
+    // the query's length and never its text (#185).
+    @Test
+    void GivenQueryText_WhenSearch_ThenNoLogEventCarriesTheQueryText() {
+        String query = "dana.levi@example.com";
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        Event e = searchEvent(1, 10, "Coldplay Live", List.of("Coldplay"));
+        ProductionCompany company = createMockCompany("Live Nation", 4.5);
+        when(mockEventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
+
+        try (LogCapture logs = LogCapture.of(CatalogService.class)) {
+            catalogService.search(VALID_TOKEN, query, 8);
+
+            assertEquals(List.of(), logs.eventsContaining(query), "the search text must not be logged");
+        }
     }
 
     // -------------------------------------------------------------------------

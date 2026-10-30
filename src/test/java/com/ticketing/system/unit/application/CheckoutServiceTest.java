@@ -35,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 import com.ticketing.system.shared.dto.BarcodeDTO;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.CheckoutResultDTO;
@@ -2511,6 +2512,28 @@ private AtomicBoolean trackReceiptSave() {
         assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
         assertEquals(5, zone.getAvailableAmount());
         assertEquals(0, zone.getReservedAmount());
+    }
+
+    // A guest's session id is the guest's credential, so the failure log must not carry it (#185).
+    @Test
+    void GivenPaymentGatewayFails_WhenGuestCheckout_ThenNoLogEventCarriesTheSessionId() {
+        givenValidGuestSession();
+        StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
+        Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+        ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
+        activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+        zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
+        when(mockActiveOrderRepo.getBySessionId(VALID_GUEST_SID)).thenReturn(Optional.of(activeOrder));
+        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+        when(mockPaymentGateway.charge(any())).thenReturn(null);
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                    VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+            assertEquals(List.of(), logs.eventsContaining(VALID_GUEST_SID),
+                    "a failed guest checkout must not log the guest's session id");
+        }
     }
 
     @Test
