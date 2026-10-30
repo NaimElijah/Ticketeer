@@ -126,15 +126,16 @@ public class AuthenticationService {
     }
 
     /**
-     * Answers "does this stored token still belong to a signed-in member?" without throwing for the
-     * expected no.
+     * Answers "is this stored token's session still live, and whose is it?" without throwing for the
+     * expected no. It checks what {@link #validateToken} checks (signature, expiry, the session row),
+     * not the token's role.
      *
      * <p>{@link #validateToken} throws for an expired or revoked token. For a caller that holds a token
      * and only needs to know whether it is still live (the UI, on every request), that is an ordinary
      * answer rather than a failure; letting it throw would also have {@code LoggingAspect} log a WARN
      * for every such check.
      *
-     * @param token the member's JWT
+     * @param token a signed-in visitor's JWT
      * @return the token's user id while it validates; empty when it has expired, is malformed, carries
      *     a bad signature, has been revoked, or is {@code null}/blank
      * @throws RuntimeException any other validation failure (e.g. the session store is unreachable),
