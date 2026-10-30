@@ -4,6 +4,8 @@ import com.ticketing.system.organization.domain.CompanyStatus;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.ticketing.system.shared.exception.AppointmentNotFoundException;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.InvariantChecked;
 import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
@@ -102,7 +104,7 @@ public class ProductionCompany implements InvariantChecked {
 
     public void addManager(int targetId) {
         if (managers.contains(targetId)) {
-            throw new RuntimeException("The target user is already a manager of this company");
+            throw new BusinessRuleViolationException("The target user is already a manager of this company");
         }
         // Validate-before-commit: roll back the add if the target cannot be a manager
         // (e.g. they are already an owner), so a rejected call leaves managers unchanged.
@@ -186,7 +188,7 @@ public class ProductionCompany implements InvariantChecked {
         } else if (ownerIds.contains(targetId)) {
             ownerIds.remove(Integer.valueOf(targetId));
         } else {
-            throw new RuntimeException("User is not a manager or owner, cannot revoke appointment");
+            throw new AppointmentNotFoundException("User is not a manager or owner, cannot revoke appointment");
         }
         checkInvariants();
     }

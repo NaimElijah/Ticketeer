@@ -14,6 +14,9 @@ import com.ticketing.system.organization.domain.AppointmentStatus;
 import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.CompanyRole;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.exception.AppointmentNotFoundException;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 /**
  * Owns company-membership (appointment) behaviour that used to live on the {@code User} aggregate
@@ -57,19 +60,19 @@ public class CompanyMembershipService {
     public CompanyAppointment acceptInvitation(int userId, int companyId) {
         CompanyAppointment appointment = getPendingCompanyAppointment(userId, companyId); // the pending offer
         if (appointment == null) {
-            throw new RuntimeException("Cannot accept invitation: no appointment found for the specified company");
+            throw new AppointmentNotFoundException("Cannot accept invitation: no appointment found for the specified company");
         }
         CompanyAppointment activeAppointment = getActiveCompanyAppointment(userId, companyId); // any current active role
         if (activeAppointment != null) {
             // The only legal co-existence is: pending Owner offer while a Manager appointment is active
             // (accepting promotes the manager to owner). Any other combination is a rule violation.
             if (appointment.getRole() != CompanyRole.Owner || activeAppointment.getRole() != CompanyRole.Manager) {
-                throw new RuntimeException(
+                throw new BusinessRuleViolationException(
                         "Cannot accept invitation: user already has an active appointment in this company");
             }
             // Clearer error before revoke() throws its own: promotion requires the same appointer.
             if (activeAppointment.getInviterId() != appointment.getInviterId()) {
-                throw new RuntimeException(
+                throw new BusinessRuleViolationException(
                         "Cannot accept owner appointment while a manager appointment from a DIFFERENT appointer is active; revoke the manager appointment first");
             }
             // revoke() re-checks the revoker's right — which is also the right to promote to owner.
@@ -85,7 +88,7 @@ public class CompanyMembershipService {
     public void rejectInvitation(int userId, int companyId) {
         CompanyAppointment appointment = getPendingCompanyAppointment(userId, companyId); // the pending offer
         if (appointment == null) {
-            throw new RuntimeException("Cannot reject invitation: no appointment found for the specified company");
+            throw new AppointmentNotFoundException("Cannot reject invitation: no appointment found for the specified company");
         }
         appointment.reject(); // PENDING -> REJECTED
         appointmentRepository.save(appointment); // persist the rejection
@@ -100,7 +103,7 @@ public class CompanyMembershipService {
     public void receiveManagerAppointment(int userId, int companyId, int ownerId, List<Permission> permissions) {
         if (getActiveCompanyAppointment(userId, companyId) != null
                 || getPendingCompanyAppointment(userId, companyId) != null) {
-            throw new RuntimeException("User already has an active or pending appointment in this company");
+            throw new BusinessRuleViolationException("User already has an active or pending appointment in this company");
         }
         CompanyAppointment appointment = CompanyAppointment.ManagerAppointment(
                 appointmentRepository.nextId(), // assigned id minted by storage
@@ -120,11 +123,11 @@ public class CompanyMembershipService {
     @Transactional
     public void receiveOwnerAppointment(int userId, int companyId, int appointerId) {
         if (getPendingCompanyAppointment(userId, companyId) != null) {
-            throw new RuntimeException("User already has an pending appointment in this company");
+            throw new BusinessRuleViolationException("User already has an pending appointment in this company");
         }
         CompanyAppointment activeAppointment = getActiveCompanyAppointment(userId, companyId); // current active role, if any
         if (activeAppointment != null && activeAppointment.getRole() == CompanyRole.Owner) {
-            throw new RuntimeException("User already has an active Owner appointment in this company");
+            throw new BusinessRuleViolationException("User already has an active Owner appointment in this company");
         }
         CompanyAppointment appointment = CompanyAppointment.OwnerAppointment(
                 appointmentRepository.nextId(), // assigned id minted by storage
@@ -143,7 +146,7 @@ public class CompanyMembershipService {
     public void addFounderAppointment(int userId, int companyId) {
         if (getActiveCompanyAppointment(userId, companyId) != null
                 || getPendingCompanyAppointment(userId, companyId) != null) {
-            throw new RuntimeException("User already has an active or pending appointment in this company");
+            throw new BusinessRuleViolationException("User already has an active or pending appointment in this company");
         }
         CompanyAppointment appointment = CompanyAppointment.FoundingAppointment(
                 appointmentRepository.nextId(), // assigned id minted by storage
@@ -162,13 +165,13 @@ public class CompanyMembershipService {
     public void modifyManagerPermissions(int userId, int companyId, int inviterId, List<Permission> newPermissions) {
         CompanyAppointment appointment = getActiveCompanyAppointment(userId, companyId); // the active appointment to edit
         if (appointment == null) {
-            throw new RuntimeException("No active appointment to edit found for the specified company");
+            throw new AppointmentNotFoundException("No active appointment to edit found for the specified company");
         }
         if (appointment.getInviterId() != inviterId) { // only the original appointer may modify
-            throw new RuntimeException("Only the original appointer can modify manager permissions");
+            throw new UnauthorizedActionException("Only the original appointer can modify manager permissions");
         }
         if (appointment.getRole() != CompanyRole.Manager) {
-            throw new RuntimeException("Can only modify permissions for manager appointments");
+            throw new BusinessRuleViolationException("Can only modify permissions for manager appointments");
         }
         appointment.setPermissions(EnumSet.copyOf(newPermissions)); // replace the permission set (validated inside)
         appointmentRepository.save(appointment); // persist the updated permissions
@@ -182,7 +185,7 @@ public class CompanyMembershipService {
     public void revokeAppointment(int userId, int companyId, int revokerId) {
         CompanyAppointment appointment = getActiveCompanyAppointment(userId, companyId); // the active appointment to revoke
         if (appointment == null) {
-            throw new RuntimeException(
+            throw new AppointmentNotFoundException(
                     "Cannot remove appointment: no active appointment found to revoke for the specified company");
         }
         appointment.revoke(revokerId); // ACTIVE -> REVOKED (permission checks inside)
@@ -244,7 +247,7 @@ public class CompanyMembershipService {
     @Transactional(readOnly = true)
     public void requireOwnerInCompany(int userId, int companyId) {
         if (!isOwnerInCompany(userId, companyId)) {
-            throw new RuntimeException("User is not an owner in this company");
+            throw new UnauthorizedActionException("User is not an owner in this company");
         }
     }
 
@@ -258,7 +261,7 @@ public class CompanyMembershipService {
     @Transactional(readOnly = true)
     public void requireMemberInCompany(int userId, int companyId) {
         if (!isMemberInCompany(userId, companyId)) {
-            throw new RuntimeException("User is not a member of this company");
+            throw new UnauthorizedActionException("User is not a member of this company");
         }
     }
 
@@ -266,7 +269,7 @@ public class CompanyMembershipService {
     @Transactional(readOnly = true)
     public void requirePermissionInCompany(int userId, int companyId, Permission permission) {
         if (!hasPermissionInCompany(userId, companyId, permission)) {
-            throw new RuntimeException("Missing permission: " + permission);
+            throw new UnauthorizedActionException("Missing permission: " + permission);
         }
     }
 
