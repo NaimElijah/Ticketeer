@@ -56,6 +56,19 @@ class NotificationTest extends BaseDomainTest {
         assertEquals(longMessage.substring(0, Notification.MAX_MESSAGE_LENGTH - 1) + "…", n.getMessage());
     }
 
+    // An emoji is two UTF-16 units. Cutting between them would store half a character, which the
+    // PostgreSQL driver encodes as '?'.
+    @Test
+    void GivenACutThatFallsInsideAnEmoji_WhenCreated_ThenTheWholeEmojiIsDropped() {
+        String head = "x".repeat(Notification.MAX_MESSAGE_LENGTH - 2);
+        String longMessage = head + "😀" + "y".repeat(10);
+
+        Notification n = track(new Notification("n4", 7, NotificationType.EVENT_CANCELLED,
+                NotificationStatus.PENDING, longMessage, CREATED));
+
+        assertEquals(head + "…", n.getMessage());
+    }
+
     @Test
     void GivenAMessageThatFitsItsColumn_WhenCreated_ThenItIsKeptWhole() {
         String fits = "y".repeat(Notification.MAX_MESSAGE_LENGTH);

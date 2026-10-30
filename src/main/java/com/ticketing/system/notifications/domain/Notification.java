@@ -105,11 +105,17 @@ public class Notification implements InvariantChecked {
 
     // The message is composed from names and subjects nobody bounds. Cutting it keeps the notice: a longer
     // one would fail the insert on the async notify- thread, where the failure is only logged (ADR-004).
+    // The width is in UTF-16 units, which H2 counts (PostgreSQL counts characters, so it fits there too),
+    // and the cut never splits a surrogate pair.
     private static String fitToColumn(String message) {
         if (message == null || message.length() <= MAX_MESSAGE_LENGTH) {
             return message;
         }
-        return message.substring(0, MAX_MESSAGE_LENGTH - 1) + ELLIPSIS;
+        int end = MAX_MESSAGE_LENGTH - ELLIPSIS.length();
+        if (Character.isHighSurrogate(message.charAt(end - 1))) {
+            end--;
+        }
+        return message.substring(0, end) + ELLIPSIS;
     }
 
     public String getId() {
