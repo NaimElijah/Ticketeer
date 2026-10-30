@@ -16,14 +16,19 @@ import java.time.Duration;
  */
 public interface ISystemMetrics {
 
+    /**
+     * The longest window, in minutes, that {@link #count} accepts from any adapter. An adapter keeps
+     * events at least this long; {@code AnalyticsProperties} caps its rate window at this value.
+     */
+    int MAX_WINDOW_MINUTES = 120;
+
     /** Records one occurrence of {@code type} at the current instant. */
     void record(MetricType type);
 
     /**
      * Number of {@code type} events recorded within the trailing {@code within} window.
      *
-     * @throws IllegalArgumentException if {@code within} is longer than the adapter keeps events for
-     *                                  ({@link InMemorySystemMetrics#RETENTION_MINUTES})
+     * @throws IllegalArgumentException if {@code within} is longer than {@link #MAX_WINDOW_MINUTES}
      */
     long count(MetricType type, Duration within);
 
