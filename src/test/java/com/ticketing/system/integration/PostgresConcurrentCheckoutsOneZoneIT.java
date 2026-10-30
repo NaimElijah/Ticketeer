@@ -42,10 +42,11 @@ import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.support.PostgresContainers;
 
 /**
- * Two buyers check out different seats of one zone at the same moment (SLR.1, SLR.5). On PostgreSQL
- * their Phase 3s share the event's lock and run together, and both write the zone. Whichever commits
- * second finds the zone's version moved, and if nothing retries, its checkout fails after the charge:
- * the hold is released and the charge refunded, though its seat was free all along.
+ * Two buyers check out in one zone at the same moment (SLR.1, SLR.5). On PostgreSQL their Phase 3s share
+ * the event's lock and run together. In a standing zone both write the zone's own counts, so whichever
+ * commits second finds the zone's version moved, and if nothing retries, its checkout fails after the
+ * charge: the hold is released and the charge refunded, though the zone had room. Seated sales write
+ * only their own seat rows, so they never meet; that case is kept as a guard.
  *
  * <p>Both checkouts are held inside Phase 3, after the on-sale check, until each has reached it. Runs
  * on PostgreSQL only: H2 takes an exclusive lock for the event's shared one, so there the two Phase 3s

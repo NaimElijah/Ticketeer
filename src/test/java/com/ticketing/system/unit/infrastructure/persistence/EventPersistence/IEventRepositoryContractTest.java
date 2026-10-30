@@ -46,13 +46,13 @@ public abstract class IEventRepositoryContractTest {
         eventRepo = newRepository();
     }
 
-    // Builds a minimal valid Event with specified category and one zone priced at
-    // 50.
     /** Runs a call the way a sale makes it: inside a transaction, on an adapter that needs one. */
     protected <T> T inSaleTransaction(Supplier<T> call) {
         return call.get();
     }
 
+    // Builds a minimal valid Event with specified category and one zone priced at
+    // 50.
     protected Event buildEvent(int id, String name, Double rating, int companyId, EventStatus status,
             EventCategory category) {
         VenueMap venueMap = new VenueMap(id, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));

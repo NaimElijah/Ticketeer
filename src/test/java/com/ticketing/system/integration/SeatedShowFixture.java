@@ -62,7 +62,7 @@ final class SeatedShowFixture {
         this.clock = clock;
     }
 
-    /** The show's id and its one seated zone, and an owner token able to read its venue map. */
+    /** The show's id and its one zone, seated or standing, and an owner token able to read its venue map. */
     record Show(int eventId, int zoneId, String ownerToken) {
     }
 

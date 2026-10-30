@@ -11,5 +11,10 @@
 --
 -- Two carts of one member, written by that race before this migration, fail this statement, and Flyway
 -- stops the boot. Release the older cart's lines and delete it, then boot again.
+--
+-- Not expand-only, a recorded exception (ADR-007's status). Code from before this migration deletes the
+-- member's old cart in the login merge without flushing, so Hibernate runs the guest cart's UPDATE of
+-- user_id first and breaks this key. While such an instance still serves traffic on this schema, that
+-- login fails with an integrity error. It is one path, for the length of a rolling deploy.
 
 alter table active_orders add constraint uk_active_orders_user_id unique (user_id);

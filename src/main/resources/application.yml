@@ -45,8 +45,10 @@ spring:
       mode: force
 
 # PostgreSQL driver bounds (SLR.6, #173), applied only to a PostgreSQL datasource (PostgresDriverSettings).
-# socket-timeout ends a read whose answer never comes, as when the database hangs or its host disappears;
-# it must exceed the slowest legitimate query (the reporting reads).
+# socket-timeout ends a statement whose answer never comes, as when the database hangs or its host
+# disappears. It bounds every statement, so it must exceed the slowest legitimate query (the reporting
+# reads), the longest migration statement, and wsep.request-timeout-seconds: a refund holds its
+# receipt's row lock across the payment call, and a second refund of that receipt waits for it.
 database:
   socket-timeout: ${DB_SOCKET_TIMEOUT:30s}
 

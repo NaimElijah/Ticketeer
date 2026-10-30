@@ -3,12 +3,15 @@
 -- V1 created only primary keys and unique constraints. PostgreSQL does not index a foreign key's column
 -- on its own (H2 does, which hid this in dev and the H2 suite), so every eager load of a parent's
 -- collection, and every repository query on a non-key column, scanned the whole table.
--- SchemaMigrationIT checks on PostgreSQL that every foreign-key column, and every column a repository
--- filters on, leads an index.
+-- SchemaMigrationIT checks on PostgreSQL that every foreign-key column, and every selective column it
+-- lists as queried, leads an index. Conversation type and status, and company status, are not indexed:
+-- each has a handful of values, and the reads that filter on them are being reworked under #222.
 --
--- A plain CREATE INDEX blocks writes to its table while it builds. That is brief at the current table
--- sizes. CREATE INDEX CONCURRENTLY would avoid it, but H2 does not accept it and PostgreSQL refuses it
--- inside the transaction Flyway runs each migration in.
+-- A plain CREATE INDEX blocks writes to its table while it builds, and Flyway runs this migration in one
+-- transaction, so writes to every table here wait until the last index is built. That is brief at the
+-- current table sizes. CREATE INDEX CONCURRENTLY would avoid it, but H2 does not accept it and
+-- PostgreSQL refuses it inside the migration's transaction. On H2, the foreign-key indexes duplicate the
+-- ones H2 creates itself, which costs nothing that matters in dev and the tests.
 
 -- Foreign-key columns: the collection loads.
 create index ix_company_owner_ids_company_id on company_owner_ids (company_id);

@@ -27,7 +27,9 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * Seat and InventoryZone carry their own {@code @Version} so two buyers reserving different seats (or
  * a buyer vs. a structural edit touching a different entity) never false-conflict. A genuine conflict
  * fails the losing commit, and {@code OptimisticLockTranslationAspect} re-types it into
- * {@code ConcurrentReservationException}; nothing retries it automatically (C1, #359).
+ * {@code ConcurrentReservationException}. The one pessimistic lock is {@link #findForSale}'s shared row
+ * lock, which a sale holds so a cancel waits for it (ADR-015); checkout Phase 3 also runs again after
+ * a lost race ({@code CheckoutService.runPhase3}).
  *
  * <p>{@code searchAll}/{@code searchONSALE} push the 18-filter catalogue search down into a Criteria
  * {@link Specification} (see {@link EventSearchSpecification}). {@code nextId}/{@code nextVenueMapId}

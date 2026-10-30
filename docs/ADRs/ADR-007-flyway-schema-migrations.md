@@ -1,6 +1,6 @@
 # ADR-007: Manage the schema with Flyway migrations; Hibernate only validates
 
-- **Status:** Accepted; amended by [ADR-012](ADR-012-session-tokens-bound-to-typed-session-rows.md), whose `V3` is a recorded exception to the expand-only rule
+- **Status:** Accepted; amended by [ADR-012](ADR-012-session-tokens-bound-to-typed-session-rows.md), whose `V3` is a recorded exception to the expand-only rule. `V7` (#186) is a second one: its unique key on `active_orders.user_id` can be broken by code from before it during a rolling deploy, as its header explains
 - **Date:** 2026-10-20
 - **Issue:** #31 (versioned schema migrations; `ddl-auto: validate` on Postgres)
 

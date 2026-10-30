@@ -22,9 +22,10 @@ import com.ticketing.system.shared.exception.ConcurrentReservationException;
  * <p>
  * Storage is a single {@link CopyOnWriteArrayList} of carts; lookups scan.
  * Identity collapse for {@code save()} matches by userId for Member carts and
- * by sessionId for Guest carts, so re-saving a promoted cart replaces any
- * stale Member-cart row with the same userId (D9a edge: prefer current
- * Guest-turned-Member cart over a prior orphaned Member cart).
+ * by sessionId for Guest carts, so re-saving a promoted cart replaces a stale
+ * Member-cart row with the same userId that holds nothing, and refuses one that
+ * still holds lines (D9a edge: prefer current Guest-turned-Member cart over a
+ * prior orphaned Member cart, whose lines the login merge releases first).
  */
 @Repository
 @Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
