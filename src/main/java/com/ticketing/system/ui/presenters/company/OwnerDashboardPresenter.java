@@ -10,6 +10,7 @@ import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code OwnerDashboardView} (V2-WIRE-OWNER-DASH). Holds no Vaadin imports so
@@ -58,7 +59,7 @@ public class OwnerDashboardPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

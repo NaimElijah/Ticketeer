@@ -18,11 +18,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import jakarta.persistence.PersistenceException;
+
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class SupportInboxPresenterTest {
 
@@ -82,7 +85,31 @@ class SupportInboxPresenterTest {
 
         SupportInboxPresenter.Outcome.Failure fail =
             assertInstanceOf(SupportInboxPresenter.Outcome.Failure.class, outcome);
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void GivenTheInboxFailsInternally_WhenLoad_ThenTheReasonIsTheGenericText() {
+        // A non-domain failure is an internal error: its text must not reach the member (CWE-209).
+        when(service.viewMyConversations(TOKEN))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select c.conversation_id from conversations c]"));
+
+        SupportInboxPresenter.Outcome.Failure fail =
+            assertInstanceOf(SupportInboxPresenter.Outcome.Failure.class, presenter.load(TOKEN));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void GivenTheReplyFailsInternally_WhenReply_ThenTheReasonIsTheGenericText() {
+        doThrow(new RuntimeException("could not execute statement [insert into messages (body)] constraint fk_messages_conversation_id"))
+            .when(service).sendMessage(anyString(), any());
+
+        SupportInboxPresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(SupportInboxPresenter.ActionOutcome.Failure.class,
+                presenter.reply(TOKEN, "c1", "any update?"));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -126,7 +153,7 @@ class SupportInboxPresenterTest {
 
         SupportInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(SupportInboxPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("conversation closed", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

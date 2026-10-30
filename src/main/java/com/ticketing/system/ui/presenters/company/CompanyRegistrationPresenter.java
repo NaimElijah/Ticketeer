@@ -7,6 +7,7 @@ import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 public class CompanyRegistrationPresenter {
@@ -34,7 +35,7 @@ public class CompanyRegistrationPresenter {
         } catch (IllegalStateException e) {
             return new Outcome.NameTaken(e.getMessage());
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

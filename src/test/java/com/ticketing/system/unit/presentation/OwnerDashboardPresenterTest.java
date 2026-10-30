@@ -22,6 +22,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class OwnerDashboardPresenterTest {
 
@@ -120,6 +121,6 @@ class OwnerDashboardPresenterTest {
 
         OwnerDashboardPresenter.Outcome.Failure fail =
             assertInstanceOf(OwnerDashboardPresenter.Outcome.Failure.class, outcome);
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 }

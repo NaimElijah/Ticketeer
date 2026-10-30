@@ -2,6 +2,7 @@ package com.ticketing.system.ui.presenters.auth;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.application.service.MemberQueryService;
+import com.ticketing.system.ui.support.ServiceErrors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -64,7 +65,7 @@ public class UsernameAvailabilityPresenter {
             }
             return new Outcome.Available();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

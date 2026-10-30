@@ -22,6 +22,7 @@ import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class SubmitComplaintPresenterTest {
 
@@ -83,7 +84,7 @@ class SubmitComplaintPresenterTest {
 
         SubmitComplaintPresenter.Outcome.Failure fail =
             assertInstanceOf(SubmitComplaintPresenter.Outcome.Failure.class, outcome);
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

@@ -19,6 +19,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import jakarta.persistence.PersistenceException;
+
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.shared.dto.SendMessageRequestDTO;
@@ -26,6 +28,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class CompanyInquiryInboxPresenterTest {
 
@@ -126,7 +129,31 @@ class CompanyInquiryInboxPresenterTest {
 
         CompanyInquiryInboxPresenter.Outcome.Failure fail =
             assertInstanceOf(CompanyInquiryInboxPresenter.Outcome.Failure.class, outcome);
-        assertEquals("inbox down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void GivenTheInboxFailsInternally_WhenLoadFor_ThenTheReasonIsTheGenericText() {
+        // A non-domain failure is an internal error: its text must not reach the user (CWE-209).
+        when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(company(7, "Acme")));
+        when(messaging.viewCompanyInbox(TOKEN, 7))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select c.counterparty_id from conversations c]"));
+
+        CompanyInquiryInboxPresenter.Outcome.Failure fail =
+            assertInstanceOf(CompanyInquiryInboxPresenter.Outcome.Failure.class, presenter.loadFor(TOKEN, 7));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void GivenClosingFailsInternally_WhenClose_ThenTheReasonIsTheGenericText() {
+        doThrow(new NullPointerException("Cannot invoke \"Conversation.close()\" because \"conversation\" is null"))
+            .when(messaging).closeConversation(TOKEN, "c1");
+
+        CompanyInquiryInboxPresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(CompanyInquiryInboxPresenter.ActionOutcome.Failure.class, presenter.close(TOKEN, "c1"));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // -- reply ----------------------------------------------------------------
@@ -161,7 +188,7 @@ class CompanyInquiryInboxPresenterTest {
 
         CompanyInquiryInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(CompanyInquiryInboxPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("conversation closed", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -201,7 +228,7 @@ class CompanyInquiryInboxPresenterTest {
 
         CompanyInquiryInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(CompanyInquiryInboxPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("already closed", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

@@ -16,6 +16,7 @@ import com.ticketing.system.shared.dto.OutreachResultDTO;
 import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code AdminSendMessagesView} (II.6.3.2 — admin proactive outreach). Holds no
@@ -50,7 +51,7 @@ public class AdminSendMessagesPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -67,7 +68,7 @@ public class AdminSendMessagesPresenter {
         } catch (InvalidTokenException e) {
             return new ActionOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(e.getMessage());
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -81,7 +82,7 @@ public class AdminSendMessagesPresenter {
         } catch (InvalidTokenException e) {
             return new SearchOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new SearchOutcome.Failure(e.getMessage());
+            return new SearchOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

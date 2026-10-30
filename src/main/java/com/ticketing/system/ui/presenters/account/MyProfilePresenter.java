@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.shared.dto.MemberDTO;
 import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,7 +45,7 @@ public class MyProfilePresenter {
             return new Outcome.Success(memberQueryService.getMemberProfile(userId));
         } catch (RuntimeException e) {
             log.warn("Failed to load profile for user {}: {}", userId, e.getMessage());
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 }

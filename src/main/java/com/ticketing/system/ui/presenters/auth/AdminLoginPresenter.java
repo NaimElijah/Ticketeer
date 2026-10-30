@@ -37,7 +37,7 @@ public class AdminLoginPresenter {
             if (ServiceErrors.isDatabaseUnavailable(e)) {
                 return new Outcome.ServiceUnavailable();
             }
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

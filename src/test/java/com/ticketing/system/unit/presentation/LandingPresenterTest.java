@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class LandingPresenterTest {
 
@@ -58,6 +59,6 @@ class LandingPresenterTest {
 
         LandingPresenter.Outcome.Failure fail =
             assertInstanceOf(LandingPresenter.Outcome.Failure.class, outcome);
-        assertEquals("catalog down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 }

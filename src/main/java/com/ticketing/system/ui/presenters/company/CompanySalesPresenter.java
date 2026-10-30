@@ -13,6 +13,7 @@ import com.ticketing.system.reporting.application.service.CompanyAnalyticsServic
 import com.ticketing.system.reporting.application.service.SalesSummaryCalculator;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 public class CompanySalesPresenter {
@@ -53,7 +54,7 @@ public class CompanySalesPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

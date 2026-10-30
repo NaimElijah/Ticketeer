@@ -100,7 +100,6 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         switch (presenter.load(sessionIdentity.memberToken(), receiptId)) {
             case ReceiptPresenter.Outcome.Success s -> renderReceipt(s.receipt());
             case ReceiptPresenter.Outcome.NotFound nf -> bodyHolder.add(infoBanner(nf.message()));
-            case ReceiptPresenter.Outcome.Forbidden f -> bodyHolder.add(infoBanner(f.message()));
             case ReceiptPresenter.Outcome.Failure f -> bodyHolder.add(infoBanner(f.message()));
         }
     }
@@ -169,7 +168,6 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
             }
             case RefundPresenter.Outcome.NotEligible n -> Toasts.warn(n.message());
             case RefundPresenter.Outcome.NotFound n -> Toasts.failure(n.message());
-            case RefundPresenter.Outcome.Forbidden f -> Toasts.failure(f.message());
             case RefundPresenter.Outcome.Failure f -> Toasts.failure(f.message());
         }
     }

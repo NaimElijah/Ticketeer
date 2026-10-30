@@ -22,8 +22,10 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 @Slf4j
@@ -66,7 +68,7 @@ public class CheckoutPresenter {
             // found. The old two-branch version committed to one key with no fallback -> empty checkout.
             return classify(reservationService.viewMyActiveOrder(identity.credential()));
         } catch (RuntimeException e) {
-            return new LoadOutcome.Failure(e.getMessage());
+            return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -114,6 +116,12 @@ public class CheckoutPresenter {
             // carries no reason so no gateway/WSEP wording can leak to the buyer.
             if (cause instanceof PaymentGatewayUnreachableException) {
                 log.warn("Checkout aborted: payment gateway unreachable", e);
+                return new PayOutcome.GatewayUnavailable();
+            }
+            // A domain exception, but its message can carry the external issuer's error text, so the
+            // buyer gets the same reason-free outcome as for an unreachable gateway.
+            if (cause instanceof TicketIssuanceFailedException) {
+                log.warn("Checkout aborted: ticket issuance failed", e);
                 return new PayOutcome.GatewayUnavailable();
             }
             if (cause instanceof PaymentGatewayException)        return new PayOutcome.PaymentDeclined(cause.getMessage());

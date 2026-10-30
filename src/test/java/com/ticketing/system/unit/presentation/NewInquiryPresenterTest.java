@@ -25,6 +25,7 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class NewInquiryPresenterTest {
 
@@ -64,7 +65,7 @@ class NewInquiryPresenterTest {
 
         NewInquiryPresenter.SearchOutcome.Failure fail =
             assertInstanceOf(NewInquiryPresenter.SearchOutcome.Failure.class, outcome);
-        assertEquals("catalog down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // -- submit ---------------------------------------------------------------
@@ -107,7 +108,7 @@ class NewInquiryPresenterTest {
 
         NewInquiryPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(NewInquiryPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("company not found", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

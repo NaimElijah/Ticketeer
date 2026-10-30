@@ -5,6 +5,7 @@ import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -186,7 +187,7 @@ class OrgTreePresenterTest {
         OrgTreePresenter.Outcome.Failure fail =
                 assertInstanceOf(OrgTreePresenter.Outcome.Failure.class, presenter.load(TOKEN, null, false));
 
-        assertEquals("db down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -196,7 +197,7 @@ class OrgTreePresenterTest {
 
         OrgTreePresenter.Outcome.Failure fail =
                 assertInstanceOf(OrgTreePresenter.Outcome.Failure.class, presenter.load(TOKEN, null, false));
-        assertEquals("tree error", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -206,7 +207,7 @@ class OrgTreePresenterTest {
         OrgTreePresenter.Outcome.Failure fail =
                 assertInstanceOf(OrgTreePresenter.Outcome.Failure.class,
                         presenter.load(ADMIN_TOKEN, null, true));
-        assertEquals("admin token required", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

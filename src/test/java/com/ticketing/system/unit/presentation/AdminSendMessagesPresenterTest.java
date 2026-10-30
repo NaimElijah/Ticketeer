@@ -28,6 +28,7 @@ import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class AdminSendMessagesPresenterTest {
 
@@ -102,7 +103,7 @@ class AdminSendMessagesPresenterTest {
 
         AdminSendMessagesPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminSendMessagesPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("no recipients", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

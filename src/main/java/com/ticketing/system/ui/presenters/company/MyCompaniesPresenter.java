@@ -11,6 +11,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 public class MyCompaniesPresenter {
@@ -27,7 +28,7 @@ public class MyCompaniesPresenter {
         try {
             return new Outcome.Success(companyManagementService.listForUser(userId));
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -77,7 +78,7 @@ public class MyCompaniesPresenter {
         } catch (UserNotFoundException e) {
             return new AppointOutcome.UserNotFound(inviteeIdentifier);
         } catch (RuntimeException e) {
-            return new AppointOutcome.Failure(e.getMessage());
+            return new AppointOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

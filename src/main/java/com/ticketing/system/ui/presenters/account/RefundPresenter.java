@@ -15,11 +15,15 @@ import lombok.extern.slf4j.Slf4j;
  * Presenter for the member "Request refund" action (#284), shared by {@code ReceiptView} and
  * {@code MyAccountView}. Vaadin-free; calls {@link RefundService} and returns a sealed
  * {@link Outcome} the view switches on. The view passes the member token
- * ({@code SessionIdentity.memberToken()}).
+ * ({@code SessionIdentity.memberToken()}). An order that belongs to another account gives the same
+ * {@link Outcome.NotFound} as a missing id, so a member cannot tell which order ids exist on other
+ * accounts.
  */
 @Slf4j
 @Component
 public class RefundPresenter {
+
+    private static final String ORDER_NOT_FOUND_MESSAGE = "We couldn't find that order.";
 
     private final RefundService refundService;
 
@@ -33,10 +37,8 @@ public class RefundPresenter {
             return new Outcome.Success(result.refundTransactionId(), result.totalRefunded());
         } catch (BusinessRuleViolationException e) {
             return new Outcome.NotEligible("This order isn't eligible for a refund.");
-        } catch (EntityNotFoundException e) {
-            return new Outcome.NotFound("We couldn't find that order.");
-        } catch (UnauthorizedActionException e) {
-            return new Outcome.Forbidden("This order belongs to another account.");
+        } catch (EntityNotFoundException | UnauthorizedActionException e) {
+            return new Outcome.NotFound(ORDER_NOT_FOUND_MESSAGE);
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Please sign in to request a refund.");
         } catch (RuntimeException e) {
@@ -50,7 +52,6 @@ public class RefundPresenter {
         record Success(String reference, double amount) implements Outcome { }
         record NotEligible(String message) implements Outcome { }
         record NotFound(String message)    implements Outcome { }
-        record Forbidden(String message)   implements Outcome { }
         record Failure(String message)     implements Outcome { }
     }
 }

@@ -1,14 +1,19 @@
 package com.ticketing.system.unit.presentation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.ConnectException;
 import java.sql.SQLException;
 import java.sql.SQLTransientConnectionException;
+import java.util.List;
 
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.support.ServiceErrors;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -93,5 +98,59 @@ class ServiceErrorsTest {
     @Test
     void nullIsHandledGracefully() {
         assertFalse(ServiceErrors.isDatabaseUnavailable(null));
+    }
+
+    // ---- the user-facing message for a failed service call (CWE-209) ----
+    // A domain rule's message is written for the user; anything else is an internal failure whose
+    // text (SQL, constraint and column names, NPE details) must reach the log and never the screen.
+
+    private static final String INTERNAL_FAILURE_TEXT =
+        "could not execute statement [insert into users (email, username) values (?, ?)] constraint uk_x";
+    private static final String INTERNAL_FAILURE_MARKER = "uk_x";
+
+    private LogCapture serviceErrorsLog;
+
+    @AfterEach
+    void closeLogCapture() {
+        if (serviceErrorsLog != null) {
+            serviceErrorsLog.close();
+        }
+    }
+
+    @Test
+    void GivenDomainException_WhenUserMessage_ThenItsOwnMessage() {
+        String message = ServiceErrors.userMessage(
+            new BusinessRuleViolationException("This event is no longer on sale."));
+
+        assertEquals("This event is no longer on sale.", message);
+    }
+
+    @Test
+    void GivenNonDomainException_WhenUserMessage_ThenTheGenericTextNotTheRawText() {
+        String message = ServiceErrors.userMessage(new DataIntegrityViolationException(INTERNAL_FAILURE_TEXT));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, message,
+            "a non-domain failure must show the generic text, but showed: " + message);
+    }
+
+    @Test
+    void GivenNonDomainException_WhenUserMessage_ThenTheFailureIsLoggedAtError() {
+        serviceErrorsLog = LogCapture.of(ServiceErrors.class);
+
+        ServiceErrors.userMessage(new DataIntegrityViolationException(INTERNAL_FAILURE_TEXT));
+
+        List<String> logged = serviceErrorsLog.eventsContaining(INTERNAL_FAILURE_MARKER);
+        assertFalse(logged.isEmpty(),
+            "the hidden failure must reach the log; recorded " + serviceErrorsLog.eventCount() + " event(s)");
+        assertTrue(logged.stream().allMatch(event -> event.startsWith("ERROR ")),
+            "the hidden failure must be logged at ERROR, but was: " + logged);
+    }
+
+    @Test
+    void GivenDatabaseOutage_WhenUserMessage_ThenTheOutageMessage() {
+        String message = ServiceErrors.userMessage(new RuntimeException("Sign-in failed",
+            new CannotCreateTransactionException("Could not open JPA EntityManager for transaction")));
+
+        assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, message);
     }
 }

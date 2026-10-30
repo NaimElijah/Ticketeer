@@ -23,6 +23,7 @@ import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class AdminInboxPresenterTest {
 
@@ -79,7 +80,7 @@ class AdminInboxPresenterTest {
 
         AdminInboxPresenter.Outcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.Outcome.Failure.class, presenter.load(TOKEN));
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // -- reply ----------------------------------------------------------------
@@ -109,7 +110,7 @@ class AdminInboxPresenterTest {
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "x"));
-        assertEquals("conversation closed", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -144,7 +145,7 @@ class AdminInboxPresenterTest {
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.close(TOKEN, "c1"));
-        assertEquals("already closed", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

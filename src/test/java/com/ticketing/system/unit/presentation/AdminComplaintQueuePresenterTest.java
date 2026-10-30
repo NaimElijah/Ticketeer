@@ -26,6 +26,7 @@ import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class AdminComplaintQueuePresenterTest {
 
@@ -143,7 +144,7 @@ class AdminComplaintQueuePresenterTest {
 
         AdminComplaintQueuePresenter.Outcome.Failure fail =
             assertInstanceOf(AdminComplaintQueuePresenter.Outcome.Failure.class, outcome);
-        assertEquals("not an admin", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // -- respond (one-shot) ---------------------------------------------------
@@ -179,7 +180,7 @@ class AdminComplaintQueuePresenterTest {
 
         AdminComplaintQueuePresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("already resolved", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.ticketing.system.unit.presentation;
 
+import jakarta.persistence.PersistenceException;
+
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
@@ -11,6 +13,7 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -133,7 +136,33 @@ class CompanyEventListPresenterTest {
                 assertInstanceOf(CompanyEventListPresenter.Outcome.Failure.class,
                         presenter.load(TOKEN, null, CatalogSearchFiltersDTO.empty()));
 
-        assertEquals("db error", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void GivenTheEventListFailsInternally_WhenLoad_ThenTheReasonIsTheGenericText() {
+        // A non-domain failure is an internal error: its text must not reach the user (CWE-209).
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
+        when(eventService.listEventsForCompany(anyString(), anyInt(), any()))
+                .thenThrow(new PersistenceException("could not execute query [select e.event_id from events e]"));
+
+        CompanyEventListPresenter.Outcome.Failure fail =
+                assertInstanceOf(CompanyEventListPresenter.Outcome.Failure.class,
+                        presenter.load(TOKEN, null, CatalogSearchFiltersDTO.empty()));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void GivenCancellingFailsInternally_WhenCancelEvent_ThenTheReasonIsTheGenericText() {
+        doThrow(new NullPointerException("Cannot invoke \"Event.getVenueMap()\" because \"event\" is null"))
+                .when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        CompanyEventListPresenter.ActionOutcome.Failure fail =
+                assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Failure.class,
+                        presenter.cancelEvent(TOKEN, EVENT_ID));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // ── cancelEvent ───────────────────────────────────────────────────────────
@@ -171,7 +200,7 @@ class CompanyEventListPresenterTest {
                 assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Failure.class,
                         presenter.cancelEvent(TOKEN, EVENT_ID));
 
-        assertEquals("refund failed", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // ── deleteEvent ───────────────────────────────────────────────────────────
@@ -272,7 +301,7 @@ class CompanyEventListPresenterTest {
                 assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Failure.class,
                         presenter.changeEventStatus(TOKEN, EVENT_ID, EventStatus.ON_SALE));
 
-        assertEquals("invalid transition", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // ── countries / cities (owner-scope filter options) ───────────────────────

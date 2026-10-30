@@ -23,6 +23,7 @@ import com.ticketing.system.shared.dto.InvitationDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class MyInvitationsPresenterTest {
 
@@ -76,7 +77,7 @@ class MyInvitationsPresenterTest {
 
         MyInvitationsPresenter.Outcome.Failure fail =
             assertInstanceOf(MyInvitationsPresenter.Outcome.Failure.class, outcome);
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -131,7 +132,7 @@ class MyInvitationsPresenterTest {
 
         MyInvitationsPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("no pending appointment", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test

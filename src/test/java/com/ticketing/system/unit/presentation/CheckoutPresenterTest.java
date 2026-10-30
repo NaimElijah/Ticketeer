@@ -12,6 +12,7 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 
@@ -62,5 +63,20 @@ class CheckoutPresenterTest {
         // PaymentGatewayException, so this also pins that a real decline does NOT fall into the
         // GatewayUnavailable arm.
         assertInstanceOf(CheckoutPresenter.PayOutcome.PaymentDeclined.class, pay());
+    }
+
+    @Test
+    void GivenTicketIssuanceFails_WhenPay_ThenTheReasonNamesNoExternalSystem() {
+        // The issuance exception is a DomainException, but its message names the external issuer and
+        // its transport error. The buyer gets the same generic "unavailable" outcome as an
+        // unreachable payment gateway, which carries no reason at all.
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock",
+                        new TicketIssuanceFailedException("ticket issuer unreachable: Connection refused")));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertInstanceOf(CheckoutPresenter.PayOutcome.GatewayUnavailable.class, outcome,
+                "a ticket-issuance failure must not surface the issuer's error text, but was: " + outcome);
     }
 }

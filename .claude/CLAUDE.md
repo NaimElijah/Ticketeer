@@ -183,6 +183,7 @@ non-2xx status (`WsepHttpStatusException`) or a body over `MAX_RESPONSE_BODY_BYT
 - Vaadin scans only `com.ticketing.system.ui` (`vaadin.allowed-packages`); a view outside it is silently never routed.
 - `ui/security/AuthBootstrap` (a `VaadinServiceInitListener`) is the global guard: an auth gate (routes without `@AnonymousAllowed` need a session) plus a capability gate (`@RequireCapability` + `Capability`).
 - Session state lives in `ui/session` (`AuthSession`, `GuestSession`, `OrderSession`, …). Dev-only seeding UI lives in `ui/dev` (`DevUserSeeder`, `DevPanel`).
+- A presenter that shows a caught `RuntimeException` passes it through `ServiceErrors.userMessage`, never `e.getMessage()`: only a `DomainException`, `IllegalArgumentException` or `IllegalStateException` message reaches the user; anything else shows generic text and is logged at ERROR. So a business rule that a user should read must throw one of those, not a plain `RuntimeException`.
 
 ## Profiles
 

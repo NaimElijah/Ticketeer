@@ -19,6 +19,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 public class EventManagementPresenter {
@@ -51,7 +52,7 @@ public class EventManagementPresenter {
         } catch (EventNotFoundException e) {
             return new LoadOutcome.NotFound();
         } catch (RuntimeException e) {
-            return new LoadOutcome.Failure(e.getMessage());
+            return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -63,7 +64,7 @@ public class EventManagementPresenter {
         } catch (InvalidTokenException e) {
             return new SaveOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new SaveOutcome.Failure(e.getMessage());
+            return new SaveOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -121,7 +122,7 @@ public class EventManagementPresenter {
         } catch (IllegalArgumentException | IllegalStateException e) {
             return new CreateOutcome.InvalidInput(e.getMessage());
         } catch (RuntimeException e) {
-            return new CreateOutcome.Failure(e.getMessage());
+            return new CreateOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -157,7 +158,7 @@ public class EventManagementPresenter {
         } catch (InvalidTokenException e) {
             return new CancelOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new CancelOutcome.Failure(e.getMessage());
+            return new CancelOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
