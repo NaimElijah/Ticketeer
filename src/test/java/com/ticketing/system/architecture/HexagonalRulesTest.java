@@ -1,9 +1,14 @@
 package com.ticketing.system.architecture;
 
+import static com.tngtech.archunit.base.DescribedPredicate.not;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -21,19 +26,41 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.TreeSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Disabled;
+import jakarta.persistence.AttributeConverter;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import com.ticketing.system.architecture.fixture.catalog.domain.ConverterUsingJackson;
+import com.ticketing.system.architecture.fixture.catalog.domain.ConverterWithTypeReference;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingHibernateAnnotation;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingHibernateSession;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingJackson;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingSharedPersistence;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingTheRootPackage;
+import com.ticketing.system.architecture.fixture.identity.IdentityTypeUsingNotificationDispatch;
+import com.ticketing.system.architecture.fixture.identity.application.service.AuthenticationService;
+import com.ticketing.system.architecture.fixture.notifications.NotificationsTypeUsingOrganization;
+import com.ticketing.system.architecture.fixture.notifications.application.service.NotificationDispatchService;
+import com.ticketing.system.architecture.fixture.sales.domain.SalesDomainTypeUsingCatalogDomain;
+import com.ticketing.system.architecture.fixture.ui.UiTypeUsingADrivenPort;
+import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnAdapter;
+import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnApplicationService;
+import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnInboundPort;
+import com.ticketing.system.architecture.fixture.undocumented.UndocumentedModuleType;
 import com.ticketing.system.shared.config.SecurityConfig;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.AccessTarget;
@@ -62,31 +89,53 @@ import com.tngtech.archunit.core.importer.ImportOption;
      * guarantee: it uses ArchUnit slices (the same cycle engine Spring Modulith uses) run directly here,
      * so it applies even though the modules are declared <em>open</em> (open modules are exempt from
      * Modulith's own cycle check).
+ *
+ * <p>Acyclicity alone lets a new edge that closes no cycle through, so the module graph documented
+ * in {@code .claude/CLAUDE.md} (Architecture) is enforced edge by edge as well, from
+ * {@link #ALLOWED_MODULE_DEPENDENCIES}. The graph rules key on package names, so they are built
+ * from a root package: the self-tests run them against offenders under {@link #FIXTURE_ROOT}.
  */
 class HexagonalRulesTest {
+
+    private static final String PRODUCTION_ROOT = "com.ticketing.system";
+
+    // Fixture packages mirror module names below this root; see its package-info.
+    private static final String FIXTURE_ROOT = "com.ticketing.system.architecture.fixture";
 
     // Production classes only (tests excluded), imported once and reused by every rule below.
     private static final JavaClasses PRODUCTION_CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("com.ticketing.system");
+            .importPackages(PRODUCTION_ROOT);
 
     /**
      * The domain is the innermost hexagon: a context's {@code domain} package must not depend on the
      * Spring or Vaadin frameworks, nor outward on the {@code application} or {@code adapter} layers.
      * {@code jakarta.persistence} is deliberately allowed — the aggregates are the JPA entities
      * (the "persistence-annotated domain" decision), which is a spec dependency, not a framework one.
+     *
+     * <p>The shared kernel's infrastructure is outer layer too, even though the domain may otherwise use
+     * {@code shared}: {@code shared.external} is the WSEP HTTP client and {@code shared.persistence}
+     * holds the repository locks, the lock-translation aspect and the adapter profiles.
      */
     @Test
     void domain_is_free_of_framework_and_outer_layers() {
-        noClasses()
-                .that().resideInAPackage("..domain..")
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        "org.springframework..",   // no Spring in the domain
-                        "com.vaadin..",             // no Vaadin in the domain
-                        "..application..",           // domain must not reach up into the application layer
-                        "..adapter..")               // domain must not reach out into adapters
-                .check(PRODUCTION_CLASSES);
+        DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS.check(PRODUCTION_CLASSES);
     }
+
+    @Test
+    void GivenADomainClassUsingSharedPersistence_WhenScanned_ThenTheDomainPurityRuleFails() {
+        assertRuleFails(DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS, DomainTypeUsingSharedPersistence.class);
+    }
+
+    private static final ArchRule DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS = noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "org.springframework..",   // no Spring in the domain
+                    "com.vaadin..",             // no Vaadin in the domain
+                    "..application..",           // domain must not reach up into the application layer
+                    "..adapter..",               // domain must not reach out into adapters
+                    "com.ticketing.system.shared.external..",     // no outbound HTTP client
+                    "com.ticketing.system.shared.persistence..");  // no persistence infrastructure
 
     /**
      * The application layer (use-case services + ports) drives the domain through ports; it must never
@@ -109,8 +158,7 @@ class HexagonalRulesTest {
      * <p>The rule lists the backend bounded contexts explicitly rather than "everything but ui" on
      * purpose: {@code bootstrap} (the composition-root sink) is deliberately allowed to reference
      * {@code ui} — it wires the app together, e.g. the notification polling scheduler drives a UI
-     * session — and {@code reporting} is a read-side consumer that never touches {@code ui}. Only the
-     * eight true backend contexts below are gated here.
+     * session. {@code reporting} is gated too: the UI reads it, so it must not read the UI back.
      */
     @Test
     void no_backend_context_depends_on_the_ui() {
@@ -119,9 +167,425 @@ class HexagonalRulesTest {
                         "com.ticketing.system.identity..", "com.ticketing.system.organization..",
                         "com.ticketing.system.catalog..", "com.ticketing.system.sales..",
                         "com.ticketing.system.messaging..", "com.ticketing.system.notifications..",
-                        "com.ticketing.system.governance..", "com.ticketing.system.shared..")
+                        "com.ticketing.system.governance..", "com.ticketing.system.reporting..",
+                        "com.ticketing.system.shared..")
                 .should().dependOnClassesThat().resideInAPackage("com.ticketing.system.ui..")
                 .check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * {@code .claude/CLAUDE.md} (Architecture): each module depends only along the documented graph,
+     * {@code shared ← identity ← organization ← catalog ← sales} and {@code organization ← messaging},
+     * with {@code notifications} on {@code shared} alone, {@code governance} and {@code reporting}
+     * reading the backend contexts other than {@code notifications} (a sink: it only consumes
+     * notices), {@code ui} above them and {@code bootstrap} above everything. An
+     * edge that closes no cycle would pass {@link #bounded_contexts_are_acyclic()}, so only this rule
+     * stops, say, {@code notifications} starting to read {@code organization}.
+     *
+     * <p>A class in a module that {@link #ALLOWED_MODULE_DEPENDENCIES} does not name fails outright,
+     * so a new module is a decision about the graph rather than a silent addition to it: add it to the
+     * map and to {@code .claude/CLAUDE.md} together.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenModulesDependOnlyAlongTheDocumentedGraph() {
+        modulesDependOnlyAlongTheDocumentedGraph(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * {@code .claude/CLAUDE.md} (Architecture): cross-context calls go through ports and events. A
+     * context's domain therefore uses only its own context and the {@code shared} kernel, even where
+     * the module graph lets the context itself depend on another one: a domain type reaching into
+     * another context couples the two aggregates' models.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenEachDomainDependsOnlyOnItsOwnContextAndShared() {
+        domainsDependOnlyOnTheirOwnContextAndShared(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * {@code .claude/CLAUDE.md} (Architecture): domain classes double as the JPA entities, so Hibernate
+     * mapping annotations ({@code @Fetch} on {@code VenueMap} and {@code Conversation}) are allowed in
+     * the domain like {@code jakarta.persistence}. Hibernate's runtime API is not: a {@code Session}
+     * or a Hibernate type in an aggregate would tie the model to one ORM's behaviour.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenTheDomainUsesOnlyHibernateAnnotations() {
+        DOMAIN_USES_ONLY_HIBERNATE_ANNOTATIONS.check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * {@code .claude/CLAUDE.md} (Architecture): domain classes double as the JPA entities, and a JSON
+     * column needs a JPA {@code AttributeConverter} beside its entity, so Jackson is allowed in the
+     * domain there and nowhere else ({@code PurchasePolicyJsonConverter},
+     * {@code DiscountPolicyJsonConverter}, {@code NotificationDataJsonConverter}). The aggregates
+     * themselves stay free of a serialisation library.
+     *
+     * <p>Classes nested in a converter, at any depth and anonymous ones included, count as the
+     * converter: {@code new TypeReference<>() { }} compiles to a class of its own, but it is the
+     * converter's own Jackson use, not a new dependency of the domain.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenOnlyAttributeConvertersUseJacksonInTheDomain() {
+        DOMAIN_USES_JACKSON_ONLY_IN_ATTRIBUTE_CONVERTERS.check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * {@code ui/package-info.java}: the UI is the single driving adapter and depends on every bounded
+     * context's <em>inbound</em> application API. A driving adapter calls application services; a
+     * context's {@code application.port.out} ports are its own driven side, and its adapters sit
+     * behind them, so a view or presenter using either bypasses the use case (its authorisation,
+     * transaction and invariants) and couples the UI to how the context stores and integrates.
+     *
+     * <p>{@code application.service}, {@code application.port.in}, {@code application.dto},
+     * {@code application.event} and, for now, {@code domain} types stay open to the UI; the domain
+     * types are tracked separately in #208.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenTheUiUsesNoOtherModulesDrivenPortsOrAdapters() {
+        uiUsesNoOtherModulesDrivenPortsOrAdapters(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    // The class comment records a rule engine that silently checked nothing; these prove each graph
+    // rule fails on an offender and that its one exception stays as narrow as documented.
+    @Test
+    void GivenAUiClassUsingADrivenPort_WhenScanned_ThenTheUiDrivenSideRuleFails() {
+        assertRuleFails(uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT), UiTypeUsingADrivenPort.class);
+    }
+
+    @Test
+    void GivenAUiClassUsingAnAdapter_WhenScanned_ThenTheUiDrivenSideRuleFails() {
+        assertRuleFails(uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT), UiTypeUsingAnAdapter.class);
+    }
+
+    @Test
+    void GivenAUiClassUsingAnApplicationService_WhenScanned_ThenTheUiDrivenSideRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(UiTypeUsingAnApplicationService.class);
+        assertThatCode(() -> uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT).check(imported))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void GivenAUiClassUsingAnInboundPort_WhenScanned_ThenTheUiDrivenSideRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(UiTypeUsingAnInboundPort.class);
+        assertThatCode(() -> uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT).check(imported))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void GivenNotificationsDependingOnOrganization_WhenScanned_ThenTheModuleGraphRuleFails() {
+        assertRuleFails(modulesDependOnlyAlongTheDocumentedGraph(FIXTURE_ROOT),
+                NotificationsTypeUsingOrganization.class);
+    }
+
+    @Test
+    void GivenAnotherIdentityClassUsingTheDispatchService_WhenScanned_ThenTheModuleGraphRuleFails() {
+        assertRuleFails(modulesDependOnlyAlongTheDocumentedGraph(FIXTURE_ROOT),
+                IdentityTypeUsingNotificationDispatch.class);
+    }
+
+    @Test
+    void GivenAuthenticationServiceUsingTheDispatchServiceAndAnotherNotificationsType_WhenScanned_ThenOnlyTheOtherTypeFails() {
+        JavaClasses imported = new ClassFileImporter().importClasses(AuthenticationService.class);
+        assertThatThrownBy(() -> modulesDependOnlyAlongTheDocumentedGraph(FIXTURE_ROOT).check(imported))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(AuthenticationService.class.getName() + " depends on "
+                        + NotificationsTypeUsingOrganization.class.getName())
+                .hasMessageNotContaining(AuthenticationService.class.getName() + " depends on "
+                        + NotificationDispatchService.class.getName());
+    }
+
+    @Test
+    void GivenAModuleOutsideTheDocumentedGraph_WhenScanned_ThenTheModuleGraphRuleFails() {
+        assertRuleFails(modulesDependOnlyAlongTheDocumentedGraph(FIXTURE_ROOT), UndocumentedModuleType.class);
+    }
+
+    /**
+     * Each allowance in {@link #ALLOWED_CROSS_MODULE_EXCEPTIONS} documents a dependency that is due to
+     * go (#53 moves the login's notification delivery behind an inbound port). Once production no
+     * longer has the dependency, a left-over allowance would silently permit it to come back.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenEveryCrossModuleExceptionIsStillInUse() {
+        assertEquals(List.of(), unusedCrossModuleExceptions(PRODUCTION_ROOT, PRODUCTION_CLASSES),
+                "these cross-module exceptions no longer match a production dependency; delete them");
+    }
+
+    @Test
+    void GivenNoClassHasTheExceptionsDependency_WhenScanned_ThenTheExceptionIsReportedUnused() {
+        JavaClasses withoutTheCall = new ClassFileImporter().importClasses(IdentityTypeUsingNotificationDispatch.class);
+
+        assertEquals(List.copyOf(ALLOWED_CROSS_MODULE_EXCEPTIONS),
+                unusedCrossModuleExceptions(FIXTURE_ROOT, withoutTheCall));
+    }
+
+    // The case #53 creates: the origin class is still there, but its call to the target is gone.
+    @Test
+    void GivenTheOriginClassWithoutTheCall_WhenScanned_ThenTheExceptionIsReportedUnused() {
+        JavaClasses callRemoved = new ClassFileImporter().importClasses(
+                com.ticketing.system.architecture.fixture.stale.identity.application.service.AuthenticationService.class);
+
+        assertEquals(List.copyOf(ALLOWED_CROSS_MODULE_EXCEPTIONS),
+                unusedCrossModuleExceptions(FIXTURE_ROOT + ".stale", callRemoved));
+    }
+
+    @Test
+    void GivenTheExceptionsDependencyIsPresent_WhenScanned_ThenNoExceptionIsReportedUnused() {
+        JavaClasses withTheCall = new ClassFileImporter().importClasses(AuthenticationService.class);
+
+        assertEquals(List.of(), unusedCrossModuleExceptions(FIXTURE_ROOT, withTheCall));
+    }
+
+    @Test
+    void GivenADomainClassUsingTheRootPackage_WhenScanned_ThenTheDomainContainmentRuleFails() {
+        assertRuleFails(domainsDependOnlyOnTheirOwnContextAndShared(FIXTURE_ROOT),
+                DomainTypeUsingTheRootPackage.class);
+    }
+
+    @Test
+    void GivenASalesDomainClassUsingTheCatalogDomain_WhenScanned_ThenTheDomainContainmentRuleFails() {
+        assertRuleFails(domainsDependOnlyOnTheirOwnContextAndShared(FIXTURE_ROOT),
+                SalesDomainTypeUsingCatalogDomain.class);
+    }
+
+    @Test
+    void GivenADomainClassUsingAHibernateSession_WhenScanned_ThenTheHibernateRuleFails() {
+        assertRuleFails(DOMAIN_USES_ONLY_HIBERNATE_ANNOTATIONS, DomainTypeUsingHibernateSession.class);
+    }
+
+    @Test
+    void GivenADomainClassUsingAHibernateAnnotation_WhenScanned_ThenTheHibernateRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(DomainTypeUsingHibernateAnnotation.class);
+        assertThatCode(() -> DOMAIN_USES_ONLY_HIBERNATE_ANNOTATIONS.check(imported)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void GivenADomainClassUsingJacksonOutsideAConverter_WhenScanned_ThenTheJacksonRuleFails() {
+        assertRuleFails(DOMAIN_USES_JACKSON_ONLY_IN_ATTRIBUTE_CONVERTERS, DomainTypeUsingJackson.class);
+    }
+
+    @Test
+    void GivenAnAttributeConverterUsingJackson_WhenScannedWithAnOffender_ThenOnlyTheOffenderIsReported() {
+        assertOnlyTheJacksonOffenderIsReported(ConverterUsingJackson.class);
+    }
+
+    @Test
+    void GivenAnAnonymousTypeReferenceInsideAConverter_WhenScannedWithAnOffender_ThenOnlyTheOffenderIsReported() {
+        assertOnlyTheJacksonOffenderIsReported(ConverterWithTypeReference.class,
+                ConverterWithTypeReference.MAP_TYPE.getClass());
+    }
+
+    // The offender keeps the rule's subject set non-empty, so the exemption is shown by the converter
+    // classes being absent from the report rather than by a rule that checked nothing.
+    private static void assertOnlyTheJacksonOffenderIsReported(Class<?> converter, Class<?>... nestedClasses) {
+        JavaClasses imported = new ClassFileImporter().importClasses(Stream.concat(
+                Stream.of(DomainTypeUsingJackson.class, converter), Stream.of(nestedClasses)).toList());
+        assertThatThrownBy(() -> DOMAIN_USES_JACKSON_ONLY_IN_ATTRIBUTE_CONVERTERS.check(imported))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(DomainTypeUsingJackson.class.getName())
+                .hasMessageNotContaining(converter.getName());
+    }
+
+    /**
+     * The documented module graph ({@code .claude/CLAUDE.md}, Architecture): for each top-level module,
+     * the other modules its classes may depend on. A module missing from this map is outside the
+     * graph, and its classes fail the rule until the graph and its documentation name it.
+     */
+    private static final Map<String, Set<String>> ALLOWED_MODULE_DEPENDENCIES = Map.ofEntries(
+            Map.entry("shared", Set.of()),
+            Map.entry("identity", Set.of("shared")),
+            Map.entry("organization", Set.of("shared", "identity")),
+            Map.entry("catalog", Set.of("shared", "identity", "organization")),
+            Map.entry("sales", Set.of("shared", "identity", "organization", "catalog")),
+            Map.entry("messaging", Set.of("shared", "identity", "organization")),
+            Map.entry("notifications", Set.of("shared")),
+            Map.entry("governance", Set.of("shared", "identity", "organization", "catalog", "sales", "messaging")),
+            Map.entry("reporting", Set.of("shared", "identity", "organization", "catalog", "sales", "messaging")),
+            Map.entry("ui", Set.of("shared",
+                    "identity", "organization", "catalog", "sales", "messaging", "notifications",
+                    "governance", "reporting")),
+            Map.entry("bootstrap", Set.of("shared",
+                    "identity", "organization", "catalog", "sales", "messaging", "notifications",
+                    "governance", "reporting", "ui")));
+
+    // A class-to-class dependency, with both names relative to the root the rule is built from.
+    private record ClassDependency(String origin, String target) {
+    }
+
+    // The documented known exception: login delivers pending notifications by calling the dispatch
+    // service directly until it moves behind an inbound port. Pinned to this class pair so that it
+    // cannot spread to other identity classes or to other notifications types.
+    private static final Set<ClassDependency> ALLOWED_CROSS_MODULE_EXCEPTIONS = Set.of(new ClassDependency(
+            "identity.application.service.AuthenticationService",
+            "notifications.application.service.NotificationDispatchService"));
+
+    private static final String SHARED_MODULE = "shared";
+
+    private static final String DOMAIN_LAYER = "domain";
+
+    private static final String UI_MODULE = "ui";
+
+    // A context's driven side, below its module package: closed to the UI at any depth.
+    private static final List<String> LAYERS_CLOSED_TO_THE_UI = List.of("application.port.out", "adapter");
+
+    private static ArchRule uiUsesNoOtherModulesDrivenPortsOrAdapters(String root) {
+        return classes().that(resideInModule(root, UI_MODULE))
+                .should(notDependOnAnotherModulesDrivenSide(root))
+                .because("ui/package-info.java: the UI depends on each bounded context's inbound application API");
+    }
+
+    private static ArchRule modulesDependOnlyAlongTheDocumentedGraph(String root) {
+        return classes().that(resideInAModule(root))
+                .should(dependOnlyOnTheirAllowedModules(root))
+                .because(".claude/CLAUDE.md (Architecture) documents the module dependency graph");
+    }
+
+    private static ArchRule domainsDependOnlyOnTheirOwnContextAndShared(String root) {
+        return classes().that(resideInADomain(root))
+                .should(dependOnlyOnTheirOwnContextAndShared(root))
+                .because(".claude/CLAUDE.md (Architecture): cross-context calls go through ports and events");
+    }
+
+    private static final ArchRule DOMAIN_USES_ONLY_HIBERNATE_ANNOTATIONS = noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat(resideInAPackage("org.hibernate..")
+                    .and(not(resideInAPackage("org.hibernate.annotations.."))))
+            .because("the JPA entities may carry Hibernate mapping annotations, not Hibernate's runtime API");
+
+    // Walks the enclosing classes too, so a converter's anonymous TypeReference counts as the converter.
+    private static final DescribedPredicate<JavaClass> BELONG_TO_AN_ATTRIBUTE_CONVERTER = DescribedPredicate.describe(
+            "implement AttributeConverter or are nested in a class that does", javaClass -> {
+                for (Optional<JavaClass> current = Optional.of(javaClass); current.isPresent();
+                        current = current.get().getEnclosingClass()) {
+                    if (current.get().isAssignableTo(AttributeConverter.class)) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+    private static final ArchRule DOMAIN_USES_JACKSON_ONLY_IN_ATTRIBUTE_CONVERTERS = noClasses()
+            .that().resideInAPackage("..domain..")
+            .and(not(BELONG_TO_AN_ATTRIBUTE_CONVERTER))
+            .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
+            .because("Jackson serialises JSON columns inside JPA attribute converters, never in the aggregates");
+
+    // The top-level module a package belongs to: empty for the root package itself, whose
+    // application class is no module, and for packages outside the root.
+    private static Optional<String> moduleOf(String packageName, String root) {
+        String prefix = root + ".";
+        if (!packageName.startsWith(prefix)) {
+            return Optional.empty();
+        }
+        String belowRoot = packageName.substring(prefix.length());
+        int dot = belowRoot.indexOf('.');
+        return Optional.of(dot < 0 ? belowRoot : belowRoot.substring(0, dot));
+    }
+
+    private static boolean isDomainPackage(String packageName, String root) {
+        return moduleOf(packageName, root)
+                .map(module -> isInOrBelow(packageName, root + "." + module + "." + DOMAIN_LAYER))
+                .orElse(false);
+    }
+
+    private static boolean isInOrBelow(String packageName, String ancestor) {
+        return packageName.equals(ancestor) || packageName.startsWith(ancestor + ".");
+    }
+
+    private static DescribedPredicate<JavaClass> resideInModule(String root, String module) {
+        return DescribedPredicate.describe("reside in module " + module + " under " + root,
+                javaClass -> isInOrBelow(javaClass.getPackageName(), root + "." + module));
+    }
+
+    private static ArchCondition<JavaClass> notDependOnAnotherModulesDrivenSide(String root) {
+        return new ArchCondition<>("not depend on another module's " + LAYERS_CLOSED_TO_THE_UI + " packages") {
+            @Override
+            public void check(JavaClass origin, ConditionEvents events) {
+                String module = moduleOf(origin.getPackageName(), root).orElseThrow();
+                dependencyTargetsOf(origin).forEach(target -> moduleOf(target.getPackageName(), root)
+                        .filter(targetModule -> !targetModule.equals(module))
+                        .filter(targetModule -> LAYERS_CLOSED_TO_THE_UI.stream().anyMatch(layer ->
+                                isInOrBelow(target.getPackageName(), root + "." + targetModule + "." + layer)))
+                        .ifPresent(targetModule -> events.add(SimpleConditionEvent.violated(origin,
+                                origin.getName() + " depends on " + target.getName() + ", but the ui may use "
+                                        + targetModule + " only through its application API"))));
+            }
+        };
+    }
+
+    // The classes an origin depends on, arrays reduced to their element type so that a Foo[] field
+    // counts as a dependency on Foo.
+    private static Stream<JavaClass> dependencyTargetsOf(JavaClass origin) {
+        return origin.getDirectDependenciesFromSelf().stream()
+                .map(dependency -> dependency.getTargetClass().getBaseComponentType())
+                .distinct();
+    }
+
+    private static DescribedPredicate<JavaClass> resideInAModule(String root) {
+        return DescribedPredicate.describe("reside in a module under " + root,
+                javaClass -> moduleOf(javaClass.getPackageName(), root).isPresent());
+    }
+
+    private static DescribedPredicate<JavaClass> resideInADomain(String root) {
+        return DescribedPredicate.describe("reside in a module's domain under " + root,
+                javaClass -> isDomainPackage(javaClass.getPackageName(), root));
+    }
+
+    private static ArchCondition<JavaClass> dependOnlyOnTheirAllowedModules(String root) {
+        return new ArchCondition<>("depend on other modules only along the documented module graph") {
+            @Override
+            public void check(JavaClass origin, ConditionEvents events) {
+                String module = moduleOf(origin.getPackageName(), root).orElseThrow();
+                Set<String> allowed = ALLOWED_MODULE_DEPENDENCIES.get(module);
+                if (allowed == null) {
+                    events.add(SimpleConditionEvent.violated(origin, origin.getName() + " is in module "
+                            + module + ", which the documented module graph does not name"));
+                    return;
+                }
+                dependencyTargetsOf(origin).forEach(target -> moduleOf(target.getPackageName(), root)
+                        .filter(targetModule -> !targetModule.equals(module) && !allowed.contains(targetModule))
+                        .filter(targetModule -> !isAllowedException(origin, target, root))
+                        .ifPresent(targetModule -> events.add(SimpleConditionEvent.violated(origin,
+                                origin.getName() + " depends on " + target.getName() + ", but module " + module
+                                        + " may depend only on " + new TreeSet<>(allowed)))));
+            }
+        };
+    }
+
+    private static boolean isAllowedException(JavaClass origin, JavaClass target, String root) {
+        int relativeStart = root.length() + 1;
+        return ALLOWED_CROSS_MODULE_EXCEPTIONS.contains(new ClassDependency(
+                origin.getName().substring(relativeStart), target.getName().substring(relativeStart)));
+    }
+
+    // The allowances whose class pair no longer appears among the classes' direct dependencies.
+    private static List<ClassDependency> unusedCrossModuleExceptions(String root, JavaClasses classes) {
+        return ALLOWED_CROSS_MODULE_EXCEPTIONS.stream()
+                .filter(allowance -> {
+                    String origin = root + "." + allowance.origin();
+                    String target = root + "." + allowance.target();
+                    return !classes.contain(origin) || dependencyTargetsOf(classes.get(origin))
+                            .noneMatch(dependency -> dependency.getName().equals(target));
+                })
+                .sorted(Comparator.comparing(ClassDependency::origin).thenComparing(ClassDependency::target))
+                .toList();
+    }
+
+    private static ArchCondition<JavaClass> dependOnlyOnTheirOwnContextAndShared(String root) {
+        return new ArchCondition<>("depend only on their own context and " + SHARED_MODULE) {
+            @Override
+            public void check(JavaClass origin, ConditionEvents events) {
+                String module = moduleOf(origin.getPackageName(), root).orElseThrow();
+                dependencyTargetsOf(origin)
+                        .filter(target -> target.getPackageName().equals(root)
+                                || moduleOf(target.getPackageName(), root)
+                                        .filter(targetModule -> !targetModule.equals(module)
+                                                && !targetModule.equals(SHARED_MODULE))
+                                        .isPresent())
+                        .forEach(target -> events.add(SimpleConditionEvent.violated(origin,
+                                origin.getName() + " depends on " + target.getName() + ", but the " + module
+                                        + " domain may depend only on " + module + " and " + SHARED_MODULE)));
+            }
+        };
     }
 
     /**

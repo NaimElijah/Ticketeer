@@ -57,10 +57,28 @@ class EventDisplayQueryServiceTest {
         assertEquals("Thu 15 Jul 2027 · 20:00 IDT", shown);
     }
 
+    // ADR-008: the earliest show is found by instant. Show dates are an unordered element collection,
+    // so a reload can return them in any order; the projection must not take the list's first entry.
+    @Test
+    void GivenShowsListedLaterFirst_WhenDescribed_ThenItStartsAtTheEarliestShow() {
+        LocalDateTime laterShow = SHOW_START.plusDays(7);
+        when(events.findById(EVENT_ID)).thenReturn(eventWithShows(JERUSALEM, List.of(
+                new ShowDate(laterShow, laterShow.plusHours(3)),
+                new ShowDate(SHOW_START, SHOW_START.plusHours(3)))));
+
+        EventDisplayInfoDTO info = service.describeEvent(EVENT_ID);
+
+        assertEquals(ZonedDateTime.of(SHOW_START, JERUSALEM), info.eventStartsAt(),
+                "the event should start at its earliest show, not at the first show in the list");
+    }
+
     private static Event eventAt(ZoneId timeZone) {
+        return eventWithShows(timeZone, List.of(new ShowDate(SHOW_START, SHOW_START.plusHours(3))));
+    }
+
+    private static Event eventWithShows(ZoneId timeZone, List<ShowDate> showDates) {
         return new Event(EVENT_ID, "Gala", 4.5, List.of("Artist"), EventCategory.CONCERT, 1, EventStatus.ON_SALE,
                 new VenueMap(1, new Location("Israel", "Jerusalem"), List.of(new StandingZone(1, "Floor", 10, 50))),
-                List.of(new ShowDate(SHOW_START, SHOW_START.plusHours(3))), timeZone,
-                new NoPurchasePolicy(), new DiscountPolicy(0));
+                showDates, timeZone, new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 }

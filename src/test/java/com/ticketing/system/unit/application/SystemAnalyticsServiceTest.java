@@ -15,6 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
@@ -42,6 +43,7 @@ class SystemAnalyticsServiceTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T12:00:00Z");
     private static final int WINDOW = 5;
+    private static final int REFRESH_INTERVAL_MS = 5000;
 
     private ISystemMetrics metrics;
     private OrderReceiptRepository orderReceiptRepository;
@@ -59,7 +61,7 @@ class SystemAnalyticsServiceTest {
         conversationRepository = mock(ConversationRepository.class);
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new SystemAnalyticsService(metrics, orderReceiptRepository, companyRepository,
-                eventRepository, conversationRepository, clock, WINDOW);
+                eventRepository, conversationRepository, clock, new AnalyticsProperties(WINDOW, REFRESH_INTERVAL_MS));
     }
 
     @Test

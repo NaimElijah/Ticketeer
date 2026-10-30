@@ -5,10 +5,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
@@ -57,14 +57,14 @@ public class SystemAnalyticsService {
             EventRepository eventRepository,
             ConversationRepository conversationRepository,
             Clock clock,
-            @Value("${analytics.rate-window-minutes:5}") int windowMinutes) {
+            AnalyticsProperties analyticsProperties) {
         this.metrics = metrics;
         this.orderReceiptRepository = orderReceiptRepository;
         this.companyRepository = companyRepository;
         this.eventRepository = eventRepository;
         this.conversationRepository = conversationRepository;
         this.clock = clock;
-        this.windowMinutes = windowMinutes > 0 ? windowMinutes : 5;
+        this.windowMinutes = analyticsProperties.rateWindowMinutes();
     }
 
     /** Builds the live analytics snapshot: rates over the trailing window, throughput over the hour. */

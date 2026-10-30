@@ -127,3 +127,15 @@ seed:
 # succeeds (recover, no restart).
 market:
   self-heal-delay-ms: ${MARKET_SELF_HEAL_DELAY_MS:30000}
+
+# Background sweeps and polls (every profile except test, which drives the sweeps directly). Each delay
+# runs from the end of one pass to the start of the next and must be positive (ADR-003).
+#  - sweeper: SessionAndOrderSweeper releases expired sessions and carts (UC-2).
+#  - event-completion: EventCompletionSweeper marks events whose last show has ended COMPLETED.
+#  - notifications: NotificationPollingScheduler pushes new notifications to connected users.
+sweeper:
+  fixed-delay-ms: ${SWEEPER_FIXED_DELAY_MS:60000}
+event-completion:
+  fixed-delay-ms: ${EVENT_COMPLETION_FIXED_DELAY_MS:60000}
+notifications:
+  poll-delay-ms: ${NOTIFICATIONS_POLL_DELAY_MS:60000}

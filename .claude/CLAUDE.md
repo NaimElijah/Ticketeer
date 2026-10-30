@@ -64,14 +64,30 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 
 DDD + hexagonal modular monolith. Each top-level package under `com.ticketing.system` is a Spring
 Modulith `@ApplicationModule` (all `Type.OPEN`; Modulith validates the model, ArchUnit is the gate).
-Cross-context calls go through ports and events, never into another context's internals.
+Cross-context calls should go through ports and events, and new code must. Existing code still
+reaches into other contexts, mainly (#184's triage has the full table):
+- identity has no inbound port, so its `SessionManager`, `UserRepository` and `User` are used
+  everywhere;
+- catalog, messaging and reporting call organization's `CompanyMembershipService`;
+- catalog, messaging, reporting, sales' `OrderReceiptMapper` and governance read `ProductionCompany`,
+  through organization's repository port or as the entity;
+- governance and reporting read sales', catalog's and messaging's repository ports and entities
+  directly; governance also calls sales' `PaymentGateway`/`TicketIssuer` and writes identity's
+  `Admin` (`AdminRepository`, `PasswordHasher`); reporting uses catalog's `CompanyRatings`;
+- messaging uses identity's `AdminRepository` and `Admin`;
+- sales takes catalog's `EventRepository` for the buyer lock.
 
-Dependencies (acyclic, enforced): `shared ← identity ← organization ← catalog ← sales`, and
-`organization ← messaging`. `notifications` depends only on `shared`. `governance` and `reporting` read
-across the backend contexts. `ui` uses every backend module; `bootstrap` uses everything including `ui`;
-nothing depends on either. Known exception, due to move behind an inbound port: `identity`
-(`AuthenticationService`, flagged in code) and `bootstrap` (`NotificationPollingScheduler`) call
-`notifications`' `NotificationDispatchService` directly.
+#54 replaces these, #53 the notifications call, and #55 closes the modules.
+
+Dependencies (acyclic, and each edge allowed by `HexagonalRulesTest`'s module map):
+`shared ← identity ← organization ← catalog ← sales`, and `organization ← messaging`. `notifications`
+depends only on `shared`. `governance` and `reporting` depend on the backend contexts except
+`notifications`, and not on each other. `ui` uses every backend module; `bootstrap` may use everything
+including `ui`. No backend module depends on either, and nothing depends on `bootstrap`. A new module fails the build until it is added to that map;
+add it to this paragraph in the same change, since nothing checks the two agree ([ADR-011](../docs/ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md)). Known
+exception, due to move behind an inbound port (#53): `identity`'s `AuthenticationService` calls
+`notifications`' `NotificationDispatchService` directly. The map allows that one class pair, nothing
+wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstrap's edges allow.
 
 | Module | Holds |
 |---|---|
@@ -82,23 +98,30 @@ nothing depends on either. Known exception, due to move behind an inbound port: 
 | `sales` | ActiveOrder, OrderReceipt, Ticket, checkout, reservations, refunds, WSEP adapters |
 | `messaging` | Conversations, support inquiries |
 | `notifications` | Consumes `shared/event` notices after commit on the `notify-` thread (`adapter/in/event`, ADR-004) |
-| `governance` | Platform lifecycle, market state, system analytics/integrity; implements sales' `MarketGate` |
+| `governance` | Platform lifecycle, market state, system analytics/integrity; implements sales' `MarketGate`; creates the default admin at init (writes identity's `Admin` directly, #54) |
 | `reporting` | CQRS read side (purchase history, company dashboards), read by `ui` |
 | `ui` | The single Vaadin driving adapter |
 | `bootstrap` | Composition root: lifecycle runners, `@Scheduled` sweepers, dev seed/`.scenario` engine |
 
-Context layout: `domain/` · `application/{port/in, port/out, service, dto}` · `adapter/in/event` ·
+Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoMappers, event}` · `adapter/in/event` ·
 `adapter/out/<persistence|wsep|security|…>`. Repository ports sit in `application/port/out`, not
 `domain`. An `adapter/out/<context>` package implements a port owned by that other context (e.g.
 `sales/adapter/out/catalog`). `governance` and `reporting` have no domain. Domain classes double as
-the JPA entities: `HexagonalRulesTest` deliberately allows `jakarta.persistence` in `domain`.
+the JPA entities, so `HexagonalRulesTest` allows `jakarta.persistence` and `org.hibernate.annotations`
+in `domain`, and Jackson only inside JPA `AttributeConverter` classes (the JSON column converters). A
+context's `domain` depends only on its own context and `shared`.
 
 Seams: `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`, `EventSalesHistoryPort`,
 `InventoryCommandPort`, `CatalogEventDisplayPort`, `EventCancelledEvent`, the `shared/event` notices.
 Events are in-process, with no outbox and no Modulith event registry. Catalog → sales (`EventCancelledEvent`) is a synchronous `@EventListener`, because the cancel call must see refund failures. Every `shared/event` notice is consumed by `NotificationEventListener` with `@Async("notificationExecutor")` + `@TransactionalEventListener(fallbackExecution = true)`: after commit, on one `notify-` thread, never delivered for a rolled-back transaction (ADR-004). Publishers don't catch notification failures, so a new notice consumer must follow the same pattern; `HexagonalRulesTest` fails the build otherwise. A Spring test that reads notifications must wait for them (Awaitility).
 
-**Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity,
-application-not-adapter, no-backend→ui, `bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit) and `ModularityTests`
+**Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity and its
+allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui never depends on
+another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
+stay open, #208), the module map,
+`bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules;
+the clock, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
+they fail on a fixture) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by
 copying from `target/`; git has CRLF and the generator writes LF, so a naive diff shows every line.
@@ -119,9 +142,9 @@ subclasses (third test command above).
 ### Transactions and concurrency
 
 - `@Transactional` sits on the application services (~15) and on Jpa adapter methods, never in `domain` or `ui`.
-- Keep WSEP calls outside the DB transaction (V3-TX-02). `CheckoutService`, `RefundService` and `EventCancellationRefundService` wrap only the DB steps in a programmatic `TransactionTemplate`; follow that pattern for any new external call.
+- Keep WSEP calls outside the DB transaction (V3-TX-02). `CheckoutService` and `EventCancellationRefundService` wrap only the DB steps in a programmatic `TransactionTemplate`; follow that pattern for any new external call. `RefundService` is the exception: it holds the receipt's row lock across the gateway refund by design (`AdamSimkinbgu/event-ticket-system#410`; `requirements.md` V3 appendix 4). It needs an ADR (#44), and #130 redesigns it. Don't copy it.
 - `@Transactional(readOnly = true)` on a path that writes drops the write under JPA without an error (b356bf57: the admin session vanished on the next request).
-- On the Jpa adapters, concurrency is optimistic (`@Version`). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the tx advice) re-types the commit-time `OptimisticLockingFailureException` into `ConcurrentReservationException`. Jpa `lockForUpdate`/`unlock` are no-ops **except** in `JpaOrderReceiptRepository`, which takes a real `PESSIMISTIC_WRITE` lock so concurrent refunds can't both reach the gateway.
+- On the Jpa adapters, concurrency is optimistic (`@Version`). `OptimisticLockTranslationAspect` (`HIGHEST_PRECEDENCE`, so it wraps the tx advice) re-types the commit-time `OptimisticLockingFailureException` into `ConcurrentReservationException`, for methods in `..application.service..` only (a bootstrap sweeper's own `@Transactional` sees the raw exception). Jpa `lockForUpdate`/`unlock` are no-ops **except** in `JpaOrderReceiptRepository`, which takes a real `PESSIMISTIC_WRITE` lock so concurrent refunds can't both reach the gateway.
 - Never mint IDs from an in-memory counter: it restarts at 1 on every boot and collides with persisted rows. Ticket IDs come from `TicketRepository.nextId` (seeded from the max existing id) inside the checkout transaction (6ce60ea1).
 - Flyway owns the schema (ADR-007): `src/main/resources/db/migration/V<n>__*.sql`, applied at startup on PostgreSQL **and** on H2 (dev, every Jpa/`test` context), with `ddl-auto: validate` everywhere. An `@Entity` change ships the next `V<n>` in the same commit; never edit one that has run (Flyway's checksum fails the boot). Write SQL both databases accept, keep migrations expand-only (add now, remove a release later), and name every constraint `uk_`/`ck_`/`fk_<table>_<column>`. `validate` checks only tables, columns and types, not length, nullability, uniques, FKs or enum `ck_` values: adding an enum constant needs a migration that drops and re-adds its `ck_` constraint, or inserts of it fail.
 - Each `test`-profile context gets its own H2 database (`testdb-${random.uuid}`), so nothing leaks between cached contexts; a test that needs a fixed name sets its own URL (`TicketIdRestartJpaTest`).
@@ -133,7 +156,7 @@ An in-memory state machine in `SystemAdminService` (governance, not persisted):
 `UNINITIALIZED → READY → OPEN ↔ CLOSED`.
 - `PlatformInitializationRunner` (`@Order(0)`) calls `initializePlatform()`. It needs a reachable WSEP `PaymentGateway` *and* `TicketIssuer` plus a System Admin, then moves to READY. Only a WSEP outage (`ExternalServiceUnavailableException`) is logged and left to self-heal; every other init failure propagates and stops the boot (ADR-003).
 - `bootstrap/scheduling/MarketOpener` opens the market on **every** non-test boot, and `MarketSelfHealScheduler` keeps retrying (it never reopens a market an admin closed). While CLOSED, `ReservationService`/`CheckoutService` refuse via `MarketGate`.
-- Under `test`, none of these runners, schedulers or real WSEP clients exist (`@Profile("!test")`); tests drive init themselves against `Stub*` gateways.
+- Under `test`, none of these runners, schedulers or real WSEP clients exist (`@Profile("!test")`); tests drive init themselves against `Stub*` gateways. The `bootstrap/scheduling` sweepers and the notification poller are still beans under `test`, but nothing schedules them, because `SchedulingConfig`'s `@EnableScheduling` is `!test`; a test calls them directly.
 
 ### External services (WSEP)
 
@@ -163,7 +186,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | `production`, `no-vaadin` | Maven build profiles: bundle the frontend and keep `vaadin-dev` and H2 out of the jar (#79) / skip `prepare-frontend` |
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
-- Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
+- Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. The exception: where a `@Scheduled` placeholder needs the value, the record only validates and nothing injects it (`MarketProperties`, `SweeperProperties`, `EventCompletionProperties`, `NotificationPollingProperties`). A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
 - `logback-spring.xml` has a catch-all `!dev & !test` block, so a new runtime profile gets appenders without a block of its own. A new profile that needs different logging gets its own block and an exclusion in the catch-all: blocks that both match merge (root gets both blocks' appenders, logback ignores a duplicate, and the later block's levels win), and a run that matches none is silent (36ac7924).
 
 ## Conventions
