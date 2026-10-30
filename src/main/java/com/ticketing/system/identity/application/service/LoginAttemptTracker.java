@@ -3,7 +3,6 @@ package com.ticketing.system.identity.application.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -14,10 +13,13 @@ import com.ticketing.system.identity.config.LockoutProperties;
  * sign-in in {@link AuthenticationService}.
  *
  * <p>Each attempt is counted, atomically, before its password is verified. Attempts are counted per
- * pool and username in a fixed window of {@code auth.lockout.lock-minutes} that opens at the key's
- * first attempt. Once the limit is reached, every further attempt in the window is refused without
- * verification, however many arrive at once; a success clears the key. Held in memory, so a restart
- * clears it.
+ * pool and username, keyed on the exact string the caller passes, so the caller passes the name its
+ * account lookup matches: names that differ in case or padding are separate keys, as they are
+ * separate member accounts (business rule 1), and a sign-in to one never clears another's window.
+ * A key's attempts are counted in a fixed window of {@code auth.lockout.lock-minutes} that opens at
+ * its first attempt. Once the limit is reached, every further attempt in the window is refused
+ * without verification, however many arrive at once; a success clears the key. Held in memory, so a
+ * restart clears it.
  *
  * <p>Thread-safe. Memory is bounded: expired windows are purged on every write, and a key keeps no
  * more of a username than the username column can hold.
@@ -46,8 +48,8 @@ final class LoginAttemptTracker {
      * Counts one sign-in attempt and says whether it may go on to password verification.
      *
      * @param pool     which sign-in the attempt is for; the pools are counted apart
-     * @param username the username as the caller sent it; case and surrounding whitespace are
-     *                 ignored, and {@code null} counts as empty
+     * @param username the username the account lookup matches, compared exactly; {@code null}
+     *                 counts as empty
      * @return the admission: refused once the window already holds {@code maxAttempts} attempts
      */
     Admission admit(Pool pool, String username) {
@@ -67,7 +69,7 @@ final class LoginAttemptTracker {
      * Forgets the key's attempts, after a successful sign-in.
      *
      * @param pool     the pool the sign-in was for
-     * @param username the username as the caller sent it
+     * @param username the username the attempts were admitted under
      */
     void clear(Pool pool, String username) {
         purgeExpired(clock.instant());
@@ -86,10 +88,10 @@ final class LoginAttemptTracker {
     }
 
     private static Key keyOf(Pool pool, String username) {
-        String normalized = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
-        return new Key(pool, normalized.length() > MAX_USERNAME_LENGTH
-                ? normalized.substring(0, MAX_USERNAME_LENGTH)
-                : normalized);
+        String name = username == null ? "" : username;
+        return new Key(pool, name.length() > MAX_USERNAME_LENGTH
+                ? name.substring(0, MAX_USERNAME_LENGTH)
+                : name);
     }
 
     /** The two sign-in pools, whose identical usernames are separate accounts. */

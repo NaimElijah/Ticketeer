@@ -1209,10 +1209,88 @@ class AuthenticationServiceTest {
     }
 
     private static void failLogins(AuthenticationService target, int times) {
+        failLoginsAs(target, "alice", times);
+    }
+
+    private static void failLoginsAs(AuthenticationService target, String username, int times) {
         for (int i = 0; i < times; i++) {
             assertThrows(AuthenticationFailedException.class,
-                    () -> target.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")),
+                    () -> target.login(new LoginRequestDTO(username, WRONG_PASSWORD, "guest-1")),
                     "a wrong password inside an unlocked window is refused as a failed sign-in, not a lock");
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Lockout key (SLR.2, OQ-8, #187). A member's attempts are counted under the username exactly as
+    // member accounts are looked up: names that differ only in case are distinct accounts (business
+    // rule 1), and a padded name names no account. So a sign-in to one account never clears another
+    // account's window, and failures at one never lock another. Admins are looked up by the trimmed
+    // name, so an admin's window is keyed by the trimmed name.
+    // ----------------------------------------------------------------------
+
+    private static final String LOOK_ALIKE_PASSWORD = "Lookalike1";
+
+    @Test
+    void GivenMaxMinusOneFailuresAtAlice_WhenALICESignsInAndAliceFailsTwiceMore_ThenTheSecondIsLocked() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+        givenLookAlikeMemberALICE();
+
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+        lockoutService.login(new LoginRequestDTO("ALICE", LOOK_ALIKE_PASSWORD, "guest-1"));
+        failLogins(lockoutService, 1);
+
+        assertThrows(AccountLockedException.class,
+                () -> lockoutService.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")),
+                "a sign-in to the distinct account ALICE must not clear alice's attempt window");
+    }
+
+    @Test
+    void GivenMaxFailuresAtALICE_WhenAliceSignsInWithHerPassword_ThenSignedIn() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+        givenLookAlikeMemberALICE();
+
+        failLoginsAs(lockoutService, "ALICE", MAX_ATTEMPTS);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "failures at the distinct account ALICE must not lock alice");
+    }
+
+    @Test
+    void GivenMaxFailuresAtAliceWithALeadingSpace_WhenAliceSignsInWithHerPassword_ThenSignedIn() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+
+        failLoginsAs(lockoutService, " alice", MAX_ATTEMPTS);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "' alice' names no member account, so failures at it must not lock alice");
+    }
+
+    @Test
+    void GivenFailuresAtPaddedAdminAndAtAdmin_WhenTheyReachMaxAttempts_ThenAdminIsLocked() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        String adminPassword = "AdminPass1";
+        when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "ADMIN_HASH", true));
+        when(mockHasher.matches(any(), eq("ADMIN_HASH")))
+                .thenAnswer(invocation -> adminPassword.equals(invocation.getArgument(0)));
+
+        for (int i = 0; i < MAX_ATTEMPTS - 1; i++) {
+            assertThrows(AuthenticationFailedException.class,
+                    () -> lockoutService.signInAsAdmin(" admin", WRONG_PASSWORD));
+        }
+        assertThrows(AuthenticationFailedException.class, () -> lockoutService.signInAsAdmin("admin", WRONG_PASSWORD));
+
+        assertThrows(AccountLockedException.class, () -> lockoutService.signInAsAdmin("admin", adminPassword),
+                "' admin' signs in to the admin account, so its failures count in admin's window");
+    }
+
+    /** Member ALICE, a distinct account from alice, whose password is {@link #LOOK_ALIKE_PASSWORD}. */
+    private void givenLookAlikeMemberALICE() {
+        User lookAlike = new User(8, "ALICE", "look.alike@example.com", "LOOK_ALIKE_HASH", 30);
+        when(mockUserRepo.findByUsername("ALICE")).thenReturn(Optional.of(lookAlike));
+        when(mockHasher.matches(any(), eq("LOOK_ALIKE_HASH")))
+                .thenAnswer(invocation -> LOOK_ALIKE_PASSWORD.equals(invocation.getArgument(0)));
     }
 }

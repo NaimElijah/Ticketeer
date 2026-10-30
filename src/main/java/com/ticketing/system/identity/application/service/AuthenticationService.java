@@ -451,14 +451,16 @@ public class AuthenticationService {
     // (member login is unaffected — it promotes an already-persisted guest session).
     @Transactional
     public AuthTokenDTO signInAsAdmin(String username, String rawPassword) {
-        Admission admission = loginAttempts.admit(Pool.ADMIN, username);
+        // Admins are looked up by the trimmed name, so their attempts are counted under it too.
+        String lookupName = username == null ? "" : username.trim();
+        Admission admission = loginAttempts.admit(Pool.ADMIN, lookupName);
         if (!admission.admitted()) {
             log.warn("ADMIN AUTH BLOCKED · username={} · reason=locked-out · at={}", username, clock.instant());
             throw lockedOut(admission);
         }
 
         // An unknown admin costs the same BCrypt work as a wrong password, as in member login.
-        Admin admin = adminRepository.findByUsername(username == null ? "" : username.trim());
+        Admin admin = adminRepository.findByUsername(lookupName);
         String storedHash = admin == null ? dummyHash : admin.getPasswordHash();
         boolean passwordMatches = passwordHasher.matches(rawPassword, storedHash);
         if (admin == null || !passwordMatches) {
@@ -468,7 +470,7 @@ public class AuthenticationService {
             throw new AuthenticationFailedException();
         }
 
-        loginAttempts.clear(Pool.ADMIN, username);
+        loginAttempts.clear(Pool.ADMIN, lookupName);
         String token = sessionManager.generateAdminToken(admin.getId(), admin.getUsername());
         long expiresAt = sessionManager.extractExpiration(token);
         log.info("ADMIN AUTH OK · username={} · id={}", admin.getUsername(), admin.getId());
