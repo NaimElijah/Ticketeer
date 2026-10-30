@@ -241,33 +241,33 @@ class HexagonalRulesTest {
      * types are tracked separately in #208.
      */
     @Test
-    void GivenProductionCode_WhenScanned_ThenTheUiUsesOnlyTheBackendsApplicationApi() {
-        uiUsesOnlyTheBackendsApplicationApi(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    void GivenProductionCode_WhenScanned_ThenTheUiUsesNoOtherModulesDrivenPortsOrAdapters() {
+        uiUsesNoOtherModulesDrivenPortsOrAdapters(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
     }
 
     // The class comment records a rule engine that silently checked nothing; these prove each graph
     // rule fails on an offender and that its one exception stays as narrow as documented.
     @Test
-    void GivenAUiClassUsingADrivenPort_WhenScanned_ThenTheUiApplicationApiRuleFails() {
-        assertRuleFails(uiUsesOnlyTheBackendsApplicationApi(FIXTURE_ROOT), UiTypeUsingADrivenPort.class);
+    void GivenAUiClassUsingADrivenPort_WhenScanned_ThenTheUiDrivenSideRuleFails() {
+        assertRuleFails(uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT), UiTypeUsingADrivenPort.class);
     }
 
     @Test
-    void GivenAUiClassUsingAnAdapter_WhenScanned_ThenTheUiApplicationApiRuleFails() {
-        assertRuleFails(uiUsesOnlyTheBackendsApplicationApi(FIXTURE_ROOT), UiTypeUsingAnAdapter.class);
+    void GivenAUiClassUsingAnAdapter_WhenScanned_ThenTheUiDrivenSideRuleFails() {
+        assertRuleFails(uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT), UiTypeUsingAnAdapter.class);
     }
 
     @Test
-    void GivenAUiClassUsingAnApplicationService_WhenScanned_ThenTheUiApplicationApiRulePasses() {
+    void GivenAUiClassUsingAnApplicationService_WhenScanned_ThenTheUiDrivenSideRulePasses() {
         JavaClasses imported = new ClassFileImporter().importClasses(UiTypeUsingAnApplicationService.class);
-        assertThatCode(() -> uiUsesOnlyTheBackendsApplicationApi(FIXTURE_ROOT).check(imported))
+        assertThatCode(() -> uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT).check(imported))
                 .doesNotThrowAnyException();
     }
 
     @Test
-    void GivenAUiClassUsingAnInboundPort_WhenScanned_ThenTheUiApplicationApiRulePasses() {
+    void GivenAUiClassUsingAnInboundPort_WhenScanned_ThenTheUiDrivenSideRulePasses() {
         JavaClasses imported = new ClassFileImporter().importClasses(UiTypeUsingAnInboundPort.class);
-        assertThatCode(() -> uiUsesOnlyTheBackendsApplicationApi(FIXTURE_ROOT).check(imported))
+        assertThatCode(() -> uiUsesNoOtherModulesDrivenPortsOrAdapters(FIXTURE_ROOT).check(imported))
                 .doesNotThrowAnyException();
     }
 
@@ -417,7 +417,7 @@ class HexagonalRulesTest {
     // A context's driven side, below its module package: closed to the UI at any depth.
     private static final List<String> LAYERS_CLOSED_TO_THE_UI = List.of("application.port.out", "adapter");
 
-    private static ArchRule uiUsesOnlyTheBackendsApplicationApi(String root) {
+    private static ArchRule uiUsesNoOtherModulesDrivenPortsOrAdapters(String root) {
         return classes().that(resideInModule(root, UI_MODULE))
                 .should(notDependOnAnotherModulesDrivenSide(root))
                 .because("ui/package-info.java: the UI depends on each bounded context's inbound application API");

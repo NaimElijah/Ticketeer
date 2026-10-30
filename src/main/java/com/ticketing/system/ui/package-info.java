@@ -5,7 +5,7 @@
  * {@code AuthBootstrap} navigation guard, capabilities, session helpers, component kit), and the dev
  * panel. As the one inbound adapter it is allowed to depend on every bounded context's inbound
  * application API, never another module's {@code application.port.out} or {@code adapter} packages
- * ({@code HexagonalRulesTest#GivenProductionCode_WhenScanned_ThenTheUiUsesOnlyTheBackendsApplicationApi});
+ * ({@code HexagonalRulesTest#GivenProductionCode_WhenScanned_ThenTheUiUsesNoOtherModulesDrivenPortsOrAdapters});
  * no backend <em>bounded context</em> may depend on {@code ui} (enforced by
  * {@code HexagonalRulesTest#no_backend_context_depends_on_the_ui}). The {@code bootstrap} composition
  * root is the one deliberate exception: as the wiring sink it may reference {@code ui} (e.g. the
