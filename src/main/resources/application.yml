@@ -52,6 +52,13 @@ auth:
     max-attempts: ${AUTH_LOCKOUT_MAX_ATTEMPTS:5}
     lock-minutes: ${AUTH_LOCKOUT_LOCK_MINUTES:15}
 
+# Usernames no member may register (UC-11, #76), comma-separated, matched ignoring case and
+# surrounding whitespace. The default admin's username (platform.admin.username) is always reserved
+# as well: platform-admin-username follows it, so it has no variable of its own.
+identity:
+  reserved-usernames: ${IDENTITY_RESERVED_USERNAMES:admin,platform.admin}
+  platform-admin-username: ${platform.admin.username}
+
 
 constants:
   # System-wide constant

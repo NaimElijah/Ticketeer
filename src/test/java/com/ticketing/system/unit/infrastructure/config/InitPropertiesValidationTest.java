@@ -3,6 +3,7 @@ package com.ticketing.system.unit.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.ZoneId;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,6 +25,7 @@ import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.bootstrap.config.SweeperProperties;
 import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
+import com.ticketing.system.identity.config.IdentityProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.sales.config.ReservationHoldProperties;
@@ -44,7 +46,7 @@ class InitPropertiesValidationTest {
             ReservationHoldProperties.class, SessionProperties.class, LockoutProperties.class,
             WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class, SeedProperties.class,
             PlatformTimeProperties.class, AnalyticsProperties.class, SweeperProperties.class,
-            EventCompletionProperties.class, NotificationPollingProperties.class})
+            EventCompletionProperties.class, NotificationPollingProperties.class, IdentityProperties.class})
     static class InitProperties {
     }
 
@@ -65,6 +67,32 @@ class InitPropertiesValidationTest {
             assertThat(context.getBean(SweeperProperties.class).fixedDelayMs()).isEqualTo(60000);
             assertThat(context.getBean(EventCompletionProperties.class).fixedDelayMs()).isEqualTo(60000);
             assertThat(context.getBean(NotificationPollingProperties.class).pollDelayMs()).isEqualTo(60000);
+            assertThat(context.getBean(IdentityProperties.class).reservedUsernames())
+                    .containsExactly("admin", "platform.admin");
+            assertThat(context.getBean(IdentityProperties.class).platformAdminUsername()).isEqualTo("admin");
+        });
+    }
+
+    // #76: the default admin's username is always reserved, so identity follows platform.admin.username
+    // without importing governance's PlatformAdminProperties.
+    @Test
+    void GivenPlatformAdminUsernameOverride_WhenContextStarts_ThenIdentityBindsTheSameName() {
+        runner.withPropertyValues("platform.admin.username=root.admin").run(context ->
+                assertThat(context.getBean(IdentityProperties.class).platformAdminUsername()).isEqualTo("root.admin"));
+    }
+
+    @Test
+    void GivenReservedUsernamesList_WhenContextStarts_ThenBindsEveryName() {
+        runner.withPropertyValues("identity.reserved-usernames=box.office,support").run(context ->
+                assertThat(context.getBean(IdentityProperties.class).reservedUsernames())
+                        .isEqualTo(List.of("box.office", "support")));
+    }
+
+    @Test
+    void GivenEmptyReservedUsernames_WhenContextStarts_ThenBindsBecauseOnlyTheAdminNameIsThenReserved() {
+        runner.withPropertyValues("identity.reserved-usernames=").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(IdentityProperties.class).reservedUsernames()).allMatch(String::isBlank);
         });
     }
 

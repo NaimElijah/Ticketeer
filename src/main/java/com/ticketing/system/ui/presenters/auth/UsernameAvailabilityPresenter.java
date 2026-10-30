@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.presenters.auth;
 
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.application.service.MemberQueryService;
-import com.ticketing.system.ui.session.AuthSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -14,9 +14,11 @@ import java.util.regex.Pattern;
  *
  * <p>Mirrors the pattern set by {@code LoginPresenter} (PR #299): a
  * sealed {@link Outcome} hierarchy with one variant per user-facing
- * state. Order of checks matters — empty / format / admin-reserved /
+ * state. Order of checks matters — empty / format / reserved /
  * existence — so the view always shows the most specific feedback
- * first.
+ * first. Which names are reserved is the identity service's answer
+ * ({@link AuthenticationService#isUsernameReserved}), the same one
+ * {@code register} enforces.
  */
 @Component
 public class UsernameAvailabilityPresenter {
@@ -31,10 +33,18 @@ public class UsernameAvailabilityPresenter {
         Pattern.compile("^[A-Za-z0-9._-]{3,32}$");
 
     private final MemberQueryService memberQueryService;
+    private final AuthenticationService authenticationService;
 
     @Autowired
-    public UsernameAvailabilityPresenter(MemberQueryService memberQueryService) {
+    public UsernameAvailabilityPresenter(MemberQueryService memberQueryService,
+                                         AuthenticationService authenticationService) {
         this.memberQueryService = memberQueryService;
+        this.authenticationService = authenticationService;
+    }
+
+    /** Whether no member may register {@code username}; {@code register} refuses such a name. */
+    public boolean isReserved(String username) {
+        return authenticationService.isUsernameReserved(username);
     }
 
     public Outcome check(String username) {
@@ -45,7 +55,7 @@ public class UsernameAvailabilityPresenter {
         if (!USERNAME_PATTERN.matcher(trimmed).matches()) {
             return new Outcome.InvalidFormat();
         }
-        if (AuthSession.isAdminUsername(trimmed)) {
+        if (isReserved(trimmed)) {
             return new Outcome.AdminReserved();
         }
         try {

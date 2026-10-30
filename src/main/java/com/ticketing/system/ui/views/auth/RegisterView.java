@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.auth;
 
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.auth.PasswordStrengthMeter;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
@@ -7,7 +8,6 @@ import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
-import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.GuestSession;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
@@ -58,6 +58,7 @@ public class RegisterView extends LkAuthCard {
         EmailField email = new EmailField("Email");
         email.setPlaceholder("you@email.com");
         email.setRequired(true);
+        email.setMaxLength(AuthenticationService.MAX_EMAIL_LENGTH);
         email.setWidthFull();
 
         IntegerField age = new IntegerField("Age");
@@ -110,7 +111,7 @@ public class RegisterView extends LkAuthCard {
             }
             case UsernameAvailabilityPresenter.Outcome.AdminReserved ignored -> {
                 field.setSuffixComponent(statusIcon(VaadinIcon.CLOSE_CIRCLE, "var(--lumo-error-color)"));
-                field.setHelperText("Reserved for the platform-admin pool.");
+                field.setHelperText("Reserved — please choose another.");
                 field.setInvalid(true);
             }
             case UsernameAvailabilityPresenter.Outcome.Taken ignored -> {
@@ -149,8 +150,8 @@ public class RegisterView extends LkAuthCard {
             Toasts.failure("Passwords don't match.");
             return;
         }
-        if (AuthSession.isAdminUsername(username.getValue())) {
-            Toasts.failure("That username is reserved for the platform-admin pool.");
+        if (usernameAvailability.isReserved(username.getValue())) {
+            Toasts.failure("That username is reserved — please choose another.");
             return;
         }
 

@@ -1,16 +1,20 @@
 package com.ticketing.system.identity.application.service;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService; // transitional: cross-context call, to be rewired via an inbound port later
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +29,9 @@ import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.shared.dto.RefreshTokenRequestDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.identity.application.service.LoginAttemptTracker.Admission;
+import com.ticketing.system.identity.application.service.LoginAttemptTracker.Pool;
+import com.ticketing.system.identity.config.IdentityProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.identity.application.port.out.CartRestorationPort;
@@ -41,6 +48,7 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.ReservedUsernameException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
@@ -66,6 +74,26 @@ public class AuthenticationService {
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
+    /**
+     * The longest email accepted: RFC 5321 caps a forward path at 254 characters. Checked before
+     * {@link #EMAIL_PATTERN}, whose backtracking grows with the input. Public so the registration
+     * form can cap its field at the same length.
+     */
+    public static final int MAX_EMAIL_LENGTH = 254;
+
+    /** The most of a password BCrypt reads; {@code PasswordHasher.hash} throws for a longer one. */
+    static final int MAX_PASSWORD_UTF8_BYTES = 72;
+
+    private static final int MIN_PASSWORD_LENGTH = 8;
+
+    /**
+     * Verified against when the username names no account, so an unknown username costs the same
+     * BCrypt work as a known one and the response time does not tell which usernames exist. A real
+     * hash at the cost {@code BcryptPasswordHasher} uses (10), of a random secret that was
+     * discarded, so no password matches it. Regenerate it if that cost changes.
+     */
+    private static final String DUMMY_HASH = "$2a$10$m9cx4gEdeGJXWUzDeiQIB.l5tExjDwjuLGriou9K2t7N6Eg2ya6bG";
+
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final SessionManager sessionManager;
@@ -79,12 +107,11 @@ public class AuthenticationService {
 
     // Admin sign-in (#290).
     private final AdminRepository adminRepository;
-    // Brute-force lockout (SLR.2 / #148) — shared by member AND admin sign-in. In-memory for
-    // V1/V2 (a restart clears it). Keys are namespaced by pool ("m:"/"a:") so the two forms are
-    // rate-limited independently.
-    private final int lockoutMaxAttempts;    // 0 disables the lockout entirely
-    private final long lockoutLockMinutes;
-    private final ConcurrentMap<String, LoginAttempts> loginAttempts = new ConcurrentHashMap<>();
+    // Brute-force lockout (SLR.2 / #148), shared by member and admin sign-in.
+    private final LoginAttemptTracker loginAttempts;
+    // Names no member may register (#76): identity.reserved-usernames plus the default admin's
+    // username, trimmed and lower-cased.
+    private final Set<String> reservedUsernames;
 
     public AuthenticationService(
             UserRepository userRepository,
@@ -97,7 +124,8 @@ public class AuthenticationService {
             Clock clock,
             AdminRepository adminRepository,
             SessionProperties sessionProperties,
-            LockoutProperties lockoutProperties) {
+            LockoutProperties lockoutProperties,
+            IdentityProperties identityProperties) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.sessionManager = sessionManager;
@@ -109,8 +137,33 @@ public class AuthenticationService {
         this.adminRepository = adminRepository;
         this.guestIdleMinutes = sessionProperties.guestIdleTimeoutMinutes();
         this.memberTtlMinutes = sessionProperties.memberTtlMinutes();
-        this.lockoutMaxAttempts = lockoutProperties.maxAttempts();
-        this.lockoutLockMinutes = lockoutProperties.lockMinutes();
+        this.loginAttempts = new LoginAttemptTracker(lockoutProperties, clock);
+        this.reservedUsernames = reservedUsernamesOf(identityProperties);
+    }
+
+    private static Set<String> reservedUsernamesOf(IdentityProperties identity) {
+        Stream<String> configured = identity.reservedUsernames().stream();
+        return Stream.concat(configured, Stream.ofNullable(identity.platformAdminUsername()))
+                .filter(name -> name != null && !name.isBlank())
+                .map(AuthenticationService::normalizedUsername)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static String normalizedUsername(String username) {
+        return username.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Whether {@code username} is one no member may register (#76): a name from
+     * {@code identity.reserved-usernames} or the default admin's username, ignoring case and
+     * surrounding whitespace. {@link #register} refuses such a name; the UI asks this to say so
+     * before the visitor submits.
+     *
+     * @param username the requested username, as typed
+     * @return {@code true} if it is reserved; {@code false} for any other name, {@code null} included
+     */
+    public boolean isUsernameReserved(String username) {
+        return username != null && reservedUsernames.contains(normalizedUsername(username));
     }
 
     /** Delegates to {@link SessionManager#extractUserId}. */
@@ -198,9 +251,13 @@ public class AuthenticationService {
      * Guest after register — {@link #login(LoginRequestDTO)} is the explicit promotion
      * step to Member-Visitor.
      *
-     * @throws InvalidEmailFormatException email fails format check
-     * @throws WeakPasswordException       password fails strength rules
-     * @throws DuplicateUsernameException  username already taken
+     * @throws InvalidEmailFormatException email is longer than {@value #MAX_EMAIL_LENGTH} characters
+     *                                     or fails the format check
+     * @throws WeakPasswordException       password fails strength rules, or is longer than
+     *                                     {@value #MAX_PASSWORD_UTF8_BYTES} bytes in UTF-8
+     * @throws ReservedUsernameException   username is reserved ({@link #isUsernameReserved})
+     * @throws DuplicateUsernameException  username already taken, including by a registration that
+     *                                     committed after this one's check
      * @throws DuplicateEmailException     email already registered
      */
     @Transactional
@@ -212,7 +269,11 @@ public class AuthenticationService {
         // 2. Guest session must exist and still be a Guest.
         Session session = requireActiveGuestSession(request.guestSessionId());
 
-        // 3. Uniqueness.
+        // 3. Uniqueness. The check gives the usual answer early; two registrations that pass it at
+        //    once are settled by save, which refuses the second with DuplicateUsernameException.
+        if (isUsernameReserved(request.username())) {
+            throw new ReservedUsernameException(request.username());
+        }
         if (userRepository.existsByUsername(request.username())) {
             throw new DuplicateUsernameException(request.username());
         }
@@ -235,14 +296,18 @@ public class AuthenticationService {
     }
 
     private static void validateEmail(String email) {
-        if (email == null || !EMAIL_PATTERN.matcher(email).matches()) {
+        if (email == null || email.length() > MAX_EMAIL_LENGTH || !EMAIL_PATTERN.matcher(email).matches()) {
             throw new InvalidEmailFormatException();
         }
     }
 
     private static void validatePassword(String rawPassword) {
-        if (rawPassword == null || rawPassword.length() < 8) {
-            throw new WeakPasswordException("must be at least 8 characters");
+        if (rawPassword == null || rawPassword.length() < MIN_PASSWORD_LENGTH) {
+            throw new WeakPasswordException("must be at least " + MIN_PASSWORD_LENGTH + " characters");
+        }
+        if (rawPassword.getBytes(StandardCharsets.UTF_8).length > MAX_PASSWORD_UTF8_BYTES) {
+            throw new WeakPasswordException("must be at most " + MAX_PASSWORD_UTF8_BYTES
+                    + " bytes in UTF-8, the most BCrypt reads; a character outside ASCII takes two or more");
         }
         boolean hasLetter = false;
         boolean hasDigit = false;
@@ -267,11 +332,14 @@ public class AuthenticationService {
      * session in place. UC-12.
      *
      * <p>
-     * "Unknown username" and "wrong password" raise the same exception to avoid
-     * username enumeration via the response.
+     * "Unknown username" and "wrong password" raise the same exception, after the same
+     * password-hash work, to avoid username enumeration via the response or its timing.
      *
      * @throws GuestSessionRequiredException no / unknown / expired / non-guest
      *                                       sessionId
+     * @throws AccountLockedException        the username's attempt window already holds
+     *                                       {@code auth.lockout.max-attempts} attempts; the
+     *                                       password is not checked
      * @throws AuthenticationFailedException invalid credentials
      */
     @Transactional
@@ -279,29 +347,27 @@ public class AuthenticationService {
         // 1. Guest session must exist.
         Session session = requireActiveGuestSession(request.guestSessionId());
 
-        // 1b. Brute-force lockout (SLR.2 #148) — same policy as admin sign-in.
-        String lockKey = lockoutKey("m", request.username());
-        if (isLockedOut(lockKey)) {
+        // 1b. Brute-force lockout (SLR.2 #148) — same policy as admin sign-in. The attempt is
+        //     counted before the password is checked, so attempts that arrive together cannot all
+        //     reach the hasher before the first failure is recorded.
+        Admission admission = loginAttempts.admit(Pool.MEMBER, request.username());
+        if (!admission.admitted()) {
             log.warn("MEMBER AUTH BLOCKED · username={} · reason=locked-out · at={}",
                     request.username(), clock.instant());
-            throw new AccountLockedException(
-                    "Too many failed attempts. Try again in about " + lockoutLockMinutes + " minutes.");
+            throw lockedOut(admission);
         }
 
-        // 2. Authenticate (same exception for both unknown-user and wrong-password).
-        User user;
-        try {
-            user = userRepository.findByUsername(request.username())
-                    .orElseThrow(AuthenticationFailedException::new);
-            if (!passwordHasher.matches(request.rawPassword(), user.getPasswordHash())) {
-                throw new AuthenticationFailedException();
-            }
-        } catch (AuthenticationFailedException e) {
-            int failures = recordFailure(lockKey);
-            log.warn("MEMBER AUTH FAILED · username={} · failures={}", request.username(), failures);
-            throw e;
+        // 2. Authenticate. An unknown username and a wrong password raise the same exception after
+        //    the same BCrypt work, so neither the answer nor its timing tells which names exist.
+        Optional<User> found = userRepository.findByUsername(request.username());
+        String storedHash = found.map(User::getPasswordHash).orElse(DUMMY_HASH);
+        boolean passwordMatches = passwordHasher.matches(request.rawPassword(), storedHash);
+        if (found.isEmpty() || !passwordMatches) {
+            log.warn("MEMBER AUTH FAILED · username={} · failures={}", request.username(), admission.attempts());
+            throw new AuthenticationFailedException();
         }
-        clearFailures(lockKey);
+        User user = found.get();
+        loginAttempts.clear(Pool.MEMBER, request.username());
 
         // 3. Promote — same sessionId, userId set, expiry bumped to Member TTL.
         Instant memberExpiry = clock.instant().plus(memberTtlMinutes, ChronoUnit.MINUTES);
@@ -335,71 +401,37 @@ public class AuthenticationService {
     // (member login is unaffected — it promotes an already-persisted guest session).
     @Transactional
     public AuthTokenDTO signInAsAdmin(String username, String rawPassword) {
-        String lockKey = lockoutKey("a", username);
-
-        if (isLockedOut(lockKey)) {
+        Admission admission = loginAttempts.admit(Pool.ADMIN, username);
+        if (!admission.admitted()) {
             log.warn("ADMIN AUTH BLOCKED · username={} · reason=locked-out · at={}", username, clock.instant());
-            throw new AccountLockedException(
-                    "Too many failed attempts. Try again in about " + lockoutLockMinutes + " minutes.");
+            throw lockedOut(admission);
         }
 
+        // An unknown admin costs the same BCrypt work as a wrong password, as in member login.
         Admin admin = adminRepository.findByUsername(username == null ? "" : username.trim());
-        if (admin == null || !passwordHasher.matches(rawPassword, admin.getPasswordHash())) {
-            int failures = recordFailure(lockKey);
+        String storedHash = admin == null ? DUMMY_HASH : admin.getPasswordHash();
+        boolean passwordMatches = passwordHasher.matches(rawPassword, storedHash);
+        if (admin == null || !passwordMatches) {
             log.warn("ADMIN AUTH FAILED · username={} · reason={} · failures={} · at={}",
-                    username, admin == null ? "unknown-admin" : "bad-password", failures, clock.instant());
+                    username, admin == null ? "unknown-admin" : "bad-password", admission.attempts(),
+                    clock.instant());
             throw new AuthenticationFailedException();
         }
 
-        clearFailures(lockKey);
+        loginAttempts.clear(Pool.ADMIN, username);
         String token = sessionManager.generateAdminToken(admin.getId(), admin.getUsername());
         long expiresAt = sessionManager.extractExpiration(token);
         log.info("ADMIN AUTH OK · username={} · id={}", admin.getUsername(), admin.getId());
         return new AuthTokenDTO(token, expiresAt, admin.getId(), admin.getUsername(), true);
     }
 
-    // ---- shared brute-force lockout (SLR.2 #148) — member + admin sign-in ----
-
-    private static String lockoutKey(String pool, String username) {
-        return pool + ":" + (username == null ? "" : username.trim().toLowerCase());
+    // The lock lasts until the attempt window ends, so the message gives the time left in it.
+    private AccountLockedException lockedOut(Admission admission) {
+        Duration left = Duration.between(clock.instant(), admission.windowEndsAt());
+        long minutesLeft = Math.max(1, left.toMinutes() + (left.toSecondsPart() > 0 ? 1 : 0));
+        return new AccountLockedException("Too many failed attempts. Try again in about "
+                + (minutesLeft == 1 ? "a minute." : minutesLeft + " minutes."));
     }
-
-    /** True while the key is inside an active lock window; clears an expired lock for a fresh start. */
-    private boolean isLockedOut(String key) {
-        if (lockoutMaxAttempts <= 0) {
-            return false;
-        }
-        LoginAttempts a = loginAttempts.get(key);
-        if (a == null || a.lockedUntil() == null) {
-            return false;
-        }
-        if (clock.instant().isBefore(a.lockedUntil())) {
-            return true;
-        }
-        loginAttempts.remove(key); // lock expired — fresh window
-        return false;
-    }
-
-    /** Records a failed attempt; locks the key once it reaches the configured threshold. */
-    private int recordFailure(String key) {
-        if (lockoutMaxAttempts <= 0) {
-            return 0;
-        }
-        LoginAttempts updated = loginAttempts.compute(key, (k, prev) -> {
-            int failures = (prev == null ? 0 : prev.failures()) + 1;
-            Instant lockedUntil = failures >= lockoutMaxAttempts
-                    ? clock.instant().plus(lockoutLockMinutes, ChronoUnit.MINUTES)
-                    : null;
-            return new LoginAttempts(failures, lockedUntil);
-        });
-        return updated.failures();
-    }
-
-    private void clearFailures(String key) {
-        loginAttempts.remove(key);
-    }
-
-    private record LoginAttempts(int failures, Instant lockedUntil) { }
 
     // ------------------------------------------------------------------
     // Logout (UC-14)
