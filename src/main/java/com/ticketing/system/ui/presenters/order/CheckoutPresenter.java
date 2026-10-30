@@ -118,11 +118,12 @@ public class CheckoutPresenter {
                 log.warn("Checkout aborted: payment gateway unreachable", e);
                 return new PayOutcome.GatewayUnavailable();
             }
-            // A domain exception, but its message can carry the external issuer's error text, so the
-            // buyer gets the same reason-free outcome as for an unreachable gateway.
+            // Tickets are issued after the charge, so this order did not complete after money moved: the
+            // buyer is told the charge is being refunded. A domain exception, but its message can carry
+            // the external issuer's error text, so the outcome carries no reason.
             if (cause instanceof TicketIssuanceFailedException) {
                 log.warn("Checkout aborted: ticket issuance failed", e);
-                return new PayOutcome.GatewayUnavailable();
+                return new PayOutcome.OrderNotCompleted();
             }
             if (cause instanceof PaymentGatewayException)        return new PayOutcome.PaymentDeclined(cause.getMessage());
             if (cause instanceof InsufficientInventoryException) return new PayOutcome.SoldOut(cause.getMessage());
@@ -206,6 +207,8 @@ public class CheckoutPresenter {
         record OrderExpired(String reason)           implements PayOutcome { }
         record DuplicateSubmission()                 implements PayOutcome { }
         record GatewayUnavailable()                  implements PayOutcome { }
+        /** Tickets could not be issued after the charge; the charge is being refunded. */
+        record OrderNotCompleted()                   implements PayOutcome { }
         record Failure(String reason)                implements PayOutcome { }
     }
 }

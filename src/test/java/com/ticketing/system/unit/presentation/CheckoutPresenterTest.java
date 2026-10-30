@@ -65,18 +65,19 @@ class CheckoutPresenterTest {
         assertInstanceOf(CheckoutPresenter.PayOutcome.PaymentDeclined.class, pay());
     }
 
+    // Tickets are issued after the charge, so an issuance failure is not "try again in a moment": the
+    // order did not complete, the charge is being refunded, and the buyer should check My account
+    // before retrying. The outcome carries no reason, so the issuer's error text never reaches the
+    // buyer.
     @Test
-    void GivenTicketIssuanceFails_WhenPay_ThenTheReasonNamesNoExternalSystem() {
-        // The issuance exception is a DomainException, but its message names the external issuer and
-        // its transport error. The buyer gets the same generic "unavailable" outcome as an
-        // unreachable payment gateway, which carries no reason at all.
+    void GivenTicketIssuanceFails_WhenPay_ThenOrderNotCompleted() {
         when(checkoutService.checkoutMember(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock",
                         new TicketIssuanceFailedException("ticket issuer unreachable: Connection refused")));
 
         CheckoutPresenter.PayOutcome outcome = pay();
 
-        assertInstanceOf(CheckoutPresenter.PayOutcome.GatewayUnavailable.class, outcome,
-                "a ticket-issuance failure must not surface the issuer's error text, but was: " + outcome);
+        assertInstanceOf(CheckoutPresenter.PayOutcome.OrderNotCompleted.class, outcome,
+                "a ticket-issuance failure after the charge is its own outcome, but was: " + outcome);
     }
 }
