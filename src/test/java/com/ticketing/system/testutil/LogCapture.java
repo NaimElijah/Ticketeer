@@ -64,6 +64,19 @@ public final class LogCapture implements AutoCloseable {
         return matches;
     }
 
+    /**
+     * The formatted message of each recorded event at exactly {@code level}, in the order logged.
+     *
+     * @param level the level to keep
+     * @return the messages at that level, empty when none was logged at it
+     */
+    public List<String> messagesAt(Level level) {
+        return List.copyOf(appender.list).stream()
+                .filter(event -> event.getLevel().equals(level))
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+    }
+
     /** How many events were recorded, so a test can show its path logged anything at all. */
     public int eventCount() {
         return appender.list.size();
