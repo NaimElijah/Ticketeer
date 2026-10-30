@@ -1,10 +1,10 @@
 package com.ticketing.system.acceptance;
 
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,6 +49,7 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.RefundService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -80,7 +81,6 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  *   <li>An admin token is rejected on every member path exactly as a revoked token is, and leaves
  *       the member's data alone.</li>
  *   <li>Admin paths still accept the admin token, and still reject the member's token.</li>
- *   <li>An admin token is only an admin's if an admin with that id exists.</li>
  *   <li>A guest credential is a live guest session id, nothing else.</li>
  *   <li>Nothing addressed to the admin lands in the inbox of the member with the admin's id.</li>
  * </ul>
@@ -321,23 +321,6 @@ class AdminAndMemberSessionAcceptanceTest {
         assertThrows(DomainException.class, () -> companyService.adminListAllCompanies(ids.member().token()));
     }
 
-    @Test
-    void GivenAdminTokenForAnIdWithNoAdmin_WhenListAllCompanies_ThenRejected() {
-        String tokenWithoutAdmin = adminTokenForAnIdWithNoAdmin();
-
-        assertThrows(DomainException.class, () -> companyService.adminListAllCompanies(tokenWithoutAdmin),
-                "an admin token is only an admin's while an admin with its id exists");
-    }
-
-    @Test
-    void GivenAdminTokenForAnIdWithNoAdmin_WhenViewAnyOrgTree_ThenRejected() {
-        int companyId = registerCompanyAs(registerAndLogin(nextName("kind.founder")));
-        String tokenWithoutAdmin = adminTokenForAnIdWithNoAdmin();
-
-        assertThrows(DomainException.class, () -> companyService.adminViewOrgTree(tokenWithoutAdmin, companyId),
-                "an admin token is only an admin's while an admin with its id exists");
-    }
-
     // ---- guest credentials ------------------------------------------------------------------------
 
     @Test
@@ -375,6 +358,78 @@ class AdminAndMemberSessionAcceptanceTest {
 
         assertFalse(activeOrderRepository.getBySessionId(guestSessionId).orElseThrow().getItems().isEmpty(),
                 "a live guest session holds what it reserved");
+    }
+
+    // A member's token and a member session's raw id are no guest credential on any guest path
+    // (ADR-012, decision 4): only the raw id of a live guest row is.
+
+    @Test
+    void GivenAMembersToken_WhenReserveForGuest_ThenSessionExpiredAndNoCartIsOpenedUnderIt() {
+        AuthTokenDTO member = registerAndLogin(nextName("kind.token.as.guest"));
+        StandingEvent event = newStandingEvent();
+
+        assertThrows(SessionExpiredException.class, () -> reservationService.reserveForGuest(
+                member.token(), event.eventId(), event.zoneId(), InventorySelectionDTO.standing(1)),
+                "a member token is not a guest session id");
+        assertTrue(activeOrderRepository.getBySessionId(member.token()).isEmpty(),
+                "no guest cart may be opened under a member's token");
+    }
+
+    @Test
+    void GivenALiveMembersSessionId_WhenViewMyActiveOrder_ThenSessionExpiredAndNotTheMembersCart() {
+        MemberWithCartOnItsSession member = memberWhoseCartIsBoundToTheirSessionId();
+
+        assertThrows(SessionExpiredException.class,
+                () -> reservationService.viewMyActiveOrder(member.sessionId()),
+                "a member session's raw id must not open the member's cart as a guest");
+    }
+
+    @Test
+    void GivenALiveMembersSessionId_WhenRestoreActiveOrderForGuest_ThenSessionExpired() {
+        MemberWithCartOnItsSession member = memberWhoseCartIsBoundToTheirSessionId();
+
+        assertThrows(SessionExpiredException.class,
+                () -> reservationService.restoreActiveOrderForGuest(member.sessionId()),
+                "a member session's raw id must not restore the member's cart as a guest");
+    }
+
+    @Test
+    void GivenALiveMembersSessionId_WhenRenewReservationsForGuestCheckout_ThenSessionExpiredAndTheHoldsAreNotRenewed() {
+        MemberWithCartOnItsSession member = memberWhoseCartIsBoundToTheirSessionId();
+        List<LocalDateTime> holdsBefore = holdTimesOf(cartOf(member.auth()));
+
+        assertThrows(SessionExpiredException.class,
+                () -> reservationService.renewReservationsForGuestCheckout(member.sessionId()),
+                "a member session's raw id must not renew the member's holds as a guest");
+        assertEquals(holdsBefore, holdTimesOf(cartOf(member.auth())), "the member's holds are unchanged");
+    }
+
+    @Test
+    void GivenAMembersToken_WhenCheckoutGuest_ThenSessionExpiredAndNothingIsBought() {
+        AuthTokenDTO member = registerAndLogin(nextName("kind.token.guest.checkout"));
+        hold(member, newStandingEvent());
+        int heldLines = cartOf(member).getItems().size();
+
+        RuntimeException failure = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                member.token(), member.username() + "@test.com", nextIdempotencyKey(), CURRENCY, CARD, MEMBER_AGE));
+
+        assertTrue(failure.getCause() instanceof SessionExpiredException,
+                "a member token is not a guest session id, so guest checkout must fail as for an expired "
+                        + "guest session, but failed with " + failure + " caused by " + failure.getCause());
+        assertTrue(orderReceiptRepository.findByHolderUserId(member.userId()).isEmpty(), "nothing is bought");
+        assertEquals(heldLines, cartOf(member).getItems().size(), "the member's cart is still held");
+    }
+
+    @Test
+    void GivenALiveMembersSessionId_WhenEndGuestSession_ThenTheMemberSessionStaysLive() {
+        AuthTokenDTO member = registerAndLogin(nextName("kind.end.guest"));
+        String membersSessionId = sessionManager.extractSessionId(member.token());
+
+        authService.endGuestSession(membersSessionId);
+
+        assertTrue(assertDoesNotThrow(() -> sessionManager.validateToken(member.token()),
+                        "ending a guest session must not revoke a member's session"),
+                "the member's token is still live");
     }
 
     // ---- notifications ----------------------------------------------------------------------------
@@ -428,6 +483,9 @@ class AdminAndMemberSessionAcceptanceTest {
      */
     private void assertRejectedAsARevokedMemberTokenIs(SharedId ids, MemberCall call) {
         Outcome revoked = Outcome.of(call, ids.revokedMemberToken());
+        assertNotNull(revoked.thrown(),
+                "arrangement: the member's revoked token must be rejected on this path, but it returned "
+                        + revoked.returned());
 
         Outcome withAdminToken = Outcome.of(call, ids.admin().token());
 
@@ -458,11 +516,28 @@ class AdminAndMemberSessionAcceptanceTest {
         return new SharedId(member, revokedMemberToken, admin);
     }
 
-    /** An admin token minted for a registered member's id, where no admin has that id. */
-    private String adminTokenForAnIdWithNoAdmin() {
-        AuthTokenDTO member = registerAndLogin(nextName("kind.notadmin"));
-        assertNull(adminRepository.findById(member.userId()), "arrangement: no admin has this id");
-        return sessionManager.generateAdminToken(member.userId(), "not-an-admin");
+    private record MemberWithCartOnItsSession(AuthTokenDTO auth, String sessionId) { }
+
+    /**
+     * A member whose cart is bound to their session id: the guest holds a ticket, then signs in from
+     * the same session, which keeps its id and takes the cart over (UC-13).
+     */
+    private MemberWithCartOnItsSession memberWhoseCartIsBoundToTheirSessionId() {
+        StandingEvent event = newStandingEvent();
+        String sessionId = authService.startGuestSession().sessionId();
+        reservationService.reserveForGuest(sessionId, event.eventId(), event.zoneId(),
+                InventorySelectionDTO.standing(TICKETS_HELD));
+        String name = nextName("kind.promoted");
+        authService.register(new RegisterRequestDTO(name, name + "@test.com", PASSWORD, sessionId, MEMBER_AGE));
+        AuthTokenDTO member = authService.login(new LoginRequestDTO(name, PASSWORD, sessionId)).authToken();
+        ActiveOrder boundCart = activeOrderRepository.getBySessionId(sessionId).orElseThrow();
+        assertEquals(member.userId(), boundCart.getUserId(),
+                "arrangement: the member's cart is found by the member's session id");
+        return new MemberWithCartOnItsSession(member, sessionId);
+    }
+
+    private static List<LocalDateTime> holdTimesOf(ActiveOrder cart) {
+        return cart.getItems().stream().map(CartLineItem::getAddedAt).toList();
     }
 
     private static AuthTokenDTO withToken(AuthTokenDTO original, String token) {

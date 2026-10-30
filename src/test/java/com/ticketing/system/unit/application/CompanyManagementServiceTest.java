@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,6 @@ import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeD
 import com.ticketing.system.organization.application.dto.PermissionEditDTO;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import org.springframework.context.ApplicationEventPublisher;
-import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
@@ -37,6 +37,8 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 public class CompanyManagementServiceTest {
 
@@ -78,8 +80,7 @@ public class CompanyManagementServiceTest {
                                 sessionManager,
                                 companyEventStatsPort,
                                 membershipService,
-                                eventPublisher,
-                                mock(AdminRepository.class));
+                                eventPublisher);
 
                 defaultPermissions = new ArrayList<>();
                 defaultPermissions.add(Permission.CONFIGURE_VENUE);
@@ -1108,10 +1109,15 @@ public class CompanyManagementServiceTest {
         public void GivenRevokedOwner_WhenEditManagerPermissions_ThenRejected() {
                 companyWithCoOwnerWhoInvitedAManager(true);
                 founderRevokesTheCoOwner();
+                Set<Permission> permissionsBefore = Set.copyOf(
+                                membershipService.getActiveCompanyAppointment(TARGET_USER_ID, COMPANY_ID).getPermissions());
 
-                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(CO_OWNER_TOKEN,
+                assertThrows(UnauthorizedActionException.class, () -> companyService.editManagerPermissions(CO_OWNER_TOKEN,
                                 new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, editedPermissions())),
                                 "a revoked owner must not edit the permissions of a manager they appointed");
+                assertEquals(permissionsBefore,
+                                membershipService.getActiveCompanyAppointment(TARGET_USER_ID, COMPANY_ID).getPermissions(),
+                                "the manager's permissions are unchanged");
         }
 
         @Test
@@ -1119,9 +1125,11 @@ public class CompanyManagementServiceTest {
                 companyWithCoOwnerWhoInvitedAManager(true);
                 founderRevokesTheCoOwner();
 
-                assertThrows(RuntimeException.class, () -> companyService.RevokeAppointment(CO_OWNER_TOKEN,
+                assertThrows(UnauthorizedActionException.class, () -> companyService.RevokeAppointment(CO_OWNER_TOKEN,
                                 new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)),
                                 "a revoked owner must not revoke a manager they appointed");
+                assertTrue(membershipService.isMemberInCompany(TARGET_USER_ID, COMPANY_ID),
+                                "the manager is still appointed");
         }
 
         @Test
@@ -1129,9 +1137,13 @@ public class CompanyManagementServiceTest {
                 companyWithCoOwnerWhoInvitedAManager(false);
                 founderRevokesTheCoOwner();
 
-                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(TARGET_TOKEN,
+                assertThrows(BusinessRuleViolationException.class, () -> companyService.respondToAppointment(TARGET_TOKEN,
                                 new AppointmentResponseDTO(COMPANY_ID, true)),
                                 "a manager invite from an owner who has since been revoked must not be accepted");
+                assertFalse(membershipService.isMemberInCompany(TARGET_USER_ID, COMPANY_ID),
+                                "the invitee did not become a manager");
+                assertNotNull(membershipService.getPendingCompanyAppointment(TARGET_USER_ID, COMPANY_ID),
+                                "the invitation is still pending, unaccepted");
         }
 
         @Test

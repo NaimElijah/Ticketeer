@@ -74,7 +74,7 @@ reaches into other contexts, mainly (#184's triage has the full table):
 - governance and reporting read sales', catalog's and messaging's repository ports and entities
   directly; governance also calls sales' `PaymentGateway`/`TicketIssuer` and writes identity's
   `Admin` (`AdminRepository`, `PasswordHasher`); reporting uses catalog's `CompanyRatings`;
-- messaging's and organization's admin gates read identity's `AdminRepository`;
+- messaging's admin gate reads identity's `AdminRepository`;
 - sales takes catalog's `EventRepository` for the buyer lock.
 
 #54 replaces these, #53 the notifications call, and #55 closes the modules.
@@ -108,7 +108,9 @@ alone has no user id), and a JWT counts only while its `sub` and `role` match th
 `SessionManager`'s member readers (`validateToken`, `extractUserId`, `tryExtractUserId`, `extractUsername`,
 `validateCredential`) reject an admin token as they reject a revoked one; its admin readers (`validateAdminToken`,
 `extractAdminId`, `isAdminToken`) reject a member token. Member paths call the member readers; an admin gate calls the
-admin readers and still checks `AdminRepository`. A raw session id is a credential only for a live guest row.
+admin readers, and only `SystemAdminService`'s and `MessagingService`'s gates also check `AdminRepository`. A raw
+session id is a credential only for a live guest row: every guest path of sales checks it with
+`validateGuestSession`, which accepts no token; `validateCredential` (member token or guest id) is for catalog browsing.
 
 Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoMappers, event}` · `adapter/in/event` ·
 `adapter/out/<persistence|wsep|security|…>`. Repository ports sit in `application/port/out`, not

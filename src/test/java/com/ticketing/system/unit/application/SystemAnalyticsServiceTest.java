@@ -16,9 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.governance.config.AnalyticsProperties;
-import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
-import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
@@ -49,7 +47,6 @@ class SystemAnalyticsServiceTest {
     private static final int WINDOW = 5;
     private static final int REFRESH_INTERVAL_MS = 5000;
     private static final String ADMIN_TOKEN = "admin-token";
-    private static final int ADMIN_ID = 1;
 
     private ISystemMetrics metrics;
     private OrderReceiptRepository orderReceiptRepository;
@@ -67,12 +64,9 @@ class SystemAnalyticsServiceTest {
         conversationRepository = mock(ConversationRepository.class);
         SessionManager sessionManager = mock(SessionManager.class);
         when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
-        when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
-        AdminRepository adminRepository = mock(AdminRepository.class);
-        when(adminRepository.findById(ADMIN_ID)).thenReturn(new Admin(ADMIN_ID, "admin", "hash", true));
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new SystemAnalyticsService(metrics, orderReceiptRepository, companyRepository,
-                eventRepository, conversationRepository, sessionManager, adminRepository, clock,
+                eventRepository, conversationRepository, sessionManager, clock,
                 new AnalyticsProperties(WINDOW, REFRESH_INTERVAL_MS));
     }
 

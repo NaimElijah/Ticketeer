@@ -20,7 +20,6 @@ import com.ticketing.system.shared.dto.AppointmentResponseDTO;
 import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
 import com.ticketing.system.organization.application.dtoMappers.AppointmentInfoMapper;
-import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -76,21 +75,17 @@ public class CompanyManagementService {
     // Publisher for cross-context integration events (role-change / appointment notices); the
     // notifications context listens for these instead of organization calling it directly.
     private final ApplicationEventPublisher eventPublisher;
-    // The admin pool, for the two admin-only reads: an admin token counts only while its admin exists.
-    private final AdminRepository adminRepository;
 
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
             SessionManager sessionManager, CompanyEventStatsPort companyEventStatsPort,
             CompanyMembershipService companyMembershipService,
-            ApplicationEventPublisher eventPublisher,
-            AdminRepository adminRepository) {
+            ApplicationEventPublisher eventPublisher) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.sessionManager = sessionManager;
         this.companyEventStatsPort = companyEventStatsPort;
         this.companyMembershipService = companyMembershipService;
         this.eventPublisher = eventPublisher;
-        this.adminRepository = adminRepository;
     }
 
     // UC-23 — Owner appoints another Member as co-Owner (PENDING).
@@ -709,11 +704,11 @@ public class CompanyManagementService {
         return sessionManager.extractUserId(token);
     }
 
-    // A live admin token whose admin still exists. Member tokens fail validateAdminToken, so a member
-    // whose id equals an admin's never reaches the adminRepository lookup.
+    // A live admin token. The token is bound to an ADMIN session row, which only admin sign-in creates
+    // and which outlives no admin, since none can be deleted yet, so the row is the proof (ADR-012,
+    // decision 3). Member tokens fail validateAdminToken, whatever their id.
     private void requireSystemAdmin(String token) {
-        if (!sessionManager.validateAdminToken(token)
-                || adminRepository.findById(sessionManager.extractAdminId(token)) == null) {
+        if (!sessionManager.validateAdminToken(token)) {
             throw new InvalidTokenException(ADMIN_REQUIRED);
         }
     }

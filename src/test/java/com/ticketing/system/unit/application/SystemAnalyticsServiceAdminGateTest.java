@@ -20,9 +20,7 @@ import com.ticketing.system.governance.application.service.SystemAnalyticsServic
 import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
-import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.config.SessionProperties;
-import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -53,8 +51,6 @@ class SystemAnalyticsServiceAdminGateTest {
     private static final String JWT_TEST_SECRET =
             "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
     private static final int SHARED_ID = 1;
-    // No admin with this id is in the pool: the repository mock answers null for it.
-    private static final int REMOVED_ADMIN_ID = 2;
     private static final long TOTAL_VISITORS = 12L;
     private static final int ACTIVE_COMPANIES = 0;
 
@@ -67,8 +63,6 @@ class SystemAnalyticsServiceAdminGateTest {
         sessionManager = new JwtSessionManager(JWT_TEST_SECRET,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES),
                 new MemorySessionRepository(clock), clock);
-        AdminRepository adminRepository = mock(AdminRepository.class);
-        when(adminRepository.findById(SHARED_ID)).thenReturn(new Admin(SHARED_ID, "admin", "hash", true));
 
         ISystemMetrics metrics = mock(ISystemMetrics.class);
         when(metrics.total(MetricType.VISITOR_ENTRY)).thenReturn(TOTAL_VISITORS);
@@ -82,7 +76,7 @@ class SystemAnalyticsServiceAdminGateTest {
         when(conversationRepository.findByType(ConversationType.COMPLAINT)).thenReturn(List.of());
 
         service = new SystemAnalyticsService(metrics, orderReceiptRepository, companyRepository,
-                eventRepository, conversationRepository, sessionManager, adminRepository, clock,
+                eventRepository, conversationRepository, sessionManager, clock,
                 new AnalyticsProperties(WINDOW, REFRESH_INTERVAL_MS));
     }
 
@@ -97,14 +91,6 @@ class SystemAnalyticsServiceAdminGateTest {
     @Test
     void GivenNoToken_WhenComputeAnalytics_ThenRejected() {
         assertThrows(DomainException.class, () -> service.computeAnalytics(null));
-    }
-
-    @Test
-    void GivenTheTokenOfAnAdminNoLongerInThePool_WhenComputeAnalytics_ThenRejected() {
-        // The admin gate still requires the admin to exist (ADR-012), not just a live admin session.
-        String removedAdminsToken = sessionManager.generateAdminToken(REMOVED_ADMIN_ID, "removed-admin");
-
-        assertThrows(DomainException.class, () -> service.computeAnalytics(removedAdminsToken));
     }
 
     @Test

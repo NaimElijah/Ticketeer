@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.governance.config.AnalyticsProperties;
-import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
@@ -39,9 +38,8 @@ import lombok.extern.slf4j.Slf4j;
  * {@code SystemAdminService}.
  *
  * <p>Both reads are admin-only and take the caller's token: this service is the boundary that
- * enforces it, not the admin route's capability check. The gate is
- * {@code SystemAdminService.requireSystemAdmin}'s: a live admin token (ADR-012) naming an admin who
- * still exists.
+ * enforces it, not the admin route's capability check. The gate is a live admin token, which is bound
+ * to an admin's session row (ADR-012, decision 3).
  */
 @Service
 @Slf4j
@@ -57,7 +55,6 @@ public class SystemAnalyticsService {
     private final EventRepository eventRepository;
     private final ConversationRepository conversationRepository;
     private final SessionManager sessionManager;
-    private final AdminRepository adminRepository;
     private final Clock clock;
     private final int windowMinutes;
 
@@ -68,7 +65,6 @@ public class SystemAnalyticsService {
             EventRepository eventRepository,
             ConversationRepository conversationRepository,
             SessionManager sessionManager,
-            AdminRepository adminRepository,
             Clock clock,
             AnalyticsProperties analyticsProperties) {
         this.metrics = metrics;
@@ -77,7 +73,6 @@ public class SystemAnalyticsService {
         this.eventRepository = eventRepository;
         this.conversationRepository = conversationRepository;
         this.sessionManager = sessionManager;
-        this.adminRepository = adminRepository;
         this.clock = clock;
         this.windowMinutes = analyticsProperties.rateWindowMinutes();
     }
@@ -86,7 +81,7 @@ public class SystemAnalyticsService {
      * Builds the live analytics snapshot: rates over the trailing window, throughput over the hour.
      *
      * @param adminToken the caller's admin token
-     * @throws UnauthorizedActionException if the token is missing, or names an admin who no longer exists
+     * @throws UnauthorizedActionException if the token is missing
      * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
      * @throws SessionExpiredException     if the token's session has expired
      */
@@ -146,7 +141,7 @@ public class SystemAnalyticsService {
      * 30 days.
      *
      * @param adminToken the caller's admin token
-     * @throws UnauthorizedActionException if the token is missing, or names an admin who no longer exists
+     * @throws UnauthorizedActionException if the token is missing
      * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
      * @throws SessionExpiredException     if the token's session has expired
      */
@@ -183,14 +178,9 @@ public class SystemAnalyticsService {
     }
 
     private void requireSystemAdmin(String adminToken) {
-        // false only for a missing token; every invalid token throws, and its id cannot be trusted.
+        // false only for a missing token; every invalid token throws.
         if (!sessionManager.validateAdminToken(adminToken)) {
             log.warn("Unauthorized analytics access attempt without a token");
-            throw new UnauthorizedActionException("Invalid or non-admin token.");
-        }
-        int adminId = sessionManager.extractAdminId(adminToken);
-        if (adminRepository.findById(adminId) == null) {
-            log.warn("Unauthorized analytics access attempt with id: {}", adminId);
             throw new UnauthorizedActionException("Invalid or non-admin token.");
         }
     }

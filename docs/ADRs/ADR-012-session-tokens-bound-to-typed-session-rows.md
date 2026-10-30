@@ -31,19 +31,26 @@ one would use (OQ-25).
 
 1. **Each session row records its kind:** `GUEST`, `MEMBER` or `ADMIN` (`sessions.kind`, migration
    `V3`). A guest row has no user; the other two do. `promoteTo` makes a guest row a member row.
+   `V3` deletes every existing row that has a user instead of guessing its kind: backfilling them
+   from `user_id` would have turned live admin rows into member rows, which a token signed with the
+   key could then use as the member with the admin's id.
 2. **`parseClaims` binds a token to its row.** It rejects a token whose `sub` is not the row's
    user, whose `role` does not match the row's kind, that names a guest row, or whose row has
    expired. Rejection is `InvalidTokenException`, as for a revoked token, or
    `SessionExpiredException` for an expired row, as for an expired `exp` claim.
 3. **The default validation is member-only.** `validateToken`, `extractUserId` and the token path
    of `validateCredential` accept member tokens only. An admin's token fails them as a revoked token
-   would. Admin gates call `validateAdminToken` and `extractAdminId`, and still require the admin row
-   to exist. Code that forgets to choose therefore gets the narrower answer.
-4. **A raw session id is a credential only for a live guest row.** The guest service paths check
-   that the session is live.
-5. **No notice is addressed to an admin id** until notifications carry a recipient type. Admin ids
-   collide with member ids in the notification store, and admins have no inbox, so every such notice
-   reached a member.
+   would. Admin gates call `validateAdminToken`, and `extractAdminId` where they need the id. Code
+   that forgets to choose therefore gets the narrower answer. An `ADMIN` row is created only by admin sign-in, and no admin
+   can be deleted yet, so the binding is enough: the gates added here do not look the admin row up.
+   The older gates in `SystemAdminService` and `MessagingService` still do. `existsByUserId`, behind
+   `isOnline`, counts member rows only.
+4. **A raw session id is a credential only for a live guest row.** Every guest service path checks
+   it through `validateGuestSession`, which accepts neither a member's raw id nor a member's token,
+   and ending a guest session deletes guest rows only.
+5. **No notice is addressed to an admin id** until notifications carry a recipient type (#217).
+   Admin ids collide with member ids in the notification store, and admins have no inbox, so every
+   such notice reached a member.
 
 ## Consequences
 
@@ -52,9 +59,16 @@ one would use (OQ-25).
     holds the signing key.
   - A new member path is safe without a role check of its own.
 - **Harder:**
-  - Admin sessions that exist when `V3` runs are backfilled as member rows. Admins must sign in again
-    after the upgrade. Sessions are transient (at most `session.member-ttl-minutes`), so this costs
-    one sign-in.
+  - Everyone signed in when `V3` runs, members and admins alike, signs in again. Sessions are
+    transient (at most `session.member-ttl-minutes`), so this costs one sign-in.
+  - `V3` is an exception to ADR-007's expand-only rule. `kind` is NOT NULL with no default, because
+    no single kind fits both the guest and the member rows an older instance inserts. An instance
+    still running the previous version therefore cannot write sessions until it stops. That is
+    acceptable while the platform runs one instance and nothing is deployed (ADR-007, Context);
+    a rolling deploy would need the column added nullable first.
+  - Deleting or disabling an admin, once it exists (#77), must delete that admin's session rows,
+    because the gates added here rely on the row alone.
+  - Admins get no notification of complaints or replies until #217.
   - An admin who opens the storefront is a guest there, not a member.
   - `SessionManager` has two validation families, member and admin, to keep apart.
 
@@ -71,9 +85,14 @@ one would use (OQ-25).
 - **Separate signing keys per pool.** Rejected: it needs a second secret, and it does not bind
   `sub` to the row.
 - **Spring Security's authentication model.** Out of scope here; that is the decision #38 records.
+- **One identity-owned check that every admin gate calls** (for example `requireLiveAdminId`).
+  Deferred: it would route the gates through identity's application service, a reach #54 is
+  removing. Identity's inbound port (#54) is where that check belongs.
 
 ## Revisit when
 
 - A second driving adapter (an HTTP API, OQ-25) accepts tokens from clients.
 - Spring Security replaces the custom guard (#38).
 - Admins and members merge into one principal model.
+- Notifications gain a recipient type (#217): decision 5 then lifts.
+- Admins can be deleted or disabled (#77).
