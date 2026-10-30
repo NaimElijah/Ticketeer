@@ -124,7 +124,7 @@ public class MessagingService {
         notifyCompanyOwners(company, conversation, senderLabel(ParticipantType.MEMBER), request.firstMessageBody());
         log.info("Inquiry {} started by member {} to company {}",
                 conversation.getConversationId(), memberId, companyId);
-        return toDTO(conversation, memberId);
+        return toDTO(conversation, memberId, ParticipantType.MEMBER);
     }
 
 
@@ -181,7 +181,7 @@ public class MessagingService {
 
         // No notice: the complaint reaches admins through their complaint queue (see class comment).
         log.info("Complaint {} submitted by member {}", conversation.getConversationId(), memberId);
-        return toDTO(conversation, memberId);
+        return toDTO(conversation, memberId, ParticipantType.MEMBER);
     }
 
     /**
@@ -291,7 +291,7 @@ public class MessagingService {
         try {
             Conversation conversation = loadConversation(conversationId);
             CallerSide reader = resolveCallerSide(caller, conversation);
-            conversation.markMessageRead(messageId, reader.id());
+            conversation.markMessageRead(messageId, reader.id(), reader.type());
             conversationRepository.save(conversation);
         } finally {
             conversationRepository.unlock(conversationId);
@@ -325,7 +325,7 @@ public class MessagingService {
         int memberId = authenticate(token);
         return conversationRepository.findMemberInbox(memberId).stream()
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, memberId))
+                .map(c -> toDTO(c, memberId, ParticipantType.MEMBER))
                 .toList();
     }
 
@@ -335,7 +335,7 @@ public class MessagingService {
         Caller caller = authenticateCaller(token);
         Conversation conversation = loadConversation(conversationId);
         CallerSide side = resolveCallerSide(caller, conversation); // throws if not a participant
-        return toDTO(conversation, side.id());
+        return toDTO(conversation, side.id(), side.type());
     }
 
     // II.4.4 — company support inbox: all conversations where this company is counterparty.
@@ -348,7 +348,7 @@ public class MessagingService {
         }
         return conversationRepository.findByCompanyAsCounterparty(companyId).stream()
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, companyId))
+                .map(c -> toDTO(c, companyId, ParticipantType.COMPANY))
                 .toList();
     }
 
@@ -364,7 +364,7 @@ public class MessagingService {
         return complaints.stream()
                 .filter(c -> matchesComplaintFilter(c, filters))
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, adminId))
+                .map(c -> toDTO(c, adminId, ParticipantType.ADMIN))
                 .toList();
     }
 
@@ -375,7 +375,7 @@ public class MessagingService {
         int adminId = requireSystemAdmin(token);
         return conversationRepository.findByTypeAndInitiatorType(ConversationType.DIRECT, ParticipantType.ADMIN).stream()
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, adminId))
+                .map(c -> toDTO(c, adminId, ParticipantType.ADMIN))
                 .toList();
     }
 
@@ -388,7 +388,7 @@ public class MessagingService {
         return conversationRepository.findByParticipant(adminId, ParticipantType.ADMIN).stream()
                 .filter(c -> c.getType() == ConversationType.DIRECT)
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, adminId))
+                .map(c -> toDTO(c, adminId, ParticipantType.ADMIN))
                 .toList();
     }
 
@@ -557,8 +557,8 @@ public class MessagingService {
     // ---------------------------------------------------------------------------
 
     // Maps a conversation to its DTO for the given viewer, resolving both parties' display names.
-    private ConversationDTO toDTO(Conversation c, int viewerId) {
-        return new ConversationMapper().toDTO(c, viewerId,
+    private ConversationDTO toDTO(Conversation c, int viewerId, ParticipantType viewerType) {
+        return new ConversationMapper().toDTO(c, viewerId, viewerType,
                 resolveDisplayName(c.getInitiatorId(), c.getInitiatorType()),
                 resolveDisplayName(c.getCounterpartyId(), c.getCounterpartyType()));
     }

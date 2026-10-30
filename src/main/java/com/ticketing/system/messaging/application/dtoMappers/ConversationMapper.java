@@ -5,6 +5,7 @@ import java.util.List;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.messaging.domain.Conversation;
+import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.messaging.domain.Message;
 
 /**
@@ -16,7 +17,7 @@ import com.ticketing.system.messaging.domain.Message;
  */
 public class ConversationMapper {
 
-    public ConversationDTO toDTO(Conversation conversation, int viewerId,
+    public ConversationDTO toDTO(Conversation conversation, int viewerId, ParticipantType viewerType,
             String initiatorDisplayName, String counterpartyDisplayName) {
         List<MessageDTO> messages = conversation.getMessages().stream()
                 .map(this::toMessageDTO)
@@ -32,7 +33,7 @@ public class ConversationMapper {
                 conversation.getSubject(),
                 conversation.getCreatedAt(),
                 conversation.getLastMessageAt(),
-                conversation.unreadCountFor(viewerId),
+                conversation.unreadCountFor(viewerId, viewerType),
                 messages,
                 initiatorDisplayName,
                 counterpartyDisplayName);

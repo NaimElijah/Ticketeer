@@ -104,7 +104,7 @@ abstract class IConversationRepositoryContractTest {
         assertFalse(messages.get(1).isRead());
 
         // member 5 reads the company's reply, then we persist and reload
-        found.markMessageRead(messages.get(1).getMessageId(), 5);
+        found.markMessageRead(messages.get(1).getMessageId(), 5, ParticipantType.MEMBER);
         repo.save(found);
         assertTrue(repo.findById(c.getConversationId()).orElseThrow().getMessages().get(1).isRead());
     }
