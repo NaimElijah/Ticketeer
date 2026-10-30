@@ -48,6 +48,15 @@ abstract class INotificationRepositoryContractTest {
         return ns.stream().map(Notification::getId).collect(Collectors.toSet());
     }
 
+    // Both adapters store a message cut to its varchar(255) column, so neither refuses one the other keeps.
+    @Test
+    void GivenANotificationComposedWithAVeryLongName_WhenSaved_ThenItIsStoredCutToItsColumn() {
+        repo.save(new Notification("long", 5, NotificationType.EVENT_CANCELLED, NotificationStatus.PENDING,
+                "Event '" + "x".repeat(300) + "' has been cancelled.", T));
+
+        assertEquals(Notification.MAX_MESSAGE_LENGTH, repo.findById("long").getMessage().length());
+    }
+
     @Test
     void save_thenFindById_returnsTheSavedNotification() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));

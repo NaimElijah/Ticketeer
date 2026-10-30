@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.domain;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,6 +39,29 @@ class NotificationTest extends BaseDomainTest {
         n.markSent();
         n.markRead();
         assertTrue(n.isRead());
+    }
+
+    // The message is composed from names and subjects nobody bounds, and its column is varchar(255):
+    // a longer one would fail the insert on the async notify- thread, and the notice would be lost.
+    @Test
+    void GivenAMessageLongerThanItsColumn_WhenCreated_ThenItIsCutToTheColumnEndingInAnEllipsis() {
+        String longMessage = "Event '" + "x".repeat(300) + "' has been cancelled.";
+
+        Notification n = track(new Notification("n2", 7, NotificationType.EVENT_CANCELLED,
+                NotificationStatus.PENDING, longMessage, LocalDateTime.now()));
+
+        assertEquals(Notification.MAX_MESSAGE_LENGTH, n.getMessage().length());
+        assertEquals(longMessage.substring(0, Notification.MAX_MESSAGE_LENGTH - 1) + "…", n.getMessage());
+    }
+
+    @Test
+    void GivenAMessageThatFitsItsColumn_WhenCreated_ThenItIsKeptWhole() {
+        String fits = "y".repeat(Notification.MAX_MESSAGE_LENGTH);
+
+        Notification n = track(new Notification("n3", 7, NotificationType.EVENT_CANCELLED,
+                NotificationStatus.PENDING, fits, LocalDateTime.now()));
+
+        assertEquals(fits, n.getMessage());
     }
 
     @Test
