@@ -64,21 +64,23 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
     @Override
     @Transactional
     public void save(ActiveOrder activeOrder) {
-        List<ActiveOrder> sameIdentity = activeOrder.isMember()
-                ? data.findByUserId(activeOrder.getUserId())
-                : data.findBySessionIdAndUserIdIsNull(activeOrder.getSessionId());
-        for (ActiveOrder existing : sameIdentity) {
-            if (!existing.getOrderKey().equals(activeOrder.getOrderKey())) {
-                if (!existing.getItems().isEmpty()) {
-                    throw new ConcurrentReservationException(ActiveOrderSaveRules.ANOTHER_CART_HOLDS_LINES, null);
-                }
-                data.delete(existing); // entity delete cascades the @ElementCollection items
-            }
-        }
-        // Hibernate flushes inserts before deletes, so the replaced cart's delete must reach the
-        // database first, or this cart's insert would break uk_active_orders_user_id.
-        data.flush();
+        // The whole body is guarded, not just the final write: a managed cart that was given a user id
+        // (the login merge) is flushed by the first query below, and that UPDATE is where the key breaks.
         try {
+            List<ActiveOrder> sameIdentity = activeOrder.isMember()
+                    ? data.findByUserId(activeOrder.getUserId())
+                    : data.findBySessionIdAndUserIdIsNull(activeOrder.getSessionId());
+            for (ActiveOrder existing : sameIdentity) {
+                if (!existing.getOrderKey().equals(activeOrder.getOrderKey())) {
+                    if (!existing.getItems().isEmpty()) {
+                        throw new ConcurrentReservationException(ActiveOrderSaveRules.ANOTHER_CART_HOLDS_LINES, null);
+                    }
+                    data.delete(existing); // entity delete cascades the @ElementCollection items
+                }
+            }
+            // Hibernate flushes inserts before deletes, so the replaced cart's delete must reach the
+            // database first, or this cart's insert would break uk_active_orders_user_id.
+            data.flush();
             data.saveAndFlush(activeOrder);
         } catch (DataIntegrityViolationException e) {
             if (ConstraintViolations.violates(e, USER_CART_UNIQUE_CONSTRAINT)) {
