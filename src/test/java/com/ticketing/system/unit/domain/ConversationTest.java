@@ -178,6 +178,16 @@ class ConversationTest extends BaseDomainTest {
         assertTrue(c.getMessages().get(0).isRead(), "the company read the member's message");
     }
 
+    @Test
+    void GivenAMemberMessageToTheCompanyThatSharesItsId_WhenTheMemberMarksItsOwnMessage_ThenItStaysUnread() {
+        Conversation c = inquiryBetweenSharedIds();
+        String memberMessage = c.getMessages().get(0).getMessageId();
+
+        c.markMessageRead(memberMessage, SHARED_ID, ParticipantType.MEMBER);
+
+        assertFalse(c.getMessages().get(0).isRead(), "only the other side reads a message");
+    }
+
     private Conversation inquiryBetweenSharedIds() {
         return track(Conversation.start(ConversationType.INQUIRY, SHARED_ID, ParticipantType.MEMBER,
                 SHARED_ID, ParticipantType.COMPANY, "Parking?", "Is there parking near the venue?", STARTED_AT));
