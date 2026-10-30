@@ -1,11 +1,9 @@
 package com.ticketing.system.identity.adapter.out.persistence;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
@@ -14,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
+import com.ticketing.system.shared.persistence.ConstraintViolations;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
@@ -88,26 +87,14 @@ public class JpaUserRepository implements UserRepository {
         try {
             data.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
-            if (violates(e, USERNAME_UNIQUE_CONSTRAINT)) {
+            if (ConstraintViolations.violates(e, USERNAME_UNIQUE_CONSTRAINT)) {
                 throw new DuplicateUsernameException(user.getUsername());
             }
-            if (violates(e, EMAIL_UNIQUE_CONSTRAINT)) {
+            if (ConstraintViolations.violates(e, EMAIL_UNIQUE_CONSTRAINT)) {
                 throw new DuplicateEmailException();
             }
             throw e;
         }
-    }
-
-    // Matched by containment: PostgreSQL reports the constraint as named, H2 reports the name of
-    // the index behind it, schema-qualified and suffixed (PUBLIC.UK_USERS_USERNAME_INDEX_4).
-    private static boolean violates(DataIntegrityViolationException e, String constraint) {
-        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-            if (cause instanceof ConstraintViolationException violation) {
-                String name = violation.getConstraintName();
-                return name != null && name.toLowerCase(Locale.ROOT).contains(constraint);
-            }
-        }
-        return false;
     }
 
     @Override
