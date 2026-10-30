@@ -1552,6 +1552,21 @@ class EventManagementServiceTest {
                 verify(mockEventRepo, never()).save(any());
         }
 
+        @Test
+        void GivenAMapWhoseGridCellsAreAllTaken_WhenAddInventoryZone_ThenRejectedAndNothingSaved() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+                int gridCells = venueMap.getGridRows() * venueMap.getGridCols();
+                for (int added = venueMap.getInventoryZones().size(); added < gridCells; added++) {
+                        service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, standingZone("Floor " + added, 1));
+                }
+                clearInvocations(mockEventRepo);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, standingZone("One too many", 1)));
+                verify(mockEventRepo, never()).save(any());
+                assertEquals(gridCells, event.getVenueMap().getInventoryZones().size(), "no zone may be added");
+        }
+
         private int seatCountOf(int zoneId) {
                 return event.getVenueMap().getZone(zoneId).getCapacity();
         }

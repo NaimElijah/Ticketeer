@@ -445,6 +445,7 @@ public class EventManagementService {
 
             Event event = getAuthorizedEventForVenueEdit(token, companyId, eventId);
             requireZoneWithinLimits(zoneConfig);
+            requireFreeGridCell(event);
             if (zoneConfig.seated()) {
                 requireMapSeatsWithinLimit(event, seatCount(zoneConfig));
             }
@@ -772,6 +773,20 @@ public class EventManagementService {
                     + " seats, not " + seatsAfter);
         }
         requireMapSeatsWithinLimit(event, seatsToAdd);
+    }
+
+    // configureVenueMap allows no more zones than grid cells; adding zones one at a time must stop there
+    // too, or repeated calls would grow a map past every per-zone cap combined.
+    private void requireFreeGridCell(Event event) {
+        VenueMap map = event.getVenueMap();
+        if (map == null) {
+            return;
+        }
+        long gridCells = (long) map.getGridRows() * map.getGridCols();
+        if (map.getInventoryZones().size() + 1 > gridCells) {
+            throw new IllegalArgumentException("A " + map.getGridRows() + "x" + map.getGridCols()
+                    + " venue grid holds at most " + gridCells + " zones");
+        }
     }
 
     // The map-wide seat cap, for the calls that add seats to an existing map one zone or row at a time.
