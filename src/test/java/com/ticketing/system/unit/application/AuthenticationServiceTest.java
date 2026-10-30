@@ -12,9 +12,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -24,9 +27,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -41,8 +44,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
+import com.ticketing.system.identity.adapter.out.security.BcryptPasswordHasher;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 import com.ticketing.system.identity.config.IdentityProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
@@ -75,6 +80,7 @@ import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.testutil.AdjustableClock;
 import com.ticketing.system.testutil.LogCapture;
 
 class AuthenticationServiceTest {
@@ -87,6 +93,7 @@ class AuthenticationServiceTest {
             "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
     private static final IdentityProperties IDENTITY =
             new IdentityProperties(List.of("admin", "platform.admin"), "admin");
+    private static final String HASH_FROM_THE_HASHER = "$2a$10$hash-the-mock-hasher-returns-for-any-input";
 
     private UserRepository mockUserRepo;
     private PasswordHasher mockHasher;
@@ -108,12 +115,17 @@ class AuthenticationServiceTest {
         mockSessionRepo = mock(SessionRepository.class);
         mockAdminRepo = mock(AdminRepository.class);
         fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
+        // The service may hash a throwaway secret when it is built (its dummy hash for unknown
+        // usernames), so the mock answers with a hash and forgets that call: each test sees only the
+        // hasher calls its own action makes.
+        when(mockHasher.hash(any())).thenReturn(HASH_FROM_THE_HASHER);
         service = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
                 IDENTITY);
+        clearInvocations(mockHasher);
     }
 
     /**
@@ -162,6 +174,8 @@ class AuthenticationServiceTest {
 
     @Test
     void endGuestSession_deletesRow() {
+        mockValidGuestSession("guest-1");
+
         service.endGuestSession("guest-1");
         verify(mockSessionRepo, times(1)).delete("guest-1");
     }
@@ -765,16 +779,19 @@ class AuthenticationServiceTest {
 
         String sessionId = service.startGuestSession().sessionId();
 
+        assertTrue(logs.eventCount() > 0, "control: starting a guest session logs, so the capture sees its logger");
         assertEquals(List.of(), logs.eventsContaining(sessionId),
                 "the new guest session id is the guest's credential and must not be logged");
     }
 
     @Test
     void GivenGuestSession_WhenEndGuestSession_ThenNoLogEventCarriesTheSessionId() {
+        mockValidGuestSession(SESSION_ID);
         logs = LogCapture.of(AuthenticationService.class);
 
         service.endGuestSession(SESSION_ID);
 
+        assertTrue(logs.eventCount() > 0, "control: ending a guest session logs, so the capture sees its logger");
         assertEquals(List.of(), logs.eventsContaining(SESSION_ID),
                 "the ended guest session id must not be logged");
     }
@@ -790,6 +807,7 @@ class AuthenticationServiceTest {
 
         service.login(new LoginRequestDTO("alice", "Password1", SESSION_ID));
 
+        assertTrue(logs.eventCount() > 0, "control: a login logs, so the capture sees its logger");
         assertEquals(List.of(), logs.eventsContaining(SESSION_ID),
                 "login keeps the guest's session id for the member session, so it must not be logged");
     }
@@ -926,6 +944,76 @@ class AuthenticationServiceTest {
         verify(mockHasher, times(1)).matches(eq("whatever"), argThat(hash -> hash != null && !hash.isBlank()));
     }
 
+    @Test
+    void GivenUnknownAdminUsername_WhenSignInAsAdmin_ThenPasswordHasherRunsOnce() {
+        when(mockAdminRepo.findByUsername("ghost")).thenReturn(null);
+
+        assertThrows(AuthenticationFailedException.class, () -> service.signInAsAdmin("ghost", "whatever"));
+
+        verify(mockHasher, times(1)).matches(eq("whatever"), argThat(hash -> hash != null && !hash.isBlank()));
+    }
+
+    // The hash an unknown username is checked against comes from the injected hasher, so it always
+    // costs what a real member's hash costs, whatever the hasher's configuration (#185).
+
+    private static final String BCRYPT_COST_10_HASH = "^\\$2[aby]\\$10\\$.{53}$";
+
+    @Test
+    void GivenRealBcryptHasher_WhenUnknownUsernameLogsIn_ThenTheCheckedHashIsACost10HashTheHasherMade() {
+        BcryptPasswordHasher realHasher = spy(new BcryptPasswordHasher(new BCryptPasswordEncoder()));
+        List<String> hashesMade = recordHashesMadeBy(realHasher);
+        AuthenticationService onRealHasher = serviceWithHasher(realHasher);
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        assertThrows(AuthenticationFailedException.class,
+                () -> onRealHasher.login(new LoginRequestDTO("ghost", "whatever", "guest-1")));
+
+        ArgumentCaptor<String> checkedHash = ArgumentCaptor.forClass(String.class);
+        verify(realHasher, times(1)).matches(eq("whatever"), checkedHash.capture());
+        assertTrue(checkedHash.getValue().matches(BCRYPT_COST_10_HASH),
+                "the dummy hash must be a BCrypt hash at cost 10, but was " + checkedHash.getValue());
+        assertEquals(List.of(checkedHash.getValue()), hashesMade,
+                "the dummy hash must be the one the injected hasher made");
+    }
+
+    @Test
+    void GivenServiceBuiltOnce_WhenTwoUnknownUsernamesLogIn_ThenTheHasherMadeOneDummyHashAtConstruction() {
+        BcryptPasswordHasher realHasher = spy(new BcryptPasswordHasher(new BCryptPasswordEncoder()));
+        List<String> hashesMade = recordHashesMadeBy(realHasher);
+        AuthenticationService onRealHasher = serviceWithHasher(realHasher);
+        assertEquals(1, hashesMade.size(), "the dummy hash is made once, when the service is built");
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.findByUsername(any())).thenReturn(Optional.empty());
+
+        assertThrows(AuthenticationFailedException.class,
+                () -> onRealHasher.login(new LoginRequestDTO("ghost-1", "whatever", "guest-1")));
+        assertThrows(AuthenticationFailedException.class,
+                () -> onRealHasher.login(new LoginRequestDTO("ghost-2", "whatever", "guest-1")));
+
+        assertEquals(1, hashesMade.size(), "an unknown username must not cost a hash of its own");
+        verify(realHasher, times(2)).matches(eq("whatever"), eq(hashesMade.get(0)));
+    }
+
+    private static List<String> recordHashesMadeBy(PasswordHasher hasher) {
+        List<String> made = new ArrayList<>();
+        doAnswer(invocation -> {
+            String hash = (String) invocation.callRealMethod();
+            made.add(hash);
+            return hash;
+        }).when(hasher).hash(any());
+        return made;
+    }
+
+    private AuthenticationService serviceWithHasher(PasswordHasher hasher) {
+        return new AuthenticationService(
+                mockUserRepo, hasher, mockSessionManager, mockCartRestorationPort, mockNotification,
+                mockSessionRepo, mock(ISystemMetrics.class),
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
+                IDENTITY);
+    }
+
     // ----------------------------------------------------------------------
     // Lockout (SLR.2, #185) — failures are counted in a window that starts at a key's first failure
     // and lasts auth.lockout.lock-minutes. Once the window passes, the count starts from zero, so a
@@ -939,7 +1027,7 @@ class AuthenticationServiceTest {
 
     @Test
     void GivenFewerThanMaxFailures_WhenTheLockWindowHasPassed_ThenTheCountStartsFromZero() {
-        MutableClock clock = new MutableClock(T0);
+        AdjustableClock clock = new AdjustableClock(T0);
         AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
         givenMemberAliceWithAnyGuestSession(clock);
 
@@ -953,7 +1041,7 @@ class AuthenticationServiceTest {
 
     @Test
     void GivenFailuresSpreadOverTheWindow_WhenTheWindowSinceTheFirstFailurePasses_ThenTheCountStartsFromZero() {
-        MutableClock clock = new MutableClock(T0);
+        AdjustableClock clock = new AdjustableClock(T0);
         AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
         givenMemberAliceWithAnyGuestSession(clock);
 
@@ -969,7 +1057,7 @@ class AuthenticationServiceTest {
 
     @Test
     void GivenMaxMinusOneFailures_WhenOneMoreFailsInsideTheWindow_ThenLocked() {
-        MutableClock clock = new MutableClock(T0);
+        AdjustableClock clock = new AdjustableClock(T0);
         AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
         givenMemberAliceWithAnyGuestSession(clock);
 
@@ -982,6 +1070,21 @@ class AuthenticationServiceTest {
                 MAX_ATTEMPTS + " failures inside one window must lock the account");
     }
 
+    // The locked message rounds the time left in the window up to whole minutes.
+    @Test
+    void GivenLockWithNinetySecondsLeft_WhenLogin_ThenTheMessageSaysAboutTwoMinutes() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService lockoutService = newService(clock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(clock);
+        failLogins(lockoutService, MAX_ATTEMPTS);
+        clock.advance(Duration.ofMinutes(LOCK_MINUTES).minusSeconds(90));
+
+        AccountLockedException locked = assertThrows(AccountLockedException.class,
+                () -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")));
+
+        assertEquals("Too many failed attempts. Try again in about 2 minutes.", locked.getMessage());
+    }
+
     // With the limit at N, every attempt beyond the N-th inside the window is refused before its
     // password is checked, even when the attempts arrive together.
 
@@ -990,7 +1093,7 @@ class AuthenticationServiceTest {
     private static final long CONCURRENCY_AWAIT_SECONDS = 5;
 
     @Test
-    void GivenMaxAttemptsN_WhenMoreThanNWrongMemberPasswordsArriveTogether_ThenAtMostNPasswordVerifications()
+    void GivenMaxAttemptsN_WhenMoreThanNWrongMemberPasswordsArriveTogether_ThenExactlyNPasswordVerifications()
             throws InterruptedException {
         AuthenticationService lockoutService = newService(fixedClock,
                 new LockoutProperties(CONCURRENT_MAX_ATTEMPTS, LOCK_MINUTES));
@@ -1000,14 +1103,14 @@ class AuthenticationServiceTest {
                 CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT,
                 () -> lockoutService.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")));
 
-        assertTrue(verifications <= CONCURRENT_MAX_ATTEMPTS,
-                "expected at most " + CONCURRENT_MAX_ATTEMPTS + " password verifications for "
+        assertEquals(CONCURRENT_MAX_ATTEMPTS, verifications,
+                "expected exactly " + CONCURRENT_MAX_ATTEMPTS + " password verifications for "
                         + (CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT)
                         + " simultaneous attempts, but there were " + verifications);
     }
 
     @Test
-    void GivenMaxAttemptsN_WhenMoreThanNWrongAdminPasswordsArriveTogether_ThenAtMostNPasswordVerifications()
+    void GivenMaxAttemptsN_WhenMoreThanNWrongAdminPasswordsArriveTogether_ThenExactlyNPasswordVerifications()
             throws InterruptedException {
         AuthenticationService lockoutService = newService(fixedClock,
                 new LockoutProperties(CONCURRENT_MAX_ATTEMPTS, LOCK_MINUTES));
@@ -1017,8 +1120,8 @@ class AuthenticationServiceTest {
                 CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT,
                 () -> lockoutService.signInAsAdmin("admin", WRONG_PASSWORD));
 
-        assertTrue(verifications <= CONCURRENT_MAX_ATTEMPTS,
-                "expected at most " + CONCURRENT_MAX_ATTEMPTS + " password verifications for "
+        assertEquals(CONCURRENT_MAX_ATTEMPTS, verifications,
+                "expected exactly " + CONCURRENT_MAX_ATTEMPTS + " password verifications for "
                         + (CONCURRENT_MAX_ATTEMPTS + ATTEMPTS_OVER_THE_LIMIT)
                         + " simultaneous attempts, but there were " + verifications);
     }
@@ -1081,11 +1184,13 @@ class AuthenticationServiceTest {
     }
 
     private AuthenticationService newService(Clock clock, LockoutProperties lockout, IdentityProperties identity) {
-        return new AuthenticationService(
+        AuthenticationService built = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
                 mockSessionRepo, mock(ISystemMetrics.class),
                 clock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity);
+        clearInvocations(mockHasher);
+        return built;
     }
 
     /** Member alice, whose password is {@link #RIGHT_PASSWORD}; every session id names a fresh guest. */
@@ -1107,34 +1212,6 @@ class AuthenticationServiceTest {
             assertThrows(AuthenticationFailedException.class,
                     () -> target.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")),
                     "a wrong password inside an unlocked window is refused as a failed sign-in, not a lock");
-        }
-    }
-
-    /** An advanceable clock, so a test can move past a lock window without waiting for it. */
-    private static final class MutableClock extends Clock {
-        private Instant now;
-
-        MutableClock(Instant start) {
-            this.now = start;
-        }
-
-        void advance(Duration duration) {
-            now = now.plus(duration);
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
         }
     }
 }

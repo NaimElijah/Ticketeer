@@ -86,14 +86,6 @@ public class AuthenticationService {
 
     private static final int MIN_PASSWORD_LENGTH = 8;
 
-    /**
-     * Verified against when the username names no account, so an unknown username costs the same
-     * BCrypt work as a known one and the response time does not tell which usernames exist. A real
-     * hash at the cost {@code BcryptPasswordHasher} uses (10), of a random secret that was
-     * discarded, so no password matches it. Regenerate it if that cost changes.
-     */
-    private static final String DUMMY_HASH = "$2a$10$m9cx4gEdeGJXWUzDeiQIB.l5tExjDwjuLGriou9K2t7N6Eg2ya6bG";
-
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final SessionManager sessionManager;
@@ -112,6 +104,11 @@ public class AuthenticationService {
     // Names no member may register (#76): identity.reserved-usernames plus the default admin's
     // username, trimmed and lower-cased.
     private final Set<String> reservedUsernames;
+    // Verified against when a username names no account, so an unknown username costs the same hash
+    // check as a known one and the response time does not tell which usernames exist. Made by the
+    // injected hasher, so it costs what a stored hash costs whatever the hasher's settings, from a
+    // random secret that is discarded, so no password matches it.
+    private final String dummyHash;
 
     public AuthenticationService(
             UserRepository userRepository,
@@ -139,6 +136,7 @@ public class AuthenticationService {
         this.memberTtlMinutes = sessionProperties.memberTtlMinutes();
         this.loginAttempts = new LoginAttemptTracker(lockoutProperties, clock);
         this.reservedUsernames = reservedUsernamesOf(identityProperties);
+        this.dummyHash = passwordHasher.hash(UUID.randomUUID().toString());
     }
 
     private static Set<String> reservedUsernamesOf(IdentityProperties identity) {
@@ -409,7 +407,7 @@ public class AuthenticationService {
         // 2. Authenticate. An unknown username and a wrong password raise the same exception after
         //    the same BCrypt work, so neither the answer nor its timing tells which names exist.
         Optional<User> found = userRepository.findByUsername(request.username());
-        String storedHash = found.map(User::getPasswordHash).orElse(DUMMY_HASH);
+        String storedHash = found.map(User::getPasswordHash).orElse(dummyHash);
         boolean passwordMatches = passwordHasher.matches(request.rawPassword(), storedHash);
         if (found.isEmpty() || !passwordMatches) {
             log.warn("MEMBER AUTH FAILED · username={} · failures={}", request.username(), admission.attempts());
@@ -458,7 +456,7 @@ public class AuthenticationService {
 
         // An unknown admin costs the same BCrypt work as a wrong password, as in member login.
         Admin admin = adminRepository.findByUsername(username == null ? "" : username.trim());
-        String storedHash = admin == null ? DUMMY_HASH : admin.getPasswordHash();
+        String storedHash = admin == null ? dummyHash : admin.getPasswordHash();
         boolean passwordMatches = passwordHasher.matches(rawPassword, storedHash);
         if (admin == null || !passwordMatches) {
             log.warn("ADMIN AUTH FAILED · username={} · reason={} · failures={} · at={}",
