@@ -121,6 +121,20 @@ class LoggingAspectTest {
     }
 
     @Test
+    void GivenTopLevelCallSucceeded_WhenALaterTopLevelCallFails_ThenItLogsOneWarn() {
+        assertEquals(RECOVERED, outer.callFailingInnerAndRecover());
+        int warningsBefore = logs.messagesAt(Level.WARN).size();
+
+        assertThrows(IllegalStateException.class, inner::fail);
+
+        List<String> warnings = logs.messagesAt(Level.WARN);
+        assertEquals(warningsBefore + 1, warnings.size(),
+                "a top-level failure after a successful top-level call must log one WARN, got: " + warnings);
+        assertTrue(warnings.get(warnings.size() - 1).contains(InnerService.class.getSimpleName()),
+                "the new WARN must come from the failing top-level call: " + warnings);
+    }
+
+    @Test
     void GivenInnerCallSucceeded_WhenTheOuterCallThenFails_ThenOneWarnFromTheOuterCall() {
         assertThrows(IllegalStateException.class, outer::callSucceedingInnerThenFail);
 
