@@ -145,6 +145,15 @@ abstract class IOrderReceiptRepositoryContractTest {
         assertTrue(repo.findByEventIds(List.of()).isEmpty());
     }
 
+    // A company with no events is filtered by an empty event list: it has no sales, so nothing matches.
+    // Read as "no filter", it would load every receipt and leave the caller to discard them.
+    @Test
+    void GivenAnEmptyEventIdFilter_WhenFindGlobal_ThenNoReceiptMatches() {
+        repo.save(member(1, 7, 5));
+
+        assertTrue(repo.findGlobal(new GlobalHistoryFiltersDTO(null, null, List.of(), null, null)).isEmpty());
+    }
+
     @Test
     void findGlobal_noFiltersReturnsAll_filterByBuyerNarrows() {
         repo.save(member(1, 7, 5));
