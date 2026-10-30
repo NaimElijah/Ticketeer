@@ -20,6 +20,10 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    # An EntityManager, and its connection, lives as long as its transaction, never as long as a web
+    # request. Every association is loaded eagerly, so nothing needs a session after its service
+    # returns (OpenInViewJpaTest).
+    open-in-view: false
     # No explicit dialect: Hibernate auto-detects it per connection (PostgreSQL on the
     # deploy/run target, H2 in dev and the @DataJpaTest contract tests), so one config
     # serves every backend — a config-only switch to the cloud DB.
