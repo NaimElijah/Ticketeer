@@ -55,7 +55,8 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     }
 
     // Review finding 4 on #129: a row written before refund state moved onto the lines (#20) records a
-    // refund only in the order-level flag. Only a database that predates the column can hold one, so
+    // refund only in the order-level flag. Since V6 (#175) its lines read NONE from their rows, the
+    // shape the raw SQL below writes. Only a database that predates the line state can hold one, so
     // this case is JPA-only. It must fail closed: nothing on it may be refunded again. It runs outside
     // the test transaction so the raw SQL commits and the adapter's own read sees it.
     @Test
@@ -65,7 +66,7 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
                 new ReceiptLine(10, 50.0, 5, 1, "A1", LocalDateTime.now()),
                 new ReceiptLine(11, 50.0, 6, 1, "A2", LocalDateTime.now())), LocalDateTime.now()));
         jdbc.update("update receipts set is_refunded = true where receipt_id = 1");
-        jdbc.update("update receipt_lines set refund_state = null where receipt_id = 1");
+        jdbc.update("update receipt_lines set refund_state = 'NONE' where receipt_id = 1");
 
         OrderReceipt legacy = repository.findByOrderReceiptId(1).orElseThrow();
 
