@@ -9,6 +9,7 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.BuyerContextDTO;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,7 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class CartRestorationAdapter implements CartRestorationPort {
 
-    // Sales use-case service that builds the enriched cart DTO for the login response.
+    // Sales use-case service that builds the enriched cart DTO for the login response and releases a
+    // member cart the guest cart replaces.
     private final ReservationService reservationService;
     // Sales aggregate-root port for the ActiveOrder (cart) aggregate.
     private final ActiveOrderRepository activeOrderRepository;
@@ -35,7 +37,8 @@ public class CartRestorationAdapter implements CartRestorationPort {
     /**
      * Wires the adapter to the sales collaborators it delegates to.
      *
-     * @param reservationService    sales service that restores/enriches the cart DTO
+     * @param reservationService    sales service that restores/enriches the cart DTO and abandons a
+     *                              replaced member cart
      * @param activeOrderRepository sales port used to lock, look up and save carts
      */
     public CartRestorationAdapter(ReservationService reservationService,
@@ -61,9 +64,12 @@ public class CartRestorationAdapter implements CartRestorationPort {
      * <li>No Guest cart this session, but an orphaned Member cart exists from a
      * previous logout &rarr; re-attach it to the new session.</li>
      * </ol>
-     * If both happen to exist, the Guest cart wins (most recent intent); the
-     * {@code MemoryActiveOrderRepository}'s save() collapses identity by userId,
-     * so the stale Member cart is replaced automatically.
+     * If both exist, the Guest cart wins (most recent intent; OQ-17 is open). The
+     * Member cart it replaces is abandoned first, within the login transaction:
+     * its holds are released back to inventory and it is deleted, so no seat stays
+     * RESERVED under an order that no longer exists. A Member cart that is
+     * CHECKOUT_IN_PROGRESS belongs to a checkout still in flight, so both carts are
+     * then left as they are: the Guest cart stays unclaimed, expires and is swept.
      */
     @Override
     public void mergeGuestCartOnPromotion(String sessionId, int userId) {
@@ -81,6 +87,17 @@ public class CartRestorationAdapter implements CartRestorationPort {
         try {
             Optional<ActiveOrder> guestCart = activeOrderRepository.getBySessionId(sessionId); // look up guest cart
             if (guestCart.isPresent() && guestCart.get().isGuest()) { // a genuine guest cart to promote
+                ActiveOrder replacedMemberCart = activeOrderRepository.getByUserId(userId);
+                if (replacedMemberCart != null) {
+                    if (replacedMemberCart.isCheckoutInProgress()) {
+                        log.info("guest cart left unclaimed: member order is in checkout userId={}", userId);
+                        return;
+                    }
+                    // The save below would delete this cart without releasing its holds (the repository
+                    // collapses carts by userId), stranding its seats as RESERVED. Re-takes the user: lock
+                    // already held here (reentrant), then the event locks, so lock order is unchanged.
+                    reservationService.abandonActiveOrder(BuyerContextDTO.member(userId));
+                }
                 guestCart.get().attachToUser(userId);        // claim it for the member
                 activeOrderRepository.save(guestCart.get()); // persist the promotion
                 log.debug("cart promoted to member userId={} sid={}", userId, sessionId);
