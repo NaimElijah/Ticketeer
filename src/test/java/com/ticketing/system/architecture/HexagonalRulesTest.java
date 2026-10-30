@@ -318,6 +318,16 @@ class HexagonalRulesTest {
                 unusedCrossModuleExceptions(FIXTURE_ROOT, withoutTheCall));
     }
 
+    // The case #53 creates: the origin class is still there, but its call to the target is gone.
+    @Test
+    void GivenTheOriginClassWithoutTheCall_WhenScanned_ThenTheExceptionIsReportedUnused() {
+        JavaClasses callRemoved = new ClassFileImporter().importClasses(
+                com.ticketing.system.architecture.fixture.stale.identity.application.service.AuthenticationService.class);
+
+        assertEquals(List.copyOf(ALLOWED_CROSS_MODULE_EXCEPTIONS),
+                unusedCrossModuleExceptions(FIXTURE_ROOT + ".stale", callRemoved));
+    }
+
     @Test
     void GivenTheExceptionsDependencyIsPresent_WhenScanned_ThenNoExceptionIsReportedUnused() {
         JavaClasses withTheCall = new ClassFileImporter().importClasses(AuthenticationService.class);
