@@ -61,7 +61,8 @@ class SeedWipeJpaTest {
     // The platform admin is infrastructure the reset needs to reopen the market.
     private static final Set<Class<?>> KEPT_BY_THE_WIPE = Set.of(SpringDataAdminRepository.class);
 
-    // deleteAll(), deleteAllInBatch() and the like all empty the table.
+    // The no-argument deleteAll() and deleteAllInBatch() empty the table; the overloads that take ids or
+    // entities delete only those rows, so they do not count.
     private static final String DELETE_ALL = "deleteAll";
 
     @Autowired private RepoCleaner repoCleaner;
@@ -126,7 +127,8 @@ class SeedWipeJpaTest {
 
         Set<Class<?>> emptied = doubles.entrySet().stream()
                 .filter(entry -> Mockito.mockingDetails(entry.getValue()).getInvocations().stream()
-                        .anyMatch(invocation -> invocation.getMethod().getName().startsWith(DELETE_ALL)))
+                        .anyMatch(invocation -> invocation.getMethod().getName().startsWith(DELETE_ALL)
+                                && invocation.getArguments().length == 0))
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
         assertEquals(sortedNames(expected), sortedNames(emptied),
