@@ -14,6 +14,7 @@ import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.security.SignOutFlow;
+import com.ticketing.system.ui.session.FreshGuestSession;
 import com.vaadin.flow.server.VaadinSession;
 
 import java.time.Instant;
@@ -31,7 +32,7 @@ class SignOutFlowTest {
     @BeforeEach
     void setUp() {
         authenticationService = mock(AuthenticationService.class);
-        signOutFlow = new SignOutFlow(authenticationService);
+        signOutFlow = new SignOutFlow(authenticationService, new FreshGuestSession(authenticationService));
         when(authenticationService.startGuestSession())
             .thenReturn(new GuestSessionDTO("fresh-sid", Instant.now()));
     }
