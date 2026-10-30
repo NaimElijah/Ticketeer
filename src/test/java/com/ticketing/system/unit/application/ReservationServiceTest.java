@@ -52,6 +52,7 @@ import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -1293,6 +1294,71 @@ public class ReservationServiceTest {
         assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the service's logger");
         assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
                 "renewing a guest's holds must not log the guest's session id");
+    }
+
+    // --- #187: a reserve that fails after the hold rolls back best-effort and rethrows its own failure.
+    // A rollback step that fails too is swallowed, so it must leave a WARN carrying its exception, or
+    // the seats or cart line it left behind have no trace in production. ---
+
+    private static final String RESERVE_FAILURE = "reserve-failed-after-the-hold-under-test";
+    private static final String RELEASE_FAILURE = "release-of-the-hold-failed-under-test";
+    private static final String CART_ROLLBACK_FAILURE = "cart-line-rollback-failed-under-test";
+    private static final String ORDER_KEY = "order-key-under-test";
+
+    @Test
+    void GivenReleaseFailsWhileRollingBackAFailedReserve_WhenReserveForMember_ThenAWarnCarriesTheReleaseFailure() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        ReservationService service = reservationServiceOver(inventory);
+        memberWithCart();
+        doThrow(new IllegalStateException(RESERVE_FAILURE)).when(activeOrder)
+                .addStandingReservation(anyInt(), anyInt(), anyInt(), anyDouble(), any());
+        when(inventory.release(anyInt(), anyInt(), any(), any())).thenThrow(new IllegalStateException(RELEASE_FAILURE));
+        logs = LogCapture.of(ReservationService.class);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> service.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(RESERVE_FAILURE, thrown.getMessage(), "the reserve's own failure must propagate, not the release's");
+        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(ORDER_KEY));
+        assertWarnCarrying(RELEASE_FAILURE);
+    }
+
+    @Test
+    void GivenCartRollbackFailsAfterAFailedReserve_WhenReserveForMember_ThenAWarnCarriesTheCartRollbackFailure() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        ReservationService service = reservationServiceOver(inventory);
+        memberWithCart();
+        doThrow(new IllegalStateException(RESERVE_FAILURE)).when(activeOrderRepository).save(activeOrder);
+        doThrow(new IllegalStateException(CART_ROLLBACK_FAILURE)).when(activeOrder)
+                .removeStandingSpots(EVENT_ID, ZONE_ID, QUANTITY);
+        logs = LogCapture.of(ReservationService.class);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> service.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(RESERVE_FAILURE, thrown.getMessage(),
+                "the reserve's own failure must propagate, not the cart rollback's");
+        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(ORDER_KEY));
+        assertWarnCarrying(CART_ROLLBACK_FAILURE);
+    }
+
+    // The same service as setUp's, with the inventory port as a mock so a test can make it fail.
+    private ReservationService reservationServiceOver(InventoryCommandPort inventory) {
+        return new ReservationService(inventory, activeOrderRepository, sessionManager, eventPublisher,
+                mock(UserRepository.class), marketGate, mock(ISystemMetrics.class), Clock.fixed(T0, ZoneOffset.UTC));
+    }
+
+    private void memberWithCart() {
+        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
+        when(activeOrder.getOrderKey()).thenReturn(ORDER_KEY);
+    }
+
+    private void assertWarnCarrying(String failure) {
+        List<String> carrying = logs.eventsContaining(failure);
+        assertTrue(carrying.stream().anyMatch(line -> line.startsWith("WARN ")),
+                "expected a WARN from ReservationService carrying '" + failure + "'; events carrying it: " + carrying);
     }
 
     // helper test methods:
