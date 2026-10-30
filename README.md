@@ -207,7 +207,7 @@ set these:
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
 `wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
-`event-completion` and `notifications` groups bind to validated records.
+`event-completion`, `notifications` and `catalog.venue-limits` groups bind to validated records.
 A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an unknown
 time zone, a malformed WSEP URL or a zero sweep delay, stops the boot with a report naming the
 property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Outside `dev` and
@@ -258,6 +258,7 @@ overrides them. Set each value in one place.
 | `SWEEPER_FIXED_DELAY_MS` | Pause between sweeps that release expired sessions and carts | `60000` |
 | `EVENT_COMPLETION_FIXED_DELAY_MS` | Pause between sweeps that mark finished events completed | `60000` |
 | `NOTIFICATIONS_POLL_DELAY_MS` | Pause between pushes of new notifications to connected users | `60000` |
+| `CATALOG_VENUE_MAX_GRID_SIZE` · `CATALOG_VENUE_MAX_SEATS_PER_ZONE` · `CATALOG_VENUE_MAX_STANDING_CAPACITY` · `CATALOG_VENUE_MAX_SEATS_PER_MAP` | The largest venue map a producer may save: grid rows and columns · seats in one seated zone · places in one standing zone · seats on the whole map (standing places not counted) | `12` · `49500` · `1000000` · `100000` |
 | `PLATFORM_TIME_ZONE` | IANA zone that new and seeded events default to, and that the UI shows recorded times and "today" in ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)) | `Asia/Jerusalem` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
 | `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |

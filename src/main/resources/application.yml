@@ -67,6 +67,17 @@ constants:
   order-expiration-duration: ${ORDER_EXPIRATION_DURATION:60}
 
 
+# Venue size limits (UC-20, #185), enforced server-side on every venue-map write. The defaults match the
+# venue editor's own caps: a 12 x 12 grid, 99 rows x 500 seats per seated zone, 1,000,000 places per
+# standing zone. max-seats-per-map bounds the seats of all seated zones together; standing places don't count.
+catalog:
+  venue-limits:
+    max-grid-size: ${CATALOG_VENUE_MAX_GRID_SIZE:12}
+    max-seats-per-zone: ${CATALOG_VENUE_MAX_SEATS_PER_ZONE:49500}
+    max-standing-capacity: ${CATALOG_VENUE_MAX_STANDING_CAPACITY:1000000}
+    max-seats-per-map: ${CATALOG_VENUE_MAX_SEATS_PER_MAP:100000}
+
+
 # System Analytics dashboard (UC-46 / #43, #279).
 #  - rate-window-minutes: trailing window the per-minute rates are computed over.
 #  - refresh-interval-ms: how often the dashboard auto-refreshes its KPIs in the

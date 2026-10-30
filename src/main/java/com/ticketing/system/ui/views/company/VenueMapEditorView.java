@@ -3,6 +3,7 @@ package com.ticketing.system.ui.views.company;
 import com.ticketing.system.shared.dto.GridPlacementDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.ZoneDetailDTO;
+import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.SeatLabels;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
@@ -44,9 +45,13 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private int gridRows = 3;
     private int gridCols = 3;
-    private static final int MAX_GRID = 12;
+    // The server's limit is seats per zone (catalog.venue-limits.max-seats-per-zone); the editor splits a
+    // zone into rows of seats, so it caps each dimension. 99 x 500 is the default seat limit.
+    private static final int MAX_ROWS_PER_ZONE = 99;
+    private static final int MAX_SEATS_PER_ROW = 500;
 
     private final VenueMapPresenter presenter;
+    private final VenueLimitsProperties venueLimits;
     private String eventId = "0";
 
     private record ZoneState(String name, boolean seated, int rows, int seatsPerRow,
@@ -74,8 +79,9 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private Div seatedEditor;
     private Div standingEditor;
 
-    public VenueMapEditorView(VenueMapPresenter presenter) {
+    public VenueMapEditorView(VenueMapPresenter presenter, VenueLimitsProperties venueLimits) {
         this.presenter = presenter;
+        this.venueLimits = venueLimits;
         zoneStates.add(new ZoneState("Zone 1", true, 10, 20, 0, 100.0, defaultPlacement(0)));
         title("Venue Map Editor");
         subtitle("Place zones on the " + gridRows + "×" + gridCols + " venue grid, then define seats.");
@@ -142,8 +148,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private Component buildCanvasCard() {
         LkCard card = new LkCard("Venue Grid").pad(14);
-        gridRowsField.setMin(1); gridRowsField.setMax(MAX_GRID); gridRowsField.setValue(gridRows);
-        gridColsField.setMin(1); gridColsField.setMax(MAX_GRID); gridColsField.setValue(gridCols);
+        gridRowsField.setMin(1); gridRowsField.setMax(venueLimits.maxGridSize()); gridRowsField.setValue(gridRows);
+        gridColsField.setMin(1); gridColsField.setMax(venueLimits.maxGridSize()); gridColsField.setValue(gridCols);
         gridRowsField.addValueChangeListener(e -> applyCanvasSize());
         gridColsField.addValueChangeListener(e -> applyCanvasSize());
         LkRow row = new LkRow().gap(12).align("flex-end");
@@ -282,8 +288,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
         seatedEditor = new Div();
         LkRow dims = new LkRow().gap(12).align("flex-end");
-        rowsField.setMin(1); rowsField.setMax(99); rowsField.setWidth("120px");
-        seatsPerRowField.setMin(1); seatsPerRowField.setMax(500); seatsPerRowField.setWidth("120px");
+        rowsField.setMin(1); rowsField.setMax(MAX_ROWS_PER_ZONE); rowsField.setWidth("120px");
+        seatsPerRowField.setMin(1); seatsPerRowField.setMax(MAX_SEATS_PER_ROW); seatsPerRowField.setWidth("120px");
         rowsField.addValueChangeListener(e -> refreshSeatPreview());
         seatsPerRowField.addValueChangeListener(e -> refreshSeatPreview());
         dims.add(rowsField, seatsPerRowField);
@@ -292,7 +298,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         seatHint.getStyle().set("font-size", "12px").set("margin-top", "8px").set("display", "block");
         seatedEditor.add(dims, seatPreview, seatHint);
 
-        capacityField.setMin(1); capacityField.setMax(1_000_000); capacityField.setWidthFull();
+        capacityField.setMin(1); capacityField.setMax(venueLimits.maxStandingCapacity()); capacityField.setWidthFull();
         standingEditor = new Div();
         standingEditor.add(capacityField);
 

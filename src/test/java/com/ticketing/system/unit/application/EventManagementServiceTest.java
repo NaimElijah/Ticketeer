@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,7 +22,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -32,6 +36,7 @@ import com.ticketing.system.catalog.domain.event.EventCancelledEvent;
 import com.ticketing.system.catalog.application.port.out.EventSalesHistoryPort;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.application.service.EventManagementService;
+import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
@@ -149,9 +154,19 @@ class EventManagementServiceTest {
                 membershipService.acceptInvitation(INVENTORY_MANAGER_ID, COMPANY_ID);
         }
 
+        // The shipped catalog.venue-limits.* defaults (application.yml), so every other test runs under
+        // the limits a real boot applies.
+        private static final VenueLimitsProperties SHIPPED_VENUE_LIMITS =
+                        new VenueLimitsProperties(12, 49_500, 1_000_000, 100_000);
+
         private EventManagementService serviceWith(Clock clock) {
+                return serviceWith(clock, SHIPPED_VENUE_LIMITS);
+        }
+
+        private EventManagementService serviceWith(Clock clock, VenueLimitsProperties venueLimits) {
                 return new EventManagementService(mockEventRepo, mockCompanyRepo, sessionManager,
-                                eventSalesHistoryPort, userRepository, membershipService, eventPublisher, clock);
+                                eventSalesHistoryPort, userRepository, membershipService, eventPublisher, clock,
+                                venueLimits);
         }
 
         // Catalog-only happy path for cancelEventAndRefund: valid owner, event, and company. The
@@ -1327,4 +1342,261 @@ class EventManagementServiceTest {
                                 () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
         }
 
+        // -------------------------------------------------------------------------
+        // #185: configureVenueMap enforces the venue size limits server-side. The editor's field
+        // limits are advisory only, so a client can send any size. Small limits keep each case cheap;
+        // VenueLimitsPropertiesTest pins the shipped values.
+        // -------------------------------------------------------------------------
+
+        private static final int LIMIT_GRID = 4;
+        private static final int LIMIT_SEATS_PER_ZONE = 6;
+        private static final int LIMIT_STANDING_CAPACITY = 50;
+        private static final int LIMIT_SEATS_PER_MAP = 10;
+        private static final VenueLimitsProperties SMALL_VENUE_LIMITS = new VenueLimitsProperties(
+                        LIMIT_GRID, LIMIT_SEATS_PER_ZONE, LIMIT_STANDING_CAPACITY, LIMIT_SEATS_PER_MAP);
+
+        @Test
+        void GivenSeatedZoneOverTheSeatLimit_WhenConfigureVenueMap_ThenRejectedAndNothingSaved() {
+                assertVenueRejected(venueConfig(LIMIT_GRID, LIMIT_GRID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE + 1)));
+        }
+
+        @Test
+        void GivenSeatedZoneAtTheSeatLimit_WhenConfigureVenueMap_ThenSaved() {
+                assertVenueSaved(venueConfig(LIMIT_GRID, LIMIT_GRID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE)), 1);
+        }
+
+        @Test
+        void GivenStandingZoneOverTheCapacityLimit_WhenConfigureVenueMap_ThenRejectedAndNothingSaved() {
+                assertVenueRejected(venueConfig(LIMIT_GRID, LIMIT_GRID,
+                                standingZone("Floor", LIMIT_STANDING_CAPACITY + 1)));
+        }
+
+        // The standing limit is above the per-map seat limit, as in the shipped defaults: standing places
+        // are not seats, so a standing zone at its own limit is accepted whatever the seat total allows.
+        @Test
+        void GivenStandingZoneAtTheCapacityLimit_WhenConfigureVenueMap_ThenSaved() {
+                assertVenueSaved(venueConfig(LIMIT_GRID, LIMIT_GRID,
+                                standingZone("Floor", LIMIT_STANDING_CAPACITY)), 1);
+        }
+
+        @Test
+        void GivenGridRowsOverTheGridLimit_WhenConfigureVenueMap_ThenRejectedAndNothingSaved() {
+                assertVenueRejected(venueConfig(LIMIT_GRID + 1, LIMIT_GRID, standingZone("Floor", 10)));
+        }
+
+        @Test
+        void GivenGridColsOverTheGridLimit_WhenConfigureVenueMap_ThenRejectedAndNothingSaved() {
+                assertVenueRejected(venueConfig(LIMIT_GRID, LIMIT_GRID + 1, standingZone("Floor", 10)));
+        }
+
+        @Test
+        void GivenGridAtTheGridLimit_WhenConfigureVenueMap_ThenSaved() {
+                assertVenueSaved(venueConfig(LIMIT_GRID, LIMIT_GRID, standingZone("Floor", 10)), 1);
+        }
+
+        @Test
+        void GivenMoreZonesThanGridCells_WhenConfigureVenueMap_ThenRejectedAndNothingSaved() {
+                assertVenueRejected(venueConfig(1, 2,
+                                standingZone("Zone 1", 10), standingZone("Zone 2", 10), standingZone("Zone 3", 10)));
+        }
+
+        @Test
+        void GivenAsManyZonesAsGridCells_WhenConfigureVenueMap_ThenSaved() {
+                assertVenueSaved(venueConfig(1, 2, standingZone("Zone 1", 10), standingZone("Zone 2", 10)), 2);
+        }
+
+        @Test
+        void GivenSeatTotalOverTheMapLimit_WhenConfigureVenueMap_ThenRejectedAndNothingSaved() {
+                assertVenueRejected(venueConfig(LIMIT_GRID, LIMIT_GRID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE),
+                                seatedZone("Balcony", "B", LIMIT_SEATS_PER_MAP - LIMIT_SEATS_PER_ZONE + 1)));
+        }
+
+        @Test
+        void GivenSeatTotalAtTheMapLimit_WhenConfigureVenueMap_ThenSaved() {
+                assertVenueSaved(venueConfig(LIMIT_GRID, LIMIT_GRID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE),
+                                seatedZone("Balcony", "B", LIMIT_SEATS_PER_MAP - LIMIT_SEATS_PER_ZONE)), 2);
+        }
+
+        // addInventoryZone and addPlacesToStandingZone also size zones, so they apply the same per-zone caps.
+        // The fixture's map holds one standing zone (ZONE_ID) of 10 places.
+
+        @Test
+        void GivenSeatedZoneOverTheSeatLimit_WhenAddInventoryZone_ThenRejectedAndNothingSaved() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE + 1)));
+                verify(mockEventRepo, never()).save(any());
+                assertEquals(1, event.getVenueMap().getInventoryZones().size(), "no zone may be added");
+        }
+
+        @Test
+        void GivenStandingZoneOverTheCapacityLimit_WhenAddInventoryZone_ThenRejectedAndNothingSaved() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                                standingZone("Floor", LIMIT_STANDING_CAPACITY + 1)));
+                verify(mockEventRepo, never()).save(any());
+                assertEquals(1, event.getVenueMap().getInventoryZones().size(), "no zone may be added");
+        }
+
+        @Test
+        void GivenZonesAtTheirLimits_WhenAddInventoryZone_ThenBothAdded() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+
+                service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE));
+                service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                standingZone("Floor", LIMIT_STANDING_CAPACITY));
+
+                assertEquals(3, event.getVenueMap().getInventoryZones().size());
+        }
+
+        @Test
+        void GivenPlacesThatTakeTheZoneOverTheCapacityLimit_WhenAddPlacesToStandingZone_ThenRejectedAndUnchanged() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+                int capacityBefore = zone.getCapacity();
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addPlacesToStandingZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, ZONE_ID,
+                                                LIMIT_STANDING_CAPACITY - capacityBefore + 1));
+                verify(mockEventRepo, never()).save(any());
+                assertEquals(capacityBefore, zone.getCapacity(), "a refused call must leave the zone's capacity as it was");
+        }
+
+        @Test
+        void GivenPlacesThatTakeTheZoneToTheCapacityLimit_WhenAddPlacesToStandingZone_ThenSaved() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+
+                service.addPlacesToStandingZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, ZONE_ID,
+                                LIMIT_STANDING_CAPACITY - zone.getCapacity());
+
+                verify(mockEventRepo).save(event);
+                assertEquals(LIMIT_STANDING_CAPACITY, zone.getCapacity());
+        }
+
+        // Growing a seated zone, or the map, one call at a time must not get past the caps a whole map is held to.
+
+        @Test
+        void GivenSeatsThatTakeTheZoneOverTheSeatLimit_WhenAddSeatsToSeatedZone_ThenRejectedAndUnchanged() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+                int seatedZoneId = service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE));
+                clearInvocations(mockEventRepo);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addSeatsToSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                                List.of(new VenueMapConfigDTO.SeatConfigDTO("B1", 10.0, 1))));
+                verify(mockEventRepo, never()).save(any());
+                assertEquals(LIMIT_SEATS_PER_ZONE, seatCountOf(seatedZoneId), "a refused call must leave the zone's seats as they were");
+        }
+
+        @Test
+        void GivenARowThatTakesTheZoneOverTheSeatLimit_WhenAddSeatRowToSeatedZone_ThenRejectedAndUnchanged() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+                int seatedZoneId = service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE - 1));
+                clearInvocations(mockEventRepo);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addSeatRowToSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                                "B", 1, 2, 0.0, 1.0, 10.0));
+                verify(mockEventRepo, never()).save(any());
+                assertEquals(LIMIT_SEATS_PER_ZONE - 1, seatCountOf(seatedZoneId));
+        }
+
+        @Test
+        void GivenSeatsThatTakeTheZoneToTheSeatLimit_WhenAddSeatsToSeatedZone_ThenSaved() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+                int seatedZoneId = service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE - 1));
+
+                service.addSeatsToSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                List.of(new VenueMapConfigDTO.SeatConfigDTO("B1", 10.0, 1)));
+
+                assertEquals(LIMIT_SEATS_PER_ZONE, seatCountOf(seatedZoneId));
+        }
+
+        @Test
+        void GivenAZoneThatTakesTheMapOverTheSeatLimit_WhenAddInventoryZone_ThenRejectedAndNothingSaved() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+                service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE));
+                clearInvocations(mockEventRepo);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                                seatedZone("Balcony", "B", LIMIT_SEATS_PER_MAP - LIMIT_SEATS_PER_ZONE + 1)));
+                verify(mockEventRepo, never()).save(any());
+                assertEquals(2, event.getVenueMap().getInventoryZones().size(), "no zone may be added");
+        }
+
+        @Test
+        void GivenSeatsThatTakeTheMapOverTheSeatLimit_WhenAddSeatsToSeatedZone_ThenRejected() {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+                service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", LIMIT_SEATS_PER_ZONE));
+                int balconyId = service.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Balcony", "B", LIMIT_SEATS_PER_MAP - LIMIT_SEATS_PER_ZONE));
+                clearInvocations(mockEventRepo);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.addSeatsToSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, balconyId,
+                                                List.of(new VenueMapConfigDTO.SeatConfigDTO("C1", 10.0, 2))));
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        private int seatCountOf(int zoneId) {
+                return event.getVenueMap().getZone(zoneId).getCapacity();
+        }
+
+        private void assertVenueRejected(VenueMapConfigDTO config) {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> service.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config),
+                                "a venue map over a size limit must be refused");
+                verify(mockEventRepo, never()).save(any());
+                assertSame(venueMap, event.getVenueMap(), "the event must keep its previous venue map");
+        }
+
+        private void assertVenueSaved(VenueMapConfigDTO config, int expectedZones) {
+                EventManagementService service = ownerCanConfigureVenueUnder(SMALL_VENUE_LIMITS);
+
+                service.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config);
+
+                verify(mockEventRepo).save(event);
+                assertEquals(expectedZones, event.getVenueMap().getInventoryZones().size(),
+                                "a venue map exactly at the limits must be stored whole");
+        }
+
+        private EventManagementService ownerCanConfigureVenueUnder(VenueLimitsProperties limits) {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                return serviceWith(Clock.systemUTC(), limits);
+        }
+
+        private VenueMapConfigDTO venueConfig(int gridRows, int gridCols, VenueMapConfigDTO.ZoneConfigDTO... zones) {
+                return new VenueMapConfigDTO(String.valueOf(EVENT_ID), "Test Venue", gridRows, gridCols, List.of(zones));
+        }
+
+        private static VenueMapConfigDTO.ZoneConfigDTO standingZone(String name, int capacity) {
+                return new VenueMapConfigDTO.ZoneConfigDTO(name, false, capacity, null, 50.0, null);
+        }
+
+        private static VenueMapConfigDTO.ZoneConfigDTO seatedZone(String name, String row, int seatCount) {
+                List<VenueMapConfigDTO.SeatConfigDTO> seats = new ArrayList<>();
+                IntStream.rangeClosed(1, seatCount).forEach(number ->
+                                seats.add(new VenueMapConfigDTO.SeatConfigDTO(row + number, number * 10.0, 0)));
+                return new VenueMapConfigDTO.ZoneConfigDTO(name, true, null, seats, 50.0, null);
+        }
 }

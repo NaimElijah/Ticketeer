@@ -23,6 +23,7 @@ import com.ticketing.system.bootstrap.config.MarketProperties;
 import com.ticketing.system.bootstrap.config.NotificationPollingProperties;
 import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.bootstrap.config.SweeperProperties;
+import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.identity.config.IdentityProperties;
@@ -46,7 +47,8 @@ class InitPropertiesValidationTest {
             ReservationHoldProperties.class, SessionProperties.class, LockoutProperties.class,
             WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class, SeedProperties.class,
             PlatformTimeProperties.class, AnalyticsProperties.class, SweeperProperties.class,
-            EventCompletionProperties.class, NotificationPollingProperties.class, IdentityProperties.class})
+            EventCompletionProperties.class, NotificationPollingProperties.class, IdentityProperties.class,
+            VenueLimitsProperties.class})
     static class InitProperties {
     }
 
