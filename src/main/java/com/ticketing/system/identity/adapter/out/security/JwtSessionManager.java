@@ -152,7 +152,7 @@ public class JwtSessionManager implements SessionManager {
         if (looksLikeJwt(credential)) {
             try {
                 return validateToken(credential);
-            } catch (Exception e) {
+            } catch (InvalidTokenException | SessionExpiredException e) {
                 return false;
             }
         }
@@ -223,18 +223,19 @@ public class JwtSessionManager implements SessionManager {
     @Override
     public void invalidate(String token) {
         if (token == null || token.isBlank()) return;
+        Claims claims;
         try {
             // Expiry-tolerant parsing: an expired token still revokes its session (idempotent
             // revocation). A token whose signature fails names no session we can trust, so it
-            // throws and revokes nothing.
-            Claims claims = parseJwtUnchecked(token);
-            String sid = claims.get(CLAIM_SID, String.class);
-            if (sid != null && !sid.isBlank()) {
-                sessions.delete(sid);
-                log.debug("session deleted");
-            }
-        } catch (Exception e) {
-            // Malformed input — nothing to invalidate. Idempotent.
+            // revokes nothing.
+            claims = parseJwtUnchecked(token);
+        } catch (JwtException | IllegalArgumentException e) {
+            return;
+        }
+        String sid = claims.get(CLAIM_SID, String.class);
+        if (sid != null && !sid.isBlank()) {
+            sessions.delete(sid);
+            log.debug("session deleted");
         }
     }
 
@@ -247,7 +248,7 @@ public class JwtSessionManager implements SessionManager {
     public Optional<Integer> tryExtractUserId(String token) {
         try {
             return Optional.of(extractUserId(token));
-        } catch (Exception e) {
+        } catch (InvalidTokenException | SessionExpiredException e) {
             return Optional.empty();
         }
     }

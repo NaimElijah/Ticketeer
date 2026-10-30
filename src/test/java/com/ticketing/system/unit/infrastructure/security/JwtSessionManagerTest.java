@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.infrastructure.security;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -19,6 +20,7 @@ import javax.crypto.SecretKey;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
@@ -831,7 +833,169 @@ class JwtSessionManagerTest {
                 "rejecting a token whose role does not match its row must not log the row's id");
     }
 
+    // ---- a session-store failure is not a bad token (#187) ----
+    // A rejected token means "no" (false, a no-op, empty), but a store that cannot answer must
+    // surface: otherwise a member is told their credential is invalid during an outage, and a logout
+    // whose delete failed leaves the session, and so the JWT, live while the user sees a sign-out.
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenValidateCredentialWithAMemberJwt_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(clock));
+        JwtSessionManager onStore = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, clock);
+        String token = onStore.generateToken(MEMBER_ID, "alice");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.validateCredential(token),
+                "an unreachable session store must not read as an invalid credential");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenInvalidate_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(clock));
+        JwtSessionManager onStore = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, clock);
+        String token = onStore.generateToken(MEMBER_ID, "alice");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.invalidate(token),
+                "a logout whose delete failed leaves the session live, so it must not look like it succeeded");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenTryExtractUserId_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(clock));
+        JwtSessionManager onStore = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, clock);
+        String token = onStore.generateToken(MEMBER_ID, "alice");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.tryExtractUserId(token),
+                "an unreachable session store must not read as a token naming no user");
+    }
+
+    @Test
+    void GivenJwtSignedWithAnotherKey_WhenValidateCredential_ThenFalse() {
+        String token = manager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(manager.validateCredential(signedWithAnotherKey(token)));
+    }
+
+    @Test
+    void GivenExpiredMemberJwt_WhenValidateCredential_ThenFalse() {
+        JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), sessions, clock);
+        String token = expiredManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(expiredManager.validateCredential(token));
+    }
+
+    @Test
+    void GivenMalformedToken_WhenInvalidate_ThenNoOpWithoutThrowing() {
+        String liveToken = manager.generateToken(MEMBER_ID, "alice");
+
+        assertDoesNotThrow(() -> manager.invalidate("not.a.jwt"));
+
+        assertTrue(manager.validateToken(liveToken), "a malformed token revokes nothing");
+    }
+
+    @Test
+    void GivenJwtSignedWithAnotherKey_WhenInvalidate_ThenNoOpWithoutThrowing() {
+        String liveToken = manager.generateToken(MEMBER_ID, "alice");
+
+        assertDoesNotThrow(() -> manager.invalidate(signedWithAnotherKey(liveToken)));
+
+        assertTrue(manager.validateToken(liveToken), "a token whose signature fails names no session to revoke");
+    }
+
+    @Test
+    void GivenJwtSignedWithAnotherKey_WhenTryExtractUserId_ThenEmpty() {
+        String token = manager.generateToken(MEMBER_ID, "alice");
+
+        assertEquals(Optional.empty(), manager.tryExtractUserId(signedWithAnotherKey(token)));
+    }
+
+    @Test
+    void GivenExpiredMemberJwt_WhenTryExtractUserId_ThenEmpty() {
+        JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), sessions, clock);
+        String token = expiredManager.generateToken(MEMBER_ID, "alice");
+
+        assertEquals(Optional.empty(), expiredManager.tryExtractUserId(token));
+    }
+
     // ---- helpers ----
+
+    private static final String OTHER_SECRET =
+        "another-secret-that-is-also-long-enough-for-hmac-sha-256-but-not-ours";
+
+    /** The same claims, so the same sid, re-signed with a key the manager does not hold. */
+    private static String signedWithAnotherKey(String token) {
+        io.jsonwebtoken.Claims claims = Jwts.parser().verifyWith(TEST_KEY).build()
+                .parseSignedClaims(token).getPayload();
+        return Jwts.builder().claims(claims)
+                .signWith(Keys.hmacShaKeyFor(OTHER_SECRET.getBytes(StandardCharsets.UTF_8)))
+                .compact();
+    }
+
+    /**
+     * A session store that works until {@link #goDown()}, after which every read and delete fails as
+     * an unreachable database does.
+     */
+    private static final class OutageSessionRepository implements SessionRepository {
+
+        private final SessionRepository live;
+        private boolean down;
+
+        OutageSessionRepository(SessionRepository live) {
+            this.live = live;
+        }
+
+        void goDown() {
+            down = true;
+        }
+
+        private void failIfDown() {
+            if (down) {
+                throw new DataAccessResourceFailureException("session store unreachable");
+            }
+        }
+
+        @Override
+        public void save(Session session) {
+            failIfDown();
+            live.save(session);
+        }
+
+        @Override
+        public Optional<Session> findById(String sessionId) {
+            failIfDown();
+            return live.findById(sessionId);
+        }
+
+        @Override
+        public boolean existsByUserId(int userId) {
+            failIfDown();
+            return live.existsByUserId(userId);
+        }
+
+        @Override
+        public void delete(String sessionId) {
+            failIfDown();
+            live.delete(sessionId);
+        }
+
+        @Override
+        public java.util.List<Session> findExpiredBefore(Instant cutoff) {
+            failIfDown();
+            return live.findExpiredBefore(cutoff);
+        }
+
+        @Override
+        public void lockForUpdate(String id) {
+            live.lockForUpdate(id);
+        }
+
+        @Override
+        public void unlock(String id) {
+            live.unlock(id);
+        }
+    }
 
     /** The sid claim, read with the test's own key so it does not depend on the manager's readers. */
     private static String sidOf(String token) {

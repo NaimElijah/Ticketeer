@@ -502,6 +502,9 @@ public class AuthenticationService {
      *
      * <p>
      * Idempotent: logout with a {@code null} / blank / already-revoked token is a no-op.
+     *
+     * @throws RuntimeException a failure of the session store, propagated unchanged: the session,
+     *     and so the token, may still be live
      */
     @Transactional
     public void logout(LogoutRequestDTO request) {
