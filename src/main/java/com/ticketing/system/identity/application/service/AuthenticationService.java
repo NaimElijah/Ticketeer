@@ -305,25 +305,29 @@ public class AuthenticationService {
      *                                     or fails the format check
      * @throws WeakPasswordException       password fails strength rules, or is longer than
      *                                     {@value #MAX_PASSWORD_UTF8_BYTES} bytes in UTF-8
-     * @throws ReservedUsernameException   username is reserved ({@link #isUsernameReserved})
+     * @throws ReservedUsernameException   username is reserved ({@link #isUsernameReserved}), padded
+     *                                     or not
+     * @throws IllegalArgumentException    username is blank, or starts or ends with whitespace
      * @throws DuplicateUsernameException  username already taken, including by a registration that
      *                                     committed after this one's check
      * @throws DuplicateEmailException     email already registered
      */
     @Transactional
     public void register(RegisterRequestDTO request) {
-        // 1. Cheap format validation first — bots / garbage fail before any IO.
+        // 1. Cheap format validation first — bots / garbage fail before any IO. A reserved name is
+        //    refused as reserved even when padded, so that check comes before the padding one.
         validateEmail(request.email());
         validatePassword(request.rawPassword());
+        if (isUsernameReserved(request.username())) {
+            throw new ReservedUsernameException(request.username());
+        }
+        validateUsername(request.username());
 
         // 2. Guest session must exist and still be a Guest.
         Session session = requireActiveGuestSession(request.guestSessionId());
 
         // 3. Uniqueness. The check gives the usual answer early; two registrations that pass it at
         //    once are settled by save, which refuses the second with DuplicateUsernameException.
-        if (isUsernameReserved(request.username())) {
-            throw new ReservedUsernameException(request.username());
-        }
         if (userRepository.existsByUsername(request.username())) {
             throw new DuplicateUsernameException(request.username());
         }
@@ -343,6 +347,17 @@ public class AuthenticationService {
         systemMetrics.record(MetricType.REGISTRATION);
 
         log.info("member registered: username={} id={}", user.getUsername(), user.getUserId());
+    }
+
+    // Accounts are looked up by the exact name (business rule 1), so a padded name would register a
+    // look-alike of another account that its owner could not tell apart on screen.
+    private static void validateUsername(String username) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username must not be blank");
+        }
+        if (!username.equals(username.trim())) {
+            throw new IllegalArgumentException("Username must not start or end with whitespace");
+        }
     }
 
     private static void validateEmail(String email) {

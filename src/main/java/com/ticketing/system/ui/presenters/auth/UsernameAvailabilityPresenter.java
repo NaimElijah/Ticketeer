@@ -52,15 +52,16 @@ public class UsernameAvailabilityPresenter {
         if (username == null || username.isBlank()) {
             return new Outcome.Empty();
         }
-        String trimmed = username.trim();
-        if (!USERNAME_PATTERN.matcher(trimmed).matches()) {
+        // Matched as typed, not trimmed: register refuses a name with surrounding whitespace, so
+        // such a name must not be called available here.
+        if (!USERNAME_PATTERN.matcher(username).matches()) {
             return new Outcome.InvalidFormat();
         }
-        if (isReserved(trimmed)) {
+        if (isReserved(username)) {
             return new Outcome.AdminReserved();
         }
         try {
-            if (memberQueryService.usernameExists(trimmed)) {
+            if (memberQueryService.usernameExists(username)) {
                 return new Outcome.Taken();
             }
             return new Outcome.Available();

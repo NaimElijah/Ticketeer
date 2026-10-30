@@ -69,6 +69,7 @@ import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
@@ -363,6 +364,49 @@ class AuthenticationServiceTest {
 
         assertEquals(refusal, thrown);
         verify(mockSessionRepo, never()).save(guest);
+    }
+
+    // ----------------------------------------------------------------------
+    // Register — the username is checked before any I/O (#187). Accounts are looked up by the exact
+    // name, so a padded name would register a look-alike of an existing account; it is refused up
+    // front, as a blank one is, with a message the user can read (ServiceErrors.userMessage shows
+    // only a DomainException, IllegalArgumentException or IllegalStateException), before any
+    // repository call or password hash.
+    // ----------------------------------------------------------------------
+
+    @Test
+    void GivenBobExists_WhenRegisterBobWithALeadingSpace_ThenRefusedBeforeAnyRepositoryCallOrHash() {
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.existsByUsername("bob")).thenReturn(true);
+        when(mockUserRepo.nextId()).thenReturn(42);
+
+        RuntimeException refusal = assertThrows(RuntimeException.class,
+                () -> service.register(new RegisterRequestDTO(" bob", "bob2@example.com", "Password1", "guest-1", 56)),
+                "' bob' would register a look-alike of the existing account bob");
+
+        assertUserReadable(refusal);
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @Test
+    void GivenBlankUsername_WhenRegister_ThenRefusedBeforeAnyRepositoryCallOrHash() {
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.nextId()).thenReturn(42);
+
+        RuntimeException refusal = assertThrows(RuntimeException.class,
+                () -> service.register(new RegisterRequestDTO("   ", "blank@example.com", "Password1", "guest-1", 56)));
+
+        assertUserReadable(refusal);
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    private static void assertUserReadable(RuntimeException refusal) {
+        assertTrue(refusal instanceof DomainException
+                        || refusal instanceof IllegalArgumentException
+                        || refusal instanceof IllegalStateException,
+                "the refusal must be one whose message reaches the user, but was " + refusal);
     }
 
     // ----------------------------------------------------------------------
