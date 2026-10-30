@@ -525,9 +525,10 @@ public class CheckoutService {
     }
 
     // Liveness check — the guest session must still be valid. Runs after the idempotency short-circuit so
-    // a completed purchase can be replayed without a live session.
+    // a completed purchase can be replayed without a live session. Only a live guest row's raw id passes;
+    // a member's token or session id is no guest credential (ADR-012, decision 4).
     private void validateGuestSessionLive(String guestSessionId) {
-        if (!sessionManager.validateCredential(guestSessionId)) {
+        if (!sessionManager.validateGuestSession(guestSessionId)) {
             throw new SessionExpiredException();
         }
     }

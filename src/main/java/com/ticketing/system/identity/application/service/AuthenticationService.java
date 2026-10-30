@@ -273,12 +273,15 @@ public class AuthenticationService {
 
     /**
      * Explicitly ends a Guest session. Idempotent — unknown / null / blank
-     * input is a no-op. Attached cart cleanup is the sweeper's
+     * input is a no-op, and so is the id of a Member or Admin session, which only
+     * logout ends (ADR-012). Attached cart cleanup is the sweeper's
      * responsibility (Phase 5).
      */
     @Transactional
     public void endGuestSession(String sessionId) {
         if (sessionId == null || sessionId.isBlank())
+            return;
+        if (sessionRepository.findById(sessionId).filter(Session::isGuest).isEmpty())
             return;
         sessionRepository.delete(sessionId);
         systemMetrics.record(MetricType.VISITOR_EXIT);

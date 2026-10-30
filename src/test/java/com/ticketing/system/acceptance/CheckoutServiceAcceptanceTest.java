@@ -965,6 +965,7 @@ public class CheckoutServiceAcceptanceTest {
         String guestSessionId = "guest-sess";
         String guestEmail = "guest@test.com";
         when(sessionManager.validateCredential(guestSessionId)).thenReturn(true);
+        when(sessionManager.validateGuestSession(guestSessionId)).thenReturn(true);
         validPaymentAndIssuance(1);
 
         MemoryActiveOrderRepository realRepo = new MemoryActiveOrderRepository();

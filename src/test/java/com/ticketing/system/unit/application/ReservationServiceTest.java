@@ -105,8 +105,9 @@ public class ReservationServiceTest {
 
         marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
-        // reserveForGuest / removeForGuest accept only a live guest session (#185).
+        // Every guest path accepts only the raw id of a live guest session (#185, ADR-012 decision 4).
         when(sessionManager.validateCredential(startsWith(LIVE_GUEST_SESSION_PREFIX))).thenReturn(true);
+        when(sessionManager.validateGuestSession(startsWith(LIVE_GUEST_SESSION_PREFIX))).thenReturn(true);
 
         // Catalog now owns inventory mutation behind InventoryCommandPort. We wire the REAL
         // InventoryService onto the SAME mock event store (and a mock company port for policy), so every
@@ -1235,6 +1236,7 @@ public class ReservationServiceTest {
 
         reservationService.reserveForGuest(LOGGED_GUEST_SID, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the service's logger");
         assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
                 "a guest reservation must not log the guest's session id");
     }
@@ -1248,6 +1250,7 @@ public class ReservationServiceTest {
         assertThrows(IllegalStateException.class, () -> reservationService.reserveForGuest(LOGGED_GUEST_SID,
                 EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the service's logger");
         assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
                 "a rejected guest reservation must not log the guest's session id");
     }
@@ -1259,6 +1262,7 @@ public class ReservationServiceTest {
 
         reservationService.abandonActiveOrder(BuyerContextDTO.guest(LOGGED_GUEST_SID));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the service's logger");
         assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
                 "abandoning a guest's missing cart must not log the guest's session id");
     }
@@ -1271,6 +1275,7 @@ public class ReservationServiceTest {
 
         reservationService.abandonActiveOrder(BuyerContextDTO.guest(LOGGED_GUEST_SID));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the service's logger");
         assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
                 "abandoning a guest's cart must not log the guest's session id");
     }
@@ -1285,6 +1290,7 @@ public class ReservationServiceTest {
 
         reservationService.renewReservationsForGuestCheckout(LOGGED_GUEST_SID);
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the service's logger");
         assertEquals(List.of(), logs.eventsContaining(LOGGED_GUEST_SID),
                 "renewing a guest's holds must not log the guest's session id");
     }

@@ -392,14 +392,19 @@ public class ReservationService {
     }
 
     // A guest's credential is the id of a live guest session, as at checkout: a session id that was
-    // never issued, has expired, or belongs to a member or admin session opens no cart.
+    // never issued, has expired, or belongs to a member or admin session opens no cart, and neither
+    // does a token (ADR-012, decision 4).
     private BuyerContextDTO authenticateGuest(String sessionId) {
         validateSessionId(sessionId);
-        if (!iSessionManager.validateCredential(sessionId)) {
+        requireLiveGuestSession(sessionId);
+        return BuyerContextDTO.guest(sessionId);
+    }
+
+    private void requireLiveGuestSession(String sessionId) {
+        if (!iSessionManager.validateGuestSession(sessionId)) {
             log.warn("Request rejected: guest session is not live");
             throw new SessionExpiredException();
         }
-        return BuyerContextDTO.guest(sessionId);
     }
 
     private int validateTokenAndGetUserId(String token) {
@@ -650,8 +655,21 @@ public class ReservationService {
                 enrichedLines);
     }
 
+    /**
+     * The guest's active order, with event names on its lines.
+     *
+     * @param sessionId the raw id of the guest's live session
+     * @return the order, or {@code null} when the guest has none
+     * @throws SessionExpiredException if {@code sessionId} is not a live guest session's id: unknown,
+     *     expired, a member's or admin's session, or a token (ADR-012, decision 4)
+     */
     @Transactional(readOnly = true)
     public ActiveOrderDTO restoreActiveOrderForGuest(String sessionId) {
+        requireLiveGuestSession(sessionId);
+        return guestOrderWithEventNames(sessionId);
+    }
+
+    private ActiveOrderDTO guestOrderWithEventNames(String sessionId) {
         return activeOrderRepository.getBySessionId(sessionId)
                 .map(order -> {
                     log.info("Active order found for guest, restoring ActiveOrderDTO orderKey={}", order.getOrderKey());
@@ -707,8 +725,15 @@ public class ReservationService {
         return restoreActiveOrder(userId);
     }
 
+    /**
+     * The guest counterpart of {@link #renewReservationsForMemberCheckout}.
+     *
+     * @throws SessionExpiredException if {@code sessionId} is not a live guest session's id; no hold
+     *     is renewed then
+     */
     @Transactional
     public ActiveOrderDTO renewReservationsForGuestCheckout(String sessionId) {
+        requireLiveGuestSession(sessionId);
         String orderLockKey = "sess:" + sessionId;
         activeOrderRepository.lockForUpdate(orderLockKey);
         try {
@@ -723,7 +748,7 @@ public class ReservationService {
         } finally {
             activeOrderRepository.unlock(orderLockKey);
         }
-        return restoreActiveOrderForGuest(sessionId);
+        return guestOrderWithEventNames(sessionId);
     }
 
     // Helper method to abandon the active order for a user (member or guest) - this is used by the frontend when a user explicitly clicks "Abandon Cart" or when they log out, to clear their active order and release any reserved inventory back to the events. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we release any reserved inventory back to the events and then delete the active order. If no active order is found, we simply return without doing anything. This ensures that we do not leave any reserved inventory hanging around for abandoned carts, which keeps our inventory accurate and allows other users to purchase those tickets if they are still available.
@@ -849,8 +874,10 @@ public class ReservationService {
                 return restoreActiveOrder(userId);
             }
         } catch (Exception ignored) {
-            // not a JWT token — fall through to guest path
+            // not a live member token — fall through to the guest path
         }
+        // Only a live guest session's id passes here: a member's raw session id or a dead token gets
+        // SessionExpiredException, never the cart bound to that id (ADR-012, decision 4).
         return restoreActiveOrderForGuest(userOrSessionId);
     }
 

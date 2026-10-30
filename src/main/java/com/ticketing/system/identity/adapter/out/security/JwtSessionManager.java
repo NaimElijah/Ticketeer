@@ -156,10 +156,22 @@ public class JwtSessionManager implements SessionManager {
                 return false;
             }
         }
-        return sessions.findById(credential)
+        return isLiveGuestRow(credential);
+    }
+
+    private boolean isLiveGuestRow(String sessionId) {
+        return sessions.findById(sessionId)
                 .filter(Session::isGuest)
                 .filter(s -> !s.isExpiredAt(clock.instant()))
                 .isPresent();
+    }
+
+    // A token is never a guest row's id (row ids are UUIDs), so the lookup alone refuses one.
+    @Override
+    public boolean validateGuestSession(String sessionId) {
+        if (sessionId == null || sessionId.isBlank())
+            return false;
+        return isLiveGuestRow(sessionId);
     }
 
     /** Cheap structural check: JWTs are {@code header.payload.signature} (two dots). */

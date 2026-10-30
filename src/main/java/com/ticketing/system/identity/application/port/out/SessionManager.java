@@ -93,6 +93,18 @@ public interface SessionManager {
     boolean validateCredential(String credential);
 
     /**
+     * Validates a guest credential: the raw id of a live, unexpired Guest session row, and nothing
+     * else (ADR-012, decision 4). Every guest path of sales checks it, where
+     * {@link #validateCredential} would also accept a member token.
+     *
+     * @param sessionId the raw session id the guest holds
+     * @return {@code true} only for a live Guest row's id; {@code false} for {@code null} / blank, an
+     *     unknown or expired id, the raw id of a Member or Admin session, and any token. Never throws
+     *     for these
+     */
+    boolean validateGuestSession(String sessionId);
+
+    /**
      * Returns the member id a member token names.
      *
      * @throws com.ticketing.system.shared.exception.InvalidTokenException

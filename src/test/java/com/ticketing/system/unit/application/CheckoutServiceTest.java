@@ -2303,10 +2303,12 @@ private AtomicBoolean trackReceiptSave() {
 
     private void givenValidGuestSession() {
         when(mockiSessionManager.validateCredential(VALID_GUEST_SID)).thenReturn(true);
+        when(mockiSessionManager.validateGuestSession(VALID_GUEST_SID)).thenReturn(true);
     }
 
     private void givenInvalidGuestSession() {
         when(mockiSessionManager.validateCredential(INVALID_GUEST_SID)).thenReturn(false);
+        when(mockiSessionManager.validateGuestSession(INVALID_GUEST_SID)).thenReturn(false);
     }
 
     private void givenGuestOrder(ActiveOrder order) {

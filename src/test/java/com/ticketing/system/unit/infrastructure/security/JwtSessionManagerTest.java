@@ -533,16 +533,15 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void GivenJwtWhoseSessionRowHasExpired_WhenValidate_ThenRejected() {
-        // The row expired before the token's own exp claim, so only the row can reject it.
+    void GivenJwtWhoseSessionRowHasExpired_WhenValidate_ThenSessionExpired() {
+        // The row expired before the token's own exp claim, so only the row can reject it, and it does
+        // so as an expired exp claim would (ADR-012, decision 2).
         boundSessions.save(new Session(MEMBER_SID, MEMBER_ID, T0.minus(Duration.ofHours(2)),
                 T0.minus(Duration.ofHours(1))));
         String token = signedToken(MEMBER_ID, MEMBER_SID, ROLE_MEMBER);
 
-        RuntimeException rejection = assertThrows(RuntimeException.class, () -> boundManager.validateToken(token),
-                "a token whose session row has expired must not validate");
-        assertTrue(rejection instanceof SessionExpiredException || rejection instanceof InvalidTokenException,
-                "expected SessionExpiredException or InvalidTokenException, got " + rejection);
+        assertThrows(SessionExpiredException.class, () -> boundManager.validateToken(token),
+                "a token whose session row has expired must be rejected as expired");
     }
 
     @Test
@@ -683,6 +682,62 @@ class JwtSessionManagerTest {
                 "a guest row is expired at its expiresAt instant");
     }
 
+    // ---- validateGuestSession: the guest paths' credential is a live guest row's raw id only ----
+    // (ADR-012, decision 4). Unlike validateCredential it accepts no token, a member's included.
+
+    @Test
+    void GivenLiveGuestRowOnInjectedClock_WhenValidateGuestSession_ThenTrue() {
+        boundSessions.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+
+        assertTrue(boundManager.validateGuestSession(GUEST_SID));
+    }
+
+    @Test
+    void GivenGuestRowExpiredOnInjectedClock_WhenValidateGuestSession_ThenFalse() {
+        boundSessions.save(new Session(GUEST_SID, null, T0.minus(Duration.ofMinutes(30)), T0));
+
+        assertFalse(boundManager.validateGuestSession(GUEST_SID),
+                "a guest row is expired at its expiresAt instant");
+    }
+
+    @Test
+    void GivenLiveMembersToken_WhenValidateGuestSession_ThenFalse() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(boundManager.validateGuestSession(memberToken), "a member token is not a guest session id");
+    }
+
+    @Test
+    void GivenLiveMembersRawSessionId_WhenValidateGuestSession_ThenFalse() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(boundManager.validateGuestSession(sidOf(memberToken)),
+                "a member session's raw id is not a guest session id");
+    }
+
+    @Test
+    void GivenLiveAdminsRawSessionId_WhenValidateGuestSession_ThenFalse() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertFalse(boundManager.validateGuestSession(sidOf(adminToken)),
+                "an admin session's raw id is not a guest session id");
+    }
+
+    @Test
+    void GivenLiveAdminsToken_WhenValidateGuestSession_ThenFalse() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertFalse(boundManager.validateGuestSession(adminToken), "an admin token is not a guest session id");
+    }
+
+    @Test
+    void GivenUnknownNullOrBlankId_WhenValidateGuestSession_ThenFalseWithoutThrowing() {
+        assertFalse(boundManager.validateGuestSession("ghost-sid"));
+        assertFalse(boundManager.validateGuestSession(null));
+        assertFalse(boundManager.validateGuestSession(""));
+        assertFalse(boundManager.validateGuestSession("   "));
+    }
+
     // ---- session ids never reach the log (#185) ----
     // A member session keeps the id its guest session had, and a guest's raw id is its credential,
     // so neither revoking nor rejecting a token may log the id it names, at any level.
@@ -704,6 +759,7 @@ class JwtSessionManagerTest {
 
         boundManager.invalidate(token);
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid), "revoking a session must not log its id");
     }
 
@@ -716,6 +772,7 @@ class JwtSessionManagerTest {
 
         assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid), "rejecting a revoked token must not log its id");
     }
 
@@ -727,6 +784,7 @@ class JwtSessionManagerTest {
 
         assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(adminToken));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid),
                 "rejecting a token of the other session kind must not log its id");
     }
@@ -739,6 +797,7 @@ class JwtSessionManagerTest {
 
         assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(GUEST_SID),
                 "the guest session id is the live guest's credential and must not be logged");
     }
@@ -752,6 +811,7 @@ class JwtSessionManagerTest {
 
         assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid),
                 "rejecting a token bound to another user's row must not log the row's id");
     }
@@ -765,6 +825,7 @@ class JwtSessionManagerTest {
 
         assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
+        assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid),
                 "rejecting a token whose role does not match its row must not log the row's id");
     }
