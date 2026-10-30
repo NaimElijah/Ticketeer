@@ -5,11 +5,14 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code AdminDashboardView} (#279). Vaadin-free POJO that loads the platform
- * headline counters from {@link SystemAnalyticsService#adminOverview()} and returns a sealed
- * outcome the view switches on. Mirrors {@code GlobalHistoryPresenter} / {@code OwnerDashboardPresenter}.
+ * headline counters from {@link SystemAnalyticsService#adminOverview(String)}, with the signed-in
+ * admin's token, and returns a sealed outcome the view switches on. Mirrors
+ * {@code GlobalHistoryPresenter} / {@code OwnerDashboardPresenter}.
  */
 @Component
 public class AdminDashboardPresenter {
@@ -24,9 +27,9 @@ public class AdminDashboardPresenter {
     /** Loads the admin landing KPIs. */
     public Outcome load() {
         try {
-            return new Outcome.Success(systemAnalyticsService.adminOverview());
+            return new Outcome.Success(systemAnalyticsService.adminOverview(AuthSession.token()));
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

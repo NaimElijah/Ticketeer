@@ -1,7 +1,10 @@
 package com.ticketing.system.ui.security;
 
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.FreshGuestSession;
+import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.MyCompaniesView;
@@ -19,7 +22,13 @@ import java.util.Set;
 /**
  * Global navigation guard for the V2 placeholder UI.
  *
- * <p>Two-step check on every navigation:
+ * <p>Before either gate, the stored sign-in is checked for liveness, since both gates read only the
+ * session's stored flags: a member token through {@link SessionIdentity#isMember()}, an admin token
+ * through {@link AuthenticationService#liveAdminId}. A token that expired or was revoked signs the
+ * visitor out ({@link FreshGuestSession#restore()}), so a dead admin token keeps no admin
+ * capabilities and a dead member token renders no member page.
+ *
+ * <p>Then a two-step check on every navigation:
  * <ol>
  *   <li><b>Auth gate</b> — targets not annotated {@link AnonymousAllowed}
  *       require a signed-in user. Signed-out users are forwarded to
@@ -78,6 +87,22 @@ public class AuthBootstrap implements VaadinServiceInitListener {
     /** Session attribute holding a permission-denied message to flash after the redirect lands. */
     private static final String PENDING_DENIAL_KEY = "authBootstrap.pendingDenialToast";
 
+    private final SessionIdentity sessionIdentity;
+    private final AuthenticationService authenticationService;
+    private final FreshGuestSession freshGuestSession;
+
+    /**
+     * @param sessionIdentity       resolves a stored member token, signing the visitor out when it is dead
+     * @param authenticationService answers whether a stored admin token is still live
+     * @param freshGuestSession     signs out a visitor whose admin token is dead
+     */
+    public AuthBootstrap(SessionIdentity sessionIdentity, AuthenticationService authenticationService,
+                         FreshGuestSession freshGuestSession) {
+        this.sessionIdentity = sessionIdentity;
+        this.authenticationService = authenticationService;
+        this.freshGuestSession = freshGuestSession;
+    }
+
     @Override
     public void serviceInit(ServiceInitEvent event) {
         event.getSource().addUIInitListener(uiInit -> {
@@ -88,6 +113,7 @@ public class AuthBootstrap implements VaadinServiceInitListener {
     }
 
     private void guard(BeforeEnterEvent event) {
+        signOutIfTheStoredTokenIsDead();
         Class<?> target = event.getNavigationTarget();
         RequireCapability cap = target.getAnnotation(RequireCapability.class);
 
@@ -120,6 +146,21 @@ public class AuthBootstrap implements VaadinServiceInitListener {
                 }
             }
             event.forwardTo(fallbackFor(cap.value()));
+        }
+    }
+
+    private void signOutIfTheStoredTokenIsDead() {
+        String token = AuthSession.token();
+        if (token == null) {
+            return;
+        }
+        if (AuthSession.isAdmin()) {
+            if (authenticationService.liveAdminId(token).isEmpty()) {
+                freshGuestSession.restore();
+            }
+        } else {
+            // Restores a fresh guest session itself when the member token is dead.
+            sessionIdentity.isMember();
         }
     }
 

@@ -16,6 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.governance.config.AnalyticsProperties;
+import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
@@ -37,13 +40,16 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 /**
  * Unit tests for {@link SystemAnalyticsService} (UC-46 / #43, #279). The metrics
  * port and order-receipt repository are stubbed so the rate / throughput math
- * and the purchase derivation are verified in isolation.
+ * and the purchase derivation are verified in isolation. The admin gate is stubbed to admit
+ * {@code ADMIN_TOKEN}; {@code SystemAnalyticsServiceAdminGateTest} covers the gate itself.
  */
 class SystemAnalyticsServiceTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T12:00:00Z");
     private static final int WINDOW = 5;
     private static final int REFRESH_INTERVAL_MS = 5000;
+    private static final String ADMIN_TOKEN = "admin-token";
+    private static final int ADMIN_ID = 1;
 
     private ISystemMetrics metrics;
     private OrderReceiptRepository orderReceiptRepository;
@@ -59,9 +65,15 @@ class SystemAnalyticsServiceTest {
         companyRepository = mock(ProductionCompanyRepository.class);
         eventRepository = mock(EventRepository.class);
         conversationRepository = mock(ConversationRepository.class);
+        SessionManager sessionManager = mock(SessionManager.class);
+        when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
+        when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
+        AdminRepository adminRepository = mock(AdminRepository.class);
+        when(adminRepository.findById(ADMIN_ID)).thenReturn(new Admin(ADMIN_ID, "admin", "hash", true));
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
         service = new SystemAnalyticsService(metrics, orderReceiptRepository, companyRepository,
-                eventRepository, conversationRepository, clock, new AnalyticsProperties(WINDOW, REFRESH_INTERVAL_MS));
+                eventRepository, conversationRepository, sessionManager, adminRepository, clock,
+                new AnalyticsProperties(WINDOW, REFRESH_INTERVAL_MS));
     }
 
     @Test
@@ -86,7 +98,7 @@ class SystemAnalyticsServiceTest {
         OrderReceipt thirtyMinAgo = receiptAt(base.minusMinutes(30));
         when(orderReceiptRepository.findGlobal(any())).thenReturn(List.of(now, twoMinAgo, thirtyMinAgo));
 
-        SystemAnalyticsDTO dto = service.computeAnalytics();
+        SystemAnalyticsDTO dto = service.computeAnalytics(ADMIN_TOKEN);
 
         assertEquals(70L, dto.activeVisitors());
         assertEquals(2.0, dto.visitorEntryRatePerMin(), 1e-9);   // 10 / 5
@@ -108,7 +120,7 @@ class SystemAnalyticsServiceTest {
         when(metrics.total(MetricType.VISITOR_EXIT)).thenReturn(8L);
         when(orderReceiptRepository.findGlobal(any())).thenReturn(List.of());
 
-        SystemAnalyticsDTO dto = service.computeAnalytics();
+        SystemAnalyticsDTO dto = service.computeAnalytics(ADMIN_TOKEN);
 
         assertEquals(0L, dto.activeVisitors());
         assertEquals(0.0, dto.purchaseRatePerMin(), 1e-9);
@@ -144,7 +156,7 @@ class SystemAnalyticsServiceTest {
         when(orderReceiptRepository.findGlobal(any()))
                 .thenReturn(List.of(inWindow, alsoInWindow, refunded, tooOld));
 
-        AdminOverviewDTO dto = service.adminOverview();
+        AdminOverviewDTO dto = service.adminOverview(ADMIN_TOKEN);
 
         assertEquals(2, dto.activeCompanies());
         assertEquals(3, dto.liveEvents());
@@ -164,7 +176,7 @@ class SystemAnalyticsServiceTest {
         order.completeEventRefund(1, TransactionRecord.refund("refund-1", "test-gateway", 100.0, "ILS", boughtAt));
         when(orderReceiptRepository.findGlobal(any())).thenReturn(List.of(order));
 
-        AdminOverviewDTO dto = service.adminOverview();
+        AdminOverviewDTO dto = service.adminOverview(ADMIN_TOKEN);
 
         assertEquals(50.0, dto.revenue30d(), 1e-9);
     }

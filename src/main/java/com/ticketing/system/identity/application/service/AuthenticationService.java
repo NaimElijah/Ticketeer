@@ -205,9 +205,58 @@ public class AuthenticationService {
         }
     }
 
+    /**
+     * The admin counterpart of {@link #liveMemberId}: answers "is this stored admin token still live,
+     * and whose is it?" without throwing for the expected no. It applies the admin gate's checks: the
+     * admin readers ({@link SessionManager#validateAdminToken}, {@link SessionManager#extractAdminId})
+     * and the admin row's existence (ADR-012), so a member token names no admin, even one carrying an
+     * admin's id.
+     *
+     * @param token a signed-in admin's JWT
+     * @return the token's admin id while it validates and the admin exists; empty when it has expired,
+     *     is malformed, carries a bad signature, has been revoked, is not an admin token, names an admin
+     *     who no longer exists, or is {@code null}/blank
+     * @throws RuntimeException any other validation failure (e.g. the session store is unreachable),
+     *     propagated unchanged
+     */
+    @Transactional(readOnly = true)
+    public OptionalInt liveAdminId(String token) {
+        try {
+            if (!sessionManager.validateAdminToken(token)) {
+                return OptionalInt.empty();
+            }
+            int adminId = sessionManager.extractAdminId(token);
+            return adminRepository.findById(adminId) == null ? OptionalInt.empty() : OptionalInt.of(adminId);
+        } catch (SessionExpiredException | InvalidTokenException e) {
+            return OptionalInt.empty();
+        }
+    }
+
     // ------------------------------------------------------------------
     // Guest session lifecycle
     // ------------------------------------------------------------------
+
+    /**
+     * Whether {@code sessionId} names a live guest session: a guest row (not a member's or an admin's,
+     * ADR-012) that has not reached its expiry. Read-only; the UI asks it before using its stored
+     * guest session id, and mints a new one on {@code false}.
+     *
+     * @param sessionId the raw guest session id the visitor holds
+     * @return {@code false} for {@code null}/blank, an unknown id, a member or admin row, and a row at
+     *     or past its expiry; never throws for these
+     * @throws RuntimeException a failure of the session store, propagated unchanged
+     */
+    @Transactional(readOnly = true)
+    public boolean isLiveGuestSession(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return false;
+        }
+        Instant now = clock.instant();
+        return sessionRepository.findById(sessionId)
+                .filter(Session::isGuest)
+                .filter(session -> !session.isExpiredAt(now))
+                .isPresent();
+    }
 
     /**
      * Mints a new Guest session. Entry point for any visitor before

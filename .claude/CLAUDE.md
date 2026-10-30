@@ -181,8 +181,8 @@ non-2xx status (`WsepHttpStatusException`) or a body over `MAX_RESPONSE_BODY_BYT
 
 - ~40 thin `@Route` views in `ui/views`; logic lives in matching `ui/presenters`; shared widgets in `ui/components`. Calculations don't belong in views (revenue moved to reporting's `SalesSummaryCalculator`).
 - Vaadin scans only `com.ticketing.system.ui` (`vaadin.allowed-packages`); a view outside it is silently never routed.
-- `ui/security/AuthBootstrap` (a `VaadinServiceInitListener`) is the global guard: an auth gate (routes without `@AnonymousAllowed` need a session) plus a capability gate (`@RequireCapability` + `Capability`).
-- Session state lives in `ui/session` (`AuthSession`, `GuestSession`, `OrderSession`, …). Dev-only seeding UI lives in `ui/dev` (`DevUserSeeder`, `DevPanel`).
+- `ui/security/AuthBootstrap` (a `VaadinServiceInitListener`) is the global guard. It first checks that the stored token is live (a member's through `SessionIdentity.isMember()`, an admin's through `AuthenticationService.liveAdminId`) and signs out a visitor whose token is dead (`FreshGuestSession.restore()`). Then it runs an auth gate (routes without `@AnonymousAllowed` need a session) and a capability gate (`@RequireCapability` + `Capability`). The gates only steer navigation; the application services still validate the token on every call.
+- Session state lives in `ui/session` (`AuthSession`, `GuestSession`, `OrderSession`, …). Use `SessionIdentity` for "member or guest, and which credential": it also replaces a dead guest session id (`FreshGuestSession.renewGuest()`). Dev-only seeding UI lives in `ui/dev` (`DevUserSeeder`, `DevPanel`).
 - A presenter that shows a caught `RuntimeException` passes it through `ServiceErrors.userMessage`, never `e.getMessage()`: only a `DomainException`, `IllegalArgumentException` or `IllegalStateException` message reaches the user; anything else shows generic text and is logged at ERROR. So a business rule that a user should read must throw one of those, not a plain `RuntimeException`.
 
 ## Profiles

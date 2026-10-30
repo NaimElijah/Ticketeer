@@ -120,6 +120,7 @@ class SessionIdentityTest {
     @Test
     void GivenNoStoredToken_WhenAsked_ThenAGuestOnItsOwnSessionWithoutARestore() {
         GuestSession.setSessionId(GUEST_SESSION_ID);
+        givenLiveGuestSession(GUEST_SESSION_ID);
         SessionIdentity identity = identity();
 
         assertFalse(identity.isMember());
@@ -176,7 +177,68 @@ class SessionIdentityTest {
         assertEquals(ADMIN_TOKEN, AuthSession.token(), "the admin's sign-in must survive member-identity checks");
     }
 
+    // ---- a guest session id that is no longer live -------------------------------------------
+    // A guest session expires after its idle timeout and nothing extends it; a new one used to be
+    // minted only when a Vaadin session started. A long-open tab, or a reload, would keep the dead
+    // id and could no longer browse, reserve, register or log in. Answering with the guest session
+    // id therefore pins a fresh guest session first when the stored one is dead.
+
+    private static final String DEAD_GUEST_SESSION_ID = "dead-guest-sid";
+
+    @Test
+    void GivenDeadGuestSessionId_WhenCredential_ThenAFreshGuestSessionIsPinnedAndReturned() {
+        GuestSession.setSessionId(DEAD_GUEST_SESSION_ID);
+        when(authenticationService.isLiveGuestSession(DEAD_GUEST_SESSION_ID)).thenReturn(false);
+        SessionIdentity identity = identity();
+
+        assertEquals(FRESH_GUEST_SESSION_ID, identity.credential(),
+                "the credential must be a fresh guest session, not the dead " + DEAD_GUEST_SESSION_ID);
+        assertEquals(FRESH_GUEST_SESSION_ID, GuestSession.sessionId(),
+                "the fresh guest session must be pinned, so later calls use it too");
+    }
+
+    @Test
+    void GivenAdminWithADeadGuestSession_WhenGuestSessionId_ThenAFreshGuestSessionAndTheAdminStaysSignedIn() {
+        storeSignedInAdmin();
+        GuestSession.setSessionId(DEAD_GUEST_SESSION_ID);
+        when(authenticationService.isLiveGuestSession(DEAD_GUEST_SESSION_ID)).thenReturn(false);
+        SessionIdentity identity = identity();
+
+        assertEquals(FRESH_GUEST_SESSION_ID, identity.guestSessionId(),
+                "an admin on the storefront is a guest, and needs a live guest session too");
+        assertEquals(ADMIN_TOKEN, AuthSession.token(), "replacing the guest session must not sign the admin out");
+        assertTrue(AuthSession.isAdmin(), "the admin must still be an admin");
+        verify(freshGuestSession, never()).restore();
+    }
+
+    @Test
+    void GivenLiveGuestSession_WhenCredential_ThenNoNewSession() {
+        GuestSession.setSessionId(GUEST_SESSION_ID);
+        givenLiveGuestSession(GUEST_SESSION_ID);
+        SessionIdentity identity = identity();
+
+        assertEquals(GUEST_SESSION_ID, identity.credential());
+        assertEquals(GUEST_SESSION_ID, GuestSession.sessionId());
+        verify(authenticationService, never()).startGuestSession();
+    }
+
+    @Test
+    void GivenALiveMember_WhenGuestSessionId_ThenThePromotedSessionAndNoNewGuestSession() {
+        // A live member's session was promoted from guest to member at login, so it is not a live
+        // guest session; that must not be read as "the guest session died".
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
+        SessionIdentity identity = identity();
+
+        assertEquals(MEMBER_SESSION_ID, identity.guestSessionId());
+        verify(authenticationService, never()).startGuestSession();
+    }
+
     // ---- arrangement --------------------------------------------------------------------------
+
+    private void givenLiveGuestSession(String sessionId) {
+        when(authenticationService.isLiveGuestSession(sessionId)).thenReturn(true);
+    }
 
     // The one place that knows SessionIdentity's dependencies, so a change to them touches only this.
     private SessionIdentity identity() {
