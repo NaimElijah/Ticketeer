@@ -65,12 +65,16 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 DDD + hexagonal modular monolith. Each top-level package under `com.ticketing.system` is a Spring
 Modulith `@ApplicationModule` (all `Type.OPEN`; Modulith validates the model, ArchUnit is the gate).
 Cross-context calls should go through ports and events, and new code must. Existing code still
-reaches into other contexts:
+reaches into other contexts, mainly (#184's triage has the full table):
 - identity has no inbound port, so its `SessionManager`, `UserRepository` and `User` are used
   everywhere;
 - catalog, messaging and reporting call organization's `CompanyMembershipService`;
-- catalog, messaging, sales' `OrderReceiptMapper` and governance read `ProductionCompany`, through
-  organization's repository port or as the entity;
+- catalog, messaging, reporting, sales' `OrderReceiptMapper` and governance read `ProductionCompany`,
+  through organization's repository port or as the entity;
+- governance and reporting read sales', catalog's and messaging's repository ports and entities
+  directly; governance also calls sales' `PaymentGateway`/`TicketIssuer` and writes identity's
+  `Admin` (`AdminRepository`, `PasswordHasher`); reporting uses catalog's `CompanyRatings`;
+- messaging uses identity's `AdminRepository` and `Admin`;
 - sales takes catalog's `EventRepository` for the buyer lock.
 
 #54 replaces these, #53 the notifications call, and #55 closes the modules.
