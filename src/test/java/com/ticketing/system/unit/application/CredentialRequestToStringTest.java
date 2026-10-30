@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -9,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
+import com.ticketing.system.sales.application.event.OrderExpiredEvent;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
@@ -17,6 +19,7 @@ import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.RefreshTokenRequestDTO;
 
 /**
@@ -129,6 +132,39 @@ class CredentialRequestToStringTest {
                 "RefreshTokenRequestDTO.toString() exposed the refresh token: " + rendered);
     }
 
+    // The hand-written toString methods above drop only the credential; the other fields still show,
+    // so a log line naming one of these records stays useful.
+
+    @Test
+    void GivenAuthToken_WhenToString_ThenTheUserIdIsStillShown() {
+        AuthTokenDTO token = new AuthTokenDTO(TOKEN, 1_900_000_000_000L, 7, "alice", false);
+
+        String rendered = token.toString();
+
+        assertTrue(rendered.contains("userId=7"), "AuthTokenDTO.toString() dropped the user id: " + rendered);
+    }
+
+    @Test
+    void GivenGuestActiveOrder_WhenToString_ThenTheRemainingSecondsAreStillShown() {
+        ActiveOrderDTO order = new ActiveOrderDTO(null, GUEST_SESSION_ID,
+                LocalDateTime.of(2026, 1, 1, 12, 0), 600, 0.0, List.of());
+
+        String rendered = order.toString();
+
+        assertTrue(rendered.contains("remainingSecondsBeforeExpiry=600"),
+                "ActiveOrderDTO.toString() dropped the remaining seconds: " + rendered);
+    }
+
+    @Test
+    void GivenMarketControlRequest_WhenToString_ThenTheActionIsStillShown() {
+        MarketControlRequestDTO request = new MarketControlRequestDTO("CLOSE", "maintenance", TOKEN);
+
+        String rendered = request.toString();
+
+        assertTrue(rendered.contains("action=CLOSE"),
+                "MarketControlRequestDTO.toString() dropped the action: " + rendered);
+    }
+
     // #187: the masked card number and CVV are already left out; the holder name is personal data,
     // and the expiry completes what a leaked card number would need.
 
@@ -151,6 +187,29 @@ class CredentialRequestToStringTest {
                 "CardDetailsDTO.toString() exposed the expiry year: " + rendered);
         assertFalse(rendered.contains(String.valueOf(EXPIRY_MONTH)),
                 "CardDetailsDTO.toString() exposed the expiry month: " + rendered);
+    }
+
+    // #187: a guest's charge carries the guest's email, which is personal data.
+
+    @Test
+    void GivenGuestPaymentRequest_WhenToString_ThenTheBuyerEmailIsAbsent() {
+        PaymentRequestDTO request = new PaymentRequestDTO("idem-under-test", 100.0, "USD", cardDetails(), null, EMAIL);
+
+        String rendered = request.toString();
+
+        assertFalse(rendered.contains(EMAIL), "PaymentRequestDTO.toString() exposed the buyer email: " + rendered);
+    }
+
+    // #187: the guest session id is the guest's credential.
+
+    @Test
+    void GivenExpiredGuestOrder_WhenOrderExpiredEventToString_ThenTheSessionIdIsAbsent() {
+        OrderExpiredEvent expired = new OrderExpiredEvent(0, GUEST_SESSION_ID);
+
+        String rendered = expired.toString();
+
+        assertFalse(rendered.contains(GUEST_SESSION_ID),
+                "OrderExpiredEvent.toString() exposed the guest session id: " + rendered);
     }
 
     // The last four digits, 4242, share no digit pair with the expiry, so a masked card number

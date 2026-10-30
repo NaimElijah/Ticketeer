@@ -17,4 +17,15 @@ public record PaymentRequestDTO(
     CardDetailsDTO card,                  // raw card details — the gateway (WSEP `pay`) needs them
     Integer buyerUserId,
     String buyerEmail
-) {}
+) {
+
+    /**
+     * Leaves out the buyer email, which is personal data, so a logged charge or an exception message
+     * built from one does not carry it (SLR.2). The card renders through {@link CardDetailsDTO#toString()}.
+     */
+    @Override
+    public String toString() {
+        return "PaymentRequestDTO[idempotencyKey=" + idempotencyKey + ", amount=" + amount
+                + ", currency=" + currency + ", card=" + card + ", buyerUserId=" + buyerUserId + "]";
+    }
+}
