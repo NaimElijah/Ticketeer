@@ -29,7 +29,7 @@ public class LkTextRows extends Div {
     private final List<TextField> rows = new ArrayList<>();
     private String placeholder = "";
     private boolean readOnly = false;
-    private Integer maxLength;
+    private Integer textLimit;
 
     public LkTextRows(String labelText, String addButtonLabel) {
         addClassName("lk-text-rows");
@@ -59,10 +59,15 @@ public class LkTextRows extends Div {
         return this;
     }
 
-    /** Caps every row, present and future, at {@code max} characters, so typing stops at the limit. */
-    public LkTextRows maxLength(int max) {
-        this.maxLength = max;
-        rows.forEach(t -> t.setMaxLength(max));
+    /**
+     * Limits every row, present and future, to {@code max} characters through {@link LkTextLimit}:
+     * each row names the limit and flags text over it, without truncating what the user typed.
+     *
+     * @param max the most characters a row may have; not negative
+     */
+    public LkTextRows textLimit(int max) {
+        this.textLimit = max;
+        rows.forEach(t -> LkTextLimit.apply(t, max));
         return this;
     }
 
@@ -118,8 +123,8 @@ public class LkTextRows extends Div {
         field.setPlaceholder(placeholder);
         field.setWidthFull();
         field.setReadOnly(readOnly);
-        if (maxLength != null) {
-            field.setMaxLength(maxLength);
+        if (textLimit != null) {
+            LkTextLimit.apply(field, textLimit);
         }
         rows.add(field);
         return field;

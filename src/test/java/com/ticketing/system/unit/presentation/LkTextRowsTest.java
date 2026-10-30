@@ -85,26 +85,36 @@ class LkTextRowsTest {
         assertEquals(List.of("A", "B"), rows.getValues(), "values still readable when read-only");
     }
 
-    // The artists' column is bounded (#186), so every row, including ones added later, carries the limit.
+    // The artists' column is bounded (#186). Every row, including ones set later, tells the user
+    // about the limit and flags text over it, instead of cutting a paste short with maxlength.
     @Test
-    void GivenAMaxLength_WhenRowsAreSetAndAdded_ThenEveryRowCarriesIt() {
-        LkTextRows rows = new LkTextRows("Artists", "+ Add artist").maxLength(ARTIST_LIMIT);
+    void GivenATextLimit_WhenRowsAreSet_ThenEveryRowNamesTheLimitAndFlagsTextOverIt() {
+        LkTextRows rows = new LkTextRows("Artists", "+ Add artist").textLimit(ARTIST_LIMIT);
 
-        rows.setValues(List.of("A", "B"));
+        rows.setValues(List.of("A", "x".repeat(ARTIST_LIMIT + 1)));
 
         List<TextField> fields = descendantsOf(rows, TextField.class);
         assertEquals(2, fields.size());
-        fields.forEach(field -> assertEquals(ARTIST_LIMIT, field.getMaxLength()));
+        fields.forEach(field -> {
+            assertEquals("Up to " + ARTIST_LIMIT + " characters", field.getHelperText());
+            assertFalse(field.getElement().hasProperty("maxlength"), "a row must not truncate input");
+        });
+        assertFalse(fields.get(0).isInvalid());
+        assertTrue(fields.get(1).isInvalid());
+        assertEquals("At most 40 characters; this has 41.", fields.get(1).getErrorMessage());
     }
 
     @Test
-    void GivenExistingRows_WhenMaxLengthIsSet_ThenTheExistingRowsCarryIt() {
+    void GivenARowOverTheLimit_WhenTheTextLimitIsSet_ThenTheRowIsFlaggedAtOnce() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
+        rows.setValues(List.of("x".repeat(ARTIST_LIMIT + 1)));
 
-        rows.maxLength(ARTIST_LIMIT);
+        rows.textLimit(ARTIST_LIMIT);
 
-        descendantsOf(rows, TextField.class)
-                .forEach(field -> assertEquals(ARTIST_LIMIT, field.getMaxLength()));
+        List<TextField> fields = descendantsOf(rows, TextField.class);
+        assertEquals(1, fields.size());
+        assertTrue(fields.get(0).isInvalid());
+        assertEquals("Up to " + ARTIST_LIMIT + " characters", fields.get(0).getHelperText());
     }
 
     // -- helpers: walk the component subtree (no UI/rendering needed) -----

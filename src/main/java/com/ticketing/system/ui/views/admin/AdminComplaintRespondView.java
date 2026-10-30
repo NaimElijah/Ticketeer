@@ -2,7 +2,6 @@ package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
-import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
@@ -11,6 +10,7 @@ import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.components.messaging.MdThread;
 import com.ticketing.system.ui.layouts.PlatformAdminLayout;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
@@ -53,6 +53,7 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
     public AdminComplaintRespondView(AdminComplaintQueuePresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;
+        LkTextLimit.apply(reply);
         title("Respond to Complaint");
         add(content);
     }
@@ -91,7 +92,6 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
             reply.setPlaceholder("Write your response to the member…");
             reply.setMinHeight("140px");
             reply.setWidthFull();
-            reply.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
             card.add(reply);
 
             LkRow actions = new LkRow().gap(8).justify("flex-end");
@@ -120,7 +120,7 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
             case AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case AdminComplaintQueuePresenter.ActionOutcome.Failure fail ->
-                Toasts.failure("Could not send your response — please try again.");
+                Toasts.failure(Lk.withReason("Could not send your response", fail.reason()));
         }
     }
 

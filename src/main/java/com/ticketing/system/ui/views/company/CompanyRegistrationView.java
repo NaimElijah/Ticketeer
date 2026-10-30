@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.company;
 
-import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
@@ -9,6 +9,7 @@ import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.vaadin.flow.component.Component;
@@ -52,12 +53,12 @@ public class CompanyRegistrationView extends LkPage {
         name.setPlaceholder("e.g. BlueWave Productions");
         name.setRequired(true);
         name.setWidthFull();
-        name.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
+        LkTextLimit.apply(name);
 
         description.setPlaceholder("What kind of events does this company produce?");
         description.setMinHeight("120px");
         description.setWidthFull();
-        description.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
+        LkTextLimit.apply(description);
 
         LkCol col = new LkCol().gap(14);
         col.add(name, description);
@@ -100,11 +101,11 @@ public class CompanyRegistrationView extends LkPage {
             case CompanyRegistrationPresenter.Outcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case CompanyRegistrationPresenter.Outcome.InvalidInput invalid ->
-                Toasts.failure("Please check the company details and try again.");
+                Toasts.failure(Lk.withReason("Please check the company details", invalid.reason()));
             case CompanyRegistrationPresenter.Outcome.NameTaken taken ->
                 Toasts.failure("That company name is already taken — please choose another.");
             case CompanyRegistrationPresenter.Outcome.Failure fail ->
-                Toasts.failure("Registration failed — please try again.");
+                Toasts.failure(Lk.withReason("Registration failed", fail.reason()));
         }
 
         if (outcome instanceof CompanyRegistrationPresenter.Outcome.Success) {

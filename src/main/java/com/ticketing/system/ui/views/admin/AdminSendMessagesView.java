@@ -1,7 +1,6 @@
 package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.shared.dto.MemberSearchResultDTO;
-import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
@@ -14,6 +13,7 @@ import com.ticketing.system.ui.components.kit.LkGrid;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.layouts.PlatformAdminLayout;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter.SentOutreach;
@@ -89,11 +89,11 @@ public class AdminSendMessagesView extends LkPage {
 
         subject.setPlaceholder("Short, clear headline");
         subject.setWidthFull();
-        subject.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
+        LkTextLimit.apply(subject);
         body.setPlaceholder("Body of the message…");
         body.setHeight("160px");
         body.setWidthFull();
-        body.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
+        LkTextLimit.apply(body);
 
         recipientSearch.setPlaceholder("Search members by username…");
         recipientSearch.setWidthFull();
@@ -204,7 +204,7 @@ public class AdminSendMessagesView extends LkPage {
             case AdminSendMessagesPresenter.ActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case AdminSendMessagesPresenter.ActionOutcome.Failure fail ->
-                Toasts.failure("Could not send the message — please try again.");
+                Toasts.failure(Lk.withReason("Could not send the message", fail.reason()));
         }
     }
 

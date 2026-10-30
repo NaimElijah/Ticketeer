@@ -5,7 +5,6 @@ import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.SeatLabels;
-import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
@@ -14,6 +13,7 @@ import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.components.venue.VkSeatBlock;
 import com.ticketing.system.ui.components.venue.VkVenueMap;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
@@ -278,7 +278,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         LkCard card = new LkCard("Edit Zone").pad(20);
 
         zoneNameField.setWidthFull();
-        zoneNameField.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
+        LkTextLimit.apply(zoneNameField);
         priceField.setPrefixComponent(new Span("$"));
         priceField.setWidthFull();
 

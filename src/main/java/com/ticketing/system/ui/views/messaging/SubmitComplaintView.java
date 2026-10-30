@@ -1,7 +1,7 @@
 package com.ticketing.system.ui.views.messaging;
 
-import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
@@ -10,6 +10,7 @@ import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkSelect;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
 import com.ticketing.system.ui.session.AuthSession;
@@ -52,17 +53,19 @@ public class SubmitComplaintView extends LkPage {
 
         LkCard card = new LkCard("New Complaint").pad(20);
 
-        about.label("About");
-        about.onChange(value -> details.setMaxLength(presenter.maxDetailsLength(value)));
         subject.setPlaceholder("Brief summary of the issue");
         subject.setRequired(true);
-        subject.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
+        LkTextLimit.apply(subject);
         subject.setWidthFull();
         details.setPlaceholder("Describe what happened, including any order or event references…");
         details.setMinHeight("160px");
         details.setRequired(true);
-        details.setMaxLength(presenter.maxDetailsLength(about.getValue()));
+        LkTextLimit detailsLimit = LkTextLimit.apply(details, presenter.maxDetailsLength(about.getValue()));
         details.setWidthFull();
+        about.label("About");
+        // The category is stored with the details, so a longer one leaves them less room: flag text
+        // already typed past the new limit at once.
+        about.onChange(value -> detailsLimit.setMax(presenter.maxDetailsLength(value)));
 
         LkCol col = new LkCol().gap(14);
         col.add(about, subject, details);
@@ -89,6 +92,15 @@ public class SubmitComplaintView extends LkPage {
             Toasts.failure("Please fill in subject and details.");
             return;
         }
+        // The over-limit field already shows by how much; take the user there instead of sending.
+        if (LkTextLimit.exceeds(subject)) {
+            subject.focus();
+            return;
+        }
+        if (LkTextLimit.exceeds(details)) {
+            details.focus();
+            return;
+        }
         switch (presenter.submit(AuthSession.token(),
                 subject.getValue(), details.getValue(), about.getValue())) {
             case SubmitComplaintPresenter.Outcome.Success ok -> {
@@ -100,7 +112,7 @@ public class SubmitComplaintView extends LkPage {
             case SubmitComplaintPresenter.Outcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case SubmitComplaintPresenter.Outcome.Failure fail ->
-                Toasts.failure("Could not submit the complaint — please try again.");
+                Toasts.failure(Lk.withReason("Could not submit the complaint", fail.reason()));
         }
     }
 }

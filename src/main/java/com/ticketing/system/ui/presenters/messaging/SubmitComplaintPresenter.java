@@ -52,7 +52,7 @@ public class SubmitComplaintPresenter {
 
     /**
      * The most characters the details may have under the chosen "About" category, which the
-     * service appends to them in the stored body; the view caps the details field with it.
+     * service appends to them in the stored body; the view limits the details field to it.
      */
     public int maxDetailsLength(String about) {
         return MessagingService.complaintDetailsLimit(about);

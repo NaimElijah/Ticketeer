@@ -31,7 +31,7 @@ public class CompanyRegistrationPresenter {
             CurrentCompanies.setCurrentCompany(company.companyId());
             return new Outcome.Success(company);
         } catch (IllegalArgumentException e) {
-            return new Outcome.InvalidInput(e.getMessage());
+            return new Outcome.InvalidInput(ServiceErrors.userMessage(e));
         } catch (IllegalStateException e) {
             return new Outcome.NameTaken(e.getMessage());
         } catch (RuntimeException e) {

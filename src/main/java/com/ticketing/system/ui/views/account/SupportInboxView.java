@@ -194,17 +194,23 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
         }
     }
 
-    private void handleReply(String text) {
-        switch (presenter.reply(AuthSession.token(), selectedId, text)) {
+    /** Sends the reply and says whether it went, so the reply bar keeps the text when it did not. */
+    private boolean handleReply(String text) {
+        return switch (presenter.reply(AuthSession.token(), selectedId, text)) {
             case SupportInboxPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Reply sent.");
                 reload(); // refresh thread, ordering, and unread badges; keeps selection
+                yield true;
             }
-            case SupportInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
+            case SupportInboxPresenter.ActionOutcome.NotAuthenticated ignored -> {
                 Toasts.failure("Your session has expired — please sign in again.");
-            case SupportInboxPresenter.ActionOutcome.Failure fail ->
-                Toasts.failure("Could not send your reply — please try again.");
-        }
+                yield false;
+            }
+            case SupportInboxPresenter.ActionOutcome.Failure fail -> {
+                Toasts.failure(Lk.withReason("Could not send your reply", fail.reason()));
+                yield false;
+            }
+        };
     }
 
     private void showBanner(String message) {
