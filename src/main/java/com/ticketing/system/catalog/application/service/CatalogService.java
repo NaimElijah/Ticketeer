@@ -515,7 +515,10 @@ public class CatalogService {
                 log.warn("Attempt to access venue map for eventId: {} from inactive company", eventId);
                 throw new CompanyClosedException("Event with ID " + eventId + " not found while getting venue map");
             }
-            
+
+            // The map is part of the event's public page (#185), so it is hidden exactly when the page is.
+            requirePubliclyListed(event, "getting venue map");
+
             // see that event has a venue map
             if (event.getVenueMap() == null) {
                 log.warn("Null venue map for event while getting venue map: {}", eventId);
@@ -551,15 +554,21 @@ public class CatalogService {
             throw new CompanyClosedException("Event with ID " + eventId + " not found while getting event detail");
         }
 
-        // DRAFT / SCHEDULED events are not yet public; ON_SALE / SOLD_OUT / CANCELED / COMPLETED are viewable
-        // (the buyer page renders a status badge and disables purchasing for the non-purchasable ones).
-        if (event.getStatus() == EventStatus.DRAFT || event.getStatus() == EventStatus.SCHEDULED) {
-            log.warn("Attempt to access non-public event detail (status {}) for eventId: {}", event.getStatus(), eventId);
-            throw new EventNotFoundException("Event with ID " + eventId + " not found while getting event detail");
-        }
+        requirePubliclyListed(event, "getting event detail");
 
         log.info("Event detail found for eventId: {} and being returned", eventId);
         return new EventMapper().toEventDetailDTO(event, company.getName());
+    }
+
+    // DRAFT / SCHEDULED events are not yet public; ON_SALE / SOLD_OUT / CANCELED / COMPLETED are viewable
+    // (the buyer page renders a status badge and disables purchasing for the non-purchasable ones). A
+    // hidden event is reported as not found, so a caller cannot tell it from one that does not exist.
+    private void requirePubliclyListed(Event event, String operation) {
+        if (event.getStatus() == EventStatus.DRAFT || event.getStatus() == EventStatus.SCHEDULED) {
+            log.warn("Attempt to access non-public event (status {}) while {} for eventId: {}",
+                    event.getStatus(), operation, event.getId());
+            throw new EventNotFoundException("Event with ID " + event.getId() + " not found while " + operation);
+        }
     }
 
 }

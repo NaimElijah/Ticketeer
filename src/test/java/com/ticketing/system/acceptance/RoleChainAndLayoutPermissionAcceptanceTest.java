@@ -34,6 +34,7 @@ import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapDTO;
+import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.catalog.application.service.CatalogService;
@@ -112,7 +113,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
                 new GridPlacementDTO(1, 1, 1, 1));
         eventManagementService.configureVenueMap(c.u3.token(), c.companyId,
                 new VenueMapConfigDTO(String.valueOf(eventId), "Reworked Arena", 1, 1, List.of(newZone)));
-        assertEquals(120, standingZone(c.u3.token(), eventId).getAvailableAmount(),
+        assertEquals(120, producerStandingZone(c.u3.token(), eventId).capacity(),
                 "u3's layout edit took effect");
 
         // u3 cannot manage purchase policies (no EDIT_POLICIES) — the policy path is blocked.
@@ -184,6 +185,13 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
         eventManagementService.configureVenueMap(owner.token(), companyId,
                 new VenueMapConfigDTO(ev.eventId(), "Arena", 1, 1, List.of(zone)));
         return eventId;
+    }
+
+    /** The producer's read of a standing zone; the public catalog hides an unpublished event's map (#185). */
+    private ZoneDetailDTO producerStandingZone(String token, int eventId) {
+        return eventManagementService.getEventZones(token, eventId).zones().stream()
+                .filter(z -> !z.seated())
+                .findFirst().orElseThrow();
     }
 
     private com.ticketing.system.shared.dto.InventoryZoneDTO standingZone(String token, int eventId) {
