@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
@@ -28,5 +29,13 @@ class NotFoundExceptionMessageTest {
     @Test
     void GivenUserId_WhenUserNotFoundExceptionBuilt_ThenMessageIsUserNotFoundWithTheId() {
         assertEquals("User not found: 42", new UserNotFoundException(42).getMessage());
+    }
+
+    // The concurrent-change refusal reaches the user the same way, so it carries the caller's text
+    // and nothing in front of it.
+    @Test
+    void GivenCallerText_WhenConcurrentReservationExceptionBuilt_ThenMessageIsExactlyThatText() {
+        assertEquals("Seat A1 is no longer reserved",
+                new ConcurrentReservationException("Seat A1 is no longer reserved").getMessage());
     }
 }

@@ -22,6 +22,7 @@ import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
@@ -1010,6 +1011,38 @@ class EventTest extends BaseDomainTest {
         assertTrue(message.contains(AGE_RULE), "either rule would have allowed it, so name the age rule: " + message);
         assertTrue(message.contains(TICKET_LIMIT_RULE),
                 "either rule would have allowed it, so name the ticket limit: " + message);
+    }
+
+    // A composite nested inside the effective AND (or inside an OR) must also name only the rules
+    // the buyer broke: every level asks its children for the refusal of this purchase.
+
+    private static final int GROUP_LIMIT = 2;
+
+    @Test
+    void GivenAdultOverTheLimitOfANestedAndCompanyPolicy_WhenValidateEffectivePolicy_ThenOnlyTheTicketLimitIsNamed() {
+        Event unrestricted = eventWithPolicy(new NoPurchasePolicy());
+        PurchasePolicy ageAndLimit = new AndPurchasePolicy(
+                new AgePurchasePolicy(MINIMUM_AGE), new MaxTicketsPurchasePolicy(TICKET_LIMIT));
+
+        String message = effectivePolicyRefusal(unrestricted, ageAndLimit, 30, TICKET_LIMIT + 1);
+
+        assertTrue(message.contains(TICKET_LIMIT_RULE), "the broken ticket limit must be named: " + message);
+        assertFalse(message.contains(AGE_RULE), "the age rule the buyer met must not be named: " + message);
+    }
+
+    @Test
+    void GivenAdultOverTheLimitOfAnAndInsideAnOrCompanyPolicy_WhenValidateEffectivePolicy_ThenTheAgeRuleIsNotNamed() {
+        Event unrestricted = eventWithPolicy(new NoPurchasePolicy());
+        PurchasePolicy ageAndLimitOrSmallGroup = new OrPurchasePolicy(
+                new AndPurchasePolicy(new AgePurchasePolicy(MINIMUM_AGE), new MaxTicketsPurchasePolicy(TICKET_LIMIT)),
+                new MaxTicketsPurchasePolicy(GROUP_LIMIT));
+
+        String message = effectivePolicyRefusal(unrestricted, ageAndLimitOrSmallGroup, 30, TICKET_LIMIT + 1);
+
+        assertTrue(message.contains(TICKET_LIMIT_RULE), "the AND side's broken ticket limit must be named: " + message);
+        assertTrue(message.contains("at most " + GROUP_LIMIT + " tickets"),
+                "the OR's other broken side must be named: " + message);
+        assertFalse(message.contains(AGE_RULE), "the age rule the buyer met must not be named: " + message);
     }
 
     private Event eventWithPolicy(PurchasePolicy eventPolicy) {

@@ -29,6 +29,7 @@ import ch.qos.logback.classic.Level;
 class LoggingAspectTest {
 
     private static final String FAILURE = "boom";
+    private static final String RECOVERED = "recovered";
 
     /** The service called second, through its proxy. */
     static class InnerService {
@@ -56,6 +57,15 @@ class LoggingAspectTest {
         public void callSucceedingInnerThenFail() {
             inner.succeed();
             throw new IllegalStateException(FAILURE);
+        }
+
+        public String callFailingInnerAndRecover() {
+            try {
+                inner.fail();
+            } catch (IllegalStateException handled) {
+                return RECOVERED;
+            }
+            throw new AssertionError("the inner service was expected to fail");
         }
     }
 
@@ -118,6 +128,24 @@ class LoggingAspectTest {
         assertEquals(1, warnings.size(), "the outer failure must log one WARN, got: " + warnings);
         assertTrue(warnings.get(0).contains(OuterService.class.getSimpleName()),
                 "the WARN must come from the outer call: " + warnings.get(0));
+    }
+
+    @Test
+    void GivenOuterHandlesTheInnerFailure_WhenBothAdvised_ThenNoWarnIsLogged() {
+        assertEquals(RECOVERED, outer.callFailingInnerAndRecover());
+
+        List<String> warnings = logs.messagesAt(Level.WARN);
+        assertEquals(List.of(), warnings, "a failure the outer service handled must not log a WARN");
+    }
+
+    @Test
+    void GivenOuterHandlesTheInnerFailure_WhenBothAdvised_ThenTheInnerFailureIsLoggedAtDebug() {
+        assertEquals(RECOVERED, outer.callFailingInnerAndRecover());
+
+        List<String> debugLines = logs.messagesAt(Level.DEBUG);
+        assertTrue(debugLines.stream().anyMatch(line -> line.contains(InnerService.class.getSimpleName())
+                        && line.contains(IllegalStateException.class.getSimpleName())),
+                "the handled inner failure must still be logged at DEBUG, got: " + debugLines);
     }
 
     private static <T> T advised(T target, LoggingAspect aspect) {
