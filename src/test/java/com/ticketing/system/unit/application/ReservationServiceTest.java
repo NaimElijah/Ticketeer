@@ -8,6 +8,7 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
@@ -85,6 +86,8 @@ public class ReservationServiceTest {
     // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+    // Every guest session id these tests use starts with this and names a live guest session.
+    private static final String LIVE_GUEST_SESSION_PREFIX = "guest-session";
 
     @BeforeEach
     void setUp() {
@@ -99,6 +102,8 @@ public class ReservationServiceTest {
 
         marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
+        // reserveForGuest / removeForGuest accept only a live guest session (#185).
+        when(sessionManager.validateCredential(startsWith(LIVE_GUEST_SESSION_PREFIX))).thenReturn(true);
 
         // Catalog now owns inventory mutation behind InventoryCommandPort. We wire the REAL
         // InventoryService onto the SAME mock event store (and a mock company port for policy), so every
@@ -406,6 +411,27 @@ public class ReservationServiceTest {
                 InventorySelectionDTO.standing(QUANTITY));
 
         assertEquals(EVENT_ID, result.getEventId());
+    }
+
+    @Test
+    void GivenAGuestSessionIdThatIsNotLive_WhenReserveForGuest_ThenSessionExpiredAndNothingIsReserved() {
+        String deadSessionId = "expired-or-never-issued";
+
+        assertThrows(SessionExpiredException.class, () -> reservationService.reserveForGuest(deadSessionId,
+                EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        verify(eventRepository, never()).findById(anyInt());
+        verify(activeOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void GivenAGuestSessionIdThatIsNotLive_WhenRemoveForGuest_ThenSessionExpired() {
+        String deadSessionId = "expired-or-never-issued";
+
+        assertThrows(SessionExpiredException.class, () -> reservationService.removeForGuest(deadSessionId,
+                EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        verify(activeOrderRepository, never()).save(any());
     }
 
     @Test

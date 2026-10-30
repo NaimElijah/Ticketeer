@@ -33,6 +33,7 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 
 @Service
@@ -390,8 +391,14 @@ public class ReservationService {
         return BuyerContextDTO.member(validateTokenAndGetUserId(token));
     }
 
+    // A guest's credential is the id of a live guest session, as at checkout: a session id that was
+    // never issued, has expired, or belongs to a member or admin session opens no cart.
     private BuyerContextDTO authenticateGuest(String sessionId) {
         validateSessionId(sessionId);
+        if (!iSessionManager.validateCredential(sessionId)) {
+            log.warn("Request rejected: guest session is not live");
+            throw new SessionExpiredException();
+        }
         return BuyerContextDTO.guest(sessionId);
     }
 
