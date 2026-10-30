@@ -11,8 +11,10 @@
 #   DB_PASSWORD=<your database password>
 #
 # Uses the Supabase Session pooler (IPv4, supports the prepared statements Hibernate needs) over TLS.
-# Many app instances (local + deployed) can point here at once — they share all data, and @Version /
-# the refund FOR UPDATE coordinate across instances because they're enforced in Postgres.
+# Run ONE app instance against this database at a time. @Version and the refund's FOR UPDATE would
+# coordinate several, since Postgres enforces them, but receipt, ticket, user, company, appointment and
+# event ids come from counters each instance seeds once from max(id), so two instances mint the same
+# ids, and in-flight checkouts are tracked per instance (#108).
 spring:
   datasource:
     # logServerErrorDetail=false: as in application.yml, no row values in logged exception messages.
@@ -20,7 +22,7 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     hikari:
-      # Supabase caps connections (more so when several instances share the DB) — keep each pool small.
+      # Supabase caps connections, so keep the pool small.
       maximum-pool-size: ${DB_POOL_SIZE:5}
       # --- DB-reconnect / recovery resilience (SLR.6, #362), config-only: no health-poller, no retry lib ---
       # The reconnect is HikariCP's own job: it validates a pooled connection before lending it (the default
