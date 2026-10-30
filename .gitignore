@@ -80,7 +80,7 @@ logs/
 run-supabase.sh
 .env
 .env.*
-!.env.example
+!/.env.example
 
-# Agent worktrees (Claude Code), each a separate checkout
+# Agent worktrees, each a separate checkout
 .claude/worktrees/
