@@ -213,7 +213,10 @@ time zone, a malformed WSEP URL or a zero sweep delay, stops the boot with a rep
 property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Outside `dev` and
 `test`, a `JWT_SECRET` or `PLATFORM_ADMIN_PASSWORD` left at the default committed in
 `application.yml` stops the boot too, naming the variable to set
-([#34](https://github.com/NaimElijah/Ticketeer/issues/34)). The datasource is not validated yet.
+([#34](https://github.com/NaimElijah/Ticketeer/issues/34)). A default admin already stored with the
+committed password gets `PLATFORM_ADMIN_PASSWORD` instead at boot, and any other admin still on it
+stops the boot ([ADR-014](docs/ADRs/ADR-014-committed-default-secrets-are-fatal-outside-dev-and-test.md)).
+The datasource is not validated yet.
 [`.env.example`](.env.example) lists the variables a deployment sets.
 
 **Settings can come from a file instead of the environment.** Spring Boot layers an external

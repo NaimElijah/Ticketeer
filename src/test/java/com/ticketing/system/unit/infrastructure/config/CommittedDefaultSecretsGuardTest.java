@@ -11,30 +11,33 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ClassPathResource;
 
 import com.ticketing.system.bootstrap.CommittedDefaultSecretsGuard;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 
 /**
  * #34 / #185: a boot outside {@code dev} and {@code test} must not run with the secrets committed in
- * {@code application.yml}. The baseline is the shipped {@code application.yml}, loaded the way Boot loads
- * it, so each case starts from the committed defaults and overrides only what it names.
+ * {@code application.yml}. Each case sets both secrets explicitly, to the committed constants or to
+ * operator values, so a {@code JWT_SECRET} or {@code PLATFORM_ADMIN_PASSWORD} exported in the
+ * developer's shell cannot change its outcome. The drift test is the one reader of the shipped
+ * {@code application.yml}: it pins the constants to the defaults committed there.
  */
 class CommittedDefaultSecretsGuardTest {
 
+    private static final String PROFILES_KEY = "spring.profiles.active";
     private static final String JWT_SECRET_KEY = "jwt.secret";
+    private static final String ADMIN_USERNAME_KEY = "platform.admin.username";
     private static final String ADMIN_PASSWORD_KEY = "platform.admin.password";
+    private static final String ADMIN_USERNAME = "admin";
     private static final String OPERATOR_JWT_SECRET =
             "operator-supplied-secret-that-is-comfortably-longer-than-256-bits-0123456789";
     private static final String OPERATOR_ADMIN_PASSWORD = "operator-supplied-admin-password";
-    private static final String SHIPPED_CONFIG = "src/main/resources/application.yml";
+    private static final String SHIPPED_CONFIG = "application.yml";
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withInitializer(new ConfigDataApplicationContextInitializer())
             .withUserConfiguration(GuardOnly.class);
 
     @EnableConfigurationProperties(PlatformAdminProperties.class)
@@ -42,12 +45,19 @@ class CommittedDefaultSecretsGuardTest {
     static class GuardOnly {
     }
 
+    /** The runner with the given profiles and both secrets set explicitly. */
+    private ApplicationContextRunner startingWith(String profiles, String jwtSecret, String adminPassword) {
+        return runner.withPropertyValues(
+                PROFILES_KEY + "=" + profiles,
+                JWT_SECRET_KEY + "=" + jwtSecret,
+                ADMIN_USERNAME_KEY + "=" + ADMIN_USERNAME,
+                ADMIN_PASSWORD_KEY + "=" + adminPassword);
+    }
+
     @ParameterizedTest(name = "spring.profiles.active=''{0}''")
     @ValueSource(strings = {"", "supabase"})
     void GivenNoProfileAndTheCommittedJwtSecret_WhenStarting_ThenTheBootFails(String profiles) {
-        runner.withPropertyValues(
-                        "spring.profiles.active=" + profiles,
-                        ADMIN_PASSWORD_KEY + "=" + OPERATOR_ADMIN_PASSWORD)
+        startingWith(profiles, CommittedDefaultSecretsGuard.COMMITTED_JWT_SECRET, OPERATOR_ADMIN_PASSWORD)
                 .run(context -> {
                     assertThat(context)
                             .as("a boot with the committed jwt.secret outside dev/test must fail")
@@ -64,9 +74,7 @@ class CommittedDefaultSecretsGuardTest {
     @ParameterizedTest(name = "spring.profiles.active=''{0}''")
     @ValueSource(strings = {"", "supabase"})
     void GivenNoProfileAndTheCommittedAdminPassword_WhenStarting_ThenTheBootFails(String profiles) {
-        runner.withPropertyValues(
-                        "spring.profiles.active=" + profiles,
-                        JWT_SECRET_KEY + "=" + OPERATOR_JWT_SECRET)
+        startingWith(profiles, OPERATOR_JWT_SECRET, CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD)
                 .run(context -> {
                     assertThat(context)
                             .as("a boot with the committed platform.admin.password outside dev/test must fail")
@@ -77,36 +85,19 @@ class CommittedDefaultSecretsGuardTest {
                 });
     }
 
-    @Test
-    void GivenDevProfileAndTheCommittedDefaults_WhenStarting_ThenTheBootProceeds() {
-        runner.withPropertyValues("spring.profiles.active=dev").run(context -> {
-            assertThat(context).as("dev runs on the committed defaults by design").hasNotFailed();
-            assertThat(context.getEnvironment().getProperty(JWT_SECRET_KEY))
-                    .isEqualTo(CommittedDefaultSecretsGuard.COMMITTED_JWT_SECRET);
-            assertThat(context.getBean(PlatformAdminProperties.class).password())
-                    .isEqualTo(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD);
-        });
-    }
-
-    // application-test.yml carries its own jwt.secret, so the committed one is set explicitly: the
-    // case under test is the test profile with both committed defaults, not the test profile's file.
-    @Test
-    void GivenTestProfileAndTheCommittedDefaults_WhenStarting_ThenTheBootProceeds() {
-        runner.withPropertyValues(
-                        "spring.profiles.active=test",
-                        JWT_SECRET_KEY + "=" + CommittedDefaultSecretsGuard.COMMITTED_JWT_SECRET)
-                .run(context -> {
-                    assertThat(context).as("the test suite may run on the committed defaults").hasNotFailed();
-                    assertThat(context.getBean(PlatformAdminProperties.class).password())
-                            .isEqualTo(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD);
-                });
+    @ParameterizedTest(name = "spring.profiles.active=''{0}''")
+    @ValueSource(strings = {"dev", "test"})
+    void GivenDevOrTestProfileAndTheCommittedDefaults_WhenStarting_ThenTheBootProceeds(String profiles) {
+        startingWith(profiles, CommittedDefaultSecretsGuard.COMMITTED_JWT_SECRET,
+                        CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD)
+                .run(context -> assertThat(context)
+                        .as("%s runs on the committed defaults by design", profiles)
+                        .hasNotFailed());
     }
 
     @Test
     void GivenOverriddenSecrets_WhenStarting_ThenTheBootProceeds() {
-        runner.withPropertyValues(
-                        JWT_SECRET_KEY + "=" + OPERATOR_JWT_SECRET,
-                        ADMIN_PASSWORD_KEY + "=" + OPERATOR_ADMIN_PASSWORD)
+        startingWith("", OPERATOR_JWT_SECRET, OPERATOR_ADMIN_PASSWORD)
                 .run(context -> assertThat(context)
                         .as("a boot with both secrets supplied by the operator must start")
                         .hasNotFailed());
@@ -115,7 +106,7 @@ class CommittedDefaultSecretsGuardTest {
     @Test
     void GivenTheShippedApplicationYml_WhenReadingEachSecretDefault_ThenItEqualsTheGuardConstant() {
         YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
-        yaml.setResources(new FileSystemResource(SHIPPED_CONFIG));
+        yaml.setResources(new ClassPathResource(SHIPPED_CONFIG));
         Properties shipped = yaml.getObject();
 
         assertThat(placeholderDefault(shipped, JWT_SECRET_KEY))

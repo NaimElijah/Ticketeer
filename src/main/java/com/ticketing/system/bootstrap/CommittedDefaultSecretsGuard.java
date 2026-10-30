@@ -11,13 +11,16 @@ import com.ticketing.system.governance.config.PlatformAdminProperties;
 
 /**
  * Stops the boot when a run outside the {@code dev} and {@code test} profiles still uses a secret
- * whose default is committed in {@code application.yml} (#34).
+ * whose default is committed in {@code application.yml} (#34, ADR-014).
  *
  * <p>The repository is public, so the committed JWT signing secret and default admin password are
  * known to anyone: a deployment that keeps either lets a stranger forge sessions or sign in as the
  * System Admin. Under ADR-003 a misconfiguration is fatal, so the constructor throws and the context
  * never starts, instead of the platform coming up with a known credential. {@code dev} and
  * {@code test} run on the committed values by design.
+ *
+ * <p>The guard checks the configured password only. The password already stored for an admin is
+ * {@link CommittedAdminPasswordRotation}'s to check, at boot (ADR-014).
  *
  * <p>The two constants repeat the defaults in {@code application.yml} because the guard has to know
  * which value is the committed one, and a resolved property cannot say whether it came from the

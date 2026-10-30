@@ -75,6 +75,23 @@ abstract class IAdminRepositoryContractTest {
         assertEquals(2, repo.findAll().size());
     }
 
+    // The boot-time rotation of the committed default password (ADR-014) changes a stored admin: a
+    // loaded admin, changed and saved again, is updated in place, not inserted a second time.
+    @Test
+    void GivenSavedAdmin_WhenItsPasswordHashIsChangedAndSavedAgain_ThenTheStoredAdminHasTheNewHash() {
+        repo.save(new Admin(1, "admin", "OLD_HASH", true));
+        Admin loaded = repo.findById(1);
+
+        loaded.changePasswordHash("NEW_HASH");
+        repo.save(loaded);
+
+        Admin reloaded = repo.findById(1);
+        assertEquals("NEW_HASH", reloaded.getPasswordHash());
+        assertEquals("admin", reloaded.getUsername(), "only the password hash changes");
+        assertTrue(reloaded.isDefault(), "only the password hash changes");
+        assertEquals(1, repo.findAll().size(), "the admin is updated, not saved a second time");
+    }
+
     @Test
     void lockForUpdateThenUnlock_isCallableWithoutThrowing() {
         // Admin is never contended (created once at synchronized platform init); the lock

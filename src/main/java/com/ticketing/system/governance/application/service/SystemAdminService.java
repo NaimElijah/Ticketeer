@@ -143,8 +143,9 @@ public class SystemAdminService {
             return;
         }
 
-        log.warn("No System Admin found — creating default admin '{}'. Override its password via "
-                + "PLATFORM_ADMIN_PASSWORD and rotate after first login.", defaultAdminUsername);
+        // No admin password can be changed from the platform yet (#77), so the message promises no rotation.
+        log.warn("No System Admin found — creating default admin '{}' with the password configured in "
+                + "platform.admin.password (PLATFORM_ADMIN_PASSWORD).", defaultAdminUsername);
         try {
             Admin defaultAdmin = new Admin(
                     DEFAULT_ADMIN_ID,
