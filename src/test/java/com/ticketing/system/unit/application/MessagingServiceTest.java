@@ -67,6 +67,10 @@ class MessagingServiceTest {
     private static final int COMPANY_ID = 5;
     // Messages are stamped from the injected clock, as UTC wall time (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
+    // submitComplaint appends "\n\n[Related: EVENT:123]" (22 characters) to the details, and the
+    // stored body is varchar(255), so with that reference the details may have 255 - 22 = 233 (#186).
+    private static final String RELATED_REF = "EVENT:123";
+    private static final int DETAILS_ALLOWED_WITH_REF = 233;
 
     private ConversationRepository conversationRepository;
     private SessionManager sessionManager;
@@ -192,6 +196,29 @@ class MessagingServiceTest {
         assertTrue(service.viewAllComplaints(ADMIN_TOKEN, null).stream()
                         .anyMatch(c -> dto.conversationId().equals(c.conversationId()) && "Refund".equals(c.subject())),
                 "the complaint reaches the admins through their queue");
+    }
+
+    @Test
+    void GivenDetailsThatFitAloneButNotWithTheReference_WhenSubmitComplaint_ThenRefusedNamingTheAllowance() {
+        String details = "d".repeat(DETAILS_ALLOWED_WITH_REF + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> service.submitComplaint(MEMBER_TOKEN,
+                        new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", details, RELATED_REF)));
+
+        assertTrue(ex.getMessage().contains(String.valueOf(DETAILS_ALLOWED_WITH_REF)),
+                () -> "the refusal tells the member the details may have " + DETAILS_ALLOWED_WITH_REF
+                        + " characters, was: " + ex.getMessage());
+    }
+
+    @Test
+    void GivenDetailsThatFitWithTheReference_WhenSubmitComplaint_ThenTheComplaintIsFiled() {
+        String details = "d".repeat(DETAILS_ALLOWED_WITH_REF);
+
+        ConversationDTO dto = service.submitComplaint(MEMBER_TOKEN,
+                new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", details, RELATED_REF));
+
+        assertEquals("COMPLAINT", dto.type());
     }
 
     // Notifications carry only a recipient user id, and member and admin ids share one id space, so a

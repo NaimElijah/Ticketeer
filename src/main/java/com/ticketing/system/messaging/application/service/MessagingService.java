@@ -27,6 +27,7 @@ import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationNotFoundException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
@@ -60,6 +61,9 @@ public class MessagingService {
     // Sentinel counterparty id for group descriptors (ADMIN_GROUP has no single entity id).
     private static final int GROUP_SENTINEL = 0;
     private static final int SNIPPET_MAX = 120;
+    // A complaint's related-entity reference is folded into the stored body, after the details.
+    private static final String RELATED_PREFIX = "\n\n[Related: ";
+    private static final String RELATED_SUFFIX = "]";
 
     private final ConversationRepository conversationRepository;
     private final SessionManager sessionManager;
@@ -161,8 +165,12 @@ public class MessagingService {
     public ConversationDTO submitComplaint(String token, SubmitComplaintRequestDTO request) {
         int memberId = authenticate(token);
         String body = request.body();
-        if (request.relatedEntityRef() != null && !request.relatedEntityRef().isBlank()) {
-            body = body + "\n\n[Related: " + request.relatedEntityRef() + "]";
+        if (hasRelatedRef(request.relatedEntityRef())) {
+            // Checked here rather than left to Message, whose refusal would name the whole body's
+            // limit: the member types only the details, and the reference shares their column (#186).
+            TextLimits.requireAtMost("Complaint details", body,
+                    complaintDetailsLimit(request.relatedEntityRef()));
+            body = body + RELATED_PREFIX + request.relatedEntityRef() + RELATED_SUFFIX;
         }
         Conversation conversation = Conversation.start(
                 ConversationType.COMPLAINT,
@@ -174,6 +182,25 @@ public class MessagingService {
         // No notice: the complaint reaches admins through their complaint queue (see class comment).
         log.info("Complaint {} submitted by member {}", conversation.getConversationId(), memberId);
         return toDTO(conversation, memberId);
+    }
+
+    /**
+     * The most characters a complaint's details may have when it is filed with
+     * {@code relatedEntityRef}, which {@link #submitComplaint} appends to the details in the stored body.
+     *
+     * @param relatedEntityRef the reference the complaint will carry; {@code null} or blank for none
+     * @return the details' allowance; with no reference, the whole {@link TextLimits#MAX_TEXT_LENGTH}
+     */
+    public static int complaintDetailsLimit(String relatedEntityRef) {
+        if (!hasRelatedRef(relatedEntityRef)) {
+            return TextLimits.MAX_TEXT_LENGTH;
+        }
+        return TextLimits.MAX_TEXT_LENGTH
+                - (RELATED_PREFIX.length() + relatedEntityRef.length() + RELATED_SUFFIX.length());
+    }
+
+    private static boolean hasRelatedRef(String relatedEntityRef) {
+        return relatedEntityRef != null && !relatedEntityRef.isBlank();
     }
 
 

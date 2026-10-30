@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.shared.dto.MemberSearchResultDTO;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
@@ -88,9 +89,11 @@ public class AdminSendMessagesView extends LkPage {
 
         subject.setPlaceholder("Short, clear headline");
         subject.setWidthFull();
+        subject.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
         body.setPlaceholder("Body of the message…");
         body.setHeight("160px");
         body.setWidthFull();
+        body.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
 
         recipientSearch.setPlaceholder("Search members by username…");
         recipientSearch.setWidthFull();

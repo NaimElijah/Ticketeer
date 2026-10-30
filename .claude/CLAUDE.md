@@ -91,7 +91,7 @@ wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstra
 
 | Module | Holds |
 |---|---|
-| `shared` | Kernel: `DomainException` hierarchy, `IRepository`, `InvariantChecked`, AOP aspects, `RepositoryLocks`, `WsepHttpClient`, metrics, `Clock`/BCrypt beans, published-language DTOs (`shared/dto`), purchase-policy domain (`shared/domain/policy`), integration notices (`shared/event`) |
+| `shared` | Kernel: `DomainException` hierarchy, `IRepository`, `InvariantChecked`, AOP aspects, `RepositoryLocks`, `WsepHttpClient`, metrics, `Clock`/BCrypt beans, published-language DTOs (`shared/dto`), purchase-policy domain (`shared/domain/policy`), the user-text length rule (`shared/domain/TextLimits`), integration notices (`shared/event`), PostgreSQL driver timeouts (`shared/persistence/PostgresDriverSettings`) |
 | `identity` | User, Session (typed by `SessionKind`), Admin, custom JWT auth (`JwtSessionManager`) |
 | `organization` | ProductionCompany + the `CompanyAppointment` aggregate (membership, roles, permissions) |
 | `catalog` | Event, venue maps, zones, seats, **inventory** (reserve/release/confirm via inbound `InventoryCommandPort`) |

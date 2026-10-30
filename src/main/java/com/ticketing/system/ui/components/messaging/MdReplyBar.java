@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.components.messaging;
 
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.button.Button;
@@ -25,6 +26,7 @@ public class MdReplyBar extends Div {
         input.setPlaceholder("Write a reply…");
         input.getStyle().set("flex", "1 1 auto");
         input.addClassName("md-reply-input");
+        input.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
 
         send.setIcon(new LkIcon("arrowRight", 15));
         send.addThemeVariants(ButtonVariant.LUMO_PRIMARY);

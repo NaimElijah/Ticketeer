@@ -108,4 +108,16 @@ class SubmitComplaintPresenterTest {
             SubmitComplaintPresenter.Outcome.Failure.class, presenter.submit(TOKEN, "Subject", "Body", null));
         assertEquals(rule.getMessage(), fail.reason());
     }
+
+    // The service appends "\n\n[Related: <about>]" (13 characters around the category) to the details,
+    // and the stored body is varchar(255), so the form may take 255 - 13 - 17 = 225 characters (#186).
+    @Test
+    void GivenACategory_WhenMaxDetailsLength_ThenTheColumnLessTheAppendedReference() {
+        assertEquals(225, presenter.maxDetailsLength("Payment or refund"));
+    }
+
+    @Test
+    void GivenNoCategory_WhenMaxDetailsLength_ThenTheWholeColumn() {
+        assertEquals(255, presenter.maxDetailsLength(null));
+    }
 }

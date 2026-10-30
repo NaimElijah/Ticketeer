@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.company;
 
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -51,10 +52,12 @@ public class CompanyRegistrationView extends LkPage {
         name.setPlaceholder("e.g. BlueWave Productions");
         name.setRequired(true);
         name.setWidthFull();
+        name.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
 
         description.setPlaceholder("What kind of events does this company produce?");
         description.setMinHeight("120px");
         description.setWidthFull();
+        description.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
 
         LkCol col = new LkCol().gap(14);
         col.add(name, description);

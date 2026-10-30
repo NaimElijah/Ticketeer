@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.messaging;
 
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -52,12 +53,15 @@ public class SubmitComplaintView extends LkPage {
         LkCard card = new LkCard("New Complaint").pad(20);
 
         about.label("About");
+        about.onChange(value -> details.setMaxLength(presenter.maxDetailsLength(value)));
         subject.setPlaceholder("Brief summary of the issue");
         subject.setRequired(true);
+        subject.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
         subject.setWidthFull();
         details.setPlaceholder("Describe what happened, including any order or event references…");
         details.setMinHeight("160px");
         details.setRequired(true);
+        details.setMaxLength(presenter.maxDetailsLength(about.getValue()));
         details.setWidthFull();
 
         LkCol col = new LkCol().gap(14);

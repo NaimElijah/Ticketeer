@@ -3,6 +3,7 @@ package com.ticketing.system.messaging.domain;
 import java.time.LocalDateTime;
 
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.domain.TextLimits;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -47,6 +48,7 @@ public class Message implements InvariantChecked {
 
     public Message(String messageId, int senderId, ParticipantType senderType,
                    String body, LocalDateTime sentAt) {
+        TextLimits.requireFits("Message", body);
         this.messageId = messageId;
         this.senderId = senderId;
         this.senderType = senderType;

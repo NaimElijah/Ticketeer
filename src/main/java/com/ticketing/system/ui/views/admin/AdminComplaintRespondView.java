@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
@@ -90,6 +91,7 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
             reply.setPlaceholder("Write your response to the member…");
             reply.setMinHeight("140px");
             reply.setWidthFull();
+            reply.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
             card.add(reply);
 
             LkRow actions = new LkRow().gap(8).justify("flex-end");

@@ -11,6 +11,7 @@ import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MessageNotFoundException;
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.domain.TextLimits;
 
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
@@ -94,6 +95,7 @@ public class Conversation implements InvariantChecked {
                         int counterpartyId, ParticipantType counterpartyType,
                         String subject, LocalDateTime createdAt,
                         List<Message> messages) {
+        TextLimits.requireFits("Subject", subject);
         this.conversationId = conversationId;
         this.type = type;
         this.status = ConversationStatus.OPEN;

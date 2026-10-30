@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
@@ -47,6 +48,10 @@ import jakarta.persistence.Version;
 @Entity
 @Table(name = "events")
 public class Event implements InvariantChecked {
+    private static final String NAME_FIELD = "Event name";
+    private static final String DESCRIPTION_FIELD = "Event description";
+    private static final String ARTIST_FIELD = "Artist name";
+
     @Id
     private int id;
     @Column(nullable = false)
@@ -118,6 +123,7 @@ public class Event implements InvariantChecked {
         // Invariants are enforced by checkInvariants() at the end of construction
         // (single source of truth). Collection copies are null-safe so a null input
         // reaches checkInvariants() as a clean IllegalStateException instead of an NPE here.
+        requireTextFits(name, description, artistsNames);
         this.id = id;
         this.name = name;
         this.description = description;
@@ -548,6 +554,7 @@ public class Event implements InvariantChecked {
             requireStartsAfter(newShowDates != null ? newShowDates : showDates,
                     newTimeZone != null ? newTimeZone : timeZone, now);
         }
+        requireTextFits(newName, newDescription, null);
         if (newName != null && !newName.isBlank()) {
             this.name = newName;
         }
@@ -717,6 +724,15 @@ public class Event implements InvariantChecked {
 
 
 
+
+    // Checked before any field is assigned, so a refused value never reaches the aggregate (#186).
+    private static void requireTextFits(String name, String description, List<String> artistsNames) {
+        TextLimits.requireFits(NAME_FIELD, name);
+        TextLimits.requireFits(DESCRIPTION_FIELD, description);
+        if (artistsNames != null) {
+            artistsNames.forEach(artist -> TextLimits.requireFits(ARTIST_FIELD, artist));
+        }
+    }
 
     @Override
     public void checkInvariants() {

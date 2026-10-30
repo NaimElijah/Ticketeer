@@ -7,6 +7,7 @@ import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -276,6 +277,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
         title.setRequired(true);
         title.setWidthFull();
+        title.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
+        artists.maxLength(TextLimits.MAX_TEXT_LENGTH);
 
         category.setLabel("Category");
         category.setItems(Arrays.stream(EventCategory.values()).map(Enum::name).toList());
@@ -304,6 +307,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
         description.setMinHeight("120px");
         description.setWidthFull();
+        description.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
 
         Div grid = new Div();
         grid.getStyle()

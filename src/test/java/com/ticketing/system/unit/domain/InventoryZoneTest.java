@@ -17,6 +17,7 @@ import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.StandingZone;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.support.BaseDomainTest;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,6 +29,9 @@ public class InventoryZoneTest extends BaseDomainTest {
     private InventoryZone zone;
 
     private final int ZONE_ID = 5;
+    // inventory_zones.name is varchar(255) (V1__baseline_schema.sql); a longer name must be refused
+    // by the domain, not by the database insert (#186).
+    private static final int NAME_LIMIT = 255;
 
     @BeforeEach
     public void setUp() {
@@ -572,4 +576,48 @@ public class InventoryZoneTest extends BaseDomainTest {
         assertFalse(gridZone.hasGridPlacement());
     }
 
+    // -- zone name length (#186) -------------------------------------------
+
+    @Test
+    void GivenNameOf256Characters_WhenCreateStandingZone_ThenRefusedNamingTheLimit() {
+        String name = "z".repeat(NAME_LIMIT + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> new StandingZone(ZONE_ID, name, 10, 100));
+
+        assertNamesTheLimit(ex);
+    }
+
+    @Test
+    void GivenNameOf255Characters_WhenCreateStandingZone_ThenAccepted() {
+        String name = "z".repeat(NAME_LIMIT);
+
+        InventoryZone standing = track(new StandingZone(ZONE_ID, name, 10, 100));
+
+        assertEquals(name, standing.getName());
+    }
+
+    @Test
+    void GivenNameOf256Characters_WhenCreateSeatedZone_ThenRefusedNamingTheLimit() {
+        String name = "z".repeat(NAME_LIMIT + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> new SeatedZone(ZONE_ID, name, 100, List.of(new Seat("A1", 0, 0))));
+
+        assertNamesTheLimit(ex);
+    }
+
+    @Test
+    void GivenNameOf255Characters_WhenCreateSeatedZone_ThenAccepted() {
+        String name = "z".repeat(NAME_LIMIT);
+
+        InventoryZone seated = track(new SeatedZone(ZONE_ID, name, 100, List.of(new Seat("A1", 0, 0))));
+
+        assertEquals(name, seated.getName());
+    }
+
+    private static void assertNamesTheLimit(BusinessRuleViolationException ex) {
+        assertTrue(ex.getMessage().contains(String.valueOf(NAME_LIMIT)),
+                () -> "the refusal names the " + NAME_LIMIT + "-character limit, was: " + ex.getMessage());
+    }
 }

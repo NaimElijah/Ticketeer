@@ -21,6 +21,8 @@ import com.vaadin.flow.component.textfield.TextField;
  */
 class LkTextRowsTest {
 
+    private static final int ARTIST_LIMIT = 40;
+
     @Test
     void newComponent_startsWithOneEmptyRow_noValues() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
@@ -81,6 +83,28 @@ class LkTextRowsTest {
         assertFalse(addButtonVisible(rows), "add button hidden in read-only mode");
         assertEquals(0, removeControlCount(rows), "no ✕ remove controls in read-only mode");
         assertEquals(List.of("A", "B"), rows.getValues(), "values still readable when read-only");
+    }
+
+    // The artists' column is bounded (#186), so every row, including ones added later, carries the limit.
+    @Test
+    void GivenAMaxLength_WhenRowsAreSetAndAdded_ThenEveryRowCarriesIt() {
+        LkTextRows rows = new LkTextRows("Artists", "+ Add artist").maxLength(ARTIST_LIMIT);
+
+        rows.setValues(List.of("A", "B"));
+
+        List<TextField> fields = descendantsOf(rows, TextField.class);
+        assertEquals(2, fields.size());
+        fields.forEach(field -> assertEquals(ARTIST_LIMIT, field.getMaxLength()));
+    }
+
+    @Test
+    void GivenExistingRows_WhenMaxLengthIsSet_ThenTheExistingRowsCarryIt() {
+        LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
+
+        rows.maxLength(ARTIST_LIMIT);
+
+        descendantsOf(rows, TextField.class)
+                .forEach(field -> assertEquals(ARTIST_LIMIT, field.getMaxLength()));
     }
 
     // -- helpers: walk the component subtree (no UI/rendering needed) -----

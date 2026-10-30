@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.views.messaging;
 
 import com.ticketing.system.shared.dto.CompanySummaryDTO;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
@@ -89,10 +90,12 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
 
         subject.setPlaceholder("Brief summary of your question");
         subject.setRequired(true);
+        subject.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
         subject.setWidthFull();
         details.setPlaceholder("Write your question to the organizer…");
         details.setMinHeight("160px");
         details.setRequired(true);
+        details.setMaxLength(TextLimits.MAX_TEXT_LENGTH);
         details.setWidthFull();
 
         LkCol col = new LkCol().gap(14);

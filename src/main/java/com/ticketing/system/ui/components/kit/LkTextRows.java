@@ -29,6 +29,7 @@ public class LkTextRows extends Div {
     private final List<TextField> rows = new ArrayList<>();
     private String placeholder = "";
     private boolean readOnly = false;
+    private Integer maxLength;
 
     public LkTextRows(String labelText, String addButtonLabel) {
         addClassName("lk-text-rows");
@@ -55,6 +56,13 @@ public class LkTextRows extends Div {
     public LkTextRows placeholder(String p) {
         this.placeholder = p == null ? "" : p;
         rows.forEach(t -> t.setPlaceholder(this.placeholder));
+        return this;
+    }
+
+    /** Caps every row, present and future, at {@code max} characters, so typing stops at the limit. */
+    public LkTextRows maxLength(int max) {
+        this.maxLength = max;
+        rows.forEach(t -> t.setMaxLength(max));
         return this;
     }
 
@@ -110,6 +118,9 @@ public class LkTextRows extends Div {
         field.setPlaceholder(placeholder);
         field.setWidthFull();
         field.setReadOnly(readOnly);
+        if (maxLength != null) {
+            field.setMaxLength(maxLength);
+        }
         rows.add(field);
         return field;
     }
