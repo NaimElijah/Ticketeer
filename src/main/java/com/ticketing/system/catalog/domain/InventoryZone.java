@@ -48,6 +48,12 @@ import jakarta.persistence.Version;
 @DiscriminatorColumn(name = "zone_type")
 public abstract class InventoryZone implements InvariantChecked {
 
+    /**
+     * The highest ticket price a zone may carry (#185). The zone invariants are the only check on a
+     * price: the editor's field limits are advisory, and a client can send any number.
+     */
+    public static final double MAX_PRICE = 1_000_000.0;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long zonePk;
@@ -79,7 +85,7 @@ public abstract class InventoryZone implements InvariantChecked {
     protected InventoryZone() { }
 
     protected InventoryZone(int id, String name, double price) {
-        // Invariants (name non-blank, price >= 0) are enforced by the concrete
+        // Invariants (name non-blank, price in bounds) are enforced by the concrete
         // subclass's checkInvariants(), invoked at the end of its constructor.
         // Calling the overridable checkInvariants() here would run before the
         // subclass's own fields are initialized.
@@ -98,6 +104,16 @@ public abstract class InventoryZone implements InvariantChecked {
 
     public double getprice() {
         return price;
+    }
+
+    /**
+     * @param price a candidate zone price
+     * @return whether it is a finite number in {@code [0, MAX_PRICE]}. Finiteness is tested on its
+     *         own, though the range already excludes NaN and the infinities, because the former check
+     *         ({@code price < 0}) let NaN through
+     */
+    protected static boolean isPriceInBounds(double price) {
+        return Double.isFinite(price) && price >= 0 && price <= MAX_PRICE;
     }
 
     public abstract ZoneType getZoneType();
