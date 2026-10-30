@@ -8,6 +8,10 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
  * <p>The domain refuses longer text with a message the user can act on. Without it, the Jpa
  * adapters fail the insert on the column and the UI shows generic text, while the Memory adapters
  * store the value, so the two backends drift (#186).
+ *
+ * <p>Length is {@link String#length()}, in UTF-16 units, so a character outside the Basic Multilingual
+ * Plane, such as an emoji, counts as two. That is how H2 counts a {@code varchar}'s length; PostgreSQL
+ * counts characters, so text that fits here fits on both.
  */
 public final class TextLimits {
 
