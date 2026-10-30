@@ -6,8 +6,11 @@ import com.ticketing.system.identity.domain.Session;
 
 /**
  * Port for session / token management. Implemented in Infrastructure by
- * {@code JwtSessionManager}. Used by {@code AuthenticationService} (UC-12/14)
- * and {@code NotificationDispatchService} (UC-35/36 — online check).
+ * {@code JwtSessionManager}. Used by {@code AuthenticationService} (UC-12/14) and by
+ * every application service that authenticates its caller.
+ *
+ * <p>A guest holds no token: its credential is the raw id of its Guest session row, which
+ * {@link #validateGuestSession} accepts and no token reader does.
  *
  * <p>Every token names one session row, and is accepted only while that row exists, is
  * unexpired, belongs to the token's subject, and is of the kind the token's role claims.
@@ -137,7 +140,11 @@ public interface SessionManager {
      */
     void invalidate(String token);
 
-    /** Whether the given user has a currently-active session. UC-35/36. */
+    /**
+     * Whether the given member has a live Member session. An Admin session with the same id does not
+     * count: member and admin ids share one space (ADR-012). UC-35/36; no production code calls it
+     * yet.
+     */
     boolean isOnline(int userId);
 
     /**

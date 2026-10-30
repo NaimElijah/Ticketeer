@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.infrastructure.persistence.SessionPersistence;
 
 import java.time.Clock;
+import java.time.ZoneOffset;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +21,8 @@ import com.ticketing.system.identity.adapter.out.persistence.SpringDataSessionRe
  *
  * <p>The repository is Spring-built (via {@code @Import}) so its {@code @PersistenceContext}
  * EntityManager — needed by {@code save}'s {@code merge} — is injected; the {@code @DataJpaTest}
- * slice doesn't load {@code SecurityConfig}, so {@link TestClockConfig} supplies the {@code Clock}
- * (system-UTC, matching the Memory contract test). Each test starts from an empty table
+ * slice doesn't load {@code SecurityConfig}, so {@link TestClockConfig} supplies the {@code Clock},
+ * fixed at {@link #NOW} as in the Memory contract test. Each test starts from an empty table
  * ({@link #cleanTable()}) so the suite is order-independent. CI never touches a real database.
  */
 @DataJpaTest
@@ -48,7 +49,7 @@ class JpaSessionRepositoryContractTest extends ISessionRepositoryContractTest {
     static class TestClockConfig {
         @Bean
         Clock clock() {
-            return Clock.systemUTC();
+            return Clock.fixed(NOW, ZoneOffset.UTC);
         }
     }
 }

@@ -62,7 +62,7 @@ public class MemorySessionRepository implements SessionRepository {
         Instant now = clock.instant();
         Integer target = userId;
         for (Session s : sessionsById.values()) {
-            if (target.equals(s.getUserId()) && !s.isExpiredAt(now)) {
+            if (s.isMember() && target.equals(s.getUserId()) && !s.isExpiredAt(now)) {
                 return true;
             }
         }
