@@ -356,6 +356,23 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(1, result.size());
     }
 
+    // The end bound is the next midnight, exclusive: a show starting at that midnight is on the next day.
+    @Test
+    void GivenAShowStartingAtTheMidnightAfterTheEndDate_WhenSearchingUpToThatDate_ThenTheEventDoesNotMatch() {
+        LocalDateTime nextMidnight = LocalDateTime.of(2099, 6, 2, 0, 0);
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
+        eventRepo.save(new Event(1, "Midnight Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(nextMidnight, nextMidnight.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0)));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null,
+                LocalDate.of(2099, 6, 1), LocalDate.of(2099, 6, 1),
+                null, null, null, null, null));
+
+        assertEquals(0, result.size());
+    }
+
     @Test
     void givenEventWithShowDateOutsideRange_whensearchAll_thenReturnsEmpty() {
         eventRepo.save(buildEvent(1, "Future Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT)); // show date:
