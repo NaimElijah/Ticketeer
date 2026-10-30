@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
@@ -40,6 +41,7 @@ import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.SeatConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 
 import jakarta.persistence.EntityManagerFactory;
 
@@ -65,6 +67,7 @@ import jakarta.persistence.EntityManagerFactory;
  */
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @ActiveProfiles("test")
+@DirtiesContext // the statistics property gives this class a context no other class reuses
 class EventUseCaseTransactionJpaTest {
 
     private static final ZoneId VENUE_ZONE = ZoneId.of("Asia/Jerusalem");
@@ -124,7 +127,7 @@ class EventUseCaseTransactionJpaTest {
         long transactions = transactionsDuring(() -> eventManagementService.deleteEvent(owner.token(), eventId));
 
         assertEquals(1, transactions, "deleteEvent should run as exactly one transaction (V3 appendix 4)");
-        assertThrows(RuntimeException.class, () -> eventRepository.findById(eventId),
+        assertThrows(EventNotFoundException.class, () -> eventRepository.findById(eventId),
                 "deleteEvent should have removed the event");
     }
 
