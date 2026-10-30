@@ -10,8 +10,9 @@ import com.vaadin.flow.data.value.ValueChangeMode;
  * truncating. {@code maxlength} drops whatever a paste puts past it without a word, and the cut
  * text then saves (WCAG 3.3.1); this names the limit in the helper text (3.3.2) and, while the text
  * is over it, marks the field invalid and adds the text's length to the helper text. The text itself is
- * left alone, so the user decides what to cut. A view refuses submit with {@link #exceeds}; the
- * domain refuses the text too ({@link TextLimits}), so this is guidance, not the guard.
+ * left alone, so the user decides what to cut. A view may also refuse to submit while {@link #exceeds}
+ * holds, as the complaint form and the reply bar do; the others submit and show the domain's refusal.
+ * The domain refuses the text either way ({@link TextLimits}), so this is guidance, not the guard.
  *
  * <p>Length is {@link String#length()}, as the domain counts it.
  *
