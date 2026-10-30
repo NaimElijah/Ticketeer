@@ -24,6 +24,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class RegisterPresenter {
 
+    /** The longest email registration accepts, so the form can cap its field at the same length. */
+    public static final int MAX_EMAIL_LENGTH = AuthenticationService.MAX_EMAIL_LENGTH;
+
     private final AuthenticationService authenticationService;
 
     @Autowired
