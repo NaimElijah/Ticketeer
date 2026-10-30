@@ -9,7 +9,7 @@ import com.vaadin.flow.data.value.ValueChangeMode;
  * A length limit on a {@code TextField} or {@code TextArea} that tells the user instead of
  * truncating. {@code maxlength} drops whatever a paste puts past it without a word, and the cut
  * text then saves (WCAG 3.3.1); this names the limit in the helper text (3.3.2) and, while the text
- * is over it, marks the field invalid with an error message saying by how much. The text itself is
+ * is over it, marks the field invalid and adds the text's length to the helper text. The text itself is
  * left alone, so the user decides what to cut. A view refuses submit with {@link #exceeds}; the
  * domain refuses the text too ({@link TextLimits}), so this is guidance, not the guard.
  *
@@ -19,6 +19,12 @@ import com.vaadin.flow.data.value.ValueChangeMode;
  * the user types rather than on blur. It relies on the field's own validation listener, which Vaadin
  * registers in the field's constructor, running before this one: on a value within its own
  * constraints that listener clears {@code invalid}, and this one, running after, sets it again.
+ *
+ * <p>The error message stays the same while the text is over the limit, and the running length goes in
+ * the helper text instead: the client announces every change of an error message assertively
+ * ({@code @vaadin/field-base}'s {@code ErrorController}), so a count in it would interrupt a
+ * screen-reader user on each keystroke, while the helper text is read only when the user reaches the
+ * field.
  */
 public final class LkTextLimit {
 
@@ -78,7 +84,6 @@ public final class LkTextLimit {
             throw new IllegalArgumentException("A text limit cannot be negative, was " + max);
         }
         this.max = max;
-        field.setHelperText("Up to " + max + " characters");
         check();
     }
 
@@ -97,11 +102,16 @@ public final class LkTextLimit {
 
     private void check() {
         int length = length();
+        String limitText = "Up to " + max + " characters";
         if (length > max) {
             flagged = true;
-            field.setErrorMessage("At most " + max + " characters; this has " + length + ".");
+            field.setHelperText(limitText + "; this has " + length);
+            field.setErrorMessage("Too long: at most " + max + " characters.");
             field.setInvalid(true);
-        } else if (flagged) {
+            return;
+        }
+        field.setHelperText(limitText);
+        if (flagged) {
             flagged = false;
             field.setErrorMessage(null);
             // Hand the verdict back to the field's own constraints, e.g. "required" on emptied text.

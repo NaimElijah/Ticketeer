@@ -28,15 +28,32 @@ class LkTextLimitTest {
     private static final String OVER = "a".repeat(LIMIT + 2);
 
     @Test
-    void GivenALimitedField_WhenTheValueGoesOverTheLimit_ThenTheFieldIsInvalidAndSaysByHowMuch() {
+    void GivenALimitedField_WhenTheValueGoesOverTheLimit_ThenTheFieldIsInvalidAndItsHelperSaysByHowMuch() {
         TextField field = new TextField("Subject");
         LkTextLimit.apply(field, LIMIT);
 
         field.setValue(OVER);
 
         assertTrue(field.isInvalid());
-        assertEquals("At most 10 characters; this has 12.", field.getErrorMessage());
+        assertEquals("Too long: at most 10 characters.", field.getErrorMessage());
+        assertEquals("Up to 10 characters; this has 12", field.getHelperText());
         assertTrue(LkTextLimit.exceeds(field));
+    }
+
+    // The client announces every change of the error text assertively, so a count in it would interrupt
+    // a screen-reader user on each keystroke. The text stays the same while the field is over the limit,
+    // and the count, in the helper text, is read only when the user moves to the field.
+    @Test
+    void GivenAFieldOverTheLimit_WhenTheUserKeepsTyping_ThenTheErrorTextStaysTheSameAndOnlyTheCountChanges() {
+        TextField field = new TextField("Subject");
+        LkTextLimit.apply(field, LIMIT);
+        field.setValue(OVER);
+        String errorText = field.getErrorMessage();
+
+        field.setValue(OVER + "a");
+
+        assertEquals(errorText, field.getErrorMessage());
+        assertEquals("Up to 10 characters; this has 13", field.getHelperText());
     }
 
     @Test
@@ -60,6 +77,7 @@ class LkTextLimitTest {
 
         assertFalse(field.isInvalid());
         assertNoErrorMessage(field);
+        assertEquals("Up to 10 characters", field.getHelperText());
         assertFalse(LkTextLimit.exceeds(field));
     }
 
@@ -85,7 +103,8 @@ class LkTextLimitTest {
         limit.setMax(LOWERED_LIMIT);
 
         assertTrue(field.isInvalid());
-        assertEquals("At most 4 characters; this has 10.", field.getErrorMessage());
+        assertEquals("Too long: at most 4 characters.", field.getErrorMessage());
+        assertEquals("Up to 4 characters; this has 10", field.getHelperText());
         assertTrue(LkTextLimit.exceeds(field));
     }
 
@@ -153,7 +172,8 @@ class LkTextLimitTest {
 
         field.setValue("a".repeat(TextLimits.MAX_TEXT_LENGTH + 1));
         assertTrue(field.isInvalid());
-        assertEquals("Up to " + TextLimits.MAX_TEXT_LENGTH + " characters", field.getHelperText());
+        assertEquals("Up to " + TextLimits.MAX_TEXT_LENGTH + " characters; this has " + (TextLimits.MAX_TEXT_LENGTH + 1),
+                field.getHelperText());
     }
 
     // Clearing an over-limit required field must leave the field's own "required" verdict in place.

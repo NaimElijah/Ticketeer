@@ -95,13 +95,14 @@ class LkTextRowsTest {
 
         List<TextField> fields = descendantsOf(rows, TextField.class);
         assertEquals(2, fields.size());
-        fields.forEach(field -> {
-            assertEquals("Up to " + ARTIST_LIMIT + " characters", field.getHelperText());
-            assertFalse(field.getElement().hasProperty("maxlength"), "a row must not truncate input");
-        });
+        fields.forEach(field ->
+                assertFalse(field.getElement().hasProperty("maxlength"), "a row must not truncate input"));
+        assertEquals("Up to " + ARTIST_LIMIT + " characters", fields.get(0).getHelperText());
+        assertEquals("Up to " + ARTIST_LIMIT + " characters; this has " + (ARTIST_LIMIT + 1),
+                fields.get(1).getHelperText());
         assertFalse(fields.get(0).isInvalid());
         assertTrue(fields.get(1).isInvalid());
-        assertEquals("At most 40 characters; this has 41.", fields.get(1).getErrorMessage());
+        assertEquals("Too long: at most 40 characters.", fields.get(1).getErrorMessage());
     }
 
     @Test
@@ -114,7 +115,7 @@ class LkTextRowsTest {
         List<TextField> fields = descendantsOf(rows, TextField.class);
         assertEquals(1, fields.size());
         assertTrue(fields.get(0).isInvalid());
-        assertEquals("Up to " + ARTIST_LIMIT + " characters", fields.get(0).getHelperText());
+        assertEquals("Up to " + ARTIST_LIMIT + " characters; this has " + (ARTIST_LIMIT + 1), fields.get(0).getHelperText());
     }
 
     // -- helpers: walk the component subtree (no UI/rendering needed) -----
