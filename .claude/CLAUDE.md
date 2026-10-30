@@ -77,9 +77,10 @@ reaches into other contexts:
 
 Dependencies (acyclic, and each edge allowed by `HexagonalRulesTest`'s module map):
 `shared ← identity ← organization ← catalog ← sales`, and `organization ← messaging`. `notifications`
-depends only on `shared`. `governance` and `reporting` depend on the backend contexts, not on each
-other. `ui` uses every backend module; `bootstrap` may use everything including `ui`; nothing depends
-on either. A new module fails the build until it is added to that map and to this paragraph. Known
+depends only on `shared`. `governance` and `reporting` depend on the backend contexts except
+`notifications`, and not on each other. `ui` uses every backend module; `bootstrap` may use everything
+including `ui`; nothing depends on either. A new module fails the build until it is added to that map
+and to this paragraph ([ADR-011](../docs/ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md)). Known
 exception, due to move behind an inbound port (#53): `identity`'s `AuthenticationService` calls
 `notifications`' `NotificationDispatchService` directly. The map allows that one class pair, nothing
 wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstrap's edges allow.
@@ -98,7 +99,7 @@ wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstra
 | `ui` | The single Vaadin driving adapter |
 | `bootstrap` | Composition root: lifecycle runners, `@Scheduled` sweepers, dev seed/`.scenario` engine |
 
-Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoMappers}` · `adapter/in/event` ·
+Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoMappers, event}` · `adapter/in/event` ·
 `adapter/out/<persistence|wsep|security|…>`. Repository ports sit in `application/port/out`, not
 `domain`. An `adapter/out/<context>` package implements a port owned by that other context (e.g.
 `sales/adapter/out/catalog`). `governance` and `reporting` have no domain. Domain classes double as
@@ -111,8 +112,9 @@ Seams: `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`, `EventSales
 Events are in-process, with no outbox and no Modulith event registry. Catalog → sales (`EventCancelledEvent`) is a synchronous `@EventListener`, because the cancel call must see refund failures. Every `shared/event` notice is consumed by `NotificationEventListener` with `@Async("notificationExecutor")` + `@TransactionalEventListener(fallbackExecution = true)`: after commit, on one `notify-` thread, never delivered for a rolled-back transaction (ADR-004). Publishers don't catch notification failures, so a new notice consumer must follow the same pattern; `HexagonalRulesTest` fails the build otherwise. A Spring test that reads notifications must wait for them (Awaitility).
 
 **Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity and its
-allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui reaches other
-modules only through their application API (no `application.port.out`, no `adapter`), the module map,
+allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui never depends on
+another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
+stay open, #208), the module map,
 `bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules;
 the clock, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
 they fail on a fixture) and `ModularityTests`
@@ -180,7 +182,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | `production`, `no-vaadin` | Maven build profiles: bundle the frontend and keep `vaadin-dev` and H2 out of the jar (#79) / skip `prepare-frontend` |
 
 - Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
-- Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
+- Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. The exception: where a `@Scheduled` placeholder needs the value, the record only validates and nothing injects it (`MarketProperties`, `SweeperProperties`, `EventCompletionProperties`, `NotificationPollingProperties`). A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
 - `logback-spring.xml` has a catch-all `!dev & !test` block, so a new runtime profile gets appenders without a block of its own. A new profile that needs different logging gets its own block and an exclusion in the catch-all: blocks that both match merge (root gets both blocks' appenders, logback ignores a duplicate, and the later block's levels win), and a run that matches none is silent (36ac7924).
 
 ## Conventions

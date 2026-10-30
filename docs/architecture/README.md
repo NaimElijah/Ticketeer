@@ -38,7 +38,8 @@ or transitively):
   `@Async` `@TransactionalEventListener` adapter that runs after the publisher commits, on the
   `notify-` thread; [ADR-004](../ADRs/ADR-004-no-outbox-for-notifications.md)) and depends on nothing but the kernel.
 - **governance** — platform lifecycle, market state, system analytics and integrity. A top-level
-  consumer (nothing depends on it; the market gate is inverted through a sales-owned port).
+  consumer (only `ui` and `bootstrap` depend on it; the market gate is inverted through a
+  sales-owned port).
 - **reporting** — the read/reporting (CQRS query) side: cross-context read services (member purchase
   history, company dashboards). A top-level consumer used only by the UI.
 - **ui** — the single Vaadin driving adapter (views, presenters). No backend module depends on it.
@@ -46,9 +47,10 @@ or transitively):
   the dev seed/`.scenario` engine. A pure sink that wires the contexts together.
 
 Each backend context follows the canonical hexagonal layout
-`domain / application(port.in, port.out, service) / adapter(out.*)`, with cross-context calls going
-through ports/events (e.g. `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`,
-`EventSalesHistoryPort`, `EventCancelledEvent`, the `shared/event` notices).
+`domain / application(port.in, port.out, service) / adapter(out.*)`. The seams between contexts are
+ports and events (e.g. `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`,
+`EventSalesHistoryPort`, `EventCancelledEvent`, the `shared/event` notices); other cross-context
+calls still use services, repository ports and entities, and #54 replaces them.
 
 ## Enforcement status
 
@@ -61,10 +63,13 @@ Both gates run on every build and are **green**:
   - each context's domain depends only on its own context and `shared`;
   - the application layer never depends on adapters;
   - no backend context, `reporting` included, depends on `ui`;
-  - `ui` uses other modules only through their application API, never their `application.port.out`
-    or `adapter` packages;
-  - each module depends only on the modules its entry in the test's module map allows: the graph
-    above, plus the one `identity → notifications` class pair;
+  - `ui` never depends on another module's `application.port.out` or `adapter` packages. That is a
+    deny-list: other modules' `domain` types and `config` records stay open to it (#208);
+  - each module depends only on the modules its entry in the test's module map allows, plus the one
+    `identity → notifications` class pair (#53). The graph is drawn in the Architecture section of
+    the root [README](../../README.md) and described in
+    [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md); the reasoning is in
+    [ADR-011](../ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md);
   - **`bounded_contexts_are_acyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is
     the same cycle engine Spring Modulith uses, run *without* the open-module exemption, so it is the
     substantive cycle guarantee.

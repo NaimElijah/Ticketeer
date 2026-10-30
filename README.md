@@ -79,7 +79,8 @@ A DDD + hexagonal modular monolith. Each top-level package under `com.ticketing.
 Spring Modulith module. Contexts are meant to talk through ports (interfaces owned by one side)
 and events. Some still reach into another context's repository ports, entities and services; #54
 replaces those. The module graph is acyclic, and each module may depend only on the modules it
-reaches by following the arrows below. The build fails if either stops being true.
+reaches by following the solid arrows below. The dashed arrow is one class pair, not a module edge.
+The build fails if either stops being true.
 
 ```mermaid
 flowchart TD
@@ -398,10 +399,12 @@ schema on PostgreSQL and on H2, in dev and in every test, and a mapped table or 
 migration created fails the boot. Cost: every entity change needs a migration in SQL both
 databases accept, and `validate` does not check length, nullability or constraints, so review must.
 
-**Open Modulith modules, with ArchUnit as the cycle gate** (no ADR yet). The code began as a
+**Open Modulith modules, with ArchUnit as the boundary gate**
+([ADR-011](docs/ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md)). The code began as a
 layered monolith whose contexts still share services and domain types, so closing the modules to
-named-interface ports is a larger follow-on. Cost: module boundaries are enforced as a fixed,
-acyclic module graph and layering rules, not as type-level encapsulation.
+named-interface ports is a larger follow-on. Cost: module boundaries are enforced as a fixed
+module map (every allowed dependency listed, the graph acyclic) and layering rules, not as
+type-level encapsulation, and the map and these docs are kept in step by hand.
 
 ## Status and limitations
 
