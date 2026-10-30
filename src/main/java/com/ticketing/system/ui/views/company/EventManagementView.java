@@ -219,6 +219,9 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             }
             case EventManagementPresenter.CreateOutcome.NoCompany ignored ->
                 Toasts.failure("You can only create events for a company you own.");
+            case EventManagementPresenter.CreateOutcome.ChooseCompany ignored ->
+                Toasts.failure("Choose the company in the workspace's Company selector, "
+                    + "or under My companies, then come back.");
             case EventManagementPresenter.CreateOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case EventManagementPresenter.CreateOutcome.InvalidInput bad ->

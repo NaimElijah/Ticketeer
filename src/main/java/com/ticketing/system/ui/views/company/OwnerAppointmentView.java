@@ -50,7 +50,7 @@ public class OwnerAppointmentView extends LkPage {
 
         UserCompanyDTO current = membershipPresenter.currentCompany();
         String companyName = current == null
-            ? "this company"
+            ? "Choose a company first"
             : current.name() + " (this company)";
         scope.setValue(companyName);
         scope.setReadOnly(true);
@@ -90,6 +90,9 @@ public class OwnerAppointmentView extends LkPage {
                 Toasts.failure("Your session has expired — please sign in again.");
             case MyCompaniesPresenter.AppointOutcome.NoCompany ignored ->
                 Toasts.failure("You don't own a company — register one first.");
+            case MyCompaniesPresenter.AppointOutcome.ChooseCompany ignored ->
+                Toasts.failure("Choose the company in the workspace's Company selector, "
+                    + "or under My companies, then come back.");
             case MyCompaniesPresenter.AppointOutcome.UserNotFound u ->
                 Toasts.failure("User \"" + u.username() + "\" was not found.");
             case MyCompaniesPresenter.AppointOutcome.Failure fail ->

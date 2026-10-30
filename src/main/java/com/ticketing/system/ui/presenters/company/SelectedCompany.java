@@ -25,7 +25,15 @@ final class SelectedCompany {
      *     company; otherwise empty
      */
     static <T> Optional<T> among(List<T> companies, ToIntFunction<T> companyIdOf) {
-        Integer selectedId = CurrentCompanies.currentCompanyId();
+        return among(CurrentCompanies.currentCompanyId(), companies, companyIdOf);
+    }
+
+    /**
+     * As {@link #among(List, ToIntFunction)}, for a caller that is handed the workspace's selection.
+     *
+     * @param selectedId the workspace's selected company id, or {@code null} for none
+     */
+    static <T> Optional<T> among(Integer selectedId, List<T> companies, ToIntFunction<T> companyIdOf) {
         if (selectedId == null) {
             return companies.size() == 1 ? Optional.of(companies.get(0)) : Optional.empty();
         }

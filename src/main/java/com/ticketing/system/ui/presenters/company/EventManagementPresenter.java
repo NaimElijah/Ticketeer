@@ -3,6 +3,7 @@ package com.ticketing.system.ui.presenters.company;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -69,10 +70,12 @@ public class EventManagementPresenter {
     }
 
     /**
-     * Creates a new event in DRAFT state under the caller's company. The company is resolved from
-     * the caller's companies — {@code preferredCompanyId} (the workspace's currently selected
-     * company) when it is one of them, otherwise the first (matching how
-     * {@code CompanyEventListPresenter} picks the company for the event list the user came from).
+     * Creates a new event in DRAFT state under the caller's company. The company is picked by
+     * {@link SelectedCompany}'s rule from every company the caller belongs to ({@code findMyCompanies},
+     * managers included, since {@code addEvent} itself checks the MANAGE_INVENTORY permission):
+     * {@code preferredCompanyId}, the workspace's selection, when it is one of them; with nothing
+     * selected, the only one. Otherwise {@link CreateOutcome.ChooseCompany}, and nothing is created,
+     * so an event never lands in a company other than the one on screen.
      * Domain value objects ({@link Location}, {@link ShowDate}) are assembled here so the view stays
      * free of domain construction. {@code starts} and {@code ends} are wall-clock times at the venue,
      * read in {@code timeZone} (ADR-008).
@@ -101,11 +104,14 @@ public class EventManagementPresenter {
                                    return new CreateOutcome.InvalidInput("Rating must be between 0 and 5.");
 
         try {
-            Integer companyId = resolveCompanyId(token, preferredCompanyId);
-            if (companyId == null) return new CreateOutcome.NoCompany();
+            List<MyCompanyDTO> companies = companyService.findMyCompanies(token);
+            if (companies.isEmpty()) return new CreateOutcome.NoCompany();
+            Optional<MyCompanyDTO> company =
+                SelectedCompany.among(preferredCompanyId, companies, MyCompanyDTO::companyId);
+            if (company.isEmpty()) return new CreateOutcome.ChooseCompany();
 
             EventCreationDTO request = new EventCreationDTO(
-                companyId,
+                company.get().companyId(),
                 name,
                 description,
                 artists,
@@ -124,26 +130,6 @@ public class EventManagementPresenter {
         } catch (RuntimeException e) {
             return new CreateOutcome.Failure(ServiceErrors.userMessage(e));
         }
-    }
-
-    /**
-     * Resolve the company to create under from the caller's companies (manager-inclusive via
-     * {@code findMyCompanies}, so a MANAGE_INVENTORY manager can create under their company). When a
-     * company is selected ({@code preferredCompanyId} non-null) it must be one of the caller's —
-     * otherwise we return {@code null} ({@code → NoCompany}) rather than silently retargeting to a
-     * different company. With no selection, use the first. {@code null} when the caller has none.
-     * The {@code addEvent} service still enforces the MANAGE_INVENTORY permission.
-     */
-    private Integer resolveCompanyId(String token, Integer preferredCompanyId) {
-        List<MyCompanyDTO> companies = companyService.findMyCompanies(token);
-        if (companies.isEmpty()) return null;
-        if (preferredCompanyId != null) {
-            for (MyCompanyDTO c : companies) {
-                if (c.companyId() == preferredCompanyId) return preferredCompanyId;
-            }
-            return null;   // selected company isn't one of the caller's — don't create elsewhere
-        }
-        return companies.get(0).companyId();
     }
 
     private static boolean isBlank(String s) {
@@ -179,6 +165,8 @@ public class EventManagementPresenter {
         record Success(String eventId) implements CreateOutcome {}
         record NotAuthenticated() implements CreateOutcome {}
         record NoCompany() implements CreateOutcome {}
+        /** The caller belongs to several companies and has not selected one of them. */
+        record ChooseCompany() implements CreateOutcome {}
         record InvalidInput(String reason) implements CreateOutcome {}
         record Failure(String reason) implements CreateOutcome {}
     }
