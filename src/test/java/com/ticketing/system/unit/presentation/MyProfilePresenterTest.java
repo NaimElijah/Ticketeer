@@ -2,7 +2,7 @@ package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,7 +58,7 @@ class MyProfilePresenterTest {
         memberQueryService = mock(MemberQueryService.class);
         authenticationService = mock(AuthenticationService.class);
         when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
-        when(memberQueryService.getMemberProfile(MEMBER_USER_ID)).thenReturn(MEMBER);
+        when(memberQueryService.getMemberProfile(MEMBER_TOKEN)).thenReturn(MEMBER);
         SessionIdentity identity = new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService));
         presenter = new MyProfilePresenter(memberQueryService, identity);
     }
@@ -76,7 +76,7 @@ class MyProfilePresenterTest {
 
         assertInstanceOf(MyProfilePresenter.Outcome.NotAuthenticated.class, outcome,
                 "an admin is no member, so must not see the profile of the member with the admin's id; got " + outcome);
-        verify(memberQueryService, never()).getMemberProfile(anyInt());
+        verify(memberQueryService, never()).getMemberProfile(any());
     }
 
     @Test
@@ -92,7 +92,7 @@ class MyProfilePresenterTest {
     @Test
     void GivenTheProfileLookupFailsInternally_WhenLoad_ThenTheReasonIsTheGenericText() {
         AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_USER_ID, "member"));
-        when(memberQueryService.getMemberProfile(MEMBER_USER_ID))
+        when(memberQueryService.getMemberProfile(MEMBER_TOKEN))
                 .thenThrow(new PersistenceException(INTERNAL_FAILURE_TEXT));
 
         MyProfilePresenter.Outcome.Failure failure =

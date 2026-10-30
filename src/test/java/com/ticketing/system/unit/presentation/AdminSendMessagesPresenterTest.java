@@ -124,12 +124,12 @@ class AdminSendMessagesPresenterTest {
         AdminSendMessagesPresenter.SearchOutcome outcome = presenter.searchUsers(null, "ali");
 
         assertInstanceOf(AdminSendMessagesPresenter.SearchOutcome.NotAuthenticated.class, outcome);
-        verify(memberQuery, never()).searchByUsername(anyString());
+        verify(memberQuery, never()).searchByUsername(any(), any());
     }
 
     @Test
     void searchUsers_returnsResults_fromMemberQueryService() {
-        when(memberQuery.searchByUsername("ali"))
+        when(memberQuery.searchByUsername(TOKEN, "ali"))
             .thenReturn(List.of(new MemberSearchResultDTO(7, "alice"), new MemberSearchResultDTO(8, "alistair")));
 
         AdminSendMessagesPresenter.SearchOutcome outcome = presenter.searchUsers(TOKEN, "ali");
@@ -137,6 +137,15 @@ class AdminSendMessagesPresenterTest {
         AdminSendMessagesPresenter.SearchOutcome.Success ok =
             assertInstanceOf(AdminSendMessagesPresenter.SearchOutcome.Success.class, outcome);
         assertEquals(2, ok.results().size());
+    }
+
+    @Test
+    void searchUsers_invalidToken_returnsNotAuthenticated() {
+        doThrow(new InvalidTokenException("bad")).when(memberQuery).searchByUsername(TOKEN, "ali");
+
+        AdminSendMessagesPresenter.SearchOutcome outcome = presenter.searchUsers(TOKEN, "ali");
+
+        assertInstanceOf(AdminSendMessagesPresenter.SearchOutcome.NotAuthenticated.class, outcome);
     }
 
     // -- load (grouping) ------------------------------------------------------
