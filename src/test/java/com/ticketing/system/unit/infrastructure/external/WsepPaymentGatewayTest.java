@@ -18,9 +18,12 @@ import java.time.ZoneOffset;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 
+import com.ticketing.system.shared.config.WsepProperties;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
@@ -33,6 +36,7 @@ import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.shared.external.WsepCommunicationException;
 import com.ticketing.system.shared.external.WsepHttpClient;
 import com.ticketing.system.sales.adapter.out.wsep.WsepPaymentGateway;
+import com.ticketing.system.testutil.LoopbackHttpServer;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -43,6 +47,11 @@ class WsepPaymentGatewayTest {
 
     private static final String FULL_PAN = "4111111111119999";
     private static final String CVV = "777";
+
+    // A real client for the loopback-server tests: one attempt, no backoff, a timeout loopback never hits.
+    private static final long REQUEST_TIMEOUT_SECONDS = 5;
+    private static final int SINGLE_ATTEMPT = 1;
+    private static final long NO_BACKOFF_MS = 0;
 
     private final WsepHttpClient http = mock(WsepHttpClient.class);
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
@@ -146,6 +155,23 @@ class WsepPaymentGatewayTest {
         when(http.post(any())).thenThrow(new WsepCommunicationException("timeout", new HttpTimeoutException("timed out")));
 
         assertThrows(RefundOutcomeUnknownException.class, () -> gateway.refund(54321, 100.0));
+    }
+
+    // ADR-001: a non-2xx answer came from the far side of the wire, possibly after WSEP reversed the
+    // charge, so the refund's outcome is unknown. It is not a verdict: only a 2xx "-1" is a rejection.
+    @ParameterizedTest(name = "HTTP {0}")
+    @ValueSource(ints = {404, 500, 502, 503})
+    void GivenWsepAnswersANon2xxStatus_WhenRefund_ThenOutcomeUnknownNotRejected(int status) {
+        try (LoopbackHttpServer server = LoopbackHttpServer.start()) {
+            server.respondWith(status, "Internal Server Error");
+            WsepPaymentGateway realGateway = new WsepPaymentGateway(
+                    new WsepHttpClient(new WsepProperties(
+                            server.baseUrl(), REQUEST_TIMEOUT_SECONDS, SINGLE_ATTEMPT, NO_BACKOFF_MS)),
+                    Clock.fixed(T0, ZoneOffset.UTC));
+
+            assertThrows(RefundOutcomeUnknownException.class, () -> realGateway.refund(54321, 100.0),
+                    "HTTP " + status + " may follow a reversed charge, so it must not read as a rejected refund");
+        }
     }
 
     @Test

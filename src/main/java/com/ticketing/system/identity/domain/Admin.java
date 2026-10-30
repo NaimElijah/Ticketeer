@@ -56,6 +56,22 @@ public class Admin implements InvariantChecked {
 
     public boolean isDefault() { return isDefault; }
 
+    /**
+     * Replaces this admin's password hash, keeping every other field. Saving the admin again updates
+     * its stored row, so call it on an admin loaded from {@code AdminRepository}: a new {@code Admin}
+     * with the same id would be inserted a second time.
+     *
+     * @param newPasswordHash the hash of the new password, never the password itself
+     * @throws IllegalArgumentException if {@code newPasswordHash} is {@code null} or blank; the
+     *     stored hash is then unchanged
+     */
+    public void changePasswordHash(String newPasswordHash) {
+        if (newPasswordHash == null || newPasswordHash.isBlank()) {
+            throw new IllegalArgumentException("Admin password hash must be non-blank");
+        }
+        this.passwordHash = newPasswordHash;
+    }
+
     @Override
     public void checkInvariants() {
         if (id <= 0) {

@@ -471,8 +471,13 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                     Toasts.failure("This purchase isn't allowed under the event's purchase policy.");
                 case CheckoutPresenter.PayOutcome.PaymentDeclined d ->
                     Toasts.failure("Your payment was declined — please check your card details and try again.");
+                // A lost answer from the payment service may still have charged the card, so the
+                // buyer checks their orders before paying again.
                 case CheckoutPresenter.PayOutcome.GatewayUnavailable g ->
-                    Toasts.failure("An unexpected error occurred. Please try again in a moment.");
+                    Toasts.failure("An unexpected error occurred. Check My account before you try again.");
+                case CheckoutPresenter.PayOutcome.OrderNotCompleted n ->
+                    Toasts.failure("We couldn't complete your order. Any charge is being refunded; "
+                            + "check My account before you try again.");
                 case CheckoutPresenter.PayOutcome.SoldOut s ->
                     Toasts.failure("Those seats just sold out. Please choose again.");
                 case CheckoutPresenter.PayOutcome.OrderExpired e ->

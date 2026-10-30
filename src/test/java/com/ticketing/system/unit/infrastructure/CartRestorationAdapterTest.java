@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -25,6 +25,8 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.BuyerContextDTO;
+import com.ticketing.system.testutil.LogCapture;
 
 /**
  * Unit tests for {@link CartRestorationAdapter}, the sales-side implementation of identity's
@@ -33,6 +35,9 @@ import com.ticketing.system.shared.dto.ActiveOrderDTO;
  * moved here verbatim during the identity&rarr;sales dependency inversion.
  */
 class CartRestorationAdapterTest {
+
+    // Every cart here is created at one fixed time; the adapter never reads the clock itself.
+    private static final LocalDateTime CART_CREATED = LocalDateTime.of(2026, 1, 1, 12, 0);
 
     private ReservationService mockReservation;      // sales service the adapter delegates restore to
     private ActiveOrderRepository mockActiveOrderRepo; // sales cart port the adapter drives for the merge
@@ -67,7 +72,7 @@ class CartRestorationAdapterTest {
     /** Case 1: a guest cart bound to the session is claimed for the now-authenticated member. */
     @Test
     void mergeGuestCartOnPromotion_whenGuestCartExists_promotesItToMember() {
-        ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid", LocalDateTime.now()); // real guest cart
+        ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid", CART_CREATED); // real guest cart
         when(mockActiveOrderRepo.getBySessionId("preserved-sid")).thenReturn(Optional.of(guestCart));
 
         adapter.mergeGuestCartOnPromotion("preserved-sid", 7);
@@ -77,15 +82,48 @@ class CartRestorationAdapterTest {
         assertEquals(7, guestCart.getUserId());
         assertEquals("preserved-sid", guestCart.getSessionId());
         verify(mockActiveOrderRepo, times(1)).save(guestCart);
-        // Guest cart wins — the orphan-member-cart restoration path is not taken.
-        verify(mockActiveOrderRepo, never()).getByUserId(anyInt());
+        // The member has no other order, so nothing is released before the guest cart is claimed.
+        verify(mockActiveOrderRepo).getByUserId(7);
+        verify(mockReservation, never()).abandonActiveOrder(any());
+    }
+
+    /** Case 1b: the guest cart wins, and the member's replaced order is released before it is claimed. */
+    @Test
+    void GivenGuestCartAndHeldMemberOrder_WhenMerge_ThenMemberOrderReleasedBeforeGuestCartClaimed() {
+        ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid", CART_CREATED);
+        ActiveOrder memberOrder = ActiveOrder.forMember(7, "old-sid", CART_CREATED);
+        when(mockActiveOrderRepo.getBySessionId("preserved-sid")).thenReturn(Optional.of(guestCart));
+        when(mockActiveOrderRepo.getByUserId(7)).thenReturn(memberOrder);
+
+        adapter.mergeGuestCartOnPromotion("preserved-sid", 7);
+
+        InOrder ordered = inOrder(mockReservation, mockActiveOrderRepo);
+        ordered.verify(mockReservation).abandonActiveOrder(BuyerContextDTO.member(7));
+        ordered.verify(mockActiveOrderRepo).save(guestCart);
+        assertEquals(7, guestCart.getUserId());
+    }
+
+    /** Case 1c: a member order in checkout owns its holds, so neither cart changes. */
+    @Test
+    void GivenGuestCartAndMemberOrderInCheckout_WhenMerge_ThenNeitherCartChanges() {
+        ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid", CART_CREATED);
+        ActiveOrder memberOrder = ActiveOrder.forMember(7, "old-sid", CART_CREATED);
+        memberOrder.markCheckoutInProgress();
+        when(mockActiveOrderRepo.getBySessionId("preserved-sid")).thenReturn(Optional.of(guestCart));
+        when(mockActiveOrderRepo.getByUserId(7)).thenReturn(memberOrder);
+
+        adapter.mergeGuestCartOnPromotion("preserved-sid", 7);
+
+        assertTrue(guestCart.isGuest());
+        verify(mockReservation, never()).abandonActiveOrder(any());
+        verify(mockActiveOrderRepo, never()).save(any());
     }
 
     /** Case 2: no guest cart, but an orphaned member cart is re-attached to the new session. */
     @Test
     void mergeGuestCartOnPromotion_whenNoGuestCartButOrphanedMemberCartExists_restoresIt() {
         when(mockActiveOrderRepo.getBySessionId("new-sid")).thenReturn(Optional.empty());
-        ActiveOrder priorCart = ActiveOrder.forMember(7, "old-stale-sid", LocalDateTime.now()); // stale-session member cart
+        ActiveOrder priorCart = ActiveOrder.forMember(7, "old-stale-sid", CART_CREATED); // stale-session member cart
         when(mockActiveOrderRepo.getByUserId(7)).thenReturn(priorCart);
 
         adapter.mergeGuestCartOnPromotion("new-sid", 7);
@@ -125,5 +163,47 @@ class CartRestorationAdapterTest {
         ordered.verify(mockActiveOrderRepo).lockForUpdate("user:7");
         ordered.verify(mockActiveOrderRepo).unlock("user:7");
         ordered.verify(mockActiveOrderRepo).unlock("sess:sid-1");
+    }
+
+    // ----------------------------------------------------------------------
+    // The promoted session keeps the guest's session id, which was the guest's credential, so no
+    // log line carries it at any level (#185).
+    // ----------------------------------------------------------------------
+
+    private static final String LOGGED_SID = "c7d02f5e-promoted-sid-not-for-logs";
+
+    private LogCapture logs;
+
+    @AfterEach
+    void detachLogCapture() {
+        if (logs != null) {
+            logs.close();
+        }
+    }
+
+    @Test
+    void GivenGuestCart_WhenMergeGuestCartOnPromotion_ThenNoLogEventCarriesTheSessionId() {
+        ActiveOrder guestCart = ActiveOrder.forGuest(LOGGED_SID, CART_CREATED);
+        when(mockActiveOrderRepo.getBySessionId(LOGGED_SID)).thenReturn(Optional.of(guestCart));
+        logs = LogCapture.of(CartRestorationAdapter.class);
+
+        adapter.mergeGuestCartOnPromotion(LOGGED_SID, 7);
+
+        assertTrue(logs.eventCount() > 0, "control: promoting a cart logs, so the capture sees the adapter's logger");
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_SID),
+                "promoting a guest cart must not log the session id");
+    }
+
+    @Test
+    void GivenOrphanedMemberCart_WhenMergeGuestCartOnPromotion_ThenNoLogEventCarriesTheSessionId() {
+        when(mockActiveOrderRepo.getBySessionId(LOGGED_SID)).thenReturn(Optional.empty());
+        when(mockActiveOrderRepo.getByUserId(7)).thenReturn(ActiveOrder.forMember(7, "old-sid", CART_CREATED));
+        logs = LogCapture.of(CartRestorationAdapter.class);
+
+        adapter.mergeGuestCartOnPromotion(LOGGED_SID, 7);
+
+        assertTrue(logs.eventCount() > 0, "control: re-attaching a cart logs, so the capture sees the adapter's logger");
+        assertEquals(List.of(), logs.eventsContaining(LOGGED_SID),
+                "re-attaching a member cart must not log the new session id");
     }
 }

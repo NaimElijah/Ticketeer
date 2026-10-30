@@ -20,6 +20,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.SessionKind;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -38,12 +39,13 @@ import io.jsonwebtoken.security.Keys;
  * Revocation (UC-14) is recorded by deleting the corresponding {@link Session}
  * row through {@link SessionRepository}; revoked tokens fail every reader
  * because the Session existence check lives inside the central
- * {@link #parseClaims} helper.
+ * {@link #parseBound} helper.
  *
  * <p>Each issued JWT carries a {@code sid} claim that identifies the matching
- * Session row. {@code subject} is still the userId so callers that only need
- * identity (not validity) can decode the JWT cheaply without touching the
- * repository.
+ * Session row, a {@code subject} that is the member or admin id, and a {@code role} claim.
+ * Member ids and admin ids share one integer space, so a token is accepted only when its
+ * subject is the row's user id and its role matches the row's {@link SessionKind} (ADR-012). Each
+ * reader then accepts one kind only, as {@link SessionManager} sets out.
  */
 @Component
 @Slf4j
@@ -54,6 +56,9 @@ public class JwtSessionManager implements SessionManager {
     private static final String CLAIM_ROLE = "role";
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_MEMBER = "MEMBER";
+    // One reason for a missing row and a row of the wrong kind, so a member reader rejects an
+    // admin token exactly as it rejects a revoked one.
+    private static final String SESSION_NOT_FOUND = "session not found";
 
     private final SecretKey signingKey;
     private final long expirationMillis;
@@ -86,22 +91,23 @@ public class JwtSessionManager implements SessionManager {
         return buildJwt(userId, username, sid, ROLE_MEMBER, now, expiry);
     }
 
-    // Admin sign-in (#290): issue a JWT carrying the ADMIN role so the admin-authorization gate
-    // can never be satisfied by a member token (admin ids and member ids share an id space).
+    // Admin sign-in (#290): the row is an Admin session and the JWT carries the ADMIN role, so the
+    // token passes only the admin readers (admin ids and member ids share an id space).
     @Override
     public String generateAdminToken(int adminId, String username) {
         Instant now = clock.instant();
         Instant expiry = now.plusMillis(expirationMillis);
         String sid = UUID.randomUUID().toString();
-        sessions.save(new Session(sid, adminId, now, expiry));
+        sessions.save(Session.admin(sid, adminId, now, expiry));
         return buildJwt(adminId, username, sid, ROLE_ADMIN, now, expiry);
     }
 
     @Override
     public boolean isAdminToken(String token) {
         try {
-            return ROLE_ADMIN.equals(parseClaims(token).get(CLAIM_ROLE, String.class));
-        } catch (RuntimeException e) {
+            parseClaimsOfKind(token, SessionKind.ADMIN);
+            return true;
+        } catch (InvalidTokenException | SessionExpiredException e) {
             return false;
         }
     }
@@ -113,29 +119,36 @@ public class JwtSessionManager implements SessionManager {
         if (session == null) {
             throw new IllegalArgumentException("session must not be null");
         }
-        if (!session.isMember()) {
-            throw new IllegalStateException("cannot issue JWT for a guest session");
+        if (session.getKind() != SessionKind.MEMBER) {
+            throw new IllegalStateException("a member JWT is issued for a member session only");
         }
         Instant now = clock.instant();
         return buildJwt(session.getUserId(), username, session.getSessionId(), ROLE_MEMBER, now, session.getExpiresAt());
     }
 
-    // UC-12: validate a JWT's signature, expiry, and revocation status. Revocation is checked by verifying that the Session row still exists.
     @Override
     public boolean validateToken(String token) {
         if (token == null || token.isBlank())
             return false;
-        parseClaims(token);
+        parseClaimsOfKind(token, SessionKind.MEMBER);
         return true;
     }
 
-    // UC-12: validate either a raw sessionId or a JWT. This is the main entry point for authentication checks on incoming requests, so it supports both "raw" (sessionId) and "token" (JWT) credentials for flexibility.
-    // The raw path is validated by checking for a non-expired Session row with the given id; the token path routes through the full JWT validation logic (signature, expiry, revocation).
+    @Override
+    public boolean validateAdminToken(String token) {
+        if (token == null || token.isBlank())
+            return false;
+        parseClaimsOfKind(token, SessionKind.ADMIN);
+        return true;
+    }
+
+    // UC-12: validate a buyer credential, either a member JWT or a guest's raw sessionId.
+    // The token path routes through the member validation (signature, expiry, revocation, kind); the
+    // raw path accepts only a live Guest row, since a member's or admin's credential is its JWT.
     @Override
     public boolean validateCredential(String credential) {
         if (credential == null || credential.isBlank())
             return false;
-        // Token path — if it looks like a JWT, try to validate it as one. If validation fails for any reason, return false (invalid token).
         if (looksLikeJwt(credential)) {
             try {
                 return validateToken(credential);
@@ -143,10 +156,22 @@ public class JwtSessionManager implements SessionManager {
                 return false;
             }
         }
-        // Raw sessionId path — direct repository lookup. returns true if a non-expired Session with the given id exists, false otherwise.
-        return sessions.findById(credential)
+        return isLiveGuestRow(credential);
+    }
+
+    private boolean isLiveGuestRow(String sessionId) {
+        return sessions.findById(sessionId)
+                .filter(Session::isGuest)
                 .filter(s -> !s.isExpiredAt(clock.instant()))
                 .isPresent();
+    }
+
+    // A token is never a guest row's id (row ids are UUIDs), so the lookup alone refuses one.
+    @Override
+    public boolean validateGuestSession(String sessionId) {
+        if (sessionId == null || sessionId.isBlank())
+            return false;
+        return isLiveGuestRow(sessionId);
     }
 
     /** Cheap structural check: JWTs are {@code header.payload.signature} (two dots). */
@@ -159,28 +184,33 @@ public class JwtSessionManager implements SessionManager {
 
     @Override
     public int extractUserId(String token) {
-        return Integer.parseInt(parseClaims(token).getSubject());
+        return Integer.parseInt(parseClaimsOfKind(token, SessionKind.MEMBER).getSubject());
+    }
+
+    @Override
+    public int extractAdminId(String token) {
+        return Integer.parseInt(parseClaimsOfKind(token, SessionKind.ADMIN).getSubject());
     }
 
     @Override
     public String extractUsername(String token) {
-        return parseClaims(token).get(CLAIM_USERNAME, String.class);
+        return parseClaimsOfKind(token, SessionKind.MEMBER).get(CLAIM_USERNAME, String.class);
     }
 
     @Override
     public String extractSessionId(String token) {
-        return parseClaims(token).get(CLAIM_SID, String.class);
+        return parseBoundClaims(token).get(CLAIM_SID, String.class);
     }
 
     @Override
     public long extractExpiration(String token) {
-        return parseClaims(token).getExpiration().getTime();
+        return parseBoundClaims(token).getExpiration().getTime();
     }
 
     @Override
     public boolean isExpired(String token) {
         try {
-            parseClaims(token);
+            parseBoundClaims(token);
             return false;
         } catch (SessionExpiredException e) {
             return true;
@@ -201,7 +231,7 @@ public class JwtSessionManager implements SessionManager {
             String sid = claims.get(CLAIM_SID, String.class);
             if (sid != null && !sid.isBlank()) {
                 sessions.delete(sid);
-                log.debug("session deleted sid={}", sid);
+                log.debug("session deleted");
             }
         } catch (Exception e) {
             // Malformed input — nothing to invalidate. Idempotent.
@@ -223,11 +253,34 @@ public class JwtSessionManager implements SessionManager {
     }
 
     /**
-     * Decodes + verifies a JWT and also enforces that the corresponding Session
-     * row still exists. Every reader (validate, extract*, isExpired) routes
-     * through here so revocation is uniformly respected.
+     * {@link #parseBoundClaims}, and the row must also be of {@code kind}. A row of the other
+     * kind fails as a missing row does, so neither reader family can tell the other's tokens
+     * from revoked ones.
      */
-    private Claims parseClaims(String token) {
+    private Claims parseClaimsOfKind(String token, SessionKind kind) {
+        BoundToken bound = parseBound(token);
+        if (bound.session().getKind() != kind) {
+            log.debug("rejected token of another session kind, wanted={} found={}", kind, bound.session().getKind());
+            throw new InvalidTokenException(SESSION_NOT_FOUND);
+        }
+        return bound.claims();
+    }
+
+    /** The claims of a token that {@link #parseBound} accepts, whatever its kind. */
+    private Claims parseBoundClaims(String token) {
+        return parseBound(token).claims();
+    }
+
+    /**
+     * Decodes + verifies a JWT and binds it to the Session row it names: the row must exist, must
+     * not be a Guest row (a guest's credential is its raw id), must belong to the token's subject,
+     * must be of the kind the role claim states, and must be unexpired on the injected clock.
+     * Every reader routes through here, so revocation is uniformly respected.
+     *
+     * @throws InvalidTokenException malformed, bad signature, revoked, or not bound to its row
+     * @throws SessionExpiredException past the {@code exp} claim or the row's expiry
+     */
+    private BoundToken parseBound(String token) {
         Claims claims;
         try {
             claims = Jwts.parser()
@@ -247,12 +300,41 @@ public class JwtSessionManager implements SessionManager {
             log.debug("rejected token without session id");
             throw new InvalidTokenException("token missing session id");
         }
-        if (sessions.findById(sid).isEmpty()) {
-            log.debug("rejected revoked token sid={}", sid);
-            throw new InvalidTokenException("session not found");
+        Session session = sessions.findById(sid).orElseThrow(() -> {
+            log.debug("rejected revoked token");
+            return new InvalidTokenException(SESSION_NOT_FOUND);
+        });
+        if (session.isGuest()) {
+            log.debug("rejected token naming a guest session");
+            throw new InvalidTokenException("token names a guest session");
         }
-        return claims;
+        if (!String.valueOf(session.getUserId()).equals(claims.getSubject())) {
+            log.debug("rejected token whose subject is not its session's user");
+            throw new InvalidTokenException("token subject does not match its session");
+        }
+        if (kindOfRole(claims.get(CLAIM_ROLE, String.class)) != session.getKind()) {
+            log.debug("rejected token whose role does not match its session's kind");
+            throw new InvalidTokenException("token role does not match its session");
+        }
+        if (session.isExpiredAt(clock.instant())) {
+            throw new SessionExpiredException();
+        }
+        return new BoundToken(claims, session);
     }
+
+    /** The session kind a role claim stands for, or {@code null} for an unknown or missing role. */
+    private static SessionKind kindOfRole(String role) {
+        if (ROLE_MEMBER.equals(role)) {
+            return SessionKind.MEMBER;
+        }
+        if (ROLE_ADMIN.equals(role)) {
+            return SessionKind.ADMIN;
+        }
+        return null;
+    }
+
+    /** A verified token and the Session row it is bound to. */
+    private record BoundToken(Claims claims, Session session) { }
 
     /**
      * Decodes a JWT and verifies its signature, but tolerates an expired exp claim — only

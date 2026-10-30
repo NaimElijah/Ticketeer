@@ -3,7 +3,9 @@ spring:
   # datasource, and fails at startup if it is unreachable. Only the in-memory test suite
   # (`test` + `memory`) swaps the adapters out.
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketing}
+    # logServerErrorDetail=false keeps the server's DETAIL out of PgJDBC's exception messages: for a
+    # constraint violation it holds the row's values (an email, a username), and those messages are logged.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketing}?logServerErrorDetail=false
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -34,12 +36,14 @@ spring:
       mode: force
 
 # JWT signing secret (consumed by Infrastructure/security/JwtSessionManager — UC-12).
-# In production the secret MUST be supplied via environment variable, never committed.
+# In production the secret MUST be supplied via environment variable, never committed. Outside dev and
+# test the boot refuses this default (CommittedDefaultSecretsGuard repeats it, and its test pins the two).
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-please-override-in-prod-must-be-at-least-256-bits-long}
 
 # Session TTLs (auth rework / unified Session aggregate).
-# Member sessions are absolute; Guest sessions are idle-bounded. The JWT's exp
+# Both are absolute lifetimes counted from the session's start: nothing extends a guest session yet
+# (OQ-8), and the UI replaces an expired one. The JWT's exp
 # claim and the Session row's expiresAt are kept in sync by JwtSessionManager.
 session:
   member-ttl-minutes: ${SESSION_MEMBER_TTL_MINUTES:1440}
@@ -52,11 +56,29 @@ auth:
     max-attempts: ${AUTH_LOCKOUT_MAX_ATTEMPTS:5}
     lock-minutes: ${AUTH_LOCKOUT_LOCK_MINUTES:15}
 
+# Usernames no member may register (UC-11, #76), comma-separated, matched ignoring case and
+# surrounding whitespace. The default admin's username (platform.admin.username) is always reserved
+# as well: platform-admin-username follows it, so it has no variable of its own.
+identity:
+  reserved-usernames: ${IDENTITY_RESERVED_USERNAMES:admin,platform.admin}
+  platform-admin-username: ${platform.admin.username}
+
 
 constants:
   # System-wide constant
   ticket-reservation-duration: ${TICKET_RESERVATION_DURATION:10}
   order-expiration-duration: ${ORDER_EXPIRATION_DURATION:60}
+
+
+# Venue size limits (UC-20, #185), enforced server-side on every venue-map write. The defaults match the
+# venue editor's own caps: a 12 x 12 grid, 99 rows x 500 seats per seated zone, 1,000,000 places per
+# standing zone. max-seats-per-map bounds the seats of all seated zones together; standing places don't count.
+catalog:
+  venue-limits:
+    max-grid-size: ${CATALOG_VENUE_MAX_GRID_SIZE:12}
+    max-seats-per-zone: ${CATALOG_VENUE_MAX_SEATS_PER_ZONE:49500}
+    max-standing-capacity: ${CATALOG_VENUE_MAX_STANDING_CAPACITY:1000000}
+    max-seats-per-map: ${CATALOG_VENUE_MAX_SEATS_PER_MAP:100000}
 
 
 # System Analytics dashboard (UC-46 / #43, #279).
@@ -90,7 +112,8 @@ vaadin:
   allowed-packages: com.ticketing.system.ui
 
 # Default System Admin (UC-1 / I.1.4) — auto-created at initialization when none exists.
-# Defaults live here only; override in production via env, and never ship the default password.
+# Defaults live here only; override in production via env. Outside dev and test the boot refuses the
+# default password (CommittedDefaultSecretsGuard repeats it, and its test pins the two).
 # time-zone (ADR-008): an IANA id. New events default to it, seeded events use it, and the UI shows
 # recorded timestamps and "today" in it. Changing it never moves an existing event's times.
 platform:
@@ -102,7 +125,7 @@ platform:
 # WSEP external systems (UC-33 payment / UC-34 issuance). WsepPaymentGateway /
 # WsepTicketIssuer back the PaymentGateway / TicketIssuer ports in every real run
 # (@Profile("!test")); the test profile swaps in the in-process stubs. base-url is
-# the single koyeb endpoint both adapters POST to.
+# the single koyeb endpoint both adapters POST to; it must be https (WsepProperties).
 wsep:
   base-url: ${WSEP_BASE_URL:https://damp-lynna-wsep-1984852e.koyeb.app/}
   request-timeout-seconds: ${WSEP_REQUEST_TIMEOUT_SECONDS:20}

@@ -7,6 +7,7 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
+import com.ticketing.system.ui.support.ServiceErrors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,9 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class RegisterPresenter {
+
+    /** The longest email registration accepts, so the form can cap its field at the same length. */
+    public static final int MAX_EMAIL_LENGTH = AuthenticationService.MAX_EMAIL_LENGTH;
 
     private final AuthenticationService authenticationService;
 
@@ -50,7 +54,7 @@ public class RegisterPresenter {
         } catch (IllegalArgumentException e) {
             return new Outcome.InvalidInput(e.getMessage());
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

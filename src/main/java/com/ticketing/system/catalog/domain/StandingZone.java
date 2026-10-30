@@ -280,8 +280,9 @@ public class StandingZone extends InventoryZone {
             if (totalReserved > capacity) {
                 throw new IllegalStateException("StandingZone invariant violated: reservedAmount (" + totalReserved + ") must be <= capacity (" + capacity + ")");
             }
-            if (price < 0) {
-                throw new IllegalStateException("StandingZone invariant violated: price must be >= 0 (was " + price + ")");
+            if (!isPriceInBounds(price)) {
+                throw new IllegalStateException("StandingZone invariant violated: price must be finite and in [0, "
+                        + MAX_PRICE + "] (was " + price + ")");
             }
         }
     }

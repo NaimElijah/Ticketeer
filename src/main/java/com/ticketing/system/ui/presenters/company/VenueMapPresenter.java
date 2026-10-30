@@ -8,6 +8,7 @@ import com.ticketing.system.shared.dto.VenueLayoutDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 public class VenueMapPresenter {
@@ -27,7 +28,7 @@ public class VenueMapPresenter {
         } catch (InvalidTokenException e) {
             return new LoadOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new LoadOutcome.Failure(e.getMessage());
+            return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -45,7 +46,7 @@ public class VenueMapPresenter {
         } catch (InvalidTokenException e) {
             return new SaveOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new SaveOutcome.Failure(e.getMessage());
+            return new SaveOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

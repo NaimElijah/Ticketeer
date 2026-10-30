@@ -34,7 +34,9 @@ public class SearchPresenter {
         try {
             return catalogService.search(credential, query, LIMIT);
         } catch (RuntimeException e) {
-            log.warn("Top-bar search failed for '{}': {}", query, e.getMessage());
+            // The query is whatever the buyer typed, so the log keeps its length and never its text.
+            log.warn("Top-bar search failed for a query of {} characters: {}",
+                    query == null ? 0 : query.length(), e.getMessage());
             return List.of();
         }
     }

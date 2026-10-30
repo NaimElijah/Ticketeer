@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.dto.SearchResultDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.presenters.catalog.SearchPresenter;
 
 class SearchPresenterTest {
@@ -46,6 +47,20 @@ class SearchPresenterTest {
                 .thenThrow(new RuntimeException("boom"));
 
         assertTrue(presenter.search(CRED, "coldplay").isEmpty());
+    }
+
+    // A buyer can type anything into the search box, an email address included, so the failure log
+    // records the query's length and never its text (#185).
+    @Test
+    void GivenSearchFails_WhenSearch_ThenNoLogEventCarriesTheQueryText() {
+        String query = "dana.levi@example.com";
+        when(catalogService.search(eq(CRED), eq(query), anyInt())).thenThrow(new RuntimeException("boom"));
+
+        try (LogCapture logs = LogCapture.of(SearchPresenter.class)) {
+            presenter.search(CRED, query);
+
+            assertEquals(List.of(), logs.eventsContaining(query), "the search text must not be logged");
+        }
     }
 
     @Test

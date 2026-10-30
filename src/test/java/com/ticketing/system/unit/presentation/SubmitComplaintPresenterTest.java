@@ -22,6 +22,8 @@ import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 class SubmitComplaintPresenterTest {
 
@@ -74,7 +76,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_serviceThrows_returnsFailureWithMessage() {
+    void submit_serviceFailsInternally_returnsGenericFailure() {
         when(service.submitComplaint(eq(TOKEN), any()))
             .thenThrow(new RuntimeException("backend down"));
 
@@ -83,7 +85,7 @@ class SubmitComplaintPresenterTest {
 
         SubmitComplaintPresenter.Outcome.Failure fail =
             assertInstanceOf(SubmitComplaintPresenter.Outcome.Failure.class, outcome);
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -95,5 +97,15 @@ class SubmitComplaintPresenterTest {
             presenter.submit(TOKEN, "Subject", "Body", null);
 
         assertInstanceOf(SubmitComplaintPresenter.Outcome.NotAuthenticated.class, outcome);
+    }
+
+    @Test
+    void submit_ruleViolated_returnsFailureWithTheRulesMessage() {
+        BusinessRuleViolationException rule = new BusinessRuleViolationException("A complaint needs a subject.");
+        when(service.submitComplaint(eq(TOKEN), any())).thenThrow(rule);
+
+        SubmitComplaintPresenter.Outcome.Failure fail = assertInstanceOf(
+            SubmitComplaintPresenter.Outcome.Failure.class, presenter.submit(TOKEN, "Subject", "Body", null));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

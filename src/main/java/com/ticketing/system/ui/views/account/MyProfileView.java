@@ -8,6 +8,8 @@ import com.ticketing.system.ui.components.kit.LkField;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.MyProfilePresenter;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
@@ -19,6 +21,8 @@ import jakarta.annotation.security.PermitAll;
 @Route(value = "my-profile", layout = MainLayout.class)
 @PageTitle("My Profile · TicketHub")
 @PermitAll
+// A signed-in member's own data: an admin, who is no member, never reaches it (ADR-012).
+@RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyProfileView extends LkPage {
 
     private final MyProfilePresenter presenter;

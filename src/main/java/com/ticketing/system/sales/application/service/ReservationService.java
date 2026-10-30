@@ -33,6 +33,7 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 
 @Service
@@ -154,8 +155,8 @@ public class ReservationService {
 
             // CheckoutService now marks orders as CHECKOUT_IN_PROGRESS and releases the order lock during Phase 2. ReservationService should reject reserve attempts against an order in that state; otherwise a concurrent reservation can mutate the cart while checkout is pricing/charging based on a snapshot, causing inconsistencies.
             if (activeOrder.isCheckoutInProgress()) {
-                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, sessionId={}",
-                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, buyer.isMember() ? null : buyer.sessionId());
+                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, orderKey={}",
+                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, activeOrder.getOrderKey());
                 throw new IllegalStateException("Cannot modify active order during checkout");
             }
 
@@ -263,8 +264,8 @@ public class ReservationService {
             // checkout is pricing/charging against. Fails fast here (before releasing inventory) instead of
             // letting the domain throw mid-flow and forcing a rollback — mirrors the guard in reserve(...).
             if (activeOrder.isCheckoutInProgress()) {
-                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, sessionId={}",
-                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, buyer.isMember() ? null : buyer.sessionId());
+                log.warn("Request rejected: cannot modify active order during checkout. eventId={}, zoneId={}, userId={}, orderKey={}",
+                        eventId, zoneId, buyer.isMember() ? buyer.userId() : null, activeOrder.getOrderKey());
                 throw new IllegalStateException("Cannot modify active order during checkout");
             }
 
@@ -390,9 +391,20 @@ public class ReservationService {
         return BuyerContextDTO.member(validateTokenAndGetUserId(token));
     }
 
+    // A guest's credential is the id of a live guest session, as at checkout: a session id that was
+    // never issued, has expired, or belongs to a member or admin session opens no cart, and neither
+    // does a token (ADR-012, decision 4).
     private BuyerContextDTO authenticateGuest(String sessionId) {
         validateSessionId(sessionId);
+        requireLiveGuestSession(sessionId);
         return BuyerContextDTO.guest(sessionId);
+    }
+
+    private void requireLiveGuestSession(String sessionId) {
+        if (!iSessionManager.validateGuestSession(sessionId)) {
+            log.warn("Request rejected: guest session is not live");
+            throw new SessionExpiredException();
+        }
     }
 
     private int validateTokenAndGetUserId(String token) {
@@ -481,7 +493,7 @@ public class ReservationService {
 
         return activeOrderRepository.getBySessionId(buyer.sessionId())
                 .orElseGet(() -> {
-                    log.info("No active order found for sessionId={}, creating new ActiveOrder", buyer.sessionId());
+                    log.info("No active order found for guest, creating new ActiveOrder");
                     return ActiveOrder.forGuest(buyer.sessionId(), now());
                 });
     }
@@ -643,11 +655,24 @@ public class ReservationService {
                 enrichedLines);
     }
 
+    /**
+     * The guest's active order, with event names on its lines.
+     *
+     * @param sessionId the raw id of the guest's live session
+     * @return the order, or {@code null} when the guest has none
+     * @throws SessionExpiredException if {@code sessionId} is not a live guest session's id: unknown,
+     *     expired, a member's or admin's session, or a token (ADR-012, decision 4)
+     */
     @Transactional(readOnly = true)
     public ActiveOrderDTO restoreActiveOrderForGuest(String sessionId) {
+        requireLiveGuestSession(sessionId);
+        return guestOrderWithEventNames(sessionId);
+    }
+
+    private ActiveOrderDTO guestOrderWithEventNames(String sessionId) {
         return activeOrderRepository.getBySessionId(sessionId)
                 .map(order -> {
-                    log.info("Active order found for sessionId={}, restoring ActiveOrderDTO", sessionId);
+                    log.info("Active order found for guest, restoring ActiveOrderDTO orderKey={}", order.getOrderKey());
                     ActiveOrderDTO dto = order.toDTO(now());
                     List<ActiveOrderDTO.CartLineDTO> enrichedLines = new ArrayList<>();
                     for (ActiveOrderDTO.CartLineDTO line : dto.lines()) {
@@ -660,7 +685,7 @@ public class ReservationService {
                             dto.remainingSecondsBeforeExpiry(), dto.currentTotalPrice(), enrichedLines);
                 })
                 .orElseGet(() -> {
-                    log.info("No active order found for sessionId={}, returning null", sessionId);
+                    log.info("No active order found for guest, returning null");
                     return null;
                 });
     }
@@ -700,8 +725,15 @@ public class ReservationService {
         return restoreActiveOrder(userId);
     }
 
+    /**
+     * The guest counterpart of {@link #renewReservationsForMemberCheckout}.
+     *
+     * @throws SessionExpiredException if {@code sessionId} is not a live guest session's id; no hold
+     *     is renewed then
+     */
     @Transactional
     public ActiveOrderDTO renewReservationsForGuestCheckout(String sessionId) {
+        requireLiveGuestSession(sessionId);
         String orderLockKey = "sess:" + sessionId;
         activeOrderRepository.lockForUpdate(orderLockKey);
         try {
@@ -711,12 +743,12 @@ public class ReservationService {
                     && !order.isCheckoutInProgress() && !order.hasExpiredItem(now)) {
                 order.renewReservationTimers(now);
                 activeOrderRepository.save(order);
-                log.info("Renewed reservation timers on checkout entry for sessionId={}", sessionId);
+                log.info("Renewed reservation timers on guest checkout entry orderKey={}", order.getOrderKey());
             }
         } finally {
             activeOrderRepository.unlock(orderLockKey);
         }
-        return restoreActiveOrderForGuest(sessionId);
+        return guestOrderWithEventNames(sessionId);
     }
 
     // Helper method to abandon the active order for a user (member or guest) - this is used by the frontend when a user explicitly clicks "Abandon Cart" or when they log out, to clear their active order and release any reserved inventory back to the events. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we release any reserved inventory back to the events and then delete the active order. If no active order is found, we simply return without doing anything. This ensures that we do not leave any reserved inventory hanging around for abandoned carts, which keeps our inventory accurate and allows other users to purchase those tickets if they are still available.
@@ -745,7 +777,7 @@ public class ReservationService {
                 if (buyer.isMember()) {
                     log.info("No active order to abandon for userId={}", buyer.userId());
                 } else {
-                    log.info("No active order to abandon for sessionId={}", buyer.sessionId());
+                    log.info("No active order to abandon for guest");
                 }
                 return;
             }
@@ -782,7 +814,7 @@ public class ReservationService {
             if (buyer.isMember()) {
                 log.info("Abandoned active order for userId={}", buyer.userId());
             } else {
-                log.info("Abandoned active order for sessionId={}", buyer.sessionId());
+                log.info("Abandoned guest active order orderKey={}", orderKey);
             }
 
         } finally {
@@ -842,8 +874,10 @@ public class ReservationService {
                 return restoreActiveOrder(userId);
             }
         } catch (Exception ignored) {
-            // not a JWT token — fall through to guest path
+            // not a live member token — fall through to the guest path
         }
+        // Only a live guest session's id passes here: a member's raw session id or a dead token gets
+        // SessionExpiredException, never the cart bound to that id (ADR-012, decision 4).
         return restoreActiveOrderForGuest(userOrSessionId);
     }
 

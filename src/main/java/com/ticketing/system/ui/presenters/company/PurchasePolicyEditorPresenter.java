@@ -17,6 +17,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for the purchase-policy editor.
@@ -29,6 +30,9 @@ import com.ticketing.system.ui.session.SessionIdentity;
  */
 @Component
 public class PurchasePolicyEditorPresenter {
+
+    /** U+0020, the space: every character below it is a control character JSON must escape. */
+    private static final char FIRST_NON_CONTROL_CHAR = ' ';
 
     private final CompanyManagementService companyManagementService;
     private final EventManagementService   eventManagementService;
@@ -62,7 +66,7 @@ public class PurchasePolicyEditorPresenter {
         } catch (InvalidTokenException e) {
             return new ContextOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new ContextOutcome.Failure(e.getMessage());
+            return new ContextOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -294,7 +298,7 @@ public class PurchasePolicyEditorPresenter {
         } catch (InvalidTokenException e) {
             return new LoadOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new LoadOutcome.Failure(e.getMessage());
+            return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -345,7 +349,7 @@ public class PurchasePolicyEditorPresenter {
         } catch (InvalidTokenException e) {
             return new SaveOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
-            return new SaveOutcome.Failure(e.getMessage());
+            return new SaveOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -379,8 +383,23 @@ public class PurchasePolicyEditorPresenter {
         return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
+    // JSON, and so the browser's JSON.parse, rejects a raw character below U+0020 inside a string, and a
+    // rule's label carries whatever the user typed.
     private static String escapeJson(String s) {
-        return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
+        if (s == null) {
+            return "";
+        }
+        StringBuilder escaped = new StringBuilder(s.length());
+        for (char c : s.toCharArray()) {
+            if (c == '\\' || c == '"') {
+                escaped.append('\\').append(c);
+            } else if (c < FIRST_NON_CONTROL_CHAR) {
+                escaped.append(String.format("\\u%04x", (int) c));
+            } else {
+                escaped.append(c);
+            }
+        }
+        return escaped.toString();
     }
 
 

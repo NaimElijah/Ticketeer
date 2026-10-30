@@ -30,8 +30,8 @@ import java.util.Map;
 /**
  * Platform-admin shell — orange "Event Ticket Platform · Admin" top bar
  * with a single-section drawer of admin-only items. Reached after
- * signing in at the unified {@link LoginView} with an admin username
- * ({@link com.ticketing.system.ui.session.AuthSession#ADMIN_USERNAMES}).
+ * signing in at {@link com.ticketing.system.ui.views.auth.AdminLoginView}
+ * against the persisted admin pool, which issues an admin token.
  * Every view inside is gated by an admin {@link
  * com.ticketing.system.ui.security.Capability}, so members
  * who somehow type the URL bounce back to the sign-in form.

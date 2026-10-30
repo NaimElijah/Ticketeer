@@ -6,6 +6,8 @@
  * <ul>
  *   <li>{@link com.ticketing.system.bootstrap.PlatformInitializationRunner} — drives the
  *       {@code UNINITIALIZED -> READY} platform lifecycle (UC-1) at startup.</li>
+ *   <li>{@link com.ticketing.system.bootstrap.CommittedDefaultSecretsGuard} — stops a boot outside
+ *       {@code dev} and {@code test} that still uses a secret committed in {@code application.yml}.</li>
  *   <li>{@code bootstrap.scheduling} — the {@code @Scheduled} driving adapters (session/order
  *       sweeper, event completion, market opener/self-heal, notification polling) that trigger
  *       use cases on a timer.</li>

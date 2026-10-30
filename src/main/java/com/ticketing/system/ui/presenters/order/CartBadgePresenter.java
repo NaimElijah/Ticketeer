@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,7 +46,7 @@ public class CartBadgePresenter {
             return new Outcome.Cart(order.lines().size(), order.remainingSecondsBeforeExpiry());
         } catch (RuntimeException e) {
             log.warn("Failed to load cart badge: {}", e.getMessage());
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

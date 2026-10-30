@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
+import com.ticketing.system.shared.exception.DuplicateEmailException;
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -79,8 +81,25 @@ public class MemoryUserRepository implements UserRepository {
         return findByUsername(username).isPresent();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>No database constraint stands behind this adapter, so saves are serialised: the username and
+     * email checks and the insert are one step, as {@code uk_users_username} and {@code uk_users_email}
+     * make them for the Jpa adapter.
+     */
     @Override
-    public void save(User user) {
+    public synchronized void save(User user) {
+        boolean usernameTakenByAnother = usersById.values().stream()
+                .anyMatch(u -> u.getUserId() != user.getUserId() && u.getUsername().equals(user.getUsername()));
+        if (usernameTakenByAnother) {
+            throw new DuplicateUsernameException(user.getUsername());
+        }
+        boolean emailTakenByAnother = usersById.values().stream()
+                .anyMatch(u -> u.getUserId() != user.getUserId() && u.getEmail().equals(user.getEmail()));
+        if (emailTakenByAnother) {
+            throw new DuplicateEmailException();
+        }
         usersById.put(user.getUserId(), user);
     }
 

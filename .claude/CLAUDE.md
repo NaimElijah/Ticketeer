@@ -24,7 +24,7 @@ quoted and on one line, so they work in both shells.
 ```bash
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev"   # local default: JPA on in-memory H2, demo seeded
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--seed.scenario=file:<abs-path>.scenario"
-./mvnw spring-boot:run                                    # NO profile: JPA on PostgreSQL via the DB_* env vars; fails at boot without it
+./mvnw spring-boot:run                                    # NO profile: JPA on PostgreSQL via DB_*, plus JWT_SECRET and PLATFORM_ADMIN_PASSWORD; fails at boot without them
 ./mvnw -Pproduction package                               # minified Vaadin bundle, for deployment
 ```
 
@@ -45,8 +45,8 @@ scenario file stops the boot in every profile. A failing scenario step stops it 
 ```
 
 - `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which tests don't need. Tests only; the app then serves no views. The Windows NPE it once worked around no longer reproduces (24.7.0 and 24.10.7, #40).
-- **Don't run the full suite locally.** About 1650 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
-- CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`, with the JVM in UTC ("Build, test and package", the required check), and again with `-Pno-vaadin` in Asia/Jerusalem ("Test in Asia/Jerusalem", not required yet). A third job, "Production artifact", packages with `-Pproduction`, fails if the jar holds H2 or Vaadin's dev tooling, and boots it against a PostgreSQL service until `/actuator/health` is UP (not required yet). `.github/workflows/dependency-audit.yml` submits the resolved Maven tree to the dependency graph, and on PRs its "Dependency review" fails a PR that adds or upgrades to a dependency with a high or critical advisory (not required yet, #200; accepted ones go in `allow-ghsas` with their ADR, ADR-010). Nothing watches the merged tree until Dependabot alerts are on (#202). Dependabot (`.github/dependabot.yml`) opens weekly update PRs into `dev`, ignoring majors, Jackson and Netty minors, Vaadin past 24.10.7 and ArchUnit (rules in ADR-010, reasons in ADR-009); it reads the file from `main`, so it starts once that file is promoted. There is no format or lint step.
+- **Don't run the full suite locally.** About 1950 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
+- CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`, with the JVM in UTC ("Build, test and package", the required check), and again with `-Pno-vaadin` in Asia/Jerusalem ("Test in Asia/Jerusalem", not required yet). A third job, "Production artifact", packages with `-Pproduction`, fails if the jar holds H2, Vaadin's dev tooling or Hilla (ADR-013), and boots it against a PostgreSQL service until `/actuator/health` is UP (not required yet). `.github/workflows/dependency-audit.yml` submits the resolved Maven tree to the dependency graph, and on PRs its "Dependency review" fails a PR that adds or upgrades to a dependency with a high or critical advisory (not required yet, #200; accepted ones go in `allow-ghsas` with their ADR, ADR-010). Nothing watches the merged tree until Dependabot alerts are on (#202). Dependabot (`.github/dependabot.yml`) opens weekly update PRs into `dev`, ignoring majors, Jackson and Netty minors, Vaadin past 24.10.7 and ArchUnit (rules in ADR-010, reasons in ADR-009); it reads the file from `main`, so it starts once that file is promoted. There is no format or lint step.
 - `.mvn/wrapper/maven-wrapper.properties` pins `distributionSha256Sum`: bump it with `distributionUrl`, or `./mvnw` refuses the download. Apache publishes only SHA-512, so check the zip against that and compute the SHA-256 from the checked zip.
 - To run tests in another JVM zone locally, add `"-DargLine=-Duser.timezone=Asia/Jerusalem"` (or `UTC`). It reaches the surefire and failsafe forks, and overrides any `argLine` the pom gains later (e.g. a JaCoCo agent), so CI's command must then append to it.
 - `*IT` classes run under failsafe in `verify`, never under `test`, and need Docker (Testcontainers, ADR-006); `-DskipITs` skips them. One IT, without surefire or packaging: `./mvnw -Pno-vaadin test-compile failsafe:integration-test failsafe:verify "-Dit.test=DbOutageRecoveryIT"`. Each IT declares its own container from `support/PostgresContainers` (`@Container @ServiceConnection`). Under `test`, Hibernate detects the dialect, so an IT can point a `test` context at PostgreSQL.
@@ -74,7 +74,7 @@ reaches into other contexts, mainly (#184's triage has the full table):
 - governance and reporting read sales', catalog's and messaging's repository ports and entities
   directly; governance also calls sales' `PaymentGateway`/`TicketIssuer` and writes identity's
   `Admin` (`AdminRepository`, `PasswordHasher`); reporting uses catalog's `CompanyRatings`;
-- messaging uses identity's `AdminRepository` and `Admin`;
+- messaging's admin gate reads identity's `AdminRepository`;
 - sales takes catalog's `EventRepository` for the buyer lock.
 
 #54 replaces these, #53 the notifications call, and #55 closes the modules.
@@ -92,7 +92,7 @@ wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstra
 | Module | Holds |
 |---|---|
 | `shared` | Kernel: `DomainException` hierarchy, `IRepository`, `InvariantChecked`, AOP aspects, `RepositoryLocks`, `WsepHttpClient`, metrics, `Clock`/BCrypt beans, published-language DTOs (`shared/dto`), purchase-policy domain (`shared/domain/policy`), integration notices (`shared/event`) |
-| `identity` | User, Session, Admin, custom JWT auth (`JwtSessionManager`) |
+| `identity` | User, Session (typed by `SessionKind`), Admin, custom JWT auth (`JwtSessionManager`) |
 | `organization` | ProductionCompany + the `CompanyAppointment` aggregate (membership, roles, permissions) |
 | `catalog` | Event, venue maps, zones, seats, **inventory** (reserve/release/confirm via inbound `InventoryCommandPort`) |
 | `sales` | ActiveOrder, OrderReceipt, Ticket, checkout, reservations, refunds, WSEP adapters |
@@ -102,6 +102,15 @@ wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstra
 | `reporting` | CQRS read side (purchase history, company dashboards), read by `ui` |
 | `ui` | The single Vaadin driving adapter |
 | `bootstrap` | Composition root: lifecycle runners, `@Scheduled` sweepers, dev seed/`.scenario` engine |
+
+Session tokens ([ADR-012](../docs/ADRs/ADR-012-session-tokens-bound-to-typed-session-rows.md)): each `sessions` row has a `SessionKind` (`GUEST`, `MEMBER`, `ADMIN`; a guest row
+alone has no user id), and a JWT counts only while its `sub` and `role` match the live row it names.
+`SessionManager`'s member readers (`validateToken`, `extractUserId`, `tryExtractUserId`, `extractUsername`,
+`validateCredential`) reject an admin token as they reject a revoked one; its admin readers (`validateAdminToken`,
+`extractAdminId`, `isAdminToken`) reject a member token. Member paths call the member readers; an admin gate calls the
+admin readers, and only `SystemAdminService`'s and `MessagingService`'s gates also check `AdminRepository`. A raw
+session id is a credential only for a live guest row: every guest path of sales checks it with
+`validateGuestSession`, which accepts no token; `validateCredential` (member token or guest id) is for catalog browsing.
 
 Context layout: `domain/` · `application/{port/in, port/out, service, dto, dtoMappers, event}` · `adapter/in/event` ·
 `adapter/out/<persistence|wsep|security|…>`. Repository ports sit in `application/port/out`, not
@@ -164,15 +173,19 @@ An in-memory state machine in `SystemAdminService` (governance, not persisted):
 `WsepPaymentGateway`/`WsepTicketIssuer` (`!test`) and `StubPaymentGateway`/`StubTicketIssuer`
 (`test`), implementing the sales ports `PaymentGateway`/`TicketIssuer`. `WsepHttpClient.postWithRetry`
 is only for the idempotent handshake; `pay`/`issue_ticket`/`refund` must use plain `post`, because a
-blind retry could double-charge or double-issue. Checkout idempotency is an in-memory cache in
-`CheckoutService`, lost on restart.
+blind retry could double-charge or double-issue. `post` throws `WsepCommunicationException` on a
+non-2xx status or a body over `MAX_RESPONSE_BODY_BYTES`, and
+`wsep.base-url` must be https at binding; tests against `testutil/LoopbackHttpServer` build
+`WsepProperties` directly with its `http://` URL. Checkout idempotency is a bounded in-memory cache
+(`CheckoutIdempotencyCache`, oldest evicted first), lost on restart.
 
 ### UI (Vaadin MVP)
 
 - ~40 thin `@Route` views in `ui/views`; logic lives in matching `ui/presenters`; shared widgets in `ui/components`. Calculations don't belong in views (revenue moved to reporting's `SalesSummaryCalculator`).
 - Vaadin scans only `com.ticketing.system.ui` (`vaadin.allowed-packages`); a view outside it is silently never routed.
-- `ui/security/AuthBootstrap` (a `VaadinServiceInitListener`) is the global guard: an auth gate (routes without `@AnonymousAllowed` need a session) plus a capability gate (`@RequireCapability` + `Capability`).
-- Session state lives in `ui/session` (`AuthSession`, `GuestSession`, `OrderSession`, …). Dev-only seeding UI lives in `ui/dev` (`DevUserSeeder`, `DevPanel`).
+- `ui/security/AuthBootstrap` (a `VaadinServiceInitListener`) is the global guard. It first checks that the stored token is live (a member's through `SessionIdentity.isMember()`, an admin's through `AuthenticationService.liveAdminId`) and signs out a visitor whose token is dead (`FreshGuestSession.restore()`). Then it runs an auth gate (routes without `@AnonymousAllowed` need a session) and a capability gate (`@RequireCapability` + `Capability`). The gates only steer navigation; the application services still validate the token on every call.
+- Session state lives in `ui/session` (`AuthSession`, `GuestSession`, `OrderSession`, …). Use `SessionIdentity` for "member or guest, and which credential": it also replaces a dead guest session id (`FreshGuestSession.renewGuest()`). Dev-only seeding UI lives in `ui/dev` (`DevUserSeeder`, `DevPanel`).
+- A presenter that shows a caught `RuntimeException` passes it through `ServiceErrors.userMessage`, never `e.getMessage()`: only a `DomainException`, `IllegalArgumentException` or `IllegalStateException` message reaches the user; anything else shows generic text and is logged at ERROR. So a business rule that a user should read must throw one of those, not a plain `RuntimeException`.
 
 ## Profiles
 
@@ -185,7 +198,7 @@ blind retry could double-charge or double-issue. Checkout idempotency is an in-m
 | `memory` | Only with `test`: swaps in the Memory repos. Inert on its own. `jpa` no longer exists; setting it does nothing |
 | `production`, `no-vaadin` | Maven build profiles: bundle the frontend and keep `vaadin-dev` and H2 out of the jar (#79) / skip `prepare-frontend` |
 
-- Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) come from env.
+- Every value in `application.yml` is `${ENV:default}`-overridable. The committed defaults are dev-only; production secrets (`JWT_SECRET`, `DB_PASSWORD`, `PLATFORM_ADMIN_PASSWORD`) must be set from env. Outside `dev` and `test`, `bootstrap/CommittedDefaultSecretsGuard` stops the boot on the committed `JWT_SECRET` or `PLATFORM_ADMIN_PASSWORD`, so a run without a profile needs both (CI's "Production artifact" sets throwaway ones); its test pins its constants to `application.yml`. Keys: `.env.example`.
 - Init parameters bind to `@Validated` `@ConfigurationProperties` records in each module's `config` package (picked up by `@ConfigurationPropertiesScan`); inject the record, not `@Value`. The exception: where a `@Scheduled` placeholder needs the value, the record only validates and nothing injects it (`MarketProperties`, `SweeperProperties`, `EventCompletionProperties`, `NotificationPollingProperties`). A new bound key needs a default in `application.yml`, or every Spring test fails to start (ADR-003).
 - `logback-spring.xml` has a catch-all `!dev & !test` block, so a new runtime profile gets appenders without a block of its own. A new profile that needs different logging gets its own block and an exclusion in the catch-all: blocks that both match merge (root gets both blocks' appenders, logback ignores a duplicate, and the later block's levels win), and a run that matches none is silent (36ac7924).
 

@@ -12,6 +12,7 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 
@@ -62,5 +63,21 @@ class CheckoutPresenterTest {
         // PaymentGatewayException, so this also pins that a real decline does NOT fall into the
         // GatewayUnavailable arm.
         assertInstanceOf(CheckoutPresenter.PayOutcome.PaymentDeclined.class, pay());
+    }
+
+    // Tickets are issued after the charge, so an issuance failure is not "try again in a moment": the
+    // order did not complete, the charge is being refunded, and the buyer should check My account
+    // before retrying. The outcome carries no reason, so the issuer's error text never reaches the
+    // buyer.
+    @Test
+    void GivenTicketIssuanceFails_WhenPay_ThenOrderNotCompleted() {
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock",
+                        new TicketIssuanceFailedException("ticket issuer unreachable: Connection refused")));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertInstanceOf(CheckoutPresenter.PayOutcome.OrderNotCompleted.class, outcome,
+                "a ticket-issuance failure after the charge is its own outcome, but was: " + outcome);
     }
 }

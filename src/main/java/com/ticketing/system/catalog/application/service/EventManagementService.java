@@ -42,6 +42,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.application.port.out.EventSalesHistoryPort;
+import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
@@ -80,6 +81,9 @@ public class EventManagementService {
     // notifications context ultimately raises holder notices — catalog never calls either directly.
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    // Server-side venue size caps (OQ-27): the editor's field limits are advisory, so every write that
+    // sizes a venue checks them here.
+    private final VenueLimitsProperties venueLimits;
     private int currentVenueMapIdCounter;
 
     public EventManagementService(
@@ -90,7 +94,8 @@ public class EventManagementService {
             UserRepository userRepository,
             CompanyMembershipService companyMembershipService,
             ApplicationEventPublisher eventPublisher,
-            Clock clock) {
+            Clock clock,
+            VenueLimitsProperties venueLimits) {
         this.eventRepository = eventRepository;                 // catalog event persistence/locking
         this.companyRepository = companyRepository;             // company lookups for auth/ownership
         this.sessionManager = sessionManager;                   // token validation/user-id extraction
@@ -99,6 +104,7 @@ public class EventManagementService {
         this.companyMembershipService = companyMembershipService; // company-membership permission checks
         this.eventPublisher = eventPublisher;                   // cross-context event publishing
         this.clock = clock;                                     // "now" for the schedule precondition
+        this.venueLimits = venueLimits;                         // venue size caps (OQ-27)
         this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
                                            // here for now.
     }
@@ -319,6 +325,10 @@ public class EventManagementService {
                 throw new UnauthorizedActionException("act on an event that does not belong to this company");
             }
 
+            int gridRows = config.gridRows() > 0 ? config.gridRows() : VenueMap.DEFAULT_GRID_ROWS;
+            int gridCols = config.gridCols() > 0 ? config.gridCols() : VenueMap.DEFAULT_GRID_COLS;
+            requireVenueWithinLimits(config.zones(), gridRows, gridCols);
+
             List<InventoryZone> zones = new ArrayList<>();
             int nextZoneId = 1;
 
@@ -345,8 +355,6 @@ public class EventManagementService {
                 nextZoneId++;
             }
 
-            int gridRows = config.gridRows() > 0 ? config.gridRows() : VenueMap.DEFAULT_GRID_ROWS;
-            int gridCols = config.gridCols() > 0 ? config.gridCols() : VenueMap.DEFAULT_GRID_COLS;
             VenueMap venueMap = new VenueMap(
                     event.getVenueMap() != null ? event.getVenueMap().getId() : eventRepository.nextVenueMapId(),
                     event.getVenueMap() != null ? event.getVenueMap().getLocation() : null,
@@ -436,6 +444,11 @@ public class EventManagementService {
             }
 
             Event event = getAuthorizedEventForVenueEdit(token, companyId, eventId);
+            requireZoneWithinLimits(zoneConfig);
+            requireFreeGridCell(event);
+            if (zoneConfig.seated()) {
+                requireMapSeatsWithinLimit(event, seatCount(zoneConfig));
+            }
 
             int newZoneId;
 
@@ -502,6 +515,7 @@ public class EventManagementService {
 
         try {
             Event event = getAuthorizedEventForVenueEdit(token, companyId, eventId);
+            requireStandingCapacityWithinLimit(event, zoneId, placesToAdd);
             event.addPlacesToStandingZone(zoneId, placesToAdd, companyId);
             eventRepository.save(event);
 
@@ -542,6 +556,7 @@ public class EventManagementService {
 
         try {
             Event event = getAuthorizedEventForVenueEdit(token, companyId, eventId);
+            requireSeatsWithinLimits(event, zoneId, seatsToAdd.size());
             event.addSeatsToSeatedZone(zoneId, toDomainSeats(seatsToAdd), companyId);
             eventRepository.save(event);
 
@@ -593,6 +608,7 @@ public class EventManagementService {
 
         try {
             Event event = getAuthorizedEventForVenueEdit(token, companyId, eventId);
+            requireSeatsWithinLimits(event, zoneId, numberOfSeats);
 
             List<Seat> rowSeats = buildSeatRow(
                     rowLabel,
@@ -682,6 +698,117 @@ public class EventManagementService {
         return seatConfigs.stream()
                 .map(seatConfig -> new Seat(seatConfig.label(), seatConfig.x(), seatConfig.y()))
                 .toList();
+    }
+
+    // Checked on the request, before any domain object is built, so an oversized map costs no
+    // allocation. A zone with no seats or no capacity is left to the existing checks further on.
+    private void requireVenueWithinLimits(List<VenueMapConfigDTO.ZoneConfigDTO> zoneConfigs, int gridRows,
+            int gridCols) {
+        int maxGrid = venueLimits.maxGridSize();
+        if (gridRows > maxGrid || gridCols > maxGrid) {
+            throw new IllegalArgumentException(
+                    "Venue grid " + gridRows + "x" + gridCols + " exceeds the " + maxGrid + "x" + maxGrid + " limit");
+        }
+        long gridCells = (long) gridRows * gridCols;
+        if (zoneConfigs.size() > gridCells) {
+            throw new IllegalArgumentException("A " + gridRows + "x" + gridCols + " venue grid holds at most "
+                    + gridCells + " zones, not " + zoneConfigs.size());
+        }
+        long seatsOnMap = 0;
+        for (VenueMapConfigDTO.ZoneConfigDTO zoneConfig : zoneConfigs) {
+            requireZoneWithinLimits(zoneConfig);
+            if (zoneConfig.seated()) {
+                seatsOnMap += seatCount(zoneConfig);
+            }
+        }
+        if (seatsOnMap > venueLimits.maxSeatsPerMap()) {
+            throw new IllegalArgumentException("A venue map holds at most " + venueLimits.maxSeatsPerMap()
+                    + " seats, not " + seatsOnMap);
+        }
+    }
+
+    private void requireZoneWithinLimits(VenueMapConfigDTO.ZoneConfigDTO zoneConfig) {
+        if (zoneConfig.seated()) {
+            int seats = seatCount(zoneConfig);
+            if (seats > venueLimits.maxSeatsPerZone()) {
+                throw new IllegalArgumentException("A seated zone holds at most " + venueLimits.maxSeatsPerZone()
+                        + " seats, not " + seats);
+            }
+        } else if (zoneConfig.capacity() != null && zoneConfig.capacity() > venueLimits.maxStandingCapacity()) {
+            throw new IllegalArgumentException("A standing zone holds at most " + venueLimits.maxStandingCapacity()
+                    + " places, not " + zoneConfig.capacity());
+        }
+    }
+
+    // Runs before the domain adds the places, so a refused call leaves the zone unchanged. A missing
+    // venue map or a seated zone is left to the domain, which refuses both.
+    private void requireStandingCapacityWithinLimit(Event event, int zoneId, int placesToAdd) {
+        VenueMap map = event.getVenueMap();
+        if (map == null) {
+            return;
+        }
+        InventoryZone zone = map.getZone(zoneId);
+        long capacityAfter = (long) zone.getCapacity() + placesToAdd;
+        if (zone.isStanding() && capacityAfter > venueLimits.maxStandingCapacity()) {
+            throw new IllegalArgumentException("A standing zone holds at most " + venueLimits.maxStandingCapacity()
+                    + " places, not " + capacityAfter);
+        }
+    }
+
+    // Growing a seated zone seat by seat must stop where a whole map's zone would. Runs before the
+    // domain adds the seats, so a refused call leaves the zone unchanged. A missing venue map or a
+    // standing zone is left to the domain, which refuses both.
+    private void requireSeatsWithinLimits(Event event, int zoneId, int seatsToAdd) {
+        VenueMap map = event.getVenueMap();
+        if (map == null) {
+            return;
+        }
+        InventoryZone zone = map.getZone(zoneId);
+        if (zone.isStanding()) {
+            return;
+        }
+        long seatsAfter = (long) zone.getCapacity() + seatsToAdd;
+        if (seatsAfter > venueLimits.maxSeatsPerZone()) {
+            throw new IllegalArgumentException("A seated zone holds at most " + venueLimits.maxSeatsPerZone()
+                    + " seats, not " + seatsAfter);
+        }
+        requireMapSeatsWithinLimit(event, seatsToAdd);
+    }
+
+    // configureVenueMap allows no more zones than grid cells; adding zones one at a time must stop there
+    // too, or repeated calls would grow a map past every per-zone cap combined.
+    private void requireFreeGridCell(Event event) {
+        VenueMap map = event.getVenueMap();
+        if (map == null) {
+            return;
+        }
+        long gridCells = (long) map.getGridRows() * map.getGridCols();
+        if (map.getInventoryZones().size() + 1 > gridCells) {
+            throw new IllegalArgumentException("A " + map.getGridRows() + "x" + map.getGridCols()
+                    + " venue grid holds at most " + gridCells + " zones");
+        }
+    }
+
+    // The map-wide seat cap, for the calls that add seats to an existing map one zone or row at a time.
+    private void requireMapSeatsWithinLimit(Event event, int seatsToAdd) {
+        VenueMap map = event.getVenueMap();
+        if (map == null) {
+            return;
+        }
+        long seatsAfter = seatsToAdd;
+        for (InventoryZone zone : map.getInventoryZones()) {
+            if (!zone.isStanding()) {
+                seatsAfter += zone.getCapacity();
+            }
+        }
+        if (seatsAfter > venueLimits.maxSeatsPerMap()) {
+            throw new IllegalArgumentException("A venue map holds at most " + venueLimits.maxSeatsPerMap()
+                    + " seats, not " + seatsAfter);
+        }
+    }
+
+    private static int seatCount(VenueMapConfigDTO.ZoneConfigDTO zoneConfig) {
+        return zoneConfig.seats() == null ? 0 : zoneConfig.seats().size();
     }
 
     // buildSeatRow is a helper function to create a list of Seat objects for a row

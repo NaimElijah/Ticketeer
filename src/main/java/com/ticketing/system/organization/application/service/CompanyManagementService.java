@@ -24,6 +24,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -60,6 +61,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 public class CompanyManagementService {
+    private static final String ADMIN_REQUIRED = "Admin privileges required";
+
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final SessionManager sessionManager;
@@ -172,6 +175,7 @@ public class CompanyManagementService {
         CompanyAppointment appointment;
 
         if (response.accept()) {
+            requireManagerInviterStillOwner(userId, response.companyId());
             // Transitions the pending appointment to ACTIVE (and persists it via the appointment repo).
             appointment = companyMembershipService.acceptInvitation(userId, response.companyId());
             if (appointment.getRole() == CompanyRole.Owner) {
@@ -194,7 +198,20 @@ public class CompanyManagementService {
         companyRepository.updateCompany(company);
     }
 
-    // UC-24 — edit a Manager's permission set (only by the original appointer).
+    // A manager invitation carries its inviter's authority, so it dies with that authority: once the
+    // inviter is no longer an owner, accepting would grant a role nobody in the company stands behind.
+    private void requireManagerInviterStillOwner(int userId, int companyId) {
+        CompanyAppointment pending = companyMembershipService.getPendingCompanyAppointment(userId, companyId);
+        if (pending != null && pending.getRole() == CompanyRole.Manager
+                && !companyMembershipService.isOwnerInCompany(pending.getInviterId(), companyId)) {
+            log.warn("Manager invitation for user {} in company {} refused: its inviter is no longer an owner",
+                    userId, companyId);
+            throw new BusinessRuleViolationException(
+                    "This invitation is no longer valid: the owner who sent it is no longer an owner of this company");
+        }
+    }
+
+    // UC-24 — edit a Manager's permission set (only by the original appointer, while still an owner).
     @Transactional
     public void editManagerPermissions(String token, PermissionEditDTO edit) {
         int ownerId = authenticate(token);
@@ -215,6 +232,8 @@ public class CompanyManagementService {
             throw new IllegalArgumentException("Manager role must have at least one permission");
         }
 
+        // A revoked owner keeps no authority over the managers they appointed.
+        companyMembershipService.requireOwnerInCompany(ownerId, edit.companyId());
         // Only the original appointer may edit; role/status checks + persistence happen inside.
         companyMembershipService.modifyManagerPermissions(edit.targetUserId(), edit.companyId(), ownerId,
                 edit.newPermissions());
@@ -241,6 +260,9 @@ public class CompanyManagementService {
             throw new UnauthorizedActionException("revoke the appointment of a company founder");
         }
 
+        // Only a current owner may revoke, so a revoked owner keeps no authority over the managers they
+        // appointed. An owner revoking their own appointment is a current owner, so it stays allowed.
+        companyMembershipService.requireOwnerInCompany(ownerId, revokeRequest.companyId());
         // Revoke the target's active appointment (revoke-rights checks + persistence happen inside).
         companyMembershipService.revokeAppointment(revokeRequest.targetUserId(), revokeRequest.companyId(), ownerId);
         company.RevokeAppointment(revokeRequest.targetUserId());
@@ -547,10 +569,7 @@ public class CompanyManagementService {
 
     // Admin-only: list every company in the system regardless of ownership.
     public List<ProductionCompanyDTO> adminListAllCompanies(String token) {
-        authenticate(token);
-        if (!sessionManager.isAdminToken(token)) {
-            throw new InvalidTokenException("Admin privileges required");
-        }
+        requireSystemAdmin(token);
         // Sort by companyId so the default selection (the presenter falls back to the first
         // entry) is deterministic — repository iteration order is not guaranteed.
         return companyRepository.findAll().stream()
@@ -563,10 +582,7 @@ public class CompanyManagementService {
 
     // Admin-only: build org tree for any company, bypassing the ownership check.
     public OrganizationalTreeNodeDTO adminViewOrgTree(String token, int companyId) {
-        authenticate(token);
-        if (!sessionManager.isAdminToken(token)) {
-            throw new InvalidTokenException("Admin privileges required");
-        }
+        requireSystemAdmin(token);
         ProductionCompany company = companyRepository.getCompanyById(companyId);
         if (company == null) {
             log.warn("Company {} not found", companyId);
@@ -686,6 +702,15 @@ public class CompanyManagementService {
             throw new InvalidTokenException("Invalid token");
         }
         return sessionManager.extractUserId(token);
+    }
+
+    // A live admin token. The token is bound to an ADMIN session row, which only admin sign-in creates
+    // and which outlives no admin, since none can be deleted yet, so the row is the proof (ADR-012,
+    // decision 3). Member tokens fail validateAdminToken, whatever their id.
+    private void requireSystemAdmin(String token) {
+        if (!sessionManager.validateAdminToken(token)) {
+            throw new InvalidTokenException(ADMIN_REQUIRED);
+        }
     }
 
     private PurchasePolicy buildPurchasePolicyFromDTO(PurchasePolicyDTO dto) {

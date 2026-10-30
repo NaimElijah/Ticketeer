@@ -1,11 +1,14 @@
 package com.ticketing.system.unit.presentation;
 
+import jakarta.persistence.PersistenceException;
+
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.company.VenueMapPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -85,6 +88,32 @@ class VenueMapPresenterTest {
                         presenter.saveMap(TOKEN, String.valueOf(EVENT_ID), config()));
 
         assertEquals("Cannot reconfigure venue map while tickets are reserved or sold", fail.reason());
+    }
+
+    @Test
+    void GivenSavingFailsInternally_WhenSaveMap_ThenTheReasonIsTheGenericText() {
+        // A non-domain failure is an internal error: its text must not reach the user (CWE-209).
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenReturn(eventInCompany(COMPANY_ID));
+        doThrow(new RuntimeException("could not execute statement [insert into zones (event_id, name)]"))
+                .when(eventService).configureVenueMap(eq(TOKEN), eq(COMPANY_ID), any());
+
+        VenueMapPresenter.SaveOutcome.Failure fail =
+                assertInstanceOf(VenueMapPresenter.SaveOutcome.Failure.class,
+                        presenter.saveMap(TOKEN, String.valueOf(EVENT_ID), config()));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    @Test
+    void GivenLoadingZonesFailsInternally_WhenLoadZones_ThenTheReasonIsTheGenericText() {
+        when(eventService.getEventZones(TOKEN, EVENT_ID))
+                .thenThrow(new PersistenceException("could not extract ResultSet [select z.zone_id from zones z]"));
+
+        VenueMapPresenter.LoadOutcome.Failure fail =
+                assertInstanceOf(VenueMapPresenter.LoadOutcome.Failure.class,
+                        presenter.loadZones(TOKEN, EVENT_ID));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     // ---- helpers --------------------------------------------------------

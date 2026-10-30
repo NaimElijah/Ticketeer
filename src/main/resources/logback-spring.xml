@@ -8,13 +8,20 @@
     Cross-cutting entry/exit tracing is handled by LoggingAspect (DEBUG level on the
     "com.ticketing.system.shared.logging" logger).
     Domain code may also use @Slf4j for WARN/ERROR; everything funnels to the same file.
+
+    Every appender formats with LOG_PATTERN. The log is read one line per event, and a logged value
+    can carry text a user typed, so a CR or LF in it would start a line the application never wrote.
+    LOG_PATTERN replaces each run of CR/LF in the message with one space, here at the logging
+    boundary rather than at each call site. LogbackPatternTest holds every appender to it.
 -->
 <configuration>
+
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %replace(%msg){'[\r\n]+', ' '}%n"/>
 
     <!-- Console appender — primary output during dev and CI. -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>${LOG_PATTERN}</pattern>
         </encoder>
     </appender>
 
@@ -22,7 +29,7 @@
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/event-ticket-system.log</file>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>${LOG_PATTERN}</pattern>
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>logs/event-ticket-system.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>

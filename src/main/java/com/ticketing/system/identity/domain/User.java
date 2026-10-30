@@ -6,11 +6,13 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
 // V3: mapped to JPA. userId is an ASSIGNED @Id (minted by UserRepository.nextId(), never
-// @GeneratedValue); email is unique; @Version drives optimistic locking. A protected no-arg ctor lets
-// Hibernate hydrate; the public ctor still enforces the invariants.
+// @GeneratedValue); email and username are unique (uk_users_email, uk_users_username); @Version
+// drives optimistic locking. A protected no-arg ctor lets Hibernate hydrate; the public ctor still
+// enforces the invariants.
 //
 // Task #20: company appointments used to live here as an owned @OneToMany collection with ~17
 // membership/authorization methods, which forced the foundational identity context to import four
@@ -19,7 +21,8 @@ import jakarta.persistence.Version;
 // CompanyMembershipService), so User now imports NOTHING from organization and the last
 // identity -> organization cycle is gone.
 @Entity
-@Table(name = "users")
+@Table(name = "users",
+        uniqueConstraints = @UniqueConstraint(name = "uk_users_username", columnNames = "username"))
 public class User implements InvariantChecked {
 
     @Id

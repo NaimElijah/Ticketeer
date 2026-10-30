@@ -17,6 +17,7 @@ import java.util.List;
  * For each live UI, acquires the Vaadin session lock via ui.access(), fetches
  * any newly generated PENDING notifications, merges them into NotificationSession,
  * and refreshes the bell component — triggering a long-poll push to the browser.
+ * Admin UIs are skipped: admins have no notification inbox.
  *
  * Real-time WebSocket/SSE delivery (#225) will replace this when implemented.
  */
@@ -38,6 +39,9 @@ public class NotificationPollingScheduler {
         for (UI ui : uiRegistry.getActiveUIs()) {
             ui.access(() -> {
                 if (!AuthSession.isSignedIn()) return;
+                // Notifications are addressed by bare user id, and admin ids share the member id space:
+                // an admin's UI would drain the inbox of the member whose id equals the admin's (ADR-012).
+                if (AuthSession.isAdmin()) return;
                 Integer userId = AuthSession.userId();
                 if (userId == null) return;
 

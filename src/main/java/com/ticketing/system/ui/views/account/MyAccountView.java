@@ -181,7 +181,6 @@ public class MyAccountView extends LkPage {
             }
             case RefundPresenter.Outcome.NotEligible n -> Toasts.warn(n.message());
             case RefundPresenter.Outcome.NotFound n    -> Toasts.failure(n.message());
-            case RefundPresenter.Outcome.Forbidden f   -> Toasts.failure(f.message());
             case RefundPresenter.Outcome.Failure f     -> Toasts.failure(f.message());
         }
     }
