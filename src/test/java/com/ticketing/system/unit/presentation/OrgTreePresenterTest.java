@@ -6,6 +6,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -181,7 +182,7 @@ class OrgTreePresenterTest {
     // ── failure ───────────────────────────────────────────────────────────────
 
     @Test
-    void serviceThrowsRuntime_returnsFailureWithMessage() {
+    void serviceFailsInternally_returnsGenericFailure() {
         when(service.findOwnedCompanies(TOKEN)).thenThrow(new RuntimeException("db down"));
 
         OrgTreePresenter.Outcome.Failure fail =
@@ -191,7 +192,7 @@ class OrgTreePresenterTest {
     }
 
     @Test
-    void treeCallThrows_returnsFailureWithMessage() {
+    void treeCallFailsInternally_returnsGenericFailure() {
         when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(company(7, "Acme")));
         when(service.viewOrganizationalTree(TOKEN, 7)).thenThrow(new RuntimeException("tree error"));
 
@@ -201,7 +202,7 @@ class OrgTreePresenterTest {
     }
 
     @Test
-    void admin_serviceThrowsRuntime_returnsFailureWithMessage() {
+    void admin_serviceFailsInternally_returnsGenericFailure() {
         when(service.adminListAllCompanies(ADMIN_TOKEN)).thenThrow(new RuntimeException("admin token required"));
 
         OrgTreePresenter.Outcome.Failure fail =
@@ -218,5 +219,16 @@ class OrgTreePresenterTest {
 
     private static OrganizationalTreeNodeDTO founderNode(int userId, String username) {
         return new OrganizationalTreeNodeDTO(userId, username, "Owner", true, List.of(), new ArrayList<>());
+    }
+
+    @Test
+    void treeCallUnauthorized_returnsFailureWithTheRulesMessage() {
+        UnauthorizedActionException rule = new UnauthorizedActionException("view the organizational tree");
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(company(7, "Acme")));
+        when(service.viewOrganizationalTree(TOKEN, 7)).thenThrow(rule);
+
+        OrgTreePresenter.Outcome.Failure fail =
+                assertInstanceOf(OrgTreePresenter.Outcome.Failure.class, presenter.load(TOKEN, null, false));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

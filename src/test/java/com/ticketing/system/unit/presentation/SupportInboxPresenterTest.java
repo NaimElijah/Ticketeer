@@ -26,6 +26,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.ConversationClosedException;
 
 class SupportInboxPresenterTest {
 
@@ -78,7 +79,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void load_serviceThrows_returnsFailureWithMessage() {
+    void load_serviceFailsInternally_returnsGenericFailure() {
         when(service.viewMyConversations(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         SupportInboxPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -145,7 +146,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceThrows_returnsFailureWithMessage() {
+    void reply_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("conversation closed"))
             .when(service).sendMessage(anyString(), any());
 
@@ -164,5 +165,15 @@ class SupportInboxPresenterTest {
         SupportInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "hi");
 
         assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
+    }
+
+    @Test
+    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+        ConversationClosedException rule = new ConversationClosedException("c1");
+        doThrow(rule).when(service).sendMessage(anyString(), any());
+
+        SupportInboxPresenter.ActionOutcome.Failure fail = assertInstanceOf(
+            SupportInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "late reply"));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

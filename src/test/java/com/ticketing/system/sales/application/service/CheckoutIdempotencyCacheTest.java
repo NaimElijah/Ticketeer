@@ -28,12 +28,10 @@ import com.ticketing.system.shared.exception.IdempotencyConflictException;
  * another buyer is a conflict, and the cache is bounded, so a long-running instance cannot grow it
  * without limit. Past its capacity the oldest entry goes first.
  *
- * <p>Written against a class that does not exist yet: {@code CheckoutService} keeps an unbounded map
- * today, and the bound needs a seam smaller than hundreds of real checkouts. The proposed API is
- * package-private in {@code sales.application.service}: {@code CheckoutIdempotencyCache(int capacity)},
- * {@code DEFAULT_CAPACITY}, {@code find(idempotencyKey, buyerKey)} and
- * {@code putIfAbsent(idempotencyKey, buyerKey, result)}. Which entry a read refreshes, if any, is not
- * specified here: eviction is pinned only for entries never read after they were cached.
+ * <p>Tests the package-private cache {@code CheckoutService} keeps its completed checkouts in, so the
+ * bound can be shown with a small capacity instead of hundreds of real checkouts. Which entry a read
+ * refreshes, if any, is not specified here: eviction is pinned only for entries never read after they
+ * were cached.
  */
 class CheckoutIdempotencyCacheTest {
 
@@ -135,7 +133,7 @@ class CheckoutIdempotencyCacheTest {
 
     // Checkouts complete on many request threads at once; the bound must hold under that too.
     @Test
-    void GivenConcurrentCheckoutsOverflowingTheCapacity_WhenCached_ThenNoMoreThanCapacityRemain() throws Exception {
+    void GivenConcurrentCheckoutsOverflowingTheCapacity_WhenCached_ThenExactlyCapacityRemain() throws Exception {
         CheckoutIdempotencyCache cache = new CheckoutIdempotencyCache(SMALL_CAPACITY);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(THREADS);
@@ -162,8 +160,8 @@ class CheckoutIdempotencyCacheTest {
 
         long remaining = IntStream.range(0, THREADS * PUTS_PER_THREAD)
                 .filter(n -> cache.find(key(n), BUYER).isPresent()).count();
-        assertTrue(remaining <= SMALL_CAPACITY,
-                "expected at most " + SMALL_CAPACITY + " cached checkouts, found " + remaining);
+        assertEquals(SMALL_CAPACITY, remaining,
+                "expected exactly " + SMALL_CAPACITY + " cached checkouts, found " + remaining);
     }
 
     private static String key(int n) {

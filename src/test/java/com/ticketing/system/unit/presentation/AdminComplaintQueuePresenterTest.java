@@ -27,6 +27,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.ConversationClosedException;
 
 class AdminComplaintQueuePresenterTest {
 
@@ -136,7 +137,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_serviceThrows_returnsFailureWithMessage() {
+    void load_serviceFailsInternally_returnsGenericFailure() {
         when(messaging.viewAllComplaints(eq(TOKEN), any()))
             .thenThrow(new RuntimeException("not an admin"));
 
@@ -172,7 +173,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void respond_serviceThrows_returnsFailureWithMessage() {
+    void respond_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("already resolved"))
             .when(messaging).respondToComplaint(anyString(), any());
 
@@ -222,5 +223,15 @@ class AdminComplaintQueuePresenterTest {
         AdminComplaintQueuePresenter.SingleOutcome outcome = presenter.loadOne(TOKEN, "c1");
 
         assertInstanceOf(AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated.class, outcome);
+    }
+
+    @Test
+    void respond_conversationClosed_returnsFailureWithTheRulesMessage() {
+        ConversationClosedException rule = new ConversationClosedException("c1");
+        doThrow(rule).when(messaging).respondToComplaint(anyString(), any());
+
+        AdminComplaintQueuePresenter.ActionOutcome.Failure fail = assertInstanceOf(
+            AdminComplaintQueuePresenter.ActionOutcome.Failure.class, presenter.respond(TOKEN, "c1", "late"));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

@@ -29,6 +29,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.ConversationClosedException;
 
 class CompanyInquiryInboxPresenterTest {
 
@@ -121,7 +122,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void loadFor_serviceThrows_returnsFailureWithMessage() {
+    void loadFor_serviceFailsInternally_returnsGenericFailure() {
         when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(company(7, "Acme")));
         when(messaging.viewCompanyInbox(TOKEN, 7)).thenThrow(new RuntimeException("inbox down"));
 
@@ -180,7 +181,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceThrows_returnsFailureWithMessage() {
+    void reply_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("conversation closed"))
             .when(messaging).sendMessage(anyString(), any());
 
@@ -220,7 +221,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void close_serviceThrows_returnsFailureWithMessage() {
+    void close_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("already closed"))
             .when(messaging).closeConversation(anyString(), anyString());
 
@@ -261,5 +262,15 @@ class CompanyInquiryInboxPresenterTest {
         CompanyInquiryInboxPresenter.SingleOutcome.Success ok =
             assertInstanceOf(CompanyInquiryInboxPresenter.SingleOutcome.Success.class, outcome);
         assertEquals(inquiry, ok.conversation());
+    }
+
+    @Test
+    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+        ConversationClosedException rule = new ConversationClosedException("c1");
+        doThrow(rule).when(messaging).sendMessage(anyString(), any());
+
+        CompanyInquiryInboxPresenter.ActionOutcome.Failure fail = assertInstanceOf(
+            CompanyInquiryInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "late reply"));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

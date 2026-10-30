@@ -791,6 +791,7 @@ class CatalogServiceTest {
         try (LogCapture logs = LogCapture.of(CatalogService.class)) {
             catalogService.search(VALID_TOKEN, query, 8);
 
+            assertTrue(logs.eventCount() > 0, "control: a search logs, so the capture sees the service's logger");
             assertEquals(List.of(), logs.eventsContaining(query), "the search text must not be logged");
         }
     }

@@ -4,11 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -22,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.identity.application.service.LoginAttemptTracker.Admission;
 import com.ticketing.system.identity.application.service.LoginAttemptTracker.Pool;
 import com.ticketing.system.identity.config.LockoutProperties;
+import com.ticketing.system.testutil.AdjustableClock;
 
 /**
  * The sign-in lockout's bookkeeping (SLR.2, #185). Attempts are counted before the password is
@@ -39,7 +37,7 @@ class LoginAttemptTrackerTest {
     private static final int THREADS = 16;
     private static final long AWAIT_SECONDS = 10;
 
-    private final MutableClock clock = new MutableClock(T0);
+    private final AdjustableClock clock = new AdjustableClock(T0);
     private final LoginAttemptTracker tracker =
             new LoginAttemptTracker(new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES), clock);
 
@@ -188,34 +186,6 @@ class LoginAttemptTrackerTest {
     private void admitTimes(Pool pool, String username, int times) {
         for (int i = 0; i < times; i++) {
             tracker.admit(pool, username);
-        }
-    }
-
-    /** An advanceable clock, so a test can move past a window without waiting for it. */
-    private static final class MutableClock extends Clock {
-        private Instant now;
-
-        MutableClock(Instant start) {
-            this.now = start;
-        }
-
-        void advance(Duration duration) {
-            now = now.plus(duration);
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
         }
     }
 }

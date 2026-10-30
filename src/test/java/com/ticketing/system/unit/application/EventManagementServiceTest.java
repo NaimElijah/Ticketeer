@@ -101,6 +101,9 @@ class EventManagementServiceTest {
         private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
         // 16:30Z on 15 July 2027 is 19:30 in Jerusalem (IDT, UTC+3).
         private static final Instant JERUSALEM_1930 = Instant.parse("2027-07-15T16:30:00Z");
+        // The venue-limit tests' "now": before any show the shared event fixture schedules, since that
+        // fixture dates its shows from the system clock.
+        private static final Instant VENUE_LIMITS_NOW = Instant.parse("2026-01-01T00:00:00Z");
 
         private ProductionCompany company;
         private InventoryZone zone;
@@ -1597,7 +1600,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
-                return serviceWith(Clock.systemUTC(), limits);
+                return serviceWith(Clock.fixed(VENUE_LIMITS_NOW, ZoneOffset.UTC), limits);
         }
 
         private VenueMapConfigDTO venueConfig(int gridRows, int gridCols, VenueMapConfigDTO.ZoneConfigDTO... zones) {

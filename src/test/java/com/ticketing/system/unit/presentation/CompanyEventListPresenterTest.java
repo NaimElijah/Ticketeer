@@ -193,7 +193,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void cancelEvent_serviceThrowsRuntime_returnsFailureWithMessage() {
+    void cancelEvent_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("refund failed")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         CompanyEventListPresenter.ActionOutcome.Failure fail =
@@ -293,7 +293,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void changeEventStatus_serviceThrowsRuntime_returnsFailureWithMessage() {
+    void changeEventStatus_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("invalid transition"))
                 .when(eventService).changeEventStatus(TOKEN, EVENT_ID, EventStatus.ON_SALE);
 

@@ -24,6 +24,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.ConversationClosedException;
 
 class AdminInboxPresenterTest {
 
@@ -75,7 +76,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void load_serviceThrows_returnsFailureWithMessage() {
+    void load_serviceFailsInternally_returnsGenericFailure() {
         when(messaging.viewAdminInbox(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         AdminInboxPresenter.Outcome.Failure fail =
@@ -105,7 +106,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceThrows_returnsFailureWithMessage() {
+    void reply_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("conversation closed")).when(messaging).sendMessage(anyString(), any());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
@@ -140,7 +141,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void close_serviceThrows_returnsFailureWithMessage() {
+    void close_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("already closed")).when(messaging).closeConversation(anyString(), anyString());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
@@ -154,5 +155,15 @@ class AdminInboxPresenterTest {
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class,
             presenter.close(TOKEN, "c1"));
+    }
+
+    @Test
+    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+        ConversationClosedException rule = new ConversationClosedException("c1");
+        doThrow(rule).when(messaging).sendMessage(anyString(), any());
+
+        AdminInboxPresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "x"));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

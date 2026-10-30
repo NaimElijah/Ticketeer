@@ -29,6 +29,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 class AdminSendMessagesPresenterTest {
 
@@ -95,7 +96,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_serviceThrows_returnsFailureWithMessage() {
+    void send_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("no recipients")).when(messaging).sendOutreach(anyString(), any());
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
@@ -162,5 +163,16 @@ class AdminSendMessagesPresenterTest {
 
         assertInstanceOf(AdminSendMessagesPresenter.Outcome.NotAuthenticated.class, outcome);
         verify(messaging, never()).viewSentOutreach(anyString());
+    }
+
+    @Test
+    void send_ruleViolated_returnsFailureWithTheRulesMessage() {
+        BusinessRuleViolationException rule = new BusinessRuleViolationException("Choose at least one recipient.");
+        doThrow(rule).when(messaging).sendOutreach(anyString(), any());
+
+        AdminSendMessagesPresenter.ActionOutcome.Failure fail = assertInstanceOf(
+            AdminSendMessagesPresenter.ActionOutcome.Failure.class,
+            presenter.send(TOKEN, "S", "B", List.of(7), false, false));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

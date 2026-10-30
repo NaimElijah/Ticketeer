@@ -126,6 +126,34 @@ class ServiceErrorsTest {
     }
 
     @Test
+    void GivenIllegalArgumentException_WhenUserMessage_ThenItsOwnMessage() {
+        String message = ServiceErrors.userMessage(new IllegalArgumentException("Quantity must be positive."));
+
+        assertEquals("Quantity must be positive.", message);
+    }
+
+    @Test
+    void GivenIllegalStateException_WhenUserMessage_ThenItsOwnMessage() {
+        String message = ServiceErrors.userMessage(
+            new IllegalStateException("Cannot reconfigure venue map while tickets are reserved or sold"));
+
+        assertEquals("Cannot reconfigure venue map while tickets are reserved or sold", message);
+    }
+
+    @Test
+    void GivenDomainExceptionWithABlankMessage_WhenUserMessage_ThenTheGenericTextAndTheFailureIsLoggedAtError() {
+        serviceErrorsLog = LogCapture.of(ServiceErrors.class);
+
+        String message = ServiceErrors.userMessage(new BusinessRuleViolationException("   "));
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, message,
+            "a rule violation with no text gives the user nothing to read, so the generic text stands in");
+        List<String> logged = serviceErrorsLog.eventsContaining("");
+        assertEquals(1, logged.size(), "the failure must be logged once, but was: " + logged);
+        assertTrue(logged.get(0).startsWith("ERROR "), "the failure must be logged at ERROR, but was: " + logged);
+    }
+
+    @Test
     void GivenNonDomainException_WhenUserMessage_ThenTheGenericTextNotTheRawText() {
         String message = ServiceErrors.userMessage(new DataIntegrityViolationException(INTERNAL_FAILURE_TEXT));
 

@@ -26,6 +26,7 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 
 class NewInquiryPresenterTest {
 
@@ -100,7 +101,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_serviceThrows_returnsFailureWithMessage() {
+    void submit_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("company not found"))
             .when(messaging).startConversation(anyString(), any());
 
@@ -119,5 +120,15 @@ class NewInquiryPresenterTest {
         NewInquiryPresenter.ActionOutcome outcome = presenter.submit(TOKEN, 5, "S", "B");
 
         assertInstanceOf(NewInquiryPresenter.ActionOutcome.NotAuthenticated.class, outcome);
+    }
+
+    @Test
+    void submit_companyNotFound_returnsFailureWithTheRulesMessage() {
+        CompanyNotFoundException rule = new CompanyNotFoundException();
+        doThrow(rule).when(messaging).startConversation(anyString(), any());
+
+        NewInquiryPresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(NewInquiryPresenter.ActionOutcome.Failure.class, presenter.submit(TOKEN, 5, "S", "B"));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

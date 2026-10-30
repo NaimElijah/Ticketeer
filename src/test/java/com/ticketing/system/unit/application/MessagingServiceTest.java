@@ -49,6 +49,7 @@ import com.ticketing.system.messaging.application.port.out.ConversationRepositor
 import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.messaging.adapter.out.persistence.MemoryConversationRepository;
 
 class MessagingServiceTest {
@@ -94,7 +95,9 @@ class MessagingServiceTest {
         stubToken(OWNER_TOKEN, OWNER_ID);
         stubToken(OUTSIDER_TOKEN, OUTSIDER_ID);
         // The admin token passes the admin readers only. The member readers reject it as the real
-        // SessionManager does (#185): validateToken(ADMIN_TOKEN) is left at its default, false.
+        // SessionManager does (#185, ADR-012): as a revoked token, with InvalidTokenException.
+        when(sessionManager.validateToken(ADMIN_TOKEN)).thenThrow(new InvalidTokenException("not a member token"));
+        when(sessionManager.extractUserId(ADMIN_TOKEN)).thenThrow(new InvalidTokenException("not a member token"));
         when(sessionManager.isAdminToken(ADMIN_TOKEN)).thenReturn(true);
         when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
         when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
