@@ -30,6 +30,7 @@ import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.auth.LoginView;
+import com.ticketing.system.ui.views.company.MyCompaniesView;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterListener;
@@ -108,6 +109,19 @@ class AuthBootstrapTest {
         verify(navigation, never()).forwardTo(any(Class.class));
         assertTrue(AuthSession.isAdmin(), "a live admin stays signed in");
         assertEquals(ADMIN_TOKEN, AuthSession.token());
+    }
+
+    // An admin holds no member capability, and My companies itself needs one, so forwarding there
+    // would forward the admin to the very view that refused them.
+    @Test
+    void GivenSignedInAdmin_WhenEnteringMyCompanies_ThenForwardedToTheAdminDashboard() {
+        storeSignedInAdmin();
+        when(authenticationService.liveAdminId(ADMIN_TOKEN)).thenReturn(OptionalInt.of(ADMIN_ID));
+        BeforeEnterEvent navigation = navigationTo(MyCompaniesView.class);
+
+        guard.beforeEnter(navigation);
+
+        verify(navigation).forwardTo(AdminDashboardView.class);
     }
 
     // ---- a member --------------------------------------------------------------------------

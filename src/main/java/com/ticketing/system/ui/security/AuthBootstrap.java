@@ -5,6 +5,7 @@ import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.MyCompaniesView;
@@ -41,6 +42,7 @@ import java.util.Set;
  *       missing capability:
  *       <ul>
  *         <li>admin capabilities → {@link LoginView}</li>
+ *         <li>any other capability, for an admin → {@link AdminDashboardView}</li>
  *         <li>owner workspace caps when the user has no company →
  *             {@link CompanyRegistrationView} (so they can become one)</li>
  *         <li>owner workspace caps when the user already has a company
@@ -184,6 +186,11 @@ public class AuthBootstrap implements VaadinServiceInitListener {
             // the unified sign-in. Re-authentication as an admin will land
             // them on the platform shell.
             return LoginView.class;
+        }
+        if (AuthSession.isAdmin()) {
+            // An admin holds no member capability, so every member page, the fallback below
+            // included, would refuse them again.
+            return AdminDashboardView.class;
         }
         if (WORKSPACE_CAPS.contains(c)) {
             // No company yet → become one. Otherwise the user has a
