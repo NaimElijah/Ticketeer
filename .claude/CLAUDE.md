@@ -172,7 +172,7 @@ An in-memory state machine in `SystemAdminService` (governance, not persisted):
 (`test`), implementing the sales ports `PaymentGateway`/`TicketIssuer`. `WsepHttpClient.postWithRetry`
 is only for the idempotent handshake; `pay`/`issue_ticket`/`refund` must use plain `post`, because a
 blind retry could double-charge or double-issue. `post` throws `WsepCommunicationException` on a
-non-2xx status (`WsepHttpStatusException`) or a body over `MAX_RESPONSE_BODY_BYTES`, and
+non-2xx status or a body over `MAX_RESPONSE_BODY_BYTES`, and
 `wsep.base-url` must be https at binding; tests against `testutil/LoopbackHttpServer` build
 `WsepProperties` directly with its `http://` URL. Checkout idempotency is a bounded in-memory cache
 (`CheckoutIdempotencyCache`, oldest evicted first), lost on restart.

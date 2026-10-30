@@ -92,10 +92,9 @@ public class WsepHttpClient {
      * POSTs the form and returns the trimmed plain-text body of a 2xx reply, so a
      * caller can tell "no WSEP reply" apart from a {@code "-1"} reply.
      *
-     * @throws WsepHttpStatusException     if the endpoint answers with a non-2xx status; its body is
-     *                                     not a WSEP reply and is never read
-     * @throws WsepCommunicationException  on a transport-level failure, or if the body is longer than
-     *                                     {@code MAX_RESPONSE_BODY_BYTES} bytes
+     * @throws WsepCommunicationException on a transport-level failure, a non-2xx status (whose body is
+     *                                    not a WSEP reply and is never read), or a body longer than
+     *                                    {@code MAX_RESPONSE_BODY_BYTES} bytes
      */
     public String post(Form form) {
         HttpRequest request = HttpRequest.newBuilder()
@@ -108,7 +107,7 @@ public class WsepHttpClient {
             HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream body = response.body()) {
                 if (!isSuccess(response.statusCode())) {
-                    throw new WsepHttpStatusException(response.statusCode());
+                    throw new WsepCommunicationException("WSEP answered HTTP " + response.statusCode());
                 }
                 return readCapped(body).trim();
             }
