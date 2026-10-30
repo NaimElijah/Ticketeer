@@ -5,11 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.function.Supplier;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
@@ -53,6 +56,9 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     @Autowired
     private TestEntityManager entityManager;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @BeforeEach
     void cleanTable() {
         data.deleteAll();
@@ -61,6 +67,12 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     @Override
     protected EventRepository newRepository() {
         return repository;
+    }
+
+    // These inherited tests run without a test transaction, and findForSale's lock needs the caller's.
+    @Override
+    protected <T> T inSaleTransaction(Supplier<T> call) {
+        return new TransactionTemplate(transactionManager).execute(status -> call.get());
     }
 
     // Flush and clear so the zone is read back from events.time_zone, not the persistence context.

@@ -30,8 +30,9 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  *       these steps are atomic against structural edits. These methods therefore do NOT lock; they
  *       rely on the caller's held lock (which also satisfies the in-memory repository's
  *       save-under-lock requirement, since the same thread holds the read lock).</li>
- *   <li>Pure reads ({@link #priceTicket}, {@link #eventName}, {@link #validatePurchasePolicy},
- *       {@link #validateEventsOnSale}) take no lock.</li>
+ *   <li>Pure reads ({@link #priceTicket}, {@link #eventName}, {@link #validatePurchasePolicy}) take
+ *       no lock. {@link #validateEventsOnSale} takes a shared row lock on each event for the caller's
+ *       transaction.</li>
  * </ul>
  *
  * <h2>Transaction contract</h2>
@@ -130,9 +131,14 @@ public interface InventoryCommandPort {
     void validatePurchasePolicy(int eventId, int buyerId, Integer buyerAge, int quantity);
 
     /**
-     * Validates that every given event still exists and is sellable (ON_SALE or SOLD_OUT). Pure read.
+     * Validates that every given event still exists and is sellable (ON_SALE or SOLD_OUT), and holds each
+     * event against a lifecycle write until the caller's transaction ends ({@code EventRepository#findForSale}).
+     * Checkout Phase 3 calls it first in the transaction that commits the sale, so a cancel that lands
+     * meanwhile waits for the sale and then refunds it.
      *
      * @param eventIds the events to check
+     * @throws org.springframework.transaction.IllegalTransactionStateException on the Jpa adapters, if
+     *     the caller has no transaction
      */
     void validateEventsOnSale(List<Integer> eventIds);
 

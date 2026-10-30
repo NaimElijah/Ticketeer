@@ -191,7 +191,7 @@ public class InventoryService implements InventoryCommandPort {
     @Override
     public void validateEventsOnSale(List<Integer> eventIds) {
         for (Integer eventId : eventIds) {
-            Event event = eventRepository.findById(eventId);       // load each event
+            Event event = eventRepository.findForSale(eventId);    // holds the event against a cancel until commit
             if (event == null) {
                 throw new EventNotFoundException("Event not found: " + eventId);
             }

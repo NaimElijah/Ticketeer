@@ -1,9 +1,13 @@
 package com.ticketing.system.catalog.adapter.out.persistence;
 
 import java.util.List;
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,6 +28,11 @@ public interface SpringDataEventRepository extends JpaRepository<Event, Integer>
 
     @Query("select e from Event e where e.comapnyid = :companyId")
     List<Event> findByCompanyId(@Param("companyId") int companyId);
+
+    /** The event, with a shared row lock ({@code FOR SHARE} on PostgreSQL) held until the transaction ends. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select e from Event e where e.id = :id")
+    Optional<Event> findByIdForShare(@Param("id") int id);
 
     @Query("select e.id from Event e where e.comapnyid = :companyId")
     List<Integer> findIdsByCompany(@Param("companyId") int companyId);

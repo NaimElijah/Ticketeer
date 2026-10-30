@@ -138,6 +138,8 @@ class CheckoutServiceTest {
     void setUp() {
         mockActiveOrderRepo = mock(ActiveOrderRepository.class);
         mockEventRepo = mock(EventRepository.class);
+        // A sale loads its events through findForSale; each test stubs the events once, on findById.
+        when(mockEventRepo.findForSale(anyInt())).thenAnswer(call -> mockEventRepo.findById(call.<Integer>getArgument(0)));
         mockTicketRepo = mock(TicketRepository.class);
         // Ticket ids are minted by the repository (#19), starting at TICKET_ID_1 for each test.
         AtomicInteger ticketIds = new AtomicInteger(TICKET_ID_1);

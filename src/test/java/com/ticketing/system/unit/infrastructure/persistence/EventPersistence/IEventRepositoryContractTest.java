@@ -2,12 +2,14 @@ package com.ticketing.system.unit.infrastructure.persistence.EventPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,7 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.catalog.domain.EventCategory;
@@ -45,6 +48,11 @@ public abstract class IEventRepositoryContractTest {
 
     // Builds a minimal valid Event with specified category and one zone priced at
     // 50.
+    /** Runs a call the way a sale makes it: inside a transaction, on an adapter that needs one. */
+    protected <T> T inSaleTransaction(Supplier<T> call) {
+        return call.get();
+    }
+
     protected Event buildEvent(int id, String name, Double rating, int companyId, EventStatus status,
             EventCategory category) {
         VenueMap venueMap = new VenueMap(id, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
@@ -91,6 +99,23 @@ public abstract class IEventRepositoryContractTest {
         assertNotNull(found);
         assertEquals(1, found.getId());
         assertEquals("Rock Night", found.getName());
+    }
+
+    // === findForSale: the event a sale commits against (the Jpa lock itself is CancelDuringCheckoutJpaTest's) ===
+
+    @Test
+    void GivenASavedEvent_WhenFindForSale_ThenItIsThatEvent() {
+        eventRepo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        Event found = inSaleTransaction(() -> eventRepo.findForSale(1));
+
+        assertEquals(1, found.getId());
+        assertEquals(EventStatus.ON_SALE, found.getStatus());
+    }
+
+    @Test
+    void GivenNoSuchEvent_WhenFindForSale_ThenEventNotFound() {
+        assertThrows(EventNotFoundException.class, () -> inSaleTransaction(() -> eventRepo.findForSale(999)));
     }
 
     @Test

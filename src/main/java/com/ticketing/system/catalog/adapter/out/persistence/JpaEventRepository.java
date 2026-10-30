@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
@@ -84,6 +85,14 @@ public class JpaEventRepository implements EventRepository {
     @Override
     public Event findById(int eventId) {
         return data.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event with ID " + eventId + " not found"));
+    }
+
+    // MANDATORY: a lock taken in a transaction of its own would end before the sale it protects.
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Event findForSale(int eventId) {
+        return data.findByIdForShare(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event with ID " + eventId + " not found"));
     }
 

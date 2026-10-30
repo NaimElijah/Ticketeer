@@ -69,6 +69,12 @@ public class MemoryEventRepository implements EventRepository {
         return events.get(eventId);
     }
 
+    // The caller's buyer lock keeps lifecycle writes out, so there is no row lock to take here.
+    @Override
+    public Event findForSale(int eventId) {
+        return findById(eventId);
+    }
+
     @Override
     public void delete(int eventId) {
         // Delete is a structural/lifecycle change: an existing event must be write-locked
