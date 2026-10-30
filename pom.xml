@@ -86,7 +86,7 @@
 			<dependency>
 				<groupId>org.apache.commons</groupId>
 				<artifactId>commons-compress</artifactId>
-				<version>1.27.1</version>
+				<version>1.28.0</version>
 			</dependency>
 			<!-- Vaadin 24.10.7, the last free 24.x, ships jsoup 1.20.1 (flow-server) and Guava 33.4.0
 			     (javaparser), both with high advisories (ADR-009). jsoup 1.23.2 is the version
