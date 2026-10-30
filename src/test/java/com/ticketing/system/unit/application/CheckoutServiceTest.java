@@ -44,6 +44,7 @@ import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
@@ -844,6 +845,51 @@ void GivenTicketFromDifferentEventDoesNotExist_WhenCheckout_ThenClearCartAndRetu
     assertEquals(0, zone1.getReservedAmount());
 }
    @Test
+void GivenPhase3LosesOneVersionRace_WhenCheckout_ThenPhase3RunsAgainAndThePurchaseSucceedsWithOneCharge() {
+    arrangeOneStandingLineCheckout();
+    doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+            .doNothing()
+            .when(mockOrderReceiptRepo).save(any());
+
+    CheckoutResultDTO result = checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+    assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId());
+    verify(mockOrderReceiptRepo, times(2)).save(any());
+    verify(mockPaymentGateway, times(1)).charge(any(PaymentRequestDTO.class));
+    verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+}
+
+// The retry is bounded: a race lost on every attempt still fails the checkout, which refunds the charge.
+@Test
+void GivenPhase3LosesEveryVersionRace_WhenCheckout_ThenItFailsAfterThreeAttemptsAndRefundsTheCharge() {
+    arrangeOneStandingLineCheckout();
+    doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+            .when(mockOrderReceiptRepo).save(any());
+
+    assertThrows(RuntimeException.class,
+            () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+    verify(mockOrderReceiptRepo, times(3)).save(any());
+    verify(mockPaymentGateway, times(1)).refund(PAYMENT_TRANSACTION_ID, 100.0);
+}
+
+// One standing ticket in zone 1 of event 1, charged 100 and issued one barcode.
+private void arrangeOneStandingLineCheckout() {
+    when(mockOrder.validateCanCheckout(any())).thenReturn(true);
+    when(mockOrder.getItems()).thenReturn(List.of(itemEvent1Zone1));
+    when(mockOrder.buy()).thenReturn(List.of(itemEvent1Zone1));
+    when(event1.calculatePrice(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(100.0);
+    when(event1.calculatePriceforoneticket(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(100.0);
+    when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(
+            new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", 100.0, "ILS", NOW));
+    when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(new IssuanceResultDTO(
+            ISSUANCE_TRANSACTION_ID, "issuer", NOW, List.of(new BarcodeDTO("barcode-value-1", "QR"))));
+    StandingZone zone1 = new StandingZone(ZONE_ID_1, "General", 100, 100.0);
+    zone1.reserve(InventorySelection.standing(1));
+    when(event1.getVenueMap().getZone(ZONE_ID_1)).thenReturn(zone1);
+}
+
+@Test
 void GivenValidCheckout_WhenCheckout_ThenReturnCheckoutResultAndSaveTicketAndReceipt() {
     PaymentResultDTO paymentResult = new PaymentResultDTO(
             PAYMENT_TRANSACTION_ID,

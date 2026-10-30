@@ -11,8 +11,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ticketing.system.shared.dto.CardDetailsDTO;
@@ -84,6 +86,8 @@ public class CheckoutService {
     // OUTSIDE any transaction so a slow gateway never pins a DB connection. This template wraps only
     // the Phase-3 DB unit (tickets + receipt + RESERVED→SOLD confirm), between the external calls.
     private final TransactionTemplate transactionTemplate;
+    // How many times Phase 3 runs before a lost version race fails the checkout (see runPhase3).
+    private static final int PHASE3_ATTEMPTS = 3;
     // "now" for hold expiry, pricing and receipts: UTC wall time (ADR-008).
     private final Clock clock;
 
@@ -284,7 +288,7 @@ public class CheckoutService {
             final int capturedUserId = userId;
             final double capturedTotalPrice = totalPrice;
             final PaymentResultDTO capturedPaymentResult = paymentResult;
-            Phase3Persisted persisted = transactionTemplate.execute(status -> {
+            Phase3Persisted persisted = runPhase3(status -> {
                 validateEventsStillOnSale(snapshotItems);
                 // Fail-fast ownership check (read-only): the reservation must still be ours and RESERVED.
                 validateCanConfirmInventorySale(snapshotItems, orderKey);
@@ -447,7 +451,7 @@ public class CheckoutService {
             // tickets + receipt + the RESERVED→SOLD confirm together, or rolls back and the catch refunds.
             final double capturedTotalPrice = totalPrice;
             final PaymentResultDTO capturedPaymentResult = paymentResult;
-            Phase3Persisted persisted = transactionTemplate.execute(status -> {
+            Phase3Persisted persisted = runPhase3(status -> {
                 validateEventsStillOnSale(snapshotItems);
                 // Fail-fast ownership check (read-only): the reservation must still be ours and RESERVED.
                 validateCanConfirmInventorySale(snapshotItems, orderKey);
@@ -611,6 +615,24 @@ public class CheckoutService {
     }
 
     //
+    // Two sales in one standing zone both move the zone's reserved and sold counts, so whichever commits
+    // second loses on the zone's @Version, though the zone had room for both. Failing then would refund a
+    // charge for nothing. Phase 3 is database work only, it re-reads and re-validates everything, and each
+    // attempt's transaction rolls back whole, so running it again is safe. Any other failure, and the last
+    // lost race, still fail the checkout.
+    private <T> T runPhase3(TransactionCallback<T> phase3) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return transactionTemplate.execute(phase3);
+            } catch (OptimisticLockingFailureException lostRace) {
+                if (attempt == PHASE3_ATTEMPTS) {
+                    throw lostRace;
+                }
+                log.info("Checkout Phase 3 lost a version race; running it again. attempt={}", attempt);
+            }
+        }
+    }
+
     private void lockEvents(List<Integer> eventIds) {
         for (Integer eventId : eventIds) {
             eventRepository.lockForBuyerOperation(eventId);
