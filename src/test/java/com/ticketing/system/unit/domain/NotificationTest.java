@@ -18,12 +18,14 @@ import com.ticketing.system.support.BaseDomainTest;
 // invariant verification via track(aggregate) after the test runs.
 class NotificationTest extends BaseDomainTest {
 
+    private static final LocalDateTime CREATED = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     /** A freshly-built PENDING notification, tracked for post-test invariant checks. */
     private Notification pending() {
         return track(new Notification(
                 "n1", 7, NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING, "Your purchase is confirmed",
-                LocalDateTime.now()));
+                CREATED));
     }
 
     @Test
@@ -48,7 +50,7 @@ class NotificationTest extends BaseDomainTest {
         String longMessage = "Event '" + "x".repeat(300) + "' has been cancelled.";
 
         Notification n = track(new Notification("n2", 7, NotificationType.EVENT_CANCELLED,
-                NotificationStatus.PENDING, longMessage, LocalDateTime.now()));
+                NotificationStatus.PENDING, longMessage, CREATED));
 
         assertEquals(Notification.MAX_MESSAGE_LENGTH, n.getMessage().length());
         assertEquals(longMessage.substring(0, Notification.MAX_MESSAGE_LENGTH - 1) + "…", n.getMessage());
@@ -59,7 +61,7 @@ class NotificationTest extends BaseDomainTest {
         String fits = "y".repeat(Notification.MAX_MESSAGE_LENGTH);
 
         Notification n = track(new Notification("n3", 7, NotificationType.EVENT_CANCELLED,
-                NotificationStatus.PENDING, fits, LocalDateTime.now()));
+                NotificationStatus.PENDING, fits, CREATED));
 
         assertEquals(fits, n.getMessage());
     }
