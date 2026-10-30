@@ -16,13 +16,13 @@ import com.vaadin.flow.server.VaadinSession;
  * map, so a test arranges and reads session state through the session holders ({@link AuthSession},
  * {@link GuestSession}, ...) instead of copying their private attribute keys.
  */
-final class MapBackedVaadinSession {
+public final class MapBackedVaadinSession {
 
     private MapBackedVaadinSession() {
     }
 
     /** Makes a fresh map-backed session the current one; pair with {@link #uninstall()}. */
-    static void install() {
+    public static void install() {
         Map<String, Object> attributes = new HashMap<>();
         VaadinSession session = mock(VaadinSession.class);
         when(session.getAttribute(anyString())).thenAnswer(call -> attributes.get(call.getArgument(0, String.class)));
@@ -32,7 +32,7 @@ final class MapBackedVaadinSession {
     }
 
     /** Clears the current session, so no state leaks into the next test. */
-    static void uninstall() {
+    public static void uninstall() {
         VaadinSession.setCurrent(null);
     }
 }

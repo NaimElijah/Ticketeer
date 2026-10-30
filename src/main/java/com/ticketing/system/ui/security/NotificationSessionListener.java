@@ -14,10 +14,19 @@ import org.springframework.stereotype.Component;
  *
  * Reads auth state directly from session attributes to avoid relying on
  * VaadinSession.getCurrent(), which is not set in a session-destroy context.
+ *
+ * An admin's session is skipped: notifications are addressed by bare user id, and
+ * admin ids share the member id space, so reverting by the admin's id would touch
+ * the notifications of the member with that id (ADR-012).
  */
 @Component
 @Slf4j
 public class NotificationSessionListener implements VaadinServiceInitListener {
+
+    // The attribute names AuthSession writes; there is no current session to ask it through here.
+    private static final String SIGNED_IN_ATTRIBUTE = "authSession.signedIn";
+    private static final String USER_ID_ATTRIBUTE = "authSession.userId";
+    private static final String ADMIN_ATTRIBUTE = "authSession.admin";
 
     private final INotificationService notificationService;
 
@@ -31,9 +40,10 @@ public class NotificationSessionListener implements VaadinServiceInitListener {
             VaadinSession session = e.getSession();
             session.lock();
             try {
-                Boolean signedIn = (Boolean) session.getAttribute("authSession.signedIn");
+                Boolean signedIn = (Boolean) session.getAttribute(SIGNED_IN_ATTRIBUTE);
                 if (!Boolean.TRUE.equals(signedIn)) return;
-                Integer userId = (Integer) session.getAttribute("authSession.userId");
+                if (Boolean.TRUE.equals(session.getAttribute(ADMIN_ATTRIBUTE))) return;
+                Integer userId = (Integer) session.getAttribute(USER_ID_ATTRIBUTE);
                 if (userId == null) return;
                 notificationService.revertSentToPending(userId);
             } catch (Exception ex) {
