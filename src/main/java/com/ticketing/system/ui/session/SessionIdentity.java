@@ -1,61 +1,83 @@
 package com.ticketing.system.ui.session;
 
+import java.util.Optional;
+import java.util.OptionalInt;
+
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.shared.exception.SessionExpiredException;
 
 /**
  * Single source of truth for "member or guest, and which backend credential to use."
- * A member is a visitor whose token still validates; everyone else — including a member
- * whose token has EXPIRED or been revoked — is a guest using the registered {@link GuestSession} id.
+ *
+ * <p>A member is a visitor whose stored token is still live; everyone else is a guest using the
+ * {@link GuestSession} id. Each method resolves the visitor afresh, with at most one
+ * {@link AuthenticationService#liveMemberId} call.
+ *
+ * <p>Side effect: when the stored token is no longer live (expired or revoked), the first method to
+ * notice calls {@link FreshGuestSession#restore()}, which drops the stored token and pins a new guest
+ * session, so the visitor is answered as a guest on that fresh id and later calls see no token at all.
+ * The old id cannot be reused: login promoted the guest session in place, so it is the member's own
+ * dead session. The reset lives here rather than in a navigation guard because a dead token is also
+ * detected outside navigation (the cart badge poll, presenters), and those calls would otherwise keep
+ * using the dead id.
  */
 @Component
 public class SessionIdentity {
 
+    /** What {@link #memberUserId()} answers for a guest; no user has this id. */
+    public static final int NO_MEMBER_USER_ID = 0;
+
     private final AuthenticationService authenticationService;
+    private final FreshGuestSession freshGuestSession;
 
-    public SessionIdentity(AuthenticationService authenticationService) {
+    public SessionIdentity(AuthenticationService authenticationService, FreshGuestSession freshGuestSession) {
         this.authenticationService = authenticationService;
+        this.freshGuestSession = freshGuestSession;
     }
 
+    /** @return {@code true} while the stored member token is live */
     public boolean isMember() {
-        return liveMemberToken() != null;
+        return liveMember().isPresent();
     }
 
+    /** @return the live member's token, or {@code null} for a guest */
     public String memberToken() {
-        return liveMemberToken();
-    }
-
-    public String guestSessionId() {
-        return GuestSession.sessionId();
-    }
-
-    public int memberUserId() {
-        String token = liveMemberToken();
-        return token != null ? authenticationService.extractUserId(token) : 0;
-    }
-
-    public String credential() {
-        String token = liveMemberToken();
-        return token != null ? token : GuestSession.sessionId();
+        return liveMember().map(LiveMember::token).orElse(null);
     }
 
     /**
-     * The signed-in member's token while it still validates, else {@code null}. Validation throws for
-     * an expired or revoked token rather than returning false; that outcome is what makes the visitor a
-     * guest, so it is answered here instead of reaching the caller.
+     * @return the visitor's guest session id; for a live member, the session their login promoted.
+     *     A dead token is resolved first, so this is never the dead member session's id
      */
-    private String liveMemberToken() {
+    public String guestSessionId() {
+        liveMember();
+        return GuestSession.sessionId();
+    }
+
+    /** @return the live member's user id, or {@link #NO_MEMBER_USER_ID} for a guest */
+    public int memberUserId() {
+        return liveMember().map(LiveMember::userId).orElse(NO_MEMBER_USER_ID);
+    }
+
+    /** @return the credential the backend expects: the live member's token, else the guest session id */
+    public String credential() {
+        return liveMember().map(LiveMember::token).orElseGet(GuestSession::sessionId);
+    }
+
+    private Optional<LiveMember> liveMember() {
         String token = AuthSession.token();
         if (token == null) {
-            return null;
+            return Optional.empty();
         }
-        try {
-            return authenticationService.validateToken(token) ? token : null;
-        } catch (SessionExpiredException | InvalidTokenException e) {
-            return null;
+        OptionalInt memberId = authenticationService.liveMemberId(token);
+        if (memberId.isEmpty()) {
+            freshGuestSession.restore();
+            return Optional.empty();
         }
+        return Optional.of(new LiveMember(token, memberId.getAsInt()));
+    }
+
+    private record LiveMember(String token, int userId) {
     }
 }

@@ -1,126 +1,172 @@
 package com.ticketing.system.ui.session;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.stream.Stream;
+import java.time.Instant;
+import java.util.OptionalInt;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.shared.exception.SessionExpiredException;
-import com.vaadin.flow.server.VaadinSession;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.GuestSessionDTO;
 
 /**
- * {@link SessionIdentity}'s contract (class Javadoc): a member is a visitor whose token still
- * validates, and everyone else, including a member whose token has expired, is a guest using the
- * guest session id. Token validation reports an expired token with {@link SessionExpiredException}
- * and a revoked one with {@link InvalidTokenException}, so each method must turn those into the
- * guest answer rather than pass them on to views and presenters.
+ * {@link SessionIdentity}'s contract (class Javadoc): a member is a visitor whose token is still live;
+ * everyone else is a guest. A member whose token has expired or been revoked must become a guest with
+ * a <em>fresh</em> guest session: at login the guest session was promoted in place, so the stored
+ * guest session id is the member's own dead session, and falling back to it would reach the member's
+ * cart on guest paths and be refused by catalog browsing.
  */
 class SessionIdentityTest {
 
     private static final String MEMBER_TOKEN = "member-jwt";
-    private static final String GUEST_SESSION_ID = "guest-sid";
     private static final int MEMBER_USER_ID = 42;
+    private static final String MEMBER_NAME = "member";
+    private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
+    // At login the guest session is promoted in place, so the member's sid is what GuestSession holds.
+    private static final String MEMBER_SESSION_ID = "member-sid";
+    private static final String GUEST_SESSION_ID = "guest-sid";
+    private static final String FRESH_GUEST_SESSION_ID = "fresh-guest-sid";
     private static final int NO_MEMBER = 0;
 
-    // The attribute keys AuthSession and GuestSession read from the Vaadin session.
-    private static final String TOKEN_KEY = "authSession.token";
-    private static final String GUEST_SESSION_KEY = "guestSession.sessionId";
+    private AuthenticationService authenticationService;
+    private FreshGuestSession freshGuestSession;
 
     @BeforeEach
-    void signedInVisitorWithAGuestSession() {
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute(TOKEN_KEY)).thenReturn(MEMBER_TOKEN);
-        when(session.getAttribute(GUEST_SESSION_KEY)).thenReturn(GUEST_SESSION_ID);
-        VaadinSession.setCurrent(session);
+    void setUp() {
+        MapBackedVaadinSession.install();
+        authenticationService = mock(AuthenticationService.class);
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+        freshGuestSession = spy(new FreshGuestSession(authenticationService));
     }
 
     @AfterEach
-    void clearVaadinSession() {
-        VaadinSession.setCurrent(null);
+    void tearDown() {
+        MapBackedVaadinSession.uninstall();
     }
 
-    static Stream<Arguments> rejectedTokens() {
-        return Stream.of(
-                Arguments.of("expired", new SessionExpiredException()),
-                Arguments.of("revoked", new InvalidTokenException("revoked")));
-    }
+    // ---- a stored token that is no longer live ----------------------------------------------
 
-    // Guards the session set-up: without it every guest assertion below would pass vacuously.
     @Test
-    void GivenAValidMemberToken_WhenAsked_ThenTheVisitorIsThatMember() {
-        SessionIdentity identity = identityWhoseTokenValidates();
+    void GivenARejectedStoredToken_WhenAskedIsMember_ThenTheVisitorIsAGuest() {
+        SessionIdentity identity = identityForAMemberWhoseTokenIsRejected();
+
+        assertFalse(identity.isMember(), "a visitor whose token is no longer live is a guest");
+    }
+
+    @Test
+    void GivenARejectedStoredToken_WhenAskedMemberToken_ThenNull() {
+        SessionIdentity identity = identityForAMemberWhoseTokenIsRejected();
+
+        assertNull(identity.memberToken(), "a guest has no member token");
+    }
+
+    @Test
+    void GivenARejectedStoredToken_WhenAskedMemberUserId_ThenNoMember() {
+        SessionIdentity identity = identityForAMemberWhoseTokenIsRejected();
+
+        assertEquals(NO_MEMBER, identity.memberUserId(), "a guest has no member user id");
+    }
+
+    @Test
+    void GivenARejectedStoredToken_WhenAskedCredential_ThenAFreshGuestSessionIdNotTheMembersOwn() {
+        SessionIdentity identity = identityForAMemberWhoseTokenIsRejected();
+
+        assertEquals(FRESH_GUEST_SESSION_ID, identity.credential(),
+                "the guest credential must be a fresh guest session, not the member's dead " + MEMBER_SESSION_ID);
+    }
+
+    @Test
+    void GivenARejectedStoredToken_WhenAskedGuestSessionId_ThenAFreshGuestSessionIdNotTheMembersOwn() {
+        SessionIdentity identity = identityForAMemberWhoseTokenIsRejected();
+
+        assertEquals(FRESH_GUEST_SESSION_ID, identity.guestSessionId(),
+                "the guest session must be a fresh one, not the member's dead " + MEMBER_SESSION_ID);
+    }
+
+    @Test
+    void GivenARejectedStoredToken_WhenEveryQuestionIsAsked_ThenTheGuestSessionIsRestoredOnce() {
+        SessionIdentity identity = identityForAMemberWhoseTokenIsRejected();
+
+        identity.isMember();
+        identity.memberToken();
+        identity.memberUserId();
+        identity.credential();
+        identity.guestSessionId();
+
+        verify(freshGuestSession, times(1)).restore();
+    }
+
+    // ---- no stored token ----------------------------------------------------------------------
+
+    @Test
+    void GivenNoStoredToken_WhenAsked_ThenAGuestOnItsOwnSessionWithoutARestore() {
+        GuestSession.setSessionId(GUEST_SESSION_ID);
+        SessionIdentity identity = identity();
+
+        assertFalse(identity.isMember());
+        assertNull(identity.memberToken());
+        assertEquals(NO_MEMBER, identity.memberUserId());
+        assertEquals(GUEST_SESSION_ID, identity.credential());
+        assertEquals(GUEST_SESSION_ID, identity.guestSessionId());
+        verify(freshGuestSession, never()).restore();
+    }
+
+    // ---- a live stored token ------------------------------------------------------------------
+
+    @Test
+    void GivenALiveStoredToken_WhenAsked_ThenTheMemberWithoutARestore() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
+        SessionIdentity identity = identity();
 
         assertTrue(identity.isMember());
         assertEquals(MEMBER_TOKEN, identity.memberToken());
         assertEquals(MEMBER_USER_ID, identity.memberUserId());
         assertEquals(MEMBER_TOKEN, identity.credential());
+        verify(freshGuestSession, never()).restore();
     }
 
-    @ParameterizedTest(name = "{0} token")
-    @MethodSource("rejectedTokens")
-    void GivenARejectedMemberToken_WhenAskedIsMember_ThenFalse(String reason, RuntimeException rejection) {
-        SessionIdentity identity = identityWhoseTokenIsRejectedWith(rejection);
+    @Test
+    void GivenALiveStoredToken_WhenAskedMemberUserId_ThenItComesFromOneLiveMemberIdCall() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
+        SessionIdentity identity = identity();
 
-        boolean member = assertDoesNotThrow(identity::isMember, "isMember() must not throw for a token that is " + reason);
-        assertFalse(member, "a visitor whose token is " + reason + " is a guest");
+        assertEquals(MEMBER_USER_ID, identity.memberUserId());
+        verify(authenticationService, times(1)).liveMemberId(MEMBER_TOKEN);
+        verify(authenticationService, never()).extractUserId(anyString());
     }
 
-    @ParameterizedTest(name = "{0} token")
-    @MethodSource("rejectedTokens")
-    void GivenARejectedMemberToken_WhenAskedMemberToken_ThenNull(String reason, RuntimeException rejection) {
-        SessionIdentity identity = identityWhoseTokenIsRejectedWith(rejection);
+    // ---- arrangement --------------------------------------------------------------------------
 
-        String token = assertDoesNotThrow(identity::memberToken,
-                "memberToken() must not throw for a token that is " + reason);
-        assertNull(token, "a guest has no member token");
+    // The one place that knows SessionIdentity's dependencies, so a change to them touches only this.
+    private SessionIdentity identity() {
+        return new SessionIdentity(authenticationService, freshGuestSession);
     }
 
-    @ParameterizedTest(name = "{0} token")
-    @MethodSource("rejectedTokens")
-    void GivenARejectedMemberToken_WhenAskedMemberUserId_ThenNoMember(String reason, RuntimeException rejection) {
-        SessionIdentity identity = identityWhoseTokenIsRejectedWith(rejection);
-
-        int userId = assertDoesNotThrow(identity::memberUserId,
-                "memberUserId() must not throw for a token that is " + reason);
-        assertEquals(NO_MEMBER, userId, "a guest has no member user id");
+    private SessionIdentity identityForAMemberWhoseTokenIsRejected() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.empty());
+        return identity();
     }
 
-    @ParameterizedTest(name = "{0} token")
-    @MethodSource("rejectedTokens")
-    void GivenARejectedMemberToken_WhenAskedCredential_ThenTheGuestSessionId(String reason, RuntimeException rejection) {
-        SessionIdentity identity = identityWhoseTokenIsRejectedWith(rejection);
-
-        String credential = assertDoesNotThrow(identity::credential,
-                "credential() must not throw for a token that is " + reason);
-        assertEquals(GUEST_SESSION_ID, credential, "a guest's credential is its guest session id");
-    }
-
-    // The only two places that know how SessionIdentity checks a token, so swapping its dependency
-    // (identity's AuthenticationService) touches these and nothing else.
-    private static SessionIdentity identityWhoseTokenValidates() {
-        AuthenticationService authenticationService = mock(AuthenticationService.class);
-        when(authenticationService.validateToken(MEMBER_TOKEN)).thenReturn(true);
-        when(authenticationService.extractUserId(MEMBER_TOKEN)).thenReturn(MEMBER_USER_ID);
-        return new SessionIdentity(authenticationService);
-    }
-
-    private static SessionIdentity identityWhoseTokenIsRejectedWith(RuntimeException rejection) {
-        AuthenticationService authenticationService = mock(AuthenticationService.class);
-        when(authenticationService.validateToken(MEMBER_TOKEN)).thenThrow(rejection);
-        return new SessionIdentity(authenticationService);
+    private static void storeSignedInMember() {
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_USER_ID, MEMBER_NAME));
+        GuestSession.setSessionId(MEMBER_SESSION_ID);
     }
 }
