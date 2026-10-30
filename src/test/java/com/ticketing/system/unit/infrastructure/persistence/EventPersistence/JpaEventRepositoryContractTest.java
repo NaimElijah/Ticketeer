@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.infrastructure.persistence.EventPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
@@ -11,7 +12,10 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
@@ -74,6 +78,16 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     @Override
     protected <T> T inSaleTransaction(Supplier<T> call) {
         return new TransactionTemplate(transactionManager).execute(status -> call.get());
+    }
+
+    // The shared lock lasts as long as its transaction, so one opened for this call alone would end before
+    // the sale it protects; the adapter refuses to run without the caller's (ADR-015).
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenNoTransaction_WhenAnEventIsLoadedForSale_ThenItIsRefused() {
+        repository.save(buildEventInZone(1, ZoneId.of("Asia/Jerusalem")));
+
+        assertThrows(IllegalTransactionStateException.class, () -> repository.findForSale(1));
     }
 
     // Flush and clear so the zone is read back from events.time_zone, not the persistence context.
