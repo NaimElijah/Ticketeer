@@ -1,20 +1,20 @@
 package com.ticketing.system.ui.security;
 
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.HashMap;
-import java.util.Map;
-
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.SessionDestroyEvent;
 import com.vaadin.flow.server.SessionDestroyListener;
@@ -27,15 +27,14 @@ import com.vaadin.flow.server.VaadinSession;
  * space, so ending an admin's session must not touch the notifications of the member whose id
  * equals the admin's (#185).
  *
- * <p>The listener reads the destroyed session's attributes directly (there is no current session
- * while it is destroyed), so the attribute names below are the ones {@code AuthSession} writes.
+ * <p>Each session is arranged through {@link AuthSession}, as sign-in fills it, and is no longer the
+ * current session when it is destroyed: a session-destroy callback runs with no current session, so
+ * the listener has to read the session it is handed.
  */
 class NotificationSessionListenerTest {
 
-    private static final String SIGNED_IN_ATTRIBUTE = "authSession.signedIn";
-    private static final String USER_ID_ATTRIBUTE = "authSession.userId";
-    private static final String ADMIN_ATTRIBUTE = "authSession.admin";
     private static final int SHARED_ID = 1;
+    private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
 
     private INotificationService notificationService;
     private SessionDestroyListener destroyListener;
@@ -54,27 +53,50 @@ class NotificationSessionListenerTest {
         destroyListener = registered.getValue();
     }
 
+    @AfterEach
+    void tearDown() {
+        MapBackedVaadinSession.uninstall();
+    }
+
     @Test
     void GivenSignedInAdminSession_WhenDestroyed_ThenNoNotificationIsRevertedForTheAdminsId() {
-        destroyListener.sessionDestroy(destroyEventFor(sessionWith(true, SHARED_ID, true)));
+        VaadinSession adminSession = sessionSignedInAs(
+                new AuthTokenDTO("admin-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "admin", true));
+
+        destroyListener.sessionDestroy(destroyEventFor(adminSession));
 
         verify(notificationService, never()).revertSentToPending(anyInt());
     }
 
     @Test
     void GivenSignedInMemberSession_WhenDestroyed_ThenTheMembersSentNotificationsAreReverted() {
-        destroyListener.sessionDestroy(destroyEventFor(sessionWith(true, SHARED_ID, false)));
+        VaadinSession memberSession = sessionSignedInAs(
+                new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
+
+        destroyListener.sessionDestroy(destroyEventFor(memberSession));
 
         verify(notificationService).revertSentToPending(SHARED_ID);
     }
 
-    private static VaadinSession sessionWith(boolean signedIn, int userId, boolean admin) {
-        Map<String, Object> attributes = new HashMap<>();
-        attributes.put(SIGNED_IN_ATTRIBUTE, signedIn);
-        attributes.put(USER_ID_ATTRIBUTE, userId);
-        attributes.put(ADMIN_ATTRIBUTE, admin);
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute(anyString())).thenAnswer(call -> attributes.get(call.getArgument(0, String.class)));
+    @Test
+    void GivenSignedOutSession_WhenDestroyed_ThenNothingIsReverted() {
+        MapBackedVaadinSession.install();
+        AuthSession.storeAuth(new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
+        AuthSession.signOut();
+        VaadinSession signedOut = VaadinSession.getCurrent();
+        MapBackedVaadinSession.uninstall();
+
+        destroyListener.sessionDestroy(destroyEventFor(signedOut));
+
+        verify(notificationService, never()).revertSentToPending(anyInt());
+    }
+
+    /** A session signed in as {@code auth} through {@link AuthSession}, no longer the current one. */
+    private static VaadinSession sessionSignedInAs(AuthTokenDTO auth) {
+        MapBackedVaadinSession.install();
+        AuthSession.storeAuth(auth);
+        VaadinSession session = VaadinSession.getCurrent();
+        MapBackedVaadinSession.uninstall();
         return session;
     }
 

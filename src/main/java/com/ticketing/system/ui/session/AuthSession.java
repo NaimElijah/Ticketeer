@@ -64,15 +64,30 @@ public final class AuthSession {
     // -- Reads ------------------------------------------------------------
 
     public static boolean isSignedIn() {
-        VaadinSession s = VaadinSession.getCurrent();
-        if (s == null) return false;
-        return Boolean.TRUE.equals(s.getAttribute(SIGNED_IN_KEY));
+        return isSignedIn(VaadinSession.getCurrent());
+    }
+
+    /**
+     * Whether {@code session} holds a sign-in. For a caller handed a session that is not the current
+     * one, such as a session-destroy listener.
+     *
+     * @param session the session to read; {@code null} reads as signed out
+     */
+    public static boolean isSignedIn(VaadinSession session) {
+        return session != null && Boolean.TRUE.equals(session.getAttribute(SIGNED_IN_KEY));
     }
 
     public static boolean isAdmin() {
-        VaadinSession s = VaadinSession.getCurrent();
-        if (s == null) return false;
-        return Boolean.TRUE.equals(s.getAttribute(ADMIN_KEY));
+        return isAdmin(VaadinSession.getCurrent());
+    }
+
+    /**
+     * Whether {@code session}'s sign-in is an admin's, as {@link #isSignedIn(VaadinSession)} reads it.
+     *
+     * @param session the session to read; {@code null} reads as no admin
+     */
+    public static boolean isAdmin(VaadinSession session) {
+        return session != null && Boolean.TRUE.equals(session.getAttribute(ADMIN_KEY));
     }
 
     public static String displayName() {
@@ -89,9 +104,19 @@ public final class AuthSession {
     }
 
     public static Integer userId() {
-        VaadinSession s = VaadinSession.getCurrent();
-        if (s == null) return null;
-        return (Integer) s.getAttribute(USER_ID_KEY);
+        return userId(VaadinSession.getCurrent());
+    }
+
+    /**
+     * The id {@code session}'s sign-in stored, as {@link #isSignedIn(VaadinSession)} reads it. Member and
+     * admin ids share one id space (ADR-012), so read it together with {@link #isAdmin(VaadinSession)}.
+     *
+     * @param session the session to read
+     * @return the stored member or admin id; {@code null} when signed out or {@code session} is {@code null}
+     */
+    public static Integer userId(VaadinSession session) {
+        if (session == null) return null;
+        return (Integer) session.getAttribute(USER_ID_KEY);
     }
 
     public static long expiresAtEpochMillis() {
