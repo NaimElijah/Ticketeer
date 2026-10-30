@@ -5,9 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.stream.Stream;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.DiscountPolicyJsonConverter;
@@ -60,12 +61,28 @@ class PolicyValueEqualityTest {
         assertEquals(policy.hashCode(), copy.hashCode());
     }
 
-    // Control: the equality is by value, so a different rule is a different policy and a real change.
-    @Test
-    void GivenPoliciesWithDifferentRules_WhenCompared_ThenTheyDiffer() {
-        assertNotEquals(new AgePurchasePolicy(18), new AgePurchasePolicy(21));
-        assertNotEquals(new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(4)),
-                new AndPurchasePolicy(new MaxTicketsPurchasePolicy(4), new AgePurchasePolicy(18)));
-        assertNotEquals(new DiscountPolicy(10.0), new DiscountPolicy(15.0));
+    static Stream<Arguments> differentPolicies() {
+        AgePurchasePolicy adults = new AgePurchasePolicy(18);
+        MaxTicketsPurchasePolicy upToFour = new MaxTicketsPurchasePolicy(4);
+        return Stream.of(
+                Arguments.of(adults, new AgePurchasePolicy(21)),
+                Arguments.of(upToFour, new MaxTicketsPurchasePolicy(5)),
+                Arguments.of(new MinTicketsPurchasePolicy(2), new MinTicketsPurchasePolicy(3)),
+                Arguments.of(new MinTicketsPurchasePolicy(2), new MaxTicketsPurchasePolicy(2)),
+                Arguments.of(new NoPurchasePolicy(), adults),
+                Arguments.of(new AndPurchasePolicy(adults, upToFour), new AndPurchasePolicy(upToFour, adults)),
+                Arguments.of(new AndPurchasePolicy(adults, upToFour), new OrPurchasePolicy(adults, upToFour)),
+                Arguments.of(new OrPurchasePolicy(adults, new NoPurchasePolicy()),
+                        new OrPurchasePolicy(adults, new AgePurchasePolicy(21))),
+                Arguments.of(new DiscountPolicy(10.0), new DiscountPolicy(15.0)));
+    }
+
+    // Control: Hibernate writes a policy only when it differs from the loaded one, so two policies with
+    // different rules must never be equal, or a change to the rules would be silently dropped.
+    @ParameterizedTest(name = "{0} vs {1}")
+    @MethodSource("differentPolicies")
+    void GivenPoliciesWithDifferentRules_WhenCompared_ThenTheyDiffer(Object policy, Object other) {
+        assertNotEquals(policy, other);
+        assertNotEquals(other, policy);
     }
 }

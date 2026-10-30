@@ -31,6 +31,7 @@ import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
 import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicyJsonConverter;
 import com.ticketing.system.catalog.adapter.out.persistence.JpaEventRepository;
@@ -83,6 +84,31 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
         entityManager.clear();
 
         assertEquals(ZoneId.of("Europe/London"), repository.findById(1).getTimeZone());
+    }
+
+    // Hibernate writes the policy column only when the new policy differs from the loaded one by equals,
+    // so a change that equals missed would be dropped without an error. AND to OR over the same rules is
+    // the closest pair.
+    @Test
+    void GivenAStoredPurchasePolicy_WhenReplacedByOneOverTheSameRules_ThenTheReloadedEventHasTheNewOne() {
+        PurchasePolicy all = new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(4));
+        PurchasePolicy either = new OrPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(4));
+        Event event = buildEventInZone(1, ZoneId.of("Asia/Jerusalem"));
+        event.setPurchasePolicy(all);
+        repository.save(event);
+        entityManager.flush();
+        entityManager.clear();
+
+        Event loaded = repository.findById(1);
+        loaded.setPurchasePolicy(either);
+        repository.save(loaded);
+        entityManager.flush();
+        entityManager.clear();
+
+        // Compared as JSON, not by equals, which is what this test doubts.
+        PurchasePolicyJsonConverter converter = new PurchasePolicyJsonConverter();
+        assertEquals(converter.convertToDatabaseColumn(either),
+                converter.convertToDatabaseColumn(repository.findById(1).getPurchasePolicy()));
     }
 
     @Test
