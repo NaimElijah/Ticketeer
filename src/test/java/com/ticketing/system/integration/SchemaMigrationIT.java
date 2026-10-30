@@ -79,6 +79,14 @@ class SchemaMigrationIT {
     // missing one. Without it, every load of a parent's collection scans the whole child table.
     @Test
     void GivenMigratedPostgres_WhenListingForeignKeys_ThenEachColumnLeadsAnIndex() {
+        Integer foreignKeys = jdbc.queryForObject("""
+                select count(*) from pg_constraint
+                where contype = 'f'
+                  and connamespace = (select oid from pg_namespace where nspname = current_schema())
+                """, Integer.class);
+        assertThat(foreignKeys).as("foreign keys in the migrated schema; with none, the check below proves nothing")
+                .isPositive();
+
         List<String> unindexed = jdbc.queryForList("""
                 select c.conrelid::regclass::text || '.' || a.attname
                 from pg_constraint c
