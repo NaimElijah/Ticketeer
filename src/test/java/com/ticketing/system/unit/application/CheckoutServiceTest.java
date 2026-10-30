@@ -2,6 +2,7 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -883,11 +884,38 @@ void GivenPhase3LosesEveryVersionRace_WhenCheckout_ThenItFailsAfterThreeAttempts
     doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
             .when(mockOrderReceiptRepo).save(any());
 
-    assertThrows(RuntimeException.class,
+    RuntimeException failed = assertThrows(RuntimeException.class,
             () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
+    assertInstanceOf(ObjectOptimisticLockingFailureException.class, failed.getCause(),
+            "the checkout fails on the race it kept losing, not on something else");
     verify(mockOrderReceiptRepo, times(3)).save(any());
     verify(mockPaymentGateway, times(1)).refund(PAYMENT_TRANSACTION_ID, 100.0);
+}
+
+// The guest path runs its Phase 3 through the same bounded retry.
+@Test
+void GivenGuestPhase3LosesOneVersionRace_WhenGuestCheckout_ThenPhase3RunsAgainAndThePurchaseSucceedsWithOneCharge() {
+    givenValidGuestSession();
+    StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
+    Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+    ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
+    activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+    zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
+    givenGuestOrder(activeOrder);
+    when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+    givenSuccessfulPaymentAndIssuanceWithFlagGuest(1);
+    doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+            .doNothing()
+            .when(mockOrderReceiptRepo).save(any());
+
+    CheckoutResultDTO result = checkoutService.checkoutGuest(
+            VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE);
+
+    assertEquals(100.0, result.totalCharged());
+    verify(mockOrderReceiptRepo, times(2)).save(any());
+    verify(mockPaymentGateway, times(1)).charge(any(PaymentRequestDTO.class));
+    verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
 }
 
 // One standing ticket in zone 1 of event 1, charged 100 and issued one barcode.
