@@ -83,6 +83,7 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.testutil.AdjustableClock;
+import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.testutil.LogCapture;
 
 class AuthenticationServiceTest {
@@ -126,7 +127,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY);
+                IDENTITY, TestTransactions.noOpManager());
         clearInvocations(mockHasher);
     }
 
@@ -682,7 +683,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY);
+                IDENTITY, TestTransactions.noOpManager());
         String adminToken = realSessionManager.generateAdminToken(sharedId, "admin");
 
         assertEquals(OptionalInt.empty(), serviceOnRealSessions.liveMemberId(adminToken),
@@ -1056,7 +1057,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY);
+                IDENTITY, TestTransactions.noOpManager());
     }
 
     // ----------------------------------------------------------------------
@@ -1233,7 +1234,8 @@ class AuthenticationServiceTest {
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
                 mockSessionRepo, mock(ISystemMetrics.class),
                 clock, mockAdminRepo,
-                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity);
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity,
+                TestTransactions.noOpManager());
         clearInvocations(mockHasher);
         return built;
     }

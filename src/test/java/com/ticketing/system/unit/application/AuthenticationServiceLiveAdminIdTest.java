@@ -67,7 +67,8 @@ class AuthenticationServiceLiveAdminIdTest {
                 mock(CartRestorationPort.class), mock(NotificationDispatchService.class),
                 sessions, mock(ISystemMetrics.class), clock, admins,
                 sessionProperties, new LockoutProperties(5, 15L),
-                new IdentityProperties(List.of(), "admin"));
+                new IdentityProperties(List.of(), "admin"),
+                TestTransactions.noOpManager());
     }
 
     @Test

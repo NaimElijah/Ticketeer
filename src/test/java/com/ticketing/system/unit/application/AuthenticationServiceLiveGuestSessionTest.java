@@ -25,6 +25,7 @@ import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.testutil.AdjustableClock;
+import com.ticketing.system.testutil.TestTransactions;
 
 /**
  * {@link AuthenticationService#isLiveGuestSession(String)} is the read-only question the UI asks
@@ -60,7 +61,8 @@ class AuthenticationServiceLiveGuestSessionTest {
                 mock(CartRestorationPort.class), mock(NotificationDispatchService.class),
                 sessions, mock(ISystemMetrics.class), clock, mock(AdminRepository.class),
                 sessionProperties, new LockoutProperties(5, 15L),
-                new IdentityProperties(List.of(), "admin"));
+                new IdentityProperties(List.of(), "admin"),
+                TestTransactions.noOpManager());
     }
 
     @Test

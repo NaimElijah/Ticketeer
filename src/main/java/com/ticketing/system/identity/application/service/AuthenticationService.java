@@ -18,7 +18,9 @@ import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -109,6 +111,8 @@ public class AuthenticationService {
     // injected hasher, so it costs what a stored hash costs whatever the hasher's settings, from a
     // random secret that is discarded, so no password matches it.
     private final String dummyHash;
+    // Login's database steps, so its notifications are delivered after they commit.
+    private final TransactionTemplate transactionTemplate;
 
     public AuthenticationService(
             UserRepository userRepository,
@@ -122,7 +126,8 @@ public class AuthenticationService {
             AdminRepository adminRepository,
             SessionProperties sessionProperties,
             LockoutProperties lockoutProperties,
-            IdentityProperties identityProperties) {
+            IdentityProperties identityProperties,
+            PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.sessionManager = sessionManager;
@@ -137,6 +142,7 @@ public class AuthenticationService {
         this.loginAttempts = new LoginAttemptTracker(lockoutProperties, clock);
         this.reservedUsernames = reservedUsernamesOf(identityProperties);
         this.dummyHash = passwordHasher.hash(UUID.randomUUID().toString());
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     private static Set<String> reservedUsernamesOf(IdentityProperties identity) {
@@ -400,6 +406,13 @@ public class AuthenticationService {
      * "Unknown username" and "wrong password" raise the same exception, after the same
      * password-hash work, to avoid username enumeration via the response or its timing.
      *
+     * <p>
+     * Not one transaction. The password is checked before any transaction opens, so no connection
+     * is held during the hash work. The promotion, the cart merge and the token issue then run in
+     * one transaction, and the member's pending notifications (UC-37) are delivered only after it
+     * commits: delivery opens connections of its own, and must not mark a notification sent for a
+     * login that then rolls back.
+     *
      * @throws GuestSessionRequiredException no / unknown / expired / non-guest
      *                                       sessionId
      * @throws AccountLockedException        the username's attempt window already holds
@@ -407,10 +420,9 @@ public class AuthenticationService {
      *                                       password is not checked
      * @throws AuthenticationFailedException invalid credentials
      */
-    @Transactional
     public LoginDTO login(LoginRequestDTO request) {
-        // 1. Guest session must exist.
-        Session session = requireActiveGuestSession(request.guestSessionId());
+        // 1. Guest session must exist, before the attempt is counted.
+        requireActiveGuestSession(request.guestSessionId());
 
         // 1b. Brute-force lockout (SLR.2 #148) — same policy as admin sign-in. The attempt is
         //     counted before the password is checked, so attempts that arrive together cannot all
@@ -434,26 +446,39 @@ public class AuthenticationService {
         User user = found.get();
         loginAttempts.clear(Pool.MEMBER, request.username());
 
+        // 3-5. Promote, merge the cart and issue the token, atomically.
+        Promotion promotion = transactionTemplate.execute(status -> promote(request.guestSessionId(), user));
+        log.info("member logged in: username={} id={}", user.getUsername(), user.getUserId());
+
+        // 6. UC-37 — only now, after the commit.
+        List<NotificationDTO> notifications = notificationDispatchService.deliverPending(user.getUserId());
+        return new LoginDTO(promotion.token(), promotion.activeOrder(), notifications);
+    }
+
+    private Promotion promote(String guestSessionId, User user) {
+        // Read again inside the transaction that writes it: the session may have been promoted or
+        // have expired since step 1.
+        Session session = requireActiveGuestSession(guestSessionId);
+
         // 3. Promote — same sessionId, userId set, expiry bumped to Member TTL.
         Instant memberExpiry = clock.instant().plus(memberTtlMinutes, ChronoUnit.MINUTES);
         session.promoteTo(user.getUserId(), memberExpiry);
         sessionRepository.save(session);
 
-        // 4. D9a — cart handling on promotion, delegated to the sales-owned adapter
-        //    (runs inside this @Transactional login, so it stays atomic with the promotion).
+        // 4. D9a — cart handling on promotion, delegated to the sales-owned adapter, atomic with the
+        //    promotion.
         cartRestorationPort.mergeGuestCartOnPromotion(session.getSessionId(), user.getUserId());
 
         // 5. Issue a JWT bound to the existing (now-Member) session.
         String token = sessionManager.generateTokenForSession(session, user.getUsername());
         long expiresAt = sessionManager.extractExpiration(token);
 
-        log.info("member logged in: username={} id={}", user.getUsername(), user.getUserId());
-
         AuthTokenDTO authTokenDTO = new AuthTokenDTO(token, expiresAt, user.getUserId(), user.getUsername());
-        ActiveOrderDTO activeOrderDTO = cartRestorationPort.restoreActiveOrder(user.getUserId());
-        List<NotificationDTO> notifications = notificationDispatchService.deliverPending(user.getUserId());
-        return new LoginDTO(authTokenDTO, activeOrderDTO, notifications);
+        return new Promotion(authTokenDTO, cartRestorationPort.restoreActiveOrder(user.getUserId()));
     }
+
+    /** What login's transaction hands back for the response. */
+    private record Promotion(AuthTokenDTO token, ActiveOrderDTO activeOrder) { }
 
     /**
      * Admin sign-in (#290). Authenticates against the persisted admin pool (never the member pool
