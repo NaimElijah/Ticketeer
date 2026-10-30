@@ -142,7 +142,6 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
-    // changed name from addReservation to addStandingReservation and added addSeatedReservation to support seated zones as well.
     public void addStandingReservation(int eventId, int zoneId, int quantity, double price, LocalDateTime addedAt) {
         synchronized (itemsLock) {
             ensureModifiable();

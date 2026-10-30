@@ -37,9 +37,11 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  * <h2>Transaction contract</h2>
  * The port opens no transaction of its own: every method joins the caller's. A caller that needs a
  * multi-event call to be atomic must therefore call it inside its transaction. Without one, each
- * event's save commits on its own, and a failure part-way leaves the earlier events changed. Only
- * {@code RefundService} calls {@link #returnSoldToStock} that way on purpose: after the refund has
- * committed, as a best-effort step that is idempotent by state.
+ * event's save commits on its own, and a failure part-way leaves the earlier events changed. Two
+ * callers do that today, both best-effort steps after the main work has committed or failed:
+ * {@code RefundService} calls {@link #returnSoldToStock} after the refund commits, and
+ * {@code CheckoutService}'s failure rollback calls {@link #releaseHeld} outside its Phase-3
+ * transaction.
  */
 public interface InventoryCommandPort {
 

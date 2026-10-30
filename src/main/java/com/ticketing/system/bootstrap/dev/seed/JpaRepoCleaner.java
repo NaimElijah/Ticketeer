@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  * are by-id (no FK between roots), so the order between roots is irrelevant; it's still written
  * leaf-first for clarity. Pure JPA — no native SQL — so it behaves identically on H2 and Postgres.
  *
- * <p>Every aggregate's table is cleared, company appointments included: their {@code companyId} and
+ * <p>Every aggregate's table except {@code admins} (below) is cleared, company appointments included: their {@code companyId} and
  * {@code targetId} are plain columns, and the id counters restart from the emptied tables, so an
  * appointment left behind would hand its role to whichever user and company are created next (#170).
  *
