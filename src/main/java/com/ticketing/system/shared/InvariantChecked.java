@@ -1,9 +1,10 @@
 package com.ticketing.system.shared;
 
 /**
- * Implemented by aggregate roots that publish a runtime invariant check.
+ * Implemented by the domain types that publish a runtime invariant check: aggregate roots, the
+ * entities inside them, and value types such as {@code PurchaseContext} and the purchase policies.
  *
- * <p>{@link #checkInvariants()} asserts the structural rules an aggregate
+ * <p>{@link #checkInvariants()} asserts the structural rules a type
  * must satisfy at every observable state. It is intended to be called:
  *
  * <ul>
@@ -11,6 +12,8 @@ package com.ticketing.system.shared;
  *       (defensive, optional — production overhead is one method call).</li>
  *   <li>From tests via the {@code BaseDomainTest} harness, which calls it
  *       automatically on every tracked aggregate after each test.</li>
+ *   <li>From {@code SystemIntegrityVerifier} (governance), which re-checks every loaded user,
+ *       company, event and active order before the market opens.</li>
  * </ul>
  *
  * <p>The contract: throw {@link IllegalStateException} (or a more specific

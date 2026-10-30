@@ -11,9 +11,8 @@ import java.time.Duration;
  * {@code SystemAnalyticsService} calls {@link #count(MetricType, Duration)} and
  * {@link #total(MetricType)} to compute live rates and throughput.
  *
- * <p>The adapter lives in Infrastructure (V1/V2: in-memory; swappable for a
- * durable / Micrometer-backed store in V3 without touching callers — ports &
- * adapters).
+ * <p>The only adapter is {@link InMemorySystemMetrics}, in this package; its counters reset on
+ * restart. A durable adapter could replace it without touching callers.
  */
 public interface ISystemMetrics {
 

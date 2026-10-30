@@ -28,9 +28,10 @@ import com.ticketing.system.shared.config.WsepProperties;
  * counts as a WSEP reply; anything else is a {@link WsepCommunicationException}.
  * The base URL is https-only, enforced where it binds ({@link WsepProperties}).
  *
- * <p>Shared by {@link WsepPaymentGateway} and {@link WsepTicketIssuer}. Always a
- * bean (it is lightweight) even when the in-process stubs are the active
- * provider — the adapters that use it are property-gated, not this helper.
+ * <p>Shared by {@code WsepPaymentGateway} and {@code WsepTicketIssuer} (package
+ * {@code com.ticketing.system.sales.adapter.out.wsep}). Like them, it is a bean in every run except
+ * the {@code test} profile ({@code @Profile("!test")}), where the {@code Stub*} gateways
+ * replace the adapters and nothing uses it.
  */
 @Component
 @Profile("!test")
