@@ -1,7 +1,6 @@
 package com.ticketing.system.unit.infrastructure.persistence.NotificationPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -129,10 +128,5 @@ abstract class INotificationRepositoryContractTest {
     void emptyData_roundTripsAsEmptyMap() {
         repo.save(note("n1", 5, NotificationStatus.PENDING)); // 6-arg ctor → empty data
         assertTrue(repo.findById("n1").getData().isEmpty());
-    }
-
-    @Test
-    void nextId_returnsDistinctValues() {
-        assertNotEquals(repo.nextId(), repo.nextId());
     }
 }

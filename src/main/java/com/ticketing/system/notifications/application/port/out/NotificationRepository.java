@@ -20,6 +20,4 @@ public interface NotificationRepository extends IRepository<Notification, String
 
     // Used by MemberAccountService for inbox view of a member's notification history.
     List<Notification> findByRecipient(int recipientUserId);
-
-    int nextId();
 }

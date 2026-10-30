@@ -9,7 +9,6 @@ import com.ticketing.system.notifications.domain.NotificationStatus;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.springframework.context.annotation.Profile;
@@ -25,7 +24,6 @@ public class MemoryNotificationRepository implements NotificationRepository {
     // ConcurrentHashMap (not HashMap) for thread-safe concurrent access, matching the
     // other Memory repositories — notifications are written and read from many threads.
     private final Map<String, Notification> storage = new ConcurrentHashMap<>();
-    private final AtomicInteger idSequence = new AtomicInteger(1);
     private final RepositoryLocks<String> locks = new RepositoryLocks<>();
 
     @Override
@@ -34,11 +32,6 @@ public class MemoryNotificationRepository implements NotificationRepository {
     @Override
     public void unlock(String id) { locks.unlock(id); }
 
-    @Override
-    public int nextId() {
-        return idSequence.getAndIncrement();
-    }
-    
     @Override
     public void save(Notification notification) {
         storage.put(notification.getId(), notification);

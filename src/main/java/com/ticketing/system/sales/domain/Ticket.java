@@ -56,8 +56,7 @@ public class Ticket implements InvariantChecked {
     private TicketStatus status;
 
     // D7 (auth rework #181): nullable. Set on the Member path of CheckoutService;
-    // stays null for Guest purchases. Lets UC-16 view-my-history go through
-    // TicketRepository.findByHolderUserId(int) in a single hop.
+    // stays null for Guest purchases.
     @Column(name = "holder_user_id")
     private Integer holderUserId;
 
