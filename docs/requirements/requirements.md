@@ -323,7 +323,9 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 - A purchase policy is a condition on the buyer's age and the number of tickets (minimum or
   maximum). Conditions combine with AND and OR to any depth, and a policy is set per company, per
   event, or both (`PurchasePolicy`, `AndPurchasePolicy`, `OrPurchasePolicy`, `AgePurchasePolicy`,
-  `MinTicketsPurchasePolicy`, `MaxTicketsPurchasePolicy` · `PurchasePolicyAcceptanceTest`).
+  `MinTicketsPurchasePolicy`, `MaxTicketsPurchasePolicy` · `PurchasePolicyAcceptanceTest`). A
+  refused purchase is told the conditions it broke and none it met
+  (`Event.validateEffectivePolicy` · `EventTest`).
 - Discounts (V2) are percentages. There are three kinds:
   - simple;
   - conditional, which applies only while its condition holds; V2 requires ticket-count (minimum

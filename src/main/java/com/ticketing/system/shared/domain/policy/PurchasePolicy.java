@@ -17,4 +17,16 @@ public interface PurchasePolicy {
     boolean isSatisfiedBy(PurchaseContext context);
 
     String getFailureMessage();
+
+    /**
+     * The refusal to show for {@code context}, naming only the rules it breaks. A leaf has one rule,
+     * so this is {@link #getFailureMessage()}; a composite overrides it to leave out what the
+     * context satisfies.
+     *
+     * @param context the purchase this policy refused
+     * @return the reason for the refusal, possibly empty when no rule has a message
+     */
+    default String getFailureMessage(PurchaseContext context) {
+        return getFailureMessage();
+    }
 }
