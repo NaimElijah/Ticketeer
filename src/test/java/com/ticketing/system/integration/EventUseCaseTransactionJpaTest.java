@@ -63,7 +63,8 @@ import jakarta.persistence.EntityManagerFactory;
  * stores notices in transactions of its own (ADR-004). Each test therefore waits for that executor to
  * drain before it reads the counter, and asserts that the measured call queued no notice, so every
  * counted transaction belongs to the call. Nothing else runs transactions under {@code test}: its
- * schedulers and runners are {@code @Profile("!test")}.
+ * runners are {@code @Profile("!test")}, and nothing schedules its sweepers, because
+ * {@code SchedulingConfig}'s {@code @EnableScheduling} is {@code !test}.
  */
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @ActiveProfiles("test")
