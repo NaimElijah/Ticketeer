@@ -293,7 +293,9 @@ through a pull request. A release is a separate promotion PR from `dev` to `main
    both adapters under `adapter/out/persistence`, and add the behaviour to that port's contract
    test. If an `@Entity` changes, add the next `V<n>__<description>.sql` to
    `src/main/resources/db/migration`, in SQL that both PostgreSQL and H2 accept. Never edit one that
-   has already run ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)).
+   has already run ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)). A new foreign key, or
+   a column a query starts filtering on, needs its index in the same migration: PostgreSQL does not
+   index foreign keys on its own, and `SchemaMigrationIT` fails without it.
 4. Add a presenter in `ui/presenters` and a thin `@Route` view in `ui/views`.
 
 `HexagonalRulesTest` fails the build if a dependency points the wrong way.
@@ -319,7 +321,7 @@ About 1,500 test methods, organised by what they boot:
 | `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
 | `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats and refunds | Spring under `test`: JPA repositories on H2 |
 | `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith) and `RepositoryAdapterProfileTest` (which adapter each profile set selects) | Nothing |
-| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database (`SchemaMigrationIT`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
+| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database, with an index on every foreign key and queried column (`SchemaMigrationIT`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
 ```bash
 ./mvnw -Pno-vaadin test "-Dtest=ReservationServiceTest"                # one class

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.List;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
@@ -72,6 +73,55 @@ class SchemaMigrationIT {
     @Test
     void GivenMigratedDatabase_WhenMigratingAgain_ThenNothingIsApplied() {
         assertThat(flyway.migrate().migrationsExecuted).isZero();
+    }
+
+    // PostgreSQL does not index a foreign key's column on its own, and H2 does, so only PostgreSQL shows a
+    // missing one. Without it, every load of a parent's collection scans the whole child table.
+    @Test
+    void GivenMigratedPostgres_WhenListingForeignKeys_ThenEachColumnLeadsAnIndex() {
+        List<String> unindexed = jdbc.queryForList("""
+                select c.conrelid::regclass::text || '.' || a.attname
+                from pg_constraint c
+                join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+                where c.contype = 'f'
+                  and c.connamespace = (select oid from pg_namespace where nspname = current_schema())
+                  and not exists (select 1 from pg_index i
+                                  where i.indrelid = c.conrelid and i.indkey[0] = c.conkey[1])
+                order by 1
+                """, String.class);
+
+        assertThat(unindexed).as("foreign-key columns that lead no index").isEmpty();
+    }
+
+    // The columns the Spring Data repositories filter on that no primary key, unique constraint or
+    // foreign-key index already covers.
+    @Test
+    void GivenMigratedPostgres_WhenListingQueriedColumns_ThenEachLeadsAnIndex() {
+        List<String> queried = List.of(
+                "events.company_id", "events.status",
+                "sessions.expires_at",
+                "companies.name",
+                "company_appointments.company_id", "company_appointments.target_id",
+                "conversations.initiator_id", "conversations.counterparty_id",
+                "notifications.recipient_user_id",
+                "active_orders.session_id",
+                "active_order_items.added_at",
+                "receipts.user_id",
+                "receipt_lines.event_id",
+                "tickets.event_id", "tickets.order_receipt_id");
+
+        List<String> unindexed = queried.stream().filter(column -> !leadsAnIndex(column)).toList();
+
+        assertThat(unindexed).as("queried columns that lead no index").isEmpty();
+    }
+
+    private boolean leadsAnIndex(String tableDotColumn) {
+        String[] parts = tableDotColumn.split("\\.");
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists (select 1 from pg_index i
+                               join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[0]
+                               where i.indrelid = to_regclass(?) and a.attname = ?)
+                """, Boolean.class, parts[0], parts[1]));
     }
 
     // Outside the test transaction: Flyway reads the schema on its own connection, which would not
