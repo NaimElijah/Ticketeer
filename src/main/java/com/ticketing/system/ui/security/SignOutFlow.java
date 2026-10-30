@@ -1,12 +1,10 @@
 package com.ticketing.system.ui.security;
 
-import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.session.AuthSession;
-import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.GuestSession;
-import com.ticketing.system.ui.session.NotificationSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -24,11 +22,11 @@ import org.springframework.stereotype.Component;
  * fresh Guest sessionId" by:
  * <ol>
  *   <li>invalidating the current JWT through {@code AuthenticationService}
- *       so the server-side Session row is gone (UC-14),</li>
- *   <li>clearing the Vaadin-side {@link AuthSession} attributes, and</li>
- *   <li>minting a new Guest session and pinning it on
- *       {@link GuestSession}, mirroring what
- *       {@code GuestSessionBootstrap} does at session start.</li>
+ *       so the server-side Session row is gone (UC-14), then</li>
+ *   <li>handing over to {@link FreshGuestSession#restore()}, which clears
+ *       the member's Vaadin-side state and pins a newly minted Guest
+ *       session, mirroring what {@code GuestSessionBootstrap} does at
+ *       session start.</li>
  * </ol>
  *
  * <p>All four sign-out call sites (the three layouts and the dev panel)
@@ -40,9 +38,11 @@ import org.springframework.stereotype.Component;
 public class SignOutFlow {
 
     private final AuthenticationService authenticationService;
+    private final FreshGuestSession freshGuestSession;
 
-    public SignOutFlow(AuthenticationService authenticationService) {
+    public SignOutFlow(AuthenticationService authenticationService, FreshGuestSession freshGuestSession) {
         this.authenticationService = authenticationService;
+        this.freshGuestSession = freshGuestSession;
     }
 
     public void execute() {
@@ -55,16 +55,6 @@ public class SignOutFlow {
             }
         }
 
-        AuthSession.signOut();
-        CurrentCompanies.clearCurrentCompany();
-        NotificationSession.clear();
-
-        try {
-            GuestSessionDTO fresh = authenticationService.startGuestSession();
-            GuestSession.setSessionId(fresh.sessionId());
-        } catch (RuntimeException e) {
-            log.warn("failed to refresh guest session after sign-out: {}", e.getMessage());
-            GuestSession.clear();
-        }
+        freshGuestSession.restore();
     }
 }

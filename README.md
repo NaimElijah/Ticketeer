@@ -76,9 +76,11 @@ course provides, until a Stripe test-mode adapter replaces it ([#98](https://git
 ## Architecture
 
 A DDD + hexagonal modular monolith. Each top-level package under `com.ticketing.system` is a
-Spring Modulith module. Contexts talk through ports (interfaces owned by one side) and
-events, never through another context's internals. The module graph is acyclic, and the build
-fails if that stops being true.
+Spring Modulith module. Contexts are meant to talk through ports (interfaces owned by one side)
+and events. Some still reach into another context's repository ports, entities and services; #54
+replaces those. The module graph is acyclic, and each module may depend only on the modules it
+reaches by following the solid arrows below. The dashed arrow is one class pair, not a module edge.
+The build fails if either stops being true.
 
 ```mermaid
 flowchart TD
@@ -204,12 +206,12 @@ set these:
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
-`wsep`, `platform.admin`, `platform.time-zone`, `seed` and `market` groups bind to validated
-records. A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an
-unknown time zone or a malformed WSEP URL, stops the boot with a report naming the property
-([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource,
-`JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) and `ANALYTICS_*`
-([#165](https://github.com/NaimElijah/Ticketeer/issues/165)) are not validated yet.
+`wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
+`event-completion` and `notifications` groups bind to validated records. A value out of bounds,
+such as a zero hold, a negative TTL, a blank admin password, an unknown time zone, a malformed
+WSEP URL or a zero sweep delay, stops the boot with a report naming the property
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The datasource and
+`JWT_SECRET` ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)) are not validated yet.
 
 **Settings can come from a file instead of the environment.** Spring Boot layers an external
 `application.yml` over the bundled defaults:
@@ -249,6 +251,9 @@ overrides them. Set each value in one place.
 | `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
+| `SWEEPER_FIXED_DELAY_MS` | Pause between sweeps that release expired sessions and carts | `60000` |
+| `EVENT_COMPLETION_FIXED_DELAY_MS` | Pause between sweeps that mark finished events completed | `60000` |
+| `NOTIFICATIONS_POLL_DELAY_MS` | Pause between pushes of new notifications to connected users | `60000` |
 | `PLATFORM_TIME_ZONE` | IANA zone that new and seeded events default to, and that the UI shows recorded times and "today" in ([ADR-008](docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)) | `Asia/Jerusalem` |
 | `DB_POOL_SIZE` | Connection pool size under `supabase` | `5` |
 | `SEED_MODE` · `SEED_ASSUME_YES` · `SEED_SCENARIO` | Replay or wipe data at boot; see [SEED.md](SEED.md) | `off` · `false` · `classpath:scenarios/demo.scenario` |
@@ -394,10 +399,12 @@ schema on PostgreSQL and on H2, in dev and in every test, and a mapped table or 
 migration created fails the boot. Cost: every entity change needs a migration in SQL both
 databases accept, and `validate` does not check length, nullability or constraints, so review must.
 
-**Open Modulith modules, with ArchUnit as the cycle gate** (no ADR yet). The code began as a
+**Open Modulith modules, with ArchUnit as the boundary gate**
+([ADR-011](docs/ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md)). The code began as a
 layered monolith whose contexts still share services and domain types, so closing the modules to
-named-interface ports is a larger follow-on. Cost: module boundaries are enforced as an acyclic
-graph and layering rules, not as type-level encapsulation.
+named-interface ports is a larger follow-on. Cost: module boundaries are enforced as a fixed
+module map (every allowed dependency listed, the graph acyclic) and layering rules, not as
+type-level encapsulation, and the map and these docs are kept in step by hand.
 
 ## Status and limitations
 

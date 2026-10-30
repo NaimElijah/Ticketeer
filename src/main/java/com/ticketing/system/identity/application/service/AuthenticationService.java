@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -39,6 +40,8 @@ import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -120,6 +123,33 @@ public class AuthenticationService {
     @Transactional(readOnly = true)
     public boolean validateToken(String token) {
         return sessionManager.validateToken(token);
+    }
+
+    /**
+     * Answers "is this stored token's session still live, and whose is it?" without throwing for the
+     * expected no. It checks what {@link #validateToken} checks (signature, expiry, the session row),
+     * not the token's role.
+     *
+     * <p>{@link #validateToken} throws for an expired or revoked token. For a caller that holds a token
+     * and only needs to know whether it is still live (the UI, on every request), that is an ordinary
+     * answer rather than a failure; letting it throw would also have {@code LoggingAspect} log a WARN
+     * for every such check.
+     *
+     * @param token a signed-in visitor's JWT
+     * @return the token's user id while it validates; empty when it has expired, is malformed, carries
+     *     a bad signature, has been revoked, or is {@code null}/blank
+     * @throws RuntimeException any other validation failure (e.g. the session store is unreachable),
+     *     propagated unchanged
+     */
+    @Transactional(readOnly = true)
+    public OptionalInt liveMemberId(String token) {
+        try {
+            return sessionManager.validateToken(token)
+                    ? OptionalInt.of(sessionManager.extractUserId(token))
+                    : OptionalInt.empty();
+        } catch (SessionExpiredException | InvalidTokenException e) {
+            return OptionalInt.empty();
+        }
     }
 
     // ------------------------------------------------------------------

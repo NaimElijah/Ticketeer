@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.application;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,8 @@ import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -486,6 +490,43 @@ class AuthenticationServiceTest {
         when(mockSessionManager.validateToken("T")).thenReturn(true);
         assertTrue(service.validateToken("T"));
         verify(mockSessionManager).validateToken("T");
+    }
+
+    // liveMemberId answers "is this stored token still a member?" for the UI. An expired or revoked
+    // token is an expected answer there, not a failure, so it comes back empty instead of throwing
+    // (a throw would also be logged at WARN by LoggingAspect on every such check).
+    @Test
+    void GivenALiveToken_WhenLiveMemberIdIsAsked_ThenTheTokensUserId() {
+        when(mockSessionManager.validateToken("T")).thenReturn(true);
+        when(mockSessionManager.extractUserId("T")).thenReturn(42);
+
+        assertEquals(OptionalInt.of(42), service.liveMemberId("T"));
+    }
+
+    @Test
+    void GivenAnExpiredToken_WhenLiveMemberIdIsAsked_ThenEmptyWithoutThrowing() {
+        when(mockSessionManager.validateToken("T")).thenThrow(new SessionExpiredException());
+
+        OptionalInt memberId = assertDoesNotThrow(() -> service.liveMemberId("T"));
+
+        assertEquals(OptionalInt.empty(), memberId, "an expired token names no live member");
+    }
+
+    @Test
+    void GivenARevokedToken_WhenLiveMemberIdIsAsked_ThenEmptyWithoutThrowing() {
+        when(mockSessionManager.validateToken("T")).thenThrow(new InvalidTokenException("revoked"));
+
+        OptionalInt memberId = assertDoesNotThrow(() -> service.liveMemberId("T"));
+
+        assertEquals(OptionalInt.empty(), memberId, "a revoked or invalid token names no live member");
+    }
+
+    @Test
+    void GivenAnUnexpectedValidationFailure_WhenLiveMemberIdIsAsked_ThenItPropagates() {
+        when(mockSessionManager.validateToken("T")).thenThrow(new IllegalStateException("session store down"));
+
+        assertThrows(IllegalStateException.class, () -> service.liveMemberId("T"),
+                "only an expired or rejected token means \"no member\"; other failures must surface");
     }
 
     @Test
