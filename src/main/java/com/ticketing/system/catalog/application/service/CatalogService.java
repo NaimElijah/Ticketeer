@@ -506,14 +506,14 @@ public class CatalogService {
             Event event = this.eventRepository.findById(eventId);
             if (event == null) {
                 log.warn("Event not found while getting venue map: {}", eventId);
-                throw new EventNotFoundException("Event with ID " + eventId + " not found while getting venue map");
+                throw new EventNotFoundException(eventId);
             }
 
             // Additional check to enforce company status is ACTIVE.
             ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
             if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
                 log.warn("Attempt to access venue map for eventId: {} from inactive company", eventId);
-                throw new CompanyClosedException("Event with ID " + eventId + " not found while getting venue map");
+                throw new CompanyClosedException(event.getCompanyId());
             }
 
             // The map is part of the event's public page, so it is hidden exactly when the page is.
@@ -544,14 +544,14 @@ public class CatalogService {
         Event event = this.eventRepository.findById(eventId);
         if (event == null) {
             log.warn("Event not found while getting event detail: {}", eventId);
-            throw new EventNotFoundException("Event with ID " + eventId + " not found while getting event detail");
+            throw new EventNotFoundException(eventId);
         }
 
         // Enforce company status is ACTIVE — closed companies' events are not publicly visible.
         ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
         if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
             log.warn("Attempt to access event detail for eventId: {} from inactive company", eventId);
-            throw new CompanyClosedException("Event with ID " + eventId + " not found while getting event detail");
+            throw new CompanyClosedException(event.getCompanyId());
         }
 
         requirePubliclyListed(event, "getting event detail");
@@ -567,7 +567,7 @@ public class CatalogService {
         if (event.getStatus() == EventStatus.DRAFT || event.getStatus() == EventStatus.SCHEDULED) {
             log.warn("Attempt to access non-public event (status {}) while {} for eventId: {}",
                     event.getStatus(), operation, event.getId());
-            throw new EventNotFoundException("Event with ID " + event.getId() + " not found while " + operation);
+            throw new EventNotFoundException(event.getId());
         }
     }
 

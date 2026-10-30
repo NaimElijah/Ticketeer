@@ -73,7 +73,7 @@ class EventDetailsPresenterTest {
 
     @Test
     void load_eventNotFound_returnsNotFound() {
-        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new EventNotFoundException("nope"));
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
 
@@ -82,7 +82,7 @@ class EventDetailsPresenterTest {
 
     @Test
     void load_companyClosed_returnsNotFound() {
-        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new CompanyClosedException("closed"));
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new CompanyClosedException(10));
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
 

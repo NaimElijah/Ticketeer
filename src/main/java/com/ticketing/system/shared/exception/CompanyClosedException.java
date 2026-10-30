@@ -6,7 +6,7 @@ package com.ticketing.system.shared.exception;
 // UC-3 (browse), UC-9 (reserve from closed company's events), UC-19/21/22/23/24 (manage closed company).
 public class CompanyClosedException extends DomainException {
 
-    public CompanyClosedException(Object companyId) {
+    public CompanyClosedException(int companyId) {
         super("Company " + companyId + " is closed");
     }
 }

@@ -158,7 +158,7 @@ class EventCompletionSweeperTest {
         Event gone = onSaleEvent(5, SHOW_END);
         Event ok = onSaleEvent(6, SHOW_END);
         when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(gone, ok));
-        when(eventRepo.findById(5)).thenThrow(new EventNotFoundException("gone"));
+        when(eventRepo.findById(5)).thenThrow(new EventNotFoundException(5));
         when(eventRepo.findById(6)).thenReturn(ok);
 
         int completed = sweeper.completeFinishedEvents(AFTER_SHOW);

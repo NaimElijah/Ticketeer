@@ -10,7 +10,8 @@ public class UserNotFoundException extends EntityNotFoundException {
         super("User not found");
     }
 
-    public UserNotFoundException(Object userId) {
+    // "User not found: <id>".
+    public UserNotFoundException(int userId) {
         super("User", userId);
     }
 }

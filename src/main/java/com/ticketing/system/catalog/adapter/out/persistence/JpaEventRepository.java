@@ -87,7 +87,7 @@ public class JpaEventRepository implements EventRepository {
     @Override
     public Event findById(int eventId) {
         return data.findById(eventId)
-                .orElseThrow(() -> new EventNotFoundException("Event with ID " + eventId + " not found"));
+                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 
     // MANDATORY: a lock taken in a transaction of its own would end before the sale it protects.
@@ -95,7 +95,7 @@ public class JpaEventRepository implements EventRepository {
     @Transactional(propagation = Propagation.MANDATORY)
     public Event findForSale(int eventId) {
         return data.findByIdForShare(eventId)
-                .orElseThrow(() -> new EventNotFoundException("Event with ID " + eventId + " not found"));
+                .orElseThrow(() -> new EventNotFoundException(eventId));
     }
 
     @Override

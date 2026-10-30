@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -27,6 +29,8 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -958,5 +962,86 @@ class CatalogServiceTest {
         when(mockEvent.getShowDates()).thenReturn(List.of(new ShowDate(start, start.plusHours(2))));
         when(mockEvent.getTimeZone()).thenReturn(timeZone);
         return mockEvent;
+    }
+
+    // -------------------------------------------------------------------------
+    // #187 / UC-8: a hidden (DRAFT / SCHEDULED) event is refused exactly like a missing one, so a
+    // caller cannot tell the two apart, and ServiceErrors.userMessage shows the message as is.
+    // The missing event goes through the real in-memory adapter, whose findById throws.
+    // -------------------------------------------------------------------------
+
+    private static final int OWNER_COMPANY_ID = 10;
+    private static final LocalDateTime HIDDEN_SHOW_START = LocalDateTime.of(2030, 6, 1, 20, 0);
+    private static final String DOUBLED_NOT_FOUND = "not found:  not found";
+
+    @Test
+    void GivenScheduledEventAndMissingEvent_WhenGetEventDetail_ThenBothRefusalsCarryTheSameMessage() {
+        CatalogService overHiddenEvent = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.ACTIVE);
+        CatalogService overNoEvent = catalogOver(new MemoryEventRepository(), CompanyStatus.ACTIVE);
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overHiddenEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a hidden event's refusal must read exactly like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenScheduledEventAndMissingEvent_WhenGetEventVenueMap_ThenBothRefusalsCarryTheSameMessage() {
+        CatalogService overHiddenEvent = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.ACTIVE);
+        CatalogService overNoEvent = catalogOver(new MemoryEventRepository(), CompanyStatus.ACTIVE);
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overHiddenEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a hidden event's map refusal must read exactly like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenEventOfInactiveCompany_WhenGetEventDetail_ThenCompanyClosedMessageNamesTheCompany() {
+        CatalogService catalog = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+
+        CompanyClosedException thrown = assertThrows(CompanyClosedException.class,
+                () -> catalog.getEventDetail(VALID_TOKEN, EVENT_ID));
+
+        assertEquals("Company " + OWNER_COMPANY_ID + " is closed", thrown.getMessage());
+    }
+
+    @Test
+    void GivenEventOfInactiveCompany_WhenGetEventVenueMap_ThenCompanyClosedMessageNamesTheCompany() {
+        CatalogService catalog = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+
+        CompanyClosedException thrown = assertThrows(CompanyClosedException.class,
+                () -> catalog.getEventVenueMap(VALID_TOKEN, EVENT_ID));
+
+        assertEquals("Company " + OWNER_COMPANY_ID + " is closed", thrown.getMessage());
+    }
+
+    private CatalogService catalogOver(EventRepository events, CompanyStatus ownerStatus) {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        when(mockCompanyRepository.getCompanyById(OWNER_COMPANY_ID)).thenReturn(new ProductionCompany(
+                OWNER_COMPANY_ID, 1, "Acme Live", ownerStatus, "A production company", 4.5));
+        return new CatalogService(mockSessionManager, events, mockCompanyRepository);
+    }
+
+    private static MemoryEventRepository repositoryHolding(EventStatus status) {
+        MemoryEventRepository events = new MemoryEventRepository();
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
+        events.save(new Event(EVENT_ID, "Concert", 4.5, List.of("Artist"), EventCategory.CONCERT,
+                OWNER_COMPANY_ID, status, venueMap,
+                List.of(new ShowDate(HIDDEN_SHOW_START, HIDDEN_SHOW_START.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), null, new DiscountPolicy(0)));
+        return events;
+    }
+
+    private static void assertWellFormedNotFound(String message) {
+        assertFalse(message.contains(DOUBLED_NOT_FOUND), "garbled not-found message: " + message);
+        assertFalse(message.toLowerCase(Locale.ROOT).contains("while"),
+                "the message must not name the operation that was refused: " + message);
     }
 }

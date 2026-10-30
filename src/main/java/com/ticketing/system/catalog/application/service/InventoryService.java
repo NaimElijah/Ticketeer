@@ -159,7 +159,7 @@ public class InventoryService implements InventoryCommandPort {
     public double priceTicket(int eventId, int eventQuantity, double priceAtReservation, LocalDateTime now) {
         Event event = eventRepository.findById(eventId);            // load the event
         if (event == null) {
-            throw new EventNotFoundException("Event not found: " + eventId); // preserve the original failure
+            throw new EventNotFoundException(eventId);
         }
         return event.calculatePriceforoneticket(eventQuantity, priceAtReservation, now); // discount-policy price
     }
@@ -169,7 +169,7 @@ public class InventoryService implements InventoryCommandPort {
     public String eventName(int eventId) {
         Event event = eventRepository.findById(eventId);            // load the event
         if (event == null) {
-            throw new EventNotFoundException("Event not found: " + eventId); // preserve the original failure
+            throw new EventNotFoundException(eventId);
         }
         return event.getName();                                    // the event's name
     }
@@ -193,7 +193,7 @@ public class InventoryService implements InventoryCommandPort {
         for (Integer eventId : eventIds) {
             Event event = eventRepository.findForSale(eventId);    // holds the event against a cancel until commit
             if (event == null) {
-                throw new EventNotFoundException("Event not found: " + eventId);
+                throw new EventNotFoundException(eventId);
             }
             // SOLD_OUT is allowed: an event that sold out while these tickets were reserved must still let
             // the holders complete their purchase (mirrors Event.validateCanConfirmSale).
@@ -211,7 +211,7 @@ public class InventoryService implements InventoryCommandPort {
         for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : grouped.entrySet()) {
             Event event = eventRepository.findById(eventEntry.getKey()); // load the event
             if (event == null) {
-                throw new EventNotFoundException("Event not found: " + eventEntry.getKey());
+                throw new EventNotFoundException(eventEntry.getKey());
             }
 
             for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : eventEntry.getValue().entrySet()) {
