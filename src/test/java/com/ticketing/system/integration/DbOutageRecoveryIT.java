@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
+import java.net.SocketTimeoutException;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.ExecutionException;
@@ -18,6 +19,7 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.annotation.DirtiesContext;
@@ -58,10 +60,12 @@ import com.zaxxer.hikari.HikariDataSource;
 @DirtiesContext
 class DbOutageRecoveryIT {
 
-    static final String SOCKET_TIMEOUT_SECONDS = "3";
+    static final String SOCKET_TIMEOUT_SECONDS = "5";
     // The read's own timeout plus room for the container pause to take effect and the error to surface.
     private static final Duration IN_FLIGHT_READ_BOUND = Duration.ofSeconds(Long.parseLong(SOCKET_TIMEOUT_SECONDS) + 7);
-    private static final String SLOW_READ = "select pg_sleep(2)";
+    // Shorter than the socket timeout, so the read fails only if the pause stopped its answer; the
+    // test has the length of the sleep to see the read start and pause the database.
+    private static final String SLOW_READ = "select pg_sleep(4)";
     private static final Duration RECOVERY_DEADLINE = Duration.ofSeconds(30);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
 
@@ -104,7 +108,8 @@ class DbOutageRecoveryIT {
         ExecutorService reader = Executors.newSingleThreadExecutor();
         try {
             Future<Object> read = reader.submit(() -> jdbc.queryForObject(SLOW_READ, Object.class));
-            await().atMost(RECOVERY_DEADLINE).pollInterval(POLL_INTERVAL).until(() -> slowReadIsRunning(jdbc));
+            await().atMost(RECOVERY_DEADLINE).pollDelay(Duration.ZERO).pollInterval(POLL_INTERVAL)
+                    .until(() -> slowReadIsRunning(jdbc));
             POSTGRES.getDockerClient().pauseContainerCmd(POSTGRES.getContainerId()).exec();
             try {
                 Throwable outcome = outcomeWithin(read, IN_FLIGHT_READ_BOUND);
@@ -112,6 +117,9 @@ class DbOutageRecoveryIT {
                         .as("the in-flight read ends within %s, with an error", IN_FLIGHT_READ_BOUND)
                         .isNotNull()
                         .isNotInstanceOf(TimeoutException.class);
+                assertThat(NestedExceptionUtils.getMostSpecificCause(outcome))
+                        .as("ended by the driver's socket timeout: %s", outcome)
+                        .isInstanceOf(SocketTimeoutException.class);
             } finally {
                 resumeDatabase();
             }
