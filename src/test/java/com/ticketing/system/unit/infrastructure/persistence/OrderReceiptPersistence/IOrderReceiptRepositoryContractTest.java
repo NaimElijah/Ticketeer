@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,11 @@ abstract class IOrderReceiptRepositoryContractTest {
 
     private OrderReceipt member(int receiptId, int userId, int eventId) {
         return OrderReceipt.forMember(receiptId, userId, 50.0, List.of(line(receiptId * 10, eventId)), LocalDateTime.now());
+    }
+
+    private OrderReceipt memberAt(int receiptId, LocalDateTime purchasedAt) {
+        return OrderReceipt.forMember(receiptId, 7, 50.0,
+                List.of(new ReceiptLine(receiptId * 10, 50.0, 5, 1, "A1", purchasedAt)), purchasedAt);
     }
 
     private Set<Integer> ids(List<OrderReceipt> rs) {
@@ -152,6 +158,24 @@ abstract class IOrderReceiptRepositoryContractTest {
         repo.save(member(1, 7, 5));
 
         assertTrue(repo.findGlobal(new GlobalHistoryFiltersDTO(null, null, List.of(), null, null)).isEmpty());
+    }
+
+    // A date filter covers whole days: the end date runs up to, not including, the next midnight.
+    // Purchase times carry fractions of a second, so an end bound of 23:59:59 dropped the last second.
+    @Test
+    void GivenAPurchaseInTheLastSecondOfTheEndDate_WhenFindGlobalUpToThatDate_ThenItIsIncluded() {
+        repo.save(memberAt(1, LocalDateTime.of(2026, 10, 30, 23, 59, 59, 500_000_000)));
+
+        assertEquals(Set.of(1), ids(repo.findGlobal(new GlobalHistoryFiltersDTO(
+                null, null, null, LocalDate.of(2026, 10, 30), LocalDate.of(2026, 10, 30)))));
+    }
+
+    @Test
+    void GivenAPurchaseAtTheMidnightAfterTheEndDate_WhenFindGlobalUpToThatDate_ThenItIsExcluded() {
+        repo.save(memberAt(1, LocalDateTime.of(2026, 10, 31, 0, 0)));
+
+        assertTrue(repo.findGlobal(new GlobalHistoryFiltersDTO(
+                null, null, null, LocalDate.of(2026, 10, 30), LocalDate.of(2026, 10, 30))).isEmpty());
     }
 
     @Test

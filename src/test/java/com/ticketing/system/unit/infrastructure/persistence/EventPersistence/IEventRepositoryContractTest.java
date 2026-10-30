@@ -338,6 +338,24 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(1, result.size());
     }
 
+    // The end date covers its whole day, as the in-memory adapter compares dates: a show starting in its
+    // last second matches. A bound of 23:59:59 dropped any start with a fraction of a second.
+    @Test
+    void GivenAShowStartingInTheLastSecondOfTheEndDate_WhenSearchingUpToThatDate_ThenTheEventMatches() {
+        LocalDateTime lastSecond = LocalDateTime.of(2099, 6, 1, 23, 59, 59, 500_000_000);
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
+        eventRepo.save(new Event(1, "Late Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(lastSecond, lastSecond.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0)));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null,
+                LocalDate.of(2099, 6, 1), LocalDate.of(2099, 6, 1),
+                null, null, null, null, null));
+
+        assertEquals(1, result.size());
+    }
+
     @Test
     void givenEventWithShowDateOutsideRange_whensearchAll_thenReturnsEmpty() {
         eventRepo.save(buildEvent(1, "Future Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT)); // show date:

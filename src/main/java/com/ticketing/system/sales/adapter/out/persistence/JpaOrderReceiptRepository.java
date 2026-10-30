@@ -126,7 +126,8 @@ public class JpaOrderReceiptRepository implements OrderReceiptRepository {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("purchaseTime"), filters.fromDate().atStartOfDay()));
             }
             if (filters.toDate() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("purchaseTime"), filters.toDate().atTime(23, 59, 59)));
+                // The end date runs up to the next midnight: purchase times carry fractions of a second.
+                predicates.add(cb.lessThan(root.get("purchaseTime"), filters.toDate().plusDays(1).atStartOfDay()));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
