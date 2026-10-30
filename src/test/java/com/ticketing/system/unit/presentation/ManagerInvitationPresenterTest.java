@@ -29,8 +29,8 @@ import com.ticketing.system.ui.session.MapBackedVaadinSession;
  * {@link ManagerInvitationPresenter#invite} appoints the manager in the company the owner has
  * selected in the workspace ({@link CurrentCompanies}), the same company the capability gate checked.
  * {@code findOwnedCompanies} is unordered, so "the first owned company" can be any of them. The
- * selection is honoured only when the caller owns it; with no selection, or a selection the caller
- * does not own, there is no company to invite into.
+ * selection is honoured only when the caller owns it. An owner of several companies with none
+ * selected is asked to choose one; an owner of none has no company to invite into.
  */
 class ManagerInvitationPresenterTest {
 
@@ -76,7 +76,17 @@ class ManagerInvitationPresenterTest {
     }
 
     @Test
-    void GivenNoCompanySelected_WhenInvite_ThenNoCompanyAndNoAppointment() {
+    void GivenOwnerOfTwoCompaniesAndNoSelection_WhenInvite_ThenChooseCompanyAndNoAppointment() {
+        ManagerInvitationPresenter.Outcome outcome = presenter.invite(TOKEN, INVITEE, PERMISSIONS);
+
+        assertInstanceOf(ManagerInvitationPresenter.Outcome.ChooseCompany.class, outcome);
+        verify(service, never()).appointManager(anyString(), any());
+    }
+
+    @Test
+    void GivenOwnerOfNoCompany_WhenInvite_ThenNoCompanyAndNoAppointment() {
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of());
+
         ManagerInvitationPresenter.Outcome outcome = presenter.invite(TOKEN, INVITEE, PERMISSIONS);
 
         assertInstanceOf(ManagerInvitationPresenter.Outcome.NoCompany.class, outcome);
@@ -98,9 +108,21 @@ class ManagerInvitationPresenterTest {
         assertEquals(FIRST_COMPANY_ID, request.getValue().companyId());
     }
 
+    // A selection the caller does not own is no selection: an owner still has one of theirs to choose.
     @Test
-    void GivenASelectedCompanyTheCallerDoesNotOwn_WhenInvite_ThenNoCompanyAndNoAppointment() {
+    void GivenASelectedCompanyTheCallerDoesNotOwn_WhenInvite_ThenChooseCompanyAndNoAppointment() {
         CurrentCompanies.setCurrentCompany(UNOWNED_COMPANY_ID);
+
+        ManagerInvitationPresenter.Outcome outcome = presenter.invite(TOKEN, INVITEE, PERMISSIONS);
+
+        assertInstanceOf(ManagerInvitationPresenter.Outcome.ChooseCompany.class, outcome);
+        verify(service, never()).appointManager(anyString(), any());
+    }
+
+    @Test
+    void GivenASelectedCompanyAndACallerWhoOwnsNone_WhenInvite_ThenNoCompanyAndNoAppointment() {
+        CurrentCompanies.setCurrentCompany(UNOWNED_COMPANY_ID);
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of());
 
         ManagerInvitationPresenter.Outcome outcome = presenter.invite(TOKEN, INVITEE, PERMISSIONS);
 

@@ -16,6 +16,7 @@ import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CurrentCompanies;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -46,10 +47,10 @@ public class OwnerDashboardView extends LkPage {
         add(statsSlot);
         add(Lk.h2("Manage"));
         add(buildTiles());
-        reload(null);
+        reload(CurrentCompanies.currentCompanyId());
     }
 
-    /** (Re)loads the dashboard for the given company (null → the member's first company). */
+    /** (Re)loads the dashboard for the given company (null or not theirs → the member's first company). */
     private void reload(Integer companyId) {
         switch (presenter.loadFor(AuthSession.token(), companyId)) {
             case OwnerDashboardPresenter.Outcome.Success ok -> applySuccess(ok);
@@ -106,6 +107,7 @@ public class OwnerDashboardView extends LkPage {
         selector.onChange(label -> {
             Integer companyId = idByLabel.get(label);
             if (companyId != null) {
+                presenter.selectCompany(companyId);
                 reload(companyId);
             }
         });

@@ -39,18 +39,21 @@ public class ManagerListPresenter {
     /**
      * Loads the manager roster of the selected company.
      *
-     * @return {@link Outcome.NoCompany} when no company is selected or the caller does not own the
-     *     selected one
+     * @return {@link Outcome.NoCompany} when the caller owns no company; {@link Outcome.ChooseCompany}
+     *     when they own one or more but none of them is selected, or the selection is one they do not own
      */
     public Outcome loadRoster(String token) {
         if (token == null) {
             return new Outcome.NotAuthenticated();
         }
         try {
-            Optional<ProductionCompanyDTO> selected =
-                SelectedOwnedCompany.among(companyManagementService.findOwnedCompanies(token));
-            if (selected.isEmpty()) {
+            List<ProductionCompanyDTO> owned = companyManagementService.findOwnedCompanies(token);
+            if (owned.isEmpty()) {
                 return new Outcome.NoCompany();
+            }
+            Optional<ProductionCompanyDTO> selected = SelectedOwnedCompany.among(owned);
+            if (selected.isEmpty()) {
+                return new Outcome.ChooseCompany();
             }
             ProductionCompanyDTO company = selected.get();
             List<AppointmentInfoDTO> active =
@@ -114,7 +117,10 @@ public class ManagerListPresenter {
                        List<AppointmentInfoDTO> activeManagers,
                        List<AppointmentInfoDTO> pendingInvitations) implements Outcome { }
         record NotAuthenticated() implements Outcome { }
+        /** The caller owns no company. */
         record NoCompany() implements Outcome { }
+        /** The caller owns a company, but none of theirs is selected in the workspace. */
+        record ChooseCompany() implements Outcome { }
         record Failure(String reason) implements Outcome { }
     }
 

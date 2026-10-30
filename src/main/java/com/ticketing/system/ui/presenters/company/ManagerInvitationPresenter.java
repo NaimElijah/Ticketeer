@@ -31,15 +31,17 @@ public class ManagerInvitationPresenter {
     /**
      * Appoints {@code inviteeUsername} as a pending manager of the selected company.
      *
-     * @return {@link Outcome.NoCompany} when no company is selected or the caller does not own the
-     *     selected one; the appointment is not attempted then
+     * @return {@link Outcome.NoCompany} when the caller owns no company; {@link Outcome.ChooseCompany}
+     *     when they own one or more but none of them is selected, or the selection is one they do not
+     *     own. The appointment is not attempted then
      */
     public Outcome invite(String token, String inviteeUsername, List<Permission> permissions) {
         if (token == null) return new Outcome.NotAuthenticated();
         try {
-            Optional<ProductionCompanyDTO> selected =
-                SelectedOwnedCompany.among(companyService.findOwnedCompanies(token));
-            if (selected.isEmpty()) return new Outcome.NoCompany();
+            List<ProductionCompanyDTO> owned = companyService.findOwnedCompanies(token);
+            if (owned.isEmpty()) return new Outcome.NoCompany();
+            Optional<ProductionCompanyDTO> selected = SelectedOwnedCompany.among(owned);
+            if (selected.isEmpty()) return new Outcome.ChooseCompany();
             int companyId = selected.get().companyId();
             int targetUserId = companyService.resolveUserId(inviteeUsername);
             companyService.appointManager(token,
@@ -57,7 +59,10 @@ public class ManagerInvitationPresenter {
     public sealed interface Outcome {
         record Success() implements Outcome {}
         record NotAuthenticated() implements Outcome {}
+        /** The caller owns no company. */
         record NoCompany() implements Outcome {}
+        /** The caller owns a company, but none of theirs is selected in the workspace. */
+        record ChooseCompany() implements Outcome {}
         record UserNotFound(String username) implements Outcome {}
         record Failure(String reason) implements Outcome {}
     }

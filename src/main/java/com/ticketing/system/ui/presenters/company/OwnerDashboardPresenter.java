@@ -10,6 +10,7 @@ import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
@@ -61,6 +62,17 @@ public class OwnerDashboardPresenter {
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
+    }
+
+    /**
+     * Makes {@code companyId} the company selected in the workspace ({@link CurrentCompanies}), the one
+     * the manager screens and the capability gate act on. The dashboard's Company selector is where an
+     * owner of several companies picks one. Whether the caller may act on it stays the service's check.
+     *
+     * @param companyId the company the selector chose
+     */
+    public void selectCompany(int companyId) {
+        CurrentCompanies.setCurrentCompany(companyId);
     }
 
     /** Sealed outcome the view switches on to render the dashboard or an empty state. */

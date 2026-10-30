@@ -31,6 +31,7 @@ import com.ticketing.system.ui.presenters.company.ManagerListPresenter;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 class ManagerListPresenterTest {
 
@@ -89,7 +90,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void serviceThrows_returnsFailureWithMessage() {
+    void serviceFailsInternally_returnsGenericFailure() {
         when(service.findOwnedCompanies(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
@@ -127,8 +128,9 @@ class ManagerListPresenterTest {
         verify(service, never()).listPendingInvitations(TOKEN, 7);
     }
 
+    // A selection the caller does not own is no selection: an owner still has one of theirs to choose.
     @Test
-    void GivenASelectedCompanyTheCallerDoesNotOwn_WhenLoadRoster_ThenNoCompany() {
+    void GivenASelectedCompanyTheCallerDoesNotOwn_WhenLoadRoster_ThenChooseCompany() {
         MapBackedVaadinSession.install();
         CurrentCompanies.setCurrentCompany(11);
         when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(
@@ -136,12 +138,25 @@ class ManagerListPresenterTest {
 
         ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
 
-        assertInstanceOf(ManagerListPresenter.Outcome.NoCompany.class, outcome);
+        assertInstanceOf(ManagerListPresenter.Outcome.ChooseCompany.class, outcome);
         verify(service, never()).listManagers(anyString(), anyInt());
     }
 
     @Test
-    void GivenOwnerOfTwoCompaniesAndNoSelection_WhenLoadRoster_ThenNoCompany() {
+    void GivenASelectedCompanyAndACallerWhoOwnsNone_WhenLoadRoster_ThenNoCompany() {
+        MapBackedVaadinSession.install();
+        CurrentCompanies.setCurrentCompany(11);
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of());
+
+        ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
+
+        assertInstanceOf(ManagerListPresenter.Outcome.NoCompany.class, outcome);
+        verify(service, never()).listManagers(anyString(), anyInt());
+    }
+
+    // Owning several companies with none selected is not owning none: the owner has to choose one.
+    @Test
+    void GivenOwnerOfTwoCompaniesAndNoSelection_WhenLoadRoster_ThenChooseCompany() {
         MapBackedVaadinSession.install();
         when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(
             new ProductionCompanyDTO(7, "Alpha", "desc", "ACTIVE", 1),
@@ -149,7 +164,7 @@ class ManagerListPresenterTest {
 
         ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
 
-        assertInstanceOf(ManagerListPresenter.Outcome.NoCompany.class, outcome);
+        assertInstanceOf(ManagerListPresenter.Outcome.ChooseCompany.class, outcome);
         verify(service, never()).listManagers(anyString(), anyInt());
     }
 
@@ -195,7 +210,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void editPermissions_serviceThrows_returnsFailureWithMessage() {
+    void editPermissions_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("only the appointer may edit"))
             .when(service).editManagerPermissions(anyString(), any());
 
@@ -242,7 +257,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void revoke_serviceThrows_returnsFailureWithMessage() {
+    void revoke_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("Cannot revoke appointment of the founder"))
             .when(service).RevokeAppointment(anyString(), any());
 
@@ -261,5 +276,17 @@ class ManagerListPresenterTest {
         ManagerListPresenter.ActionOutcome outcome = presenter.revoke(TOKEN, 7, 2);
 
         assertInstanceOf(ManagerListPresenter.ActionOutcome.NotAuthenticated.class, outcome);
+    }
+
+    @Test
+    void editPermissions_notTheAppointer_returnsFailureWithTheRulesMessage() {
+        UnauthorizedActionException rule =
+            new UnauthorizedActionException("Only the original appointer can modify manager permissions");
+        doThrow(rule).when(service).editManagerPermissions(anyString(), any());
+
+        ManagerListPresenter.ActionOutcome.Failure fail = assertInstanceOf(
+            ManagerListPresenter.ActionOutcome.Failure.class,
+            presenter.editPermissions(TOKEN, 7, 2, List.of("VIEW_SALES")));
+        assertEquals(rule.getMessage(), fail.reason());
     }
 }

@@ -70,7 +70,10 @@ public class ManagerListView extends LkPage {
         switch (presenter.loadRoster(AuthSession.token())) {
             case ManagerListPresenter.Outcome.Success ok -> renderRosters(ok);
             case ManagerListPresenter.Outcome.NoCompany ignored -> content.add(banner(
-                "Select a production company you own to manage its team."));
+                "You don't own a production company yet. Register one to manage its team."));
+            case ManagerListPresenter.Outcome.ChooseCompany ignored -> content.add(banner(
+                "Choose the company in the workspace's Company selector, "
+                    + "or under My companies, then come back."));
             case ManagerListPresenter.Outcome.NotAuthenticated ignored -> content.add(banner(
                 "Your session has expired — please sign in again."));
             case ManagerListPresenter.Outcome.Failure fail -> content.add(banner(

@@ -10,7 +10,7 @@ import com.ticketing.system.ui.session.CurrentCompanies;
  * Picks the company a workspace action applies to out of the caller's owned companies: the one
  * selected in the workspace ({@link CurrentCompanies}), which is the company the capability gate
  * checked. The owned list is unordered, so its first entry can be any of them and is never a default.
- * A selection the caller does not own counts as no company, not as a cue to pick another one, so an
+ * A selection the caller does not own counts as no selection, not as a cue to pick another one, so an
  * action never lands in a company other than the one on screen. With nothing selected, an owner of
  * exactly one company gets that company, since there is nothing to choose.
  */
