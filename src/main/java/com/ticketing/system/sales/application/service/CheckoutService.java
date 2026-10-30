@@ -6,8 +6,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +40,6 @@ import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
-import com.ticketing.system.shared.exception.IdempotencyConflictException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
@@ -88,13 +86,10 @@ public class CheckoutService {
     // "now" for hold expiry, pricing and receipts: UTC wall time (ADR-008).
     private final Clock clock;
 
-    // In-memory cache for completed checkouts to handle idempotency. Keyed by a
-    // combination of buyer identity and idempotency key, since the same idempotency
-    // key could be used
-    // by different users (e.g. if they copy-paste it from a confirmation page). In
-    // a real implementation this would likely be a distributed cache like Redis
-    // with an expiration time.
-    private final ConcurrentMap<String, IdempotencyCacheEntry> completedCheckoutsByIdempotencyKey = new ConcurrentHashMap<>();
+    // Completed checkouts by idempotency key, each tagged with its buyer so a key reused by another buyer
+    // is a conflict rather than a replay. Bounded, and in memory, so lost on restart (SLR.7).
+    private final CheckoutIdempotencyCache idempotencyCache =
+            new CheckoutIdempotencyCache(CheckoutIdempotencyCache.DEFAULT_CAPACITY);
 
     // idempotency means that if the same buyer (member or guest) submits the same
     // checkout request (identified by idempotency key) multiple times, only the
@@ -201,9 +196,9 @@ public class CheckoutService {
             // Idempotency short-circuit BEFORE the market gate: a completed purchase must be returned even
             // if the market has since closed (C1). (Pre-flight validation failures above are still wrapped
             // by the catch as a checkout failure, matching the existing contract.)
-            CheckoutResultDTO cached = getCachedCheckoutResult(idempotencyKey, buyerKey);
-            if (cached != null) {
-                return cached;
+            Optional<CheckoutResultDTO> cached = idempotencyCache.find(idempotencyKey, buyerKey);
+            if (cached.isPresent()) {
+                return cached.get();
             }
 
             // UC-32 / I.2.1 — no money moves while the market is closed (checked after the idempotency
@@ -304,7 +299,7 @@ public class CheckoutService {
 
             CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult,
                     persisted.issuedTickets());
-            cacheCheckoutResult(idempotencyKey, buyerKey, result);
+            idempotencyCache.putIfAbsent(idempotencyKey, buyerKey, result);
 
             receiptLinesToNotifyAfterUnlock = receiptLines;
             checkoutSucceeded = true;
@@ -371,9 +366,9 @@ public class CheckoutService {
 
             String buyerKey = guestBuyerKey(guestSessionId, guestEmail);
 
-            CheckoutResultDTO cached = getCachedCheckoutResult(idempotencyKey, buyerKey);
-            if (cached != null) {
-                return cached;
+            Optional<CheckoutResultDTO> cached = idempotencyCache.find(idempotencyKey, buyerKey);
+            if (cached.isPresent()) {
+                return cached.get();
             }
 
             requireMarketOpen();
@@ -459,7 +454,7 @@ public class CheckoutService {
 
             CheckoutResultDTO result = buildCheckoutResult(totalPrice, orderReceiptId, paymentResult,
                     persisted.issuedTickets());
-            cacheCheckoutResult(idempotencyKey, buyerKey, result);
+            idempotencyCache.putIfAbsent(idempotencyKey, buyerKey, result);
 
             return result;
 
@@ -1275,43 +1270,6 @@ public class CheckoutService {
         }
     }
 
-    // We check the idempotency cache for a completed checkout result using the
-    // idempotency key and the buyer key. If there is an existing cache entry for
-    // the idempotency key, we check if the buyer key matches. If it does not match,
-    // we throw an IdempotencyConflictException to indicate that there is a conflict
-    // with the idempotency key being used by a different buyer. If it matches, we
-    // return the cached checkout result. If there is no existing cache entry for
-    // the idempotency key, we return null to indicate that there is no cached
-    // result and that we should proceed with processing the checkout as normal.
-    private CheckoutResultDTO getCachedCheckoutResult(String idempotencyKey, String buyerKey) {
-        IdempotencyCacheEntry existing = completedCheckoutsByIdempotencyKey.get(idempotencyKey);
-
-        if (existing == null) {
-            return null;
-        }
-
-        if (!existing.buyerKey().equals(buyerKey)) {
-            throw new IdempotencyConflictException(idempotencyKey);
-        }
-
-        return existing.result();
-    }
-
-    // We cache the checkout result in the idempotency cache by associating the
-    // idempotency key with a new cache entry that contains the buyer key and the
-    // checkout result. This allows us to return the same checkout result for
-    // subsequent requests that use the same idempotency key and buyer key, while
-    // also ensuring that if there is a conflict with the idempotency key being used
-    // by a different buyer, we can detect it and throw an appropriate exception. By
-    // using putIfAbsent, we ensure that we do not overwrite an existing cache entry
-    // if one already exists for the same idempotency key, which helps maintain the
-    // integrity of our idempotency handling.
-    private void cacheCheckoutResult(String idempotencyKey, String buyerKey, CheckoutResultDTO result) {
-        completedCheckoutsByIdempotencyKey.putIfAbsent(
-                idempotencyKey,
-                new IdempotencyCacheEntry(buyerKey, result));
-    }
-
     // We generate a unique key for a member buyer based on their user ID. This key
     // is used to identify the buyer in the idempotency cache and other internal
     // mechanisms.
@@ -1384,14 +1342,6 @@ public class CheckoutService {
     private record PricedCartLine(
             CartLineItem item,
             double finalPrice) {
-    }
-
-    // This is the value stored in the idempotency cache. It includes the buyerKey
-    // to detect conflicts (same idempotency key used by different buyers) and the
-    // actual checkout result to return for repeated requests.
-    private record IdempotencyCacheEntry(
-            String buyerKey,
-            CheckoutResultDTO result) {
     }
 
 }

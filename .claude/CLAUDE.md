@@ -164,8 +164,8 @@ An in-memory state machine in `SystemAdminService` (governance, not persisted):
 `WsepPaymentGateway`/`WsepTicketIssuer` (`!test`) and `StubPaymentGateway`/`StubTicketIssuer`
 (`test`), implementing the sales ports `PaymentGateway`/`TicketIssuer`. `WsepHttpClient.postWithRetry`
 is only for the idempotent handshake; `pay`/`issue_ticket`/`refund` must use plain `post`, because a
-blind retry could double-charge or double-issue. Checkout idempotency is an in-memory cache in
-`CheckoutService`, lost on restart.
+blind retry could double-charge or double-issue. Checkout idempotency is a bounded in-memory cache
+(`CheckoutIdempotencyCache`, oldest evicted first), lost on restart.
 
 ### UI (Vaadin MVP)
 
