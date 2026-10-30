@@ -180,6 +180,8 @@ public class CheckoutService {
         PaymentResultDTO paymentResult = null;
         double totalPrice = 0.0;
         boolean inventorySaleConfirmed = false;
+        // Set once this call has frozen the order; only the attempt that froze an order may roll it back.
+        boolean frozeOrder = false;
         boolean checkoutSucceeded = false;
         List<ReceiptLine> receiptLinesToNotifyAfterUnlock = null;
 
@@ -230,6 +232,7 @@ public class CheckoutService {
             // this state.
             order.markCheckoutInProgress();
             activeOrderRepository.save(order);
+            frozeOrder = true;
 
             activeOrderRepository.unlock(orderLockKey);
 
@@ -314,7 +317,7 @@ public class CheckoutService {
             throw marketClosed;
         } catch (Exception e) {
             handleCheckoutFailure(order, userId, orderLockKey, paymentResult, totalPrice, inventorySaleConfirmed,
-                    e);
+                    frozeOrder, e);
             // failure handling does not mutate inventory without locks
             // checkout failure handling will: reset CHECKOUT_IN_PROGRESS safely, refund
             // payment if needed, not release inventory without locks, not clear the cart
@@ -352,6 +355,8 @@ public class CheckoutService {
         PaymentResultDTO paymentResult = null;
         double totalPrice = 0.0;
         boolean inventorySaleConfirmed = false;
+        // Set once this call has frozen the order; only the attempt that froze an order may roll it back.
+        boolean frozeOrder = false;
 
         String orderLockKey = null;
         List<Integer> lockedEventIds = List.of();
@@ -389,6 +394,7 @@ public class CheckoutService {
 
             order.markCheckoutInProgress();
             activeOrderRepository.save(order);
+            frozeOrder = true;
 
             activeOrderRepository.unlock(orderLockKey);
 
@@ -462,7 +468,7 @@ public class CheckoutService {
             throw marketClosed;
         } catch (Exception e) {
             handleGuestCheckoutFailure(order, guestSessionId, orderLockKey, paymentResult, totalPrice,
-                    inventorySaleConfirmed, e);
+                    inventorySaleConfirmed, frozeOrder, e);
             throw new RuntimeException("Checkout failed, tickets returned to stock", e);
         } finally {
             unlockEvents(lockedEventIds);
@@ -1063,6 +1069,7 @@ public class CheckoutService {
             PaymentResultDTO paymentResult,
             double totalPrice,
             boolean inventorySaleConfirmed,
+            boolean frozeOrder,
             Exception originalFailure) {
         log.error(
                 "Checkout failed. userId={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
@@ -1073,10 +1080,10 @@ public class CheckoutService {
                 originalFailure);
 
         // Reset the CHECKOUT_IN_PROGRESS status, return the reserved inventory to stock, and clear the cart
-        // atomically under one lock scope. The guard inside the helper skips the rollback once the sale is
-        // confirmed SOLD (a release would throw and the order is still CHECKOUT_IN_PROGRESS). Mirrors
-        // handleGuestCheckoutFailure.
-        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed);
+        // atomically under one lock scope. The guards inside the helper skip the rollback once the sale is
+        // confirmed SOLD (a release would throw and the order is still CHECKOUT_IN_PROGRESS), and when another
+        // attempt froze the order. Mirrors handleGuestCheckoutFailure.
+        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed, frozeOrder);
 
         if (inventorySaleConfirmed) {
             log.error(
@@ -1114,6 +1121,7 @@ public class CheckoutService {
             PaymentResultDTO paymentResult,
             double totalPrice,
             boolean inventorySaleConfirmed,
+            boolean frozeOrder,
             Exception originalFailure) {
         log.error(
                 "Guest checkout failed. guestSessionId={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
@@ -1124,7 +1132,7 @@ public class CheckoutService {
                 originalFailure);
 
         // Roll back inventory + cart + status atomically under one lock scope (see handleCheckoutFailure).
-        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed);
+        rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed, frozeOrder);
 
         if (inventorySaleConfirmed) {
             log.error(
@@ -1148,12 +1156,14 @@ public class CheckoutService {
     private void rollbackReservedInventoryAtomically(
             String orderLockKey,
             ActiveOrder fallbackOrder,
-            boolean inventorySaleConfirmed) {
+            boolean inventorySaleConfirmed,
+            boolean frozeOrder) {
         // Skip when the sale already committed (inventory is SOLD — a release would throw while the order is
         // still CHECKOUT_IN_PROGRESS) or there is no key to lock by (failure before Phase 1 acquired the order,
-        // so nothing was reserved for this checkout to roll back). A Phase-1 validation failure still rolls
-        // back: the status reset below is guarded by isCheckoutInProgress(), so it is simply skipped while the
-        // reserved tickets are still returned to stock and the cart is cleared.
+        // so nothing was reserved for this checkout to roll back). A Phase-1 validation failure on an order
+        // that is not in checkout (e.g. an expired hold) still rolls back: its reserved tickets are returned
+        // to stock and the cart is cleared. One that failed because another attempt already froze the order
+        // is skipped below, under the lock.
         if (inventorySaleConfirmed || orderLockKey == null) {
             return;
         }
@@ -1167,6 +1177,13 @@ public class CheckoutService {
                 order = fallbackOrder;
             }
             if (order == null) {
+                return;
+            }
+            // Frozen by another attempt still in flight: resetting it, releasing its seats or clearing it
+            // would let that attempt charge for seats it no longer holds.
+            if (order.isCheckoutInProgress() && !frozeOrder) {
+                log.warn("Checkout rollback skipped: the order is in another attempt's checkout. orderKey={}",
+                        order.getOrderKey());
                 return;
             }
 
