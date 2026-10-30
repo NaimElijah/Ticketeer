@@ -35,6 +35,12 @@ spring:
     execution:
       mode: force
 
+# PostgreSQL driver bounds (SLR.6, #173), applied only to a PostgreSQL datasource (PostgresDriverSettings).
+# socket-timeout ends a read whose answer never comes, as when the database hangs or its host disappears;
+# it must exceed the slowest legitimate query (the reporting reads).
+database:
+  socket-timeout: ${DB_SOCKET_TIMEOUT:30s}
+
 # JWT signing secret (consumed by Infrastructure/security/JwtSessionManager — UC-12).
 # In production the secret MUST be supplied via environment variable, never committed. Outside dev and
 # test the boot refuses this default (CommittedDefaultSecretsGuard repeats it, and its test pins the two).
