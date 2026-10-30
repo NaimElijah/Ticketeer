@@ -2,6 +2,7 @@ package com.ticketing.system.unit.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -30,6 +31,7 @@ import com.ticketing.system.identity.config.IdentityProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.sales.config.ReservationHoldProperties;
+import com.ticketing.system.shared.config.DatabaseProperties;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.config.WsepProperties;
 
@@ -48,7 +50,7 @@ class InitPropertiesValidationTest {
             WsepProperties.class, PlatformAdminProperties.class, MarketProperties.class, SeedProperties.class,
             PlatformTimeProperties.class, AnalyticsProperties.class, SweeperProperties.class,
             EventCompletionProperties.class, NotificationPollingProperties.class, IdentityProperties.class,
-            VenueLimitsProperties.class})
+            VenueLimitsProperties.class, DatabaseProperties.class})
     static class InitProperties {
     }
 
@@ -72,6 +74,7 @@ class InitPropertiesValidationTest {
             assertThat(context.getBean(IdentityProperties.class).reservedUsernames())
                     .containsExactly("admin", "platform.admin");
             assertThat(context.getBean(IdentityProperties.class).platformAdminUsername()).isEqualTo("admin");
+            assertThat(context.getBean(DatabaseProperties.class).socketTimeout()).isEqualTo(Duration.ofSeconds(30));
         });
     }
 
@@ -160,6 +163,7 @@ class InitPropertiesValidationTest {
             "sweeper.fixed-delay-ms,                0,         fixedDelayMs",
             "event-completion.fixed-delay-ms,       0,         fixedDelayMs",
             "notifications.poll-delay-ms,           0,         pollDelayMs",
+            "database.socket-timeout,               0s,        socketTimeout",
     })
     void GivenOutOfBoundsValue_WhenContextStarts_ThenFailsNamingTheField(String property, String value, String field) {
         runner.withPropertyValues(property + "=" + value).run(context -> {

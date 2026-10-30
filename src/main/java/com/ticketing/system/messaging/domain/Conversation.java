@@ -11,6 +11,7 @@ import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MessageNotFoundException;
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.domain.TextLimits;
 
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
@@ -94,6 +95,7 @@ public class Conversation implements InvariantChecked {
                         int counterpartyId, ParticipantType counterpartyType,
                         String subject, LocalDateTime createdAt,
                         List<Message> messages) {
+        TextLimits.requireFits("Subject", subject);
         this.conversationId = conversationId;
         this.type = type;
         this.status = ConversationStatus.OPEN;
@@ -175,10 +177,10 @@ public class Conversation implements InvariantChecked {
     }
 
     // Mark a single message read by the given participant (the non-sender).
-    public void markMessageRead(String messageId, int readerId) {
+    public void markMessageRead(String messageId, int readerId, ParticipantType readerType) {
         for (Message m : messages) {
             if (m.getMessageId().equals(messageId)) {
-                if (m.getSenderId() != readerId) {
+                if (!sentBy(m, readerId, readerType)) {
                     m.markRead();
                 }
                 return;
@@ -240,14 +242,20 @@ public class Conversation implements InvariantChecked {
     }
 
     // Unread = messages addressed to (i.e. not sent by) the reader and not yet read.
-    public int unreadCountFor(int readerId) {
+    public int unreadCountFor(int readerId, ParticipantType readerType) {
         int count = 0;
         for (Message m : messages) {
-            if (m.getSenderId() != readerId && !m.isRead()) {
+            if (!sentBy(m, readerId, readerType) && !m.isRead()) {
                 count++;
             }
         }
         return count;
+    }
+
+    // Member, company and admin ids come from separate sequences that each start at 1, so an id alone
+    // does not tell whose a message is: a company often shares its id with the member it writes to.
+    private static boolean sentBy(Message message, int readerId, ParticipantType readerType) {
+        return message.getSenderId() == readerId && message.getSenderType() == readerType;
     }
 
     // Whether the given sender represents the initiator side of this thread

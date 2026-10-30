@@ -7,13 +7,16 @@ import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.components.kit.LkTextRows;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
@@ -178,7 +181,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             case EventManagementPresenter.SaveOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case EventManagementPresenter.SaveOutcome.Failure fail ->
-                Toasts.failure("Could not save the event — please try again.");
+                Toasts.failure(Lk.withReason("Could not save the event", fail.reason()));
         }
     }
 
@@ -227,7 +230,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             case EventManagementPresenter.CreateOutcome.InvalidInput bad ->
                 Toasts.failure(bad.reason());
             case EventManagementPresenter.CreateOutcome.Failure fail ->
-                Toasts.failure("Could not create the event — please try again.");
+                Toasts.failure(Lk.withReason("Could not create the event", fail.reason()));
         }
     }
 
@@ -276,6 +279,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
         title.setRequired(true);
         title.setWidthFull();
+        LkTextLimit.apply(title);
+        artists.textLimit(TextLimits.MAX_TEXT_LENGTH);
 
         category.setLabel("Category");
         category.setItems(Arrays.stream(EventCategory.values()).map(Enum::name).toList());
@@ -304,6 +309,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
         description.setMinHeight("120px");
         description.setWidthFull();
+        LkTextLimit.apply(description);
 
         Div grid = new Div();
         grid.getStyle()

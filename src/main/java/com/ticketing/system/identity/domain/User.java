@@ -1,6 +1,7 @@
 package com.ticketing.system.identity.domain;
 
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.domain.TextLimits;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -48,6 +49,7 @@ public class User implements InvariantChecked {
 
     /** Constructs a user with the given assigned id, credentials and age, enforcing the invariants. */
     public User(int userId, String username, String email, String password, int age) {
+        TextLimits.requireFits("Username", username);
         this.userId = userId;       // assigned id (minted by the repository)
         this.username = username;   // display / login name
         this.email = email;         // unique contact + secondary login key

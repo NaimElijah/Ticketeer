@@ -108,20 +108,26 @@ public class JpaOrderReceiptRepository implements OrderReceiptRepository {
         if (filters == null) {
             return data.findAll();
         }
+        // No event can match an empty event list, as the in-memory adapter reads it; an "in ()" predicate
+        // is not valid SQL, so the list cannot simply be passed on.
+        if (filters.eventIds() != null && filters.eventIds().isEmpty()) {
+            return List.of();
+        }
         Specification<OrderReceipt> spec = (root, query, cb) -> {
             query.distinct(true);
             List<Predicate> predicates = new ArrayList<>();
             if (filters.buyerUserId() != null) {
                 predicates.add(cb.equal(root.get("userid"), filters.buyerUserId()));
             }
-            if (filters.eventIds() != null && !filters.eventIds().isEmpty()) {
+            if (filters.eventIds() != null) {
                 predicates.add(root.join("receiptLines").get("eventid").in(filters.eventIds()));
             }
             if (filters.fromDate() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("purchaseTime"), filters.fromDate().atStartOfDay()));
             }
             if (filters.toDate() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("purchaseTime"), filters.toDate().atTime(23, 59, 59)));
+                // The end date runs up to the next midnight: purchase times carry fractions of a second.
+                predicates.add(cb.lessThan(root.get("purchaseTime"), filters.toDate().plusDays(1).atStartOfDay()));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };

@@ -3,7 +3,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.context.annotation.Profile;
-import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,8 +26,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * tickets ever see. {@link #nextId} seeds its sequence from {@code max(ticketId)} on first
  * use, so a restarted process never reissues an id a previous boot persisted (#19). Like the
  * other aggregates' sequences it assumes a single application instance per database.
- * {@link #saveAll} delegates to {@code data.saveAll} for UC-20 bulk pre-generation. The
- * writes are {@code @Transactional} so the adapter is self-sufficient before the service
+ * {@link #save} is {@code @Transactional} so the adapter is self-sufficient before the service
  * layer gains transactions (#359); reads inherit Spring Data's read-only tx.
  */
 @Repository
@@ -84,34 +82,7 @@ public class JpaTicketRepository implements TicketRepository {
     }
 
     @Override
-    public List<Ticket> findAvailableInZone(int eventId, int zoneId, int quantity) {
-        if (quantity <= 0) {
-            return List.of();
-        }
-        return data.findAvailableInZone(eventId, zoneId, Limit.of(quantity));
-    }
-
-    @Override
-    public int countAvailableInZone(int eventId, int zoneId) {
-        return (int) data.countAvailableInZone(eventId, zoneId);
-    }
-
-    @Override
     public List<Ticket> findByOrderReceiptId(int orderReceiptId) {
         return data.findByOrderReceiptId(orderReceiptId);
-    }
-
-    @Override
-    public List<Ticket> findByHolderUserId(int holderUserId) {
-        return data.findByHolderUserId(holderUserId);
-    }
-
-    @Override
-    @Transactional
-    public void saveAll(List<Ticket> tickets) {
-        if (tickets == null) {
-            return;
-        }
-        data.saveAll(tickets);
     }
 }

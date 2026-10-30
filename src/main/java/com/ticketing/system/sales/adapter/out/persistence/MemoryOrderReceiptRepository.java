@@ -151,8 +151,9 @@ public class MemoryOrderReceiptRepository implements OrderReceiptRepository {
 
                     // Filter by date range if provided
                     if (filters.toDate() != null) {
-                        matches &= !receipt.getPurchaseTime()
-                                .isAfter(filters.toDate().atTime(23, 59, 59));
+                        // The end date runs up to the next midnight: purchase times carry fractions of a second.
+                        matches &= receipt.getPurchaseTime()
+                                .isBefore(filters.toDate().plusDays(1).atStartOfDay());
                     }
 
                     return matches;

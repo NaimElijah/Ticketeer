@@ -3,6 +3,7 @@ package com.ticketing.system.unit.domain;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,7 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.support.BaseDomainTest;
 
@@ -45,6 +47,11 @@ class EventTest extends BaseDomainTest {
     private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
     // 16:30Z on 15 July 2027 is 19:30 in Jerusalem (IDT, UTC+3).
     private static final Instant JERUSALEM_1930 = Instant.parse("2027-07-15T16:30:00Z");
+    // events.name, events.description and event_artists.artist_name are varchar(255)
+    // (V1__baseline_schema.sql); longer text must be refused by the domain, not by the insert (#186).
+    private static final int TEXT_LIMIT = 255;
+    private static final ShowDate FIXED_SHOW = new ShowDate(
+            LocalDateTime.of(2027, 8, 15, 19, 0), LocalDateTime.of(2027, 8, 15, 22, 0));
 
     private InventoryZone zone;
     private Event event;
@@ -602,6 +609,115 @@ class EventTest extends BaseDomainTest {
         assertEquals(ZoneId.of("Europe/London"), e.getTimeZone());
     }
 
+    // -- text length (#186) ------------------------------------------------
+
+    @Test
+    void GivenNameOf256Characters_WhenConstructed_ThenRefusedNamingTheLimit() {
+        String name = "n".repeat(TEXT_LIMIT + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> eventWithText(name, "A description", ARTISTS));
+
+        assertNamesTheLimit(ex);
+    }
+
+    @Test
+    void GivenNameOf255Characters_WhenConstructed_ThenAccepted() {
+        String name = "n".repeat(TEXT_LIMIT);
+
+        Event e = track(eventWithText(name, "A description", ARTISTS));
+
+        assertEquals(name, e.getName());
+    }
+
+    @Test
+    void GivenDescriptionOf256Characters_WhenConstructed_ThenRefusedNamingTheLimit() {
+        String description = "d".repeat(TEXT_LIMIT + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> eventWithText("Concert", description, ARTISTS));
+
+        assertNamesTheLimit(ex);
+    }
+
+    @Test
+    void GivenDescriptionOf255Characters_WhenConstructed_ThenAccepted() {
+        String description = "d".repeat(TEXT_LIMIT);
+
+        Event e = track(eventWithText("Concert", description, ARTISTS));
+
+        assertEquals(description, e.getDescription());
+    }
+
+    @Test
+    void GivenOneArtistNameOf256Characters_WhenConstructed_ThenRefusedNamingTheLimit() {
+        List<String> artists = List.of("Artist 1", "a".repeat(TEXT_LIMIT + 1));
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> eventWithText("Concert", "A description", artists));
+
+        assertNamesTheLimit(ex);
+    }
+
+    @Test
+    void GivenArtistNameOf255Characters_WhenConstructed_ThenAccepted() {
+        List<String> artists = List.of("Artist 1", "a".repeat(TEXT_LIMIT));
+
+        Event e = track(eventWithText("Concert", "A description", artists));
+
+        assertEquals(artists, e.getArtistsNames());
+    }
+
+    @Test
+    void GivenNameOf256Characters_WhenEditDetails_ThenRefusedNamingTheLimit() {
+        String name = "n".repeat(TEXT_LIMIT + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> event.editDetails(name, null, null, null, null, null, JERUSALEM_1930));
+
+        assertNamesTheLimit(ex);
+    }
+
+    // editDetails promises that a rejected edit leaves the aggregate untouched.
+    @Test
+    void GivenNameOf256Characters_WhenEditDetails_ThenTheNameIsKept() {
+        String name = "n".repeat(TEXT_LIMIT + 1);
+
+        assertThrows(BusinessRuleViolationException.class,
+                () -> event.editDetails(name, "New Description", null, null, null, null, JERUSALEM_1930));
+
+        assertEquals("Concert", event.getName());
+        assertNull(event.getDescription(), "the description in the same rejected edit is not applied");
+    }
+
+    @Test
+    void GivenNameOf255Characters_WhenEditDetails_ThenApplied() {
+        String name = "n".repeat(TEXT_LIMIT);
+
+        event.editDetails(name, null, null, null, null, null, JERUSALEM_1930);
+
+        assertEquals(name, event.getName());
+    }
+
+    @Test
+    void GivenDescriptionOf256Characters_WhenEditDetails_ThenRefusedNamingTheLimit() {
+        String description = "d".repeat(TEXT_LIMIT + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> event.editDetails(null, description, null, null, null, null, JERUSALEM_1930));
+
+        assertNamesTheLimit(ex);
+    }
+
+    @Test
+    void GivenDescriptionOf255Characters_WhenEditDetails_ThenApplied() {
+        String description = "d".repeat(TEXT_LIMIT);
+
+        event.editDetails(null, description, null, null, null, null, JERUSALEM_1930);
+
+        assertEquals(description, event.getDescription());
+    }
+
     // -- ON_SALE / SOLD_OUT -> COMPLETED transition ----------------------
 
     @Test
@@ -662,6 +778,17 @@ class EventTest extends BaseDomainTest {
     }
 
     // test helper functions:
+
+    private Event eventWithText(String name, String description, List<String> artists) {
+        return new Event(EVENT_ID, name, description, 4.5, artists, EventCategory.CONCERT, COMPANY_ID,
+                EventStatus.SCHEDULED, new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100))),
+                List.of(FIXED_SHOW), JERUSALEM, acceptingPurchasePolicy(), noDiscountPolicy());
+    }
+
+    private static void assertNamesTheLimit(BusinessRuleViolationException ex) {
+        assertTrue(ex.getMessage().contains(String.valueOf(TEXT_LIMIT)),
+                () -> "the refusal names the " + TEXT_LIMIT + "-character limit, was: " + ex.getMessage());
+    }
 
     private Event scheduledEventInZone(ZoneId timeZone, ShowDate show) {
         return track(new Event(EVENT_ID, "Concert", 4.5, ARTISTS, EventCategory.CONCERT, COMPANY_ID,

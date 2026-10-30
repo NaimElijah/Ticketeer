@@ -69,6 +69,8 @@ class InventoryServiceTest {
     @BeforeEach
     void setUp() {
         eventRepository = mock(EventRepository.class);
+        // A sale loads its events through findForSale; each test stubs the events once, on findById.
+        when(eventRepository.findForSale(anyInt())).thenAnswer(call -> eventRepository.findById(call.<Integer>getArgument(0)));
         companyRepository = mock(ProductionCompanyRepository.class);
         service = new InventoryService(eventRepository, companyRepository);
     }

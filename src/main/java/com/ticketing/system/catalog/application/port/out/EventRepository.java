@@ -12,6 +12,19 @@ public interface EventRepository extends IRepository<Event, Integer> {
 
     Event findById(int eventId);
 
+    /**
+     * Loads the event for a sale that commits in the caller's transaction. On a database, a row lock is
+     * held until that transaction ends: on PostgreSQL a shared one, which other sales may hold at the same
+     * time; on H2, which has none, an exclusive one. A write to the event row, such as a cancel's
+     * CANCELED, waits for the sale to commit. During a long run of overlapping sales it can keep waiting,
+     * because a new shared lock does not queue behind it (ADR-015). The cancel's refund then
+     * sees the sale's receipt, instead of the sale committing on a cancelled event with no refund. The
+     * in-memory adapter relies on the buyer and structural locks instead.
+     *
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
+     */
+    Event findForSale(int eventId);
+
     boolean save(Event event);
 
     /**

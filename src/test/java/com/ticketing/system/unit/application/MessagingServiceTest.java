@@ -21,6 +21,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.dto.ComplaintFilterDTO;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.OutreachRequestDTO;
@@ -65,8 +66,14 @@ class MessagingServiceTest {
     private static final String ADMIN_TOKEN = "admin-tok";
     private static final int ADMIN_ID = 1;
     private static final int COMPANY_ID = 5;
+    // Member and company ids come from separate sequences, so a member often has its company's id.
+    private static final String SHARED_ID_MEMBER_TOKEN = "shared-id-member-tok";
     // Messages are stamped from the injected clock, as UTC wall time (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
+    // submitComplaint appends "\n\n[Related: EVENT:123]" (22 characters) to the details, and the
+    // stored body is varchar(255), so with that reference the details may have 255 - 22 = 233 (#186).
+    private static final String RELATED_REF = "EVENT:123";
+    private static final int DETAILS_ALLOWED_WITH_REF = 233;
 
     private ConversationRepository conversationRepository;
     private SessionManager sessionManager;
@@ -120,6 +127,10 @@ class MessagingServiceTest {
 
         User member = plainUser(MEMBER_ID);
         when(userRepository.getUserById(MEMBER_ID)).thenReturn(member);
+
+        stubToken(SHARED_ID_MEMBER_TOKEN, COMPANY_ID);
+        User sharedIdMember = plainUser(COMPANY_ID);
+        when(userRepository.getUserById(COMPANY_ID)).thenReturn(sharedIdMember);
     }
 
     // Mockito matcher for a NewMessageNotice published to the given recipient, optionally
@@ -192,6 +203,41 @@ class MessagingServiceTest {
         assertTrue(service.viewAllComplaints(ADMIN_TOKEN, null).stream()
                         .anyMatch(c -> dto.conversationId().equals(c.conversationId()) && "Refund".equals(c.subject())),
                 "the complaint reaches the admins through their queue");
+    }
+
+    @Test
+    void GivenDetailsThatFitAloneButNotWithTheReference_WhenSubmitComplaint_ThenRefusedNamingTheAllowance() {
+        String details = "d".repeat(DETAILS_ALLOWED_WITH_REF + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> service.submitComplaint(MEMBER_TOKEN,
+                        new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", details, RELATED_REF)));
+
+        assertTrue(ex.getMessage().contains(String.valueOf(DETAILS_ALLOWED_WITH_REF)),
+                () -> "the refusal tells the member the details may have " + DETAILS_ALLOWED_WITH_REF
+                        + " characters, was: " + ex.getMessage());
+    }
+
+    // The reference shares the details' column. One that fills it is a caller's mistake, not a limit to
+    // tell the member about: the allowance would be negative ("at most -8 characters").
+    @Test
+    void GivenAReferenceThatLeavesNoRoomForDetails_WhenSubmitComplaint_ThenRefusedAndNothingIsFiled() {
+        String oversizedRef = "x".repeat(TextLimits.MAX_TEXT_LENGTH);
+
+        assertThrows(IllegalArgumentException.class, () -> service.submitComplaint(MEMBER_TOKEN,
+                new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Charged twice.", oversizedRef)));
+
+        assertTrue(service.viewMyConversations(MEMBER_TOKEN).isEmpty(), "no complaint is filed");
+    }
+
+    @Test
+    void GivenDetailsThatFitWithTheReference_WhenSubmitComplaint_ThenTheComplaintIsFiled() {
+        String details = "d".repeat(DETAILS_ALLOWED_WITH_REF);
+
+        ConversationDTO dto = service.submitComplaint(MEMBER_TOKEN,
+                new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", details, RELATED_REF));
+
+        assertEquals("COMPLAINT", dto.type());
     }
 
     // Notifications carry only a recipient user id, and member and admin ids share one id space, so a
@@ -458,6 +504,32 @@ class MessagingServiceTest {
 
         var conv = conversationRepository.findById(created.conversationId()).orElseThrow();
         assertTrue(conv.getMessages().get(0).isRead());
+    }
+
+    // Each call must pass the side it resolved: with the id alone, the member and the company that share
+    // it would each take the other's messages for their own. The member writes twice, so the two counts
+    // differ and a call passing the wrong side cannot come out right.
+    @Test
+    void GivenAMemberWithTheCompanysId_WhenBothWrite_ThenEachInboxCountsOnlyTheOthersMessagesUnread() {
+        ConversationDTO created = service.startConversation(SHARED_ID_MEMBER_TOKEN, inquiryReq());
+        service.sendMessage(OWNER_TOKEN, new SendMessageRequestDTO(created.conversationId(), 0, null, "Yes, paid lot."));
+        service.sendMessage(SHARED_ID_MEMBER_TOKEN,
+                new SendMessageRequestDTO(created.conversationId(), 0, null, "How far is it?"));
+
+        assertEquals(1, service.viewMyConversations(SHARED_ID_MEMBER_TOKEN).get(0).unreadCountForViewer(),
+                "the company's reply is unread for the member");
+        assertEquals(2, service.viewCompanyInbox(OWNER_TOKEN, COMPANY_ID).get(0).unreadCountForViewer(),
+                "both of the member's messages are unread for the company");
+    }
+
+    @Test
+    void GivenAMemberWithTheCompanysId_WhenTheCompanyMarksTheMembersMessageRead_ThenTheCompanyHasNothingUnread() {
+        ConversationDTO created = service.startConversation(SHARED_ID_MEMBER_TOKEN, inquiryReq());
+        String memberMessage = created.messages().get(0).messageId();
+
+        service.markMessageAsRead(OWNER_TOKEN, created.conversationId(), memberMessage);
+
+        assertEquals(0, service.viewCompanyInbox(OWNER_TOKEN, COMPANY_ID).get(0).unreadCountForViewer());
     }
 
     @Test

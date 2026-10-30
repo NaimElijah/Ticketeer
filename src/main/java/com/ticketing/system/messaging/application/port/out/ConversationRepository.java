@@ -35,9 +35,6 @@ public interface ConversationRepository extends IRepository<Conversation, String
     // Company-side support inbox (II.4.4) — conversations where the company is counterparty.
     List<Conversation> findByCompanyAsCounterparty(int companyId);
 
-    // Member inbox unread badge.
-    int countUnreadForMember(int memberId);
-
     // Admin filter for complaint queues — by status and date.
     List<Conversation> findByTypeAndStatus(ConversationType type, ConversationStatus status);
 }

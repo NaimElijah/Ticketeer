@@ -5,12 +5,15 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
+import com.ticketing.system.shared.persistence.ConstraintViolations;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
@@ -27,13 +30,17 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  *
  * <p>{@link #save} reproduces the in-memory identity collapse: a member cart is unique per userId and
  * a guest cart per sessionId, even though each {@link ActiveOrder} carries a distinct orderKey. So a
- * save first entity-deletes any <em>other</em> cart sharing this cart's identity (the entity delete
- * cascades the item collection), then persists this one. Writes are {@code @Transactional} so the
+ * save first entity-deletes any <em>other</em> cart sharing this cart's identity that holds nothing (the
+ * entity delete cascades the item collection), refuses if one still holds lines, then persists this
+ * one. {@code uk_active_orders_user_id} backs the member side in the database, because the order lock
+ * here is a no-op. Writes are {@code @Transactional} so the
  * adapter is self-sufficient before the service layer gains transactions (#359).
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaActiveOrderRepository implements ActiveOrderRepository {
+
+    private static final String USER_CART_UNIQUE_CONSTRAINT = "uk_active_orders_user_id";
 
     private final SpringDataActiveOrderRepository data;
 
@@ -47,18 +54,40 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
     @Override
     public void unlock(String id) { /* no-op */ }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flushes, so a member cart another request stored first fails here, on
+     * {@code uk_active_orders_user_id}, as {@link ConcurrentReservationException}, rather than at a later
+     * flush or at commit, outside the adapter. Any other integrity violation propagates unchanged.
+     */
     @Override
     @Transactional
     public void save(ActiveOrder activeOrder) {
-        List<ActiveOrder> sameIdentity = activeOrder.isMember()
-                ? data.findByUserId(activeOrder.getUserId())
-                : data.findBySessionIdAndUserIdIsNull(activeOrder.getSessionId());
-        for (ActiveOrder existing : sameIdentity) {
-            if (!existing.getOrderKey().equals(activeOrder.getOrderKey())) {
-                data.delete(existing); // entity delete cascades the @ElementCollection items
+        // The whole body is guarded, not just the final write: a managed cart that was given a user id
+        // (the login merge) is flushed by the first query below, and that UPDATE is where the key breaks.
+        try {
+            List<ActiveOrder> sameIdentity = activeOrder.isMember()
+                    ? data.findByUserId(activeOrder.getUserId())
+                    : data.findBySessionIdAndUserIdIsNull(activeOrder.getSessionId());
+            for (ActiveOrder existing : sameIdentity) {
+                if (!existing.getOrderKey().equals(activeOrder.getOrderKey())) {
+                    if (!existing.getItems().isEmpty()) {
+                        throw new ConcurrentReservationException(ActiveOrderSaveRules.ANOTHER_CART_HOLDS_LINES, null);
+                    }
+                    data.delete(existing); // entity delete cascades the @ElementCollection items
+                }
             }
+            // Hibernate flushes inserts before deletes, so the replaced cart's delete must reach the
+            // database first, or this cart's insert would break uk_active_orders_user_id.
+            data.flush();
+            data.saveAndFlush(activeOrder);
+        } catch (DataIntegrityViolationException e) {
+            if (ConstraintViolations.violates(e, USER_CART_UNIQUE_CONSTRAINT)) {
+                throw new ConcurrentReservationException(ActiveOrderSaveRules.ANOTHER_CART_HOLDS_LINES, e);
+            }
+            throw e;
         }
-        data.save(activeOrder);
     }
 
     @Override
@@ -82,6 +111,10 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
         }
         // Idempotent + cascades the item collection; deleting an unknown cart is a no-op.
         data.findById(activeOrder.getOrderKey()).ifPresent(data::delete);
+        // Hibernate runs a flush's updates before its deletes. The login merge deletes the member's old
+        // cart and then gives the guest cart that member's user id; if both waited for one flush, the
+        // update would break uk_active_orders_user_id before the delete ran.
+        data.flush();
     }
 
     @Override

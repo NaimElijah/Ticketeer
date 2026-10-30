@@ -21,10 +21,6 @@ import com.ticketing.system.messaging.domain.ParticipantType;
  * In-memory {@link ConversationRepository}. Lets Spring wire MessagingService.
  * Used only by the in-memory test suite ({@code test} with {@code memory});
  * every other run gets {@link JpaConversationRepository}.
- *
- * <p>Read-tracking ({@code countUnreadForMember}) is computed by summing
- * {@link Conversation#unreadCountFor(int)} over the conversations where the
- * member is a participant.
  */
 @Repository
 @Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
@@ -112,21 +108,6 @@ public class MemoryConversationRepository implements ConversationRepository {
             }
         }
         return result;
-    }
-
-    @Override
-    public int countUnreadForMember(int memberId) {
-        int total = 0;
-        for (Conversation c : conversationsById.values()) {
-            boolean isParticipant = (c.getInitiatorType() == ParticipantType.MEMBER
-                            && c.getInitiatorId() == memberId)
-                    || (c.getCounterpartyType() == ParticipantType.MEMBER
-                            && c.getCounterpartyId() == memberId);
-            if (isParticipant) {
-                total += c.unreadCountFor(memberId);
-            }
-        }
-        return total;
     }
 
     @Override

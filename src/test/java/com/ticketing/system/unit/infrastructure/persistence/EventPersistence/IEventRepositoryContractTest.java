@@ -2,12 +2,14 @@ package com.ticketing.system.unit.infrastructure.persistence.EventPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,7 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.catalog.domain.EventCategory;
@@ -41,6 +44,11 @@ public abstract class IEventRepositoryContractTest {
     @BeforeEach
     void setUp() {
         eventRepo = newRepository();
+    }
+
+    /** Runs a call the way a sale makes it: inside a transaction, on an adapter that needs one. */
+    protected <T> T inSaleTransaction(Supplier<T> call) {
+        return call.get();
     }
 
     // Builds a minimal valid Event with specified category and one zone priced at
@@ -91,6 +99,23 @@ public abstract class IEventRepositoryContractTest {
         assertNotNull(found);
         assertEquals(1, found.getId());
         assertEquals("Rock Night", found.getName());
+    }
+
+    // === findForSale: the event a sale commits against (the Jpa lock itself is CancelDuringCheckoutJpaTest's) ===
+
+    @Test
+    void GivenASavedEvent_WhenFindForSale_ThenItIsThatEvent() {
+        eventRepo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        Event found = inSaleTransaction(() -> eventRepo.findForSale(1));
+
+        assertEquals(1, found.getId());
+        assertEquals(EventStatus.ON_SALE, found.getStatus());
+    }
+
+    @Test
+    void GivenNoSuchEvent_WhenFindForSale_ThenEventNotFound() {
+        assertThrows(EventNotFoundException.class, () -> inSaleTransaction(() -> eventRepo.findForSale(999)));
     }
 
     @Test
@@ -311,6 +336,41 @@ public abstract class IEventRepositoryContractTest {
                 null, null, null, null, null));
 
         assertEquals(1, result.size());
+    }
+
+    // The end date covers its whole day, as the in-memory adapter compares dates: a show starting in its
+    // last second matches. A bound of 23:59:59 dropped any start with a fraction of a second.
+    @Test
+    void GivenAShowStartingInTheLastSecondOfTheEndDate_WhenSearchingUpToThatDate_ThenTheEventMatches() {
+        LocalDateTime lastSecond = LocalDateTime.of(2099, 6, 1, 23, 59, 59, 500_000_000);
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
+        eventRepo.save(new Event(1, "Late Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(lastSecond, lastSecond.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0)));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null,
+                LocalDate.of(2099, 6, 1), LocalDate.of(2099, 6, 1),
+                null, null, null, null, null));
+
+        assertEquals(1, result.size());
+    }
+
+    // The end bound is the next midnight, exclusive: a show starting at that midnight is on the next day.
+    @Test
+    void GivenAShowStartingAtTheMidnightAfterTheEndDate_WhenSearchingUpToThatDate_ThenTheEventDoesNotMatch() {
+        LocalDateTime nextMidnight = LocalDateTime.of(2099, 6, 2, 0, 0);
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
+        eventRepo.save(new Event(1, "Midnight Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(nextMidnight, nextMidnight.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0)));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null,
+                LocalDate.of(2099, 6, 1), LocalDate.of(2099, 6, 1),
+                null, null, null, null, null));
+
+        assertEquals(0, result.size());
     }
 
     @Test

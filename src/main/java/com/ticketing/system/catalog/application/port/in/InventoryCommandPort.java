@@ -16,7 +16,8 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  * <h2>Locking contract (read carefully — concurrency-critical)</h2>
  * The Event carries a shared "buyer operation" read lock ({@code lockForBuyerOperation}) that many
  * buyers may hold at once and that blocks only structural/lifecycle edits. On the Jpa adapters
- * these locks are no-ops and correctness comes from JPA {@code @Version} optimistic locking; on the
+ * these locks are no-ops and correctness comes from JPA {@code @Version} optimistic locking, except for
+ * the event row lock that {@link #validateEventsOnSale} takes for a sale (ADR-015); on the
  * in-memory adapters (test suite only) they are real reentrant read/write locks. Methods here fall into two
  * groups, and each method's Javadoc states which it is:
  * <ul>
@@ -30,8 +31,9 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  *       these steps are atomic against structural edits. These methods therefore do NOT lock; they
  *       rely on the caller's held lock (which also satisfies the in-memory repository's
  *       save-under-lock requirement, since the same thread holds the read lock).</li>
- *   <li>Pure reads ({@link #priceTicket}, {@link #eventName}, {@link #validatePurchasePolicy},
- *       {@link #validateEventsOnSale}) take no lock.</li>
+ *   <li>Pure reads ({@link #priceTicket}, {@link #eventName}, {@link #validatePurchasePolicy}) take
+ *       no lock. {@link #validateEventsOnSale} takes a row lock on each event for the caller's
+ *       transaction: shared on PostgreSQL, exclusive on H2.</li>
  * </ul>
  *
  * <h2>Transaction contract</h2>
@@ -130,9 +132,14 @@ public interface InventoryCommandPort {
     void validatePurchasePolicy(int eventId, int buyerId, Integer buyerAge, int quantity);
 
     /**
-     * Validates that every given event still exists and is sellable (ON_SALE or SOLD_OUT). Pure read.
+     * Validates that every given event still exists and is sellable (ON_SALE or SOLD_OUT), and holds each
+     * event against a lifecycle write until the caller's transaction ends ({@code EventRepository#findForSale}).
+     * Checkout Phase 3 calls it first in the transaction that commits the sale, so a cancel that lands
+     * meanwhile waits for the sale and then refunds it.
      *
      * @param eventIds the events to check
+     * @throws org.springframework.transaction.IllegalTransactionStateException on the Jpa adapters, if
+     *     the caller has no transaction
      */
     void validateEventsOnSale(List<Integer> eventIds);
 

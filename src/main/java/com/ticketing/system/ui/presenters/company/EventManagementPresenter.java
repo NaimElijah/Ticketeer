@@ -126,7 +126,7 @@ public class EventManagementPresenter {
         } catch (InvalidTokenException e) {
             return new CreateOutcome.NotAuthenticated();
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return new CreateOutcome.InvalidInput(e.getMessage());
+            return new CreateOutcome.InvalidInput(ServiceErrors.userMessage(e));
         } catch (RuntimeException e) {
             return new CreateOutcome.Failure(ServiceErrors.userMessage(e));
         }

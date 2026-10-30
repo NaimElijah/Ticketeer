@@ -27,6 +27,11 @@ class ConversationTest extends BaseDomainTest {
     private static final int COMPANY_ID = 5;
     private static final int ADMIN_ID = 7;
     private static final int OUTSIDER_ID = 99;
+    private static final int SHARED_ID = 3;
+    // conversations.subject is varchar(255) (V1__baseline_schema.sql); a longer subject must be
+    // refused by the domain, not by the database insert (#186).
+    private static final int SUBJECT_LIMIT = 255;
+    private static final LocalDateTime STARTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private Conversation inquiry() {
         return track(Conversation.start(ConversationType.INQUIRY,
@@ -126,29 +131,66 @@ class ConversationTest extends BaseDomainTest {
         Conversation c = inquiry();
         String firstId = c.getMessages().get(0).getMessageId(); // authored by the member
         // The sender marking their own message is a no-op (stays unread for the recipient).
-        c.markMessageRead(firstId, MEMBER_ID);
-        assertEquals(1, c.unreadCountFor(COMPANY_ID));
+        c.markMessageRead(firstId, MEMBER_ID, ParticipantType.MEMBER);
+        assertEquals(1, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
         // The recipient marks it read.
-        c.markMessageRead(firstId, COMPANY_ID);
-        assertEquals(0, c.unreadCountFor(COMPANY_ID));
+        c.markMessageRead(firstId, COMPANY_ID, ParticipantType.COMPANY);
+        assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
         // Idempotent.
-        c.markMessageRead(firstId, COMPANY_ID);
-        assertEquals(0, c.unreadCountFor(COMPANY_ID));
+        c.markMessageRead(firstId, COMPANY_ID, ParticipantType.COMPANY);
+        assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
     }
 
     @Test
     void markMessageRead_missingMessage_throws() {
         Conversation c = inquiry();
         assertThrows(MessageNotFoundException.class,
-                () -> c.markMessageRead("no-such-id", COMPANY_ID));
+                () -> c.markMessageRead("no-such-id", COMPANY_ID, ParticipantType.COMPANY));
     }
 
     @Test
     void unreadCountFor_excludesOwnMessages() {
         Conversation c = inquiry();                                   // 1 message from the member
         c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "reply", LocalDateTime.now());   // 1 message from the company
-        assertEquals(1, c.unreadCountFor(MEMBER_ID));   // only the company's message
-        assertEquals(1, c.unreadCountFor(COMPANY_ID));  // only the member's message
+        assertEquals(1, c.unreadCountFor(MEMBER_ID, ParticipantType.MEMBER));    // only the company's message
+        assertEquals(1, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));  // only the member's message
+    }
+
+    // Member and company ids come from separate sequences that both start at 1, so a company often
+    // shares its id with the member it writes to. A message is the reader's own only when both its
+    // sender id and its sender type are the reader's.
+    @Test
+    void GivenACompanyReplyToTheMemberWhoSharesItsId_WhenEachSideCountsUnread_ThenEachCountsTheOthersMessage() {
+        Conversation c = inquiryBetweenSharedIds();
+        c.addMessage(SHARED_ID, ParticipantType.COMPANY, "Yes, lot B.", STARTED_AT.plusMinutes(1));
+
+        assertEquals(1, c.unreadCountFor(SHARED_ID, ParticipantType.MEMBER), "the company's reply is unread for the member");
+        assertEquals(1, c.unreadCountFor(SHARED_ID, ParticipantType.COMPANY), "the member's message is unread for the company");
+    }
+
+    @Test
+    void GivenAMemberMessageToTheCompanyThatSharesItsId_WhenTheCompanyMarksItRead_ThenItIsRead() {
+        Conversation c = inquiryBetweenSharedIds();
+        String memberMessage = c.getMessages().get(0).getMessageId();
+
+        c.markMessageRead(memberMessage, SHARED_ID, ParticipantType.COMPANY);
+
+        assertTrue(c.getMessages().get(0).isRead(), "the company read the member's message");
+    }
+
+    @Test
+    void GivenAMemberMessageToTheCompanyThatSharesItsId_WhenTheMemberMarksItsOwnMessage_ThenItStaysUnread() {
+        Conversation c = inquiryBetweenSharedIds();
+        String memberMessage = c.getMessages().get(0).getMessageId();
+
+        c.markMessageRead(memberMessage, SHARED_ID, ParticipantType.MEMBER);
+
+        assertFalse(c.getMessages().get(0).isRead(), "only the other side reads a message");
+    }
+
+    private Conversation inquiryBetweenSharedIds() {
+        return track(Conversation.start(ConversationType.INQUIRY, SHARED_ID, ParticipantType.MEMBER,
+                SHARED_ID, ParticipantType.COMPANY, "Parking?", "Is there parking near the venue?", STARTED_AT));
     }
 
     @Test
@@ -164,5 +206,31 @@ class ConversationTest extends BaseDomainTest {
         c.transitionToClosed();
         c.transitionToClosed();
         assertTrue(c.isClosed());
+    }
+
+    // -- subject length (#186) --------------------------------------------------
+
+    @Test
+    void GivenSubjectOf256Characters_WhenStart_ThenRefusedNamingTheLimit() {
+        String subject = "s".repeat(SUBJECT_LIMIT + 1);
+
+        BusinessRuleViolationException ex = assertThrows(BusinessRuleViolationException.class,
+                () -> Conversation.start(ConversationType.INQUIRY,
+                        MEMBER_ID, ParticipantType.MEMBER, COMPANY_ID, ParticipantType.COMPANY,
+                        subject, "Is there parking near the venue?", STARTED_AT));
+
+        assertTrue(ex.getMessage().contains(String.valueOf(SUBJECT_LIMIT)),
+                () -> "the refusal names the " + SUBJECT_LIMIT + "-character limit, was: " + ex.getMessage());
+    }
+
+    @Test
+    void GivenSubjectOf255Characters_WhenStart_ThenAccepted() {
+        String subject = "s".repeat(SUBJECT_LIMIT);
+
+        Conversation c = track(Conversation.start(ConversationType.INQUIRY,
+                MEMBER_ID, ParticipantType.MEMBER, COMPANY_ID, ParticipantType.COMPANY,
+                subject, "Is there parking near the venue?", STARTED_AT));
+
+        assertEquals(subject, c.getSubject());
     }
 }

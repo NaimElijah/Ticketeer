@@ -2,6 +2,7 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,6 +45,8 @@ import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
@@ -138,6 +141,8 @@ class CheckoutServiceTest {
     void setUp() {
         mockActiveOrderRepo = mock(ActiveOrderRepository.class);
         mockEventRepo = mock(EventRepository.class);
+        // A sale loads its events through findForSale; each test stubs the events once, on findById.
+        when(mockEventRepo.findForSale(anyInt())).thenAnswer(call -> mockEventRepo.findById(call.<Integer>getArgument(0)));
         mockTicketRepo = mock(TicketRepository.class);
         // Ticket ids are minted by the repository (#19), starting at TICKET_ID_1 for each test.
         AtomicInteger ticketIds = new AtomicInteger(TICKET_ID_1);
@@ -842,6 +847,94 @@ void GivenTicketFromDifferentEventDoesNotExist_WhenCheckout_ThenClearCartAndRetu
     assertEquals(0, zone1.getReservedAmount());
 }
    @Test
+void GivenPhase3LosesOneVersionRace_WhenCheckout_ThenPhase3RunsAgainAndThePurchaseSucceedsWithOneCharge() {
+    arrangeOneStandingLineCheckout();
+    doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+            .doNothing()
+            .when(mockOrderReceiptRepo).save(any());
+
+    CheckoutResultDTO result = checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+    assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId());
+    verify(mockOrderReceiptRepo, times(2)).save(any());
+    verify(mockPaymentGateway, times(1)).charge(any(PaymentRequestDTO.class));
+    verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+}
+
+// On PostgreSQL a sale can also be the victim of a deadlock, or wait out a lock: Phase 3 is just as safe to
+// run again after a pessimistic failure as after a lost version race.
+@Test
+void GivenPhase3IsADeadlockVictimOnce_WhenCheckout_ThenPhase3RunsAgainAndThePurchaseSucceedsWithOneCharge() {
+    arrangeOneStandingLineCheckout();
+    doThrow(new PessimisticLockingFailureException("deadlock detected"))
+            .doNothing()
+            .when(mockOrderReceiptRepo).save(any());
+
+    CheckoutResultDTO result = checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+    assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId());
+    verify(mockOrderReceiptRepo, times(2)).save(any());
+    verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+}
+
+// The retry is bounded: a race lost on every attempt still fails the checkout, which refunds the charge.
+@Test
+void GivenPhase3LosesEveryVersionRace_WhenCheckout_ThenItFailsAfterThreeAttemptsAndRefundsTheCharge() {
+    arrangeOneStandingLineCheckout();
+    doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+            .when(mockOrderReceiptRepo).save(any());
+
+    RuntimeException failed = assertThrows(RuntimeException.class,
+            () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+    assertInstanceOf(ObjectOptimisticLockingFailureException.class, failed.getCause(),
+            "the checkout fails on the race it kept losing, not on something else");
+    verify(mockOrderReceiptRepo, times(3)).save(any());
+    verify(mockPaymentGateway, times(1)).refund(PAYMENT_TRANSACTION_ID, 100.0);
+}
+
+// The guest path runs its Phase 3 through the same bounded retry.
+@Test
+void GivenGuestPhase3LosesOneVersionRace_WhenGuestCheckout_ThenPhase3RunsAgainAndThePurchaseSucceedsWithOneCharge() {
+    givenValidGuestSession();
+    StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
+    Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+    ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
+    activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+    zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
+    givenGuestOrder(activeOrder);
+    when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+    givenSuccessfulPaymentAndIssuanceWithFlagGuest(1);
+    doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+            .doNothing()
+            .when(mockOrderReceiptRepo).save(any());
+
+    CheckoutResultDTO result = checkoutService.checkoutGuest(
+            VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE);
+
+    assertEquals(100.0, result.totalCharged());
+    verify(mockOrderReceiptRepo, times(2)).save(any());
+    verify(mockPaymentGateway, times(1)).charge(any(PaymentRequestDTO.class));
+    verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+}
+
+// One standing ticket in zone 1 of event 1, charged 100 and issued one barcode.
+private void arrangeOneStandingLineCheckout() {
+    when(mockOrder.validateCanCheckout(any())).thenReturn(true);
+    when(mockOrder.getItems()).thenReturn(List.of(itemEvent1Zone1));
+    when(mockOrder.buy()).thenReturn(List.of(itemEvent1Zone1));
+    when(event1.calculatePrice(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(100.0);
+    when(event1.calculatePriceforoneticket(anyInt(), anyDouble(), any(LocalDateTime.class))).thenReturn(100.0);
+    when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(
+            new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", 100.0, "ILS", NOW));
+    when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(new IssuanceResultDTO(
+            ISSUANCE_TRANSACTION_ID, "issuer", NOW, List.of(new BarcodeDTO("barcode-value-1", "QR"))));
+    StandingZone zone1 = new StandingZone(ZONE_ID_1, "General", 100, 100.0);
+    zone1.reserve(InventorySelection.standing(1));
+    when(event1.getVenueMap().getZone(ZONE_ID_1)).thenReturn(zone1);
+}
+
+@Test
 void GivenValidCheckout_WhenCheckout_ThenReturnCheckoutResultAndSaveTicketAndReceipt() {
     PaymentResultDTO paymentResult = new PaymentResultDTO(
             PAYMENT_TRANSACTION_ID,

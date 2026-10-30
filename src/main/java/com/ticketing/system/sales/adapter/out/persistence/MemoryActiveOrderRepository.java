@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 
 /**
  * In-memory {@link ActiveOrderRepository}, used only by the in-memory test suite ({@code test}
@@ -21,9 +22,10 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
  * <p>
  * Storage is a single {@link CopyOnWriteArrayList} of carts; lookups scan.
  * Identity collapse for {@code save()} matches by userId for Member carts and
- * by sessionId for Guest carts, so re-saving a promoted cart replaces any
- * stale Member-cart row with the same userId (D9a edge: prefer current
- * Guest-turned-Member cart over a prior orphaned Member cart).
+ * by sessionId for Guest carts, so re-saving a promoted cart replaces a stale
+ * Member-cart row with the same userId that holds nothing, and refuses one that
+ * still holds lines (D9a edge: prefer current Guest-turned-Member cart over a
+ * prior orphaned Member cart, whose lines the login merge releases first).
  */
 @Repository
 @Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)
@@ -54,7 +56,14 @@ public class MemoryActiveOrderRepository implements ActiveOrderRepository {
                         "ActiveOrder for " + lockKey + " must be locked via lockForUpdate before saving");
             }
         }
-        // Remove any existing cart with the same identity, then add.
+        // Replace any other cart with the same identity, unless it still holds lines: deleting those would
+        // leave their seats reserved under an order key no cart holds.
+        boolean anotherCartHoldsLines = carts.stream().anyMatch(existing -> sameIdentity(existing, activeOrder)
+                && !existing.getOrderKey().equals(activeOrder.getOrderKey())
+                && !existing.getItems().isEmpty());
+        if (anotherCartHoldsLines) {
+            throw new ConcurrentReservationException(ActiveOrderSaveRules.ANOTHER_CART_HOLDS_LINES, null);
+        }
         carts.removeIf(existing -> sameIdentity(existing, activeOrder));
         carts.add(activeOrder);
     }

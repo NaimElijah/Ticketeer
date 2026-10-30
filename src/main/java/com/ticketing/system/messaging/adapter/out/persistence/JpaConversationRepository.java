@@ -23,8 +23,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops (concurrency via {@code @Version}). {@code save}
  * delegates to {@code data.save} under {@code @Version} (a fresh conversation inserts with its first
  * message; a loaded one updates, cascading new messages and read-flag changes) and is
- * {@code @Transactional}. {@code countUnreadForMember} is computed by the database from message
- * read-state.
+ * {@code @Transactional}.
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
@@ -79,11 +78,6 @@ public class JpaConversationRepository implements ConversationRepository {
     @Override
     public List<Conversation> findByCompanyAsCounterparty(int companyId) {
         return data.findByCounterpartyTypeAndCounterpartyId(ParticipantType.COMPANY, companyId);
-    }
-
-    @Override
-    public int countUnreadForMember(int memberId) {
-        return (int) data.countUnreadForMember(memberId);
     }
 
     @Override

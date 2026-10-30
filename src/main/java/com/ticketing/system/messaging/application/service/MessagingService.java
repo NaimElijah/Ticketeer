@@ -27,6 +27,7 @@ import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationNotFoundException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
@@ -60,6 +61,9 @@ public class MessagingService {
     // Sentinel counterparty id for group descriptors (ADMIN_GROUP has no single entity id).
     private static final int GROUP_SENTINEL = 0;
     private static final int SNIPPET_MAX = 120;
+    // A complaint's related-entity reference is folded into the stored body, after the details.
+    private static final String RELATED_PREFIX = "\n\n[Related: ";
+    private static final String RELATED_SUFFIX = "]";
 
     private final ConversationRepository conversationRepository;
     private final SessionManager sessionManager;
@@ -120,7 +124,7 @@ public class MessagingService {
         notifyCompanyOwners(company, conversation, senderLabel(ParticipantType.MEMBER), request.firstMessageBody());
         log.info("Inquiry {} started by member {} to company {}",
                 conversation.getConversationId(), memberId, companyId);
-        return toDTO(conversation, memberId);
+        return toDTO(conversation, memberId, ParticipantType.MEMBER);
     }
 
 
@@ -161,8 +165,12 @@ public class MessagingService {
     public ConversationDTO submitComplaint(String token, SubmitComplaintRequestDTO request) {
         int memberId = authenticate(token);
         String body = request.body();
-        if (request.relatedEntityRef() != null && !request.relatedEntityRef().isBlank()) {
-            body = body + "\n\n[Related: " + request.relatedEntityRef() + "]";
+        if (hasRelatedRef(request.relatedEntityRef())) {
+            // Checked here rather than left to Message, whose refusal would name the whole body's
+            // limit: the member types only the details, and the reference shares their column (#186).
+            TextLimits.requireAtMost("Complaint details", body,
+                    complaintDetailsLimit(request.relatedEntityRef()));
+            body = body + RELATED_PREFIX + request.relatedEntityRef() + RELATED_SUFFIX;
         }
         Conversation conversation = Conversation.start(
                 ConversationType.COMPLAINT,
@@ -173,7 +181,34 @@ public class MessagingService {
 
         // No notice: the complaint reaches admins through their complaint queue (see class comment).
         log.info("Complaint {} submitted by member {}", conversation.getConversationId(), memberId);
-        return toDTO(conversation, memberId);
+        return toDTO(conversation, memberId, ParticipantType.MEMBER);
+    }
+
+    /**
+     * The most characters a complaint's details may have when it is filed with
+     * {@code relatedEntityRef}, which {@link #submitComplaint} appends to the details in the stored body.
+     *
+     * @param relatedEntityRef the reference the complaint will carry; {@code null} or blank for none
+     * @return the details' allowance, always positive; with no reference, the whole
+     *         {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws IllegalArgumentException if the reference leaves no room for the details. References are
+     *         built by the caller, never typed by the member, so this is the caller's mistake
+     */
+    public static int complaintDetailsLimit(String relatedEntityRef) {
+        if (!hasRelatedRef(relatedEntityRef)) {
+            return TextLimits.MAX_TEXT_LENGTH;
+        }
+        int allowance = TextLimits.MAX_TEXT_LENGTH
+                - (RELATED_PREFIX.length() + relatedEntityRef.length() + RELATED_SUFFIX.length());
+        if (allowance <= 0) {
+            throw new IllegalArgumentException("A related reference of " + relatedEntityRef.length()
+                    + " characters leaves no room for the complaint's details");
+        }
+        return allowance;
+    }
+
+    private static boolean hasRelatedRef(String relatedEntityRef) {
+        return relatedEntityRef != null && !relatedEntityRef.isBlank();
     }
 
 
@@ -264,7 +299,7 @@ public class MessagingService {
         try {
             Conversation conversation = loadConversation(conversationId);
             CallerSide reader = resolveCallerSide(caller, conversation);
-            conversation.markMessageRead(messageId, reader.id());
+            conversation.markMessageRead(messageId, reader.id(), reader.type());
             conversationRepository.save(conversation);
         } finally {
             conversationRepository.unlock(conversationId);
@@ -298,7 +333,7 @@ public class MessagingService {
         int memberId = authenticate(token);
         return conversationRepository.findMemberInbox(memberId).stream()
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, memberId))
+                .map(c -> toDTO(c, memberId, ParticipantType.MEMBER))
                 .toList();
     }
 
@@ -308,7 +343,7 @@ public class MessagingService {
         Caller caller = authenticateCaller(token);
         Conversation conversation = loadConversation(conversationId);
         CallerSide side = resolveCallerSide(caller, conversation); // throws if not a participant
-        return toDTO(conversation, side.id());
+        return toDTO(conversation, side.id(), side.type());
     }
 
     // II.4.4 — company support inbox: all conversations where this company is counterparty.
@@ -321,7 +356,7 @@ public class MessagingService {
         }
         return conversationRepository.findByCompanyAsCounterparty(companyId).stream()
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, companyId))
+                .map(c -> toDTO(c, companyId, ParticipantType.COMPANY))
                 .toList();
     }
 
@@ -337,7 +372,7 @@ public class MessagingService {
         return complaints.stream()
                 .filter(c -> matchesComplaintFilter(c, filters))
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, adminId))
+                .map(c -> toDTO(c, adminId, ParticipantType.ADMIN))
                 .toList();
     }
 
@@ -348,7 +383,7 @@ public class MessagingService {
         int adminId = requireSystemAdmin(token);
         return conversationRepository.findByTypeAndInitiatorType(ConversationType.DIRECT, ParticipantType.ADMIN).stream()
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, adminId))
+                .map(c -> toDTO(c, adminId, ParticipantType.ADMIN))
                 .toList();
     }
 
@@ -361,7 +396,7 @@ public class MessagingService {
         return conversationRepository.findByParticipant(adminId, ParticipantType.ADMIN).stream()
                 .filter(c -> c.getType() == ConversationType.DIRECT)
                 .sorted(Comparator.comparing(Conversation::getLastMessageAt).reversed())
-                .map(c -> toDTO(c, adminId))
+                .map(c -> toDTO(c, adminId, ParticipantType.ADMIN))
                 .toList();
     }
 
@@ -530,8 +565,8 @@ public class MessagingService {
     // ---------------------------------------------------------------------------
 
     // Maps a conversation to its DTO for the given viewer, resolving both parties' display names.
-    private ConversationDTO toDTO(Conversation c, int viewerId) {
-        return new ConversationMapper().toDTO(c, viewerId,
+    private ConversationDTO toDTO(Conversation c, int viewerId, ParticipantType viewerType) {
+        return new ConversationMapper().toDTO(c, viewerId, viewerType,
                 resolveDisplayName(c.getInitiatorId(), c.getInitiatorType()),
                 resolveDisplayName(c.getCounterpartyId(), c.getCounterpartyType()));
     }

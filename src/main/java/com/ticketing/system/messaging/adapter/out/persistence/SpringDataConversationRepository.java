@@ -47,14 +47,4 @@ public interface SpringDataConversationRepository extends JpaRepository<Conversa
             + "(c.counterpartyId = :pid and c.counterpartyType = :ptype)")
     List<Conversation> findByParticipant(@Param("pid") int participantId,
                                          @Param("ptype") ParticipantType participantType);
-
-    /**
-     * Unread badge: messages addressed to the member (not sent by them, not yet read) across the
-     * conversations where the member is a participant — derived directly from message read-state.
-     */
-    @Query("select count(m) from Conversation c join c.messages m where "
-            + "((c.initiatorType = com.ticketing.system.messaging.domain.ParticipantType.MEMBER and c.initiatorId = :memberId) or "
-            + " (c.counterpartyType = com.ticketing.system.messaging.domain.ParticipantType.MEMBER and c.counterpartyId = :memberId)) "
-            + "and m.senderId <> :memberId and m.read = false")
-    long countUnreadForMember(@Param("memberId") int memberId);
 }

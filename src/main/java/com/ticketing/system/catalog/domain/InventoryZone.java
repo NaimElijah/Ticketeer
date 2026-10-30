@@ -1,6 +1,7 @@
 package com.ticketing.system.catalog.domain;
 
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.domain.TextLimits;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorColumn;
@@ -89,6 +90,7 @@ public abstract class InventoryZone implements InvariantChecked {
         // subclass's checkInvariants(), invoked at the end of its constructor.
         // Calling the overridable checkInvariants() here would run before the
         // subclass's own fields are initialized.
+        TextLimits.requireFits("Zone name", name);
         this.id = id;
         this.name = name;
         this.price = price;

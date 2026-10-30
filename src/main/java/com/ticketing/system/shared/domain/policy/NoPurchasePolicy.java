@@ -17,4 +17,15 @@ public class NoPurchasePolicy implements PurchasePolicy {
     public String getFailureMessage() {
         return "";
     }
+
+    // Every NoPurchasePolicy imposes the same nothing, so all of them are equal.
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof NoPurchasePolicy;
+    }
+
+    @Override
+    public int hashCode() {
+        return NoPurchasePolicy.class.hashCode();
+    }
 }

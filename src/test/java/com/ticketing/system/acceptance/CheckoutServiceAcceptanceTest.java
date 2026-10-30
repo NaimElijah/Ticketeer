@@ -39,6 +39,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -107,6 +108,8 @@ public class CheckoutServiceAcceptanceTest {
     void setUp() {
         activeOrderRepository = mock(ActiveOrderRepository.class);
         eventRepository = mock(EventRepository.class);
+        // A sale loads its events through findForSale; each test stubs the events once, on findById.
+        when(eventRepository.findForSale(anyInt())).thenAnswer(call -> eventRepository.findById(call.<Integer>getArgument(0)));
         ticketRepository = mock(TicketRepository.class);
         AtomicInteger ticketIds = new AtomicInteger(1);
         when(ticketRepository.nextId()).thenAnswer(invocation -> ticketIds.getAndIncrement());

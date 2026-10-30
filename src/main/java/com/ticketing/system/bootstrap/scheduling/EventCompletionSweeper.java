@@ -54,8 +54,10 @@ public class EventCompletionSweeper {
      * <p>Concurrency safety does NOT rely on {@code lockForUpdate} — that is a no-op on the JPA
      * repository (it locks only under the in-memory repo). Each candidate is re-read and
      * re-validated, and the real guard is the {@code Event} {@code @Version} optimistic lock: a
-     * racing sale bumps the version, so a stale completion fails on {@code save} and is retried on
-     * the next tick. The transition is idempotent and monotonic ({@code -> COMPLETED}) and mutates
+     * racing lifecycle edit bumps the version, so a stale completion fails on {@code save} and is
+     * retried on the next tick. A sale does not bump it; one committing in checkout Phase 3 holds the
+     * event's shared row lock ({@code EventRepository.findForSale}), so the completion's write waits
+     * for it. The transition is idempotent and monotonic ({@code -> COMPLETED}) and mutates
      * status only (no inventory side effects), and the {@code @Scheduled} pool is single-threaded —
      * so there is no lock-ordering concern with the multi-event {@code SessionAndOrderSweeper}.
      */
