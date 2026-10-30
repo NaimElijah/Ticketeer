@@ -549,7 +549,7 @@ public class CatalogService {
         }
 
         // Only a closed company's owners and the system admins may see its information, so on this
-        // public read its event is refused exactly like a missing one (II.2.2).
+        // public read its event is refused exactly like a missing one (II.2.1).
         ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
         if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
             log.warn("Attempt to access event detail for eventId: {} from inactive company", eventId);
