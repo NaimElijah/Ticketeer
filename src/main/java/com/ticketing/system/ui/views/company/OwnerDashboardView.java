@@ -122,11 +122,14 @@ public class OwnerDashboardView extends LkPage {
 
         row.add(
             rating,
-            new LkStat("Live events",        String.valueOf(stats.activeEvents())),
-            new LkStat("Tickets sold · 30d",  String.format("%,d", stats.ticketsSold30d()))
+            new LkStat("Live events",        String.valueOf(stats.activeEvents()))
         );
-        // The service withholds revenue (VIEW_SALES) and open inquiries (RESPOND_TO_INQUIRIES) as
-        // null for members without the permission (#22), so the server decides what is shown.
+        // The service withholds tickets sold and revenue (VIEW_SALES) and open inquiries
+        // (RESPOND_TO_INQUIRIES) as null for members without the permission (#22), so the server
+        // decides what is shown.
+        if (stats.ticketsSold30d() != null) {
+            row.add(new LkStat("Tickets sold · 30d", String.format("%,d", stats.ticketsSold30d())));
+        }
         if (stats.revenue30d() != null) {
             row.add(new LkStat("Revenue · 30d", "$" + String.format("%,.0f", stats.revenue30d())));
         }

@@ -106,7 +106,7 @@ private final ManagerInvitationPresenter presenter;
             case ManagerInvitationPresenter.Outcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case ManagerInvitationPresenter.Outcome.NoCompany ignored ->
-                Toasts.failure("You don't own a company — register one first.");
+                Toasts.failure("Select a company you own before inviting a manager.");
             case ManagerInvitationPresenter.Outcome.UserNotFound u ->
                 Toasts.failure("User \"" + u.username() + "\" was not found.");
             case ManagerInvitationPresenter.Outcome.Failure fail ->

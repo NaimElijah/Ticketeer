@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.presenters.company;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -11,7 +12,12 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.ui.support.ServiceErrors;
 
+/**
+ * MVP presenter for {@code ManagerInvitationView}: invites a member to manage the company selected in
+ * the workspace ({@code CurrentCompanies}), which the caller must own.
+ */
 @Component
 public class ManagerInvitationPresenter {
 
@@ -22,12 +28,19 @@ public class ManagerInvitationPresenter {
         this.companyService = companyService;
     }
 
+    /**
+     * Appoints {@code inviteeUsername} as a pending manager of the selected company.
+     *
+     * @return {@link Outcome.NoCompany} when no company is selected or the caller does not own the
+     *     selected one; the appointment is not attempted then
+     */
     public Outcome invite(String token, String inviteeUsername, List<Permission> permissions) {
         if (token == null) return new Outcome.NotAuthenticated();
         try {
-            List<ProductionCompanyDTO> owned = companyService.findOwnedCompanies(token);
-            if (owned.isEmpty()) return new Outcome.NoCompany();
-            int companyId = owned.get(0).companyId();
+            Optional<ProductionCompanyDTO> selected =
+                SelectedOwnedCompany.among(companyService.findOwnedCompanies(token));
+            if (selected.isEmpty()) return new Outcome.NoCompany();
+            int companyId = selected.get().companyId();
             int targetUserId = companyService.resolveUserId(inviteeUsername);
             companyService.appointManager(token,
                 new ManagerAppointmentRequestDTO(companyId, targetUserId, permissions));
@@ -37,7 +50,7 @@ public class ManagerInvitationPresenter {
         } catch (UserNotFoundException e) {
             return new Outcome.UserNotFound(inviteeUsername);
         } catch (RuntimeException e) {
-            return new Outcome.Failure(e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

@@ -25,6 +25,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -179,6 +180,7 @@ public class CompanyManagementService {
         CompanyAppointment appointment;
 
         if (response.accept()) {
+            requireManagerInviterStillOwner(userId, response.companyId());
             // Transitions the pending appointment to ACTIVE (and persists it via the appointment repo).
             appointment = companyMembershipService.acceptInvitation(userId, response.companyId());
             if (appointment.getRole() == CompanyRole.Owner) {
@@ -201,7 +203,20 @@ public class CompanyManagementService {
         companyRepository.updateCompany(company);
     }
 
-    // UC-24 — edit a Manager's permission set (only by the original appointer).
+    // A manager invitation carries its inviter's authority, so it dies with that authority: once the
+    // inviter is no longer an owner, accepting would grant a role nobody in the company stands behind.
+    private void requireManagerInviterStillOwner(int userId, int companyId) {
+        CompanyAppointment pending = companyMembershipService.getPendingCompanyAppointment(userId, companyId);
+        if (pending != null && pending.getRole() == CompanyRole.Manager
+                && !companyMembershipService.isOwnerInCompany(pending.getInviterId(), companyId)) {
+            log.warn("Manager invitation for user {} in company {} refused: its inviter is no longer an owner",
+                    userId, companyId);
+            throw new BusinessRuleViolationException(
+                    "This invitation is no longer valid: the owner who sent it is no longer an owner of this company");
+        }
+    }
+
+    // UC-24 — edit a Manager's permission set (only by the original appointer, while still an owner).
     @Transactional
     public void editManagerPermissions(String token, PermissionEditDTO edit) {
         int ownerId = authenticate(token);
@@ -222,6 +237,8 @@ public class CompanyManagementService {
             throw new IllegalArgumentException("Manager role must have at least one permission");
         }
 
+        // A revoked owner keeps no authority over the managers they appointed.
+        companyMembershipService.requireOwnerInCompany(ownerId, edit.companyId());
         // Only the original appointer may edit; role/status checks + persistence happen inside.
         companyMembershipService.modifyManagerPermissions(edit.targetUserId(), edit.companyId(), ownerId,
                 edit.newPermissions());
@@ -248,6 +265,9 @@ public class CompanyManagementService {
             throw new UnauthorizedActionException("revoke the appointment of a company founder");
         }
 
+        // Only a current owner may revoke, so a revoked owner keeps no authority over the managers they
+        // appointed. An owner revoking their own appointment is a current owner, so it stays allowed.
+        companyMembershipService.requireOwnerInCompany(ownerId, revokeRequest.companyId());
         // Revoke the target's active appointment (revoke-rights checks + persistence happen inside).
         companyMembershipService.revokeAppointment(revokeRequest.targetUserId(), revokeRequest.companyId(), ownerId);
         company.RevokeAppointment(revokeRequest.targetUserId());

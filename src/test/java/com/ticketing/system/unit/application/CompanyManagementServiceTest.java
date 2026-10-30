@@ -28,6 +28,7 @@ import com.ticketing.system.organization.application.service.CompanyMembershipSe
 import com.ticketing.system.shared.dto.AppointmentResponseDTO;
 import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -1060,4 +1061,116 @@ public class CompanyManagementServiceTest {
                 assertTrue(mine.isEmpty());
         }
 
+        // ---- a removed owner keeps no control over the managers they appointed -----------------
+        // The founder appoints a co-owner, who appoints a manager. Once the founder revokes the
+        // co-owner, the co-owner is no longer an owner, so they can neither edit nor revoke "their"
+        // manager, and a manager invite they sent before the revocation can no longer be accepted.
+        // A current co-owner keeps all three abilities (the control cases).
+
+        private static final int CO_OWNER_ID = 3;
+        private static final String CO_OWNER_TOKEN = "co-owner-token";
+
+        private ProductionCompany companyWithCoOwnerWhoInvitedAManager(boolean managerAccepted) {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(CO_OWNER_ID, "coOwner", CO_OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "manager", TARGET_TOKEN);
+
+                companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, CO_OWNER_ID));
+                companyService.respondToAppointment(CO_OWNER_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+                companyService.appointManager(CO_OWNER_TOKEN,
+                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions));
+                if (managerAccepted) {
+                        companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+                }
+                return company;
+        }
+
+        private void givenUserWithToken(int userId, String username, String token) {
+                when(mockUserRepo.getUserById(userId))
+                                .thenReturn(new User(userId, username, username + "@test.com", "password", 30));
+                when(sessionManager.validateToken(token)).thenReturn(true);
+                when(sessionManager.extractUserId(token)).thenReturn(userId);
+        }
+
+        private void founderRevokesTheCoOwner() {
+                companyService.RevokeAppointment(OWNER_TOKEN, new AppointmentRevokeDTO(COMPANY_ID, CO_OWNER_ID));
+        }
+
+        private static List<Permission> editedPermissions() {
+                return List.of(Permission.EDIT_POLICIES);
+        }
+
+        @Test
+        public void GivenRevokedOwner_WhenEditManagerPermissions_ThenRejected() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+                founderRevokesTheCoOwner();
+
+                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(CO_OWNER_TOKEN,
+                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, editedPermissions())),
+                                "a revoked owner must not edit the permissions of a manager they appointed");
+        }
+
+        @Test
+        public void GivenRevokedOwner_WhenRevokeTheirManager_ThenRejected() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+                founderRevokesTheCoOwner();
+
+                assertThrows(RuntimeException.class, () -> companyService.RevokeAppointment(CO_OWNER_TOKEN,
+                                new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)),
+                                "a revoked owner must not revoke a manager they appointed");
+        }
+
+        @Test
+        public void GivenPendingManagerInviteFromAnOwnerSinceRevoked_WhenAccepted_ThenRejected() {
+                companyWithCoOwnerWhoInvitedAManager(false);
+                founderRevokesTheCoOwner();
+
+                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                new AppointmentResponseDTO(COMPANY_ID, true)),
+                                "a manager invite from an owner who has since been revoked must not be accepted");
+        }
+
+        @Test
+        public void GivenCurrentCoOwner_WhenEditTheirManagersPermissions_ThenTheManagerHoldsTheNewPermissions() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+
+                companyService.editManagerPermissions(CO_OWNER_TOKEN,
+                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, editedPermissions()));
+
+                assertTrue(membershipService.hasPermissionInCompany(TARGET_USER_ID, COMPANY_ID, Permission.EDIT_POLICIES));
+                assertFalse(membershipService.hasPermissionInCompany(TARGET_USER_ID, COMPANY_ID, Permission.CONFIGURE_VENUE));
+        }
+
+        @Test
+        public void GivenCurrentCoOwner_WhenRevokeTheirManager_ThenTheManagerIsGone() {
+                ProductionCompany company = companyWithCoOwnerWhoInvitedAManager(true);
+
+                companyService.RevokeAppointment(CO_OWNER_TOKEN, new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID));
+
+                assertFalse(company.getManagers().contains(TARGET_USER_ID));
+                assertNull(membershipService.getActiveCompanyAppointment(TARGET_USER_ID, COMPANY_ID));
+        }
+
+        @Test
+        public void GivenPendingManagerInviteFromACurrentCoOwner_WhenAccepted_ThenTheTargetIsAManager() {
+                ProductionCompany company = companyWithCoOwnerWhoInvitedAManager(false);
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+
+                assertTrue(company.getManagers().contains(TARGET_USER_ID));
+        }
+
+        @Test
+        public void GivenCoOwner_WhenRevokingTheirOwnAppointment_ThenTheyAreNoLongerAnOwner() {
+                ProductionCompany company = companyWithCoOwnerWhoInvitedAManager(true);
+
+                companyService.RevokeAppointment(CO_OWNER_TOKEN, new AppointmentRevokeDTO(COMPANY_ID, CO_OWNER_ID));
+
+                assertFalse(company.isOwner(CO_OWNER_ID));
+                assertFalse(membershipService.isOwnerInCompany(CO_OWNER_ID, COMPANY_ID));
+        }
 }

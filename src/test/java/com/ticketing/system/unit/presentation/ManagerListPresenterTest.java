@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +28,9 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.presenters.company.ManagerListPresenter;
+import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class ManagerListPresenterTest {
 
@@ -61,6 +65,8 @@ class ManagerListPresenterTest {
 
     @Test
     void ownedCompany_returnsSuccessWithBothRosters() {
+        MapBackedVaadinSession.install();
+        CurrentCompanies.setCurrentCompany(7);
         ProductionCompanyDTO company = new ProductionCompanyDTO(7, "Acme", "desc", "ACTIVE", 1);
         AppointmentInfoDTO manager = new AppointmentInfoDTO(
             "10", 7, "Acme", 2, "carol", 1, "Manager", "ACTIVE",
@@ -90,7 +96,77 @@ class ManagerListPresenterTest {
 
         ManagerListPresenter.Outcome.Failure fail =
             assertInstanceOf(ManagerListPresenter.Outcome.Failure.class, outcome);
-        assertEquals("backend down", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    // -- the selected company --------------------------------------------------
+    // The roster belongs to the company selected in the workspace (CurrentCompanies), the one the
+    // capability gate checked; findOwnedCompanies is unordered, so "the first" can be any of them.
+
+    @AfterEach
+    void uninstallVaadinSession() {
+        MapBackedVaadinSession.uninstall();
+    }
+
+    @Test
+    void GivenOwnerOfTwoCompaniesWithTheSecondSelected_WhenLoadRoster_ThenTheRosterIsTheSelectedCompanys() {
+        MapBackedVaadinSession.install();
+        CurrentCompanies.setCurrentCompany(9);
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(
+            new ProductionCompanyDTO(7, "Alpha", "desc", "ACTIVE", 1),
+            new ProductionCompanyDTO(9, "Beta", "desc", "ACTIVE", 1)));
+        when(service.listManagers(TOKEN, 9)).thenReturn(List.of());
+        when(service.listPendingInvitations(TOKEN, 9)).thenReturn(List.of());
+
+        ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
+
+        ManagerListPresenter.Outcome.Success ok =
+            assertInstanceOf(ManagerListPresenter.Outcome.Success.class, outcome);
+        assertEquals("Beta", ok.companyName(), "the roster must be the selected company's");
+        verify(service, never()).listManagers(TOKEN, 7);
+        verify(service, never()).listPendingInvitations(TOKEN, 7);
+    }
+
+    @Test
+    void GivenASelectedCompanyTheCallerDoesNotOwn_WhenLoadRoster_ThenNoCompany() {
+        MapBackedVaadinSession.install();
+        CurrentCompanies.setCurrentCompany(11);
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(
+            new ProductionCompanyDTO(7, "Alpha", "desc", "ACTIVE", 1)));
+
+        ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
+
+        assertInstanceOf(ManagerListPresenter.Outcome.NoCompany.class, outcome);
+        verify(service, never()).listManagers(anyString(), anyInt());
+    }
+
+    @Test
+    void GivenOwnerOfTwoCompaniesAndNoSelection_WhenLoadRoster_ThenNoCompany() {
+        MapBackedVaadinSession.install();
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(
+            new ProductionCompanyDTO(7, "Alpha", "desc", "ACTIVE", 1),
+            new ProductionCompanyDTO(9, "Beta", "desc", "ACTIVE", 1)));
+
+        ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
+
+        assertInstanceOf(ManagerListPresenter.Outcome.NoCompany.class, outcome);
+        verify(service, never()).listManagers(anyString(), anyInt());
+    }
+
+    // One owned company leaves nothing to choose, so an owner who never picked it still gets its roster.
+    @Test
+    void GivenOwnerOfOneCompanyAndNoSelection_WhenLoadRoster_ThenThatCompanysRoster() {
+        MapBackedVaadinSession.install();
+        when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(
+            new ProductionCompanyDTO(7, "Alpha", "desc", "ACTIVE", 1)));
+        when(service.listManagers(TOKEN, 7)).thenReturn(List.of());
+        when(service.listPendingInvitations(TOKEN, 7)).thenReturn(List.of());
+
+        ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
+
+        ManagerListPresenter.Outcome.Success ok =
+            assertInstanceOf(ManagerListPresenter.Outcome.Success.class, outcome);
+        assertEquals("Alpha", ok.companyName());
     }
 
     // -- editPermissions ------------------------------------------------------
@@ -128,7 +204,7 @@ class ManagerListPresenterTest {
 
         ManagerListPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(ManagerListPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("only the appointer may edit", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
@@ -174,7 +250,7 @@ class ManagerListPresenterTest {
 
         ManagerListPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(ManagerListPresenter.ActionOutcome.Failure.class, outcome);
-        assertEquals("Cannot revoke appointment of the founder", fail.reason());
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
     }
 
     @Test
