@@ -1,6 +1,6 @@
 # ADR-009: Direct dependencies — what each is for, the versions pinned, and the risks accepted
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR-013](ADR-013-hilla-excluded-from-the-vaadin-starter.md), which excludes Hilla, so decision 3's Spring MVC users are the actuator and Boot's `DispatcherServlet` only
 - **Date:** 2026-10-29
 - **Issue:** #183 (scan 2/10 · dependency-vetter), with #40 and #79 pulled in; the follow-up is #199
 

@@ -134,6 +134,10 @@ jobs:
             echo "::error file=pom.xml::The production jar contains a dev-only library; see the production profile (#79)."
             exit 1
           fi
+          if grep -E '^BOOT-INF/lib/hilla(-[a-z-]+)?-[0-9]' <<< "$libs"; then
+            echo "::error file=pom.xml::The production jar contains Hilla, which the starter's exclusion keeps out (ADR-013)."
+            exit 1
+          fi
 
       - name: Boot the jar against PostgreSQL and check it serves
         env:
