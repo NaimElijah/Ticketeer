@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -93,11 +92,14 @@ public class CheckoutService {
     private final CheckoutIdempotencyCache idempotencyCache =
             new CheckoutIdempotencyCache(CheckoutIdempotencyCache.DEFAULT_CAPACITY);
 
-    // Order keys of the checkout attempts running in this process, each added once its attempt has frozen
-    // the order (CHECKOUT_IN_PROGRESS) and removed when the attempt ends, however it ends. A frozen order
-    // whose key is absent was frozen by an attempt that is gone (the process restarted during its external
-    // calls), so a retry may roll it back. In memory, so it holds for one instance only.
-    private final Set<String> ordersInFlight = ConcurrentHashMap.newKeySet();
+    // The checkout attempts running in this process, counted by order key. An attempt is counted just before
+    // it saves the order frozen (CHECKOUT_IN_PROGRESS), so no other attempt can see the order frozen without
+    // that count, and uncounted when it ends, however it ends. A frozen order with no count was frozen by an
+    // attempt that is gone (the process restarted during its external calls), so a retry may roll it back.
+    // A count, not a set: on the Jpa adapter the order lock is a no-op, so two attempts can both validate
+    // the order and be counted, and the one whose save then loses on @Version must not uncount the one
+    // still running. In memory, so it holds for one instance only.
+    private final ConcurrentHashMap<String, Integer> attemptsInFlight = new ConcurrentHashMap<>();
 
     // idempotency means that if the same buyer (member or guest) submits the same
     // checkout request (identified by idempotency key) multiple times, only the
@@ -183,7 +185,8 @@ public class CheckoutService {
         PaymentResultDTO paymentResult = null;
         double totalPrice = 0.0;
         boolean inventorySaleConfirmed = false;
-        // Set once this call has frozen the order, and its key is then in ordersInFlight until finally.
+        // frozeOrder: this call's save froze the order. frozenOrderKey: this call is counted in
+        // attemptsInFlight, from just before that save until finally.
         boolean frozeOrder = false;
         String frozenOrderKey = null;
         boolean checkoutSucceeded = false;
@@ -235,10 +238,10 @@ public class CheckoutService {
             // (e.g. inventory management) to treat this order differently while it is in
             // this state.
             order.markCheckoutInProgress();
+            countAttemptInFlight(orderKey);
+            frozenOrderKey = orderKey;
             activeOrderRepository.save(order);
             frozeOrder = true;
-            ordersInFlight.add(orderKey);
-            frozenOrderKey = orderKey;
 
             activeOrderRepository.unlock(orderLockKey);
 
@@ -331,7 +334,7 @@ public class CheckoutService {
             throw new RuntimeException("Checkout failed, tickets returned to stock", e);
         } finally {
             if (frozenOrderKey != null) {
-                ordersInFlight.remove(frozenOrderKey);
+                uncountAttemptInFlight(frozenOrderKey);
             }
             unlockEvents(lockedEventIds);
 
@@ -364,7 +367,8 @@ public class CheckoutService {
         PaymentResultDTO paymentResult = null;
         double totalPrice = 0.0;
         boolean inventorySaleConfirmed = false;
-        // Set once this call has frozen the order, and its key is then in ordersInFlight until finally.
+        // frozeOrder: this call's save froze the order. frozenOrderKey: this call is counted in
+        // attemptsInFlight, from just before that save until finally.
         boolean frozeOrder = false;
         String frozenOrderKey = null;
 
@@ -403,10 +407,10 @@ public class CheckoutService {
             String orderKey = order.getOrderKey();
 
             order.markCheckoutInProgress();
+            countAttemptInFlight(orderKey);
+            frozenOrderKey = orderKey;
             activeOrderRepository.save(order);
             frozeOrder = true;
-            ordersInFlight.add(orderKey);
-            frozenOrderKey = orderKey;
 
             activeOrderRepository.unlock(orderLockKey);
 
@@ -484,7 +488,7 @@ public class CheckoutService {
             throw new RuntimeException("Checkout failed, tickets returned to stock", e);
         } finally {
             if (frozenOrderKey != null) {
-                ordersInFlight.remove(frozenOrderKey);
+                uncountAttemptInFlight(frozenOrderKey);
             }
             unlockEvents(lockedEventIds);
             if (orderLockKey != null) {
@@ -1163,6 +1167,14 @@ public class CheckoutService {
         }
     }
 
+    private void countAttemptInFlight(String orderKey) {
+        attemptsInFlight.merge(orderKey, 1, Integer::sum);
+    }
+
+    private void uncountAttemptInFlight(String orderKey) {
+        attemptsInFlight.computeIfPresent(orderKey, (key, attempts) -> attempts == 1 ? null : attempts - 1);
+    }
+
     // Atomic checkout-failure rollback: under a single order-write-lock + event-read-lock scope, reset the
     // CHECKOUT_IN_PROGRESS status, return the reserved inventory to stock, and clear the cart. Folding these
     // into one lock scope closes the window where a concurrent op (checkout retry, add-to-cart, expiry sweep)
@@ -1179,7 +1191,7 @@ public class CheckoutService {
         // so nothing was reserved for this checkout to roll back). A Phase-1 validation failure on an order
         // that is not in checkout (e.g. an expired hold) still rolls back: its reserved tickets are returned
         // to stock and the cart is cleared. One that failed because another attempt still in flight froze
-        // the order is skipped below, under the lock.
+        // the order is skipped below, once the order is re-read.
         if (inventorySaleConfirmed || orderLockKey == null) {
             return;
         }
@@ -1197,11 +1209,12 @@ public class CheckoutService {
             }
             // Frozen by another attempt still in flight: resetting it, releasing its seats or clearing it
             // would let that attempt charge for seats it no longer holds. An order frozen by an attempt
-            // that is no longer running (the process restarted during its external calls) has no key in
-            // ordersInFlight, so a retry rolls it back and the buyer can start over. ordersInFlight is this
-            // process's only, so with several instances an attempt running on another one looks dead
-            // here; the expiry sweeper never releases a frozen order (NaimElijah/Ticketeer#214).
-            if (order.isCheckoutInProgress() && !frozeOrder && ordersInFlight.contains(order.getOrderKey())) {
+            // that is no longer running (the process restarted during its external calls) has no count in
+            // attemptsInFlight, so a retry rolls it back and the buyer can start over. The count may include
+            // this attempt, when its own freeze lost to another's; the order is then that other's. The
+            // count is this process's only, so with several instances an attempt running on another one
+            // looks dead here; the expiry sweeper never releases a frozen order (NaimElijah/Ticketeer#214).
+            if (order.isCheckoutInProgress() && !frozeOrder && attemptsInFlight.containsKey(order.getOrderKey())) {
                 log.warn("Checkout rollback skipped: the order is in another attempt's checkout. orderKey={}",
                         order.getOrderKey());
                 return;

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,21 +15,28 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.invocation.InvocationOnMock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
@@ -78,13 +87,14 @@ class SecondCheckoutAttemptJpaTest {
     @Autowired private SystemAdminService systemAdminService;
     @Autowired private ReservationService reservationService;
     @Autowired private CheckoutService checkoutService;
-    @Autowired private ActiveOrderRepository activeOrderRepository;
     @Autowired private OrderReceiptRepository orderReceiptRepository;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private Clock clock;
 
     // The test profile's stub gateway, spied on only to hold one charge open in the in-flight case.
     @MockitoSpyBean private PaymentGateway paymentGateway;
+    // The Jpa adapter, spied on only to run other attempts at the moment an attempt freezes the order.
+    @MockitoSpyBean private ActiveOrderRepository activeOrderRepository;
 
     private SeatedShowFixture fixture;
     private Show show;
@@ -152,7 +162,7 @@ class SecondCheckoutAttemptJpaTest {
                     "an order in another attempt's checkout cannot be checked out a second time");
 
             assertFailedBecauseTheOrderWasInCheckout(secondFailure);
-            assertFrozenWithItsSeat(activeOrderRepository.getByUserId(member.userId()));
+            firstAttemptState(member).assertFrozenWithItsSeat();
 
             releaseCharge.countDown();
             CheckoutResultDTO firstResult = firstAttempt.get(AWAIT_SECONDS, TimeUnit.SECONDS);
@@ -164,24 +174,185 @@ class SecondCheckoutAttemptJpaTest {
         }
     }
 
+    // ---- the moment an attempt freezes the order ----
+    // On the Jpa adapter the order lock is a no-op and each save commits on its own, so other attempts
+    // see the frozen order the moment its save commits.
+
+    @Test
+    void GivenAFirstAttemptWhoseFreezeHasJustCommitted_WhenASecondAttemptRuns_ThenTheFirstIsLeftFrozenWithItsHolds() {
+        AuthTokenDTO member = fixture.registerAndLogin("justFrozenMember");
+        reservationService.reserveForMember(member.token(), show.eventId(), show.zoneId(),
+                InventorySelectionDTO.seated(List.of(HELD_SEAT)));
+        ExecutorService otherThreads = Executors.newCachedThreadPool();
+        AtomicReference<Throwable> secondFailure = new AtomicReference<>();
+        AtomicReference<FirstAttemptState> stateAfterSecond = new AtomicReference<>();
+        AtomicInteger freezes = new AtomicInteger();
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            if (isFreeze(invocation) && freezes.incrementAndGet() == 1) {
+                afterTheSaveCommits(() -> {
+                    secondFailure.set(failureOf(() -> anotherAttempt(otherThreads, member)));
+                    stateAfterSecond.set(onAnotherThread(otherThreads, () -> firstAttemptState(member)));
+                });
+            }
+            return null;
+        }).when(activeOrderRepository).save(any());
+        try {
+            Throwable firstFailure = failureOf(
+                    () -> checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD));
+
+            assertFailedBecauseTheOrderWasInCheckout(secondFailure.get());
+            stateAfterSecond.get().assertFrozenWithItsSeat();
+            assertNull(firstFailure, "the first attempt, left alone, completes its purchase");
+        } finally {
+            otherThreads.shutdownNow();
+        }
+    }
+
+    // Both attempts pass validation before either freezes the order; the loser's save then fails on the
+    // winner's @Version. The loser's cleanup must leave the winner recorded as running, or a later attempt
+    // would take the winner's order for one that a dead attempt left behind.
+    @Test
+    void GivenTwoAttemptsRacingToFreezeOneOrder_WhenTheLosersSaveFails_ThenALaterAttemptLeavesTheWinnerFrozen() {
+        AuthTokenDTO member = fixture.registerAndLogin("racingFreezeMember");
+        reservationService.reserveForMember(member.token(), show.eventId(), show.zoneId(),
+                InventorySelectionDTO.seated(List.of(HELD_SEAT)));
+        Thread winner = Thread.currentThread();
+        ExecutorService otherThreads = Executors.newCachedThreadPool();
+        CountDownLatch loserAtItsFreeze = new CountDownLatch(1);
+        CountDownLatch winnerFrozen = new CountDownLatch(1);
+        AtomicReference<Throwable> loserFailure = new AtomicReference<>();
+        AtomicBoolean winnerPastItsFreeze = new AtomicBoolean(false);
+        AtomicReference<Throwable> laterFailure = new AtomicReference<>();
+        AtomicReference<FirstAttemptState> stateAfterLater = new AtomicReference<>();
+        AtomicInteger freezes = new AtomicInteger();
+        doAnswer(invocation -> {
+            int freeze = isFreeze(invocation) ? freezes.incrementAndGet() : 0;
+            if (freeze == 1) {
+                Future<CheckoutResultDTO> loser = otherThreads.submit(() ->
+                        checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD));
+                awaitOrFail(loserAtItsFreeze, "arrangement: the loser validates the order before it is frozen");
+                invocation.callRealMethod();
+                afterTheSaveCommits(() -> {
+                    winnerFrozen.countDown();
+                    loserFailure.set(failureOf(() -> loser.get(AWAIT_SECONDS, TimeUnit.SECONDS)));
+                    winnerPastItsFreeze.set(true);
+                });
+            } else if (freeze == 2) {
+                loserAtItsFreeze.countDown();
+                awaitOrFail(winnerFrozen, "arrangement: the winner's freeze commits first");
+                invocation.callRealMethod();
+            } else {
+                invocation.callRealMethod();
+            }
+            return null;
+        }).when(activeOrderRepository).save(any());
+        // The winner releases the order lock right after its freeze.
+        doAnswer(invocation -> {
+            if (Thread.currentThread() == winner && winnerPastItsFreeze.getAndSet(false)) {
+                laterFailure.set(failureOf(() -> anotherAttempt(otherThreads, member)));
+                stateAfterLater.set(onAnotherThread(otherThreads, () -> firstAttemptState(member)));
+            }
+            return invocation.callRealMethod();
+        }).when(activeOrderRepository).unlock(any());
+        try {
+            Throwable winnerFailure = failureOf(
+                    () -> checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD));
+
+            assertNotNull(loserFailure.get(), "arrangement: the loser's freeze must lose to the winner's");
+            assertFailedBecauseTheOrderWasInCheckout(laterFailure.get());
+            stateAfterLater.get().assertFrozenWithItsSeat();
+            assertNull(winnerFailure, "the winner, left alone, completes its purchase");
+        } finally {
+            winnerFrozen.countDown();
+            otherThreads.shutdownNow();
+        }
+    }
+
     // ---- assertions and arrangement ----
 
-    private static void assertFailedBecauseTheOrderWasInCheckout(RuntimeException failure) {
+    // The first attempt's order and its zone's stock, read while that attempt is still running. Each facet
+    // is reported on its own, so a partial fix shows what is left.
+    private record FirstAttemptState(boolean inCheckout, List<String> seats, int availableSeats) {
+
+        void assertFrozenWithItsSeat() {
+            assertAll(
+                    () -> assertTrue(inCheckout,
+                            "another attempt must not reset the first attempt's CHECKOUT_IN_PROGRESS"),
+                    () -> assertEquals(List.of(HELD_SEAT), seats,
+                            "another attempt must not clear the first attempt's cart"),
+                    () -> assertEquals(SeatedShowFixture.SEATS.size() - 1, availableSeats,
+                            "another attempt must not return the first attempt's " + HELD_SEAT + " to stock"));
+        }
+    }
+
+    private FirstAttemptState firstAttemptState(AuthTokenDTO member) {
+        ActiveOrder order = activeOrderRepository.getByUserId(member.userId());
+        return new FirstAttemptState(order != null && order.isCheckoutInProgress(),
+                order == null ? List.of() : order.getItems().stream().map(CartLineItem::getSeatNumber).toList(),
+                fixture.availableSeats(show));
+    }
+
+    private CheckoutResultDTO anotherAttempt(ExecutorService otherThreads, AuthTokenDTO member) throws Exception {
+        return onAnotherThread(otherThreads,
+                () -> checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD));
+    }
+
+    // Work run from inside an attempt goes to another thread: on the attempt's own thread it would join the
+    // attempt's persistence context, and read the attempt's own copy of the order rather than the database.
+    private static <T> T onAnotherThread(ExecutorService otherThreads, Callable<T> work) throws Exception {
+        return otherThreads.submit(work).get(AWAIT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    // The spy sits inside the adapter's @Transactional proxy, so a save's answer runs before that save's
+    // transaction commits. Work that must see the saved order waits for the commit.
+    private static void afterTheSaveCommits(Work work) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    work.run();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted while running work after the save committed", e);
+                } catch (Exception e) {
+                    throw new IllegalStateException("the work run after the save committed failed", e);
+                }
+            }
+        });
+    }
+
+    private interface Work {
+        void run() throws Exception;
+    }
+
+    private static boolean isFreeze(InvocationOnMock save) {
+        return save.<ActiveOrder>getArgument(0).isCheckoutInProgress();
+    }
+
+    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
+    private static Throwable failureOf(Callable<?> call) {
+        try {
+            call.call();
+            return null;
+        } catch (ExecutionException e) {
+            return e.getCause();
+        } catch (Exception e) {
+            return e;
+        }
+    }
+
+    private static void awaitOrFail(CountDownLatch latch, String what) throws InterruptedException {
+        if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
+            throw new IllegalStateException(what + ", but it never did");
+        }
+    }
+
+    private static void assertFailedBecauseTheOrderWasInCheckout(Throwable failure) {
+        assertNotNull(failure, "the attempt must fail, but it completed");
         assertEquals(CHECKOUT_FAILED, failure.getMessage(), "the checkout failure wrapper");
         assertInstanceOf(IllegalStateException.class, failure.getCause(),
                 "the attempt fails on the order already being in checkout, but the cause was " + failure.getCause());
-    }
-
-    // Each facet of the first attempt's state is reported on its own, so a partial fix shows what is left.
-    private void assertFrozenWithItsSeat(ActiveOrder order) {
-        assertAll(
-                () -> assertTrue(order.isCheckoutInProgress(),
-                        "the second attempt must not reset the first attempt's CHECKOUT_IN_PROGRESS"),
-                () -> assertEquals(List.of(HELD_SEAT),
-                        order.getItems().stream().map(CartLineItem::getSeatNumber).toList(),
-                        "the second attempt must not clear the first attempt's cart"),
-                () -> assertEquals(SeatedShowFixture.SEATS.size() - 1, fixture.availableSeats(show),
-                        "the second attempt must not return the first attempt's " + HELD_SEAT + " to stock"));
     }
 
     // Whether the emptied cart row is kept or deleted is not specified; either way nothing is held.
