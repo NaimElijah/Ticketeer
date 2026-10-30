@@ -144,6 +144,29 @@ class InitPropertiesValidationTest {
         });
     }
 
+    // #185: the base URL carries card data on every pay call, so only TLS is acceptable.
+    @ParameterizedTest(name = "wsep.base-url={0}")
+    @ValueSource(strings = {"http://wsep.example.com/", "ftp://wsep.example.com/"})
+    void GivenNonHttpsWsepBaseUrl_WhenContextStarts_ThenFailsNamingBaseUrl(String baseUrl) {
+        runner.withPropertyValues("wsep.base-url=" + baseUrl).run(context -> {
+            assertThat(context).as("a non-https WSEP base URL must stop the boot").hasFailed();
+            Throwable root = NestedExceptionUtils.getRootCause(context.getStartupFailure());
+            assertThat(root).isInstanceOf(BindValidationException.class);
+            ValidationErrors errors = ((BindValidationException) root).getValidationErrors();
+            assertThat(errors.getAllErrors())
+                    .extracting(error -> ((FieldError) error).getField())
+                    .containsExactly("baseUrl");
+        });
+    }
+
+    @Test
+    void GivenHttpsWsepBaseUrl_WhenContextStarts_ThenBinds() {
+        runner.withPropertyValues("wsep.base-url=https://wsep.example.com/").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(WsepProperties.class).baseUrl()).isEqualTo("https://wsep.example.com/");
+        });
+    }
+
     private static <T extends Throwable> T causeOfType(Throwable failure, Class<T> type) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (type.isInstance(cause)) {

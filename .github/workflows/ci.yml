@@ -143,7 +143,8 @@ jobs:
           DB_USER: postgres
           DB_PASSWORD: ci-only
           # No WSEP in CI: the handshake fails fast and the boot carries on without it (ADR-003).
-          WSEP_BASE_URL: http://127.0.0.1:1/
+          # https, because the base URL is refused at binding otherwise; port 1 still refuses the connection.
+          WSEP_BASE_URL: https://127.0.0.1:1/
           WSEP_HANDSHAKE_ATTEMPTS: '1'
         run: |
           java -jar "$(ls target/*.jar)" > app.log 2>&1 &

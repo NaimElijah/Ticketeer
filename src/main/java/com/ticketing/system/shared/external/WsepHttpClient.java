@@ -1,6 +1,7 @@
 package com.ticketing.system.shared.external;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -23,7 +24,9 @@ import com.ticketing.system.shared.config.WsepProperties;
  * single {@code application/x-www-form-urlencoded} POST to one URL, dispatched
  * by the {@code action_type} field; the server replies with a tiny plain-text
  * body where {@code "-1"} is the universal failure sentinel (callers interpret
- * the body).
+ * the body). Only a 2xx reply of at most {@code MAX_RESPONSE_BODY_BYTES} bytes
+ * counts as a WSEP reply; anything else is a {@link WsepCommunicationException}.
+ * The base URL is https-only, enforced where it binds ({@link WsepProperties}).
  *
  * <p>Shared by {@link WsepPaymentGateway} and {@link WsepTicketIssuer}. Always a
  * bean (it is lightweight) even when the in-process stubs are the active
@@ -32,6 +35,12 @@ import com.ticketing.system.shared.config.WsepProperties;
 @Component
 @Profile("!test")
 public class WsepHttpClient {
+
+    // WSEP replies are an integer or a ticket code (at most 255 characters, the tickets.barcode_value
+    // column), so anything past this is not a WSEP reply and is refused rather than buffered.
+    static final int MAX_RESPONSE_BODY_BYTES = 4096;
+    private static final int FIRST_SUCCESS_STATUS = 200;
+    private static final int FIRST_REDIRECT_STATUS = 300;
 
     private final String baseUrl;
     private final long requestTimeoutSeconds;
@@ -80,9 +89,13 @@ public class WsepHttpClient {
     }
 
     /**
-     * POSTs the form and returns the trimmed plain-text body. Throws
-     * {@link WsepCommunicationException} on any transport-level failure, so a
-     * caller can tell "couldn't reach WSEP" apart from a {@code "-1"} reply.
+     * POSTs the form and returns the trimmed plain-text body of a 2xx reply, so a
+     * caller can tell "no WSEP reply" apart from a {@code "-1"} reply.
+     *
+     * @throws WsepHttpStatusException     if the endpoint answers with a non-2xx status; its body is
+     *                                     not a WSEP reply and is never read
+     * @throws WsepCommunicationException  on a transport-level failure, or if the body is longer than
+     *                                     {@code MAX_RESPONSE_BODY_BYTES} bytes
      */
     public String post(Form form) {
         HttpRequest request = HttpRequest.newBuilder()
@@ -92,8 +105,13 @@ public class WsepHttpClient {
                 .POST(HttpRequest.BodyPublishers.ofString(form.encoded(), StandardCharsets.UTF_8))
                 .build();
         try {
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            return response.body() == null ? "" : response.body().trim();
+            HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream body = response.body()) {
+                if (!isSuccess(response.statusCode())) {
+                    throw new WsepHttpStatusException(response.statusCode());
+                }
+                return readCapped(body).trim();
+            }
         } catch (IOException e) {
             throw new WsepCommunicationException("WSEP request failed: " + e.getMessage(), e);
         } catch (InterruptedException e) {
@@ -102,8 +120,23 @@ public class WsepHttpClient {
         }
     }
 
+    private static boolean isSuccess(int status) {
+        return status >= FIRST_SUCCESS_STATUS && status < FIRST_REDIRECT_STATUS;
+    }
+
+    // Reads one byte past the cap, so an oversized body is detected without buffering the rest of it.
+    private static String readCapped(InputStream body) throws IOException {
+        byte[] bytes = body.readNBytes(MAX_RESPONSE_BODY_BYTES + 1);
+        if (bytes.length > MAX_RESPONSE_BODY_BYTES) {
+            throw new WsepCommunicationException(
+                    "WSEP response body exceeds " + MAX_RESPONSE_BODY_BYTES + " bytes");
+        }
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
     /**
-     * Like {@link #post}, but retries on a transport failure with a short backoff. Use ONLY for
+     * Like {@link #post}, but retries on any {@link WsepCommunicationException} (a transport failure,
+     * a non-2xx status such as a waking host's 503, an oversized body) with a short backoff. Use ONLY for
      * <b>idempotent</b> actions — the reachability {@code handshake}. NEVER for {@code pay} /
      * {@code issue_ticket} / {@code refund}: those are non-idempotent and a blind retry could
      * double-charge or double-issue. The retry lets a cold-starting WSEP endpoint (a free-tier host
@@ -114,8 +147,8 @@ public class WsepHttpClient {
         return withRetry(() -> post(form));
     }
 
-    // Bounded retry around a transport call: retries only WsepCommunicationException (a transport
-    // failure), rethrowing the last one after exhausting attempts. Package-private for unit testing.
+    // Bounded retry around a transport call: retries only WsepCommunicationException (no usable WSEP
+    // reply), rethrowing the last one after exhausting attempts. Package-private for unit testing.
     String withRetry(Supplier<String> action) {
         int attempts = Math.max(1, handshakeAttempts);
         WsepCommunicationException last = null;

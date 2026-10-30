@@ -203,7 +203,7 @@ set these:
 | `DB_USER` · `DB_PASSWORD` | PostgreSQL credentials | `postgres` · `postgres` | Yes |
 | `JWT_SECRET` | Token signing key, 256 bits or more | a dev-only value | Yes |
 | `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes |
-| `WSEP_BASE_URL` | The external payment and ticket-issuing service | the course's WSEP host | No |
+| `WSEP_BASE_URL` | The external payment and ticket-issuing service; must be an `https://` URL, or the boot stops | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
 `wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,

@@ -6,7 +6,9 @@ import com.ticketing.system.shared.external.WsepHttpClient; // transitional: sha
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.context.annotation.Profile;
@@ -30,8 +32,9 @@ import lombok.extern.slf4j.Slf4j;
  * purchase needs one barcode per ticket, so this issues one ticket per item
  * (GA, {@code quantity=1}) and assembles the list, one {@code TIX-…} code per item in
  * request order. Ticket ids are minted by the ticket repository, not here (#19). Any
- * {@code "-1"} reply fails the whole issuance, which drives the checkout's
- * refund/rollback path.
+ * {@code "-1"} reply, any answer that is no WSEP reply (a non-2xx status), a code
+ * longer than the barcode column, or a code repeated within the issuance fails the
+ * whole issuance, which drives the checkout's refund/rollback path.
  */
 @Component
 @Profile("!test")
@@ -40,6 +43,9 @@ public class WsepTicketIssuer implements TicketIssuer {
 
     private static final String ISSUER_ID = "wsep-ticket-issuer";
     private static final String FAILURE = "-1";
+    // tickets.barcode_value is varchar(255) (db/migration/V1__baseline_schema.sql): a longer code cannot
+    // be stored, so it fails the issuance in Phase 2, where the checkout still refunds the charge.
+    private static final int MAX_BARCODE_LENGTH = 255;
 
     private final WsepHttpClient http;
     private final Clock clock;   // stamps issuances (UTC wall time, ADR-008)
@@ -78,6 +84,7 @@ public class WsepTicketIssuer implements TicketIssuer {
         String customerId = request.buyerUserId() != null ? String.valueOf(request.buyerUserId()) : "guest";
 
         List<BarcodeDTO> barcodes = new ArrayList<>();
+        Set<String> issuedCodes = new HashSet<>();
         for (IssuanceRequestDTO.TicketIssuanceItemDTO item : request.items()) {
             WsepHttpClient.Form form = WsepHttpClient.action("issue_ticket")
                     .add("customer_id", customerId)
@@ -94,6 +101,14 @@ public class WsepTicketIssuer implements TicketIssuer {
 
             if (code == null || code.isBlank() || FAILURE.equals(code)) {
                 throw new TicketIssuanceFailedException("ticket issuance rejected by WSEP for event " + item.eventId());
+            }
+            if (code.length() > MAX_BARCODE_LENGTH) {
+                throw new TicketIssuanceFailedException("WSEP ticket code for event " + item.eventId()
+                        + " is longer than " + MAX_BARCODE_LENGTH + " characters");
+            }
+            if (!issuedCodes.add(code)) {
+                throw new TicketIssuanceFailedException(
+                        "WSEP returned the same ticket code twice for event " + item.eventId());
             }
 
             barcodes.add(new BarcodeDTO(code, "QR"));
