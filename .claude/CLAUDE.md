@@ -79,7 +79,7 @@ Dependencies (acyclic, and each edge allowed by `HexagonalRulesTest`'s module ma
 `shared ← identity ← organization ← catalog ← sales`, and `organization ← messaging`. `notifications`
 depends only on `shared`. `governance` and `reporting` depend on the backend contexts except
 `notifications`, and not on each other. `ui` uses every backend module; `bootstrap` may use everything
-including `ui`; nothing depends on either. A new module fails the build until it is added to that map;
+including `ui`. No backend module depends on either, and nothing depends on `bootstrap`. A new module fails the build until it is added to that map;
 add it to this paragraph in the same change, since nothing checks the two agree ([ADR-011](../docs/ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md)). Known
 exception, due to move behind an inbound port (#53): `identity`'s `AuthenticationService` calls
 `notifications`' `NotificationDispatchService` directly. The map allows that one class pair, nothing
