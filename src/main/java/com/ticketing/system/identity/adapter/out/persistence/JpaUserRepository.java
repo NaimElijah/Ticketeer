@@ -1,13 +1,17 @@
 package com.ticketing.system.identity.adapter.out.persistence;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -20,8 +24,9 @@ import com.ticketing.system.identity.domain.User;
  * the user (task #20) — they persist through the separate {@code CompanyAppointmentRepository}.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code User}'s
- * {@code @Version} optimistic lock. {@code save}/{@code updateUser} both delegate to
- * {@code data.save} (insert fresh / update loaded under {@code @Version}); they are
+ * {@code @Version} optimistic lock. {@code save}/{@code updateUser} both delegate to Spring Data
+ * (insert fresh / update loaded under {@code @Version}); {@code save} also flushes, so the
+ * {@code uk_users_username} constraint is checked inside the adapter. Both are
  * {@code @Transactional} so the adapter is self-sufficient before the service layer gains
  * transactions (#359).
  *
@@ -32,6 +37,9 @@ import com.ticketing.system.identity.domain.User;
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaUserRepository implements UserRepository {
+
+    /** The unique constraint on {@code users.username}, added by migration V4. */
+    private static final String USERNAME_UNIQUE_CONSTRAINT = "uk_users_username";
 
     private final SpringDataUserRepository data;
     private final AtomicInteger idSequence = new AtomicInteger(0);
@@ -64,10 +72,36 @@ public class JpaUserRepository implements UserRepository {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flushes the insert, so a username another user holds fails here, as
+     * {@link DuplicateUsernameException}, rather than at a later flush or at commit, outside the
+     * adapter. Any other integrity violation, such as a taken email, propagates unchanged.
+     */
     @Override
     @Transactional
     public void save(User user) {
-        data.save(user);
+        try {
+            data.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            if (violates(e, USERNAME_UNIQUE_CONSTRAINT)) {
+                throw new DuplicateUsernameException(user.getUsername());
+            }
+            throw e;
+        }
+    }
+
+    // Matched by containment: PostgreSQL reports the constraint as named, H2 reports the name of
+    // the index behind it, schema-qualified and suffixed (PUBLIC.UK_USERS_USERNAME_INDEX_4).
+    private static boolean violates(DataIntegrityViolationException e, String constraint) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException violation) {
+                String name = violation.getConstraintName();
+                return name != null && name.toLowerCase(Locale.ROOT).contains(constraint);
+            }
+        }
+        return false;
     }
 
     @Override

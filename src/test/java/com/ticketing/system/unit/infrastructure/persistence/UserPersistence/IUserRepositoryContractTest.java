@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.infrastructure.persistence.UserPersistence;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -11,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
@@ -102,5 +104,29 @@ abstract class IUserRepositoryContractTest {
 
         repo.delete(id);
         assertFalse(repo.existsByUsername("alice"));
+    }
+
+    // ---- one username, one user (#185) ----
+    // Two registrations that both pass register's existsByUsername check must not both create the
+    // name. Every adapter refuses, from save itself, a user whose username another user already
+    // holds: the Jpa adapter flushes the insert so the uk_users_username violation surfaces there,
+    // and re-types it, rather than at a later flush or at commit, outside the adapter.
+
+    @Test
+    void GivenSavedUser_WhenAnotherUserWithTheSameUsernameIsSaved_ThenDuplicateUsernameException() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+        User sameName = new User(repo.nextId(), "alice", "other-alice@example.com", "HASH", 30);
+
+        assertThrows(DuplicateUsernameException.class, () -> repo.save(sameName),
+                "a second user must not be saved under a username another user holds");
+    }
+
+    @Test
+    void GivenSavedUser_WhenTheSameUserIsSavedAgain_ThenSaved() {
+        User alice = new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20);
+        repo.save(alice);
+
+        assertDoesNotThrow(() -> repo.save(alice), "saving a user again keeps its own username");
+        assertTrue(repo.existsByUsername("alice"));
     }
 }
