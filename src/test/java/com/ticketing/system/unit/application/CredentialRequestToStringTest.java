@@ -165,6 +165,53 @@ class CredentialRequestToStringTest {
                 "MarketControlRequestDTO.toString() dropped the action: " + rendered);
     }
 
+    @Test
+    void GivenGuestSession_WhenToString_ThenTheCreationTimeIsStillShown() {
+        GuestSessionDTO session = new GuestSessionDTO(GUEST_SESSION_ID, Instant.parse("2026-01-01T00:00:00Z"));
+
+        String rendered = session.toString();
+
+        assertTrue(rendered.contains("createdAt=2026-01-01T00:00:00Z"),
+                "GuestSessionDTO.toString() dropped the creation time: " + rendered);
+    }
+
+    // A guest buyer's only other field is a null user id, so the member case shows the field survives.
+    @Test
+    void GivenMemberBuyerContext_WhenToString_ThenTheUserIdIsStillShown() {
+        BuyerContextDTO buyer = BuyerContextDTO.member(42);
+
+        String rendered = buyer.toString();
+
+        assertTrue(rendered.contains("userId=42"), "BuyerContextDTO.toString() dropped the user id: " + rendered);
+    }
+
+    @Test
+    void GivenCardDetails_WhenToString_ThenTheMaskedLastFourDigitsAreStillShown() {
+        String rendered = cardDetails().toString();
+
+        assertTrue(rendered.contains("**** **** **** 4242"),
+                "CardDetailsDTO.toString() dropped the masked last four digits: " + rendered);
+    }
+
+    @Test
+    void GivenGuestPaymentRequest_WhenToString_ThenTheIdempotencyKeyIsStillShown() {
+        PaymentRequestDTO request = new PaymentRequestDTO("idem-under-test", 100.0, "USD", cardDetails(), null, EMAIL);
+
+        String rendered = request.toString();
+
+        assertTrue(rendered.contains("idempotencyKey=idem-under-test"),
+                "PaymentRequestDTO.toString() dropped the idempotency key: " + rendered);
+    }
+
+    @Test
+    void GivenExpiredMemberOrder_WhenOrderExpiredEventToString_ThenTheUserIdIsStillShown() {
+        OrderExpiredEvent expired = new OrderExpiredEvent(17, null);
+
+        String rendered = expired.toString();
+
+        assertTrue(rendered.contains("userId=17"), "OrderExpiredEvent.toString() dropped the user id: " + rendered);
+    }
+
     // #187: the masked card number and CVV are already left out; the holder name is personal data,
     // and the expiry completes what a leaked card number would need.
 
