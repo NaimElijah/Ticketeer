@@ -256,7 +256,7 @@ overrides them. Set each value in one place.
 | `IDENTITY_RESERVED_USERNAMES` | Comma-separated usernames no member may register, ignoring case; `PLATFORM_ADMIN_USERNAME` is always reserved too | `admin,platform.admin` |
 | `TICKET_RESERVATION_DURATION` | Ticket hold, in minutes | `10` |
 | `ORDER_EXPIRATION_DURATION` | Read by no code yet (#166); the hold time is `TICKET_RESERVATION_DURATION` | `60` |
-| `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window · dashboard refresh (`0` stops it) | `5` · `5000` |
+| `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window, at most `120` (the metrics retention; a longer one stops the boot) · dashboard refresh (`0` stops it) | `5` · `5000` |
 | `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
 | `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |

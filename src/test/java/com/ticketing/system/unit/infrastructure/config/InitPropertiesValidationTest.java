@@ -127,6 +127,31 @@ class InitPropertiesValidationTest {
         });
     }
 
+    // #187: InMemorySystemMetrics keeps two hours of events, so a longer rate window would be computed
+    // over a truncated count.
+    @Test
+    void GivenRateWindowLongerThanMetricsRetention_WhenContextStarts_ThenFailsNamingTheField() {
+        runner.withPropertyValues("analytics.rate-window-minutes=121").run(context -> {
+            assertThat(context).as("a rate window over the 120-minute metrics retention must stop the boot")
+                    .hasFailed();
+            Throwable root = NestedExceptionUtils.getRootCause(context.getStartupFailure());
+            assertThat(root).isInstanceOf(BindValidationException.class);
+            ValidationErrors errors = ((BindValidationException) root).getValidationErrors();
+            assertThat(errors.getName()).hasToString("analytics");
+            assertThat(errors.getAllErrors())
+                    .extracting(error -> ((FieldError) error).getField())
+                    .containsExactly("rateWindowMinutes");
+        });
+    }
+
+    @Test
+    void GivenRateWindowEqualToMetricsRetention_WhenContextStarts_ThenBinds() {
+        runner.withPropertyValues("analytics.rate-window-minutes=120").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(AnalyticsProperties.class).rateWindowMinutes()).isEqualTo(120);
+        });
+    }
+
     @Test
     void GivenUnknownSeedMode_WhenContextStarts_ThenFailsNamingTheProperty() {
         runner.withPropertyValues("seed.mode=resed").run(context -> {

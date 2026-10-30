@@ -20,7 +20,12 @@ public interface ISystemMetrics {
     /** Records one occurrence of {@code type} at the current instant. */
     void record(MetricType type);
 
-    /** Number of {@code type} events recorded within the trailing {@code within} window. */
+    /**
+     * Number of {@code type} events recorded within the trailing {@code within} window.
+     *
+     * @throws IllegalArgumentException if {@code within} is longer than the adapter keeps events for
+     *                                  ({@link InMemorySystemMetrics#RETENTION_MINUTES})
+     */
     long count(MetricType type, Duration within);
 
     /** Cumulative number of {@code type} events recorded since startup. */
