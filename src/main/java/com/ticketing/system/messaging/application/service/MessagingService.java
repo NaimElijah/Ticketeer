@@ -189,14 +189,22 @@ public class MessagingService {
      * {@code relatedEntityRef}, which {@link #submitComplaint} appends to the details in the stored body.
      *
      * @param relatedEntityRef the reference the complaint will carry; {@code null} or blank for none
-     * @return the details' allowance; with no reference, the whole {@link TextLimits#MAX_TEXT_LENGTH}
+     * @return the details' allowance, always positive; with no reference, the whole
+     *         {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws IllegalArgumentException if the reference leaves no room for the details. References are
+     *         built by the caller, never typed by the member, so this is the caller's mistake
      */
     public static int complaintDetailsLimit(String relatedEntityRef) {
         if (!hasRelatedRef(relatedEntityRef)) {
             return TextLimits.MAX_TEXT_LENGTH;
         }
-        return TextLimits.MAX_TEXT_LENGTH
+        int allowance = TextLimits.MAX_TEXT_LENGTH
                 - (RELATED_PREFIX.length() + relatedEntityRef.length() + RELATED_SUFFIX.length());
+        if (allowance <= 0) {
+            throw new IllegalArgumentException("A related reference of " + relatedEntityRef.length()
+                    + " characters leaves no room for the complaint's details");
+        }
+        return allowance;
     }
 
     private static boolean hasRelatedRef(String relatedEntityRef) {

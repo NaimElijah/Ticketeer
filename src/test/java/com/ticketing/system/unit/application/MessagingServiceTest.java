@@ -21,6 +21,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.dto.ComplaintFilterDTO;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.OutreachRequestDTO;
@@ -215,6 +216,18 @@ class MessagingServiceTest {
         assertTrue(ex.getMessage().contains(String.valueOf(DETAILS_ALLOWED_WITH_REF)),
                 () -> "the refusal tells the member the details may have " + DETAILS_ALLOWED_WITH_REF
                         + " characters, was: " + ex.getMessage());
+    }
+
+    // The reference shares the details' column. One that fills it is a caller's mistake, not a limit to
+    // tell the member about: the allowance would be negative ("at most -8 characters").
+    @Test
+    void GivenAReferenceThatLeavesNoRoomForDetails_WhenSubmitComplaint_ThenRefusedAndNothingIsFiled() {
+        String oversizedRef = "x".repeat(TextLimits.MAX_TEXT_LENGTH);
+
+        assertThrows(IllegalArgumentException.class, () -> service.submitComplaint(MEMBER_TOKEN,
+                new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Charged twice.", oversizedRef)));
+
+        assertTrue(service.viewMyConversations(MEMBER_TOKEN).isEmpty(), "no complaint is filed");
     }
 
     @Test
