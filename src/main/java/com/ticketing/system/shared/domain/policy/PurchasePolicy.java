@@ -20,8 +20,9 @@ public interface PurchasePolicy {
 
     /**
      * The refusal to show for {@code context}, naming only the rules it breaks. A leaf has one rule,
-     * so this is {@link #getFailureMessage()}; a composite overrides it to leave out what the
-     * context satisfies.
+     * so this is {@link #getFailureMessage()}. The default names the policy's own rule, which for a
+     * composite is every rule it holds, so a composite must override it to leave out the rules the
+     * context meets.
      *
      * @param context the purchase this policy refused
      * @return the reason for the refusal, possibly empty when no rule has a message
