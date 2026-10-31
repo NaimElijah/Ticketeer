@@ -142,8 +142,9 @@ public class InventoryService implements InventoryCommandPort {
         for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : byEventThenZone.entrySet()) {
             int eventId = eventEntry.getKey();
             // Hold the buyer lock around load -> mutate -> save for this event. The whole per-event block is
-            // best-effort: any failure is logged and swallowed, because the gateway refund and the
-            // receipt/ticket flips have already committed — a stock-return hiccup must never fail the refund.
+            // best-effort: the gateway refund and the receipt/ticket flips have already committed, so a
+            // failed stock return must never fail the refund. It does leave the places SOLD for good, with
+            // nothing to repair them, so every way it can fail is logged at ERROR.
             try {
                 eventRepository.lockForBuyerOperation(eventId);     // self-lock this event
                 try {
@@ -152,18 +153,20 @@ public class InventoryService implements InventoryCommandPort {
                     eventRepository.unlockBuyerOperation(eventId);  // release this event's lock
                 }
             } catch (RuntimeException e) {
-                log.warn("Refund: failed to return event {} inventory to stock", eventId, e);
+                log.error("Refund: returning places to stock failed; they stay SOLD. eventId={}, placesByZone={}",
+                        eventId, placesByZone(eventEntry.getValue()), e);
             }
         }
     }
 
     // The refund calls this with no transaction of its own (RefundService.requestRefund), so without one
     // here the loaded event is detached by the time it is saved, and a reservation that commits in the
-    // same zone meanwhile makes the save lose on the zone's @Version (on PostgreSQL a lost race can also
-    // surface as a lock wait or deadlock, all ConcurrencyFailureException, as in ADR-015's Phase 3 retry).
-    // A lost attempt rolls back whole, so
-    // running it again on a fresh load is safe. Giving up leaves the refunded places SOLD for good, so the
-    // last loss is logged at ERROR, not at the WARN of the other per-event failures.
+    // same zone meanwhile makes the save lose on the zone's @Version. On PostgreSQL a lost race can also
+    // surface as a deadlock, and on H2 as a lock timeout, both ConcurrencyFailureException as in ADR-015's
+    // Phase 3 retry; PostgreSQL sets no lock_timeout, so a long lock wait there ends at the socket timeout
+    // instead, which is no lost race and is not run again. A lost attempt rolls back whole, so running it
+    // again on a fresh load is safe. Giving up leaves the refunded places SOLD for good, so the last loss is
+    // logged at ERROR, as returnSoldToStock logs every other failure.
     private void returnEventToStock(int eventId, Map<Integer, List<InventoryLineDTO>> linesByZone) {
         for (int attempt = 1; ; attempt++) {
             try {
