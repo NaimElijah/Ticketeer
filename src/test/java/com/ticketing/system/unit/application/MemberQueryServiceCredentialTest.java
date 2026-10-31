@@ -6,13 +6,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
@@ -23,8 +25,9 @@ import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.shared.dto.MemberDTO;
 import com.ticketing.system.shared.dto.MemberSearchResultDTO;
-import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.testutil.AdjustableClock;
 
 /**
  * Member data needs a credential (#187), as every application service call does: the member search
@@ -36,6 +39,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 class MemberQueryServiceCredentialTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
+    private static final long MEMBER_TTL_MINUTES = 1440;
     // At least 256 bits, as JwtSessionManager requires of its HMAC secret.
     private static final String JWT_TEST_SECRET =
             "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
@@ -43,16 +47,17 @@ class MemberQueryServiceCredentialTest {
     private static final int MEMBER_ID = 7;
     private static final int ADMIN_ID = 7;
 
+    private AdjustableClock clock;
     private UserRepository userRepository;
     private JwtSessionManager sessionManager;
     private MemberQueryService service;
 
     @BeforeEach
     void setUp() {
-        Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
+        clock = new AdjustableClock(T0);
         userRepository = mock(UserRepository.class);
-        sessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET), new SessionProperties(1440, 30),
-                new MemorySessionRepository(clock), clock);
+        sessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET),
+                new SessionProperties(MEMBER_TTL_MINUTES, 30), new MemorySessionRepository(clock), clock);
         service = new MemberQueryService(userRepository, sessionManager);
     }
 
@@ -81,6 +86,23 @@ class MemberQueryServiceCredentialTest {
     @Test
     void GivenMalformedToken_WhenGetMemberProfile_ThenRefusedWithoutReadingAnyMember() {
         assertThrows(InvalidTokenException.class, () -> service.getMemberProfile("not.a.jwt"));
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void GivenNoToken_WhenGetMemberProfile_ThenRefusedWithoutReadingAnyMember() {
+        assertThrows(InvalidTokenException.class, () -> service.getMemberProfile(null),
+                "a missing token must be refused like an invalid one");
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void GivenExpiredMemberToken_WhenGetMemberProfile_ThenSessionExpiredWithoutReadingAnyMember() {
+        String memberToken = sessionManager.generateToken(MEMBER_ID, "alice");
+        clock.advance(Duration.ofMinutes(MEMBER_TTL_MINUTES).plusSeconds(1));
+
+        assertThrows(SessionExpiredException.class, () -> service.getMemberProfile(memberToken),
+                "an expired token is told apart from an invalid one, so the UI can say the session ended");
         verifyNoInteractions(userRepository);
     }
 
@@ -116,8 +138,28 @@ class MemberQueryServiceCredentialTest {
 
     @Test
     void GivenNoToken_WhenSearchByUsername_ThenRefusedWithoutReadingAnyMember() {
-        assertThrows(DomainException.class, () -> service.searchByUsername(null, "ali"),
+        assertThrows(InvalidTokenException.class, () -> service.searchByUsername(null, "ali"),
                 "a missing token must be refused like an invalid one");
+        verifyNoInteractions(userRepository);
+    }
+
+    @ParameterizedTest(name = "query ''{0}''")
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void GivenAdminTokenAndBlankQuery_WhenSearchByUsername_ThenEmptyWithoutReadingAnyMember(String query) {
+        String adminToken = sessionManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertEquals(List.of(), service.searchByUsername(adminToken, query));
+        verifyNoInteractions(userRepository);
+    }
+
+    // The credential is checked first, so a blank query does not let a member token through.
+    @Test
+    void GivenMemberTokenAndBlankQuery_WhenSearchByUsername_ThenRefused() {
+        String memberToken = sessionManager.generateToken(MEMBER_ID, "alice");
+
+        assertThrows(InvalidTokenException.class, () -> service.searchByUsername(memberToken, "   "),
+                "a blank query must not answer before the token is checked");
         verifyNoInteractions(userRepository);
     }
 }

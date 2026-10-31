@@ -861,8 +861,8 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenSessionStoreUnreachable_WhenValidateCredentialWithAMemberJwt_ThenTheStoreFailurePropagates() {
-        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(clock));
-        JwtSessionManager onStore = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, clock);
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
         String token = onStore.generateToken(MEMBER_ID, "alice");
         store.goDown();
 
@@ -872,8 +872,8 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenSessionStoreUnreachable_WhenInvalidate_ThenTheStoreFailurePropagates() {
-        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(clock));
-        JwtSessionManager onStore = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, clock);
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
         String token = onStore.generateToken(MEMBER_ID, "alice");
         store.goDown();
 
@@ -883,8 +883,8 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenSessionStoreUnreachable_WhenTryExtractUserId_ThenTheStoreFailurePropagates() {
-        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(clock));
-        JwtSessionManager onStore = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, clock);
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
         String token = onStore.generateToken(MEMBER_ID, "alice");
         store.goDown();
 
@@ -893,15 +893,26 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void GivenJwtSignedWithAnotherKey_WhenValidateCredential_ThenFalse() {
-        String token = manager.generateToken(MEMBER_ID, "alice");
+    void GivenSessionStoreUnreachable_WhenValidateCredentialWithAGuestId_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        store.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+        store.goDown();
 
-        assertFalse(manager.validateCredential(signedWithAnotherKey(token)));
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.validateCredential(GUEST_SID),
+                "an unreachable session store must not read as an unknown guest");
+    }
+
+    @Test
+    void GivenJwtSignedWithAnotherKey_WhenValidateCredential_ThenFalse() {
+        String token = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(boundManager.validateCredential(signedWithAnotherKey(token)));
     }
 
     @Test
     void GivenExpiredMemberJwt_WhenValidateCredential_ThenFalse() {
-        JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), sessions, clock);
+        JwtSessionManager expiredManager = expiredOnIssueManager();
         String token = expiredManager.generateToken(MEMBER_ID, "alice");
 
         assertFalse(expiredManager.validateCredential(token));
@@ -909,32 +920,32 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenMalformedToken_WhenInvalidate_ThenNoOpWithoutThrowing() {
-        String liveToken = manager.generateToken(MEMBER_ID, "alice");
+        String liveToken = boundManager.generateToken(MEMBER_ID, "alice");
 
-        assertDoesNotThrow(() -> manager.invalidate("not.a.jwt"));
+        assertDoesNotThrow(() -> boundManager.invalidate("not.a.jwt"));
 
-        assertTrue(manager.validateToken(liveToken), "a malformed token revokes nothing");
+        assertTrue(boundManager.validateToken(liveToken), "a malformed token revokes nothing");
     }
 
     @Test
     void GivenJwtSignedWithAnotherKey_WhenInvalidate_ThenNoOpWithoutThrowing() {
-        String liveToken = manager.generateToken(MEMBER_ID, "alice");
+        String liveToken = boundManager.generateToken(MEMBER_ID, "alice");
 
-        assertDoesNotThrow(() -> manager.invalidate(signedWithAnotherKey(liveToken)));
+        assertDoesNotThrow(() -> boundManager.invalidate(signedWithAnotherKey(liveToken)));
 
-        assertTrue(manager.validateToken(liveToken), "a token whose signature fails names no session to revoke");
+        assertTrue(boundManager.validateToken(liveToken), "a token whose signature fails names no session to revoke");
     }
 
     @Test
     void GivenJwtSignedWithAnotherKey_WhenTryExtractUserId_ThenEmpty() {
-        String token = manager.generateToken(MEMBER_ID, "alice");
+        String token = boundManager.generateToken(MEMBER_ID, "alice");
 
-        assertEquals(Optional.empty(), manager.tryExtractUserId(signedWithAnotherKey(token)));
+        assertEquals(Optional.empty(), boundManager.tryExtractUserId(signedWithAnotherKey(token)));
     }
 
     @Test
     void GivenExpiredMemberJwt_WhenTryExtractUserId_ThenEmpty() {
-        JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), sessions, clock);
+        JwtSessionManager expiredManager = expiredOnIssueManager();
         String token = expiredManager.generateToken(MEMBER_ID, "alice");
 
         assertEquals(Optional.empty(), expiredManager.tryExtractUserId(token));
@@ -945,9 +956,20 @@ class JwtSessionManagerTest {
     private static final String OTHER_SECRET =
         "another-secret-that-is-also-long-enough-for-hmac-sha-256-but-not-ours";
 
+    /** A manager on the fixed clock, over {@code store}. */
+    private static JwtSessionManager onFixedClock(SessionRepository store) {
+        return new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, FIXED_CLOCK);
+    }
+
+    /** A manager on the fixed clock whose tokens are past their expiry when issued (a negative TTL). */
+    private static JwtSessionManager expiredOnIssueManager() {
+        return new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1),
+                new MemorySessionRepository(FIXED_CLOCK), FIXED_CLOCK);
+    }
+
     /** The same claims, so the same sid, re-signed with a key the manager does not hold. */
     private static String signedWithAnotherKey(String token) {
-        io.jsonwebtoken.Claims claims = Jwts.parser().verifyWith(TEST_KEY).build()
+        io.jsonwebtoken.Claims claims = Jwts.parser().verifyWith(TEST_KEY).clock(() -> Date.from(T0)).build()
                 .parseSignedClaims(token).getPayload();
         return Jwts.builder().claims(claims)
                 .signWith(Keys.hmacShaKeyFor(OTHER_SECRET.getBytes(StandardCharsets.UTF_8)))

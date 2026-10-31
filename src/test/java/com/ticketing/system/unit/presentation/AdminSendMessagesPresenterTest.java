@@ -140,7 +140,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void searchUsers_invalidToken_returnsNotAuthenticated() {
+    void GivenMemberQueryRejectsTheToken_WhenSearchUsers_ThenNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(memberQuery).searchByUsername(TOKEN, "ali");
 
         AdminSendMessagesPresenter.SearchOutcome outcome = presenter.searchUsers(TOKEN, "ali");
