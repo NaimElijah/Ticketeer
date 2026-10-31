@@ -12,6 +12,7 @@ import com.ticketing.system.catalog.application.port.in.EventDisplayInfoDTO;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 
 /**
  * Catalog application service implementing {@link CatalogEventDisplayPort}: it flattens an
@@ -34,7 +35,7 @@ public class EventDisplayQueryService implements CatalogEventDisplayPort {
         this.eventRepository = eventRepository;   // store the event port
     }
 
-    /** {@inheritDoc} Null-safe: any load failure or missing event yields {@code null}. */
+    /** {@inheritDoc} Null-safe for a missing event, which yields {@code null}; any other load failure propagates. */
     @Override
     public EventDisplayInfoDTO describeEvent(int eventId) {
         Event event = findEvent(eventId);          // best-effort load
@@ -60,11 +61,11 @@ public class EventDisplayQueryService implements CatalogEventDisplayPort {
                 zones);
     }
 
-    /** Best-effort event load — a since-deleted event (or repo throw) becomes {@code null}. */
+    /** Event load where a since-deleted event becomes {@code null}; a store failure is not a missing event. */
     private Event findEvent(int eventId) {
         try {
-            return eventRepository.findById(eventId);   // may throw if absent — normalized to null below
-        } catch (RuntimeException e) {
+            return eventRepository.findById(eventId);
+        } catch (EventNotFoundException e) {
             return null;
         }
     }

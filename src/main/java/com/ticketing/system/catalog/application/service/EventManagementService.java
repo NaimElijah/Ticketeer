@@ -129,12 +129,11 @@ public class EventManagementService {
             throw new IllegalArgumentException("An event needs a venue location");
         }
 
-        ProductionCompany company = null;
-        // TODO: see about all the other exceptions throws handlings/catches.
+        ProductionCompany company;
         try {
             company = companyRepository.getCompanyById(request.companyId());
-        } catch (RuntimeException e) {
-            log.error("Error - company not found: {}, {}", request.companyId(), e.getMessage());
+        } catch (CompanyNotFoundException e) {
+            log.warn("Request rejected: company not found. companyId={}", request.companyId());
             throw new CompanyNotFoundException();
         }
 
@@ -664,8 +663,8 @@ public class EventManagementService {
 
         try {
             companyRepository.getCompanyById(companyId);
-        } catch (RuntimeException e) {
-            log.error("Error - company not found: {}, {}", companyId, e.getMessage());
+        } catch (CompanyNotFoundException e) {
+            log.warn("Request rejected: company not found. companyId={}", companyId);
             throw new CompanyNotFoundException();
         }
 

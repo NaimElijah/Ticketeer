@@ -429,32 +429,20 @@ public class CatalogService {
     }
 
     // *HELPER METHOD* to return the active ProductionCompany for a given companyId, or null if not found or not active.
+    // Any other failure of the lookup propagates: a store that cannot answer is not a company that is not public.
     private ProductionCompany activeCompanyOrNull(int companyId) {
+        ProductionCompany company;
         try {
-            ProductionCompany company = productionCompanyRepository.getCompanyById(companyId);
-            // will throw if company not found, and if it doesn't throw but the company is not active, we'll return null to indicate that the company is not publicly visible.
-            if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
-                return null;
-            }
-            return company;
-        } catch (RuntimeException e) {
-            // If the company is not found or any other exception occurs, return null to indicate that the company does not exist.
+            company = productionCompanyRepository.getCompanyById(companyId);
+        } catch (CompanyNotFoundException e) {
             return null;
         }
+        return company.getStatus() == CompanyStatus.ACTIVE ? company : null;
     }
 
     // *HELPER METHOD* to require that a ProductionCompany exists and is active, throwing CompanyNotFoundException or CompanyClosedException if not.
     private ProductionCompany requireActiveCompany(int companyId) {
-        ProductionCompany company;
-        try {
-            company = productionCompanyRepository.getCompanyById(companyId);
-        } catch (RuntimeException e) {
-            throw new CompanyNotFoundException(companyId);
-        }
-
-        if (company == null) {
-            throw new CompanyNotFoundException(companyId);
-        }
+        ProductionCompany company = productionCompanyRepository.getCompanyById(companyId);
 
         if (company.getStatus() != CompanyStatus.ACTIVE) {
             throw new CompanyClosedException(companyId);
