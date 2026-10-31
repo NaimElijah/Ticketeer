@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchaseStage;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
 import com.ticketing.system.support.BaseDomainTest;
@@ -1098,5 +1100,56 @@ class EventTest extends BaseDomainTest {
                 ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy()));
+    }
+
+    // ---- aggregate rules hold on every path: artists named, a scheduled event keeps a zone (#187) ----
+    // A null or blank artist was stored, and getArtistsNames() then threw in every listing. A SCHEDULED
+    // event must have inventory to be scheduled (transitionToScheduled), but a reconfiguration or a
+    // zone removal could take its last zone away.
+
+    @Test
+    void GivenANullArtist_WhenAnEventIsConstructed_ThenItIsRefused() {
+        assertRefused(assertThrows(RuntimeException.class,
+                () -> scheduledEventWithArtists(Arrays.asList("Artist 1", null))));
+    }
+
+    @Test
+    void GivenABlankArtist_WhenAnEventIsConstructed_ThenItIsRefused() {
+        assertRefused(assertThrows(RuntimeException.class,
+                () -> scheduledEventWithArtists(List.of("Artist 1", "   "))));
+    }
+
+    @Test
+    void GivenAScheduledEvent_WhenItsVenueIsReconfiguredWithNoZones_ThenItIsRefusedAndItKeepsItsZone() {
+        VenueMap noZones = new VenueMap(2, LOCATION, List.of());
+
+        assertRefused(assertThrows(RuntimeException.class, () -> event.configureVenueMap(noZones, COMPANY_ID)));
+
+        assertEquals(List.of(ZONE_ID), zoneIds(event));
+    }
+
+    @Test
+    void GivenAScheduledEventWithOneZone_WhenThatZoneIsRemoved_ThenItIsRefusedAndTheZoneStays() {
+        assertRefused(assertThrows(RuntimeException.class, () -> event.removeInventoryZone(ZONE_ID, COMPANY_ID)));
+
+        assertEquals(List.of(ZONE_ID), zoneIds(event));
+    }
+
+    private Event scheduledEventWithArtists(List<String> artists) {
+        return new Event(EVENT_ID, "Concert", 4.5, artists, EventCategory.CONCERT, COMPANY_ID, EventStatus.SCHEDULED,
+                new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100))), List.of(FIXED_SHOW),
+                JERUSALEM, null, new DiscountPolicy(0));
+    }
+
+    private static List<Integer> zoneIds(Event event) {
+        return event.getVenueMap().getInventoryZones().stream().map(InventoryZone::getId).toList();
+    }
+
+    // Refused as invalid input, with a message the user can read (ServiceErrors.userMessage), not by
+    // an accident such as a NullPointerException.
+    private static void assertRefused(RuntimeException refusal) {
+        assertTrue(refusal instanceof IllegalArgumentException || refusal instanceof IllegalStateException
+                || refusal instanceof DomainException,
+                "expected a refusal as invalid input, but got " + refusal);
     }
 }

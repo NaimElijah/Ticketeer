@@ -13,6 +13,7 @@ import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.support.BaseDomainTest;
 
 public class VenueMapTest extends BaseDomainTest {
@@ -92,5 +93,31 @@ public class VenueMapTest extends BaseDomainTest {
         assertTrue(map.getZone(2).hasGridPlacement());
         assertEquals(1, map.getZone(2).getGridRow());
         assertEquals(2, map.getZone(2).getGridCol());
+    }
+
+    // ---- aggregate rules hold on every path: a constructed map's zones are unique (#187) ----
+    // addZone refuses a zone whose id is taken or whose name is taken ignoring case; the constructor
+    // took any list, so a whole-map reconfiguration could bring in what addZone refuses.
+
+    @Test
+    void GivenTwoZonesNamedFloorIgnoringCase_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50), new StandingZone(2, "FLOOR", 10, 50));
+
+        assertRefused(assertThrows(RuntimeException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3)));
+    }
+
+    @Test
+    void GivenTwoZonesWithTheSameId_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50), new StandingZone(1, "Balcony", 10, 50));
+
+        assertRefused(assertThrows(RuntimeException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3)));
+    }
+
+    // Refused as invalid input, with a message the user can read (ServiceErrors.userMessage), not by
+    // an accident such as a NullPointerException.
+    private static void assertRefused(RuntimeException refusal) {
+        assertTrue(refusal instanceof IllegalArgumentException || refusal instanceof IllegalStateException
+                || refusal instanceof DomainException,
+                "expected a refusal as invalid input, but got " + refusal);
     }
 }

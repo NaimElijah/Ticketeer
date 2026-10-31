@@ -51,6 +51,8 @@ public class Event implements InvariantChecked {
     private static final String NAME_FIELD = "Event name";
     private static final String DESCRIPTION_FIELD = "Event description";
     private static final String ARTIST_FIELD = "Artist name";
+    // Scheduling needs inventory (transitionToScheduled), so a scheduled event may not lose all of it.
+    private static final String SCHEDULED_NEEDS_A_ZONE = "A scheduled event must keep at least one inventory zone";
 
     @Id
     private int id;
@@ -124,6 +126,7 @@ public class Event implements InvariantChecked {
         // (single source of truth). Collection copies are null-safe so a null input
         // reaches checkInvariants() as a clean IllegalStateException instead of an NPE here.
         requireTextFits(name, description, artistsNames);
+        requireNamedArtists(artistsNames);
         this.id = id;
         this.name = name;
         this.description = description;
@@ -282,6 +285,10 @@ public class Event implements InvariantChecked {
             throw new IllegalStateException("Cannot reconfigure venue map while tickets are reserved or sold");
         }
 
+        if (status == EventStatus.SCHEDULED && venueMap.getInventoryZones().isEmpty()) {
+            throw new IllegalStateException(SCHEDULED_NEEDS_A_ZONE);
+        }
+
         this.venueMap = venueMap;
 
         // UC-20: binding a venue map with inventory advances a draft event to SCHEDULED.
@@ -341,7 +348,16 @@ public class Event implements InvariantChecked {
     
     public void removeInventoryZone(int zoneId, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
+        if (status == EventStatus.SCHEDULED && isOnlyZone(zoneId)) {
+            throw new IllegalStateException(SCHEDULED_NEEDS_A_ZONE);
+        }
         venueMap.removeZone(zoneId);
+    }
+
+    // An id that is not on the map is not its only zone, so removeZone still reports it as not found.
+    private boolean isOnlyZone(int zoneId) {
+        List<InventoryZone> zones = venueMap.getInventoryZones();
+        return zones.size() == 1 && zones.get(0).getId() == zoneId;
     }
 
     
@@ -731,6 +747,19 @@ public class Event implements InvariantChecked {
         TextLimits.requireFits(DESCRIPTION_FIELD, description);
         if (artistsNames != null) {
             artistsNames.forEach(artist -> TextLimits.requireFits(ARTIST_FIELD, artist));
+        }
+    }
+
+    // A null artist broke every listing that reads the names (getArtistsNames copies them with
+    // List.copyOf), and a blank one names nobody. Checked before any field is assigned.
+    private static void requireNamedArtists(List<String> artistsNames) {
+        if (artistsNames == null) {
+            return; // a missing list is checkInvariants' to refuse
+        }
+        for (String artist : artistsNames) {
+            if (artist == null || artist.isBlank()) {
+                throw new IllegalArgumentException("Every artist needs a name");
+            }
         }
     }
 

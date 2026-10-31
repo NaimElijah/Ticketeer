@@ -65,6 +65,12 @@ public class VenueMap implements InvariantChecked {
         if (gridRows < 1 || gridCols < 1) {
             throw new IllegalArgumentException("Venue grid must be at least 1x1");
         }
+        // A whole map arrives here on reconfiguration, so it must refuse what addZone refuses one at a time.
+        List<InventoryZone> accepted = new ArrayList<>();
+        for (InventoryZone zone : inventoryZones) {
+            requireUniqueAmong(accepted, zone);
+            accepted.add(zone);
+        }
 
         this.id = id;
         this.location = location;
@@ -247,7 +253,15 @@ public class VenueMap implements InvariantChecked {
             throw new IllegalArgumentException("Zone id must be positive");
         }
 
-        for (InventoryZone existingZone : inventoryZones) {
+        requireUniqueAmong(inventoryZones, zone);
+
+        zone.checkInvariants();
+    }
+
+    // A zone is looked up by id, and shown by name, so neither may repeat within a map; names compare
+    // ignoring case.
+    private static void requireUniqueAmong(List<InventoryZone> existingZones, InventoryZone zone) {
+        for (InventoryZone existingZone : existingZones) {
             if (existingZone.getId() == zone.getId()) {
                 throw new IllegalArgumentException("Zone id already exists: " + zone.getId());
             }
@@ -256,8 +270,6 @@ public class VenueMap implements InvariantChecked {
                 throw new IllegalArgumentException("Zone name already exists: " + zone.getName());
             }
         }
-
-        zone.checkInvariants();
     }
 
 
