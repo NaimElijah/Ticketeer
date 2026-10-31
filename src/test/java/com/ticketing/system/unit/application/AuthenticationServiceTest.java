@@ -39,11 +39,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
@@ -69,7 +74,6 @@ import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
-import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
@@ -381,11 +385,24 @@ class AuthenticationServiceTest {
         when(mockUserRepo.existsByUsername("bob")).thenReturn(true);
         when(mockUserRepo.nextId()).thenReturn(42);
 
-        RuntimeException refusal = assertThrows(RuntimeException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> service.register(new RegisterRequestDTO(" bob", "bob2@example.com", "Password1", "guest-1", 56)),
                 "' bob' would register a look-alike of the existing account bob");
 
-        assertUserReadable(refusal);
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @Test
+    void GivenBobExists_WhenRegisterBobWithATrailingSpace_ThenRefusedBeforeAnyRepositoryCallOrHash() {
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.existsByUsername("bob")).thenReturn(true);
+        when(mockUserRepo.nextId()).thenReturn(42);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO("bob ", "bob2@example.com", "Password1", "guest-1", 56)),
+                "'bob ' would register a look-alike of the existing account bob");
+
         verifyNoInteractions(mockUserRepo);
         verifyNoInteractions(mockHasher);
     }
@@ -395,19 +412,65 @@ class AuthenticationServiceTest {
         mockValidGuestSession("guest-1");
         when(mockUserRepo.nextId()).thenReturn(42);
 
-        RuntimeException refusal = assertThrows(RuntimeException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> service.register(new RegisterRequestDTO("   ", "blank@example.com", "Password1", "guest-1", 56)));
 
-        assertUserReadable(refusal);
         verifyNoInteractions(mockUserRepo);
         verifyNoInteractions(mockHasher);
     }
 
-    private static void assertUserReadable(RuntimeException refusal) {
-        assertTrue(refusal instanceof DomainException
-                        || refusal instanceof IllegalArgumentException
-                        || refusal instanceof IllegalStateException,
-                "the refusal must be one whose message reaches the user, but was " + refusal);
+    // ----------------------------------------------------------------------
+    // Register — the username is limited to the characters the UI allows, [A-Za-z0-9._-] (#187).
+    // RegisterView submits whatever its field holds, and trim() strips only characters up to U+0020,
+    // so a name the live check refuses (a no-break or zero-width space, a Cyrillic look-alike, an
+    // inner space, a bidi override) would still register a look-alike of another account. The length
+    // (3–32 in the UI) is not enforced here: that is open question OQ-8.
+    // ----------------------------------------------------------------------
+
+    static Stream<Arguments> usernamesOutsideTheAllowedCharacters() {
+        return Stream.of(
+                Arguments.of("a trailing no-break space", "bob\u00A0"),
+                Arguments.of("only no-break spaces", "\u00A0\u00A0\u00A0"),
+                Arguments.of("a trailing zero-width space", "bob\u200B"),
+                Arguments.of("a Cyrillic a in admin", "\u0430dmin"),
+                Arguments.of("an inner space", "TicketHub Support"),
+                Arguments.of("a right-to-left override", "\u202Enimda"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("usernamesOutsideTheAllowedCharacters")
+    void GivenUsernameOutsideTheAllowedCharacters_WhenRegister_ThenRefusedBeforeAnyRepositoryCallOrHash(
+            String description, String username) {
+        givenRegistrationWillSucceed("guest-1");
+        clearInvocations(mockHasher);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO(username, "new@example.com", "Password1", "guest-1", 56)),
+                "a username with " + description + " is outside [A-Za-z0-9._-] and must be refused");
+
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockSessionRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @Test
+    void GivenUsernameOfEveryAllowedCharacterKind_WhenRegister_ThenRegistered() {
+        givenRegistrationWillSucceed("guest-1");
+
+        service.register(new RegisterRequestDTO("alice.b-2_x", "alice@example.com", "Password1", "guest-1", 56));
+
+        verify(mockUserRepo, times(1)).save(argThat(user -> "alice.b-2_x".equals(user.getUsername())));
+    }
+
+    // The UI asks for 3 to 32 characters, but register does not enforce a length (OQ-8), and the
+    // review scenario registers two-character names.
+    @Test
+    void GivenTwoCharacterUsername_WhenRegister_ThenRegistered() {
+        givenRegistrationWillSucceed("guest-1");
+
+        service.register(new RegisterRequestDTO("u1", "u1@example.com", "Password1", "guest-1", 56));
+
+        verify(mockUserRepo, times(1)).save(argThat(user -> "u1".equals(user.getUsername())));
     }
 
     // ----------------------------------------------------------------------

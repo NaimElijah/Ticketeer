@@ -28,10 +28,12 @@ public class UsernameAvailabilityPresenter {
      * Allowed username shape: 3–32 chars, letters / digits / dot /
      * underscore / hyphen. The shape matches the placeholder text on
      * {@code RegisterView} plus the dot-bearing seed users
-     * ({@code naim.founder}, {@code avi.avocado}, …).
+     * ({@code naim.founder}, {@code avi.avocado}, …). The characters are
+     * the ones {@code register} enforces; the length is checked here only
+     * (OQ-8).
      */
     private static final Pattern USERNAME_PATTERN =
-        Pattern.compile("^[A-Za-z0-9._-]{3,32}$");
+        Pattern.compile("^" + AuthenticationService.USERNAME_CHARACTERS + "{3,32}$");
 
     private final MemberQueryService memberQueryService;
     private final AuthenticationService authenticationService;

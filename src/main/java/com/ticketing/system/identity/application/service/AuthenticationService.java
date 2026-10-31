@@ -90,6 +90,16 @@ public class AuthenticationService {
 
     private static final int MIN_PASSWORD_LENGTH = 8;
 
+    /**
+     * The characters a username may hold, as a regular-expression character class: ASCII letters,
+     * digits, dot, underscore and hyphen (business rule 1). {@link #register} refuses a name holding
+     * any other. Public so the registration form's live check uses the same class. It carries no
+     * length bound: the form's 3 to 32 characters are not enforced at registration (OQ-8).
+     */
+    public static final String USERNAME_CHARACTERS = "[A-Za-z0-9._-]";
+
+    private static final Pattern USERNAME_PATTERN = Pattern.compile(USERNAME_CHARACTERS + "+");
+
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final SessionManager sessionManager;
@@ -315,7 +325,8 @@ public class AuthenticationService {
      *                                     {@value #MAX_PASSWORD_UTF8_BYTES} bytes in UTF-8
      * @throws ReservedUsernameException   username is reserved ({@link #isUsernameReserved}), padded
      *                                     or not
-     * @throws IllegalArgumentException    username is blank, or starts or ends with whitespace
+     * @throws IllegalArgumentException    username is blank, or holds a character outside
+     *                                     {@link #USERNAME_CHARACTERS}, whitespace included
      * @throws DuplicateUsernameException  username already taken, including by a registration that
      *                                     committed after this one's check
      * @throws DuplicateEmailException     email already registered
@@ -323,7 +334,7 @@ public class AuthenticationService {
     @Transactional
     public void register(RegisterRequestDTO request) {
         // 1. Cheap format validation first — bots / garbage fail before any IO. A reserved name is
-        //    refused as reserved even when padded, so that check comes before the padding one.
+        //    refused as reserved even when padded, so that check comes before the character one.
         validateEmail(request.email());
         validatePassword(request.rawPassword());
         if (isUsernameReserved(request.username())) {
@@ -357,14 +368,17 @@ public class AuthenticationService {
         log.info("member registered: username={} id={}", user.getUsername(), user.getUserId());
     }
 
-    // Accounts are looked up by the exact name (business rule 1), so a padded name would register a
-    // look-alike of another account that its owner could not tell apart on screen.
+    // Accounts are looked up by the exact name (business rule 1), so a name padded with whitespace, or
+    // holding an invisible, bidi or non-Latin look-alike character, would register a look-alike of
+    // another account that its owner could not tell apart on screen. The form checks the same
+    // characters, but submits whatever its field holds.
     private static void validateUsername(String username) {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("Username must not be blank");
         }
-        if (!username.equals(username.trim())) {
-            throw new IllegalArgumentException("Username must not start or end with whitespace");
+        if (!USERNAME_PATTERN.matcher(username).matches()) {
+            throw new IllegalArgumentException(
+                    "Username may contain only the letters A-Z and a-z, digits, '.', '_' and '-'");
         }
     }
 
