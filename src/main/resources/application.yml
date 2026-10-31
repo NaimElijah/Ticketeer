@@ -52,7 +52,8 @@ spring:
 database:
   socket-timeout: ${DB_SOCKET_TIMEOUT:30s}
 
-# JWT signing secret (consumed by Infrastructure/security/JwtSessionManager — UC-12).
+# JWT signing secret (UC-12). Binds to identity's JwtProperties; the boot refuses a secret under 32
+# characters (JwtSessionManager), naming the key but never printing the value.
 # In production the secret MUST be supplied via environment variable, never committed. Outside dev and
 # test the boot refuses this default (CommittedDefaultSecretsGuard repeats it, and its test pins the two).
 jwt:

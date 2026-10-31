@@ -11,10 +11,10 @@ import java.util.UUID;
 import javax.crypto.SecretKey;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.identity.application.port.out.SessionManager;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
@@ -31,9 +31,11 @@ import io.jsonwebtoken.security.Keys;
 /**
  * jjwt-backed implementation of {@link SessionManager}. UC-12 / UC-14.
  *
- * <p>Tokens are HMAC-signed with {@code jwt.secret}. jjwt picks HS256, HS384 or HS512 from the
- * secret's length (the committed 70-byte dev default gives HS512) and refuses a secret shorter
- * than 256 bits when this bean is built. Tokens expire after {@code session.member-ttl-minutes},
+ * <p>Tokens are HMAC-signed with {@code jwt.secret} ({@link JwtProperties}). The constructor refuses a
+ * secret shorter than {@value JwtProperties#MIN_SECRET_LENGTH} characters (256 bits) with an
+ * {@link IllegalStateException} that names the key but never the secret, so the boot stops on it.
+ * jjwt picks HS256, HS384 or HS512 from the secret's length (the
+ * committed 70-byte dev default gives HS512). Tokens expire after {@code session.member-ttl-minutes},
  * checked against the injected clock (the JWT's exp claim and the Session row's expiresAt are
  * always kept in sync by construction).
  * Revocation (UC-14) is recorded by deleting the corresponding {@link Session}
@@ -68,16 +70,37 @@ public class JwtSessionManager implements SessionManager {
     // from the injected clock, so both sides must read the same one (ADR-008).
     private final io.jsonwebtoken.Clock jwtClock;
 
+    /**
+     * @param jwtProperties     the signing secret
+     * @param sessionProperties the member session lifetime, which every token's expiry follows
+     * @param sessions          the session rows tokens are bound to
+     * @param clock             the source of "now" for issuing and checking expiry
+     * @throws IllegalStateException the secret is shorter than {@value JwtProperties#MIN_SECRET_LENGTH}
+     *                               characters; the message names {@code jwt.secret}, never its value
+     */
     public JwtSessionManager(
-            @Value("${jwt.secret}") String secret,
+            JwtProperties jwtProperties,
             SessionProperties sessionProperties,
             SessionRepository sessions,
             Clock clock) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.signingKey = Keys.hmacShaKeyFor(signingSecretOf(jwtProperties).getBytes(StandardCharsets.UTF_8));
         this.expirationMillis = Duration.ofMinutes(sessionProperties.memberTtlMinutes()).toMillis();
         this.sessions = sessions;
         this.clock = clock;
         this.jwtClock = () -> Date.from(clock.instant());
+    }
+
+    // Checked here rather than by a binding constraint on JwtProperties, whose failure report prints
+    // the rejected value; so the message names the key and the minimum, never the secret or any part
+    // of it. Counting characters is enough: each one is at least one byte in UTF-8, so jjwt's own
+    // WeakKeyException, which would not name the key, cannot follow.
+    private static String signingSecretOf(JwtProperties jwtProperties) {
+        String secret = jwtProperties.secret();
+        if (secret == null || secret.length() < JwtProperties.MIN_SECRET_LENGTH) {
+            throw new IllegalStateException("jwt.secret (env JWT_SECRET) must be at least "
+                    + JwtProperties.MIN_SECRET_LENGTH + " characters, the 256 bits HS256 signing needs");
+        }
+        return secret;
     }
 
 
@@ -152,7 +175,7 @@ public class JwtSessionManager implements SessionManager {
         if (looksLikeJwt(credential)) {
             try {
                 return validateToken(credential);
-            } catch (Exception e) {
+            } catch (InvalidTokenException | SessionExpiredException e) {
                 return false;
             }
         }
@@ -223,18 +246,19 @@ public class JwtSessionManager implements SessionManager {
     @Override
     public void invalidate(String token) {
         if (token == null || token.isBlank()) return;
+        Claims claims;
         try {
             // Expiry-tolerant parsing: an expired token still revokes its session (idempotent
             // revocation). A token whose signature fails names no session we can trust, so it
-            // throws and revokes nothing.
-            Claims claims = parseJwtUnchecked(token);
-            String sid = claims.get(CLAIM_SID, String.class);
-            if (sid != null && !sid.isBlank()) {
-                sessions.delete(sid);
-                log.debug("session deleted");
-            }
-        } catch (Exception e) {
-            // Malformed input — nothing to invalidate. Idempotent.
+            // revokes nothing.
+            claims = parseJwtUnchecked(token);
+        } catch (JwtException | IllegalArgumentException e) {
+            return;
+        }
+        String sid = claims.get(CLAIM_SID, String.class);
+        if (sid != null && !sid.isBlank()) {
+            sessions.delete(sid);
+            log.debug("session deleted");
         }
     }
 
@@ -247,7 +271,7 @@ public class JwtSessionManager implements SessionManager {
     public Optional<Integer> tryExtractUserId(String token) {
         try {
             return Optional.of(extractUserId(token));
-        } catch (Exception e) {
+        } catch (InvalidTokenException | SessionExpiredException e) {
             return Optional.empty();
         }
     }

@@ -41,14 +41,14 @@ public class MyProfilePresenter {
 
     /** The live member's profile; NotAuthenticated for a guest or an admin, Failure on error. */
     public Outcome load() {
-        int userId = identity.memberUserId();
-        if (userId == SessionIdentity.NO_MEMBER_USER_ID) {
+        String memberToken = identity.memberToken();
+        if (memberToken == null) {
             return new Outcome.NotAuthenticated();
         }
         try {
-            return new Outcome.Success(memberQueryService.getMemberProfile(userId));
+            return new Outcome.Success(memberQueryService.getMemberProfile(memberToken));
         } catch (RuntimeException e) {
-            log.warn("Failed to load profile for user {}: {}", userId, e.getMessage());
+            log.warn("Failed to load profile: {}", e.getMessage());
             return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }

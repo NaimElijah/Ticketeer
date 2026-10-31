@@ -1,5 +1,7 @@
 package com.ticketing.system.unit.infrastructure.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -19,6 +21,7 @@ import javax.crypto.SecretKey;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
@@ -26,12 +29,12 @@ import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.testutil.LogCapture;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.WeakKeyException;
 
 class JwtSessionManagerTest {
 
@@ -52,6 +55,7 @@ class JwtSessionManagerTest {
     private static final String ROLE_ADMIN = "ADMIN";
 
     private static final Instant T0 = Instant.parse("2100-01-01T00:00:00Z");
+    private static final Clock FIXED_CLOCK = Clock.fixed(T0, ZoneOffset.UTC);
     // The same integer on purpose: member and admin ids share one id space.
     private static final int MEMBER_ID = 1;
     private static final int ADMIN_ID = 1;
@@ -71,11 +75,11 @@ class JwtSessionManagerTest {
     void setUp() {
         clock = Clock.systemUTC();
         sessions = new MemorySessionRepository(clock);
-        manager = new JwtSessionManager(SECRET, sessionTtl(60), sessions, clock);
+        manager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), sessions, clock);
 
         Clock fixed = Clock.fixed(T0, ZoneOffset.UTC);
         boundSessions = new MemorySessionRepository(fixed);
-        boundManager = new JwtSessionManager(SECRET, sessionTtl(60), boundSessions, fixed);
+        boundManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), boundSessions, fixed);
     }
 
     @Test
@@ -119,7 +123,7 @@ class JwtSessionManagerTest {
         // Negative expiration → token is issued already past its exp claim.
         Clock expiredClock = Clock.systemUTC();
         SessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
-        JwtSessionManager expiredManager = new JwtSessionManager(SECRET, sessionTtl(-1), expiredSessions, expiredClock);
+        JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), expiredSessions, expiredClock);
         String token = expiredManager.generateToken(42, "alice");
         assertThrows(SessionExpiredException.class, () -> expiredManager.validateToken(token));
     }
@@ -128,7 +132,7 @@ class JwtSessionManagerTest {
     void GivenClockFixedYearsBeforeRealTime_WhenValidateFreshToken_ThenTrue() {
         Clock past = Clock.fixed(Instant.parse("2020-01-01T00:00:00Z"), ZoneOffset.UTC);
         JwtSessionManager pastManager =
-                new JwtSessionManager(SECRET, sessionTtl(60), new MemorySessionRepository(past), past);
+                new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), new MemorySessionRepository(past), past);
         String token = pastManager.generateToken(42, "alice");
 
         assertTrue(pastManager.validateToken(token));
@@ -138,9 +142,9 @@ class JwtSessionManagerTest {
     void GivenInjectedClockPastTokenExpiry_WhenValidate_ThenThrowsSessionExpired() {
         Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager twoHoursLater = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager twoHoursLater = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofHours(2)), ZoneOffset.UTC));
 
         assertThrows(SessionExpiredException.class, () -> twoHoursLater.validateToken(token));
@@ -150,9 +154,9 @@ class JwtSessionManagerTest {
     void GivenInjectedClockOneSecondBeforeExp_WhenValidate_ThenTrue() {
         Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager justBeforeExp = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager justBeforeExp = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofMinutes(60)).minusSeconds(1), ZoneOffset.UTC));
 
         assertTrue(justBeforeExp.validateToken(token));
@@ -162,9 +166,9 @@ class JwtSessionManagerTest {
     void GivenInjectedClockOneSecondAfterExp_WhenValidate_ThenThrowsSessionExpired() {
         Instant issuedAt = Instant.parse("2100-01-01T00:00:00Z");
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager justAfterExp = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager justAfterExp = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofMinutes(60)).plusSeconds(1), ZoneOffset.UTC));
 
         assertThrows(SessionExpiredException.class, () -> justAfterExp.validateToken(token));
@@ -176,9 +180,9 @@ class JwtSessionManagerTest {
         // The repository's clock stays at issue time, so the row still counts as live to it and
         // only invalidate() can make it disappear.
         SessionRepository shared = new MemorySessionRepository(Clock.fixed(issuedAt, ZoneOffset.UTC));
-        String token = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        String token = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt, ZoneOffset.UTC)).generateToken(42, "alice");
-        JwtSessionManager twoHoursLater = new JwtSessionManager(SECRET, sessionTtl(60), shared,
+        JwtSessionManager twoHoursLater = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), shared,
                 Clock.fixed(issuedAt.plus(Duration.ofHours(2)), ZoneOffset.UTC));
         assertTrue(shared.existsByUserId(42));
 
@@ -198,11 +202,31 @@ class JwtSessionManagerTest {
         assertTrue(manager.validateToken(token));
     }
 
+    // #187: the length rule lives here, not in JwtProperties, because a bind-validation failure
+    // report prints the rejected value; so the refusal names the key and never the secret.
     @Test
-    void GivenSecretShorterThan256Bits_WhenConstruct_ThenThrowsWeakKey() {
-        // 31 bytes: one short of the 256 bits HS256 needs.
-        assertThrows(WeakKeyException.class, () -> new JwtSessionManager(
-                "only-31-bytes-of-secret-materia", sessionTtl(60), sessions, clock));
+    void GivenSecretOf31Characters_WhenConstruct_ThenIllegalStateNamingTheKeyButNotTheSecret() {
+        // 31 ASCII characters, so 31 bytes: one short of the 256 bits HS256 needs.
+        String shortSecret = "only-31-bytes-of-secret-materia";
+        assertEquals(31, shortSecret.length(), "test fixture: secret length");
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> new JwtSessionManager(
+                new JwtProperties(shortSecret), sessionTtl(60), new MemorySessionRepository(FIXED_CLOCK), FIXED_CLOCK));
+
+        assertThat(refusal.getMessage()).as("the refusal names the key to fix").contains("jwt.secret");
+        assertThat(refusal.getMessage()).as("the refusal must never carry the secret").doesNotContain(shortSecret);
+    }
+
+    @Test
+    void GivenSecretOfExactly32Characters_WhenConstruct_ThenItIssuesTokensThatValidate() {
+        String secret = "exactly-32-bytes-of-secret-mater";
+        assertEquals(32, secret.length(), "test fixture: secret length");
+        JwtSessionManager onShortestKey = new JwtSessionManager(
+                new JwtProperties(secret), sessionTtl(60), new MemorySessionRepository(FIXED_CLOCK), FIXED_CLOCK);
+
+        String token = onShortestKey.generateToken(MEMBER_ID, "alice");
+
+        assertTrue(onShortestKey.validateToken(token), "32 bytes is the shortest key HS256 accepts");
     }
 
     @Test
@@ -830,7 +854,191 @@ class JwtSessionManagerTest {
                 "rejecting a token whose role does not match its row must not log the row's id");
     }
 
+    // ---- a session-store failure is not a bad token (#187) ----
+    // A rejected token means "no" (false, a no-op, empty), but a store that cannot answer must
+    // surface: otherwise a member is told their credential is invalid during an outage, and a logout
+    // whose delete failed leaves the session, and so the JWT, live while the user sees a sign-out.
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenValidateCredentialWithAMemberJwt_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        String token = onStore.generateToken(MEMBER_ID, "alice");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.validateCredential(token),
+                "an unreachable session store must not read as an invalid credential");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenInvalidate_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        String token = onStore.generateToken(MEMBER_ID, "alice");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.invalidate(token),
+                "a logout whose delete failed leaves the session live, so it must not look like it succeeded");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenTryExtractUserId_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        String token = onStore.generateToken(MEMBER_ID, "alice");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.tryExtractUserId(token),
+                "an unreachable session store must not read as a token naming no user");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenValidateCredentialWithAGuestId_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        store.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.validateCredential(GUEST_SID),
+                "an unreachable session store must not read as an unknown guest");
+    }
+
+    @Test
+    void GivenJwtSignedWithAnotherKey_WhenValidateCredential_ThenFalse() {
+        String token = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(boundManager.validateCredential(signedWithAnotherKey(token)));
+    }
+
+    @Test
+    void GivenExpiredMemberJwt_WhenValidateCredential_ThenFalse() {
+        JwtSessionManager expiredManager = expiredOnIssueManager();
+        String token = expiredManager.generateToken(MEMBER_ID, "alice");
+
+        assertFalse(expiredManager.validateCredential(token));
+    }
+
+    @Test
+    void GivenMalformedToken_WhenInvalidate_ThenNoOpWithoutThrowing() {
+        String liveToken = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertDoesNotThrow(() -> boundManager.invalidate("not.a.jwt"));
+
+        assertTrue(boundManager.validateToken(liveToken), "a malformed token revokes nothing");
+    }
+
+    @Test
+    void GivenJwtSignedWithAnotherKey_WhenInvalidate_ThenNoOpWithoutThrowing() {
+        String liveToken = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertDoesNotThrow(() -> boundManager.invalidate(signedWithAnotherKey(liveToken)));
+
+        assertTrue(boundManager.validateToken(liveToken), "a token whose signature fails names no session to revoke");
+    }
+
+    @Test
+    void GivenJwtSignedWithAnotherKey_WhenTryExtractUserId_ThenEmpty() {
+        String token = boundManager.generateToken(MEMBER_ID, "alice");
+
+        assertEquals(Optional.empty(), boundManager.tryExtractUserId(signedWithAnotherKey(token)));
+    }
+
+    @Test
+    void GivenExpiredMemberJwt_WhenTryExtractUserId_ThenEmpty() {
+        JwtSessionManager expiredManager = expiredOnIssueManager();
+        String token = expiredManager.generateToken(MEMBER_ID, "alice");
+
+        assertEquals(Optional.empty(), expiredManager.tryExtractUserId(token));
+    }
+
     // ---- helpers ----
+
+    private static final String OTHER_SECRET =
+        "another-secret-that-is-also-long-enough-for-hmac-sha-256-but-not-ours";
+
+    /** A manager on the fixed clock, over {@code store}. */
+    private static JwtSessionManager onFixedClock(SessionRepository store) {
+        return new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, FIXED_CLOCK);
+    }
+
+    /** A manager on the fixed clock whose tokens are past their expiry when issued (a negative TTL). */
+    private static JwtSessionManager expiredOnIssueManager() {
+        return new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1),
+                new MemorySessionRepository(FIXED_CLOCK), FIXED_CLOCK);
+    }
+
+    /** The same claims, so the same sid, re-signed with a key the manager does not hold. */
+    private static String signedWithAnotherKey(String token) {
+        io.jsonwebtoken.Claims claims = Jwts.parser().verifyWith(TEST_KEY).clock(() -> Date.from(T0)).build()
+                .parseSignedClaims(token).getPayload();
+        return Jwts.builder().claims(claims)
+                .signWith(Keys.hmacShaKeyFor(OTHER_SECRET.getBytes(StandardCharsets.UTF_8)))
+                .compact();
+    }
+
+    /**
+     * A session store that works until {@link #goDown()}, after which every read and delete fails as
+     * an unreachable database does.
+     */
+    private static final class OutageSessionRepository implements SessionRepository {
+
+        private final SessionRepository live;
+        private boolean down;
+
+        OutageSessionRepository(SessionRepository live) {
+            this.live = live;
+        }
+
+        void goDown() {
+            down = true;
+        }
+
+        private void failIfDown() {
+            if (down) {
+                throw new DataAccessResourceFailureException("session store unreachable");
+            }
+        }
+
+        @Override
+        public void save(Session session) {
+            failIfDown();
+            live.save(session);
+        }
+
+        @Override
+        public Optional<Session> findById(String sessionId) {
+            failIfDown();
+            return live.findById(sessionId);
+        }
+
+        @Override
+        public boolean existsByUserId(int userId) {
+            failIfDown();
+            return live.existsByUserId(userId);
+        }
+
+        @Override
+        public void delete(String sessionId) {
+            failIfDown();
+            live.delete(sessionId);
+        }
+
+        @Override
+        public java.util.List<Session> findExpiredBefore(Instant cutoff) {
+            failIfDown();
+            return live.findExpiredBefore(cutoff);
+        }
+
+        @Override
+        public void lockForUpdate(String id) {
+            live.lockForUpdate(id);
+        }
+
+        @Override
+        public void unlock(String id) {
+            live.unlock(id);
+        }
+    }
 
     /** The sid claim, read with the test's own key so it does not depend on the manager's readers. */
     private static String sidOf(String token) {

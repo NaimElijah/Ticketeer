@@ -20,6 +20,7 @@ import com.ticketing.system.governance.application.service.SystemAnalyticsServic
 import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.ConversationType;
@@ -60,7 +61,7 @@ class SystemAnalyticsServiceAdminGateTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
-        sessionManager = new JwtSessionManager(JWT_TEST_SECRET,
+        sessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET),
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES),
                 new MemorySessionRepository(clock), clock);
 

@@ -1,6 +1,6 @@
 # ADR-003: Platform initialization fails startup, except for an external-service outage
 
-- **Status:** Accepted
+- **Status:** Accepted. Extended by [ADR-016](ADR-016-bounds-on-secret-values-are-checked-outside-bind-validation.md) (bounds on secret values are checked outside bind validation).
 - **Date:** 2026-10-18
 - **Issue:** #27 (fail startup on invalid init config or initial-state file)
 

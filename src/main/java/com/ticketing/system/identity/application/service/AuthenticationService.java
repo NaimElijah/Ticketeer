@@ -17,8 +17,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -41,6 +45,7 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.AccountLockedException;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
@@ -86,6 +91,16 @@ public class AuthenticationService {
 
     private static final int MIN_PASSWORD_LENGTH = 8;
 
+    /**
+     * The characters a username may hold, as a regular-expression character class: ASCII letters,
+     * digits, dot, underscore and hyphen (business rule 1). {@link #register} refuses a name holding
+     * any other. Public so the registration form's live check uses the same class. It carries no
+     * length bound: the form's 3 to 32 characters are not enforced at registration (OQ-8).
+     */
+    public static final String USERNAME_CHARACTERS = "[A-Za-z0-9._-]";
+
+    private static final Pattern USERNAME_PATTERN = Pattern.compile(USERNAME_CHARACTERS + "+");
+
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final SessionManager sessionManager;
@@ -109,6 +124,8 @@ public class AuthenticationService {
     // injected hasher, so it costs what a stored hash costs whatever the hasher's settings, from a
     // random secret that is discarded, so no password matches it.
     private final String dummyHash;
+    // Login's database steps, so its notifications are delivered after they commit.
+    private final TransactionTemplate transactionTemplate;
 
     public AuthenticationService(
             UserRepository userRepository,
@@ -122,7 +139,8 @@ public class AuthenticationService {
             AdminRepository adminRepository,
             SessionProperties sessionProperties,
             LockoutProperties lockoutProperties,
-            IdentityProperties identityProperties) {
+            IdentityProperties identityProperties,
+            PlatformTransactionManager transactionManager) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.sessionManager = sessionManager;
@@ -137,6 +155,7 @@ public class AuthenticationService {
         this.loginAttempts = new LoginAttemptTracker(lockoutProperties, clock);
         this.reservedUsernames = reservedUsernamesOf(identityProperties);
         this.dummyHash = passwordHasher.hash(UUID.randomUUID().toString());
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     private static Set<String> reservedUsernamesOf(IdentityProperties identity) {
@@ -305,25 +324,30 @@ public class AuthenticationService {
      *                                     or fails the format check
      * @throws WeakPasswordException       password fails strength rules, or is longer than
      *                                     {@value #MAX_PASSWORD_UTF8_BYTES} bytes in UTF-8
-     * @throws ReservedUsernameException   username is reserved ({@link #isUsernameReserved})
+     * @throws ReservedUsernameException   username is reserved ({@link #isUsernameReserved}), padded
+     *                                     or not
+     * @throws IllegalArgumentException    username is blank, or holds a character outside
+     *                                     {@link #USERNAME_CHARACTERS}, whitespace included
      * @throws DuplicateUsernameException  username already taken, including by a registration that
      *                                     committed after this one's check
      * @throws DuplicateEmailException     email already registered
      */
     @Transactional
     public void register(RegisterRequestDTO request) {
-        // 1. Cheap format validation first — bots / garbage fail before any IO.
+        // 1. Cheap format validation first — bots / garbage fail before any IO. A reserved name is
+        //    refused as reserved even when padded, so that check comes before the character one.
         validateEmail(request.email());
         validatePassword(request.rawPassword());
+        if (isUsernameReserved(request.username())) {
+            throw new ReservedUsernameException(request.username());
+        }
+        validateUsername(request.username());
 
         // 2. Guest session must exist and still be a Guest.
         Session session = requireActiveGuestSession(request.guestSessionId());
 
         // 3. Uniqueness. The check gives the usual answer early; two registrations that pass it at
         //    once are settled by save, which refuses the second with DuplicateUsernameException.
-        if (isUsernameReserved(request.username())) {
-            throw new ReservedUsernameException(request.username());
-        }
         if (userRepository.existsByUsername(request.username())) {
             throw new DuplicateUsernameException(request.username());
         }
@@ -343,6 +367,20 @@ public class AuthenticationService {
         systemMetrics.record(MetricType.REGISTRATION);
 
         log.info("member registered: username={} id={}", user.getUsername(), user.getUserId());
+    }
+
+    // Accounts are looked up by the exact name (business rule 1), so a name padded with whitespace, or
+    // holding an invisible, bidi or non-Latin look-alike character, would register a look-alike of
+    // another account that its owner could not tell apart on screen. The form checks the same
+    // characters, but submits whatever its field holds.
+    private static void validateUsername(String username) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username must not be blank");
+        }
+        if (!USERNAME_PATTERN.matcher(username).matches()) {
+            throw new IllegalArgumentException(
+                    "Username may contain only the letters A-Z and a-z, digits, '.', '_' and '-'");
+        }
     }
 
     private static void validateEmail(String email) {
@@ -385,6 +423,17 @@ public class AuthenticationService {
      * "Unknown username" and "wrong password" raise the same exception, after the same
      * password-hash work, to avoid username enumeration via the response or its timing.
      *
+     * <p>
+     * Not one transaction. The password is checked before any transaction opens, so no connection
+     * is held during the hash work. The promotion, the cart merge and the token issue then run in
+     * one transaction, and the member's pending notifications (UC-37) are delivered only after it
+     * commits: delivery opens connections of its own, and must not mark a notification sent for a
+     * login that then rolls back. If that delivery then fails with a store failure, a lost
+     * connection or a lost concurrent update, the member is still signed in: the response carries
+     * no notifications and the failure is logged at WARN. Notifications the delivery had not reached
+     * stay PENDING for the notification poller; any it had already saved as SENT are not shown.
+     *
+     * @return the member's token, restored active order and delivered notifications
      * @throws GuestSessionRequiredException no / unknown / expired / non-guest
      *                                       sessionId
      * @throws AccountLockedException        the username's attempt window already holds
@@ -392,10 +441,9 @@ public class AuthenticationService {
      *                                       password is not checked
      * @throws AuthenticationFailedException invalid credentials
      */
-    @Transactional
     public LoginDTO login(LoginRequestDTO request) {
-        // 1. Guest session must exist.
-        Session session = requireActiveGuestSession(request.guestSessionId());
+        // 1. Guest session must exist, before the attempt is counted.
+        requireActiveGuestSession(request.guestSessionId());
 
         // 1b. Brute-force lockout (SLR.2 #148) — same policy as admin sign-in. The attempt is
         //     counted before the password is checked, so attempts that arrive together cannot all
@@ -419,26 +467,53 @@ public class AuthenticationService {
         User user = found.get();
         loginAttempts.clear(Pool.MEMBER, request.username());
 
+        // 3-5. Promote, merge the cart and issue the token, atomically.
+        Promotion promotion = transactionTemplate.execute(status -> promote(request.guestSessionId(), user));
+        log.info("member logged in: username={} id={}", user.getUsername(), user.getUserId());
+
+        // 6. UC-37 — only now, after the commit.
+        return new LoginDTO(promotion.token(), promotion.activeOrder(), deliverPendingAfterLogin(user.getUserId()));
+    }
+
+    // The promotion has committed: the guest session is now the member's, so failing the login here
+    // would leave them without a token, and a retry would fail for want of a guest session. Only a
+    // store failure, a connection that cannot be had (CannotCreateTransactionException, raised as a
+    // save's transaction begins) and a lost race (what OptimisticLockTranslationAspect makes of a
+    // lost @Version race in deliverPending) are absorbed. Notifications not yet reached stay PENDING
+    // for the poller; ones deliverPending already saved as SENT before the failure are not shown.
+    private List<NotificationDTO> deliverPendingAfterLogin(int userId) {
+        try {
+            return notificationDispatchService.deliverPending(userId);
+        } catch (DataAccessException | CannotCreateTransactionException | ConcurrentReservationException e) {
+            log.warn("pending notifications not delivered at login, left for the poller: id={}", userId, e);
+            return List.of();
+        }
+    }
+
+    private Promotion promote(String guestSessionId, User user) {
+        // Read again inside the transaction that writes it: the session may have been promoted or
+        // have expired since step 1.
+        Session session = requireActiveGuestSession(guestSessionId);
+
         // 3. Promote — same sessionId, userId set, expiry bumped to Member TTL.
         Instant memberExpiry = clock.instant().plus(memberTtlMinutes, ChronoUnit.MINUTES);
         session.promoteTo(user.getUserId(), memberExpiry);
         sessionRepository.save(session);
 
-        // 4. D9a — cart handling on promotion, delegated to the sales-owned adapter
-        //    (runs inside this @Transactional login, so it stays atomic with the promotion).
+        // 4. D9a — cart handling on promotion, delegated to the sales-owned adapter, atomic with the
+        //    promotion.
         cartRestorationPort.mergeGuestCartOnPromotion(session.getSessionId(), user.getUserId());
 
         // 5. Issue a JWT bound to the existing (now-Member) session.
         String token = sessionManager.generateTokenForSession(session, user.getUsername());
         long expiresAt = sessionManager.extractExpiration(token);
 
-        log.info("member logged in: username={} id={}", user.getUsername(), user.getUserId());
-
         AuthTokenDTO authTokenDTO = new AuthTokenDTO(token, expiresAt, user.getUserId(), user.getUsername());
-        ActiveOrderDTO activeOrderDTO = cartRestorationPort.restoreActiveOrder(user.getUserId());
-        List<NotificationDTO> notifications = notificationDispatchService.deliverPending(user.getUserId());
-        return new LoginDTO(authTokenDTO, activeOrderDTO, notifications);
+        return new Promotion(authTokenDTO, cartRestorationPort.restoreActiveOrder(user.getUserId()));
     }
+
+    /** What login's transaction hands back for the response. */
+    private record Promotion(AuthTokenDTO token, ActiveOrderDTO activeOrder) { }
 
     /**
      * Admin sign-in (#290). Authenticates against the persisted admin pool (never the member pool
@@ -451,14 +526,16 @@ public class AuthenticationService {
     // (member login is unaffected — it promotes an already-persisted guest session).
     @Transactional
     public AuthTokenDTO signInAsAdmin(String username, String rawPassword) {
-        Admission admission = loginAttempts.admit(Pool.ADMIN, username);
+        // Admins are looked up by the trimmed name, so their attempts are counted under it too.
+        String lookupName = username == null ? "" : username.trim();
+        Admission admission = loginAttempts.admit(Pool.ADMIN, lookupName);
         if (!admission.admitted()) {
             log.warn("ADMIN AUTH BLOCKED · username={} · reason=locked-out · at={}", username, clock.instant());
             throw lockedOut(admission);
         }
 
         // An unknown admin costs the same BCrypt work as a wrong password, as in member login.
-        Admin admin = adminRepository.findByUsername(username == null ? "" : username.trim());
+        Admin admin = adminRepository.findByUsername(lookupName);
         String storedHash = admin == null ? dummyHash : admin.getPasswordHash();
         boolean passwordMatches = passwordHasher.matches(rawPassword, storedHash);
         if (admin == null || !passwordMatches) {
@@ -468,7 +545,7 @@ public class AuthenticationService {
             throw new AuthenticationFailedException();
         }
 
-        loginAttempts.clear(Pool.ADMIN, username);
+        loginAttempts.clear(Pool.ADMIN, lookupName);
         String token = sessionManager.generateAdminToken(admin.getId(), admin.getUsername());
         long expiresAt = sessionManager.extractExpiration(token);
         log.info("ADMIN AUTH OK · username={} · id={}", admin.getUsername(), admin.getId());
@@ -499,13 +576,17 @@ public class AuthenticationService {
      * {@link CartRestorationPort#mergeGuestCartOnPromotion}).
      *
      * <p>
-     * Idempotent: logout with a {@code null} / blank / already-revoked token is a no-op.
+     * Idempotent: logout with a {@code null} / blank / already-revoked token is a no-op. The
+     * revocation is the only call to the session store: nothing is read first, so no failed read can
+     * skip it.
+     *
+     * @throws RuntimeException a failure of the session store, propagated unchanged: the session,
+     *     and so the token, may still be live
      */
     @Transactional
     public void logout(LogoutRequestDTO request) {
-        Optional<Integer> userIdOpt = sessionManager.tryExtractUserId(request.token());
         sessionManager.invalidate(request.token());
-        userIdOpt.ifPresent(userId -> log.info("member logged out: id={}", userId));
+        log.info("session revoked at logout");
     }
 
     // Deferred from V1. Not in the UC-12 spec, no acceptance test gates it, and a

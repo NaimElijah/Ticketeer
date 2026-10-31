@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,17 +40,23 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.BcryptPasswordHasher;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 import com.ticketing.system.identity.config.IdentityProperties;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -81,6 +88,7 @@ import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.testutil.AdjustableClock;
+import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.testutil.LogCapture;
 
 class AuthenticationServiceTest {
@@ -124,7 +132,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY);
+                IDENTITY, TestTransactions.noOpManager());
         clearInvocations(mockHasher);
     }
 
@@ -362,6 +370,108 @@ class AuthenticationServiceTest {
 
         assertEquals(refusal, thrown);
         verify(mockSessionRepo, never()).save(guest);
+    }
+
+    // ----------------------------------------------------------------------
+    // Register — the username is checked before any I/O (#187). Accounts are looked up by the exact
+    // name, so a padded name would register a look-alike of an existing account; it is refused up
+    // front, as a blank one is, with a message the user can read (ServiceErrors.userMessage shows
+    // only a DomainException, IllegalArgumentException or IllegalStateException), before any
+    // repository call or password hash.
+    // ----------------------------------------------------------------------
+
+    @Test
+    void GivenBobExists_WhenRegisterBobWithALeadingSpace_ThenRefusedBeforeAnyRepositoryCallOrHash() {
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.existsByUsername("bob")).thenReturn(true);
+        when(mockUserRepo.nextId()).thenReturn(42);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO(" bob", "bob2@example.com", "Password1", "guest-1", 56)),
+                "' bob' would register a look-alike of the existing account bob");
+
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @Test
+    void GivenBobExists_WhenRegisterBobWithATrailingSpace_ThenRefusedBeforeAnyRepositoryCallOrHash() {
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.existsByUsername("bob")).thenReturn(true);
+        when(mockUserRepo.nextId()).thenReturn(42);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO("bob ", "bob2@example.com", "Password1", "guest-1", 56)),
+                "'bob ' would register a look-alike of the existing account bob");
+
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @Test
+    void GivenBlankUsername_WhenRegister_ThenRefusedBeforeAnyRepositoryCallOrHash() {
+        mockValidGuestSession("guest-1");
+        when(mockUserRepo.nextId()).thenReturn(42);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO("   ", "blank@example.com", "Password1", "guest-1", 56)));
+
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    // ----------------------------------------------------------------------
+    // Register — the username is limited to the characters the UI allows, [A-Za-z0-9._-] (#187).
+    // RegisterView submits whatever its field holds, and trim() strips only characters up to U+0020,
+    // so a name the live check refuses (a no-break or zero-width space, a Cyrillic look-alike, an
+    // inner space, a bidi override) would still register a look-alike of another account. The length
+    // (3–32 in the UI) is not enforced here: that is open question OQ-8.
+    // ----------------------------------------------------------------------
+
+    static Stream<Arguments> usernamesOutsideTheAllowedCharacters() {
+        return Stream.of(
+                Arguments.of("a trailing no-break space", "bob\u00A0"),
+                Arguments.of("only no-break spaces", "\u00A0\u00A0\u00A0"),
+                Arguments.of("a trailing zero-width space", "bob\u200B"),
+                Arguments.of("a Cyrillic a in admin", "\u0430dmin"),
+                Arguments.of("an inner space", "TicketHub Support"),
+                Arguments.of("a right-to-left override", "\u202Enimda"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("usernamesOutsideTheAllowedCharacters")
+    void GivenUsernameOutsideTheAllowedCharacters_WhenRegister_ThenRefusedBeforeAnyRepositoryCallOrHash(
+            String description, String username) {
+        givenRegistrationWillSucceed("guest-1");
+        clearInvocations(mockHasher);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO(username, "new@example.com", "Password1", "guest-1", 56)),
+                "a username with " + description + " is outside [A-Za-z0-9._-] and must be refused");
+
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockSessionRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @Test
+    void GivenUsernameOfEveryAllowedCharacterKind_WhenRegister_ThenRegistered() {
+        givenRegistrationWillSucceed("guest-1");
+
+        service.register(new RegisterRequestDTO("alice.b-2_x", "alice@example.com", "Password1", "guest-1", 56));
+
+        verify(mockUserRepo, times(1)).save(argThat(user -> "alice.b-2_x".equals(user.getUsername())));
+    }
+
+    // The UI asks for 3 to 32 characters, but register does not enforce a length (OQ-8), and the
+    // review scenario registers two-character names.
+    @Test
+    void GivenTwoCharacterUsername_WhenRegister_ThenRegistered() {
+        givenRegistrationWillSucceed("guest-1");
+
+        service.register(new RegisterRequestDTO("u1", "u1@example.com", "Password1", "guest-1", 56));
+
+        verify(mockUserRepo, times(1)).save(argThat(user -> "u1".equals(user.getUsername())));
     }
 
     // ----------------------------------------------------------------------
@@ -629,7 +739,7 @@ class AuthenticationServiceTest {
     @Test
     void GivenAnAdminToken_WhenLiveMemberIdIsAsked_ThenEmpty() {
         int sharedId = 1;
-        JwtSessionManager realSessionManager = new JwtSessionManager(JWT_TEST_SECRET,
+        JwtSessionManager realSessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET),
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES),
                 new MemorySessionRepository(fixedClock), fixedClock);
         AuthenticationService serviceOnRealSessions = new AuthenticationService(
@@ -637,7 +747,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY);
+                IDENTITY, TestTransactions.noOpManager());
         String adminToken = realSessionManager.generateAdminToken(sharedId, "admin");
 
         assertEquals(OptionalInt.empty(), serviceOnRealSessions.liveMemberId(adminToken),
@@ -656,6 +766,30 @@ class AuthenticationServiceTest {
     void logout_delegatesToSessionManagerInvalidate() {
         service.logout(new LogoutRequestDTO("SOME_TOKEN"));
         verify(mockSessionManager).invalidate("SOME_TOKEN");
+    }
+
+    // #187: a read of the session store before the revocation adds a way for logout to fail, and one
+    // that a failure in it would roll the revocation back with, since both share logout's transaction.
+    @Test
+    void GivenAToken_WhenLogout_ThenItIsRevokedWithoutReadingTheSessionStoreFirst() {
+        service.logout(new LogoutRequestDTO("SOME_TOKEN"));
+
+        verify(mockSessionManager).invalidate("SOME_TOKEN");
+        verify(mockSessionManager, never()).tryExtractUserId(any());
+    }
+
+    // #187: a logout whose revocation failed leaves the session, and so the token, live; it must not
+    // look like it succeeded.
+    @Test
+    void GivenTheSessionStoreFails_WhenLogout_ThenTheFailurePropagates() {
+        DataAccessResourceFailureException storeFailure =
+                new DataAccessResourceFailureException("session store unreachable");
+        doThrow(storeFailure).when(mockSessionManager).invalidate("SOME_TOKEN");
+
+        DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
+                () -> service.logout(new LogoutRequestDTO("SOME_TOKEN")));
+
+        assertSame(storeFailure, thrown, "logout must let the session store's own failure out unchanged");
     }
 
     @Test
@@ -1011,7 +1145,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY);
+                IDENTITY, TestTransactions.noOpManager());
     }
 
     // ----------------------------------------------------------------------
@@ -1188,7 +1322,8 @@ class AuthenticationServiceTest {
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
                 mockSessionRepo, mock(ISystemMetrics.class),
                 clock, mockAdminRepo,
-                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity);
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity,
+                TestTransactions.noOpManager());
         clearInvocations(mockHasher);
         return built;
     }
@@ -1208,10 +1343,88 @@ class AuthenticationServiceTest {
     }
 
     private static void failLogins(AuthenticationService target, int times) {
+        failLoginsAs(target, "alice", times);
+    }
+
+    private static void failLoginsAs(AuthenticationService target, String username, int times) {
         for (int i = 0; i < times; i++) {
             assertThrows(AuthenticationFailedException.class,
-                    () -> target.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")),
+                    () -> target.login(new LoginRequestDTO(username, WRONG_PASSWORD, "guest-1")),
                     "a wrong password inside an unlocked window is refused as a failed sign-in, not a lock");
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Lockout key (SLR.2, OQ-8, #187). A member's attempts are counted under the username exactly as
+    // member accounts are looked up: names that differ only in case are distinct accounts (business
+    // rule 1), and a padded name names no account. So a sign-in to one account never clears another
+    // account's window, and failures at one never lock another. Admins are looked up by the trimmed
+    // name, so an admin's window is keyed by the trimmed name.
+    // ----------------------------------------------------------------------
+
+    private static final String LOOK_ALIKE_PASSWORD = "Lookalike1";
+
+    @Test
+    void GivenMaxMinusOneFailuresAtAlice_WhenALICESignsInAndAliceFailsTwiceMore_ThenTheSecondIsLocked() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+        givenLookAlikeMemberALICE();
+
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+        lockoutService.login(new LoginRequestDTO("ALICE", LOOK_ALIKE_PASSWORD, "guest-1"));
+        failLogins(lockoutService, 1);
+
+        assertThrows(AccountLockedException.class,
+                () -> lockoutService.login(new LoginRequestDTO("alice", WRONG_PASSWORD, "guest-1")),
+                "a sign-in to the distinct account ALICE must not clear alice's attempt window");
+    }
+
+    @Test
+    void GivenMaxFailuresAtALICE_WhenAliceSignsInWithHerPassword_ThenSignedIn() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+        givenLookAlikeMemberALICE();
+
+        failLoginsAs(lockoutService, "ALICE", MAX_ATTEMPTS);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "failures at the distinct account ALICE must not lock alice");
+    }
+
+    @Test
+    void GivenMaxFailuresAtAliceWithALeadingSpace_WhenAliceSignsInWithHerPassword_ThenSignedIn() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+
+        failLoginsAs(lockoutService, " alice", MAX_ATTEMPTS);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "' alice' names no member account, so failures at it must not lock alice");
+    }
+
+    @Test
+    void GivenFailuresAtPaddedAdminAndAtAdmin_WhenTheyReachMaxAttempts_ThenAdminIsLocked() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        String adminPassword = "AdminPass1";
+        when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "ADMIN_HASH", true));
+        when(mockHasher.matches(any(), eq("ADMIN_HASH")))
+                .thenAnswer(invocation -> adminPassword.equals(invocation.getArgument(0)));
+
+        for (int i = 0; i < MAX_ATTEMPTS - 1; i++) {
+            assertThrows(AuthenticationFailedException.class,
+                    () -> lockoutService.signInAsAdmin(" admin", WRONG_PASSWORD));
+        }
+        assertThrows(AuthenticationFailedException.class, () -> lockoutService.signInAsAdmin("admin", WRONG_PASSWORD));
+
+        assertThrows(AccountLockedException.class, () -> lockoutService.signInAsAdmin("admin", adminPassword),
+                "' admin' signs in to the admin account, so its failures count in admin's window");
+    }
+
+    /** Member ALICE, a distinct account from alice, whose password is {@link #LOOK_ALIKE_PASSWORD}. */
+    private void givenLookAlikeMemberALICE() {
+        User lookAlike = new User(8, "ALICE", "look.alike@example.com", "LOOK_ALIKE_HASH", 30);
+        when(mockUserRepo.findByUsername("ALICE")).thenReturn(Optional.of(lookAlike));
+        when(mockHasher.matches(any(), eq("LOOK_ALIKE_HASH")))
+                .thenAnswer(invocation -> LOOK_ALIKE_PASSWORD.equals(invocation.getArgument(0)));
     }
 }

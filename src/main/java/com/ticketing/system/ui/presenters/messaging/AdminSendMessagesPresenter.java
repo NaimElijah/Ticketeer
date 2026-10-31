@@ -78,7 +78,7 @@ public class AdminSendMessagesPresenter {
             return new SearchOutcome.NotAuthenticated();
         }
         try {
-            return new SearchOutcome.Success(memberQueryService.searchByUsername(query));
+            return new SearchOutcome.Success(memberQueryService.searchByUsername(token, query));
         } catch (InvalidTokenException e) {
             return new SearchOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
