@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +18,8 @@ import com.ticketing.system.notifications.application.port.out.NotificationRepos
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.notifications.application.service.NotificationService;
 import com.ticketing.system.notifications.domain.Notification;
+import com.ticketing.system.notifications.domain.NotificationStatus;
+import com.ticketing.system.notifications.domain.NotificationType;
 
 class NotificationServiceTest {
 
@@ -34,5 +37,21 @@ class NotificationServiceTest {
         ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
         verify(dispatcher).dispatch(sent.capture());
         assertEquals(LocalDateTime.ofInstant(T0, ZoneOffset.UTC), sent.getValue().getCreatedAt());
+    }
+
+    // A manager invitation is still pending, so it must not read as a role change (#187).
+    @Test
+    void GivenPendingManagerAppointment_WhenNotifyManagerAppointmentPending_ThenAPendingAppointmentNotificationIsDispatched() {
+        service.notifyManagerAppointmentPending(7, 100, "Acme");
+
+        ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
+        verify(dispatcher).dispatch(sent.capture());
+        Notification notification = sent.getValue();
+        assertEquals(7, notification.getRecipientUserId());
+        assertEquals(NotificationType.MANAGER_APPOINTMENT_PENDING, notification.getType());
+        assertEquals(NotificationStatus.PENDING, notification.getStatus());
+        assertEquals("You have a pending manager appointment for company 'Acme'. Please accept or reject it.",
+                notification.getMessage());
+        assertEquals(Map.of("companyId", 100, "companyName", "Acme"), notification.getData());
     }
 }

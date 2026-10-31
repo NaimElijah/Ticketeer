@@ -14,6 +14,8 @@ public enum NotificationType {
     COMPANY_CLOSED,
     ROLE_CHANGED,
     OWNER_APPOINTMENT_PENDING,
+    // A new constant needs a migration that re-adds ck_notifications_type with it (ADR-007).
+    MANAGER_APPOINTMENT_PENDING,
     MANAGER_REVOKED,
 
     // General member (I.5.3)

@@ -39,6 +39,7 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.OwnerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.RoleChangedNotice;
@@ -146,8 +147,9 @@ public class CompanyManagementService {
         // Notify target user
         ProductionCompany company = companyRepository.getCompanyById(request.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
-        eventPublisher.publishEvent(new RoleChangedNotice(request.targetUserId(), request.companyId(),
-                company.getName(), "MANAGER"));
+        // The invitee's role changes only on acceptance, which publishes the RoleChangedNotice.
+        eventPublisher.publishEvent(new ManagerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
+                company.getName()));
 
         log.info("Manager appointment created successfully: ownerId={}, targetUserId={}, companyId={}, permissions={}",
                 ownerId, request.targetUserId(), request.companyId(), request.permissions());

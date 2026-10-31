@@ -4,14 +4,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.lang.reflect.RecordComponent;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.InvitationDTO;
@@ -37,6 +42,18 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.organization.domain.CompanyRole;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
@@ -1185,4 +1202,93 @@ public class CompanyManagementServiceTest {
                 assertFalse(company.isOwner(CO_OWNER_ID));
                 assertFalse(membershipService.isOwnerInCompany(CO_OWNER_ID, COMPANY_ID));
         }
+
+        // ---- a manager invitation is a pending offer, not a role change (#187) ----------------
+        // The invitee's role changes only when they accept, so the invitation must not tell them it
+        // already has; the acceptance tells them once.
+
+        private ProductionCompany founderInvitedTheTargetAsManager() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "invitee", TARGET_TOKEN);
+                companyService.appointManager(OWNER_TOKEN,
+                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions));
+                return company;
+        }
+
+        private List<Object> publishedEvents() {
+                return mockingDetails(eventPublisher).getInvocations().stream()
+                                .filter(invocation -> invocation.getMethod().getName().equals("publishEvent"))
+                                .map(invocation -> invocation.getArguments()[0])
+                                .toList();
+        }
+
+        private List<RoleChangedNotice> publishedRoleChangedNotices() {
+                return publishedEvents().stream()
+                                .filter(RoleChangedNotice.class::isInstance)
+                                .map(RoleChangedNotice.class::cast)
+                                .toList();
+        }
+
+        // True when the event is a notice whose userId and companyId components name the given pair:
+        // the shape every shared/event notice addressed to a member has. Kept type-agnostic so it holds
+        // for the pending-manager notice the fix introduces, which does not exist yet.
+        private static boolean isNoticeFor(Object event, int userId, int companyId) {
+                Integer noticeUserId = intRecordComponent(event, "userId");
+                Integer noticeCompanyId = intRecordComponent(event, "companyId");
+                return noticeUserId != null && noticeUserId == userId
+                                && noticeCompanyId != null && noticeCompanyId == companyId;
+        }
+
+        private static Integer intRecordComponent(Object event, String name) {
+                if (!event.getClass().isRecord()) {
+                        return null;
+                }
+                for (RecordComponent component : event.getClass().getRecordComponents()) {
+                        if (component.getName().equals(name) && component.getType() == int.class) {
+                                try {
+                                        return (Integer) component.getAccessor().invoke(event);
+                                } catch (ReflectiveOperationException e) {
+                                        throw new IllegalStateException("Cannot read " + name + " of " + event, e);
+                                }
+                        }
+                }
+                return null;
+        }
+
+        @Test
+        public void GivenOwnerAndTargetUser_WhenInviteManager_ThenNoRoleChangedNoticeIsPublished() {
+                founderInvitedTheTargetAsManager();
+
+                List<RoleChangedNotice> roleChanges = publishedRoleChangedNotices();
+                assertTrue(roleChanges.isEmpty(),
+                                "an invitation is still pending, so the invitee's role has not changed; published: "
+                                                + roleChanges);
+        }
+
+        @Test
+        public void GivenOwnerAndTargetUser_WhenInviteManager_ThenANoticeAddressedToTheInviteeIsPublished() {
+                founderInvitedTheTargetAsManager();
+
+                List<Object> published = publishedEvents();
+                assertTrue(published.stream().anyMatch(event -> isNoticeFor(event, TARGET_USER_ID, COMPANY_ID)),
+                                "the invitee must be told about the invitation in company " + COMPANY_ID + "; published: "
+                                                + published);
+        }
+
+        @Test
+        public void GivenPendingManagerInvitation_WhenTargetAccepts_ThenExactlyOneRoleChangedNoticeNamesTheManagerRole() {
+                founderInvitedTheTargetAsManager();
+                clearInvocations(eventPublisher);
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+
+                assertEquals(List.of(new RoleChangedNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME,
+                                CompanyRole.Manager.name())), publishedRoleChangedNotices(),
+                                "accepting the invitation is the one role change the invitee is told about");
+        }
+
 }

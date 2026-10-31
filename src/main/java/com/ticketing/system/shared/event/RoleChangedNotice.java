@@ -2,8 +2,10 @@ package com.ticketing.system.shared.event;
 
 /**
  * Integration event published by the organization context (CompanyManagementService) when a
- * member's role in a company changes (appointment accepted, manager appointed, or permissions
- * updated). The notifications context listens for it and raises a role-changed notification.
+ * member's role in a company changes (appointment accepted, or permissions updated). A pending
+ * invitation changes no role, so it publishes {@link OwnerAppointmentPendingNotice} or
+ * {@link ManagerAppointmentPendingNotice} instead. The notifications context listens for it and
+ * raises a role-changed notification.
  * Mirrors the former {@code INotificationService.notifyRoleChanged} call.
  */
 public record RoleChangedNotice(

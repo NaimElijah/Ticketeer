@@ -27,6 +27,8 @@ public interface INotificationService {
 
     void notifyOwnerAppointmentPending(int userId, int companyId, String companyName);
 
+    void notifyManagerAppointmentPending(int userId, int companyId, String companyName);
+
     void notifyRoleChanged(int userId, int companyId, String companyName, String newRole);
 
     /**
