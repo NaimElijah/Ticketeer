@@ -1334,4 +1334,48 @@ public class CompanyManagementServiceTest {
                 assertTrue(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID));
         }
 
+        // ---- founding a company is not an invitation (#187) -----------------------------------
+
+        private static final int OTHER_COMPANY_ID = 200;
+
+        private void registerCompanyAs(String token, int companyId, String name) {
+                when(mockCompanyRepo.existsByName(name)).thenReturn(false);
+                when(mockCompanyRepo.nextId()).thenReturn(companyId);
+                companyService.registerCompany(token, new CompanyRegistrationDTO(name, COMPANY_1_DESCRIPTION));
+        }
+
+        @Test
+        public void GivenFounderWhoReceivedNoInvitation_WhenListMyInvitations_ThenTheListIsEmpty() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                registerCompanyAs(OWNER_TOKEN, COMPANY_ID, COMPANY_1_NAME);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(new ProductionCompany(COMPANY_ID, OWNER_ID,
+                                COMPANY_1_NAME, CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+
+                List<InvitationDTO> invitations = companyService.listMyInvitations(OWNER_TOKEN);
+
+                assertEquals(List.of(), invitations,
+                                "founding a company is not an invitation from oneself; listed: " + invitations);
+        }
+
+        @Test
+        public void GivenFounderInvitedToManageAnotherCompany_WhenListMyInvitations_ThenOnlyThatInvitationIsListed() {
+                ProductionCompany invitingCompany = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(invitingCompany);
+                givenUserWithToken(OWNER_ID, "inviter", OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "founderElsewhere", TARGET_TOKEN);
+                registerCompanyAs(TARGET_TOKEN, OTHER_COMPANY_ID, "Company2");
+                when(mockCompanyRepo.getCompanyById(OTHER_COMPANY_ID)).thenReturn(new ProductionCompany(OTHER_COMPANY_ID,
+                                TARGET_USER_ID, "Company2", CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+                companyService.appointManager(OWNER_TOKEN,
+                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions));
+
+                List<InvitationDTO> invitations = companyService.listMyInvitations(TARGET_TOKEN);
+
+                assertEquals(List.of(COMPANY_ID), invitations.stream().map(InvitationDTO::companyId).toList(),
+                                "only the manager invitation is an invitation; listed: " + invitations);
+                assertEquals("inviter", invitations.get(0).fromUsername());
+        }
+
 }

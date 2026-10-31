@@ -435,6 +435,11 @@ public class CompanyManagementService {
 
         List<InvitationDTO> invitations = new ArrayList<>();
         for (CompanyAppointment appt : companyMembershipService.getAllCompanyAppointments(userId)) {
+            // Only a founding appointment names its target as its inviter (a member cannot invite
+            // themselves into a company they already belong to), and founding is not an invitation.
+            if (appt.getInviterId() == appt.getTargetId()) {
+                continue;
+            }
             ProductionCompany company = companyRepository.getCompanyById(appt.getCompanyId());
             String companyName = company != null ? company.getName() : "(unknown company)";
             // getUserById throws (never returns null) when the inviter no longer
