@@ -205,8 +205,11 @@ public class InventoryService implements InventoryCommandPort {
                 // SOLD tickets are returned WITHOUT an order key (ownership isn't checked here).
                 event.returnSoldToStock(zoneId, toStockSelection(zoneEntry.getValue()));
                 anyReturned = true;
-            } catch (RuntimeException e) {
-                log.warn("Refund: failed to return zone {} of event {} to stock", zoneId, eventId, e);
+            } catch (RuntimeException zoneRefusal) {
+                // A zone takes its places back all or nothing, so they all stay SOLD for good: ERROR, as for
+                // an event that fails whole.
+                log.error("Refund: a zone refused its places back; they stay SOLD. eventId={}, zoneId={}, places={}",
+                        eventId, zoneId, zoneEntry.getValue().size(), zoneRefusal);
             }
         }
         if (anyReturned) {
