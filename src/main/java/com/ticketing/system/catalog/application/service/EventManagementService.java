@@ -125,6 +125,9 @@ public class EventManagementService {
     @Transactional
     public EventDetailDTO addEvent(String token, EventCreationDTO request) {
         int ownerId = validateTokenAndGetUserId(token);
+        if (request.location() == null) {
+            throw new IllegalArgumentException("An event needs a venue location");
+        }
 
         ProductionCompany company = null;
         // TODO: see about all the other exceptions throws handlings/catches.
