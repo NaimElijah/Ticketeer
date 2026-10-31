@@ -1,6 +1,8 @@
 package com.ticketing.system.organization.domain;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -184,7 +186,8 @@ public class CompanyAppointment implements InvariantChecked {
         // call never leaves the appointment corrupted. checkInvariants stays the sole
         // validator.
         Set<Permission> previous = this.permissions;
-        this.permissions = newPermissions;
+        // A copy, so the caller keeps no handle on the set this appointment checks.
+        this.permissions = newPermissions == null ? null : EnumSet.copyOf(newPermissions);
         try {
             checkInvariants();
         } catch (RuntimeException ex) {
@@ -236,9 +239,15 @@ public class CompanyAppointment implements InvariantChecked {
         checkInvariants();
     }
 
-    // UC-24 — replace permission set with validation (existing setPermissions does
-    // raw set).
-    public void updatePermissions(EnumSet<Permission> newPermissions) {
+    /**
+     * UC-24 — replaces an active manager appointment's permission set.
+     *
+     * @param newPermissions the new set; copied, so the caller keeps no handle on it
+     * @throws InvalidPermissionException if this is not a manager appointment
+     * @throws IllegalStateException      if the appointment is not active
+     * @throws IllegalArgumentException   if {@code newPermissions} is null or empty
+     */
+    public void updatePermissions(Collection<Permission> newPermissions) {
         if (this.role != CompanyRole.Manager) {
             throw new InvalidPermissionException("Only manager appointments can have permissions.");
         }
@@ -285,8 +294,9 @@ public class CompanyAppointment implements InvariantChecked {
         return inviterId;
     }
 
+    /** A read-only view: the set changes only through {@link #setPermissions} and {@link #updatePermissions}. */
     public Set<Permission> getPermissions() {
-        return permissions;
+        return Collections.unmodifiableSet(permissions);
     }
 
     public int getAppointmentId() {
