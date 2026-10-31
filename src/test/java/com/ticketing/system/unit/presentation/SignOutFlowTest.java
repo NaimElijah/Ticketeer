@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.presentation;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -15,7 +16,10 @@ import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.FreshGuestSession;
+import com.ticketing.system.testutil.LogCapture;
 import com.vaadin.flow.server.VaadinSession;
+
+import ch.qos.logback.classic.Level;
 
 import java.time.Instant;
 
@@ -28,6 +32,7 @@ class SignOutFlowTest {
 
     private AuthenticationService authenticationService;
     private SignOutFlow signOutFlow;
+    private LogCapture logs;
 
     @BeforeEach
     void setUp() {
@@ -40,6 +45,9 @@ class SignOutFlowTest {
     @AfterEach
     void tearDown() {
         VaadinSession.setCurrent(null);
+        if (logs != null) {
+            logs.close();
+        }
     }
 
     @Test
@@ -131,5 +139,23 @@ class SignOutFlowTest {
         assertDoesNotThrow(() -> signOutFlow.execute());
         // Still mints the new guest so the next register/login can proceed.
         verify(authenticationService).startGuestSession();
+    }
+
+    // #187: a failed logout may leave the session, and so the token, live while the user sees a
+    // sign-out. That is actionable, so it is an ERROR, with the exception for its cause and stack.
+    @Test
+    void GivenLogoutFails_WhenExecute_ThenAnErrorIsLoggedWithTheExceptionAttached() {
+        VaadinSession session = mock(VaadinSession.class);
+        when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
+        VaadinSession.setCurrent(session);
+        org.mockito.Mockito.doThrow(new IllegalStateException("session store unreachable"))
+            .when(authenticationService).logout(any());
+        logs = LogCapture.of(SignOutFlow.class);
+
+        signOutFlow.execute();
+
+        assertThat(logs.throwableClassNamesAt(Level.ERROR))
+            .as("the failed logout must be logged at ERROR with the exception attached")
+            .containsExactly(IllegalStateException.class.getName());
     }
 }

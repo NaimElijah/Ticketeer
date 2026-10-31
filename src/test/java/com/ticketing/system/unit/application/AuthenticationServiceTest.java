@@ -767,6 +767,19 @@ class AuthenticationServiceTest {
         verify(mockSessionManager).invalidate("SOME_TOKEN");
     }
 
+    // #187: tryExtractUserId lets a session-store failure out. The id is read only for the log line, so
+    // a failed read must not skip the revocation: the session, and so the token, would stay live.
+    @Test
+    void GivenReadingTheUserIdFailsWithAStoreFailure_WhenLogout_ThenTheTokenIsStillRevokedAndTheFailurePropagates() {
+        when(mockSessionManager.tryExtractUserId("SOME_TOKEN"))
+                .thenThrow(new DataAccessResourceFailureException("session store unreachable"));
+
+        assertThrows(DataAccessResourceFailureException.class,
+                () -> service.logout(new LogoutRequestDTO("SOME_TOKEN")));
+
+        verify(mockSessionManager).invalidate("SOME_TOKEN");
+    }
+
     @Test
     void logout_idempotent_doesNotThrowForGarbageToken() {
         service.logout(new LogoutRequestDTO("not-a-real-token"));

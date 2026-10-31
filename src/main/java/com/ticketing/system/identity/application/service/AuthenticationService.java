@@ -572,15 +572,21 @@ public class AuthenticationService {
      * {@link CartRestorationPort#mergeGuestCartOnPromotion}).
      *
      * <p>
-     * Idempotent: logout with a {@code null} / blank / already-revoked token is a no-op.
+     * Idempotent: logout with a {@code null} / blank / already-revoked token is a no-op. The
+     * revocation is attempted even when reading the token's user id (for the log line) fails.
      *
      * @throws RuntimeException a failure of the session store, propagated unchanged: the session,
      *     and so the token, may still be live
      */
     @Transactional
     public void logout(LogoutRequestDTO request) {
-        Optional<Integer> userIdOpt = sessionManager.tryExtractUserId(request.token());
-        sessionManager.invalidate(request.token());
+        // The id is read only for the log line, so a failure to read it must not skip the revocation.
+        Optional<Integer> userIdOpt;
+        try {
+            userIdOpt = sessionManager.tryExtractUserId(request.token());
+        } finally {
+            sessionManager.invalidate(request.token());
+        }
         userIdOpt.ifPresent(userId -> log.info("member logged out: id={}", userId));
     }
 

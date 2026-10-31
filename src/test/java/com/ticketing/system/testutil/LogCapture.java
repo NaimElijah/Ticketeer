@@ -77,6 +77,22 @@ public final class LogCapture implements AutoCloseable {
                 .toList();
     }
 
+    /**
+     * The class name of the throwable attached to each recorded event at exactly {@code level}, in the
+     * order logged; an event at that level with no throwable attached contributes nothing.
+     *
+     * @param level the level to keep
+     * @return the attached throwables' class names, empty when no event at that level carried one
+     */
+    public List<String> throwableClassNamesAt(Level level) {
+        return List.copyOf(appender.list).stream()
+                .filter(event -> event.getLevel().equals(level))
+                .map(ILoggingEvent::getThrowableProxy)
+                .filter(throwable -> throwable != null)
+                .map(IThrowableProxy::getClassName)
+                .toList();
+    }
+
     /** How many events were recorded, so a test can show its path logged anything at all. */
     public int eventCount() {
         return appender.list.size();
