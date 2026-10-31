@@ -177,7 +177,7 @@ public class CompanyManagementService {
         CompanyAppointment appointment;
 
         if (response.accept()) {
-            requireManagerInviterStillOwner(userId, response.companyId());
+            requireInviterStillOwner(userId, response.companyId());
             // Transitions the pending appointment to ACTIVE (and persists it via the appointment repo).
             appointment = companyMembershipService.acceptInvitation(userId, response.companyId());
             if (appointment.getRole() == CompanyRole.Owner) {
@@ -200,14 +200,14 @@ public class CompanyManagementService {
         companyRepository.updateCompany(company);
     }
 
-    // A manager invitation carries its inviter's authority, so it dies with that authority: once the
-    // inviter is no longer an owner, accepting would grant a role nobody in the company stands behind.
-    private void requireManagerInviterStillOwner(int userId, int companyId) {
+    // A manager invitation or owner offer carries its inviter's authority, so it dies with that
+    // authority: once the inviter is no longer an owner, accepting would grant a role nobody in the
+    // company stands behind. Checked before acceptInvitation, so a refused offer stays pending.
+    private void requireInviterStillOwner(int userId, int companyId) {
         CompanyAppointment pending = companyMembershipService.getPendingCompanyAppointment(userId, companyId);
-        if (pending != null && pending.getRole() == CompanyRole.Manager
-                && !companyMembershipService.isOwnerInCompany(pending.getInviterId(), companyId)) {
-            log.warn("Manager invitation for user {} in company {} refused: its inviter is no longer an owner",
-                    userId, companyId);
+        if (pending != null && !companyMembershipService.isOwnerInCompany(pending.getInviterId(), companyId)) {
+            log.warn("{} invitation for user {} in company {} refused: its inviter is no longer an owner",
+                    pending.getRole(), userId, companyId);
             throw new BusinessRuleViolationException(
                     "This invitation is no longer valid: the owner who sent it is no longer an owner of this company");
         }

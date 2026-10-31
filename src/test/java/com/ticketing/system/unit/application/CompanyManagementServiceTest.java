@@ -1291,4 +1291,47 @@ public class CompanyManagementServiceTest {
                                 "accepting the invitation is the one role change the invitee is told about");
         }
 
+        // ---- an owner offer dies with its inviter's ownership, as a manager invitation does (#187) ----
+
+        private ProductionCompany companyWithCoOwnerWhoOfferedOwnership() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(CO_OWNER_ID, "coOwner", CO_OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "offeree", TARGET_TOKEN);
+
+                companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, CO_OWNER_ID));
+                companyService.respondToAppointment(CO_OWNER_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+                companyService.appointOwner(CO_OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID));
+                return company;
+        }
+
+        @Test
+        public void GivenPendingOwnerOfferFromAnOwnerSinceRevoked_WhenAccepted_ThenRefusedAsNoLongerValid() {
+                ProductionCompany company = companyWithCoOwnerWhoOfferedOwnership();
+                founderRevokesTheCoOwner();
+
+                BusinessRuleViolationException refused = assertThrows(BusinessRuleViolationException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                                new AppointmentResponseDTO(COMPANY_ID, true)),
+                                "an owner offer from an owner who has since been revoked must be refused as no longer valid");
+                assertEquals("This invitation is no longer valid: the owner who sent it is no longer an owner of this company",
+                                refused.getMessage());
+                assertFalse(company.isOwner(TARGET_USER_ID), "the offeree did not become an owner of the company");
+                assertFalse(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID),
+                                "the offeree holds no active owner appointment");
+        }
+
+        @Test
+        public void GivenPendingOwnerOfferFromACurrentCoOwner_WhenAccepted_ThenTheTargetIsAnOwner() {
+                ProductionCompany company = companyWithCoOwnerWhoOfferedOwnership();
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+
+                assertTrue(company.isOwner(TARGET_USER_ID));
+                assertTrue(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID));
+        }
+
 }
