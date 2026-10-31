@@ -101,6 +101,12 @@ public abstract class IEventRepositoryContractTest {
         assertEquals("Rock Night", found.getName());
     }
 
+    // The port promises "never null": catalog's services rely on it and no longer check for null.
+    @Test
+    void GivenNoSuchEvent_WhenFindById_ThenEventNotFound() {
+        assertThrows(EventNotFoundException.class, () -> eventRepo.findById(999));
+    }
+
     // === findForSale: the event a sale commits against (the Jpa lock itself is CancelDuringCheckoutJpaTest's) ===
 
     @Test
