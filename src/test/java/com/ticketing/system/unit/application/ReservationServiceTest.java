@@ -51,6 +51,7 @@ import org.mockito.ArgumentCaptor;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
 import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -115,7 +116,7 @@ public class ReservationServiceTest {
         // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
         // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, mock(ProductionCompanyRepository.class));
+                eventRepository, mock(ProductionCompanyRepository.class), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,

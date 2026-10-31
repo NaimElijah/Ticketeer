@@ -44,6 +44,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.EventNotOnSaleException;
 import com.ticketing.system.shared.exception.InsufficientInventoryException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
+import com.ticketing.system.testutil.TestTransactions;
 
 /**
  * Direct unit coverage of {@link InventoryService} — the catalog inbound port implementation that took
@@ -72,7 +73,7 @@ class InventoryServiceTest {
         // A sale loads its events through findForSale; each test stubs the events once, on findById.
         when(eventRepository.findForSale(anyInt())).thenAnswer(call -> eventRepository.findById(call.<Integer>getArgument(0)));
         companyRepository = mock(ProductionCompanyRepository.class);
-        service = new InventoryService(eventRepository, companyRepository);
+        service = new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager());
     }
 
     // ---- reserve --------------------------------------------------------

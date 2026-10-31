@@ -23,6 +23,7 @@ import com.ticketing.system.catalog.domain.*;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -135,7 +136,7 @@ public class CheckoutServiceAcceptanceTest {
         checkoutService = new CheckoutService(
                 activeOrderRepository,
                 eventRepository,
-                new InventoryService(eventRepository, companyRepository),
+                new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager()),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
@@ -921,7 +922,7 @@ public class CheckoutServiceAcceptanceTest {
         return new CheckoutService(
                 realRepo,
                 eventRepository,
-                new InventoryService(eventRepository, companyRepository),
+                new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager()),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,

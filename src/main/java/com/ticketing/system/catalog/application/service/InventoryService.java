@@ -7,7 +7,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,20 +46,31 @@ import com.ticketing.system.shared.exception.InsufficientInventoryException;
 @Slf4j
 public class InventoryService implements InventoryCommandPort {
 
+    // How many times one event's stock return runs before a lost concurrency race gives it up (see
+    // returnEventToStock).
+    private static final int STOCK_RETURN_ATTEMPTS = 3;
+
     // Catalog aggregate-root port for the Event aggregate (load/save + the buyer-operation lock).
     private final EventRepository eventRepository;
     // Organization port used to resolve a company's purchase policy for effective-policy validation.
     private final ProductionCompanyRepository companyRepository;
+    // Bounds each event's stock return when the caller has no transaction (returnSoldToStock).
+    private final TransactionTemplate transactionTemplate;
 
     /**
-     * Wires the catalog inventory service to the event store and the organization company port.
+     * Wires the catalog inventory service to the event store, the organization company port and the
+     * transaction manager.
      *
-     * @param eventRepository   the Event aggregate-root port
-     * @param companyRepository the organization company port (for company purchase policies)
+     * @param eventRepository    the Event aggregate-root port
+     * @param companyRepository  the organization company port (for company purchase policies)
+     * @param transactionManager opens the transaction each event's stock return runs in, when the caller
+     *                           has none ({@link #returnSoldToStock})
      */
-    public InventoryService(EventRepository eventRepository, ProductionCompanyRepository companyRepository) {
+    public InventoryService(EventRepository eventRepository, ProductionCompanyRepository companyRepository,
+            PlatformTransactionManager transactionManager) {
         this.eventRepository = eventRepository;       // store the event port
         this.companyRepository = companyRepository;   // store the company port
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     /** {@inheritDoc} SELF-LOCKING single-event reserve; validates the RESERVE-stage effective policy first. */
@@ -116,7 +130,10 @@ public class InventoryService implements InventoryCommandPort {
         }
     }
 
-    /** {@inheritDoc} SELF-LOCKING per event, fully best-effort return of SOLD inventory to stock. */
+    /**
+     * {@inheritDoc} SELF-LOCKING per event, fully best-effort return of SOLD inventory to stock. Each
+     * event's load, mutation and save run in one transaction, retried when it loses a concurrency race.
+     */
     @Override
     public void returnSoldToStock(List<InventoryLineDTO> lines) {
         // Group the flat refund lines by event then zone so each event is locked and saved once.
@@ -130,21 +147,7 @@ public class InventoryService implements InventoryCommandPort {
             try {
                 eventRepository.lockForBuyerOperation(eventId);     // self-lock this event
                 try {
-                    Event event = eventRepository.findById(eventId); // load (throws under memory if absent)
-                    boolean anyReturned = false;                    // track whether anything actually returned
-                    for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : eventEntry.getValue().entrySet()) {
-                        int zoneId = zoneEntry.getKey();
-                        try {
-                            // SOLD tickets are returned WITHOUT an order key (ownership isn't checked here).
-                            event.returnSoldToStock(zoneId, toStockSelection(zoneEntry.getValue()));
-                            anyReturned = true;                     // at least one zone returned
-                        } catch (RuntimeException e) {
-                            log.warn("Refund: failed to return zone {} of event {} to stock", zoneId, eventId, e);
-                        }
-                    }
-                    if (anyReturned) {
-                        eventRepository.save(event);                // persist only if something changed
-                    }
+                    returnEventToStock(eventId, eventEntry.getValue());
                 } finally {
                     eventRepository.unlockBuyerOperation(eventId);  // release this event's lock
                 }
@@ -154,13 +157,60 @@ public class InventoryService implements InventoryCommandPort {
         }
     }
 
+    // The refund calls this with no transaction of its own (RefundService.requestRefund), so without one
+    // here the loaded event is detached by the time it is saved, and a reservation that commits in the
+    // same zone meanwhile makes the save lose on the zone's @Version (on PostgreSQL a lost race can also
+    // surface as a lock wait or deadlock, all ConcurrencyFailureException, as in ADR-015's Phase 3 retry).
+    // A lost attempt rolls back whole, so
+    // running it again on a fresh load is safe. Giving up leaves the refunded places SOLD for good, so the
+    // last loss is logged at ERROR, not at the WARN of the other per-event failures.
+    private void returnEventToStock(int eventId, Map<Integer, List<InventoryLineDTO>> linesByZone) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                transactionTemplate.executeWithoutResult(status -> returnZonesToStock(eventId, linesByZone));
+                return;
+            } catch (ConcurrencyFailureException lostRace) {
+                if (attempt == STOCK_RETURN_ATTEMPTS) {
+                    log.error("Refund: returning places to stock lost a concurrency race on every attempt; "
+                            + "they stay SOLD. eventId={}, placesByZone={}, attempts={}",
+                            eventId, placesByZone(linesByZone), attempt, lostRace);
+                    return;
+                }
+                log.info("Refund: returning places to stock lost a concurrency race; running it again. "
+                        + "eventId={}, attempt={}", eventId, attempt);
+            }
+        }
+    }
+
+    // One attempt: load the event, return each zone's places, and save if any zone took them back.
+    private void returnZonesToStock(int eventId, Map<Integer, List<InventoryLineDTO>> linesByZone) {
+        Event event = eventRepository.findById(eventId);
+        boolean anyReturned = false;
+        for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : linesByZone.entrySet()) {
+            int zoneId = zoneEntry.getKey();
+            try {
+                // SOLD tickets are returned WITHOUT an order key (ownership isn't checked here).
+                event.returnSoldToStock(zoneId, toStockSelection(zoneEntry.getValue()));
+                anyReturned = true;
+            } catch (RuntimeException e) {
+                log.warn("Refund: failed to return zone {} of event {} to stock", zoneId, eventId, e);
+            }
+        }
+        if (anyReturned) {
+            eventRepository.save(event);                            // persist only if something changed
+        }
+    }
+
+    // zoneId -> number of places returned there, for the give-up log line.
+    private static Map<Integer, Integer> placesByZone(Map<Integer, List<InventoryLineDTO>> linesByZone) {
+        return linesByZone.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, zoneEntry -> zoneEntry.getValue().size()));
+    }
+
     /** {@inheritDoc} Pure read — final per-ticket price via the event's discount policy. */
     @Override
     public double priceTicket(int eventId, int eventQuantity, double priceAtReservation, LocalDateTime now) {
         Event event = eventRepository.findById(eventId);            // load the event
-        if (event == null) {
-            throw new EventNotFoundException(eventId);
-        }
         return event.calculatePriceforoneticket(eventQuantity, priceAtReservation, now); // discount-policy price
     }
 

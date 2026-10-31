@@ -20,6 +20,8 @@ import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,7 +76,7 @@ public class ReservationAcceptanceTests {
         // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
         // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, mock(ProductionCompanyRepository.class));
+                eventRepository, mock(ProductionCompanyRepository.class), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,

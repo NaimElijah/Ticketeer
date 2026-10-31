@@ -173,7 +173,8 @@ class CheckoutServiceTest {
         checkoutService = new CheckoutService(
                 mockActiveOrderRepo,
                 mockEventRepo,
-                new InventoryService(mockEventRepo, mock(ProductionCompanyRepository.class)),
+                new InventoryService(mockEventRepo, mock(ProductionCompanyRepository.class),
+                        TestTransactions.noOpManager()),
                 mockTicketRepo,
                 mockOrderReceiptRepo,
                 mockTicketIssuer,
