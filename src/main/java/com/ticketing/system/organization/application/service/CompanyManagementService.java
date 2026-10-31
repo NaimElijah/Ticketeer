@@ -653,7 +653,7 @@ public class CompanyManagementService {
             ProductionCompany company;
             try {
                 company = companyRepository.getCompanyById(appointment.getCompanyId());
-            } catch (RuntimeException e) {
+            } catch (CompanyNotFoundException e) {
                 log.warn("Skipping membership for missing companyId={}", appointment.getCompanyId());
                 continue;
             }

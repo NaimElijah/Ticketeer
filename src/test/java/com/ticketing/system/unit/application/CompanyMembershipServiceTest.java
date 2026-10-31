@@ -2,6 +2,7 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataAccessResourceFailureException;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
@@ -162,5 +164,22 @@ class CompanyMembershipServiceTest {
                 refused.getMessage());
         assertEquals(Set.of(Permission.VIEW_SALES),
                 membershipService.getActiveCompanyAppointment(USER_ID, COMPANY_ID).getPermissions());
+    }
+
+    // A failing company store is an outage, not a missing company: listing must not hide it behind
+    // an empty list (#187).
+    @Test
+    void GivenCompanyStoreOutage_WhenListForUser_ThenTheOutagePropagates() {
+        User user = new User(USER_ID, "founder", "founder@test.com", "hash", 30);
+        membershipService.addFounderAppointment(USER_ID, COMPANY_ID);
+        when(userRepository.getUserById(USER_ID)).thenReturn(user);
+        DataAccessResourceFailureException outage = new DataAccessResourceFailureException("company store unreachable");
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenThrow(outage);
+
+        DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
+                () -> service.listForUser(USER_ID),
+                "a company store outage must reach the caller, not be read as a missing company");
+
+        assertSame(outage, thrown);
     }
 }
