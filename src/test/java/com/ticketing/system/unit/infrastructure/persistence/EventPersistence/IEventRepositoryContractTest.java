@@ -508,4 +508,40 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(1, result.size());
         assertEquals(1, result.get(0).getId());
     }
+
+    // ---- search terms match as literal text, not as LIKE patterns (#187) ----
+    // The Memory adapter matches a term as a substring; the Jpa one put it into a LIKE pattern
+    // unescaped, so "_" and "%" matched any character there, and the two backends answered differently.
+
+    @Test
+    void GivenAnUnderscoreAsTheSearchTerm_WhenSearchingByName_ThenOnlyNamesContainingAnUnderscoreMatch() {
+        eventRepo.save(buildEvent(1, "Under_score Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "Underscore Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        assertEquals(List.of("Under_score Night"), namesFoundSearchingFor("_"));
+    }
+
+    @Test
+    void GivenAPercentSignInTheSearchTerm_WhenSearchingByName_ThenOnlyNamesContainingThatTextMatch() {
+        eventRepo.save(buildEvent(1, "100% Hits", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "100 Days", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        assertEquals(List.of("100% Hits"), namesFoundSearchingFor("100%"));
+    }
+
+    // A backslash is the default LIKE escape character on H2 and PostgreSQL, so escaping the wildcards
+    // must escape it too.
+    @Test
+    void GivenABackslashInTheSearchTerm_WhenSearchingByName_ThenOnlyNamesContainingABackslashMatch() {
+        eventRepo.save(buildEvent(1, "AC\\DC Tribute", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "ACDC Tribute", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        assertEquals(List.of("AC\\DC Tribute"), namesFoundSearchingFor("c\\d"));
+    }
+
+    private List<String> namesFoundSearchingFor(String eventName) {
+        return eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                eventName, null, null, null, null, null, null, null, null, null, null, null, null))
+                .stream().map(Event::getName).toList();
+    }
 }
