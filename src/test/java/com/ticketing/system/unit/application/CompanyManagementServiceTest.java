@@ -685,15 +685,15 @@ public class CompanyManagementServiceTest {
                 when(mockCompanyRepo.nextId()).thenReturn(100);
 
                 // save() returns void; use Mockito's doThrow().when() pattern for void methods.
-                doThrow(new RuntimeException("Database connection lost"))
-                                .when(mockCompanyRepo).save(any(ProductionCompany.class));
+                RuntimeException databaseError = new RuntimeException("Database connection lost");
+                doThrow(databaseError).when(mockCompanyRepo).save(any(ProductionCompany.class));
 
                 RuntimeException exception = assertThrows(RuntimeException.class, () -> {
                         companyService.registerCompany(token, request);
                 });
 
-                assertEquals("Failed to register company due to a server error", exception.getMessage());
-                assertEquals("Database connection lost", exception.getCause().getMessage());
+                // The store's failure reaches the caller as thrown, not wrapped (#187).
+                assertSame(databaseError, exception);
         }
 
         @Test
@@ -1376,6 +1376,24 @@ public class CompanyManagementServiceTest {
                 assertEquals(List.of(COMPANY_ID), invitations.stream().map(InvitationDTO::companyId).toList(),
                                 "only the manager invitation is an invitation; listed: " + invitations);
                 assertEquals("inviter", invitations.get(0).fromUsername());
+        }
+
+        // ---- an unexpected registration failure keeps its type (#187) ------------------------
+        // Wrapping it in a bare RuntimeException hides it from ServiceErrors.userMessage's
+        // classification and from the caller.
+
+        @Test
+        public void GivenCompanyStoreOutage_WhenRegisterCompany_ThenTheStoreExceptionPropagatesUnwrapped() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockCompanyRepo.existsByName(anyString())).thenReturn(false);
+                when(mockCompanyRepo.nextId()).thenReturn(COMPANY_ID);
+                DataAccessResourceFailureException outage = new DataAccessResourceFailureException("company store unreachable");
+                doThrow(outage).when(mockCompanyRepo).save(any(ProductionCompany.class));
+
+                RuntimeException thrown = assertThrows(RuntimeException.class, () -> companyService.registerCompany(
+                                OWNER_TOKEN, new CompanyRegistrationDTO(COMPANY_1_NAME, COMPANY_1_DESCRIPTION)));
+
+                assertSame(outage, thrown, "the store's own exception must reach the caller, not a wrapper; got " + thrown);
         }
 
 }

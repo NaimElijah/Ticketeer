@@ -26,7 +26,6 @@ import com.ticketing.system.organization.application.port.out.ProductionCompanyR
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
-import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
@@ -490,37 +489,29 @@ public class CompanyManagementService {
             throw new IllegalStateException("A company with this name already exists");
         }
 
-        try {
-            int companyId = companyRepository.nextId();
-            ProductionCompany newProductionCompany = new ProductionCompany(
-                    companyId,
-                    userId,
-                    request.getName().trim(),
-                    CompanyStatus.ACTIVE,
-                    request.getDescription().trim(),
-                    0.0);
+        int companyId = companyRepository.nextId();
+        ProductionCompany newProductionCompany = new ProductionCompany(
+                companyId,
+                userId,
+                request.getName().trim(),
+                CompanyStatus.ACTIVE,
+                request.getDescription().trim(),
+                0.0);
 
-            // ProductionCompanyRepository.save returns void; the new instance IS the saved
-            // one.
-            companyRepository.save(newProductionCompany);
-            // Founder receives an immediately-active owner appointment (created + persisted here).
-            companyMembershipService.addFounderAppointment(userId, companyId);
-            log.info("Successfully registered new company: '{}' by userId: {}", newProductionCompany.getName(), userId);
+        // ProductionCompanyRepository.save returns void; the new instance IS the saved
+        // one.
+        companyRepository.save(newProductionCompany);
+        // Founder receives an immediately-active owner appointment (created + persisted here).
+        companyMembershipService.addFounderAppointment(userId, companyId);
+        log.info("Successfully registered new company: '{}' by userId: {}", newProductionCompany.getName(), userId);
 
-            return new ProductionCompanyDTO(
-                    newProductionCompany.getCompanyId(),
-                    newProductionCompany.getName(),
-                    newProductionCompany.getDescription(),
-                    newProductionCompany.getStatus().name(), // DTO field is String
-                    newProductionCompany.getFounderId() // DTO field is founderId
-            );
-
-        } catch (DomainException e) {
-            throw e; // a known business failure (e.g. duplicate) keeps its type/message; don't mask it
-        } catch (Exception e) {
-            log.error("Error occurred while saving company '{}': {}", request.getName(), e.getMessage());
-            throw new RuntimeException("Failed to register company due to a server error", e);
-        }
+        return new ProductionCompanyDTO(
+                newProductionCompany.getCompanyId(),
+                newProductionCompany.getName(),
+                newProductionCompany.getDescription(),
+                newProductionCompany.getStatus().name(), // DTO field is String
+                newProductionCompany.getFounderId() // DTO field is founderId
+        );
     }
 
     @Transactional
