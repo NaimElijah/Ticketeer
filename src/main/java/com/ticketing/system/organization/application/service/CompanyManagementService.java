@@ -273,9 +273,19 @@ public class CompanyManagementService {
         log.info("Manager revoked successfully");
     }
 
-    // Resolves a username-or-email string to a userId — used by the invite flow.
+    /**
+     * Resolves a username or an email address to the member's user id, for the invite flow.
+     *
+     * @param token      the caller's member token; only a signed-in member may look members up
+     * @param identifier a username or an email address
+     * @return the id of the member the identifier names
+     * @throws InvalidTokenException    if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws IllegalArgumentException if {@code identifier} is null or blank
+     * @throws UserNotFoundException    if no member has that username or email
+     */
     @Transactional(readOnly = true)
-    public int resolveUserId(String identifier) {
+    public int resolveUserId(String token, String identifier) {
+        authenticate(token);
         if (identifier == null || identifier.isBlank())
             throw new IllegalArgumentException("Identifier must not be blank");
 
@@ -630,8 +640,17 @@ public class CompanyManagementService {
         return userIdToNodeMap.get(founderId);
     }
 
+    /**
+     * The signed-in member's own memberships: one entry per company where they hold an ACTIVE appointment.
+     *
+     * @param token the member's token; the memberships listed are always the token's own member's
+     * @return the memberships, empty for a member of no company
+     * @throws InvalidTokenException if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws UserNotFoundException if the token's member no longer exists
+     */
     @Transactional(readOnly = true)
-    public List<UserCompanyDTO> listForUser(int userId) {
+    public List<UserCompanyDTO> listForUser(String token) {
+        int userId = authenticate(token);
         User user = userRepository.getUserById(userId);
         if (user == null) {
             throw new UserNotFoundException();
@@ -653,8 +672,18 @@ public class CompanyManagementService {
         return memberships;
     }
 
+    /**
+     * Whether the signed-in member holds an ACTIVE owner appointment (founder or co-owner) in a company.
+     *
+     * @param token     the member's token; the answer is always about the token's own member
+     * @param companyId the company to check
+     * @return {@code true} if the token's member owns {@code companyId}
+     * @throws InvalidTokenException if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws UserNotFoundException if the token's member no longer exists
+     */
     @Transactional(readOnly = true)
-    public boolean isOwnerOf(int userId, int companyId) {
+    public boolean isOwnerOf(String token, int companyId) {
+        int userId = authenticate(token);
         User user = userRepository.getUserById(userId);
         if (user == null) {
             throw new UserNotFoundException();

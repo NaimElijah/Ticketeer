@@ -43,7 +43,7 @@ public class ManagerInvitationPresenter {
             Optional<ProductionCompanyDTO> selected = SelectedCompany.among(owned, ProductionCompanyDTO::companyId);
             if (selected.isEmpty()) return new Outcome.ChooseCompany();
             int companyId = selected.get().companyId();
-            int targetUserId = companyService.resolveUserId(inviteeUsername);
+            int targetUserId = companyService.resolveUserId(token, inviteeUsername);
             companyService.appointManager(token,
                 new ManagerAppointmentRequestDTO(companyId, targetUserId, permissions));
             return new Outcome.Success();

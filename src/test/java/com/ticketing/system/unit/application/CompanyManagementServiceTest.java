@@ -8,6 +8,7 @@ import java.lang.reflect.RecordComponent;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 
@@ -55,6 +58,7 @@ import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 public class CompanyManagementServiceTest {
@@ -1077,6 +1081,34 @@ public class CompanyManagementServiceTest {
                 List<MyCompanyDTO> mine = companyService.findMyCompanies(TARGET_TOKEN);
 
                 assertTrue(mine.isEmpty());
+        }
+
+        // ---- resolveUserId: only a signed-in member may look members up --------------------------
+
+        private static final String UNKNOWN_TOKEN = "unknown-token";
+        private static final String ADMIN_TOKEN = "admin-token";
+        private static final String INVITEE_USERNAME = "invitee";
+
+        @ParameterizedTest
+        @NullSource
+        @ValueSource(strings = {UNKNOWN_TOKEN, ADMIN_TOKEN})
+        public void GivenNoLiveMemberToken_WhenResolveUserId_ThenInvalidTokenAndNoLookup(String token) {
+                when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
+                when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(OWNER_ID);
+
+                assertThrows(InvalidTokenException.class, () -> companyService.resolveUserId(token, INVITEE_USERNAME));
+                verify(mockUserRepo, never()).findByUsername(anyString());
+                verify(mockUserRepo, never()).findByEmail(anyString());
+        }
+
+        @Test
+        public void GivenMemberToken_WhenResolveUserIdByUsername_ThenTheNamedMembersId() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(mockUserRepo.findByUsername(INVITEE_USERNAME)).thenReturn(Optional.of(
+                                new User(TARGET_USER_ID, INVITEE_USERNAME, "invitee@test.com", "password", 25)));
+
+                assertEquals(TARGET_USER_ID, companyService.resolveUserId(OWNER_TOKEN, INVITEE_USERNAME));
         }
 
         // ---- a removed owner keeps no control over the managers they appointed -----------------

@@ -53,7 +53,7 @@ class ManagerInvitationPresenterTest {
         presenter = new ManagerInvitationPresenter(service);
         when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(
                 company(FIRST_COMPANY_ID, "Alpha"), company(SECOND_COMPANY_ID, "Beta")));
-        when(service.resolveUserId(INVITEE)).thenReturn(INVITEE_USER_ID);
+        when(service.resolveUserId(TOKEN, INVITEE)).thenReturn(INVITEE_USER_ID);
     }
 
     @AfterEach
@@ -106,6 +106,8 @@ class ManagerInvitationPresenterTest {
                 ArgumentCaptor.forClass(ManagerAppointmentRequestDTO.class);
         verify(service).appointManager(eq(TOKEN), request.capture());
         assertEquals(FIRST_COMPANY_ID, request.getValue().companyId());
+        assertEquals(INVITEE_USER_ID, request.getValue().targetUserId(),
+                "the invitee is looked up with the owner's own token");
     }
 
     // A selection the caller does not own is no selection: an owner still has one of theirs to choose.

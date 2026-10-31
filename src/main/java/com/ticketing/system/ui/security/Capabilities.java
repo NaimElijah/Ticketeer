@@ -3,6 +3,7 @@ package com.ticketing.system.ui.security;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
@@ -100,10 +101,8 @@ public final class Capabilities {
         Set<Capability> caps = EnumSet.copyOf(GUEST_BASE);
 
         if (AuthSession.isAdmin()) {
-            // Admins are a SEPARATE pool from members — the admin's id lives in the `admins` table,
-            // not `users`. Return here so we never resolve company memberships for an admin: falling
-            // through to listForUser(userId) -> getUserById(userId) throws UserNotFoundException
-            // whenever no member happens to share that id (always, on a clean DB).
+            // Admins are a SEPARATE pool from members, and an admin token is no member credential
+            // (ADR-012): listForUser refuses it. An admin holds no company memberships, so never ask.
             caps.addAll(ADMIN_BUNDLE);
             return caps;
         }
@@ -114,13 +113,20 @@ public final class Capabilities {
 
         caps.addAll(MEMBER_BASE);
 
-        Integer userId = AuthSession.userId();
+        String token = AuthSession.token();
         CompanyManagementService service = CompanyManagementBridge.service();
-        if (userId == null || service == null) {
+        if (token == null || service == null) {
             return caps;
         }
 
-        List<UserCompanyDTO> memberships = service.listForUser(userId);
+        List<UserCompanyDTO> memberships;
+        try {
+            memberships = service.listForUser(token);
+        } catch (InvalidTokenException e) {
+            // The token died after sign-in (expired or revoked). A dead token holds no memberships, so
+            // it gets no company capabilities; AuthBootstrap signs the visitor out on their next navigation.
+            return caps;
+        }
         if (memberships.isEmpty()) {
             return caps;
         }

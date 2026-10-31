@@ -1,8 +1,15 @@
 package com.ticketing.system.unit.presentation;
 
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CompanyManagementBridge;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -14,13 +21,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Sanity checks for the capability resolver. We can't easily fake a
- * VaadinSession inside a unit test, so the assertions here cover the
- * static structure (bundle sets, helper booleans) — the per-role bundle
- * compositions and the marker / annotation wiring are exercised by
- * VaadinSmokeTest's view-construction pass.
+ * Checks for the capability resolver. The guest checks run with no VaadinSession at all; the
+ * signed-in checks install a map-backed session ({@link MapBackedVaadinSession}) and a mocked
+ * {@link CompanyManagementService} behind {@link CompanyManagementBridge}. The marker / annotation
+ * wiring is exercised by VaadinSmokeTest's view-construction pass.
  */
 class CapabilitiesTest {
 
@@ -103,6 +114,72 @@ class CapabilitiesTest {
             Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES,
             Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT)),
             "a manager holding both permissions gets the union of their capabilities");
+    }
+
+    // ---- resolution for a signed-in session: memberships are read with the member's own token ----
+
+    private static final String MEMBER_TOKEN = "member-jwt";
+    private static final String ADMIN_TOKEN = "admin-jwt";
+    private static final int USER_ID = 42;
+    private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
+
+    private CompanyManagementService service;
+    // The bridge is static and a Spring context in the same JVM may have set it, so it is restored after.
+    private CompanyManagementService bridgedBefore;
+
+    @AfterEach
+    void restoreSessionAndBridge() {
+        if (service != null) {
+            new CompanyManagementBridge(bridgedBefore);
+            MapBackedVaadinSession.uninstall();
+        }
+    }
+
+    @Test
+    void GivenAdminSession_WhenForCurrentUser_ThenAdminBundleAndNoMembershipLookup() {
+        installSessionAndService();
+        AuthSession.storeAuth(new AuthTokenDTO(ADMIN_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID, "admin", true));
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.ADMIN_WORKSPACE));
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE), "an admin holds no company memberships");
+        verify(service, never()).listForUser(any());
+    }
+
+    @Test
+    void GivenMemberOfNoCompany_WhenForCurrentUser_ThenMemberBaseAskedWithTheMembersToken() {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of());
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.CHECKOUT));
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE));
+        verify(service).listForUser(MEMBER_TOKEN);
+    }
+
+    @Test
+    void GivenMemberWhoseTokenDied_WhenForCurrentUser_ThenMemberBaseWithoutCompanyCapabilities() {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenThrow(new InvalidTokenException("Invalid token"));
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.CHECKOUT));
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE), "a dead token holds no memberships");
+    }
+
+    private void installSessionAndService() {
+        MapBackedVaadinSession.install();
+        bridgedBefore = CompanyManagementBridge.service();
+        service = mock(CompanyManagementService.class);
+        new CompanyManagementBridge(service);
+    }
+
+    private void signInAsMember() {
+        installSessionAndService();
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID, "member"));
     }
 
     @SuppressWarnings("unchecked")

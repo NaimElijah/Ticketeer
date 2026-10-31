@@ -105,10 +105,11 @@ public final class DevPanel {
         }
     }
 
+    // An admin token is no member credential (ADR-012) and an admin holds no memberships, so never ask.
     private static List<UserCompanyDTO> listFromService() {
-        Integer userId = AuthSession.userId();
-        if (userId == null || CompanyManagementBridge.service() == null) return List.of();
-        return CompanyManagementBridge.service().listForUser(userId);
+        String token = AuthSession.token();
+        if (token == null || AuthSession.isAdmin() || CompanyManagementBridge.service() == null) return List.of();
+        return CompanyManagementBridge.service().listForUser(token);
     }
 
     private static UserCompanyDTO currentCompanyFromService() {
