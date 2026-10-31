@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -13,10 +14,9 @@ import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.Permission;
 
 /**
- * {@link CompanyAppointment} owns its permission set: only {@code setPermissions} and
- * {@code updatePermissions}, which check the invariants, may change it. A caller holding the set
- * returned by {@code getPermissions} must not be able to empty a manager's permissions or grant
- * itself new ones (#187).
+ * {@link CompanyAppointment} owns its permission set: only {@code updatePermissions}, which checks the
+ * invariants, may change it. A caller holding the set returned by {@code getPermissions} must not be
+ * able to empty a manager's permissions or grant itself new ones (#187).
  */
 class CompanyAppointmentTest {
 
@@ -54,5 +54,20 @@ class CompanyAppointmentTest {
                 "the returned permission set must not let a caller grant a manager a permission");
 
         assertEquals(GRANTED, appointment.getPermissions());
+    }
+
+    // ---- permission sets are copied on the way in (#187) ----
+
+    @Test
+    void GivenPermissionsUpdatedFromACallersSet_WhenTheCallerChangesThatSet_ThenTheAppointmentsPermissionsAreUnchanged() {
+        CompanyAppointment appointment = activeManagerAppointment();
+        Set<Permission> callerSet = EnumSet.of(Permission.EDIT_POLICIES);
+        appointment.updatePermissions(callerSet);
+
+        callerSet.add(Permission.CONFIGURE_VENUE);
+        callerSet.remove(Permission.EDIT_POLICIES);
+
+        assertEquals(Set.of(Permission.EDIT_POLICIES), appointment.getPermissions(),
+                "the appointment must keep its own copy, not the caller's collection");
     }
 }

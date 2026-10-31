@@ -178,24 +178,6 @@ public class CompanyAppointment implements InvariantChecked {
                 createdAt);
     }
 
-    public void setPermissions(EnumSet<Permission> newPermissions) {
-        // Validate-before-commit: roll back to the previous permission set if the new
-        // one
-        // would violate an invariant (e.g. emptying a Manager's permissions), so a
-        // rejected
-        // call never leaves the appointment corrupted. checkInvariants stays the sole
-        // validator.
-        Set<Permission> previous = this.permissions;
-        // A copy, so the caller keeps no handle on the set this appointment checks.
-        this.permissions = newPermissions == null ? null : EnumSet.copyOf(newPermissions);
-        try {
-            checkInvariants();
-        } catch (RuntimeException ex) {
-            this.permissions = previous;
-            throw ex;
-        }
-    }
-
     // ---------------------------------------------------------------------------
     // Skeleton additions — AppointmentStatus lifecycle + accessors.
     // ---------------------------------------------------------------------------
@@ -294,7 +276,7 @@ public class CompanyAppointment implements InvariantChecked {
         return inviterId;
     }
 
-    /** A read-only view: the set changes only through {@link #setPermissions} and {@link #updatePermissions}. */
+    /** A read-only view: the set changes only through {@link #updatePermissions}. */
     public Set<Permission> getPermissions() {
         return Collections.unmodifiableSet(permissions);
     }
