@@ -8,8 +8,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +54,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
  */
 class CatalogRepositoryFailurePropagationTest {
 
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-31T12:00:00Z"), ZoneOffset.UTC);
     private static final String TOKEN = "owner-token";
     private static final int OWNER_ID = 1;
     private static final int COMPANY_ID = 100;
@@ -77,8 +80,8 @@ class CatalogRepositoryFailurePropagationTest {
     @BeforeEach
     void setUp() {
         eventManagement = new EventManagementService(events, companies, sessions, mock(EventSalesHistoryPort.class),
-                users, new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC()),
-                mock(ApplicationEventPublisher.class), Clock.systemUTC(), SHIPPED_VENUE_LIMITS);
+                users, new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), CLOCK),
+                mock(ApplicationEventPublisher.class), CLOCK, SHIPPED_VENUE_LIMITS);
         catalog = new CatalogService(sessions, events, companies);
         eventDisplay = new EventDisplayQueryService(events);
 

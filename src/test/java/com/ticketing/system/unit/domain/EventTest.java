@@ -31,7 +31,6 @@ import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchaseStage;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
-import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
 import com.ticketing.system.support.BaseDomainTest;
@@ -1109,28 +1108,28 @@ class EventTest extends BaseDomainTest {
 
     @Test
     void GivenANullArtist_WhenAnEventIsConstructed_ThenItIsRefused() {
-        assertRefused(assertThrows(RuntimeException.class,
-                () -> scheduledEventWithArtists(Arrays.asList("Artist 1", null))));
+        assertThrows(IllegalArgumentException.class,
+                () -> scheduledEventWithArtists(Arrays.asList("Artist 1", null)));
     }
 
     @Test
     void GivenABlankArtist_WhenAnEventIsConstructed_ThenItIsRefused() {
-        assertRefused(assertThrows(RuntimeException.class,
-                () -> scheduledEventWithArtists(List.of("Artist 1", "   "))));
+        assertThrows(IllegalArgumentException.class,
+                () -> scheduledEventWithArtists(List.of("Artist 1", "   ")));
     }
 
     @Test
     void GivenAScheduledEvent_WhenItsVenueIsReconfiguredWithNoZones_ThenItIsRefusedAndItKeepsItsZone() {
         VenueMap noZones = new VenueMap(2, LOCATION, List.of());
 
-        assertRefused(assertThrows(RuntimeException.class, () -> event.configureVenueMap(noZones, COMPANY_ID)));
+        assertThrows(IllegalStateException.class, () -> event.configureVenueMap(noZones, COMPANY_ID));
 
         assertEquals(List.of(ZONE_ID), zoneIds(event));
     }
 
     @Test
     void GivenAScheduledEventWithOneZone_WhenThatZoneIsRemoved_ThenItIsRefusedAndTheZoneStays() {
-        assertRefused(assertThrows(RuntimeException.class, () -> event.removeInventoryZone(ZONE_ID, COMPANY_ID)));
+        assertThrows(IllegalStateException.class, () -> event.removeInventoryZone(ZONE_ID, COMPANY_ID));
 
         assertEquals(List.of(ZONE_ID), zoneIds(event));
     }
@@ -1143,13 +1142,5 @@ class EventTest extends BaseDomainTest {
 
     private static List<Integer> zoneIds(Event event) {
         return event.getVenueMap().getInventoryZones().stream().map(InventoryZone::getId).toList();
-    }
-
-    // Refused as invalid input, with a message the user can read (ServiceErrors.userMessage), not by
-    // an accident such as a NullPointerException.
-    private static void assertRefused(RuntimeException refusal) {
-        assertTrue(refusal instanceof IllegalArgumentException || refusal instanceof IllegalStateException
-                || refusal instanceof DomainException,
-                "expected a refusal as invalid input, but got " + refusal);
     }
 }

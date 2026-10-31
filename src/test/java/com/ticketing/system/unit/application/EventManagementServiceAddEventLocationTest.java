@@ -1,8 +1,8 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,7 +34,6 @@ import com.ticketing.system.organization.application.port.out.ProductionCompanyR
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
-import com.ticketing.system.shared.exception.DomainException;
 
 /**
  * An event is refused without a venue location, before anything is saved (#187). {@code addEvent} built
@@ -63,7 +62,7 @@ class EventManagementServiceAddEventLocationTest {
     @BeforeEach
     void anOwnerWhoMayAddEvents() {
         CompanyMembershipService membership =
-                new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
+                new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.fixed(NOW, ZoneOffset.UTC));
         membership.addFounderAppointment(OWNER_ID, COMPANY_ID);
         eventManagement = new EventManagementService(events, companies, sessions, mock(EventSalesHistoryPort.class),
                 users, membership, mock(ApplicationEventPublisher.class), Clock.fixed(NOW, ZoneOffset.UTC),
@@ -84,11 +83,9 @@ class EventManagementServiceAddEventLocationTest {
                 EventCategory.CONCERT, 4.5, null, List.of(new ShowDate(SHOW_START, SHOW_START.plusHours(3))),
                 ZoneId.of("Europe/Brussels"), null);
 
-        RuntimeException refusal = assertThrows(RuntimeException.class,
-                () -> eventManagement.addEvent(OWNER_TOKEN, withoutLocation));
+        assertThrows(IllegalArgumentException.class, () -> eventManagement.addEvent(OWNER_TOKEN, withoutLocation));
 
-        assertTrue(refusal instanceof IllegalArgumentException || refusal instanceof DomainException,
-                "a missing location should be refused as invalid input, but got " + refusal);
+        verify(companies, never()).getCompanyById(anyInt());
         verify(events, never()).save(any());
     }
 }

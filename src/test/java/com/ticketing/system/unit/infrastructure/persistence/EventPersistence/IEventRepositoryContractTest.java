@@ -545,6 +545,36 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(List.of("AC\\DC Tribute"), namesFoundSearchingFor("c\\d"));
     }
 
+    // The artist and location filters escape their term the same way as the name filter.
+    @Test
+    void GivenAnUnderscoreAsTheArtistTerm_WhenSearching_ThenOnlyArtistsContainingAnUnderscoreMatch() {
+        eventRepo.save(eventWithArtistAt(1, "DJ_Max", LOCATION));
+        eventRepo.save(eventWithArtistAt(2, "DJ Max", LOCATION));
+
+        List<Event> found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, "_", null, null, null, null, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
+    @Test
+    void GivenAnUnderscoreAsTheLocationTerm_WhenSearching_ThenOnlyLocationsContainingAnUnderscoreMatch() {
+        eventRepo.save(eventWithArtistAt(1, "Artist A", new Location("France", "Saint_Denis")));
+        eventRepo.save(eventWithArtistAt(2, "Artist A", new Location("France", "Saint Denis")));
+
+        List<Event> found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null, null, null, "_", null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
+    private Event eventWithArtistAt(int id, String artist, Location location) {
+        VenueMap venueMap = new VenueMap(id, location, List.of(new StandingZone(1, "Floor", 100, 50)));
+        return new Event(id, "Concert " + id, 4.5, List.of(artist), EventCategory.CONCERT, 10, EventStatus.ON_SALE,
+                venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)), ZoneId.of("Asia/Jerusalem"),
+                new NoPurchasePolicy(), new DiscountPolicy(0));
+    }
+
     private List<String> namesFoundSearchingFor(String eventName) {
         return eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 eventName, null, null, null, null, null, null, null, null, null, null, null, null))

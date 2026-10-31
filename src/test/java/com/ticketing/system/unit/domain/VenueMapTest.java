@@ -17,7 +17,6 @@ import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.support.BaseDomainTest;
 
 public class VenueMapTest extends BaseDomainTest {
@@ -107,14 +106,14 @@ public class VenueMapTest extends BaseDomainTest {
     void GivenTwoZonesNamedFloorIgnoringCase_WhenAVenueMapIsConstructed_ThenItIsRefused() {
         List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50), new StandingZone(2, "FLOOR", 10, 50));
 
-        assertRefused(assertThrows(RuntimeException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3)));
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
     }
 
     @Test
     void GivenTwoZonesWithTheSameId_WhenAVenueMapIsConstructed_ThenItIsRefused() {
         List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50), new StandingZone(1, "Balcony", 10, 50));
 
-        assertRefused(assertThrows(RuntimeException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3)));
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
     }
 
     // The rule sits in the constructor, not in checkInvariants, on purpose: SystemIntegrityVerifier checks
@@ -140,13 +139,5 @@ public class VenueMapTest extends BaseDomainTest {
         nextZoneIdField.setAccessible(true);
         nextZoneIdField.setInt(map, zones.size() + 1);
         return map;
-    }
-
-    // Refused as invalid input, with a message the user can read (ServiceErrors.userMessage), not by
-    // an accident such as a NullPointerException.
-    private static void assertRefused(RuntimeException refusal) {
-        assertTrue(refusal instanceof IllegalArgumentException || refusal instanceof IllegalStateException
-                || refusal instanceof DomainException,
-                "expected a refusal as invalid input, but got " + refusal);
     }
 }

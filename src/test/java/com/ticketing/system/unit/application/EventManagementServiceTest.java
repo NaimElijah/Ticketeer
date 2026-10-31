@@ -1194,7 +1194,7 @@ class EventManagementServiceTest {
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
                 when(mockEventRepo.findByCompanyId(COMPANY_ID)).thenReturn(List.of(event));
 
-                assertThrows(RuntimeException.class,
+                assertThrows(CompanyNotFoundException.class,
                                 () -> eventService.listEventsForCompany(OWNER_TOKEN, COMPANY_ID));
         }
 
@@ -1206,7 +1206,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
                 when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class,
+                assertThrows(EventNotFoundException.class,
                                 () -> eventService.getEventZones(MANAGER_TOKEN, EVENT_ID));
         }
 

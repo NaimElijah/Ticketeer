@@ -75,7 +75,7 @@ class EventManagementServiceLogLevelTest {
     @BeforeEach
     void anOwnerOfAScheduledEvent() {
         CompanyMembershipService membership =
-                new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
+                new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.fixed(NOW, ZoneOffset.UTC));
         membership.addFounderAppointment(OWNER_ID, COMPANY_ID);
         eventManagement = new EventManagementService(events, companies, sessions, mock(EventSalesHistoryPort.class),
                 users, membership, publisher, Clock.fixed(NOW, ZoneOffset.UTC), SHIPPED_VENUE_LIMITS);
