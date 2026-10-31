@@ -5,6 +5,8 @@ import com.ticketing.system.shared.dto.BuyerContextDTO;
 import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.organization.domain.Permission;
@@ -111,7 +113,13 @@ public final class DevPanel {
     private static List<UserCompanyDTO> listFromService() {
         String token = AuthSession.token();
         if (token == null || AuthSession.isAdmin() || CompanyManagementBridge.service() == null) return List.of();
-        return CompanyManagementBridge.service().listForUser(token);
+        try {
+            return CompanyManagementBridge.service().listForUser(token);
+        } catch (InvalidTokenException | SessionExpiredException e) {
+            // A token that died since the last navigation holds no memberships, as in Capabilities;
+            // AuthBootstrap signs the visitor out on their next navigation.
+            return List.of();
+        }
     }
 
     private static UserCompanyDTO currentCompanyFromService() {
