@@ -2,6 +2,7 @@ package com.ticketing.system.notifications.domain;
 
 // Categorizes Notification entities (UC-35 design walkthrough).
 // Which types must be sent (UC-35, I.5) is OQ-4 in docs/requirements/requirements.md; see #63.
+// A new constant needs a migration that re-adds ck_notifications_type with it (ADR-007).
 public enum NotificationType {
     // Buyer-facing (I.5.2)
     PURCHASE_CONFIRMED,
@@ -14,7 +15,6 @@ public enum NotificationType {
     COMPANY_CLOSED,
     ROLE_CHANGED,
     OWNER_APPOINTMENT_PENDING,
-    // A new constant needs a migration that re-adds ck_notifications_type with it (ADR-007).
     MANAGER_APPOINTMENT_PENDING,
     MANAGER_REVOKED,
 
