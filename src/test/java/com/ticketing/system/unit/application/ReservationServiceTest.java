@@ -186,9 +186,11 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenremoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        // The member's cart holds the line, so the removal reaches the event lookup.
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
