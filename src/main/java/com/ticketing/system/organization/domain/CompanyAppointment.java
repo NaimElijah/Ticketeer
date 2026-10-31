@@ -253,8 +253,8 @@ public class CompanyAppointment implements InvariantChecked {
         return this.permissions.contains(permission);
     }
 
-    /// Getters for all fields (no setters except for permissions, as role/status
-    /// changes are handled by specific methods above to enforce lifecycle rules).
+    /// Getters only: permissions change through updatePermissions, and role and status through the
+    /// lifecycle methods above, which enforce their rules.
 
     public int getCompanyId() {
         return this.companyId;
