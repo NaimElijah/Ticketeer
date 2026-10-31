@@ -58,6 +58,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class CompanyManagementService {
     private static final String ADMIN_REQUIRED = "Admin privileges required";
+    // Every email holds it and no username registered under AuthenticationService.USERNAME_CHARACTERS does.
+    private static final String EMAIL_MARKER = "@";
 
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -275,14 +277,17 @@ public class CompanyManagementService {
     }
 
     /**
-     * Resolves a username or an email address to the member's user id, for the invite flow.
+     * Resolves a username or an email address to the member's user id, for the invite flow. An identifier
+     * containing {@code @} is looked up as an email only, anything else as a username only.
      *
      * @param token      the caller's member token; only a signed-in member may look members up
      * @param identifier a username or an email address
      * @return the id of the member the identifier names
      * @throws InvalidTokenException    if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws SessionExpiredException  if the token has expired
      * @throws IllegalArgumentException if {@code identifier} is null or blank
-     * @throws UserNotFoundException    if no member has that username or email
+     * @throws UserNotFoundException    if no member has that username (for an identifier without {@code @})
+     *                                  or that email (for one with {@code @})
      */
     @Transactional(readOnly = true)
     public int resolveUserId(String token, String identifier) {
@@ -290,15 +295,14 @@ public class CompanyManagementService {
         if (identifier == null || identifier.isBlank())
             throw new IllegalArgumentException("Identifier must not be blank");
 
-        Optional<User> byName = userRepository.findByUsername(identifier.trim());
-        if (byName.isPresent())
-            return byName.get().getUserId();
-
-        Optional<User> byEmail = userRepository.findByEmail(identifier.trim());
-        if (byEmail.isPresent())
-            return byEmail.get().getUserId();
-
-        throw new UserNotFoundException();
+        // The identifier's shape picks one lookup, with no fall-through to the other. Registration refuses
+        // '@' in usernames, so an email-shaped username can exist only from before that rule; it must not
+        // intercept an invitation typed as an email, nor answer for an email no member has.
+        String trimmed = identifier.trim();
+        Optional<User> match = trimmed.contains(EMAIL_MARKER)
+                ? userRepository.findByEmail(trimmed)
+                : userRepository.findByUsername(trimmed);
+        return match.map(User::getUserId).orElseThrow(UserNotFoundException::new);
     }
 
     // ---------------------------------------------------------------------------

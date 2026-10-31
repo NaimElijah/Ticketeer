@@ -60,6 +60,7 @@ import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
 
 public class CompanyManagementServiceTest {
 
@@ -1487,5 +1488,55 @@ public class CompanyManagementServiceTest {
 
                 assertThrows(IllegalStateException.class, () -> companyService.getCompanyPurchasePolicy(OWNER_TOKEN, COMPANY_ID),
                                 "a policy the mapping does not know must be refused, not read as NONE");
+        }
+
+        // ---- an invitation typed as an email resolves by email, never by username (#187) ----
+        // The identifier's shape picks the one lookup: with an '@' it is an email, otherwise a
+        // username, and a miss does not fall through to the other. Otherwise a member whose
+        // username is another member's email address intercepts invitations typed as that email.
+
+        private static final String EMAIL_SHAPED_IDENTIFIER = "alice@corp.example";
+        private static final int EMAIL_OWNER_ID = 4;
+
+        private User memberWhoseUsernameIsTheEmailShapedIdentifier() {
+                return new User(TARGET_USER_ID, EMAIL_SHAPED_IDENTIFIER, "squatter@test.com", "password", 25);
+        }
+
+        @Test
+        public void GivenOneMembersUsernameIsAnothersEmail_WhenResolveUserIdByThatEmail_ThenTheEmailOwnersId() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockUserRepo.findByUsername(EMAIL_SHAPED_IDENTIFIER))
+                                .thenReturn(Optional.of(memberWhoseUsernameIsTheEmailShapedIdentifier()));
+                when(mockUserRepo.findByEmail(EMAIL_SHAPED_IDENTIFIER)).thenReturn(Optional.of(
+                                new User(EMAIL_OWNER_ID, "alice", EMAIL_SHAPED_IDENTIFIER, "password", 25)));
+
+                int resolved = companyService.resolveUserId(OWNER_TOKEN, EMAIL_SHAPED_IDENTIFIER);
+
+                assertEquals(EMAIL_OWNER_ID, resolved,
+                                "an email-shaped identifier names the member with that email, not the member with that username");
+        }
+
+        @Test
+        public void GivenEmailShapedIdentifierThatOnlyAUsernameMatches_WhenResolveUserId_ThenUserNotFound() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockUserRepo.findByUsername(EMAIL_SHAPED_IDENTIFIER))
+                                .thenReturn(Optional.of(memberWhoseUsernameIsTheEmailShapedIdentifier()));
+                when(mockUserRepo.findByEmail(EMAIL_SHAPED_IDENTIFIER)).thenReturn(Optional.empty());
+
+                assertThrows(UserNotFoundException.class,
+                                () -> companyService.resolveUserId(OWNER_TOKEN, EMAIL_SHAPED_IDENTIFIER),
+                                "an email-shaped identifier that no member's email matches must not fall through to usernames");
+        }
+
+        @Test
+        public void GivenPlainUsername_WhenResolveUserId_ThenResolvedByUsernameWithoutAnEmailLookup() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockUserRepo.findByUsername(INVITEE_USERNAME)).thenReturn(Optional.of(
+                                new User(TARGET_USER_ID, INVITEE_USERNAME, "invitee@test.com", "password", 25)));
+
+                int resolved = companyService.resolveUserId(OWNER_TOKEN, INVITEE_USERNAME);
+
+                assertEquals(TARGET_USER_ID, resolved, "an identifier without '@' is a username");
+                verify(mockUserRepo, never()).findByEmail(anyString());
         }
 }
