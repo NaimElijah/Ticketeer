@@ -64,10 +64,12 @@ public class MemoryEventRepository implements EventRepository {
 
     @Override
     public Event findById(int eventId) {
-        if (!events.containsKey(eventId)) {
+        // One read, not a check and then a get: an unlocked caller racing a delete would get null.
+        Event event = events.get(eventId);
+        if (event == null) {
             throw new EventNotFoundException(eventId);
         }
-        return events.get(eventId);
+        return event;
     }
 
     // The caller's buyer lock keeps lifecycle writes out, so there is no row lock to take here.
