@@ -1687,7 +1687,7 @@ class EventManagementServiceTest {
         void GivenEventPurchasePolicyOfAnUnmappedType_WhenReadEventPolicy_ThenRefusedInsteadOfReadAsNone() {
                 ownerCanEditTheEventPolicy(new UnmappedPurchasePolicy());
 
-                assertThrows(IllegalStateException.class,
+                assertThrows(UnsupportedOperationException.class,
                                 () -> eventService.getEventPurchasePolicy(OWNER_TOKEN, COMPANY_ID, EVENT_ID),
                                 "a policy the mapping does not know must be refused, not read as NONE");
         }

@@ -61,8 +61,10 @@ public final class PurchasePolicyDtoMapper {
      *
      * @param policy the stored policy; {@code null} means no policy
      * @return the DTO, of type {@code NONE} for {@code null} or {@link NoPurchasePolicy}
-     * @throws IllegalStateException if the policy, or one nested in it, is of a class this mapper does
-     *                               not know: reading it as {@code NONE} would let a save erase it
+     * @throws UnsupportedOperationException if the policy, or one nested in it, is of a class this mapper
+     *                                       does not know: reading it as {@code NONE} would let a save erase
+     *                                       it. A programming error, not a business rule, so it is outside
+     *                                       the exceptions whose message reaches the user
      */
     public static PurchasePolicyDTO toDto(PurchasePolicy policy) {
         if (policy == null || policy instanceof NoPurchasePolicy) {
@@ -83,7 +85,8 @@ public final class PurchasePolicyDtoMapper {
         if (policy instanceof OrPurchasePolicy or) {
             return composite(PolicyType.OR, or.getLeftPolicy(), or.getRightPolicy());
         }
-        throw new IllegalStateException("No DTO mapping for purchase policy type " + policy.getClass().getName());
+        throw new UnsupportedOperationException(
+                "No DTO mapping for purchase policy type " + policy.getClass().getName());
     }
 
     private static PolicyType typeOf(PurchasePolicyDTO dto) {

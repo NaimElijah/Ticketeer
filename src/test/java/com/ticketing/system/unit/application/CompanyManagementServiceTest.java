@@ -1486,7 +1486,7 @@ public class CompanyManagementServiceTest {
         public void GivenCompanyPurchasePolicyOfAnUnmappedType_WhenReadCompanyPolicy_ThenRefusedInsteadOfReadAsNone() {
                 companyOfTheFounderWithPolicy(new UnmappedPurchasePolicy());
 
-                assertThrows(IllegalStateException.class, () -> companyService.getCompanyPurchasePolicy(OWNER_TOKEN, COMPANY_ID),
+                assertThrows(UnsupportedOperationException.class, () -> companyService.getCompanyPurchasePolicy(OWNER_TOKEN, COMPANY_ID),
                                 "a policy the mapping does not know must be refused, not read as NONE");
         }
 
