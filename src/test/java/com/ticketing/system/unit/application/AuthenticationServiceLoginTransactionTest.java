@@ -29,6 +29,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -214,6 +215,24 @@ class AuthenticationServiceLoginTransactionTest {
     void GivenDeliveryFailsWithAConcurrentReservationExceptionAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
         // What OptimisticLockTranslationAspect makes of a lost @Version race in deliverPending.
         givenDeliveryFailsWith(new ConcurrentReservationException("notification updated concurrently"));
+
+        runner.run(context -> {
+            LoginDTO login = context.getBean(AuthenticationService.class)
+                    .login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID));
+
+            assertThat(journal).as("the login commits, and only then is delivery attempted")
+                    .containsExactly(BEGIN, COMMIT, DELIVER_PENDING);
+            assertThat(login.authToken().token()).as("a committed login still hands back its token")
+                    .isEqualTo("TOK");
+            assertThat(login.notifications()).as("nothing was delivered, so nothing is shown").isEmpty();
+        });
+    }
+
+    @Test
+    void GivenDeliveryCannotGetAConnectionAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
+        // What Spring raises when deliverPending's own transaction cannot get a connection: a
+        // TransactionException, not a DataAccessException, yet the same store failure.
+        givenDeliveryFailsWith(new CannotCreateTransactionException("Could not open JPA EntityManager for transaction"));
 
         runner.run(context -> {
             LoginDTO login = context.getBean(AuthenticationService.class)
