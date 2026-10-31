@@ -25,10 +25,13 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import org.springframework.context.ApplicationEventPublisher;
@@ -69,6 +72,16 @@ import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 
 class EventManagementServiceTest {
 
@@ -1616,5 +1629,66 @@ class EventManagementServiceTest {
                 IntStream.rangeClosed(1, seatCount).forEach(number ->
                                 seats.add(new VenueMapConfigDTO.SeatConfigDTO(row + number, number * 10.0, 0)));
                 return new VenueMapConfigDTO.ZoneConfigDTO(name, true, null, seats, 50.0, null);
+        }
+
+        // ---- the event purchase policy survives a read and a save back (#187) ------------------
+        // The policy editor reads the policy as a DTO and saves that DTO back, so a policy the read
+        // cannot express must be refused, never read as NONE, or saving it back erases it.
+
+        private static Stream<PurchasePolicy> everyPurchasePolicyShape() {
+                return Stream.of(
+                                new NoPurchasePolicy(),
+                                new AgePurchasePolicy(18),
+                                new MinTicketsPurchasePolicy(2),
+                                new MaxTicketsPurchasePolicy(6),
+                                new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(6)),
+                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2), new MaxTicketsPurchasePolicy(6)),
+                                new AndPurchasePolicy(new AgePurchasePolicy(21),
+                                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2),
+                                                                new MaxTicketsPurchasePolicy(4))),
+                                new OrPurchasePolicy(new AndPurchasePolicy(new AgePurchasePolicy(16),
+                                                new MinTicketsPurchasePolicy(3)), new MaxTicketsPurchasePolicy(8)));
+        }
+
+        // A policy type the DTO mapping has never heard of.
+        private static final class UnmappedPurchasePolicy implements PurchasePolicy {
+                @Override
+                public boolean isSatisfiedBy(PurchaseContext context) {
+                        return true;
+                }
+
+                @Override
+                public String getFailureMessage() {
+                        return "";
+                }
+        }
+
+        private void ownerCanEditTheEventPolicy(PurchasePolicy policy) {
+                event.setPurchasePolicy(policy);
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+        }
+
+        @ParameterizedTest
+        @MethodSource("everyPurchasePolicyShape")
+        void GivenEventPurchasePolicy_WhenReadAndSavedBack_ThenThePolicyIsUnchanged(PurchasePolicy stored) {
+                ownerCanEditTheEventPolicy(stored);
+
+                PurchasePolicyDTO read = eventService.getEventPurchasePolicy(OWNER_TOKEN, COMPANY_ID, EVENT_ID);
+                eventService.setEventPolicies(OWNER_TOKEN, new EventPolicyConfigDTO(COMPANY_ID, EVENT_ID, read));
+
+                assertEquals(stored, event.getPurchasePolicy(), "read as " + read);
+        }
+
+        @Test
+        void GivenEventPurchasePolicyOfAnUnmappedType_WhenReadEventPolicy_ThenRefusedInsteadOfReadAsNone() {
+                ownerCanEditTheEventPolicy(new UnmappedPurchasePolicy());
+
+                assertThrows(UnsupportedOperationException.class,
+                                () -> eventService.getEventPurchasePolicy(OWNER_TOKEN, COMPANY_ID, EVENT_ID),
+                                "a policy the mapping does not know must be refused, not read as NONE");
         }
 }

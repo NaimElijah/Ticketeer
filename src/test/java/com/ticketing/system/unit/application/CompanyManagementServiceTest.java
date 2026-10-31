@@ -7,11 +7,18 @@ import static org.mockito.Mockito.*;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.InvitationDTO;
@@ -37,8 +44,23 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.organization.domain.CompanyRole;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
+import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
 
 public class CompanyManagementServiceTest {
 
@@ -658,28 +680,6 @@ public class CompanyManagementServiceTest {
         }
 
         @Test
-        public void GivenDatabaseError_WhenRegisterCompany_ThenThrowException() {
-                String token = "valid-token";
-                CompanyRegistrationDTO request = new CompanyRegistrationDTO("New Co", "Desc");
-
-                when(sessionManager.validateToken(token)).thenReturn(true);
-                when(sessionManager.extractUserId(token)).thenReturn(1);
-                when(mockCompanyRepo.existsByName(anyString())).thenReturn(false);
-                when(mockCompanyRepo.nextId()).thenReturn(100);
-
-                // save() returns void; use Mockito's doThrow().when() pattern for void methods.
-                doThrow(new RuntimeException("Database connection lost"))
-                                .when(mockCompanyRepo).save(any(ProductionCompany.class));
-
-                RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-                        companyService.registerCompany(token, request);
-                });
-
-                assertEquals("Failed to register company due to a server error", exception.getMessage());
-                assertEquals("Database connection lost", exception.getCause().getMessage());
-        }
-
-        @Test
         public void GivenInvalidToken_WhenViewOrganizationalTree_ThenThrowException() {
                 when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
@@ -1062,6 +1062,34 @@ public class CompanyManagementServiceTest {
                 assertTrue(mine.isEmpty());
         }
 
+        // ---- resolveUserId: only a signed-in member may look members up --------------------------
+
+        private static final String UNKNOWN_TOKEN = "unknown-token";
+        private static final String ADMIN_TOKEN = "admin-token";
+        private static final String INVITEE_USERNAME = "invitee";
+
+        @ParameterizedTest
+        @NullSource
+        @ValueSource(strings = {UNKNOWN_TOKEN, ADMIN_TOKEN})
+        public void GivenNoLiveMemberToken_WhenResolveUserId_ThenInvalidTokenAndNoLookup(String token) {
+                when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
+                when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(OWNER_ID);
+
+                assertThrows(InvalidTokenException.class, () -> companyService.resolveUserId(token, INVITEE_USERNAME));
+                verify(mockUserRepo, never()).findByUsername(anyString());
+                verify(mockUserRepo, never()).findByEmail(anyString());
+        }
+
+        @Test
+        public void GivenMemberToken_WhenResolveUserIdByUsername_ThenTheNamedMembersId() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(mockUserRepo.findByUsername(INVITEE_USERNAME)).thenReturn(Optional.of(
+                                new User(TARGET_USER_ID, INVITEE_USERNAME, "invitee@test.com", "password", 25)));
+
+                assertEquals(TARGET_USER_ID, companyService.resolveUserId(OWNER_TOKEN, INVITEE_USERNAME));
+        }
+
         // ---- a removed owner keeps no control over the managers they appointed -----------------
         // The founder appoints a co-owner, who appoints a manager. Once the founder revokes the
         // co-owner, the co-owner is no longer an owner, so they can neither edit nor revoke "their"
@@ -1184,5 +1212,284 @@ public class CompanyManagementServiceTest {
 
                 assertFalse(company.isOwner(CO_OWNER_ID));
                 assertFalse(membershipService.isOwnerInCompany(CO_OWNER_ID, COMPANY_ID));
+        }
+
+        // ---- a manager invitation is a pending offer, not a role change (#187) ----------------
+        // The invitee's role changes only when they accept, so the invitation must not tell them it
+        // already has; the acceptance tells them once.
+
+        private ProductionCompany founderInvitedTheTargetAsManager() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "invitee", TARGET_TOKEN);
+                companyService.appointManager(OWNER_TOKEN,
+                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions));
+                return company;
+        }
+
+        private List<Object> publishedEvents() {
+                return mockingDetails(eventPublisher).getInvocations().stream()
+                                .filter(invocation -> invocation.getMethod().getName().equals("publishEvent"))
+                                .map(invocation -> invocation.getArguments()[0])
+                                .toList();
+        }
+
+        private List<RoleChangedNotice> publishedRoleChangedNotices() {
+                return publishedEvents().stream()
+                                .filter(RoleChangedNotice.class::isInstance)
+                                .map(RoleChangedNotice.class::cast)
+                                .toList();
+        }
+
+        @Test
+        public void GivenOwnerAndTargetUser_WhenInviteManager_ThenNoRoleChangedNoticeIsPublished() {
+                founderInvitedTheTargetAsManager();
+
+                List<RoleChangedNotice> roleChanges = publishedRoleChangedNotices();
+                assertTrue(roleChanges.isEmpty(),
+                                "an invitation is still pending, so the invitee's role has not changed; published: "
+                                                + roleChanges);
+        }
+
+        @Test
+        public void GivenOwnerAndTargetUser_WhenInviteManager_ThenExactlyThePendingManagerNoticeIsPublished() {
+                founderInvitedTheTargetAsManager();
+
+                assertEquals(List.of(new ManagerAppointmentPendingNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME)),
+                                publishedEvents(),
+                                "a manager invitation tells the invitee of a pending manager appointment, and nothing else");
+        }
+
+        @Test
+        public void GivenPendingManagerInvitation_WhenTargetAccepts_ThenExactlyOneRoleChangedNoticeNamesTheManagerRole() {
+                founderInvitedTheTargetAsManager();
+                clearInvocations(eventPublisher);
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+
+                assertEquals(List.of(new RoleChangedNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME,
+                                CompanyRole.Manager.name())), publishedRoleChangedNotices(),
+                                "accepting the invitation is the one role change the invitee is told about");
+        }
+
+        // ---- an owner offer dies with its inviter's ownership, as a manager invitation does (#187) ----
+
+        private ProductionCompany companyWithCoOwnerWhoOfferedOwnership() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(CO_OWNER_ID, "coOwner", CO_OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "offeree", TARGET_TOKEN);
+
+                companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, CO_OWNER_ID));
+                companyService.respondToAppointment(CO_OWNER_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+                companyService.appointOwner(CO_OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID));
+                return company;
+        }
+
+        @Test
+        public void GivenPendingOwnerOfferFromAnOwnerSinceRevoked_WhenAccepted_ThenRefusedAsNoLongerValid() {
+                ProductionCompany company = companyWithCoOwnerWhoOfferedOwnership();
+                founderRevokesTheCoOwner();
+
+                BusinessRuleViolationException refused = assertThrows(BusinessRuleViolationException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                                new AppointmentResponseDTO(COMPANY_ID, true)),
+                                "an owner offer from an owner who has since been revoked must be refused as no longer valid");
+                assertEquals("This invitation is no longer valid: the owner who sent it is no longer an owner of this company",
+                                refused.getMessage());
+                assertFalse(company.isOwner(TARGET_USER_ID), "the offeree did not become an owner of the company");
+                assertFalse(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID),
+                                "the offeree holds no active owner appointment");
+                assertNotNull(membershipService.getPendingCompanyAppointment(TARGET_USER_ID, COMPANY_ID),
+                                "a refused offer is left pending, neither accepted nor rejected (#187)");
+        }
+
+        @Test
+        public void GivenPendingOwnerOfferFromACurrentCoOwner_WhenAccepted_ThenTheTargetIsAnOwner() {
+                ProductionCompany company = companyWithCoOwnerWhoOfferedOwnership();
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+
+                assertTrue(company.isOwner(TARGET_USER_ID));
+                assertTrue(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID));
+        }
+
+        // ---- founding a company is not an invitation (#187) -----------------------------------
+
+        private static final int OTHER_COMPANY_ID = 200;
+
+        private void registerCompanyAs(String token, int companyId, String name) {
+                when(mockCompanyRepo.existsByName(name)).thenReturn(false);
+                when(mockCompanyRepo.nextId()).thenReturn(companyId);
+                companyService.registerCompany(token, new CompanyRegistrationDTO(name, COMPANY_1_DESCRIPTION));
+        }
+
+        @Test
+        public void GivenFounderWhoReceivedNoInvitation_WhenListMyInvitations_ThenTheListIsEmpty() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                registerCompanyAs(OWNER_TOKEN, COMPANY_ID, COMPANY_1_NAME);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(new ProductionCompany(COMPANY_ID, OWNER_ID,
+                                COMPANY_1_NAME, CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+
+                List<InvitationDTO> invitations = companyService.listMyInvitations(OWNER_TOKEN);
+
+                assertEquals(List.of(), invitations,
+                                "founding a company is not an invitation from oneself; listed: " + invitations);
+        }
+
+        @Test
+        public void GivenFounderInvitedToManageAnotherCompany_WhenListMyInvitations_ThenOnlyThatInvitationIsListed() {
+                ProductionCompany invitingCompany = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(invitingCompany);
+                givenUserWithToken(OWNER_ID, "inviter", OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "founderElsewhere", TARGET_TOKEN);
+                registerCompanyAs(TARGET_TOKEN, OTHER_COMPANY_ID, "Company2");
+                when(mockCompanyRepo.getCompanyById(OTHER_COMPANY_ID)).thenReturn(new ProductionCompany(OTHER_COMPANY_ID,
+                                TARGET_USER_ID, "Company2", CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+                companyService.appointManager(OWNER_TOKEN,
+                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions));
+
+                List<InvitationDTO> invitations = companyService.listMyInvitations(TARGET_TOKEN);
+
+                assertEquals(List.of(COMPANY_ID), invitations.stream().map(InvitationDTO::companyId).toList(),
+                                "only the manager invitation is an invitation; listed: " + invitations);
+                assertEquals("inviter", invitations.get(0).fromUsername());
+        }
+
+        // ---- an unexpected registration failure keeps its type (#187) ------------------------
+        // Wrapping it in a bare RuntimeException hides it from ServiceErrors.userMessage's
+        // classification and from the caller.
+
+        @Test
+        public void GivenCompanyStoreOutage_WhenRegisterCompany_ThenTheStoreExceptionPropagatesUnwrapped() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockCompanyRepo.existsByName(anyString())).thenReturn(false);
+                when(mockCompanyRepo.nextId()).thenReturn(COMPANY_ID);
+                DataAccessResourceFailureException outage = new DataAccessResourceFailureException("company store unreachable");
+                doThrow(outage).when(mockCompanyRepo).save(any(ProductionCompany.class));
+
+                RuntimeException thrown = assertThrows(RuntimeException.class, () -> companyService.registerCompany(
+                                OWNER_TOKEN, new CompanyRegistrationDTO(COMPANY_1_NAME, COMPANY_1_DESCRIPTION)));
+
+                assertSame(outage, thrown, "the store's own exception must reach the caller, not a wrapper; got " + thrown);
+        }
+
+        // ---- the company purchase policy survives a read and a save back (#187) ----------------
+        // The policy editor reads the policy as a DTO and saves that DTO back, so a policy the read
+        // cannot express must be refused, never read as NONE, or saving it back erases it.
+
+        private static Stream<PurchasePolicy> everyPurchasePolicyShape() {
+                return Stream.of(
+                                new NoPurchasePolicy(),
+                                new AgePurchasePolicy(18),
+                                new MinTicketsPurchasePolicy(2),
+                                new MaxTicketsPurchasePolicy(6),
+                                new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(6)),
+                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2), new MaxTicketsPurchasePolicy(6)),
+                                new AndPurchasePolicy(new AgePurchasePolicy(21),
+                                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2),
+                                                                new MaxTicketsPurchasePolicy(4))),
+                                new OrPurchasePolicy(new AndPurchasePolicy(new AgePurchasePolicy(16),
+                                                new MinTicketsPurchasePolicy(3)), new MaxTicketsPurchasePolicy(8)));
+        }
+
+        // A policy type the DTO mapping has never heard of.
+        private static final class UnmappedPurchasePolicy implements PurchasePolicy {
+                @Override
+                public boolean isSatisfiedBy(PurchaseContext context) {
+                        return true;
+                }
+
+                @Override
+                public String getFailureMessage() {
+                        return "";
+                }
+        }
+
+        private ProductionCompany companyOfTheFounderWithPolicy(PurchasePolicy policy) {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                company.setPurchasePolicy(policy);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                return company;
+        }
+
+        @ParameterizedTest
+        @MethodSource("everyPurchasePolicyShape")
+        public void GivenCompanyPurchasePolicy_WhenReadAndSavedBack_ThenThePolicyIsUnchanged(PurchasePolicy stored) {
+                ProductionCompany company = companyOfTheFounderWithPolicy(stored);
+
+                PurchasePolicyDTO read = companyService.getCompanyPurchasePolicy(OWNER_TOKEN, COMPANY_ID);
+                companyService.setCompanyPolicies(OWNER_TOKEN, new CompanyPolicyConfigDTO(COMPANY_ID, read, List.of()));
+
+                assertEquals(stored, company.getPurchasePolicy(), "read as " + read);
+        }
+
+        @Test
+        public void GivenCompanyPurchasePolicyOfAnUnmappedType_WhenReadCompanyPolicy_ThenRefusedInsteadOfReadAsNone() {
+                companyOfTheFounderWithPolicy(new UnmappedPurchasePolicy());
+
+                assertThrows(UnsupportedOperationException.class, () -> companyService.getCompanyPurchasePolicy(OWNER_TOKEN, COMPANY_ID),
+                                "a policy the mapping does not know must be refused, not read as NONE");
+        }
+
+        // ---- an invitation typed as an email resolves by email, never by username (#187) ----
+        // The identifier's shape picks the one lookup: with an '@' it is an email, otherwise a
+        // username, and a miss does not fall through to the other. Otherwise a member whose
+        // username is another member's email address intercepts invitations typed as that email.
+
+        private static final String EMAIL_SHAPED_IDENTIFIER = "alice@corp.example";
+        private static final int EMAIL_OWNER_ID = 4;
+
+        private User memberWhoseUsernameIsTheEmailShapedIdentifier() {
+                return new User(TARGET_USER_ID, EMAIL_SHAPED_IDENTIFIER, "squatter@test.com", "password", 25);
+        }
+
+        @Test
+        public void GivenOneMembersUsernameIsAnothersEmail_WhenResolveUserIdByThatEmail_ThenTheEmailOwnersId() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockUserRepo.findByUsername(EMAIL_SHAPED_IDENTIFIER))
+                                .thenReturn(Optional.of(memberWhoseUsernameIsTheEmailShapedIdentifier()));
+                when(mockUserRepo.findByEmail(EMAIL_SHAPED_IDENTIFIER)).thenReturn(Optional.of(
+                                new User(EMAIL_OWNER_ID, "alice", EMAIL_SHAPED_IDENTIFIER, "password", 25)));
+
+                int resolved = companyService.resolveUserId(OWNER_TOKEN, EMAIL_SHAPED_IDENTIFIER);
+
+                assertEquals(EMAIL_OWNER_ID, resolved,
+                                "an email-shaped identifier names the member with that email, not the member with that username");
+        }
+
+        @Test
+        public void GivenEmailShapedIdentifierThatOnlyAUsernameMatches_WhenResolveUserId_ThenUserNotFound() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockUserRepo.findByUsername(EMAIL_SHAPED_IDENTIFIER))
+                                .thenReturn(Optional.of(memberWhoseUsernameIsTheEmailShapedIdentifier()));
+                when(mockUserRepo.findByEmail(EMAIL_SHAPED_IDENTIFIER)).thenReturn(Optional.empty());
+
+                assertThrows(UserNotFoundException.class,
+                                () -> companyService.resolveUserId(OWNER_TOKEN, EMAIL_SHAPED_IDENTIFIER),
+                                "an email-shaped identifier that no member's email matches must not fall through to usernames");
+        }
+
+        @Test
+        public void GivenPlainUsername_WhenResolveUserId_ThenResolvedByUsernameWithoutAnEmailLookup() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockUserRepo.findByUsername(INVITEE_USERNAME)).thenReturn(Optional.of(
+                                new User(TARGET_USER_ID, INVITEE_USERNAME, "invitee@test.com", "password", 25)));
+
+                int resolved = companyService.resolveUserId(OWNER_TOKEN, INVITEE_USERNAME);
+
+                assertEquals(TARGET_USER_ID, resolved, "an identifier without '@' is a username");
+                verify(mockUserRepo, never()).findByEmail(anyString());
         }
 }

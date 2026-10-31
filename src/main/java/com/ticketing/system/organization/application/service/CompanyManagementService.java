@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import lombok.extern.slf4j.Slf4j;
 
+import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.InvitationDTO;
@@ -26,8 +27,8 @@ import com.ticketing.system.organization.application.port.out.ProductionCompanyR
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
-import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
@@ -39,6 +40,7 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.OwnerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.RoleChangedNotice;
@@ -47,13 +49,8 @@ import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDtoMapper;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
-import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
-import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,6 +59,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class CompanyManagementService {
     private static final String ADMIN_REQUIRED = "Admin privileges required";
+    // Every email holds it and no username registered under AuthenticationService.USERNAME_CHARACTERS does.
+    private static final String EMAIL_MARKER = "@";
 
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -146,8 +145,9 @@ public class CompanyManagementService {
         // Notify target user
         ProductionCompany company = companyRepository.getCompanyById(request.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
-        eventPublisher.publishEvent(new RoleChangedNotice(request.targetUserId(), request.companyId(),
-                company.getName(), "MANAGER"));
+        // The invitee's role changes only on acceptance, which publishes the RoleChangedNotice.
+        eventPublisher.publishEvent(new ManagerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
+                company.getName()));
 
         log.info("Manager appointment created successfully: ownerId={}, targetUserId={}, companyId={}, permissions={}",
                 ownerId, request.targetUserId(), request.companyId(), request.permissions());
@@ -175,7 +175,7 @@ public class CompanyManagementService {
         CompanyAppointment appointment;
 
         if (response.accept()) {
-            requireManagerInviterStillOwner(userId, response.companyId());
+            requireInviterStillOwner(userId, response.companyId());
             // Transitions the pending appointment to ACTIVE (and persists it via the appointment repo).
             appointment = companyMembershipService.acceptInvitation(userId, response.companyId());
             if (appointment.getRole() == CompanyRole.Owner) {
@@ -198,14 +198,14 @@ public class CompanyManagementService {
         companyRepository.updateCompany(company);
     }
 
-    // A manager invitation carries its inviter's authority, so it dies with that authority: once the
-    // inviter is no longer an owner, accepting would grant a role nobody in the company stands behind.
-    private void requireManagerInviterStillOwner(int userId, int companyId) {
+    // A manager invitation or owner offer carries its inviter's authority, so it dies with that
+    // authority: once the inviter is no longer an owner, accepting would grant a role nobody in the
+    // company stands behind. Checked before acceptInvitation, so a refused offer stays pending.
+    private void requireInviterStillOwner(int userId, int companyId) {
         CompanyAppointment pending = companyMembershipService.getPendingCompanyAppointment(userId, companyId);
-        if (pending != null && pending.getRole() == CompanyRole.Manager
-                && !companyMembershipService.isOwnerInCompany(pending.getInviterId(), companyId)) {
-            log.warn("Manager invitation for user {} in company {} refused: its inviter is no longer an owner",
-                    userId, companyId);
+        if (pending != null && !companyMembershipService.isOwnerInCompany(pending.getInviterId(), companyId)) {
+            log.warn("{} invitation for user {} in company {} refused: its inviter is no longer an owner",
+                    pending.getRole(), userId, companyId);
             throw new BusinessRuleViolationException(
                     "This invitation is no longer valid: the owner who sent it is no longer an owner of this company");
         }
@@ -277,21 +277,33 @@ public class CompanyManagementService {
         log.info("Manager revoked successfully");
     }
 
-    // Resolves a username-or-email string to a userId — used by the invite flow.
+    /**
+     * Resolves a username or an email address to the member's user id, for the invite flow. An identifier
+     * containing {@code @} is looked up as an email only, anything else as a username only.
+     *
+     * @param token      the caller's member token; only a signed-in member may look members up
+     * @param identifier a username or an email address
+     * @return the id of the member the identifier names
+     * @throws InvalidTokenException    if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws SessionExpiredException  if the token has expired
+     * @throws IllegalArgumentException if {@code identifier} is null or blank
+     * @throws UserNotFoundException    if no member has that username (for an identifier without {@code @})
+     *                                  or that email (for one with {@code @})
+     */
     @Transactional(readOnly = true)
-    public int resolveUserId(String identifier) {
+    public int resolveUserId(String token, String identifier) {
+        authenticate(token);
         if (identifier == null || identifier.isBlank())
             throw new IllegalArgumentException("Identifier must not be blank");
 
-        Optional<User> byName = userRepository.findByUsername(identifier.trim());
-        if (byName.isPresent())
-            return byName.get().getUserId();
-
-        Optional<User> byEmail = userRepository.findByEmail(identifier.trim());
-        if (byEmail.isPresent())
-            return byEmail.get().getUserId();
-
-        throw new UserNotFoundException();
+        // The identifier's shape picks one lookup, with no fall-through to the other. Registration refuses
+        // '@' in usernames, so an email-shaped username can exist only from before that rule; it must not
+        // intercept an invitation typed as an email, nor answer for an email no member has.
+        String trimmed = identifier.trim();
+        Optional<User> match = trimmed.contains(EMAIL_MARKER)
+                ? userRepository.findByEmail(trimmed)
+                : userRepository.findByUsername(trimmed);
+        return match.map(User::getUserId).orElseThrow(UserNotFoundException::new);
     }
 
     // ---------------------------------------------------------------------------
@@ -404,13 +416,10 @@ public class CompanyManagementService {
             if (company == null) {
                 continue;
             }
-            String role;
-            if (appt.getRole() == CompanyRole.Owner) {
-                role = company.getFounderId() == userId ? "Founder" : "Co-owner";
-            } else {
-                role = "Manager";
-            }
-            companies.add(new MyCompanyDTO(company.getCompanyId(), company.getName(), role));
+            // MyCompanyDTO is published language in shared/dto, which cannot name an organization type, so its
+            // role stays a display string. Nothing switches on it; Capabilities reads UserCompanyDTO's type.
+            companies.add(new MyCompanyDTO(company.getCompanyId(), company.getName(),
+                    membershipRole(userId, appt, company).label()));
         }
         log.info("User {} belongs to {} active company appointment(s)", userId, companies.size());
         return companies;
@@ -433,6 +442,11 @@ public class CompanyManagementService {
 
         List<InvitationDTO> invitations = new ArrayList<>();
         for (CompanyAppointment appt : companyMembershipService.getAllCompanyAppointments(userId)) {
+            // Only a founding appointment names its target as its inviter (a member cannot invite
+            // themselves into a company they already belong to), and founding is not an invitation.
+            if (appt.getInviterId() == appt.getTargetId()) {
+                continue;
+            }
             ProductionCompany company = companyRepository.getCompanyById(appt.getCompanyId());
             String companyName = company != null ? company.getName() : "(unknown company)";
             // getUserById throws (never returns null) when the inviter no longer
@@ -483,37 +497,29 @@ public class CompanyManagementService {
             throw new IllegalStateException("A company with this name already exists");
         }
 
-        try {
-            int companyId = companyRepository.nextId();
-            ProductionCompany newProductionCompany = new ProductionCompany(
-                    companyId,
-                    userId,
-                    request.getName().trim(),
-                    CompanyStatus.ACTIVE,
-                    request.getDescription().trim(),
-                    0.0);
+        int companyId = companyRepository.nextId();
+        ProductionCompany newProductionCompany = new ProductionCompany(
+                companyId,
+                userId,
+                request.getName().trim(),
+                CompanyStatus.ACTIVE,
+                request.getDescription().trim(),
+                0.0);
 
-            // ProductionCompanyRepository.save returns void; the new instance IS the saved
-            // one.
-            companyRepository.save(newProductionCompany);
-            // Founder receives an immediately-active owner appointment (created + persisted here).
-            companyMembershipService.addFounderAppointment(userId, companyId);
-            log.info("Successfully registered new company: '{}' by userId: {}", newProductionCompany.getName(), userId);
+        // ProductionCompanyRepository.save returns void; the new instance IS the saved
+        // one.
+        companyRepository.save(newProductionCompany);
+        // Founder receives an immediately-active owner appointment (created + persisted here).
+        companyMembershipService.addFounderAppointment(userId, companyId);
+        log.info("Successfully registered new company: '{}' by userId: {}", newProductionCompany.getName(), userId);
 
-            return new ProductionCompanyDTO(
-                    newProductionCompany.getCompanyId(),
-                    newProductionCompany.getName(),
-                    newProductionCompany.getDescription(),
-                    newProductionCompany.getStatus().name(), // DTO field is String
-                    newProductionCompany.getFounderId() // DTO field is founderId
-            );
-
-        } catch (DomainException e) {
-            throw e; // a known business failure (e.g. duplicate) keeps its type/message; don't mask it
-        } catch (Exception e) {
-            log.error("Error occurred while saving company '{}': {}", request.getName(), e.getMessage());
-            throw new RuntimeException("Failed to register company due to a server error", e);
-        }
+        return new ProductionCompanyDTO(
+                newProductionCompany.getCompanyId(),
+                newProductionCompany.getName(),
+                newProductionCompany.getDescription(),
+                newProductionCompany.getStatus().name(), // DTO field is String
+                newProductionCompany.getFounderId() // DTO field is founderId
+        );
     }
 
     @Transactional
@@ -531,7 +537,7 @@ public class CompanyManagementService {
             throw new UserNotFoundException();
         }
         companyMembershipService.requirePermissionInCompany(userId, config.companyId(), Permission.EDIT_POLICIES);
-        PurchasePolicy policy = buildPurchasePolicyFromDTO(config.defaultPurchasePolicy());
+        PurchasePolicy policy = PurchasePolicyDtoMapper.toPolicy(config.defaultPurchasePolicy());
         company.setPurchasePolicy(policy);
         companyRepository.save(company);
         log.info("Purchase policy updated for company {} by user {}", config.companyId(), userId);
@@ -637,8 +643,18 @@ public class CompanyManagementService {
         return userIdToNodeMap.get(founderId);
     }
 
+    /**
+     * The signed-in member's own memberships: one entry per company where they hold an ACTIVE appointment.
+     *
+     * @param token the member's token; the memberships listed are always the token's own member's
+     * @return the memberships, empty for a member of no company
+     * @throws InvalidTokenException   if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws SessionExpiredException if the token has expired
+     * @throws UserNotFoundException   if the token's member no longer exists
+     */
     @Transactional(readOnly = true)
-    public List<UserCompanyDTO> listForUser(int userId) {
+    public List<UserCompanyDTO> listForUser(String token) {
+        int userId = authenticate(token);
         User user = userRepository.getUserById(userId);
         if (user == null) {
             throw new UserNotFoundException();
@@ -651,7 +667,7 @@ public class CompanyManagementService {
             ProductionCompany company;
             try {
                 company = companyRepository.getCompanyById(appointment.getCompanyId());
-            } catch (RuntimeException e) {
+            } catch (CompanyNotFoundException e) {
                 log.warn("Skipping membership for missing companyId={}", appointment.getCompanyId());
                 continue;
             }
@@ -660,8 +676,19 @@ public class CompanyManagementService {
         return memberships;
     }
 
+    /**
+     * Whether the signed-in member holds an ACTIVE owner appointment (founder or co-owner) in a company.
+     *
+     * @param token     the member's token; the answer is always about the token's own member
+     * @param companyId the company to check
+     * @return {@code true} if the token's member owns {@code companyId}
+     * @throws InvalidTokenException   if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws SessionExpiredException if the token has expired
+     * @throws UserNotFoundException   if the token's member no longer exists
+     */
     @Transactional(readOnly = true)
-    public boolean isOwnerOf(int userId, int companyId) {
+    public boolean isOwnerOf(String token, int companyId) {
+        int userId = authenticate(token);
         User user = userRepository.getUserById(userId);
         if (user == null) {
             throw new UserNotFoundException();
@@ -679,7 +706,7 @@ public class CompanyManagementService {
                 company.getName(),
                 company.getDescription(),
                 "",
-                displayRole(userId, appointment, company),
+                membershipRole(userId, appointment, company),
                 company.getStatus().name(),
                 company.getOwnersIds().size() + company.getManagers().size(),
                 // Active-event count comes from catalog via the outbound port (no catalog import here).
@@ -687,14 +714,14 @@ public class CompanyManagementService {
                 managerPermissions);
     }
 
-    private static String displayRole(int userId, CompanyAppointment appointment, ProductionCompany company) {
-        if (company.getFounderId() == userId)
-            return "Founder";
-        if (appointment.getRole() == CompanyRole.Owner)
-            return "Co-owner";
-        if (appointment.getRole() == CompanyRole.Manager)
-            return "Manager";
-        return appointment.getRole().name();
+    // The one mapping from an appointment to the role a member reads. The founder holds the founding
+    // owner appointment, so only an owner can be the founder.
+    private static MembershipRole membershipRole(int userId, CompanyAppointment appointment,
+            ProductionCompany company) {
+        return switch (appointment.getRole()) {
+            case Owner -> company.getFounderId() == userId ? MembershipRole.FOUNDER : MembershipRole.CO_OWNER;
+            case Manager -> MembershipRole.MANAGER;
+        };
     }
 
     private int authenticate(String token) {
@@ -713,45 +740,6 @@ public class CompanyManagementService {
         }
     }
 
-    private PurchasePolicy buildPurchasePolicyFromDTO(PurchasePolicyDTO dto) {
-        if (dto == null)
-            return new NoPurchasePolicy();
-        if (dto.type() == null || dto.type().isBlank())
-            throw new IllegalArgumentException("Purchase policy type is required");
-        switch (dto.type().trim().toUpperCase()) {
-            case "AGE":
-                if (dto.minimumAge() == null)
-                    throw new IllegalArgumentException("minimumAge is required");
-                return new AgePurchasePolicy(dto.minimumAge());
-            case "MIN_TICKETS":
-                if (dto.minimumTickets() == null)
-                    throw new IllegalArgumentException("minimumTickets is required");
-                return new MinTicketsPurchasePolicy(dto.minimumTickets());
-            case "MAX_TICKETS":
-                if (dto.maximumTickets() == null)
-                    throw new IllegalArgumentException("maximumTickets is required");
-                return new MaxTicketsPurchasePolicy(dto.maximumTickets());
-            case "AND":
-                if (dto.children() == null || dto.children().size() < 2)
-                    throw new IllegalArgumentException("AND policy must have at least two children");
-                PurchasePolicy andResult = buildPurchasePolicyFromDTO(dto.children().get(0));
-                for (int i = 1; i < dto.children().size(); i++)
-                    andResult = new AndPurchasePolicy(andResult, buildPurchasePolicyFromDTO(dto.children().get(i)));
-                return andResult;
-            case "OR":
-                if (dto.children() == null || dto.children().size() < 2)
-                    throw new IllegalArgumentException("OR policy must have at least two children");
-                PurchasePolicy orResult = buildPurchasePolicyFromDTO(dto.children().get(0));
-                for (int i = 1; i < dto.children().size(); i++)
-                    orResult = new OrPurchasePolicy(orResult, buildPurchasePolicyFromDTO(dto.children().get(i)));
-                return orResult;
-            case "NONE":
-                return new NoPurchasePolicy();
-            default:
-                throw new IllegalArgumentException("Unknown purchase policy type: " + dto.type());
-        }
-    }
-
     @Transactional(readOnly = true)
     public PurchasePolicyDTO getCompanyPurchasePolicy(String token, int companyId) {
         int userId = authenticate(token);
@@ -762,24 +750,6 @@ public class CompanyManagementService {
         if (user == null)
             throw new UserNotFoundException();
         companyMembershipService.requirePermissionInCompany(userId, companyId, Permission.EDIT_POLICIES);
-        return policyToDTO(company.getPurchasePolicy());
-    }
-
-    private PurchasePolicyDTO policyToDTO(PurchasePolicy policy) {
-        if (policy == null || policy instanceof NoPurchasePolicy)
-            return new PurchasePolicyDTO("NONE", null, null, null, null);
-        if (policy instanceof AgePurchasePolicy a)
-            return new PurchasePolicyDTO("AGE", a.getMinimumAge(), null, null, null);
-        if (policy instanceof MinTicketsPurchasePolicy m)
-            return new PurchasePolicyDTO("MIN_TICKETS", null, m.getMinimumTickets(), null, null);
-        if (policy instanceof MaxTicketsPurchasePolicy m)
-            return new PurchasePolicyDTO("MAX_TICKETS", null, null, m.getMaximumTickets(), null);
-        if (policy instanceof AndPurchasePolicy a)
-            return new PurchasePolicyDTO("AND", null, null, null,
-                    List.of(policyToDTO(a.getLeftPolicy()), policyToDTO(a.getRightPolicy())));
-        if (policy instanceof OrPurchasePolicy o)
-            return new PurchasePolicyDTO("OR", null, null, null,
-                    List.of(policyToDTO(o.getLeftPolicy()), policyToDTO(o.getRightPolicy())));
-        return new PurchasePolicyDTO("NONE", null, null, null, null);
+        return PurchasePolicyDtoMapper.toDto(company.getPurchasePolicy());
     }
 }

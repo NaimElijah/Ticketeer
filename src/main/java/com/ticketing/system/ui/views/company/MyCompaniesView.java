@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.company;
 
+import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter.Outcome;
 import com.ticketing.system.ui.components.kit.Lk;
@@ -112,7 +113,7 @@ public class MyCompaniesView extends LkPage {
             Span name = new Span();
             name.getElement().setProperty("innerHTML", "<b>" + escape(company.name()) + "</b>");
             row.put("company", name);
-            row.put("role", new LkBadge(company.role(), toneFor(company.role())).small());
+            row.put("role", new LkBadge(company.role().label(), toneFor(company.role())).small());
             row.put("status", new LkStatusDot(LkStatusDot.Tone.ok, company.status()));
             row.put("members", company.members());
             row.put("events", company.activeEvents());
@@ -138,11 +139,11 @@ public class MyCompaniesView extends LkPage {
         return card;
     }
 
-    private static LkBadge.Tone toneFor(String role) {
+    private static LkBadge.Tone toneFor(MembershipRole role) {
         return switch (role) {
-            case "Founder"  -> LkBadge.Tone.warning;
-            case "Co-owner" -> LkBadge.Tone.primary;
-            default         -> LkBadge.Tone.success;
+            case FOUNDER  -> LkBadge.Tone.warning;
+            case CO_OWNER -> LkBadge.Tone.primary;
+            case MANAGER  -> LkBadge.Tone.success;
         };
     }
 

@@ -171,6 +171,21 @@ public class NotificationService implements INotificationService {
     }
 
     @Override
+    public void notifyManagerAppointmentPending(int userId, int companyId, String companyName) {
+        String message = String.format("You have a pending manager appointment for company '%s'. Please accept or reject it.", companyName);
+        Notification notification = new Notification(
+                UUID.randomUUID().toString(),
+                userId,
+                NotificationType.MANAGER_APPOINTMENT_PENDING,
+                NotificationStatus.PENDING,
+                message,
+                LocalDateTime.now(clock),
+                Map.<String, Object>of("companyId", companyId, "companyName", companyName)
+        );
+        dispatcher.dispatch(notification);
+    }
+
+    @Override
     public void notifyRoleChanged(int userId, int companyId, String companyName, String newRole) {
         String message = String.format("Your role in company '%s' has been updated to %s.", companyName, newRole);
         Notification notification = new Notification(

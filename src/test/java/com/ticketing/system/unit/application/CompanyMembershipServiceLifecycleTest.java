@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAp
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 /**
  * Appointment-lifecycle coverage relocated from the old {@code UserTest} (task #20). These cases used
@@ -187,5 +189,30 @@ class CompanyMembershipServiceLifecycleTest {
 
         assertThrows(RuntimeException.class,
                 () -> membership.modifyManagerPermissions(USER_ID, COMPANY_ID, USER_ID, newPermissions));
+    }
+
+    // Owners hold every permission implicitly, so an owner appointment never takes an explicit set.
+    @Test
+    void GivenOwnerAppointment_WhenModifyManagerPermissions_ThenRefusedAndTheOwnerHoldsNoExplicitPermissions() {
+        BusinessRuleViolationException refused = assertThrows(BusinessRuleViolationException.class,
+                () -> membership.modifyManagerPermissions(OWNER_ID, COMPANY_ID, OWNER_ID,
+                        List.of(Permission.EDIT_POLICIES)));
+
+        assertEquals("Can only modify permissions for manager appointments", refused.getMessage());
+        assertEquals(Set.of(), membership.getActiveCompanyAppointment(OWNER_ID, COMPANY_ID).getPermissions());
+    }
+
+    // A manager must keep at least one permission; a refused edit leaves the old set in place.
+    @Test
+    void GivenActiveManager_WhenModifyManagerPermissionsWithNoPermissions_ThenRefusedAndTheOldPermissionsKept() {
+        membership.receiveManagerAppointment(USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
+        membership.acceptInvitation(USER_ID, COMPANY_ID);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> membership.modifyManagerPermissions(USER_ID, COMPANY_ID, OWNER_ID, List.of()),
+                "a manager left with no permission must be refused");
+
+        assertEquals(Set.copyOf(defaultPermissions),
+                membership.getActiveCompanyAppointment(USER_ID, COMPANY_ID).getPermissions());
     }
 }

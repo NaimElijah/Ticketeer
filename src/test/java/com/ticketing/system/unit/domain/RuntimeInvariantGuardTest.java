@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,19 +40,20 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     private static final int TARGET_ID = 3;
     private static final int INVITER_ID = 1;
 
-    // --- Pattern C: raw bypass setter now re-validates ---------------------------
+    // --- Pattern C: the permission mutator re-validates ---------------------------
 
     @Test
-    void setPermissions_emptySetOnManager_throwsAndRollsBack() {
+    void GivenActiveManagerAppointment_WhenPermissionsUpdatedToAnEmptySet_ThenRefusedAndTheOldSetKept() {
         CompanyAppointment manager = track(CompanyAppointment.ManagerAppointment(
-                7, COMPANY_ID, TARGET_ID, INVITER_ID, List.of(Permission.MANAGE_INVENTORY), LocalDateTime.now()));
+                7, COMPANY_ID, TARGET_ID, INVITER_ID, List.of(Permission.MANAGE_INVENTORY),
+                LocalDateTime.of(2027, 7, 15, 17, 0)));
+        manager.accept();
 
-        // Manager must keep at least one permission — the raw setter used to allow this.
-        assertThrows(IllegalStateException.class,
-                () -> manager.setPermissions(EnumSet.noneOf(Permission.class)));
+        // A manager must keep at least one permission.
+        assertThrows(IllegalArgumentException.class, () -> manager.updatePermissions(List.of()));
 
-        // Validate-before-commit: the rejected call rolled back, leaving the original permission.
-        assertTrue(manager.getPermissions().contains(Permission.MANAGE_INVENTORY));
+        // Validate-before-commit: the refused call left the original permission set in place.
+        assertEquals(Set.of(Permission.MANAGE_INVENTORY), manager.getPermissions());
     }
 
     // --- Pattern A: status mutation re-asserts invariants ------------------------

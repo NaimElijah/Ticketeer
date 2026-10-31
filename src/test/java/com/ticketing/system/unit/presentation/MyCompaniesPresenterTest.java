@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -35,9 +37,9 @@ import com.ticketing.system.ui.session.SessionIdentity;
 
 /**
  * {@link MyCompaniesPresenter} answers with the signed-in member's companies, and only a member's.
- * The member is resolved through {@link SessionIdentity}: an admin's session stores the admin's id,
- * and admin and member ids share one id space (ADR-012), so the stored id alone would show an admin
- * the companies of the member with the same id, and count the admin as their owner.
+ * The member is resolved through {@link SessionIdentity}, and the service is asked with the member's
+ * own token. An admin's session stores the admin's id and token, and admin and member ids share one
+ * id space (ADR-012), so an admin is answered as having no companies without asking the service.
  */
 class MyCompaniesPresenterTest {
 
@@ -51,9 +53,9 @@ class MyCompaniesPresenterTest {
     private static final int INVITEE_USER_ID = 77;
     private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
     private static final UserCompanyDTO MEMBERS_COMPANY = new UserCompanyDTO(COMPANY_ID, "Acme", "desc",
-            "acme@example.com", "Founder", "ACTIVE", 1, 0, List.of());
+            "acme@example.com", MembershipRole.FOUNDER, "ACTIVE", 1, 0, List.of());
     private static final UserCompanyDTO MEMBERS_SECOND_COMPANY = new UserCompanyDTO(SECOND_COMPANY_ID, "Beta",
-            "desc", "beta@example.com", "Co-owner", "ACTIVE", 1, 0, List.of());
+            "desc", "beta@example.com", MembershipRole.CO_OWNER, "ACTIVE", 1, 0, List.of());
 
     private CompanyManagementService companyManagementService;
     private MyCompaniesPresenter presenter;
@@ -62,9 +64,9 @@ class MyCompaniesPresenterTest {
     void setUp() {
         MapBackedVaadinSession.install();
         companyManagementService = mock(CompanyManagementService.class);
-        when(companyManagementService.listForUser(MEMBER_USER_ID)).thenReturn(List.of(MEMBERS_COMPANY));
-        when(companyManagementService.isOwnerOf(MEMBER_USER_ID, COMPANY_ID)).thenReturn(true);
-        when(companyManagementService.resolveUserId(INVITEE)).thenReturn(INVITEE_USER_ID);
+        when(companyManagementService.listForUser(MEMBER_TOKEN)).thenReturn(List.of(MEMBERS_COMPANY));
+        when(companyManagementService.isOwnerOf(MEMBER_TOKEN, COMPANY_ID)).thenReturn(true);
+        when(companyManagementService.resolveUserId(MEMBER_TOKEN, INVITEE)).thenReturn(INVITEE_USER_ID);
         AuthenticationService authenticationService = mock(AuthenticationService.class);
         when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
         SessionIdentity identity = new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService));
@@ -85,7 +87,7 @@ class MyCompaniesPresenterTest {
         assertInstanceOf(MyCompaniesPresenter.Outcome.NotAuthenticated.class, outcome,
                 "an admin is no member, so must not see the companies of the member with the admin's id; got "
                         + outcome);
-        verify(companyManagementService, never()).listForUser(anyInt());
+        verify(companyManagementService, never()).listForUser(any());
     }
 
     @Test
@@ -93,7 +95,7 @@ class MyCompaniesPresenterTest {
         signInAsAdminWithTheMembersId();
 
         assertNull(presenter.currentCompany(), "an admin has no current company of the member's");
-        verify(companyManagementService, never()).listForUser(anyInt());
+        verify(companyManagementService, never()).listForUser(any());
     }
 
     @Test
@@ -101,7 +103,7 @@ class MyCompaniesPresenterTest {
         signInAsAdminWithTheMembersId();
 
         assertFalse(presenter.isOwnerOf(COMPANY_ID), "an admin does not own the member's company");
-        verify(companyManagementService, never()).isOwnerOf(anyInt(), anyInt());
+        verify(companyManagementService, never()).isOwnerOf(any(), anyInt());
     }
 
     @Test
@@ -114,13 +116,20 @@ class MyCompaniesPresenterTest {
         assertEquals(List.of(MEMBERS_COMPANY), success.companies());
     }
 
+    @Test
+    void GivenMemberSession_WhenIsOwnerOfTheMembersCompany_ThenTrue() {
+        signInAsMember();
+
+        assertTrue(presenter.isOwnerOf(COMPANY_ID), "the member's own token answers for the member's company");
+    }
+
     // ---- the company a co-owner appointment applies to ---------------------------------------
     // The member's memberships are unordered, so the first can be any of them and is never a default.
 
     @Test
     void GivenMemberOfTwoCompaniesAndNoSelection_WhenCurrentCompany_ThenNone() {
         signInAsMember();
-        when(companyManagementService.listForUser(MEMBER_USER_ID))
+        when(companyManagementService.listForUser(MEMBER_TOKEN))
                 .thenReturn(List.of(MEMBERS_COMPANY, MEMBERS_SECOND_COMPANY));
 
         assertNull(presenter.currentCompany(), "with two companies and none selected, none is current");
@@ -129,7 +138,7 @@ class MyCompaniesPresenterTest {
     @Test
     void GivenMemberOfTwoCompaniesWithTheSecondSelected_WhenAppoint_ThenTheAppointmentIsInTheSelectedCompany() {
         signInAsMember();
-        when(companyManagementService.listForUser(MEMBER_USER_ID))
+        when(companyManagementService.listForUser(MEMBER_TOKEN))
                 .thenReturn(List.of(MEMBERS_COMPANY, MEMBERS_SECOND_COMPANY));
         CurrentCompanies.setCurrentCompany(SECOND_COMPANY_ID);
 
@@ -145,7 +154,7 @@ class MyCompaniesPresenterTest {
     @Test
     void GivenMemberOfTwoCompaniesAndNoSelection_WhenAppoint_ThenChooseCompanyAndNoAppointment() {
         signInAsMember();
-        when(companyManagementService.listForUser(MEMBER_USER_ID))
+        when(companyManagementService.listForUser(MEMBER_TOKEN))
                 .thenReturn(List.of(MEMBERS_COMPANY, MEMBERS_SECOND_COMPANY));
 
         MyCompaniesPresenter.AppointOutcome outcome = presenter.appoint(INVITEE);
@@ -177,12 +186,14 @@ class MyCompaniesPresenterTest {
         ArgumentCaptor<OwnerAppointmentRequestDTO> request = ArgumentCaptor.forClass(OwnerAppointmentRequestDTO.class);
         verify(companyManagementService).appointOwner(eq(MEMBER_TOKEN), request.capture());
         assertEquals(COMPANY_ID, request.getValue().companyId());
+        assertEquals(INVITEE_USER_ID, request.getValue().targetUserId(),
+                "the invitee is looked up with the member's own token");
     }
 
     @Test
     void GivenMemberOfNoCompany_WhenAppoint_ThenNoCompanyAndNoAppointment() {
         signInAsMember();
-        when(companyManagementService.listForUser(MEMBER_USER_ID)).thenReturn(List.of());
+        when(companyManagementService.listForUser(MEMBER_TOKEN)).thenReturn(List.of());
 
         MyCompaniesPresenter.AppointOutcome outcome = presenter.appoint(INVITEE);
 

@@ -27,6 +27,16 @@ public interface INotificationService {
 
     void notifyOwnerAppointmentPending(int userId, int companyId, String companyName);
 
+    /**
+     * Tells a member they hold a pending manager appointment in a company. Their role changes only once
+     * they accept it, which sends its own role-change notification.
+     *
+     * @param userId      the invited member
+     * @param companyId   the company the appointment is in
+     * @param companyName the company's name, shown in the notification
+     */
+    void notifyManagerAppointmentPending(int userId, int companyId, String companyName);
+
     void notifyRoleChanged(int userId, int companyId, String companyName, String newRole);
 
     /**

@@ -3,6 +3,8 @@ package com.ticketing.system.ui.security;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
@@ -100,10 +102,8 @@ public final class Capabilities {
         Set<Capability> caps = EnumSet.copyOf(GUEST_BASE);
 
         if (AuthSession.isAdmin()) {
-            // Admins are a SEPARATE pool from members — the admin's id lives in the `admins` table,
-            // not `users`. Return here so we never resolve company memberships for an admin: falling
-            // through to listForUser(userId) -> getUserById(userId) throws UserNotFoundException
-            // whenever no member happens to share that id (always, on a clean DB).
+            // Admins are a SEPARATE pool from members, and an admin token is no member credential
+            // (ADR-012): listForUser refuses it. An admin holds no company memberships, so never ask.
             caps.addAll(ADMIN_BUNDLE);
             return caps;
         }
@@ -114,13 +114,21 @@ public final class Capabilities {
 
         caps.addAll(MEMBER_BASE);
 
-        Integer userId = AuthSession.userId();
+        String token = AuthSession.token();
         CompanyManagementService service = CompanyManagementBridge.service();
-        if (userId == null || service == null) {
+        if (token == null || service == null) {
             return caps;
         }
 
-        List<UserCompanyDTO> memberships = service.listForUser(userId);
+        List<UserCompanyDTO> memberships;
+        try {
+            memberships = service.listForUser(token);
+        } catch (InvalidTokenException | SessionExpiredException e) {
+            // The token died after sign-in: revoked (InvalidTokenException) or expired (SessionExpiredException).
+            // A dead token holds no memberships, so it gets no company capabilities; AuthBootstrap signs the
+            // visitor out on their next navigation. Any other failure is not a dead token and propagates.
+            return caps;
+        }
         if (memberships.isEmpty()) {
             return caps;
         }
@@ -141,20 +149,17 @@ public final class Capabilities {
 
         caps.add(Capability.OWNER_WORKSPACE);
 
-        String role = current.role();
-        if (role == null) {
-            return caps;
-        }
-        switch (role) {
-            case "Founder" -> {
-                caps.addAll(OWNER_BUNDLE);
-                caps.addAll(FOUNDER_EXTRA);
+        // A switch expression, so a new MembershipRole fails the build until it is given its capabilities.
+        Set<Capability> roleCapabilities = switch (current.role()) {
+            case FOUNDER -> {
+                Set<Capability> founder = EnumSet.copyOf(OWNER_BUNDLE);
+                founder.addAll(FOUNDER_EXTRA);
+                yield founder;
             }
-            case "Co-owner" -> caps.addAll(OWNER_BUNDLE);
-            case "Manager" -> caps.addAll(capabilitiesFromPermissions(current.managerPermissions()));
-            default -> {
-                /* unknown role — workspace only */ }
-        }
+            case CO_OWNER -> OWNER_BUNDLE;
+            case MANAGER -> capabilitiesFromPermissions(current.managerPermissions());
+        };
+        caps.addAll(roleCapabilities);
         return caps;
     }
 

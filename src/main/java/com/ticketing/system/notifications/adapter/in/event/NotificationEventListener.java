@@ -7,6 +7,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.notifications.config.NotificationAsyncConfig;
 import com.ticketing.system.shared.event.EventCancelledNotice;
+import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.NewMessageNotice;
 import com.ticketing.system.shared.event.OwnerAppointmentPendingNotice;
@@ -110,6 +111,13 @@ public class NotificationEventListener {
     @TransactionalEventListener(fallbackExecution = true)
     public void on(OwnerAppointmentPendingNotice notice) {
         notificationService.notifyOwnerAppointmentPending(
+                notice.userId(), notice.companyId(), notice.companyName());
+    }
+
+    /** Raises a pending-manager-appointment notification when a member is invited to manage. */
+    @TransactionalEventListener(fallbackExecution = true)
+    public void on(ManagerAppointmentPendingNotice notice) {
+        notificationService.notifyManagerAppointmentPending(
                 notice.userId(), notice.companyId(), notice.companyName());
     }
 
