@@ -66,7 +66,8 @@ public class VenueMap implements InvariantChecked {
      * @param gridRows       the canvas grid's rows, at least 1
      * @param gridCols       the canvas grid's columns, at least 1
      * @throws IllegalArgumentException if {@code location} or {@code inventoryZones} is null, the grid is
-     *                                  smaller than 1x1, or two zones share an id or a name ignoring case
+     *                                  smaller than 1x1, a zone is null or has an id below 1, or two zones
+     *                                  share an id or a name ignoring case
      */
     public VenueMap(int id, Location location, List<InventoryZone> inventoryZones, int gridRows, int gridCols) {
         // Null-guarded here because the list is copied before checkInvariants() runs;
@@ -81,7 +82,7 @@ public class VenueMap implements InvariantChecked {
         // A whole map arrives here on reconfiguration, so it must refuse what addZone refuses one at a time.
         List<InventoryZone> accepted = new ArrayList<>();
         for (InventoryZone zone : inventoryZones) {
-            requireUniqueAmong(accepted, zone);
+            validateZoneAmong(accepted, zone);
             accepted.add(zone);
         }
 
@@ -234,7 +235,7 @@ public class VenueMap implements InvariantChecked {
     public void addZone(InventoryZone zone) {
         // zone id already given in calling method with the nextZoneId, but we validate here just in case to ensure no duplicate 
         // zone ids or names are added to the venue map, which could cause issues when trying to retrieve zones by id or name later on.
-        validateNewZone(zone);
+        validateZoneAmong(inventoryZones, zone);
 
         inventoryZones.add(zone);
 
@@ -258,7 +259,9 @@ public class VenueMap implements InvariantChecked {
     }
 
 
-    private void validateNewZone(InventoryZone zone) {
+    // What a zone must be to join a map, whether one at a time (addZone) or with the whole map (the
+    // constructor, on reconfiguration).
+    private static void validateZoneAmong(List<InventoryZone> existingZones, InventoryZone zone) {
         if (zone == null) {
             throw new IllegalArgumentException("Zone cannot be null");
         }
@@ -267,7 +270,7 @@ public class VenueMap implements InvariantChecked {
             throw new IllegalArgumentException("Zone id must be positive");
         }
 
-        requireUniqueAmong(inventoryZones, zone);
+        requireUniqueAmong(existingZones, zone);
 
         zone.checkInvariants();
     }

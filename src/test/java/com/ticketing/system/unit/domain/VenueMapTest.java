@@ -116,6 +116,21 @@ public class VenueMapTest extends BaseDomainTest {
         assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
     }
 
+    // The constructor takes a whole map on reconfiguration, so it refuses every zone addZone refuses.
+    @Test
+    void GivenANullZone_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = java.util.Arrays.asList(new StandingZone(1, "Floor", 10, 50), null);
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
+    }
+
+    @Test
+    void GivenAZoneWithIdZero_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(0, "Floor", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
+    }
+
     // A map without a location broke every listing and detail view that prints it (EventMapper,
     // VenueMapMapper); addEvent refused one, but any other way in did not.
     @Test
