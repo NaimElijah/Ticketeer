@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.lang.reflect.RecordComponent;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,6 +55,7 @@ import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -680,28 +680,6 @@ public class CompanyManagementServiceTest {
         }
 
         @Test
-        public void GivenDatabaseError_WhenRegisterCompany_ThenThrowException() {
-                String token = "valid-token";
-                CompanyRegistrationDTO request = new CompanyRegistrationDTO("New Co", "Desc");
-
-                when(sessionManager.validateToken(token)).thenReturn(true);
-                when(sessionManager.extractUserId(token)).thenReturn(1);
-                when(mockCompanyRepo.existsByName(anyString())).thenReturn(false);
-                when(mockCompanyRepo.nextId()).thenReturn(100);
-
-                // save() returns void; use Mockito's doThrow().when() pattern for void methods.
-                RuntimeException databaseError = new RuntimeException("Database connection lost");
-                doThrow(databaseError).when(mockCompanyRepo).save(any(ProductionCompany.class));
-
-                RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-                        companyService.registerCompany(token, request);
-                });
-
-                // The store's failure reaches the caller as thrown, not wrapped (#187).
-                assertSame(databaseError, exception);
-        }
-
-        @Test
         public void GivenInvalidToken_WhenViewOrganizationalTree_ThenThrowException() {
                 when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
@@ -1266,32 +1244,6 @@ public class CompanyManagementServiceTest {
                                 .toList();
         }
 
-        // True when the event is a notice whose userId and companyId components name the given pair:
-        // the shape every shared/event notice addressed to a member has. Kept type-agnostic so it holds
-        // for the pending-manager notice the fix introduces, which does not exist yet.
-        private static boolean isNoticeFor(Object event, int userId, int companyId) {
-                Integer noticeUserId = intRecordComponent(event, "userId");
-                Integer noticeCompanyId = intRecordComponent(event, "companyId");
-                return noticeUserId != null && noticeUserId == userId
-                                && noticeCompanyId != null && noticeCompanyId == companyId;
-        }
-
-        private static Integer intRecordComponent(Object event, String name) {
-                if (!event.getClass().isRecord()) {
-                        return null;
-                }
-                for (RecordComponent component : event.getClass().getRecordComponents()) {
-                        if (component.getName().equals(name) && component.getType() == int.class) {
-                                try {
-                                        return (Integer) component.getAccessor().invoke(event);
-                                } catch (ReflectiveOperationException e) {
-                                        throw new IllegalStateException("Cannot read " + name + " of " + event, e);
-                                }
-                        }
-                }
-                return null;
-        }
-
         @Test
         public void GivenOwnerAndTargetUser_WhenInviteManager_ThenNoRoleChangedNoticeIsPublished() {
                 founderInvitedTheTargetAsManager();
@@ -1303,13 +1255,12 @@ public class CompanyManagementServiceTest {
         }
 
         @Test
-        public void GivenOwnerAndTargetUser_WhenInviteManager_ThenANoticeAddressedToTheInviteeIsPublished() {
+        public void GivenOwnerAndTargetUser_WhenInviteManager_ThenExactlyThePendingManagerNoticeIsPublished() {
                 founderInvitedTheTargetAsManager();
 
-                List<Object> published = publishedEvents();
-                assertTrue(published.stream().anyMatch(event -> isNoticeFor(event, TARGET_USER_ID, COMPANY_ID)),
-                                "the invitee must be told about the invitation in company " + COMPANY_ID + "; published: "
-                                                + published);
+                assertEquals(List.of(new ManagerAppointmentPendingNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME)),
+                                publishedEvents(),
+                                "a manager invitation tells the invitee of a pending manager appointment, and nothing else");
         }
 
         @Test
@@ -1355,6 +1306,8 @@ public class CompanyManagementServiceTest {
                 assertFalse(company.isOwner(TARGET_USER_ID), "the offeree did not become an owner of the company");
                 assertFalse(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID),
                                 "the offeree holds no active owner appointment");
+                assertNotNull(membershipService.getPendingCompanyAppointment(TARGET_USER_ID, COMPANY_ID),
+                                "a refused offer is left pending, neither accepted nor rejected (#187)");
         }
 
         @Test

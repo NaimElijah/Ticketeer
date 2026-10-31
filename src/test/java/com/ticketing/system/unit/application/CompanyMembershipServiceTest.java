@@ -36,6 +36,7 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
@@ -263,5 +264,23 @@ class CompanyMembershipServiceTest {
                 "a company store outage must reach the caller, not be read as a missing company");
 
         assertSame(outage, thrown);
+    }
+
+    // ---- listForUser skips a membership whose company is missing (#187) ----
+
+    @Test
+    void GivenTwoMembershipsOneOfAMissingCompany_WhenListForUser_ThenOnlyTheOtherIsListed() {
+        User user = new User(USER_ID, "founder", "founder@test.com", "hash", 30);
+        membershipService.addFounderAppointment(USER_ID, COMPANY_ID);
+        membershipService.addFounderAppointment(USER_ID, OTHER_COMPANY_ID);
+        when(userRepository.getUserById(USER_ID)).thenReturn(user);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
+        when(companyRepository.getCompanyById(OTHER_COMPANY_ID)).thenReturn(new ProductionCompany(
+                OTHER_COMPANY_ID, USER_ID, "Still Here", CompanyStatus.ACTIVE, "Desc", 4.5));
+
+        var memberships = service.listForUser(MEMBER_TOKEN);
+
+        assertEquals(List.of(OTHER_COMPANY_ID), memberships.stream().map(UserCompanyDTO::companyId).toList(),
+                "a membership whose company is gone is skipped, and the rest are still listed");
     }
 }
