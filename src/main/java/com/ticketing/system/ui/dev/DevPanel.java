@@ -19,7 +19,6 @@ import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.MockPermissions;
-import com.ticketing.system.ui.support.MembershipRoleLabels;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -359,7 +358,7 @@ public final class DevPanel {
                 tag.getElement().setProperty("innerHTML",
                     (current ? "<span style='color:#ca8a04'>★</span> " : "")
                     + "<b>" + escape(company.name()) + "</b>"
-                    + " <span style='color:" + SECTION_SUB_COLOR + "'>· " + MembershipRoleLabels.label(company.role()) + "</span>");
+                    + " <span style='color:" + SECTION_SUB_COLOR + "'>· " + company.role().label() + "</span>");
                 Button select = ghostBtn("Make current", () -> {
                     CurrentCompanies.setCurrentCompany(company.companyId());
                     refresh(dialog);
@@ -375,7 +374,7 @@ public final class DevPanel {
         UserCompanyDTO current = currentCompanyFromService();
         if (current == null) return "No current company — pick one above.";
         if (current.role() != MembershipRole.MANAGER) {
-            return "Current role is " + MembershipRoleLabels.label(current.role()) + " — grants only apply to Managers.";
+            return "Current role is " + current.role().label() + " — grants only apply to Managers.";
         }
         return "Current manager permissions (read-only — edit via the real UI).";
     }

@@ -1,4 +1,4 @@
-package com.ticketing.system.ui.support;
+package com.ticketing.system.unit.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -8,12 +8,12 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import com.ticketing.system.organization.application.dto.MembershipRole;
 
-class MembershipRoleLabelsTest {
+class MembershipRoleTest {
 
     @ParameterizedTest
     @CsvSource({"FOUNDER, Founder", "CO_OWNER, Co-owner", "MANAGER, Manager"})
     void GivenMembershipRole_WhenLabel_ThenItsDisplayLabel(MembershipRole role, String expectedLabel) {
-        assertThat(MembershipRoleLabels.label(role)).isEqualTo(expectedLabel);
+        assertThat(role.label()).isEqualTo(expectedLabel);
     }
 
     // The labels are display text only; they must still tell every role apart.
@@ -22,7 +22,7 @@ class MembershipRoleLabelsTest {
     void GivenMembershipRole_WhenLabel_ThenNoOtherRoleSharesIt(MembershipRole role) {
         for (MembershipRole other : MembershipRole.values()) {
             if (other != role) {
-                assertThat(MembershipRoleLabels.label(other)).isNotEqualTo(MembershipRoleLabels.label(role));
+                assertThat(other.label()).isNotEqualTo(role.label());
             }
         }
     }

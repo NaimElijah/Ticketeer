@@ -16,7 +16,6 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
-import com.ticketing.system.ui.support.MembershipRoleLabels;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -114,7 +113,7 @@ public class MyCompaniesView extends LkPage {
             Span name = new Span();
             name.getElement().setProperty("innerHTML", "<b>" + escape(company.name()) + "</b>");
             row.put("company", name);
-            row.put("role", new LkBadge(MembershipRoleLabels.label(company.role()), toneFor(company.role())).small());
+            row.put("role", new LkBadge(company.role().label(), toneFor(company.role())).small());
             row.put("status", new LkStatusDot(LkStatusDot.Tone.ok, company.status()));
             row.put("members", company.members());
             row.put("events", company.activeEvents());

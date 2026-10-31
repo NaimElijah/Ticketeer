@@ -416,8 +416,10 @@ public class CompanyManagementService {
             if (company == null) {
                 continue;
             }
+            // MyCompanyDTO is published language in shared/dto, which cannot name an organization type, so its
+            // role stays a display string. Nothing switches on it; Capabilities reads UserCompanyDTO's type.
             companies.add(new MyCompanyDTO(company.getCompanyId(), company.getName(),
-                    myCompanyRoleLabel(membershipRole(userId, appt, company))));
+                    membershipRole(userId, appt, company).label()));
         }
         log.info("User {} belongs to {} active company appointment(s)", userId, companies.size());
         return companies;
@@ -719,16 +721,6 @@ public class CompanyManagementService {
         return switch (appointment.getRole()) {
             case Owner -> company.getFounderId() == userId ? MembershipRole.FOUNDER : MembershipRole.CO_OWNER;
             case Manager -> MembershipRole.MANAGER;
-        };
-    }
-
-    // MyCompanyDTO is published language in shared/dto, which cannot name an organization type, so its
-    // role stays a display string. Nothing switches on it; Capabilities reads UserCompanyDTO's type.
-    private static String myCompanyRoleLabel(MembershipRole role) {
-        return switch (role) {
-            case FOUNDER -> "Founder";
-            case CO_OWNER -> "Co-owner";
-            case MANAGER -> "Manager";
         };
     }
 
