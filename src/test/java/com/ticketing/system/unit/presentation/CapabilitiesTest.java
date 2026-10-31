@@ -6,6 +6,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.session.AuthSession;
@@ -13,6 +14,7 @@ import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.lang.reflect.Method;
 import java.util.EnumSet;
@@ -22,6 +24,8 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -243,5 +247,30 @@ class CapabilitiesTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("could not invoke Capabilities.capabilitiesFromPermissions", e);
         }
+    }
+
+    // ---- an expired member token gets the dead-token fallback (#187) ----
+
+    @Test
+    void GivenMemberWhoseTokenExpired_WhenForCurrentUser_ThenMemberBaseWithoutCompanyCapabilities() {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenThrow(new SessionExpiredException());
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.CHECKOUT), "an expired member keeps the member base; got " + caps);
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE), "an expired token holds no memberships; got " + caps);
+    }
+
+    @Test
+    void GivenMembershipStoreOutage_WhenForCurrentUser_ThenTheFailurePropagates() {
+        signInAsMember();
+        DataAccessResourceFailureException outage = new DataAccessResourceFailureException("store down");
+        when(service.listForUser(MEMBER_TOKEN)).thenThrow(outage);
+
+        DataAccessResourceFailureException thrown =
+            assertThrows(DataAccessResourceFailureException.class, Capabilities::forCurrentUser,
+                "an infrastructure failure is not a dead token and must not be hidden as one");
+        assertSame(outage, thrown);
     }
 }

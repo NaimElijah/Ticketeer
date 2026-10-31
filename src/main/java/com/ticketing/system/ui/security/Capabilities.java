@@ -4,6 +4,7 @@ import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
@@ -122,9 +123,10 @@ public final class Capabilities {
         List<UserCompanyDTO> memberships;
         try {
             memberships = service.listForUser(token);
-        } catch (InvalidTokenException e) {
-            // The token died after sign-in (expired or revoked). A dead token holds no memberships, so
-            // it gets no company capabilities; AuthBootstrap signs the visitor out on their next navigation.
+        } catch (InvalidTokenException | SessionExpiredException e) {
+            // The token died after sign-in: revoked (InvalidTokenException) or expired (SessionExpiredException).
+            // A dead token holds no memberships, so it gets no company capabilities; AuthBootstrap signs the
+            // visitor out on their next navigation. Any other failure is not a dead token and propagates.
             return caps;
         }
         if (memberships.isEmpty()) {

@@ -28,6 +28,7 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.organization.application.port.out.CompanyEventStatsPort;
@@ -645,8 +646,9 @@ public class CompanyManagementService {
      *
      * @param token the member's token; the memberships listed are always the token's own member's
      * @return the memberships, empty for a member of no company
-     * @throws InvalidTokenException if {@code token} is not a live member token (null, revoked, or an admin's)
-     * @throws UserNotFoundException if the token's member no longer exists
+     * @throws InvalidTokenException   if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws SessionExpiredException if the token has expired
+     * @throws UserNotFoundException   if the token's member no longer exists
      */
     @Transactional(readOnly = true)
     public List<UserCompanyDTO> listForUser(String token) {
@@ -678,8 +680,9 @@ public class CompanyManagementService {
      * @param token     the member's token; the answer is always about the token's own member
      * @param companyId the company to check
      * @return {@code true} if the token's member owns {@code companyId}
-     * @throws InvalidTokenException if {@code token} is not a live member token (null, revoked, or an admin's)
-     * @throws UserNotFoundException if the token's member no longer exists
+     * @throws InvalidTokenException   if {@code token} is not a live member token (null, revoked, or an admin's)
+     * @throws SessionExpiredException if the token has expired
+     * @throws UserNotFoundException   if the token's member no longer exists
      */
     @Transactional(readOnly = true)
     public boolean isOwnerOf(String token, int companyId) {
