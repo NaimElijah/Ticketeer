@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,7 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.AccountLockedException;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
@@ -411,8 +413,11 @@ public class AuthenticationService {
      * is held during the hash work. The promotion, the cart merge and the token issue then run in
      * one transaction, and the member's pending notifications (UC-37) are delivered only after it
      * commits: delivery opens connections of its own, and must not mark a notification sent for a
-     * login that then rolls back.
+     * login that then rolls back. If that delivery then fails with a store failure or a lost
+     * concurrent update, the member is still signed in: the response carries no notifications, the
+     * failure is logged at WARN, and the notifications stay PENDING for the notification poller.
      *
+     * @return the member's token, restored active order and delivered notifications
      * @throws GuestSessionRequiredException no / unknown / expired / non-guest
      *                                       sessionId
      * @throws AccountLockedException        the username's attempt window already holds
@@ -451,8 +456,20 @@ public class AuthenticationService {
         log.info("member logged in: username={} id={}", user.getUsername(), user.getUserId());
 
         // 6. UC-37 — only now, after the commit.
-        List<NotificationDTO> notifications = notificationDispatchService.deliverPending(user.getUserId());
-        return new LoginDTO(promotion.token(), promotion.activeOrder(), notifications);
+        return new LoginDTO(promotion.token(), promotion.activeOrder(), deliverPendingAfterLogin(user.getUserId()));
+    }
+
+    // The promotion has committed: the guest session is now the member's, so failing the login here
+    // would leave them without a token, and a retry would fail for want of a guest session. Only a
+    // store failure and a lost race (what OptimisticLockTranslationAspect makes of a lost @Version
+    // race in deliverPending) are absorbed; the notifications stay PENDING for the poller.
+    private List<NotificationDTO> deliverPendingAfterLogin(int userId) {
+        try {
+            return notificationDispatchService.deliverPending(userId);
+        } catch (DataAccessException | ConcurrentReservationException e) {
+            log.warn("pending notifications not delivered at login, left for the poller: id={}", userId, e);
+            return List.of();
+        }
     }
 
     private Promotion promote(String guestSessionId, User user) {

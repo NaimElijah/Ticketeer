@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,17 +21,21 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
+
+import ch.qos.logback.classic.Level;
 
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.CartRestorationPort;
@@ -45,8 +50,12 @@ import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
+import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
+import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.testutil.LogCapture;
 
 /**
  * Login's transaction boundary (UC-12, UC-37, #187). Login delivers the member's pending
@@ -78,6 +87,8 @@ class AuthenticationServiceLoginTransactionTest {
     private final List<String> journal = new ArrayList<>();
     private final RecordingTransactionManager transactionManager = new RecordingTransactionManager(journal);
     private final AtomicInteger openTransactionsAtDelivery = new AtomicInteger(-1);
+    private final AtomicInteger openTransactionsAtPasswordCheck = new AtomicInteger(-1);
+    private LogCapture logs;
 
     private final UserRepository userRepository = mock(UserRepository.class);
     private final PasswordHasher passwordHasher = mock(PasswordHasher.class);
@@ -115,14 +126,20 @@ class AuthenticationServiceLoginTransactionTest {
         when(userRepository.findByUsername("alice"))
                 .thenReturn(Optional.of(new User(USER_ID, "alice", "alice@example.com", "STORED_HASH", 30)));
         when(passwordHasher.matches(PASSWORD, "STORED_HASH")).thenReturn(true);
-        when(sessionRepository.findById(GUEST_SID)).thenAnswer(invocation -> Optional.of(
-                new Session(GUEST_SID, null, T0, T0.plus(GUEST_IDLE_MINUTES, ChronoUnit.MINUTES))));
+        when(sessionRepository.findById(GUEST_SID)).thenAnswer(invocation -> Optional.of(liveGuestSession()));
         when(sessionManager.generateTokenForSession(any(), eq("alice"))).thenReturn("TOK");
         when(notifications.deliverPending(anyInt())).thenAnswer(invocation -> {
             openTransactionsAtDelivery.set(transactionManager.openTransactions());
             journal.add(DELIVER_PENDING);
             return List.of();
         });
+    }
+
+    @AfterEach
+    void detachLogCapture() {
+        if (logs != null) {
+            logs.close();
+        }
     }
 
     @Test
@@ -172,11 +189,144 @@ class AuthenticationServiceLoginTransactionTest {
         });
     }
 
+    // ---- delivery fails after the login committed (#187) ----
+    // The promotion has committed, so the guest session is now a member row: failing the login here
+    // would leave the member without a token, and a retry would fail for want of a guest session. The
+    // notifications stay PENDING, and the notification poller delivers them later.
+
+    @Test
+    void GivenDeliveryFailsWithAStoreFailureAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
+        givenDeliveryFailsWith(new DataAccessResourceFailureException("notification store unreachable"));
+
+        runner.run(context -> {
+            LoginDTO login = context.getBean(AuthenticationService.class)
+                    .login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID));
+
+            assertThat(journal).as("the login commits, and only then is delivery attempted")
+                    .containsExactly(BEGIN, COMMIT, DELIVER_PENDING);
+            assertThat(login.authToken().token()).as("a committed login still hands back its token")
+                    .isEqualTo("TOK");
+            assertThat(login.notifications()).as("nothing was delivered, so nothing is shown").isEmpty();
+        });
+    }
+
+    @Test
+    void GivenDeliveryFailsWithAConcurrentReservationExceptionAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
+        // What OptimisticLockTranslationAspect makes of a lost @Version race in deliverPending.
+        givenDeliveryFailsWith(new ConcurrentReservationException("notification updated concurrently"));
+
+        runner.run(context -> {
+            LoginDTO login = context.getBean(AuthenticationService.class)
+                    .login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID));
+
+            assertThat(journal).as("the login commits, and only then is delivery attempted")
+                    .containsExactly(BEGIN, COMMIT, DELIVER_PENDING);
+            assertThat(login.authToken().token()).as("a committed login still hands back its token")
+                    .isEqualTo("TOK");
+            assertThat(login.notifications()).as("nothing was delivered, so nothing is shown").isEmpty();
+        });
+    }
+
+    @Test
+    void GivenDeliveryFailsWithAStoreFailureAfterCommit_WhenLogin_ThenTheFailureIsLoggedAtWarn() {
+        givenDeliveryFailsWith(new DataAccessResourceFailureException("notification store unreachable"));
+        logs = LogCapture.of(AuthenticationService.class);
+
+        runner.run(context -> {
+            context.getBean(AuthenticationService.class).login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID));
+
+            assertThat(logs.messagesAt(Level.WARN))
+                    .as("a delivery failure the login absorbs must still be reported, not swallowed")
+                    .isNotEmpty();
+        });
+    }
+
+    @Test
+    void GivenDeliveryFailsUnexpectedlyAfterCommit_WhenLogin_ThenTheFailurePropagates() {
+        givenDeliveryFailsWith(new IllegalStateException("bug in delivery"));
+
+        runner.run(context -> {
+            AuthenticationService service = context.getBean(AuthenticationService.class);
+
+            assertThrows(IllegalStateException.class,
+                    () -> service.login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID)),
+                    "only a store failure or a lost race is absorbed; any other failure is a bug and must surface");
+        });
+    }
+
+    // ---- what runs inside login's transaction, and what after it (#187) ----
+
+    @Test
+    void GivenTheCommitFails_WhenLogin_ThenTheFailurePropagatesAndNothingIsDelivered() {
+        transactionManager.failCommitWith(new OptimisticLockingFailureException("session row changed at commit"));
+
+        runner.run(context -> {
+            AuthenticationService service = context.getBean(AuthenticationService.class);
+
+            assertThrows(OptimisticLockingFailureException.class,
+                    () -> service.login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID)));
+
+            verify(notifications, never()).deliverPending(anyInt());
+            assertThat(journal).as("a login whose commit failed must deliver nothing").doesNotContain(DELIVER_PENDING);
+        });
+    }
+
+    @Test
+    void GivenValidCredentials_WhenLogin_ThenThePasswordIsCheckedWithNoTransactionOpen() {
+        when(passwordHasher.matches(PASSWORD, "STORED_HASH")).thenAnswer(invocation -> {
+            openTransactionsAtPasswordCheck.set(transactionManager.openTransactions());
+            return true;
+        });
+
+        runner.run(context -> {
+            context.getBean(AuthenticationService.class).login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID));
+
+            assertThat(openTransactionsAtPasswordCheck.get())
+                    .as("transactions open while the password hash was checked; journal %s", journal)
+                    .isZero();
+        });
+    }
+
+    @Test
+    void GivenTheGuestSessionIsPromotedBeforeLoginsTransaction_WhenLogin_ThenRefusedAndNothingCommits() {
+        when(sessionRepository.findById(GUEST_SID))
+                .thenAnswer(invocation -> Optional.of(liveGuestSession()))
+                .thenAnswer(invocation -> Optional.of(
+                        new Session(GUEST_SID, USER_ID, T0, T0.plus(MEMBER_TTL_MINUTES, ChronoUnit.MINUTES))));
+
+        runner.run(context -> {
+            AuthenticationService service = context.getBean(AuthenticationService.class);
+
+            assertThrows(GuestSessionRequiredException.class,
+                    () -> service.login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID)),
+                    "the session must be read again inside the transaction that promotes it");
+
+            verify(sessionRepository, never()).save(any(Session.class));
+            verify(notifications, never()).deliverPending(anyInt());
+            assertThat(journal).as("a login refused inside its transaction must roll back")
+                    .contains(BEGIN, ROLLBACK).doesNotContain(COMMIT);
+        });
+    }
+
+    // doAnswer rather than when(...): when(mock.call()) runs the stub set in @BeforeEach once while
+    // stubbing, which would journal a delivery before the login began.
+    private void givenDeliveryFailsWith(RuntimeException failure) {
+        doAnswer(invocation -> {
+            journal.add(DELIVER_PENDING);
+            throw failure;
+        }).when(notifications).deliverPending(anyInt());
+    }
+
+    private static Session liveGuestSession() {
+        return new Session(GUEST_SID, null, T0, T0.plus(GUEST_IDLE_MINUTES, ChronoUnit.MINUTES));
+    }
+
     /**
      * Journals each transaction it begins, commits and rolls back, and counts the ones begun and not
-     * yet completed. Supports suspension, because {@code deliverPending} is declared
-     * {@code NOT_SUPPORTED}: called inside a transaction, it suspends that transaction, which then
-     * still holds its connection. Single-threaded, as each test is.
+     * yet completed. Suspension is supported only so that a boundary the service declares with a
+     * suspending propagation still runs here; {@code deliverPending}'s own {@code NOT_SUPPORTED}
+     * never reaches this manager, because the notification service is a mock, not a proxied bean.
+     * Single-threaded, as each test is.
      */
     private static final class RecordingTransactionManager extends AbstractPlatformTransactionManager {
 
@@ -185,6 +335,7 @@ class AuthenticationServiceLoginTransactionTest {
         private final List<String> journal;
         private int open;
         private boolean bound;
+        private RuntimeException commitFailure;
 
         RecordingTransactionManager(List<String> journal) {
             this.journal = journal;
@@ -192,6 +343,11 @@ class AuthenticationServiceLoginTransactionTest {
 
         int openTransactions() {
             return open;
+        }
+
+        /** Makes every later commit throw {@code failure}, as a conflict found at commit does. */
+        void failCommitWith(RuntimeException failure) {
+            commitFailure = failure;
         }
 
         @Override
@@ -224,6 +380,9 @@ class AuthenticationServiceLoginTransactionTest {
 
         @Override
         protected void doCommit(DefaultTransactionStatus status) {
+            if (commitFailure != null) {
+                throw commitFailure;
+            }
             journal.add(COMMIT);
         }
 
