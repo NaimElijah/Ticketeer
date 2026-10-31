@@ -52,10 +52,22 @@ public class VenueMap implements InvariantChecked {
         this.inventoryZones = new ArrayList<>();
     }
 
+    /**
+     * A map on the default grid; see {@link #VenueMap(int, Location, List, int, int)}.
+     */
     public VenueMap(int id, Location location, List<InventoryZone> inventoryZones) {
         this(id, location, inventoryZones, DEFAULT_GRID_ROWS, DEFAULT_GRID_COLS);
     }
 
+    /**
+     * @param id             the map's id
+     * @param location       the venue's location
+     * @param inventoryZones the zones, copied
+     * @param gridRows       the canvas grid's rows, at least 1
+     * @param gridCols       the canvas grid's columns, at least 1
+     * @throws IllegalArgumentException if {@code inventoryZones} is null, the grid is smaller than 1x1, or two
+     *                                  zones share an id or a name ignoring case
+     */
     public VenueMap(int id, Location location, List<InventoryZone> inventoryZones, int gridRows, int gridCols) {
         // Null-guarded here because the list is copied before checkInvariants() runs;
         // a null input would otherwise NPE in the copy rather than fail cleanly.

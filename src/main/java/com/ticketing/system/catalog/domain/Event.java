@@ -118,6 +118,7 @@ public class Event implements InvariantChecked {
     /**
      * @param showDates wall-clock times at the venue, read in {@code timeZone}
      * @param timeZone  the venue's IANA zone (ADR-008); required
+     * @throws IllegalArgumentException if an artist's name is null or blank
      */
     public Event(int id, String name, String description, Double rating, List<String> artistsNames,
             EventCategory category, int comapnyid, EventStatus status, VenueMap venueMap, List<ShowDate> showDates,
@@ -268,8 +269,16 @@ public class Event implements InvariantChecked {
 
 
 
-    // UC-20 — only company that owns the event can configure the venue map; must be done before going ON_SALE.
-    // this is simply a setter for the venue map.
+    /**
+     * UC-20: replaces the event's venue map. Only the owning company may, before sales open.
+     *
+     * @param venueMap          the new map
+     * @param incomingCompanyId the company asking
+     * @throws UnauthorizedActionException if another company asks
+     * @throws IllegalArgumentException    if {@code venueMap} is null
+     * @throws IllegalStateException       if tickets are reserved or sold, or if the event is SCHEDULED and
+     *                                     the new map has no zone
+     */
     public void configureVenueMap(VenueMap venueMap, int incomingCompanyId) {
         if (comapnyid != incomingCompanyId) {
             throw new UnauthorizedActionException("configure the venue map of another company's event");
@@ -345,7 +354,17 @@ public class Event implements InvariantChecked {
         return newZoneId;
     }
 
-    
+    /**
+     * Removes one inventory zone from the venue map, on the owning company's behalf.
+     *
+     * @param zoneId            the zone to remove
+     * @param incomingCompanyId the company asking
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map
+     * @throws IllegalArgumentException       if the map has no such zone
+     * @throws IllegalStateException          if the event is past SCHEDULED, is SCHEDULED and this is its
+     *                                        only zone, or the zone has reserved or sold places
+     */
     public void removeInventoryZone(int zoneId, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
         if (status == EventStatus.SCHEDULED && isOnlyZone(zoneId)) {

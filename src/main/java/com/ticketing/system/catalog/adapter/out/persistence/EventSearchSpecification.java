@@ -31,8 +31,8 @@ import jakarta.persistence.criteria.Subquery;
  */
 final class EventSearchSpecification {
 
-    // PostgreSQL's default LIKE escape character; passed explicitly to every LIKE so H2 escapes the
-    // same way.
+    // Escapes the wildcards in a term. Hibernate renders a LIKE without one as escape '' on both H2 and
+    // PostgreSQL, so the term's % and _ would stay wildcards; every LIKE here passes this one.
     private static final char LIKE_ESCAPE = '\\';
 
     private EventSearchSpecification() { }

@@ -120,7 +120,16 @@ public class EventManagementService {
     // first create the event with basic details and then configure the venue map in
     // a second step.
 
-    // UC-19 — Owner adds an Event in DRAFT state.
+    /**
+     * UC-19: a company member with {@code MANAGE_INVENTORY} adds an event in DRAFT state.
+     *
+     * @param token   the member's session token
+     * @param request the event's details; its location is required
+     * @return the new event
+     * @throws InvalidTokenException     if {@code token} is not a live member token
+     * @throws IllegalArgumentException  if the request has no venue location, checked before any lookup
+     * @throws CompanyNotFoundException  if the company does not exist
+     */
     @Transactional
     public EventDetailDTO addEvent(String token, EventCreationDTO request) {
         int ownerId = validateTokenAndGetUserId(token);
@@ -942,7 +951,8 @@ public class EventManagementService {
         eventRepository.lockForUpdate(eventId);
 
         // Only a missing event is logged here. Any other failure, a RefundFailedException from the sales
-        // listener included, propagates unlogged: LoggingAspect and the presenter that handles it log it.
+        // listener included, propagates unlogged here: LoggingAspect logs it at WARN, and the sales refund
+        // service logs its own refund failures. The presenter shows a DomainException's message unlogged.
         try {
             Event event = eventRepository.findById(eventId); // throws if not found, which is what we want here.
             User user = userRepository.getUserById(ownerId);                   // load caller for permission check
