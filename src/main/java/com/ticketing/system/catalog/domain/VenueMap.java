@@ -65,8 +65,8 @@ public class VenueMap implements InvariantChecked {
      * @param inventoryZones the zones, copied
      * @param gridRows       the canvas grid's rows, at least 1
      * @param gridCols       the canvas grid's columns, at least 1
-     * @throws IllegalArgumentException if {@code inventoryZones} is null, the grid is smaller than 1x1, or two
-     *                                  zones share an id or a name ignoring case
+     * @throws IllegalArgumentException if {@code location} or {@code inventoryZones} is null, the grid is
+     *                                  smaller than 1x1, or two zones share an id or a name ignoring case
      */
     public VenueMap(int id, Location location, List<InventoryZone> inventoryZones, int gridRows, int gridCols) {
         // Null-guarded here because the list is copied before checkInvariants() runs;
@@ -74,6 +74,7 @@ public class VenueMap implements InvariantChecked {
         if (inventoryZones == null) {
             throw new IllegalArgumentException("Inventory zones cannot be null");
         }
+        requireLocation(location);
         if (gridRows < 1 || gridCols < 1) {
             throw new IllegalArgumentException("Venue grid must be at least 1x1");
         }
@@ -128,6 +129,7 @@ public class VenueMap implements InvariantChecked {
     }
 
     public void setLocation(Location location) {
+        requireLocation(location);
         this.location = location;
         checkInvariants();
     }
@@ -268,6 +270,14 @@ public class VenueMap implements InvariantChecked {
         requireUniqueAmong(inventoryZones, zone);
 
         zone.checkInvariants();
+    }
+
+    // Checked where a location comes in, not in checkInvariants: SystemIntegrityVerifier checks every stored
+    // map when the market opens, and the schema still allows a map stored without one (V1).
+    private static void requireLocation(Location location) {
+        if (location == null) {
+            throw new IllegalArgumentException("A venue needs a location");
+        }
     }
 
     // A zone is looked up by id, and shown by name, so neither may repeat within a map; names compare

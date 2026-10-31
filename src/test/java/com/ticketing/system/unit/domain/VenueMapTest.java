@@ -116,6 +116,24 @@ public class VenueMapTest extends BaseDomainTest {
         assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
     }
 
+    // A map without a location broke every listing and detail view that prints it (EventMapper,
+    // VenueMapMapper); addEvent refused one, but any other way in did not.
+    @Test
+    void GivenNoLocation_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, null, zones, 3, 3));
+    }
+
+    @Test
+    void GivenAVenueMap_WhenItsLocationIsSetToNull_ThenItIsRefusedAndKeepsItsLocation() {
+        VenueMap map = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 10, 50)));
+
+        assertThrows(IllegalArgumentException.class, () -> map.setLocation(null));
+
+        assertEquals(LOCATION, map.getLocation());
+    }
+
     // The rule sits in the constructor, not in checkInvariants, on purpose: SystemIntegrityVerifier checks
     // every stored map at the market's open, and one stored before #187 with two zones named alike must
     // not block it. The map is built here as JPA loads one: the no-arg constructor, then the fields.
