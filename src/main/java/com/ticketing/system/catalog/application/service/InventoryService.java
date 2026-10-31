@@ -90,7 +90,7 @@ public class InventoryService implements InventoryCommandPort {
             PurchaseContext context = new PurchaseContext(
                     buyerId, buyerAge, eventId, event.getCompanyId(), totalQuantityForPolicy, PurchaseStage.RESERVE);
             ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId()); // owning company
-            event.validateEffectivePolicy(company == null ? null : company.getPurchasePolicy(), context); // throws on rejection
+            event.validateEffectivePolicy(company.getPurchasePolicy(), context); // throws on rejection
             double pricePerTicket = zone.getprice();                // unit price for the caller's cart line
             event.reserveInventory(zoneId, toDomainSelection(selection, orderKey, holdUntil)); // mutate inventory (ownership-stamped)
             eventRepository.save(event);                            // persist under the held lock
@@ -241,7 +241,7 @@ public class InventoryService implements InventoryCommandPort {
         // CHECKOUT-stage context (every policy rule enforced): the 5-arg constructor defaults the stage.
         PurchaseContext context = new PurchaseContext(buyerId, buyerAge, event.getId(), event.getCompanyId(), quantity);
         ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId()); // owning company
-        event.validateEffectivePolicy(company == null ? null : company.getPurchasePolicy(), context); // throws on rejection
+        event.validateEffectivePolicy(company.getPurchasePolicy(), context); // throws on rejection
     }
 
     /** {@inheritDoc} Each event must exist and be ON_SALE or SOLD_OUT; holds each against a cancel until the caller's transaction ends. */

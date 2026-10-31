@@ -1,6 +1,7 @@
 package com.ticketing.system.acceptance;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.PurchaseCompletedNotice;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
@@ -115,7 +116,7 @@ public class CheckoutServiceAcceptanceTest {
         AtomicInteger ticketIds = new AtomicInteger(1);
         when(ticketRepository.nextId()).thenAnswer(invocation -> ticketIds.getAndIncrement());
         userRepository = mock(UserRepository.class);
-        companyRepository = mock(ProductionCompanyRepository.class);
+        companyRepository = companiesWithoutPolicies();
 
         orderReceiptRepository = mock(OrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);
@@ -1020,5 +1021,10 @@ public class CheckoutServiceAcceptanceTest {
         
     }
 
-    
+    // Every company exists and has no purchase policy of its own; a test that needs one stubs it.
+    private static ProductionCompanyRepository companiesWithoutPolicies() {
+        ProductionCompanyRepository companies = mock(ProductionCompanyRepository.class);
+        when(companies.getCompanyById(anyInt())).thenReturn(mock(ProductionCompany.class));
+        return companies;
+    }
 }

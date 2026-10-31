@@ -115,6 +115,7 @@ class InventoryServiceTest {
         InventoryZone zone = mock(InventoryZone.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.getVenueMap().getZone(STANDING_ZONE)).thenReturn(zone);
+        when(companyRepository.getCompanyById(anyInt())).thenReturn(activeCompany());
         doThrow(new PolicyViolationException("max 1 ticket"))
                 .when(event).validateEffectivePolicy(any(), any(PurchaseContext.class));
 
