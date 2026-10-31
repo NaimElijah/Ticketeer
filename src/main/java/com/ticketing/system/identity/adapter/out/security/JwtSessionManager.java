@@ -31,8 +31,10 @@ import io.jsonwebtoken.security.Keys;
 /**
  * jjwt-backed implementation of {@link SessionManager}. UC-12 / UC-14.
  *
- * <p>Tokens are HMAC-signed with {@code jwt.secret} ({@link JwtProperties}, which refuses a secret
- * shorter than 256 bits at binding). jjwt picks HS256, HS384 or HS512 from the secret's length (the
+ * <p>Tokens are HMAC-signed with {@code jwt.secret} ({@link JwtProperties}). The constructor refuses a
+ * secret shorter than {@value JwtProperties#MIN_SECRET_LENGTH} characters (256 bits) with an
+ * {@link IllegalStateException} that names the key but never the secret, so the boot stops on it.
+ * jjwt picks HS256, HS384 or HS512 from the secret's length (the
  * committed 70-byte dev default gives HS512). Tokens expire after {@code session.member-ttl-minutes},
  * checked against the injected clock (the JWT's exp claim and the Session row's expiresAt are
  * always kept in sync by construction).
@@ -68,16 +70,37 @@ public class JwtSessionManager implements SessionManager {
     // from the injected clock, so both sides must read the same one (ADR-008).
     private final io.jsonwebtoken.Clock jwtClock;
 
+    /**
+     * @param jwtProperties     the signing secret
+     * @param sessionProperties the member session lifetime, which every token's expiry follows
+     * @param sessions          the session rows tokens are bound to
+     * @param clock             the source of "now" for issuing and checking expiry
+     * @throws IllegalStateException the secret is shorter than {@value JwtProperties#MIN_SECRET_LENGTH}
+     *                               characters; the message names {@code jwt.secret}, never its value
+     */
     public JwtSessionManager(
             JwtProperties jwtProperties,
             SessionProperties sessionProperties,
             SessionRepository sessions,
             Clock clock) {
-        this.signingKey = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
+        this.signingKey = Keys.hmacShaKeyFor(signingSecretOf(jwtProperties).getBytes(StandardCharsets.UTF_8));
         this.expirationMillis = Duration.ofMinutes(sessionProperties.memberTtlMinutes()).toMillis();
         this.sessions = sessions;
         this.clock = clock;
         this.jwtClock = () -> Date.from(clock.instant());
+    }
+
+    // Checked here rather than by a binding constraint on JwtProperties, whose failure report prints
+    // the rejected value; so the message names the key and the minimum, never the secret or any part
+    // of it. Counting characters is enough: each one is at least one byte in UTF-8, so jjwt's own
+    // WeakKeyException, which would not name the key, cannot follow.
+    private static String signingSecretOf(JwtProperties jwtProperties) {
+        String secret = jwtProperties.secret();
+        if (secret == null || secret.length() < JwtProperties.MIN_SECRET_LENGTH) {
+            throw new IllegalStateException("jwt.secret (env JWT_SECRET) must be at least "
+                    + JwtProperties.MIN_SECRET_LENGTH + " characters, the 256 bits HS256 signing needs");
+        }
+        return secret;
     }
 
 

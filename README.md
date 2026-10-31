@@ -203,16 +203,18 @@ set these:
 | `SPRING_PROFILES_ACTIVE` | `supabase` for Supabase over SSL; plain PostgreSQL needs no profile | none: PostgreSQL through `DB_*` | No |
 | `DB_HOST` · `DB_PORT` · `DB_NAME` | PostgreSQL location | `localhost` · `5432` · `ticketing` | Yes |
 | `DB_USER` · `DB_PASSWORD` | PostgreSQL credentials | `postgres` · `postgres` | Yes |
-| `JWT_SECRET` | Token signing key, 256 bits or more | a dev-only value | Yes, outside `dev` and `test`: the boot stops on the committed default |
+| `JWT_SECRET` | Token signing key, 256 bits or more (32 characters or more) | a dev-only value | Yes, outside `dev` and `test`: the boot stops on the committed default |
 | `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes; outside `dev` and `test` the boot stops on the committed default password |
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service; must be an `https://` URL, or the boot stops | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
 `wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
 `event-completion`, `notifications`, `identity`, `jwt`, `catalog.venue-limits` and `database` groups bind to validated records.
-A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, a JWT secret under 32 characters, an unknown
+A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, a blank JWT secret, an unknown
 time zone, a malformed WSEP URL or a zero sweep delay, stops the boot with a report naming the
-property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Outside `dev` and
+property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). A JWT secret
+under 32 characters stops the boot too, when `JwtSessionManager` is created: that report names
+`jwt.secret` but, unlike a binding report, never prints the value. Outside `dev` and
 `test`, a `JWT_SECRET` or `PLATFORM_ADMIN_PASSWORD` left at the default committed in
 `application.yml` stops the boot too, naming the variable to set
 ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)). A default admin already stored with the

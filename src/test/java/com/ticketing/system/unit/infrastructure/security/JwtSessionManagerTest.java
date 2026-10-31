@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.infrastructure.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -34,7 +35,6 @@ import com.ticketing.system.testutil.LogCapture;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.WeakKeyException;
 
 class JwtSessionManagerTest {
 
@@ -55,6 +55,7 @@ class JwtSessionManagerTest {
     private static final String ROLE_ADMIN = "ADMIN";
 
     private static final Instant T0 = Instant.parse("2100-01-01T00:00:00Z");
+    private static final Clock FIXED_CLOCK = Clock.fixed(T0, ZoneOffset.UTC);
     // The same integer on purpose: member and admin ids share one id space.
     private static final int MEMBER_ID = 1;
     private static final int ADMIN_ID = 1;
@@ -201,11 +202,31 @@ class JwtSessionManagerTest {
         assertTrue(manager.validateToken(token));
     }
 
+    // #187: the length rule lives here, not in JwtProperties, because a bind-validation failure
+    // report prints the rejected value; so the refusal names the key and never the secret.
     @Test
-    void GivenSecretShorterThan256Bits_WhenConstruct_ThenThrowsWeakKey() {
-        // 31 bytes: one short of the 256 bits HS256 needs.
-        assertThrows(WeakKeyException.class, () -> new JwtSessionManager(
-                new JwtProperties("only-31-bytes-of-secret-materia"), sessionTtl(60), sessions, clock));
+    void GivenSecretOf31Characters_WhenConstruct_ThenIllegalStateNamingTheKeyButNotTheSecret() {
+        // 31 ASCII characters, so 31 bytes: one short of the 256 bits HS256 needs.
+        String shortSecret = "only-31-bytes-of-secret-materia";
+        assertEquals(31, shortSecret.length(), "test fixture: secret length");
+
+        IllegalStateException refusal = assertThrows(IllegalStateException.class, () -> new JwtSessionManager(
+                new JwtProperties(shortSecret), sessionTtl(60), new MemorySessionRepository(FIXED_CLOCK), FIXED_CLOCK));
+
+        assertThat(refusal.getMessage()).as("the refusal names the key to fix").contains("jwt.secret");
+        assertThat(refusal.getMessage()).as("the refusal must never carry the secret").doesNotContain(shortSecret);
+    }
+
+    @Test
+    void GivenSecretOfExactly32Characters_WhenConstruct_ThenItIssuesTokensThatValidate() {
+        String secret = "exactly-32-bytes-of-secret-mater";
+        assertEquals(32, secret.length(), "test fixture: secret length");
+        JwtSessionManager onShortestKey = new JwtSessionManager(
+                new JwtProperties(secret), sessionTtl(60), new MemorySessionRepository(FIXED_CLOCK), FIXED_CLOCK);
+
+        String token = onShortestKey.generateToken(MEMBER_ID, "alice");
+
+        assertTrue(onShortestKey.validateToken(token), "32 bytes is the shortest key HS256 accepts");
     }
 
     @Test
