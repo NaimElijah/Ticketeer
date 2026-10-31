@@ -155,7 +155,7 @@ public class CatalogService {
     //* UC-7: Search the catalog with filters, returning a list of EventSummaryDTOs. Accepts either a JWT (Member) or a raw sessionId (Guest) — 
     //* catalog search is open to anyone with an active session per UC-3 / UC-7 (auth rework #181 / Phase 4.3).
     public List<EventSummaryDTO> searchGlobal(String credential, CatalogSearchFiltersDTO filters) {
-        log.info("Starting global search with filters set: {}", filtersInUse(filters));
+        log.debug("Starting global search with filters set: {}", filtersInUse(filters));
         // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
             log.warn("Invalid credential provided while performing global search with filters set: {}",
@@ -205,7 +205,7 @@ public class CatalogService {
             results.add(mapper.convertEventToEventSummaryDTO(event, productionCompanyRepository));
         }
 
-        log.info("Global search with filters set: {} returning {} results",
+        log.debug("Global search with filters set: {} returning {} results",
                 filtersInUse(effectiveFilters), results.size());
         return results;
     }
@@ -216,7 +216,7 @@ public class CatalogService {
 
     //* the searchByCompany method is similar to searchGlobal but scoped to a specific company and without company-rating filters.
     public List<EventSummaryDTO> searchByCompany(String credential, int companyId, CatalogSearchFiltersDTO filters) {
-        log.info("Starting company-scoped search for companyId: {} with filters set: {}",
+        log.debug("Starting company-scoped search for companyId: {} with filters set: {}",
                 companyId, filtersInUse(filters));
         // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
@@ -249,7 +249,7 @@ public class CatalogService {
             results.add(mapper.convertEventToEventSummaryDTO(event, productionCompanyRepository));
         }
 
-        log.info("Company-scoped search for companyId: {} with filters set: {} returning {} results",
+        log.debug("Company-scoped search for companyId: {} with filters set: {} returning {} results",
                 companyId, filtersInUse(effectiveFilters), results.size());
 
         return results;
@@ -321,7 +321,7 @@ public class CatalogService {
             if (i < artists.size()) { results.add(artists.get(i)); added = true; if (results.size() == limit) break; }
             if (i < venues.size())  { results.add(venues.get(i));  added = true; if (results.size() == limit) break; }
         }
-        log.info("Top-bar search of {} characters returning {} results", q.length(), results.size());
+        log.debug("Top-bar search of {} characters returning {} results", q.length(), results.size());
         return results;
     }
 
@@ -483,7 +483,7 @@ public class CatalogService {
     // viewing is open to anyone with an active session per UC-3 / UC-8
     // (auth rework #181 / Phase 4.3).
     public VenueMapDTO getEventVenueMap(String credential, int eventId) {
-        log.info("Fetching venue map for eventId: {}", eventId);
+        log.debug("Fetching venue map for eventId: {}", eventId);
 
             if (!this.sessionManager.validateCredential(credential)) {
                 log.warn("Invalid credential provided while getting venue map for eventId: {}", eventId);
@@ -510,7 +510,7 @@ public class CatalogService {
                 throw new NullVenueMapException(eventId);
             }
 
-            log.info("Venue map found for eventId: {} while getting venue map and being returned", eventId);
+            log.debug("Venue map found for eventId: {} while getting venue map and being returned", eventId);
             return new VenueMapMapper().venueMapToVenueMapDTO(event.getVenueMap());
 
     }
@@ -519,7 +519,7 @@ public class CatalogService {
     // UC-8: Public single-event detail for the buyer event page (header, description, schedule, lineup).
     // Accepts either a JWT (Member) or a raw sessionId (Guest) — same audience as browse / getEventVenueMap.
     public EventDetailDTO getEventDetail(String credential, int eventId) {
-        log.info("Fetching event detail for eventId: {}", eventId);
+        log.debug("Fetching event detail for eventId: {}", eventId);
 
         if (!this.sessionManager.validateCredential(credential)) {
             log.warn("Invalid credential provided while getting event detail for eventId: {}", eventId);

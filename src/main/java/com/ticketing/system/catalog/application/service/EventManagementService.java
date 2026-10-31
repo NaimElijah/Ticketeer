@@ -19,7 +19,6 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -942,6 +941,8 @@ public class EventManagementService {
         // cancellation process. This ensures that we have a consistent view of the event's state.
         eventRepository.lockForUpdate(eventId);
 
+        // Only a missing event is logged here. Any other failure, a RefundFailedException from the sales
+        // listener included, propagates unlogged: LoggingAspect and the presenter that handles it log it.
         try {
             Event event = eventRepository.findById(eventId); // throws if not found, which is what we want here.
             User user = userRepository.getUserById(ownerId);                   // load caller for permission check
@@ -963,13 +964,6 @@ public class EventManagementService {
 
         } catch (EventNotFoundException e) {
             log.warn("Event {} not found for cancellation", eventId);
-            throw e;
-        } catch (RefundFailedException e) {
-            // Surfaced synchronously from the sales refund listener during publishEvent above.
-            log.error("Refund failed during cancellation of event {}: {}", eventId, e.getMessage());
-            throw e;
-        } catch (RuntimeException e) {
-            log.error("Unexpected error during cancellation of event {}: {}", eventId, e.getMessage());
             throw e;
         } finally {
             eventRepository.unlock(eventId);                                   // always release the lock
