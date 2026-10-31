@@ -26,6 +26,7 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
 import com.ticketing.system.shared.dto.EventUpdateDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDtoMapper;
 import com.ticketing.system.shared.dto.GridPlacementDTO;
 import com.ticketing.system.shared.dto.VenueLayoutDTO;
 import com.ticketing.system.catalog.application.dtoMappers.EventMapper;
@@ -54,13 +55,7 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
-import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
-import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
-import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
 
 @Service
 @Slf4j
@@ -152,7 +147,7 @@ public class EventManagementService {
         DiscountPolicy discountPolicy = new DiscountPolicy(0);
 
         
-        PurchasePolicy eventSpecificPurchasePolicy = buildPurchasePolicyFromDTO(request.purchasePolicy());
+        PurchasePolicy eventSpecificPurchasePolicy = PurchasePolicyDtoMapper.toPolicy(request.purchasePolicy());
        
         Event newEvent = new Event(
                 newEventId,
@@ -1038,7 +1033,7 @@ public class EventManagementService {
                 throw new UnauthorizedActionException("act on an event that does not belong to this company");
             }
 
-           PurchasePolicy eventSpecificPurchasePolicy = buildPurchasePolicyFromDTO(config.purchasePolicy());
+           PurchasePolicy eventSpecificPurchasePolicy = PurchasePolicyDtoMapper.toPolicy(config.purchasePolicy());
 
             event.setPurchasePolicy(eventSpecificPurchasePolicy);
 
@@ -1048,82 +1043,6 @@ public class EventManagementService {
         } finally {
             eventRepository.unlock(config.eventId());
         }
-    }
-
-    private PurchasePolicy buildPurchasePolicyFromDTO(PurchasePolicyDTO dto) {
-        if (dto == null) {
-            return new NoPurchasePolicy();
-        }
-
-        if (dto.type() == null || dto.type().isBlank()) {
-            throw new IllegalArgumentException("Purchase policy type is required");
-        }
-
-        String type = dto.type().trim().toUpperCase();
-
-        switch (type) {
-            case "AGE":
-                if (dto.minimumAge() == null) {
-                    throw new IllegalArgumentException("minimumAge is required for AGE policy");
-                }
-                return new AgePurchasePolicy(dto.minimumAge());
-
-            case "MIN_TICKETS":
-                if (dto.minimumTickets() == null) {
-                    throw new IllegalArgumentException("minimumTickets is required for MIN_TICKETS policy");
-                }
-                return new MinTicketsPurchasePolicy(dto.minimumTickets());
-
-            case "MAX_TICKETS":
-                if (dto.maximumTickets() == null) {
-                    throw new IllegalArgumentException("maximumTickets is required for MAX_TICKETS policy");
-                }
-                return new MaxTicketsPurchasePolicy(dto.maximumTickets());
-
-            case "AND":
-                validateCompositeChildren(dto, "AND");
-                return buildAndPolicy(dto.children());
-
-            case "OR":
-                validateCompositeChildren(dto, "OR");
-                return buildOrPolicy(dto.children());
-
-            case "NONE":
-                return new NoPurchasePolicy();
-
-            default:
-                throw new IllegalArgumentException("Unknown purchase policy type: " + dto.type());
-        }
-    }
-
-    private void validateCompositeChildren(PurchasePolicyDTO dto, String type) {
-        if (dto.children() == null || dto.children().size() < 2) {
-            throw new IllegalArgumentException(type + " policy must contain at least two children");
-        }
-    }
-
-    private PurchasePolicy buildAndPolicy(List<PurchasePolicyDTO> children) {
-        PurchasePolicy result = buildPurchasePolicyFromDTO(children.get(0));
-
-        for (int i = 1; i < children.size(); i++) {
-            result = new AndPurchasePolicy(
-                    result,
-                    buildPurchasePolicyFromDTO(children.get(i)));
-        }
-
-        return result;
-    }
-
-    private PurchasePolicy buildOrPolicy(List<PurchasePolicyDTO> children) {
-        PurchasePolicy result = buildPurchasePolicyFromDTO(children.get(0));
-
-        for (int i = 1; i < children.size(); i++) {
-            result = new OrPurchasePolicy(
-                    result,
-                    buildPurchasePolicyFromDTO(children.get(i)));
-        }
-
-        return result;
     }
 
     private int validateTokenAndGetUserId(String token) {
@@ -1151,24 +1070,6 @@ public class EventManagementService {
             throw new EventNotFoundException();
         if (event.getCompanyId() != companyId)
             throw new UnauthorizedActionException("act on an event that does not belong to this company");
-        return policyToDTO(event.getPurchasePolicy());
-    }
-
-    private PurchasePolicyDTO policyToDTO(PurchasePolicy policy) {
-        if (policy == null || policy instanceof NoPurchasePolicy)
-            return new PurchasePolicyDTO("NONE", null, null, null, null);
-        if (policy instanceof AgePurchasePolicy a)
-            return new PurchasePolicyDTO("AGE", a.getMinimumAge(), null, null, null);
-        if (policy instanceof MinTicketsPurchasePolicy m)
-            return new PurchasePolicyDTO("MIN_TICKETS", null, m.getMinimumTickets(), null, null);
-        if (policy instanceof MaxTicketsPurchasePolicy m)
-            return new PurchasePolicyDTO("MAX_TICKETS", null, null, m.getMaximumTickets(), null);
-        if (policy instanceof AndPurchasePolicy a)
-            return new PurchasePolicyDTO("AND", null, null, null,
-                    List.of(policyToDTO(a.getLeftPolicy()), policyToDTO(a.getRightPolicy())));
-        if (policy instanceof OrPurchasePolicy o)
-            return new PurchasePolicyDTO("OR", null, null, null,
-                    List.of(policyToDTO(o.getLeftPolicy()), policyToDTO(o.getRightPolicy())));
-        return new PurchasePolicyDTO("NONE", null, null, null, null);
+        return PurchasePolicyDtoMapper.toDto(event.getPurchasePolicy());
     }
 }

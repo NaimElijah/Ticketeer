@@ -47,13 +47,8 @@ import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDtoMapper;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
-import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
-import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
-import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -529,7 +524,7 @@ public class CompanyManagementService {
             throw new UserNotFoundException();
         }
         companyMembershipService.requirePermissionInCompany(userId, config.companyId(), Permission.EDIT_POLICIES);
-        PurchasePolicy policy = buildPurchasePolicyFromDTO(config.defaultPurchasePolicy());
+        PurchasePolicy policy = PurchasePolicyDtoMapper.toPolicy(config.defaultPurchasePolicy());
         company.setPurchasePolicy(policy);
         companyRepository.save(company);
         log.info("Purchase policy updated for company {} by user {}", config.companyId(), userId);
@@ -711,45 +706,6 @@ public class CompanyManagementService {
         }
     }
 
-    private PurchasePolicy buildPurchasePolicyFromDTO(PurchasePolicyDTO dto) {
-        if (dto == null)
-            return new NoPurchasePolicy();
-        if (dto.type() == null || dto.type().isBlank())
-            throw new IllegalArgumentException("Purchase policy type is required");
-        switch (dto.type().trim().toUpperCase()) {
-            case "AGE":
-                if (dto.minimumAge() == null)
-                    throw new IllegalArgumentException("minimumAge is required");
-                return new AgePurchasePolicy(dto.minimumAge());
-            case "MIN_TICKETS":
-                if (dto.minimumTickets() == null)
-                    throw new IllegalArgumentException("minimumTickets is required");
-                return new MinTicketsPurchasePolicy(dto.minimumTickets());
-            case "MAX_TICKETS":
-                if (dto.maximumTickets() == null)
-                    throw new IllegalArgumentException("maximumTickets is required");
-                return new MaxTicketsPurchasePolicy(dto.maximumTickets());
-            case "AND":
-                if (dto.children() == null || dto.children().size() < 2)
-                    throw new IllegalArgumentException("AND policy must have at least two children");
-                PurchasePolicy andResult = buildPurchasePolicyFromDTO(dto.children().get(0));
-                for (int i = 1; i < dto.children().size(); i++)
-                    andResult = new AndPurchasePolicy(andResult, buildPurchasePolicyFromDTO(dto.children().get(i)));
-                return andResult;
-            case "OR":
-                if (dto.children() == null || dto.children().size() < 2)
-                    throw new IllegalArgumentException("OR policy must have at least two children");
-                PurchasePolicy orResult = buildPurchasePolicyFromDTO(dto.children().get(0));
-                for (int i = 1; i < dto.children().size(); i++)
-                    orResult = new OrPurchasePolicy(orResult, buildPurchasePolicyFromDTO(dto.children().get(i)));
-                return orResult;
-            case "NONE":
-                return new NoPurchasePolicy();
-            default:
-                throw new IllegalArgumentException("Unknown purchase policy type: " + dto.type());
-        }
-    }
-
     @Transactional(readOnly = true)
     public PurchasePolicyDTO getCompanyPurchasePolicy(String token, int companyId) {
         int userId = authenticate(token);
@@ -760,24 +716,6 @@ public class CompanyManagementService {
         if (user == null)
             throw new UserNotFoundException();
         companyMembershipService.requirePermissionInCompany(userId, companyId, Permission.EDIT_POLICIES);
-        return policyToDTO(company.getPurchasePolicy());
-    }
-
-    private PurchasePolicyDTO policyToDTO(PurchasePolicy policy) {
-        if (policy == null || policy instanceof NoPurchasePolicy)
-            return new PurchasePolicyDTO("NONE", null, null, null, null);
-        if (policy instanceof AgePurchasePolicy a)
-            return new PurchasePolicyDTO("AGE", a.getMinimumAge(), null, null, null);
-        if (policy instanceof MinTicketsPurchasePolicy m)
-            return new PurchasePolicyDTO("MIN_TICKETS", null, m.getMinimumTickets(), null, null);
-        if (policy instanceof MaxTicketsPurchasePolicy m)
-            return new PurchasePolicyDTO("MAX_TICKETS", null, null, m.getMaximumTickets(), null);
-        if (policy instanceof AndPurchasePolicy a)
-            return new PurchasePolicyDTO("AND", null, null, null,
-                    List.of(policyToDTO(a.getLeftPolicy()), policyToDTO(a.getRightPolicy())));
-        if (policy instanceof OrPurchasePolicy o)
-            return new PurchasePolicyDTO("OR", null, null, null,
-                    List.of(policyToDTO(o.getLeftPolicy()), policyToDTO(o.getRightPolicy())));
-        return new PurchasePolicyDTO("NONE", null, null, null, null);
+        return PurchasePolicyDtoMapper.toDto(company.getPurchasePolicy());
     }
 }

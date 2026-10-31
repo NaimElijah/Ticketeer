@@ -1396,4 +1396,64 @@ public class CompanyManagementServiceTest {
                 assertSame(outage, thrown, "the store's own exception must reach the caller, not a wrapper; got " + thrown);
         }
 
+        // ---- the company purchase policy survives a read and a save back (#187) ----------------
+        // The policy editor reads the policy as a DTO and saves that DTO back, so a policy the read
+        // cannot express must be refused, never read as NONE, or saving it back erases it.
+
+        private static Stream<PurchasePolicy> everyPurchasePolicyShape() {
+                return Stream.of(
+                                new NoPurchasePolicy(),
+                                new AgePurchasePolicy(18),
+                                new MinTicketsPurchasePolicy(2),
+                                new MaxTicketsPurchasePolicy(6),
+                                new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(6)),
+                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2), new MaxTicketsPurchasePolicy(6)),
+                                new AndPurchasePolicy(new AgePurchasePolicy(21),
+                                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2),
+                                                                new MaxTicketsPurchasePolicy(4))),
+                                new OrPurchasePolicy(new AndPurchasePolicy(new AgePurchasePolicy(16),
+                                                new MinTicketsPurchasePolicy(3)), new MaxTicketsPurchasePolicy(8)));
+        }
+
+        // A policy type the DTO mapping has never heard of.
+        private static final class UnmappedPurchasePolicy implements PurchasePolicy {
+                @Override
+                public boolean isSatisfiedBy(PurchaseContext context) {
+                        return true;
+                }
+
+                @Override
+                public String getFailureMessage() {
+                        return "";
+                }
+        }
+
+        private ProductionCompany companyOfTheFounderWithPolicy(PurchasePolicy policy) {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                company.setPurchasePolicy(policy);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                return company;
+        }
+
+        @ParameterizedTest
+        @MethodSource("everyPurchasePolicyShape")
+        public void GivenCompanyPurchasePolicy_WhenReadAndSavedBack_ThenThePolicyIsUnchanged(PurchasePolicy stored) {
+                ProductionCompany company = companyOfTheFounderWithPolicy(stored);
+
+                PurchasePolicyDTO read = companyService.getCompanyPurchasePolicy(OWNER_TOKEN, COMPANY_ID);
+                companyService.setCompanyPolicies(OWNER_TOKEN, new CompanyPolicyConfigDTO(COMPANY_ID, read, List.of()));
+
+                assertEquals(stored, company.getPurchasePolicy(), "read as " + read);
+        }
+
+        @Test
+        public void GivenCompanyPurchasePolicyOfAnUnmappedType_WhenReadCompanyPolicy_ThenRefusedInsteadOfReadAsNone() {
+                companyOfTheFounderWithPolicy(new UnmappedPurchasePolicy());
+
+                assertThrows(IllegalStateException.class, () -> companyService.getCompanyPurchasePolicy(OWNER_TOKEN, COMPANY_ID),
+                                "a policy the mapping does not know must be refused, not read as NONE");
+        }
 }
