@@ -3,6 +3,7 @@ package com.ticketing.system.catalog.adapter.out.persistence;
 import com.ticketing.system.shared.persistence.RepositoryReadWriteLocks;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -175,7 +176,7 @@ public class MemoryEventRepository implements EventRepository {
     private boolean matchesSearch(Event event, CatalogSearchFiltersDTO filters) {
         // eventName — case-insensitive substring match on event name.
         if (filters.eventName() != null &&
-                !event.getName().toLowerCase().contains(filters.eventName().toLowerCase())) {
+                !event.getName().toLowerCase(Locale.ROOT).contains(filters.eventName().toLowerCase(Locale.ROOT))) {
             return false;
         }
 
@@ -183,7 +184,7 @@ public class MemoryEventRepository implements EventRepository {
         if (filters.artistName() != null) {
             if (event.getArtistsNames() == null ||
                     !event.getArtistsNames().stream().anyMatch(
-                            a -> a.toLowerCase().contains(filters.artistName().toLowerCase()))) {
+                            a -> a.toLowerCase(Locale.ROOT).contains(filters.artistName().toLowerCase(Locale.ROOT)))) {
                 return false;
             }
         }
@@ -202,10 +203,10 @@ public class MemoryEventRepository implements EventRepository {
 
         // keywords — case-insensitive substring match on event name or any artist name.
         if (filters.keywords() != null) {
-            String kw = filters.keywords().toLowerCase();
-            boolean nameMatch = event.getName() != null && event.getName().toLowerCase().contains(kw);
+            String kw = filters.keywords().toLowerCase(Locale.ROOT);
+            boolean nameMatch = event.getName() != null && event.getName().toLowerCase(Locale.ROOT).contains(kw);
             boolean artistMatch = event.getArtistsNames() != null &&
-                    event.getArtistsNames().stream().anyMatch(a -> a.toLowerCase().contains(kw));
+                    event.getArtistsNames().stream().anyMatch(a -> a.toLowerCase(Locale.ROOT).contains(kw));
             if (!nameMatch && !artistMatch) {
                 return false;
             }
@@ -254,9 +255,9 @@ public class MemoryEventRepository implements EventRepository {
         if (filters.location() != null) {
             if (event.getVenueMap() == null || event.getVenueMap().getLocation() == null)
                 return false;
-            String locFilter = filters.location().toLowerCase();
-            boolean cityMatch = event.getVenueMap().getLocation().city().toLowerCase().contains(locFilter);
-            boolean countryMatch = event.getVenueMap().getLocation().country().toLowerCase().contains(locFilter);
+            String locFilter = filters.location().toLowerCase(Locale.ROOT);
+            boolean cityMatch = event.getVenueMap().getLocation().city().toLowerCase(Locale.ROOT).contains(locFilter);
+            boolean countryMatch = event.getVenueMap().getLocation().country().toLowerCase(Locale.ROOT).contains(locFilter);
             if (!cityMatch && !countryMatch) {
                 return false;
             }
