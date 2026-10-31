@@ -417,9 +417,10 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private void addZone(boolean seated) {
         int idx = zoneStates.size();
+        String name = presenter.defaultZoneName(zoneStates.stream().map(ZoneState::name).toList());
         ZoneState z = seated
-            ? new ZoneState("Zone " + (idx + 1), true, 10, 20, 0, 100.0, defaultPlacement(idx))
-            : new ZoneState("Zone " + (idx + 1), false, 0, 0, 500, 80.0, defaultPlacement(idx));
+            ? new ZoneState(name, true, 10, 20, 0, 100.0, defaultPlacement(idx))
+            : new ZoneState(name, false, 0, 0, 500, 80.0, defaultPlacement(idx));
         zoneStates.add(z);
         selectedZoneIdx = idx;
         loadZoneIntoEditor(idx);

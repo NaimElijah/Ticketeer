@@ -1,5 +1,10 @@
 package com.ticketing.system.ui.presenters.company;
 
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +17,8 @@ import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 public class VenueMapPresenter {
+
+    private static final String DEFAULT_ZONE_NAME_PREFIX = "Zone ";
 
     private final EventManagementService eventService;
 
@@ -47,6 +54,26 @@ public class VenueMapPresenter {
             return new SaveOutcome.NotAuthenticated();
         } catch (RuntimeException e) {
             return new SaveOutcome.Failure(ServiceErrors.userMessage(e));
+        }
+    }
+
+    /**
+     * The name a new zone gets in the editor: the lowest "Zone n" that no zone of the map uses, ignoring
+     * case. A venue map refuses two zones named alike, and numbering by position repeats a name once a
+     * zone before the last is removed.
+     *
+     * @param takenNames the names of the map's current zones
+     * @return the first free default name; "Zone 1" for a map with no zones
+     */
+    public String defaultZoneName(List<String> takenNames) {
+        Set<String> taken = takenNames.stream()
+                .map(name -> name.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        for (int number = 1; ; number++) {
+            String candidate = DEFAULT_ZONE_NAME_PREFIX + number;
+            if (!taken.contains(candidate.toLowerCase(Locale.ROOT))) {
+                return candidate;
+            }
         }
     }
 
