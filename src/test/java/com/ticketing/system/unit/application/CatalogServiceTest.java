@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -43,6 +45,8 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.domain.TextLimits;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
 
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
@@ -1093,5 +1097,19 @@ class CatalogServiceTest {
         assertFalse(message.contains(DOUBLED_NOT_FOUND), "garbled not-found message: " + message);
         assertFalse(message.toLowerCase(Locale.ROOT).contains("while"),
                 "the message must not name the operation that was refused: " + message);
+    }
+
+    // A search term is bound as a LIKE parameter. One longer than any stored text can match nothing, so it is
+    // refused before the query, rather than sent in whatever size a caller chooses (#187).
+    @Test
+    void GivenASearchTermLongerThanAnyStoredText_WhenSearchGlobal_ThenItIsRefusedBeforeTheQuery() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        String tooLong = "a".repeat(TextLimits.MAX_TEXT_LENGTH + 1);
+        CatalogSearchFiltersDTO filters = new CatalogSearchFiltersDTO(
+                null, null, null, tooLong, null, null, null, null, null, null, null, null, null);
+
+        assertThrows(BusinessRuleViolationException.class, () -> catalogService.searchGlobal(VALID_TOKEN, filters));
+
+        verify(mockEventRepository, never()).searchONSALE(any());
     }
 }

@@ -12,6 +12,7 @@ import java.util.Set;
 
 import lombok.extern.slf4j.Slf4j;
 
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.exception.*;
 
 import com.ticketing.system.catalog.domain.Event;
@@ -407,6 +408,13 @@ public class CatalogService {
         CatalogSearchFiltersDTO f = filters == null
                 ? CatalogSearchFiltersDTO.empty()
                 : filters.normalized();
+
+        // Each term is bound as a LIKE parameter; one longer than any stored text can match nothing.
+        TextLimits.requireFits("Event name", f.eventName());
+        TextLimits.requireFits("Artist name", f.artistName());
+        TextLimits.requireFits("Category", f.category());
+        TextLimits.requireFits("Keywords", f.keywords());
+        TextLimits.requireFits("Location", f.location());
 
         validateDoubleRange(f.minPrice(), f.maxPrice(), "price");
         validateDoubleRange(f.minEventRating(), f.maxEventRating(), "event rating");
