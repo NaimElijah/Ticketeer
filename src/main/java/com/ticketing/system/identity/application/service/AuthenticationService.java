@@ -577,21 +577,16 @@ public class AuthenticationService {
      *
      * <p>
      * Idempotent: logout with a {@code null} / blank / already-revoked token is a no-op. The
-     * revocation is attempted even when reading the token's user id (for the log line) fails.
+     * revocation is the only call to the session store: nothing is read first, so no failed read can
+     * skip it.
      *
      * @throws RuntimeException a failure of the session store, propagated unchanged: the session,
      *     and so the token, may still be live
      */
     @Transactional
     public void logout(LogoutRequestDTO request) {
-        // The id is read only for the log line, so a failure to read it must not skip the revocation.
-        Optional<Integer> userIdOpt;
-        try {
-            userIdOpt = sessionManager.tryExtractUserId(request.token());
-        } finally {
-            sessionManager.invalidate(request.token());
-        }
-        userIdOpt.ifPresent(userId -> log.info("member logged out: id={}", userId));
+        sessionManager.invalidate(request.token());
+        log.info("session revoked at logout");
     }
 
     // Deferred from V1. Not in the UC-12 spec, no acceptance test gates it, and a

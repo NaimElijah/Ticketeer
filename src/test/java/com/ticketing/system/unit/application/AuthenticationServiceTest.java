@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -767,17 +768,28 @@ class AuthenticationServiceTest {
         verify(mockSessionManager).invalidate("SOME_TOKEN");
     }
 
-    // #187: tryExtractUserId lets a session-store failure out. The id is read only for the log line, so
-    // a failed read must not skip the revocation: the session, and so the token, would stay live.
+    // #187: a read of the session store before the revocation adds a way for logout to fail, and one
+    // that a failure in it would roll the revocation back with, since both share logout's transaction.
     @Test
-    void GivenReadingTheUserIdFailsWithAStoreFailure_WhenLogout_ThenTheTokenIsStillRevokedAndTheFailurePropagates() {
-        when(mockSessionManager.tryExtractUserId("SOME_TOKEN"))
-                .thenThrow(new DataAccessResourceFailureException("session store unreachable"));
-
-        assertThrows(DataAccessResourceFailureException.class,
-                () -> service.logout(new LogoutRequestDTO("SOME_TOKEN")));
+    void GivenAToken_WhenLogout_ThenItIsRevokedWithoutReadingTheSessionStoreFirst() {
+        service.logout(new LogoutRequestDTO("SOME_TOKEN"));
 
         verify(mockSessionManager).invalidate("SOME_TOKEN");
+        verify(mockSessionManager, never()).tryExtractUserId(any());
+    }
+
+    // #187: a logout whose revocation failed leaves the session, and so the token, live; it must not
+    // look like it succeeded.
+    @Test
+    void GivenTheSessionStoreFails_WhenLogout_ThenTheFailurePropagates() {
+        DataAccessResourceFailureException storeFailure =
+                new DataAccessResourceFailureException("session store unreachable");
+        doThrow(storeFailure).when(mockSessionManager).invalidate("SOME_TOKEN");
+
+        DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
+                () -> service.logout(new LogoutRequestDTO("SOME_TOKEN")));
+
+        assertSame(storeFailure, thrown, "logout must let the session store's own failure out unchanged");
     }
 
     @Test
