@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import lombok.extern.slf4j.Slf4j;
 
+import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.InvitationDTO;
@@ -410,13 +411,8 @@ public class CompanyManagementService {
             if (company == null) {
                 continue;
             }
-            String role;
-            if (appt.getRole() == CompanyRole.Owner) {
-                role = company.getFounderId() == userId ? "Founder" : "Co-owner";
-            } else {
-                role = "Manager";
-            }
-            companies.add(new MyCompanyDTO(company.getCompanyId(), company.getName(), role));
+            companies.add(new MyCompanyDTO(company.getCompanyId(), company.getName(),
+                    myCompanyRoleLabel(membershipRole(userId, appt, company))));
         }
         log.info("User {} belongs to {} active company appointment(s)", userId, companies.size());
         return companies;
@@ -701,7 +697,7 @@ public class CompanyManagementService {
                 company.getName(),
                 company.getDescription(),
                 "",
-                displayRole(userId, appointment, company),
+                membershipRole(userId, appointment, company),
                 company.getStatus().name(),
                 company.getOwnersIds().size() + company.getManagers().size(),
                 // Active-event count comes from catalog via the outbound port (no catalog import here).
@@ -709,14 +705,24 @@ public class CompanyManagementService {
                 managerPermissions);
     }
 
-    private static String displayRole(int userId, CompanyAppointment appointment, ProductionCompany company) {
-        if (company.getFounderId() == userId)
-            return "Founder";
-        if (appointment.getRole() == CompanyRole.Owner)
-            return "Co-owner";
-        if (appointment.getRole() == CompanyRole.Manager)
-            return "Manager";
-        return appointment.getRole().name();
+    // The one mapping from an appointment to the role a member reads. The founder holds the founding
+    // owner appointment, so only an owner can be the founder.
+    private static MembershipRole membershipRole(int userId, CompanyAppointment appointment,
+            ProductionCompany company) {
+        return switch (appointment.getRole()) {
+            case Owner -> company.getFounderId() == userId ? MembershipRole.FOUNDER : MembershipRole.CO_OWNER;
+            case Manager -> MembershipRole.MANAGER;
+        };
+    }
+
+    // MyCompanyDTO is published language in shared/dto, which cannot name an organization type, so its
+    // role stays a display string. Nothing switches on it; Capabilities reads UserCompanyDTO's type.
+    private static String myCompanyRoleLabel(MembershipRole role) {
+        return switch (role) {
+            case FOUNDER -> "Founder";
+            case CO_OWNER -> "Co-owner";
+            case MANAGER -> "Manager";
+        };
     }
 
     private int authenticate(String token) {

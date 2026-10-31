@@ -25,6 +25,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessResourceFailureException;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
+import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
@@ -116,7 +117,7 @@ class CompanyMembershipServiceTest {
         var memberships = service.listForUser(MEMBER_TOKEN);
 
         assertEquals(1, memberships.size());
-        assertEquals("Founder", memberships.get(0).role());
+        assertEquals(MembershipRole.FOUNDER, memberships.get(0).role());
         assertEquals("Acme Events", memberships.get(0).name());
         assertEquals(1, memberships.get(0).members());
     }
@@ -139,9 +140,23 @@ class CompanyMembershipServiceTest {
         var memberships = service.listForUser(MEMBER_TOKEN);
 
         assertEquals(1, memberships.size());
-        assertEquals("Manager", memberships.get(0).role());
+        assertEquals(MembershipRole.MANAGER, memberships.get(0).role());
         assertEquals(0, memberships.get(0).activeEvents());
         assertEquals(List.of(Permission.VIEW_SALES), memberships.get(0).managerPermissions());
+    }
+
+    @Test
+    void GivenAcceptedOwnerAppointmentInAnotherFoundersCompany_WhenListForUser_ThenRoleIsCoOwner() {
+        User user = new User(USER_ID, "coowner", "coowner@test.com", "hash", 30);
+        membershipService.receiveOwnerAppointment(USER_ID, COMPANY_ID, 1);
+        membershipService.acceptInvitation(USER_ID, COMPANY_ID);
+        when(userRepository.getUserById(USER_ID)).thenReturn(user);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(new ProductionCompany(
+                COMPANY_ID, 1, "Acme Events", CompanyStatus.ACTIVE, "Desc", 4.5));
+
+        var memberships = service.listForUser(MEMBER_TOKEN);
+
+        assertEquals(List.of(MembershipRole.CO_OWNER), memberships.stream().map(UserCompanyDTO::role).toList());
     }
 
     @Test

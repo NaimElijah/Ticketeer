@@ -1,5 +1,7 @@
 package com.ticketing.system.unit.presentation;
 
+import com.ticketing.system.organization.application.dto.MembershipRole;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -121,6 +123,7 @@ class CapabilitiesTest {
     private static final String MEMBER_TOKEN = "member-jwt";
     private static final String ADMIN_TOKEN = "admin-jwt";
     private static final int USER_ID = 42;
+    private static final int COMPANY_ID = 7;
     private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
 
     private CompanyManagementService service;
@@ -168,6 +171,55 @@ class CapabilitiesTest {
 
         assertTrue(caps.contains(Capability.CHECKOUT));
         assertFalse(caps.contains(Capability.OWNER_WORKSPACE), "a dead token holds no memberships");
+    }
+
+    // ---- the capability set each membership role grants for the current company ----
+
+    private static final Set<Capability> OWNER_CAPABILITIES = EnumSet.of(
+        Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES,
+        Capability.EDIT_PURCHASE_POLICIES, Capability.RESPOND_INQUIRIES, Capability.MANAGE_VENUE_MAPS,
+        Capability.APPOINT_MANAGER, Capability.APPOINT_CO_OWNER, Capability.EDIT_MANAGER_PERMISSIONS,
+        Capability.REVOKE_MANAGER, Capability.CANCEL_EVENT, Capability.VIEW_COMPANY_ORG_TREE);
+    private static final Set<Capability> FOUNDER_ONLY_CAPABILITIES =
+        EnumSet.of(Capability.DISSOLVE_COMPANY, Capability.TRANSFER_FOUNDERSHIP);
+
+    @Test
+    void GivenFounderOfTheCurrentCompany_WhenForCurrentUser_ThenOwnerAndFounderCapabilities() {
+        Set<Capability> caps = capabilitiesOfAMemberWhoIs(MembershipRole.FOUNDER, List.of());
+
+        assertTrue(caps.contains(Capability.OWNER_WORKSPACE));
+        assertTrue(caps.containsAll(OWNER_CAPABILITIES), "a founder holds every owner capability");
+        assertTrue(caps.containsAll(FOUNDER_ONLY_CAPABILITIES), "a founder holds the founder-only capabilities");
+    }
+
+    @Test
+    void GivenCoOwnerOfTheCurrentCompany_WhenForCurrentUser_ThenOwnerCapabilitiesButNoFounderOnes() {
+        Set<Capability> caps = capabilitiesOfAMemberWhoIs(MembershipRole.CO_OWNER, List.of());
+
+        assertTrue(caps.contains(Capability.OWNER_WORKSPACE));
+        assertTrue(caps.containsAll(OWNER_CAPABILITIES), "a co-owner holds every owner capability");
+        assertTrue(FOUNDER_ONLY_CAPABILITIES.stream().noneMatch(caps::contains),
+            "a co-owner must not hold the founder-only capabilities");
+    }
+
+    @Test
+    void GivenManagerOfTheCurrentCompany_WhenForCurrentUser_ThenOnlyTheirPermissionsCapabilities() {
+        Set<Capability> caps = capabilitiesOfAMemberWhoIs(MembershipRole.MANAGER, List.of(Permission.VIEW_SALES));
+
+        assertTrue(caps.contains(Capability.OWNER_WORKSPACE));
+        assertTrue(caps.containsAll(capsFor(Permission.VIEW_SALES)));
+        Set<Capability> beyondTheirPermissions = EnumSet.copyOf(OWNER_CAPABILITIES);
+        beyondTheirPermissions.removeAll(capsFor(Permission.VIEW_SALES));
+        beyondTheirPermissions.addAll(FOUNDER_ONLY_CAPABILITIES);
+        assertTrue(beyondTheirPermissions.stream().noneMatch(caps::contains),
+            "a manager holds only what their permissions grant; got " + caps);
+    }
+
+    private Set<Capability> capabilitiesOfAMemberWhoIs(MembershipRole role, List<Permission> managerPermissions) {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of(new UserCompanyDTO(COMPANY_ID, "Acme", "desc",
+            "", role, "ACTIVE", 1, 0, managerPermissions)));
+        return Capabilities.forCurrentUser();
     }
 
     private void installSessionAndService() {

@@ -12,7 +12,7 @@ public record UserCompanyDTO(
         String name,
         String description,
         String contactEmail,
-        String role,
+        MembershipRole role,
         String status,
         int members,
         int activeEvents,

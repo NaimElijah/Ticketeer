@@ -2,6 +2,7 @@ package com.ticketing.system.ui.dev;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
+import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
@@ -16,6 +17,7 @@ import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.MockPermissions;
+import com.ticketing.system.ui.support.MembershipRoleLabels;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -349,7 +351,7 @@ public final class DevPanel {
                 tag.getElement().setProperty("innerHTML",
                     (current ? "<span style='color:#ca8a04'>★</span> " : "")
                     + "<b>" + escape(company.name()) + "</b>"
-                    + " <span style='color:" + SECTION_SUB_COLOR + "'>· " + company.role() + "</span>");
+                    + " <span style='color:" + SECTION_SUB_COLOR + "'>· " + MembershipRoleLabels.label(company.role()) + "</span>");
                 Button select = ghostBtn("Make current", () -> {
                     CurrentCompanies.setCurrentCompany(company.companyId());
                     refresh(dialog);
@@ -364,15 +366,15 @@ public final class DevPanel {
     private static String currentManagerSubtitle() {
         UserCompanyDTO current = currentCompanyFromService();
         if (current == null) return "No current company — pick one above.";
-        if (!"Manager".equals(current.role())) {
-            return "Current role is " + current.role() + " — grants only apply to Managers.";
+        if (current.role() != MembershipRole.MANAGER) {
+            return "Current role is " + MembershipRoleLabels.label(current.role()) + " — grants only apply to Managers.";
         }
         return "Current manager permissions (read-only — edit via the real UI).";
     }
 
     private static Component buildManagerPermsBlock() {
         UserCompanyDTO current = currentCompanyFromService();
-        if (current == null || !"Manager".equals(current.role())) {
+        if (current == null || current.role() != MembershipRole.MANAGER) {
             return new Span();
         }
 

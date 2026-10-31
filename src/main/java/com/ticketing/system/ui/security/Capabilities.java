@@ -147,20 +147,17 @@ public final class Capabilities {
 
         caps.add(Capability.OWNER_WORKSPACE);
 
-        String role = current.role();
-        if (role == null) {
-            return caps;
-        }
-        switch (role) {
-            case "Founder" -> {
-                caps.addAll(OWNER_BUNDLE);
-                caps.addAll(FOUNDER_EXTRA);
+        // A switch expression, so a new MembershipRole fails the build until it is given its capabilities.
+        Set<Capability> roleCapabilities = switch (current.role()) {
+            case FOUNDER -> {
+                Set<Capability> founder = EnumSet.copyOf(OWNER_BUNDLE);
+                founder.addAll(FOUNDER_EXTRA);
+                yield founder;
             }
-            case "Co-owner" -> caps.addAll(OWNER_BUNDLE);
-            case "Manager" -> caps.addAll(capabilitiesFromPermissions(current.managerPermissions()));
-            default -> {
-                /* unknown role — workspace only */ }
-        }
+            case CO_OWNER -> OWNER_BUNDLE;
+            case MANAGER -> capabilitiesFromPermissions(current.managerPermissions());
+        };
+        caps.addAll(roleCapabilities);
         return caps;
     }
 

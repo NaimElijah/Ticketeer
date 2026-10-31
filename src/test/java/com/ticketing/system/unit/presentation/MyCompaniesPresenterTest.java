@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -52,9 +53,9 @@ class MyCompaniesPresenterTest {
     private static final int INVITEE_USER_ID = 77;
     private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
     private static final UserCompanyDTO MEMBERS_COMPANY = new UserCompanyDTO(COMPANY_ID, "Acme", "desc",
-            "acme@example.com", "Founder", "ACTIVE", 1, 0, List.of());
+            "acme@example.com", MembershipRole.FOUNDER, "ACTIVE", 1, 0, List.of());
     private static final UserCompanyDTO MEMBERS_SECOND_COMPANY = new UserCompanyDTO(SECOND_COMPANY_ID, "Beta",
-            "desc", "beta@example.com", "Co-owner", "ACTIVE", 1, 0, List.of());
+            "desc", "beta@example.com", MembershipRole.CO_OWNER, "ACTIVE", 1, 0, List.of());
 
     private CompanyManagementService companyManagementService;
     private MyCompaniesPresenter presenter;
