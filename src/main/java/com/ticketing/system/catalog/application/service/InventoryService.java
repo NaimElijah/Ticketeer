@@ -46,15 +46,16 @@ import com.ticketing.system.shared.exception.InsufficientInventoryException;
 @Slf4j
 public class InventoryService implements InventoryCommandPort {
 
-    // How many times one event's stock return runs before a lost concurrency race gives it up (see
-    // returnEventToStock).
-    private static final int STOCK_RETURN_ATTEMPTS = 3;
+    // How many times one event's stock return or hold release runs before a lost concurrency race gives
+    // it up (see runRetryingLostRaces).
+    private static final int ATTEMPTS_PER_EVENT = 3;
 
     // Catalog aggregate-root port for the Event aggregate (load/save + the buyer-operation lock).
     private final EventRepository eventRepository;
     // Organization port used to resolve a company's purchase policy for effective-policy validation.
     private final ProductionCompanyRepository companyRepository;
-    // Bounds each event's stock return when the caller has no transaction (returnSoldToStock).
+    // Bounds each event's stock return or hold release when the caller has no transaction
+    // (returnSoldToStock, releaseHeld).
     private final TransactionTemplate transactionTemplate;
 
     /**
@@ -63,8 +64,8 @@ public class InventoryService implements InventoryCommandPort {
      *
      * @param eventRepository    the Event aggregate-root port
      * @param companyRepository  the organization company port (for company purchase policies)
-     * @param transactionManager opens the transaction each event's stock return runs in, when the caller
-     *                           has none ({@link #returnSoldToStock})
+     * @param transactionManager opens the transaction each event's stock return or hold release runs in,
+     *                           when the caller has none ({@link #returnSoldToStock}, {@link #releaseHeld})
      */
     public InventoryService(EventRepository eventRepository, ProductionCompanyRepository companyRepository,
             PlatformTransactionManager transactionManager) {
@@ -159,28 +160,37 @@ public class InventoryService implements InventoryCommandPort {
         }
     }
 
-    // The refund calls this with no transaction of its own (RefundService.requestRefund), so without one
-    // here the loaded event is detached by the time it is saved, and a reservation that commits in the
-    // same zone meanwhile makes the save lose on the zone's @Version. On PostgreSQL a lost race can also
+    // Giving up leaves the refunded places SOLD for good, so the last lost race is logged at ERROR, as
+    // returnSoldToStock logs every other failure.
+    private void returnEventToStock(int eventId, Map<Integer, List<InventoryLineDTO>> linesByZone) {
+        try {
+            runRetryingLostRaces("Refund: returning places to stock", eventId,
+                    () -> returnZonesToStock(eventId, linesByZone));
+        } catch (ConcurrencyFailureException lostRace) {
+            log.error("Refund: returning places to stock lost a concurrency race on every attempt; "
+                    + "they stay SOLD. eventId={}, placesByZone={}, attempts={}",
+                    eventId, placesByZone(linesByZone), ATTEMPTS_PER_EVENT, lostRace);
+        }
+    }
+
+    // The refund and the checkout rollback call in with no transaction of their own, so without one here
+    // the loaded event is detached by the time it is saved, and a reservation that commits in the same
+    // zone meanwhile makes the save lose on the zone's @Version. On PostgreSQL a lost race can also
     // surface as a deadlock, and on H2 as a lock timeout, both ConcurrencyFailureException as in ADR-015's
     // Phase 3 retry; PostgreSQL sets no lock_timeout, so a long lock wait there ends at the socket timeout
     // instead, which is no lost race and is not run again. A lost attempt rolls back whole, so running it
-    // again on a fresh load is safe. Giving up leaves the refunded places SOLD for good, so the last loss is
-    // logged at ERROR, as returnSoldToStock logs every other failure.
-    private void returnEventToStock(int eventId, Map<Integer, List<InventoryLineDTO>> linesByZone) {
-        for (int attempt = 1; ; attempt++) {
+    // again on a fresh load is safe. The last lost race is rethrown.
+    private void runRetryingLostRaces(String step, int eventId, Runnable attempt) {
+        for (int attemptNumber = 1; ; attemptNumber++) {
             try {
-                transactionTemplate.executeWithoutResult(status -> returnZonesToStock(eventId, linesByZone));
+                transactionTemplate.executeWithoutResult(status -> attempt.run());
                 return;
             } catch (ConcurrencyFailureException lostRace) {
-                if (attempt == STOCK_RETURN_ATTEMPTS) {
-                    log.error("Refund: returning places to stock lost a concurrency race on every attempt; "
-                            + "they stay SOLD. eventId={}, placesByZone={}, attempts={}",
-                            eventId, placesByZone(linesByZone), attempt, lostRace);
-                    return;
+                if (attemptNumber == ATTEMPTS_PER_EVENT) {
+                    throw lostRace;
                 }
-                log.info("Refund: returning places to stock lost a concurrency race; running it again. "
-                        + "eventId={}, attempt={}", eventId, attempt);
+                log.info("{} lost a concurrency race; running it again. eventId={}, attempt={}",
+                        step, eventId, attemptNumber);
             }
         }
     }
@@ -331,49 +341,62 @@ public class InventoryService implements InventoryCommandPort {
         }
     }
 
-    /** {@inheritDoc} CALLER-LOCKED mutate — release still-held RESERVED lines during a checkout rollback. */
+    /**
+     * {@inheritDoc} CALLER-LOCKED mutate — release still-held RESERVED lines during a checkout rollback.
+     * Each event's load, mutation and save run in one transaction, retried when it loses a concurrency race.
+     */
     @Override
     public void releaseHeld(List<InventoryLineDTO> lines, String orderKey) {
         Map<Integer, Map<Integer, List<InventoryLineDTO>>> grouped = groupByEventAndZone(lines);
 
+        // Every event is tried, whatever happens to the others. A failure still reaches the caller, after
+        // the rest, so the checkout keeps the cart's lines instead of clearing lines whose holds remain.
+        RuntimeException firstFailure = null;
         for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : grouped.entrySet()) {
             int eventId = eventEntry.getKey();
-            Event event;
             try {
-                event = eventRepository.findById(eventId);
+                runRetryingLostRaces("Checkout rollback: releasing holds", eventId,
+                        () -> releaseZonesHeld(eventId, eventEntry.getValue(), orderKey));
             } catch (EventNotFoundException deleted) {
-                // A deleted event holds nothing to release; the rollback goes on for the other events.
+                // A deleted event holds nothing to release.
                 log.warn("Skipped releasing a deleted event's holds during checkout rollback. eventId={}, orderKey={}",
                         eventId, orderKey);
-                continue;
-            }
-
-            // Release each (event, zone) independently: a zone that can no longer be released (already
-            // confirmed/expired) must not abort the rollback for the remaining zones. Log and continue,
-            // then save the event if anything in it was actually released.
-            boolean anyReleased = false;
-            for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : eventEntry.getValue().entrySet()) {
-                int zoneId = zoneEntry.getKey();
-                List<InventoryLineDTO> zoneItems = zoneEntry.getValue();
-
-                List<String> seatNumbers = extractSeatNumbers(zoneItems);  // seated seats (empty = standing)
-                try {
-                    if (seatNumbers.isEmpty()) {
-                        event.releaseInventory(zoneId, InventorySelection.standing(zoneItems.size(), orderKey));
-                    } else {
-                        event.releaseInventory(zoneId, InventorySelection.seated(seatNumbers, orderKey));
-                    }
-                    anyReleased = true;                                    // this zone released
-                } catch (RuntimeException zoneReleaseFailure) {
-                    log.warn(
-                            "Could not release inventory during checkout rollback. eventId={}, zoneId={}, orderKey={}",
-                            eventId, zoneId, orderKey, zoneReleaseFailure);
+            } catch (RuntimeException failure) {
+                if (firstFailure == null) {
+                    firstFailure = failure;
+                } else {
+                    firstFailure.addSuppressed(failure);
                 }
             }
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
+        }
+    }
 
-            if (anyReleased) {
-                eventRepository.save(event);                               // persist only if something changed
+    // One attempt: load the event, release each zone's holds, and save if any zone released. A zone that can
+    // no longer be released (already confirmed or expired) must not stop the others: it is logged and skipped.
+    private void releaseZonesHeld(int eventId, Map<Integer, List<InventoryLineDTO>> linesByZone, String orderKey) {
+        Event event = eventRepository.findById(eventId);
+        boolean anyReleased = false;
+        for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : linesByZone.entrySet()) {
+            int zoneId = zoneEntry.getKey();
+            List<InventoryLineDTO> zoneItems = zoneEntry.getValue();
+            List<String> seatNumbers = extractSeatNumbers(zoneItems);  // seated seats (empty = standing)
+            try {
+                if (seatNumbers.isEmpty()) {
+                    event.releaseInventory(zoneId, InventorySelection.standing(zoneItems.size(), orderKey));
+                } else {
+                    event.releaseInventory(zoneId, InventorySelection.seated(seatNumbers, orderKey));
+                }
+                anyReleased = true;
+            } catch (RuntimeException zoneReleaseFailure) {
+                log.warn("Could not release inventory during checkout rollback. eventId={}, zoneId={}, orderKey={}",
+                        eventId, zoneId, orderKey, zoneReleaseFailure);
             }
+        }
+        if (anyReleased) {
+            eventRepository.save(event);                               // persist only if something changed
         }
     }
 

@@ -42,9 +42,9 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  * and a failure part-way leaves the earlier events changed. Two callers do that today, both
  * best-effort steps after the main work has committed or failed: {@code RefundService} calls
  * {@link #returnSoldToStock} after the refund commits, and {@code CheckoutService}'s failure rollback
- * calls {@link #releaseHeld} outside its Phase-3 transaction. {@link #returnSoldToStock} is the one
- * method that opens a transaction when the caller has none: one per event, so that event's load and
- * save commit together and a lost concurrency race can run again.
+ * calls {@link #releaseHeld} outside its Phase-3 transaction. Those two methods open a transaction when
+ * the caller has none: one per event, so that event's load and save commit together and a lost
+ * concurrency race can run again.
  */
 public interface InventoryCommandPort {
 
@@ -171,12 +171,16 @@ public interface InventoryCommandPort {
 
     /**
      * Releases the given still-held (RESERVED) lines back to AVAILABLE during a checkout rollback,
-     * grouping by event and zone and saving each event once. Best-effort per zone: a zone that can no
-     * longer be released is logged and skipped so the rest still roll back. CALLER-LOCKED: the caller
+     * grouping by event and zone and saving each event once, in a transaction of its own when the caller
+     * has none, run again up to three attempts in all when it loses a concurrency race. Best-effort per
+     * zone: a zone that can no longer be released is logged and skipped so the rest still roll back. A
+     * deleted event is skipped. Every event is tried even when another fails. CALLER-LOCKED: the caller
      * must hold the event buyer-lock for every affected event.
      *
      * @param lines    the held lines to release
      * @param orderKey the owning order's key
+     * @throws RuntimeException the first event's failure, with the later ones suppressed, once every event
+     *                          has been tried, so the caller can keep the lines whose holds remain
      */
     void releaseHeld(List<InventoryLineDTO> lines, String orderKey);
 }

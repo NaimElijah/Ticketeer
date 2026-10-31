@@ -1302,11 +1302,11 @@ public class CheckoutService {
         safelyClearCart(order);
     }
 
-    // We clear and persist the cart after a rollback without letting a failure here
-    // mask the
-    // original checkout failure. The release loop above is resilient and always
-    // reaches this point,
-    // so the clear is no longer skipped by an earlier release throwing.
+    // We clear and persist the cart after a rollback without letting a failure here mask the original
+    // checkout failure. releaseHeld tries every event and throws only if one could not be released; the
+    // clear is then skipped on purpose, since clearing lines whose holds remain would orphan those holds.
+    // The expiry sweeper releases them later only if the order is not left frozen: the status reset
+    // above is saved by the clear alone, and the sweeper never releases a frozen order (#214).
     private void safelyClearCart(ActiveOrder order) {
         try {
             order.clear();

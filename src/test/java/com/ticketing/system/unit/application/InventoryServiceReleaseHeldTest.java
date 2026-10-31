@@ -2,7 +2,11 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +18,7 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import ch.qos.logback.classic.Level;
 
@@ -89,6 +94,23 @@ class InventoryServiceReleaseHeldTest {
         List<String> warnings = inventoryLog.messagesAt(Level.WARN);
         assertTrue(warnings.stream().anyMatch(message -> message.contains(String.valueOf(DELETED_EVENT_ID))),
                 "the skipped event " + DELETED_EVENT_ID + " should be named at WARN; WARN lines: " + warnings);
+    }
+
+    // A store failure on one event must not stop the release of the others. It must still reach the caller,
+    // so the checkout keeps the cart's lines instead of clearing lines whose holds remain.
+    @Test
+    void GivenTheSaveOfOneEventFails_WhenTheHoldsAreReleased_ThenTheOtherIsStillReleasedAndTheFailurePropagates() {
+        Event failing = onSaleEventHolding(DELETED_EVENT_ID, 1);
+        doReturn(failing).when(events).findById(DELETED_EVENT_ID);
+        DataAccessResourceFailureException outage = new DataAccessResourceFailureException("connection refused");
+        doThrow(outage).when(events).save(failing);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> inventory.releaseHeld(heldLines(), ORDER_KEY));
+
+        assertSame(outage, thrown);
+        assertEquals(0, liveEvent.getVenueMap().getZone(ZONE_ID).getReservedAmount(),
+                "event " + LIVE_EVENT_ID + "'s holds should be released despite the other event's failure");
+        verify(events).save(liveEvent);
     }
 
     private static List<InventoryLineDTO> heldLines() {
