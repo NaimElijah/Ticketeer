@@ -132,10 +132,15 @@ class RefundStockReturnRaceJpaTest {
         inventory.returnSoldToStock(refundedPlaces());
 
         List<String> errors = inventoryLog.messagesAt(Level.ERROR);
-        assertTrue(errors.stream().anyMatch(message -> message.contains(String.valueOf(EVENT_ID))),
-                "a stock return that lost every attempt should be logged at ERROR naming event " + EVENT_ID
-                        + "; ERROR lines: " + errors + "; everything mentioning it: "
-                        + inventoryLog.eventsContaining(String.valueOf(EVENT_ID)));
+        assertAll(
+                () -> assertTrue(errors.stream().anyMatch(message -> message.contains(String.valueOf(EVENT_ID))),
+                        "a stock return that lost every attempt should be logged at ERROR naming event " + EVENT_ID
+                                + "; ERROR lines: " + errors + "; everything mentioning it: "
+                                + inventoryLog.eventsContaining(String.valueOf(EVENT_ID))),
+                // One rival per attempt: the return runs three times in all, then gives up.
+                () -> assertEquals(3, racing.rivalsCommitted(), "attempts made before giving up"),
+                () -> assertEquals(REFUNDED_PLACES, storedZone().getSoldAmount(),
+                        "a stock return that gave up should leave the refunded places SOLD"));
     }
 
     private static List<InventoryLineDTO> refundedPlaces() {
