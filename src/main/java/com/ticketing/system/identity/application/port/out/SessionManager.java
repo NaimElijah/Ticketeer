@@ -53,6 +53,8 @@ public interface SessionManager {
      * Whether the token is a live admin token: the ADMIN role claim on a live Admin session row.
      *
      * @return {@code false} for a member token, and for a malformed, revoked or expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged: an unreachable
+     *     store is not a non-admin token
      */
     boolean isAdminToken(String token);
 
@@ -65,6 +67,7 @@ public interface SessionManager {
      *     malformed, bad signature, revoked, or not a member token (an admin token included)
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     boolean validateToken(String token);
 
@@ -77,6 +80,7 @@ public interface SessionManager {
      *     malformed, bad signature, revoked, or not an admin token (a member token included)
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     boolean validateAdminToken(String token);
 
@@ -125,6 +129,7 @@ public interface SessionManager {
      *     for any token {@link #validateAdminToken} rejects as invalid, a member token included
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     for an expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     int extractAdminId(String token);
 

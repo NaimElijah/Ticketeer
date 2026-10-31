@@ -66,10 +66,10 @@ public class NotificationDispatchService {
     }
 
     // UC-37: triggered by MemberLoggedIn event.
-    // Deliberately NOT part of a surrounding transaction: NOT_SUPPORTED suspends the caller's tx
-    // (e.g. the @Transactional login), so each pending notification is delivered + persisted on its
-    // own repository transaction. One failed push — or a mid-flush error — can't roll back the others
-    // or the login itself. Per-item by design (Eval 5 acceptance #1's documented exception).
+    // Deliberately NOT part of a surrounding transaction: NOT_SUPPORTED suspends any caller's tx, so
+    // each pending notification is delivered + persisted on its own repository transaction. One failed
+    // push — or a mid-flush error — can't roll back the others. Login calls this only after its own
+    // TransactionTemplate commits. Per-item by design (Eval 5 acceptance #1's documented exception).
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<NotificationDTO> deliverPending(int userId) {
         log.info("Delivering pending notifications for userId={}", userId);

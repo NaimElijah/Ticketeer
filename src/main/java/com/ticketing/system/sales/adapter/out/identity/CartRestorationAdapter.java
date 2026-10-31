@@ -19,8 +19,8 @@ import lombok.extern.slf4j.Slf4j;
  * D9a) by delegating to sales-internal collaborators, so the source dependency points
  * {@code sales -> identity} (acyclic) and identity imports no sales type.
  *
- * <p>The adapter carries no {@code @Transactional} of its own: it is called from
- * {@code AuthenticationService.login}, which is already {@code @Transactional}, so the
+ * <p>The adapter carries no {@code @Transactional} of its own: it is called from inside
+ * {@code AuthenticationService.login}'s {@code TransactionTemplate}, so the
  * lock/lookup/save merge below runs inside that login transaction (atomic with the
  * session promotion) — preserving the pre-migration behavior. Abandoning a replaced member cart
  * therefore commits its inventory releases with the login too: under JPA's optimistic locking, a
