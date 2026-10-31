@@ -48,6 +48,8 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventoryZone;
@@ -1189,7 +1191,7 @@ class EventManagementServiceTest {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
                 when(mockEventRepo.findByCompanyId(COMPANY_ID)).thenReturn(List.of(event));
 
                 assertThrows(RuntimeException.class,
@@ -1202,7 +1204,7 @@ class EventManagementServiceTest {
                 when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
                 when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
-                when(mockEventRepo.findById(EVENT_ID)).thenReturn(null);
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
                 assertThrows(RuntimeException.class,
                                 () -> eventService.getEventZones(MANAGER_TOKEN, EVENT_ID));

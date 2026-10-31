@@ -218,9 +218,6 @@ public class InventoryService implements InventoryCommandPort {
     @Override
     public String eventName(int eventId) {
         Event event = eventRepository.findById(eventId);            // load the event
-        if (event == null) {
-            throw new EventNotFoundException(eventId);
-        }
         return event.getName();                                    // the event's name
     }
 
@@ -228,9 +225,6 @@ public class InventoryService implements InventoryCommandPort {
     @Override
     public void validatePurchasePolicy(int eventId, int buyerId, Integer buyerAge, int quantity) {
         Event event = eventRepository.findById(eventId);           // load the event
-        if (event == null) {
-            throw new EventNotFoundException(eventId);             // matches CheckoutService's original throw
-        }
         // CHECKOUT-stage context (every policy rule enforced): the 5-arg constructor defaults the stage.
         PurchaseContext context = new PurchaseContext(buyerId, buyerAge, event.getId(), event.getCompanyId(), quantity);
         ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId()); // owning company
@@ -242,9 +236,6 @@ public class InventoryService implements InventoryCommandPort {
     public void validateEventsOnSale(List<Integer> eventIds) {
         for (Integer eventId : eventIds) {
             Event event = eventRepository.findForSale(eventId);    // holds the event against a cancel until commit
-            if (event == null) {
-                throw new EventNotFoundException(eventId);
-            }
             // SOLD_OUT is allowed: an event that sold out while these tickets were reserved must still let
             // the holders complete their purchase (mirrors Event.validateCanConfirmSale).
             if (event.getStatus() != EventStatus.ON_SALE && event.getStatus() != EventStatus.SOLD_OUT) {
@@ -260,9 +251,6 @@ public class InventoryService implements InventoryCommandPort {
 
         for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : grouped.entrySet()) {
             Event event = eventRepository.findById(eventEntry.getKey()); // load the event
-            if (event == null) {
-                throw new EventNotFoundException(eventEntry.getKey());
-            }
 
             for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : eventEntry.getValue().entrySet()) {
                 int zoneId = zoneEntry.getKey();
@@ -347,10 +335,14 @@ public class InventoryService implements InventoryCommandPort {
 
         for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : grouped.entrySet()) {
             int eventId = eventEntry.getKey();
-            Event event = eventRepository.findById(eventId);               // load the event
-
-            if (event == null) {
-                continue;                                                  // event gone — nothing to release
+            Event event;
+            try {
+                event = eventRepository.findById(eventId);
+            } catch (EventNotFoundException deleted) {
+                // A deleted event holds nothing to release; the rollback goes on for the other events.
+                log.warn("Skipped releasing a deleted event's holds during checkout rollback. eventId={}, orderKey={}",
+                        eventId, orderKey);
+                continue;
             }
 
             // Release each (event, zone) independently: a zone that can no longer be released (already
@@ -386,14 +378,9 @@ public class InventoryService implements InventoryCommandPort {
     // Internal helpers (moved verbatim from the former sales services)
     // ---------------------------------------------------------------------
 
-    /** Loads an event by id, throwing {@link IllegalArgumentException} if it does not exist (reserve/release path). */
+    /** Loads an event by id, throwing {@link EventNotFoundException} if it does not exist (reserve/release path). */
     private Event getEventOrThrow(int eventId) {
-        Event event = eventRepository.findById(eventId);           // load
-        if (event == null) {
-            log.warn("Request rejected: event not found. eventId={}", eventId);
-            throw new IllegalArgumentException("Event not found: " + eventId);
-        }
-        return event;
+        return eventRepository.findById(eventId);
     }
 
     /** Resolves a zone from an event's venue map, normalizing both the throw and the null contract of getZone. */

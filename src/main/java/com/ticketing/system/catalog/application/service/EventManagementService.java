@@ -189,9 +189,6 @@ public class EventManagementService {
         }
 
         ProductionCompany company = companyRepository.getCompanyById(companyId);
-        if (company == null) {
-            throw new CompanyNotFoundException();
-        }
 
         // The events list is a read-only management hub. Any active member of the company may see
         // it (so e.g. a venue/sales manager can reach the per-event venue editor); the per-event
@@ -209,18 +206,12 @@ public class EventManagementService {
     public EventDetailDTO getEvent(String token, int eventId) {
         int userId = validateTokenAndGetUserId(token);
         Event event = eventRepository.findById(eventId);
-        if (event == null) {
-            throw new EventNotFoundException();
-        }
         User user = userRepository.getUserById(userId);
         if (user == null) {
             throw new UserNotFoundException();
         }
         companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
         ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
-        if (company == null) {
-            throw new CompanyNotFoundException();
-        }
 
         return new EventDetailDTO(
             String.valueOf(event.getId()),
@@ -253,9 +244,6 @@ public class EventManagementService {
             throw new UserNotFoundException();
         }
         Event event = eventRepository.findById(eventId);
-        if (event == null) {
-            throw new EventNotFoundException();
-        }
         companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.CONFIGURE_VENUE);
 
         VenueMap map = event.getVenueMap();
@@ -1015,10 +1003,7 @@ public class EventManagementService {
         try {
             int userId = sessionManager.extractUserId(token);
 
-            ProductionCompany company = companyRepository.getCompanyById(config.companyId());
-            if (company == null) {
-                throw new CompanyNotFoundException();
-            }
+            companyRepository.getCompanyById(config.companyId());
 
             User user = userRepository.getUserById(userId);
             if (user == null) {
@@ -1027,9 +1012,6 @@ public class EventManagementService {
             companyMembershipService.requirePermissionInCompany(user.getUserId(),config.companyId(), Permission.EDIT_POLICIES);
 
             Event event = eventRepository.findById(config.eventId());
-            if (event == null) {
-                throw new EventNotFoundException();
-            }
 
             if (event.getCompanyId() != config.companyId()) {
                 throw new UnauthorizedActionException("act on an event that does not belong to this company");
@@ -1060,16 +1042,12 @@ public class EventManagementService {
         if (!sessionManager.validateToken(token))
             throw new InvalidTokenException();
         int userId = sessionManager.extractUserId(token);
-        ProductionCompany company = companyRepository.getCompanyById(companyId);
-        if (company == null)
-            throw new CompanyNotFoundException();
+        companyRepository.getCompanyById(companyId);
         User user = userRepository.getUserById(userId);
         if (user == null)
             throw new UserNotFoundException();
         companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.EDIT_POLICIES);
         Event event = eventRepository.findById(eventId);
-        if (event == null)
-            throw new EventNotFoundException();
         if (event.getCompanyId() != companyId)
             throw new UnauthorizedActionException("act on an event that does not belong to this company");
         return PurchasePolicyDtoMapper.toDto(event.getPurchasePolicy());

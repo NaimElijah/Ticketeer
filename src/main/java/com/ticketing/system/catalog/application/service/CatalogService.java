@@ -492,15 +492,11 @@ public class CatalogService {
             
             // see that event exists and has a venue map
             Event event = this.eventRepository.findById(eventId);
-            if (event == null) {
-                log.warn("Event not found while getting venue map: {}", eventId);
-                throw new EventNotFoundException(eventId);
-            }
 
             // Only a closed company's owners and the system admins may see its information, so on this
             // public read its event is refused exactly like a missing one (II.2.2).
             ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
-            if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
+            if (company.getStatus() != CompanyStatus.ACTIVE) {
                 log.warn("Attempt to access venue map for eventId: {} from inactive company", eventId);
                 throw new EventNotFoundException(eventId);
             }
@@ -531,22 +527,18 @@ public class CatalogService {
         }
 
         Event event = this.eventRepository.findById(eventId);
-        if (event == null) {
-            log.warn("Event not found while getting event detail: {}", eventId);
-            throw new EventNotFoundException(eventId);
-        }
 
         // Only a closed company's owners and the system admins may see its information, so on this
         // public read its event is refused exactly like a missing one (II.2.1).
         ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
-        if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
+        if (company.getStatus() != CompanyStatus.ACTIVE) {
             log.warn("Attempt to access event detail for eventId: {} from inactive company", eventId);
             throw new EventNotFoundException(eventId);
         }
 
         requirePubliclyListed(event, "getting event detail");
 
-        log.info("Event detail found for eventId: {} and being returned", eventId);
+        log.debug("Event detail found for eventId: {} and being returned", eventId);
         return new EventMapper().toEventDetailDTO(event, company.getName());
     }
 

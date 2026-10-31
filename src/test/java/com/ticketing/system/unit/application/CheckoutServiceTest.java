@@ -53,6 +53,7 @@ import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -838,7 +839,7 @@ void GivenTicketFromDifferentEventDoesNotExist_WhenCheckout_ThenClearCartAndRetu
     when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
 
     when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event1);
-    when(mockEventRepo.findById(EVENT_ID_2)).thenReturn(null);
+    when(mockEventRepo.findById(EVENT_ID_2)).thenThrow(new EventNotFoundException(EVENT_ID_2));
 
     when(event1.getVenueMap().getZone(ZONE_ID_1)).thenReturn(zone1);
 

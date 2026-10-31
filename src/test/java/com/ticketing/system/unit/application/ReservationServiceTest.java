@@ -7,6 +7,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.sales.domain.ActiveOrder;
@@ -185,7 +186,7 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenremoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -348,9 +349,9 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenreserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
@@ -464,9 +465,9 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenreserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 

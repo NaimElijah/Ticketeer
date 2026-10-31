@@ -165,7 +165,7 @@ public class ReservationAcceptanceTests {
 
     @Test
     void GivenEventNotFound_WhenreserveStandingTicketsForMember_ThenThrowException() {
-        when(eventRepository.findById(100)).thenReturn(null);
+        when(eventRepository.findById(100)).thenThrow(new EventNotFoundException(100));
 
         String result;
 

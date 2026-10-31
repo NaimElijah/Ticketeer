@@ -503,7 +503,7 @@ public class CheckoutServiceAcceptanceTest {
         validSession();
         ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(eventRepository.findById(EVENT_ID_1)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID_1)).thenThrow(new EventNotFoundException(EVENT_ID_1));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
@@ -521,7 +521,7 @@ public class CheckoutServiceAcceptanceTest {
         ), true);
 
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(eventRepository.findById(EVENT_ID_2)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID_2)).thenThrow(new EventNotFoundException(EVENT_ID_2));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)

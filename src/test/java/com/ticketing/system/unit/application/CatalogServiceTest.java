@@ -325,7 +325,7 @@ class CatalogServiceTest {
     @Test
     void givenValidTokenAndNonExistentEvent_whenGetEventVenueMap_thenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class,
                 () -> catalogService.getEventVenueMap(VALID_TOKEN, EVENT_ID));
@@ -570,7 +570,7 @@ class CatalogServiceTest {
     @Test
     void givenNonExistentEvent_whenGetEventDetail_thenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class,
                 () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID));
@@ -585,7 +585,7 @@ class CatalogServiceTest {
 
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         // First read finds the closed company's event; the second finds no event under the same id.
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event, (Event) null);
+        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event).thenThrow(new EventNotFoundException(EVENT_ID));
         when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
 
         String hidden = assertThrows(EventNotFoundException.class,
