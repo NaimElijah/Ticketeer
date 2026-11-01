@@ -301,10 +301,11 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   request it again (#130).
 - A guest's order ends with the visit; a member's lasts until the hold expires. A guest's order passes
   to a member only for a real user id, 1 or above (`ActiveOrder.attachToUser`, #187 · `ActiveOrderTest`).
-- A ticket changes state only along its lifecycle: a refund needs a paid or issued ticket, an issuance
-  a paid one, use an issued one, and a release a reserved one; any ticket may be voided. Every other
-  change is refused with `InvalidStateTransitionException` and leaves the ticket as it was (`Ticket`,
-  `TicketStatus`, #187 · `TicketTest`).
+- A ticket changes state only along its lifecycle: a reservation needs an available ticket, a payment
+  a reserved one, a refund a paid or issued one, an issuance a paid one, use an issued one, and a
+  release a reserved one; any ticket may be voided. Reserving a ticket that is not available is refused
+  with `TicketNotAvailableException`, and every other change with `InvalidStateTransitionException`;
+  either leaves the ticket as it was (`Ticket`, `TicketStatus`, #187 · `TicketStatusTest`, `TicketTest`).
 - Receipts and purchase history never change when events, prices or companies change later
   (II.3.5, II.4.5). Receipts store the price at purchase (`OrderReceipt`, `ReceiptLine`).
 - A company's sales history shows only its own tickets and the revenue from them. An order's

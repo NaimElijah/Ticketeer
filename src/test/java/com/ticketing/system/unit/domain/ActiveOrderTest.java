@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.sales.domain.CartLineItem;
 
 // Unit tests for the ActiveOrder aggregate.
@@ -35,14 +36,23 @@ class ActiveOrderTest extends BaseDomainTest {
     void givenEmptyOrder_whenAddReservation_thenLineAdded() {
     }
 
+    // UC-10: an empty cart, or one whose hold has run out, cannot be checked out; the buyer reads the refusal
+    // as an expired order (CheckoutPresenter), so it is a state transition, not an internal error (#187).
+
     @Test
-    @Disabled("V1: validateCanCheckout rejects empty (UC-10)")
-    void givenEmptyOrder_whenValidateCanCheckout_thenThrows() {
+    void GivenEmptyOrder_WhenValidateCanCheckout_ThenRefusedAsAnInvalidStateTransition() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+
+        assertThrows(InvalidStateTransitionException.class, () -> order.validateCanCheckout(NOW));
     }
 
     @Test
-    @Disabled("V1: validateCanCheckout rejects expired (UC-10)")
-    void givenExpiredItem_whenValidateCanCheckout_thenThrows() {
+    void GivenOrderWhoseHoldHasRunOut_WhenValidateCanCheckout_ThenRefusedAsAnInvalidStateTransition() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0,
+                NOW.minus(CartLineItem.getExpirationLimit()).minusMinutes(1));
+
+        assertThrows(InvalidStateTransitionException.class, () -> order.validateCanCheckout(NOW));
     }
 
     @Test
@@ -310,8 +320,8 @@ class ActiveOrderTest extends BaseDomainTest {
     }
 
     // ---- Defect 10: attachToUser refuses an id no user can have (#187) ----
-    // A user id is positive (checkInvariants). Whether the refusal is an argument or a state exception is
-    // left to the fix; either way the cart must stay a guest cart.
+    // A user id is positive (checkInvariants), so a lower one is refused as an invalid argument, and the cart
+    // stays a guest cart.
 
     private static final String GUEST_SESSION_ID = "guest-session-1";
 
@@ -344,8 +354,8 @@ class ActiveOrderTest extends BaseDomainTest {
         RuntimeException refused = assertThrows(RuntimeException.class, () -> cart.attachToUser(userId),
                 "no user has id " + userId + ", so a cart must not be attached to it");
 
-        assertTrue(refused instanceof IllegalArgumentException || refused instanceof IllegalStateException,
-                "attaching to user id " + userId + " must be refused as invalid, but threw " + refused);
+        assertInstanceOf(IllegalArgumentException.class, refused,
+                "attaching to user id " + userId + " must be refused as an invalid argument");
         assertTrue(cart.isGuest(), "a refused attach must leave the cart a guest cart");
     }
 }

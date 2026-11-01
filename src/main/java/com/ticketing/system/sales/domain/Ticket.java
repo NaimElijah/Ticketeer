@@ -117,7 +117,13 @@ public class Ticket implements InvariantChecked {
     // Lifecycle transitions: TicketStatus documents the legal ones and refuses the rest.
     // ---------------------------------------------------------------------------
 
-    // UC-9 / UC-5 — AVAILABLE -> RESERVED. Throws TicketNotAvailableException if not AVAILABLE.
+    /**
+     * UC-9 / UC-5: AVAILABLE → RESERVED for a member.
+     *
+     * @param holderUserId the member who holds the ticket, positive
+     * @throws TicketNotAvailableException unless the ticket is AVAILABLE; it is then left as it was
+     * @throws IllegalArgumentException    if {@code holderUserId} is not positive; the ticket is then left as it was
+     */
     public void reserve(int holderUserId) {
         if (!isAvailable()) {
             throw new TicketNotAvailableException(
@@ -126,9 +132,9 @@ public class Ticket implements InvariantChecked {
         if (holderUserId <= 0) {
             throw new IllegalArgumentException("holderUserId must be positive");
         }
+        requireCanBecome(TicketStatus.RESERVED);
         this.holderUserId = holderUserId;
-        this.status = TicketStatus.RESERVED;
-        checkInvariants();
+        moveTo(TicketStatus.RESERVED);
     }
 
     /**
@@ -250,11 +256,6 @@ public class Ticket implements InvariantChecked {
 
     public String getBarcode() {
         return barcodeValue;
-    }
-
-    public void setBarcodeValue(String barcodeValue) {
-       this.barcodeValue=barcodeValue;
-       checkInvariants();
     }
 
     public TicketStatus getStatus() {

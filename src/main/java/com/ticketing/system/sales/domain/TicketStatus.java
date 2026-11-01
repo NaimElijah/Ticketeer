@@ -14,7 +14,10 @@ package com.ticketing.system.sales.domain;
  *   <li>any state → VOIDED (an event cancellation or a refund voids what was never sold,
  *       {@link Ticket#markVoided})</li>
  * </ul>
- * Every other change is refused. A ticket is created PAID, at checkout, since the current design
+ * Every other change is refused: reserving a ticket that is not AVAILABLE with
+ * {@code TicketNotAvailableException}, and any other illegal change with
+ * {@code InvalidStateTransitionException}; either leaves the ticket as it was. TicketStatusTest pins the whole
+ * table. A ticket is created PAID, at checkout, since the current design
  * creates tickets only once they are paid for; AVAILABLE and RESERVED are reached only by a row
  * stored with them.
  */
