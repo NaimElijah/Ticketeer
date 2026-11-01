@@ -46,7 +46,9 @@ public class NotificationDispatchService {
             throw new IllegalArgumentException(
                     "dispatch() requires a PENDING notification, but got status: " + notification.getStatus());
         }
-        log.info("Dispatching notification for userId={}, type={}",
+        // DEBUG: an outreach fan-out dispatches once per recipient, and storing an alert is not a state
+        // transition anyone acts on (ADR-019).
+        log.debug("Dispatching notification for userId={}, type={}",
                 notification.getRecipientUserId(), notification.getType());
         notificationRepository.save(notification);
     }

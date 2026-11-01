@@ -61,7 +61,9 @@ overflow:
   (ADR-004); a failure part-way through now loses the tail of one send rather than the whole send.
 - **A large send holds the `notify-` thread for one insert per recipient.** Other notices wait
   behind it, in order.
-- **The dispatcher logs each alert at INFO,** so a large send writes one line per recipient.
+- **The dispatcher logs each alert at DEBUG,** not INFO: a large send would otherwise write one INFO
+  line per recipient, and storing an alert is not a state transition anyone acts on. An outreach's
+  alerts therefore leave no INFO trace of their own; `MessagingService` logs the send itself.
 
 ## Alternatives considered
 
