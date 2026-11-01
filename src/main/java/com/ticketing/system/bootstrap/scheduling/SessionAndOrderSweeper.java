@@ -196,8 +196,9 @@ public class SessionAndOrderSweeper {
      * <p>The locks are real only on the in-memory adapters. On JPA, {@code lockForUpdate} and
      * {@code unlock} are no-ops, and the order checked here is the copy the scan loaded, not a fresh
      * read. There a buyer's concurrent change to the cart, or another write to one of its events, is
-     * caught by {@code @Version} when the tick commits: the commit fails, the whole tick rolls back,
-     * and the next tick sweeps again. #209 moves this logic out of bootstrap.
+     * caught by {@code @Version} when the order's delete is flushed or when the tick commits; either
+     * way the whole tick rolls back, and the next tick sweeps again. #209 moves this logic out of
+     * bootstrap.
      *
      * <p>Policy:
      * If an ActiveOrder is CHECKOUT_IN_PROGRESS, the sweeper must not release/delete it.
@@ -235,7 +236,8 @@ public class SessionAndOrderSweeper {
             // Order-expiry path only: re-check expiry before releasing. A buyer may have manually removed the
             // expired line (R1) — or renewed the timers — since findExpired(), leaving a healthy cart we must
             // not destroy. On the in-memory adapters this runs under the order lock and can see that change; on
-            // JPA it re-reads the scan's copy, and @Version catches the change at commit instead (#209). The
+            // JPA it re-reads the scan's copy, and @Version catches the change instead, when the order's delete
+            // is flushed or when the tick commits; either way the whole tick rolls back (#209). The
             // session-expiry path passes false (a guest's attached cart is released when the session ends,
             // regardless of item expiry).
             if (requireStillExpired && !order.isEmpty() && !order.hasExpiredItem(now)) {
