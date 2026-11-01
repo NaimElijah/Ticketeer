@@ -32,6 +32,7 @@ import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 
@@ -870,23 +871,40 @@ public class ReservationService {
         return s.indexOf('.', dot1 + 1) > dot1;
     }
 
-    // Helper method to view the current active order for a user (member or guest). For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we convert it to an ActiveOrderDTO and return it. If no active order is found, we return null. This allows the frontend to show the user their current reservations in the cart when they navigate to the cart page, etc.
+    /**
+     * The buyer's current cart, with event names, for a member token or a guest's session id.
+     *
+     * <p>The credential is tried as a member token first. Only one that is not a live member token
+     * (refused by the session manager as invalid or expired) is tried as a guest session id.
+     *
+     * @param userOrSessionId a member token or a guest's raw session id
+     * @return the cart, or {@code null} for a blank credential or a buyer with no cart
+     * @throws SessionExpiredException if the credential is neither a live member token nor a live
+     *     guest session id
+     * @throws RuntimeException a failure of the session or cart store, propagated unchanged
+     */
     @Transactional(readOnly = true)
     public ActiveOrderDTO viewMyActiveOrder(String userOrSessionId) {
         if (userOrSessionId == null || userOrSessionId.isBlank()) {
             return null;
         }
-        try {
-            if (iSessionManager.validateToken(userOrSessionId)) {
-                int userId = iSessionManager.extractUserId(userOrSessionId);
-                return restoreActiveOrder(userId);
-            }
-        } catch (Exception ignored) {
-            // not a live member token — fall through to the guest path
+        if (isLiveMemberToken(userOrSessionId)) {
+            return restoreActiveOrder(iSessionManager.extractUserId(userOrSessionId));
         }
         // Only a live guest session's id passes here: a member's raw session id or a dead token gets
         // SessionExpiredException, never the cart bound to that id (ADR-012, decision 4).
         return restoreActiveOrderForGuest(userOrSessionId);
+    }
+
+    // Only the session manager's refusals mean "not a live member token". A store failure says nothing
+    // about the credential, so it propagates rather than sending a member down the guest path, whose
+    // refusal the UI would show as an expired session (NaimElijah/Ticketeer#187).
+    private boolean isLiveMemberToken(String credential) {
+        try {
+            return iSessionManager.validateToken(credential);
+        } catch (InvalidTokenException | SessionExpiredException notALiveMemberToken) {
+            return false;
+        }
     }
 
     
