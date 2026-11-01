@@ -321,6 +321,38 @@ public class InventoryZoneTest extends BaseDomainTest {
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
     }
 
+    // A member can read this refusal (it is an IllegalStateException), so it names only the seat, never
+    // an order key: neither the order holding the seat nor the one asking (#187).
+    private static final String HOLDING_ORDER = "holding-order-key";
+    private static final String ASKING_ORDER = "asking-order-key";
+    private static final String SEAT_NO_LONGER_HELD = "Seat A1 is no longer held for this order.";
+
+    @Test
+    void GivenASeatHeldByAnotherOrder_WhenReleaseSeats_ThenTheRefusalNamesOnlyTheSeat() {
+        SeatedZone seatedZone = track(new SeatedZone(1, "Orchestra", 120.0, List.of(new Seat("A1", 0, 0))));
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> seatedZone.release(InventorySelection.seated(List.of("A1"), ASKING_ORDER)));
+
+        assertEquals(SEAT_NO_LONGER_HELD, refused.getMessage());
+        assertFalse(refused.getMessage().contains(HOLDING_ORDER) || refused.getMessage().contains(ASKING_ORDER));
+        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
+    }
+
+    @Test
+    void GivenASeatHeldByAnotherOrder_WhenConfirmSale_ThenTheRefusalNamesOnlyTheSeat() {
+        SeatedZone seatedZone = track(new SeatedZone(1, "Orchestra", 120.0, List.of(new Seat("A1", 0, 0))));
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> seatedZone.confirmSale(InventorySelection.seated(List.of("A1"), ASKING_ORDER)));
+
+        assertEquals(SEAT_NO_LONGER_HELD, refused.getMessage());
+        assertFalse(refused.getMessage().contains(HOLDING_ORDER) || refused.getMessage().contains(ASKING_ORDER));
+        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
+    }
+
     @Test
     void GivenStandingZone_WhenReserveSeatSelection_ThenThrowsException() {
         StandingZone standingZone = track(new StandingZone(1, "General Admission", 100, 50.0));

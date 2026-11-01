@@ -223,9 +223,7 @@ public class SeatedZone extends InventoryZone {
                 }   //TODO:  see if ok that skips ownership check when key is null seats, since those will fail the status check anyway. Otherwise, would need to check ownership before status, which is a bit weird but would be more precise in error reporting.
                 String seatOwner = seat.getReservedByOrderKey();
                 if (orderKey != null && !orderKey.isBlank() && !orderKey.equals(seatOwner)) {
-                    throw new IllegalStateException(
-                            "Seat " + label + " is reserved by order '" + seatOwner
-                                    + "', not by '" + orderKey + "'");
+                    throw new IllegalStateException(seatNoLongerHeld(label));
                 }
             }
             for (String label : sorted) {
@@ -284,9 +282,7 @@ public class SeatedZone extends InventoryZone {
                 } //TODO:  see if ok that skips ownership check when key is null seats, since those will fail the status check anyway. Otherwise, would need to check ownership before status, which is a bit weird but would be more precise in error reporting.
                 String seatOwner = seat.getReservedByOrderKey();
                 if (orderKey != null && !orderKey.isBlank() && !orderKey.equals(seatOwner)) {
-                    throw new IllegalStateException(
-                            "Cannot confirm sale — seat " + label + " is reserved by order '"
-                                    + seatOwner + "', not by '" + orderKey + "'");
+                    throw new IllegalStateException(seatNoLongerHeld(label));
                 }
             }
             for (String label : sorted) {
@@ -549,5 +545,11 @@ public class SeatedZone extends InventoryZone {
             }
             seat.checkInvariants();
         }
+    }
+
+    // A member can read this refusal, so it names only the seat: an order key is an internal handle
+    // (#187).
+    private static String seatNoLongerHeld(String label) {
+        return "Seat " + label + " is no longer held for this order.";
     }
 }
