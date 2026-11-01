@@ -5,6 +5,7 @@ import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioParser;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -84,5 +85,21 @@ class ScenarioParserTest {
 
         assertEquals("expect-error", c.op());
         assertEquals("IllegalStateException", c.named("error"));
+    }
+
+    // ---- F6: the operation name does not depend on the JVM's default locale (#187) ----
+    // Under Turkish rules an upper-case I lower-cases to a dotless one, so "LOGIN" would become "logın".
+
+    @Test
+    void GivenTurkishDefaultLocale_WhenAnUpperCaseOperationIsParsed_ThenItIsTheLowerCaseOperation() {
+        Locale original = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr"));
+        try {
+            ScenarioCommand c = parser.parse("LOGIN u1").get(0);
+
+            assertEquals("login", c.op());
+        } finally {
+            Locale.setDefault(original);
+        }
     }
 }

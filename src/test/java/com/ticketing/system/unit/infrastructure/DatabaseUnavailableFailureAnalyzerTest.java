@@ -3,6 +3,7 @@ package com.ticketing.system.unit.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.ConnectException;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -212,6 +213,22 @@ class DatabaseUnavailableFailureAnalyzerTest {
 
         FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
                 .analyze(new IllegalStateException("Unable to obtain connection from database", connectTimedOut));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(CANNOT_CONNECT).contains(UNREACHABLE_URL);
+        assertThat(analysis.getDescription() + " " + analysis.getAction()).doesNotContain(SOCKET_TIMEOUT_PROPERTY);
+    }
+
+    // ---- F6: only a socket timeout under 08006 is a statement timeout (#187) ----
+    // A connection the server or network reset is 08006 too, caused by a SocketException: nothing timed out.
+
+    @Test
+    void GivenConnectionFailureCausedByAConnectionReset_WhenAnalyzed_ThenItStillSaysTheDatabaseCannotBeReached() {
+        SQLException reset = new SQLException("An I/O error occurred while sending to the backend.", "08006",
+                new SocketException("Connection reset"));
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Migration failed", reset));
 
         assertThat(analysis).isNotNull();
         assertThat(analysis.getDescription()).contains(CANNOT_CONNECT).contains(UNREACHABLE_URL);

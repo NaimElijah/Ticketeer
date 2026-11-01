@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,6 +39,8 @@ class ScenarioExpectErrorTest {
 
     private static final String THROWN_TYPE = "IllegalArgumentException";
     private static final String OTHER_TYPE = "IllegalStateException";
+    private static final String SCENARIO_WITH_A_BARE_EXPECT_ERROR =
+            "register alice password123 alice@demo.test 30\nexpect-error login ghost\n";
     private static final String SUPERCLASS_OF_THROWN_TYPE = "RuntimeException";
     private static final String EXPECT_ERROR = "expect-error";
     private static final String ERROR_ARGUMENT = "error";
@@ -115,6 +118,21 @@ class ScenarioExpectErrorTest {
 
         assertFalse(expectations == 0, "the committed scenarios hold no expect-error line to check");
         assertEquals(List.of(), withoutType, "every committed expect-error must name its exception with error=<Type>");
+    }
+
+    // ---- F6: the runner refuses a bare expect-error before any step, whatever seed.fail-fast says (#187) ----
+
+    @Test
+    void GivenAScenarioWithABareExpectError_WhenReseededWithoutFailFast_ThenTheBootStopsNamingTheLineAndNoStepRuns()
+            throws IOException {
+        ScenarioRunner runner = runnerFor(SCENARIO_WITH_A_BARE_EXPECT_ERROR, false);
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> runner.run(null),
+                "a bare expect-error must stop the boot even when seed.fail-fast is off");
+
+        assertTrue(refused.getMessage().contains("line 2"), "the refusal must name the line, but was: "
+                + refused.getMessage());
+        fixture.verifyNoScenarioStepRan();
     }
 
     private ScenarioRunner runnerFor(String scenario, boolean failFast) throws IOException {

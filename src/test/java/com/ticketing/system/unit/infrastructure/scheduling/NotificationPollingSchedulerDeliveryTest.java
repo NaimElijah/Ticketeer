@@ -2,6 +2,7 @@ package com.ticketing.system.unit.infrastructure.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -103,6 +104,20 @@ class NotificationPollingSchedulerDeliveryTest {
             poller.poll();
 
             verify(dispatchService, never()).deliverPending(anyInt());
+        });
+    }
+
+    // ---- F6: the poll signs out a UI whose member token is dead, as AuthBootstrap does (#187) ----
+
+    @Test
+    void GivenMemberUiWhoseTokenIsDead_WhenPoll_ThenTheUiEndsSignedOut() {
+        AuthSession.storeAuth(memberToken(DEAD_TOKEN));
+        activeUis(uiRunningAccessInline());
+
+        withPoller(poller -> {
+            poller.poll();
+
+            assertFalse(AuthSession.isSignedIn(), "a UI whose member token is dead must end signed out");
         });
     }
 

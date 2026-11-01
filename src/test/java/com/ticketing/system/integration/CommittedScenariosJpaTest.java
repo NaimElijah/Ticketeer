@@ -1,10 +1,11 @@
 package com.ticketing.system.integration;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -75,13 +76,18 @@ class CommittedScenariosJpaTest {
         systemAdminService.initializePlatform();
     }
 
+    // The second column names a user the scenario registers, so a run whose steps were all skipped (a reseed
+    // over users that already exist) cannot pass by doing nothing.
     @ParameterizedTest(name = "{0}.scenario")
-    @ValueSource(strings = {"demo", "review"})
-    void GivenACommittedScenario_WhenReseededUnderFailFast_ThenEveryStepAndExpectationHolds(String scenario) {
+    @CsvSource({"demo, alice", "review, u1"})
+    void GivenACommittedScenario_WhenReseededUnderFailFast_ThenEveryStepAndExpectationHolds(
+            String scenario, String registeredUsername) {
         ScenarioRunner runner = runnerFor("classpath:scenarios/" + scenario + ".scenario");
 
         assertDoesNotThrow(() -> runner.run(null),
                 scenario + ".scenario must run clean: a failed step or a mismatched expect-error stops a fail-fast boot");
+        assertTrue(userRepository.existsByUsername(registeredUsername),
+                scenario + ".scenario must actually have run its steps, registering " + registeredUsername);
     }
 
     private ScenarioRunner runnerFor(String scenarioLocation) {
