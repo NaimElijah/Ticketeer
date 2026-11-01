@@ -71,6 +71,7 @@ import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
+import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.router.Route;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -264,6 +265,16 @@ class VaadinSmokeTest {
         assertTrue(text.contains("Could not load your orders and tickets: database unreachable"),
                 "expected the load error in: " + text);
         assertFalse(text.contains("No orders yet"), "a failed load must not read as an empty history: " + text);
+        assertFalse(text.contains("My Orders") || text.contains("My Tickets"),
+                "a failed load shows no order or ticket section: " + text);
+        // The counts are set as inner HTML, which the text above leaves out, so look for their block.
+        assertFalse(hasDescendantWithClass(view.getElement(), "acct-hero-stats"),
+                "a failed load shows no order or ticket counts, so no \"0 orders\"");
+    }
+
+    private static boolean hasDescendantWithClass(Element element, String className) {
+        return element.getClassList().contains(className)
+                || element.getChildren().anyMatch(child -> hasDescendantWithClass(child, className));
     }
 
     @Test
