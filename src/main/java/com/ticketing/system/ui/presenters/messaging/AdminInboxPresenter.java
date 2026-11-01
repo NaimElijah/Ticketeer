@@ -79,8 +79,8 @@ public class AdminInboxPresenter {
         }
     }
 
-    /** Marks {@code conversationId} read for the signed-in admin, as the view opens the thread. */
-    public ActionOutcome markRead(String token, String conversationId) {
+    // Marks the thread read for the caller's side; open is its only caller.
+    private ActionOutcome markRead(String token, String conversationId) {
         if (token == null) {
             return new ActionOutcome.NotAuthenticated();
         }
@@ -137,7 +137,7 @@ public class AdminInboxPresenter {
         record Failure(String reason) implements Outcome { }
     }
 
-    /** Result of a reply / close / mark-read the view reacts to. */
+    /** Result of a reply / close / open the view reacts to. */
     public sealed interface ActionOutcome {
         record Success() implements ActionOutcome { }
         record NotAuthenticated() implements ActionOutcome { }
