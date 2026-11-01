@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
+import com.ticketing.system.identity.domain.SessionKind;
 
 /**
  * In-memory {@link SessionRepository}.
@@ -75,6 +76,12 @@ public class MemorySessionRepository implements SessionRepository {
             return;
         }
         sessionsById.remove(sessionId);
+    }
+
+    @Override
+    public void deleteAdminSessions(int adminId) {
+        Integer target = adminId;
+        sessionsById.values().removeIf(s -> s.getKind() == SessionKind.ADMIN && target.equals(s.getUserId()));
     }
 
     @Override

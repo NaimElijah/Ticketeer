@@ -1024,6 +1024,12 @@ class JwtSessionManagerTest {
         }
 
         @Override
+        public void deleteAdminSessions(int adminId) {
+            failIfDown();
+            live.deleteAdminSessions(adminId);
+        }
+
+        @Override
         public java.util.List<Session> findExpiredBefore(Instant cutoff) {
             failIfDown();
             return live.findExpiredBefore(cutoff);

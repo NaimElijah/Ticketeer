@@ -5,16 +5,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.DefaultApplicationArguments;
-import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
@@ -24,9 +29,11 @@ import com.ticketing.system.bootstrap.PlatformInitializationRunner;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.identity.adapter.out.persistence.MemoryAdminRepository;
+import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.BcryptPasswordHasher;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
+import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.testutil.LogCapture;
 
@@ -58,6 +65,7 @@ class CommittedAdminPasswordRotationTest {
 
     private final PasswordHasher hasher = new BcryptPasswordHasher(new BCryptPasswordEncoder());
     private final AdminRepository admins = new MemoryAdminRepository();
+    private final SessionRepository sessions = new MemorySessionRepository(Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
     private LogCapture logs;
 
     @AfterEach
@@ -73,7 +81,7 @@ class CommittedAdminPasswordRotationTest {
             String profile) {
         admins.save(defaultAdminWithPassword(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD));
 
-        rotationUnder(profile).run(new DefaultApplicationArguments());
+        rotationUnder(profile).afterSingletonsInstantiated();
 
         Admin rotated = admins.findById(DEFAULT_ADMIN_ID);
         assertTrue(hasher.matches(CONFIGURED_PASSWORD, rotated.getPasswordHash()),
@@ -90,7 +98,7 @@ class CommittedAdminPasswordRotationTest {
         admins.save(committed);
         logs = LogCapture.of(CommittedAdminPasswordRotation.class);
 
-        rotationUnder(NO_PROFILE).run(new DefaultApplicationArguments());
+        rotationUnder(NO_PROFILE).afterSingletonsInstantiated();
 
         List<String> logged = logs.eventsContaining("");
         assertTrue(logged.stream().anyMatch(event -> event.startsWith("WARN ")),
@@ -110,7 +118,7 @@ class CommittedAdminPasswordRotationTest {
         CommittedAdminPasswordRotation rotation = rotationUnder(NO_PROFILE);
 
         IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> rotation.run(new DefaultApplicationArguments()),
+                rotation::afterSingletonsInstantiated,
                 "an admin other than the default one with the committed password must stop the boot");
 
         assertFalse(refused.getMessage().contains(CONFIGURED_PASSWORD), "the refusal must not name the configured password");
@@ -128,7 +136,7 @@ class CommittedAdminPasswordRotationTest {
                 hasher.hash(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD), false));
         CommittedAdminPasswordRotation rotation = rotationUnder(profile);
 
-        assertDoesNotThrow(() -> rotation.run(new DefaultApplicationArguments()),
+        assertDoesNotThrow(rotation::afterSingletonsInstantiated,
                 profile + " runs on the committed password by design");
 
         assertEquals(committed.getPasswordHash(), admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
@@ -140,7 +148,7 @@ class CommittedAdminPasswordRotationTest {
         Admin rotatedEarlier = defaultAdminWithPassword(EARLIER_ROTATED_PASSWORD);
         admins.save(rotatedEarlier);
 
-        rotationUnder(NO_PROFILE).run(new DefaultApplicationArguments());
+        rotationUnder(NO_PROFILE).afterSingletonsInstantiated();
 
         assertEquals(rotatedEarlier.getPasswordHash(), admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
                 "a password that is not the committed one is the operator's, and stays");
@@ -150,19 +158,38 @@ class CommittedAdminPasswordRotationTest {
     void GivenNoAdminYet_WhenRun_ThenNothingHappens() {
         CommittedAdminPasswordRotation rotation = rotationUnder(NO_PROFILE);
 
-        assertDoesNotThrow(() -> rotation.run(new DefaultApplicationArguments()),
+        assertDoesNotThrow(rotation::afterSingletonsInstantiated,
                 "a first boot has no admin yet; platform initialisation creates it with the configured password");
         assertFalse(admins.existsAny());
     }
 
-    // The rotation must have happened before platform initialisation looks at the admins.
+    // The rotation must have happened before platform initialisation looks at the admins. Spring Boot
+    // calls the runners once the context has started, as this test does with PlatformInitializationRunner.
     @Test
-    void GivenBothRunners_WhenSpringOrdersThem_ThenTheRotationRunsBeforePlatformInitialisation() {
-        CommittedAdminPasswordRotation rotation = rotationUnder(NO_PROFILE);
-        PlatformInitializationRunner initialisation = new PlatformInitializationRunner(mock(SystemAdminService.class));
+    void GivenDefaultAdminWithTheCommittedPassword_WhenPlatformInitialisationRuns_ThenTheAdminAlreadyHasTheConfiguredPassword() {
+        admins.save(defaultAdminWithPassword(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD));
+        SystemAdminService systemAdminService = mock(SystemAdminService.class);
+        AtomicBoolean rotatedWhenInitialised = new AtomicBoolean();
+        doAnswer(invocation -> {
+            rotatedWhenInitialised.set(
+                    hasher.matches(CONFIGURED_PASSWORD, admins.findById(DEFAULT_ADMIN_ID).getPasswordHash()));
+            return null;
+        }).when(systemAdminService).initializePlatform();
 
-        assertTrue(AnnotationAwareOrderComparator.INSTANCE.compare(rotation, initialisation) < 0,
-                "the rotation must be ordered before PlatformInitializationRunner");
+        new ApplicationContextRunner()
+                .withBean(AdminRepository.class, () -> admins)
+                .withBean(PasswordHasher.class, () -> hasher)
+                .withBean(SessionRepository.class, () -> sessions)
+                .withBean(PlatformAdminProperties.class,
+                        () -> new PlatformAdminProperties(DEFAULT_ADMIN_USERNAME, CONFIGURED_PASSWORD))
+                .withBean(SystemAdminService.class, () -> systemAdminService)
+                .withBean(CommittedAdminPasswordRotation.class)
+                .withBean(PlatformInitializationRunner.class)
+                .run(context -> context.getBean(PlatformInitializationRunner.class)
+                        .run(new DefaultApplicationArguments()));
+
+        assertTrue(rotatedWhenInitialised.get(),
+                "platform initialisation must find the default admin already on the configured password");
     }
 
     private Admin defaultAdminWithPassword(String rawPassword) {
@@ -174,7 +201,7 @@ class CommittedAdminPasswordRotationTest {
         if (!profile.isEmpty()) {
             environment.setActiveProfiles(profile);
         }
-        return new CommittedAdminPasswordRotation(environment, admins, hasher,
+        return new CommittedAdminPasswordRotation(environment, admins, hasher, sessions,
                 new PlatformAdminProperties(DEFAULT_ADMIN_USERNAME, CONFIGURED_PASSWORD));
     }
 }
