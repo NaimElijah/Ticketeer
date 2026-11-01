@@ -112,8 +112,8 @@ class NotificationSessionListenerTest {
         try (LogCapture logs = LogCapture.of(NotificationSessionListener.class)) {
             destroyListener.sessionDestroy(destroyEventFor(memberSession));
 
-            assertEquals(List.of("SENT notifications not sent back on session end; they will not be shown again: "
-                    + "userId=" + SHARED_ID), logs.messagesAt(Level.WARN));
+            assertEquals(List.of("SENT notifications not sent back on session end; they stay SENT until another"
+                    + " of the member's sessions ends: userId=" + SHARED_ID), logs.messagesAt(Level.WARN));
             assertEquals(List.of(DataAccessResourceFailureException.class.getName()),
                     logs.throwableClassNamesAt(Level.WARN));
         }

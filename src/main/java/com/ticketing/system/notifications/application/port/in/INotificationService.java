@@ -133,6 +133,9 @@ public interface INotificationService {
      * @param userId the member whose session closed
      * @throws org.springframework.dao.DataAccessException if the store fails; the notifications already
      *         sent back stay PENDING, and the rest stay SENT
+     * @throws org.springframework.transaction.CannotCreateTransactionException if no connection can be
+     *         had for a notification's save; the notifications already sent back stay PENDING, and the
+     *         rest stay SENT
      */
     void revertSentToPending(int userId);
 }
