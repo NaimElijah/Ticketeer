@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.infrastructure.persistence.EventPersistence;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,6 +27,7 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
@@ -88,6 +90,27 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
         repository.save(buildEventInZone(1, ZoneId.of("Asia/Jerusalem")));
 
         assertThrows(IllegalTransactionStateException.class, () -> repository.findForSale(1));
+    }
+
+    // VenueMap's constructor refuses two zones named alike, but checkInvariants does not, on purpose: a map
+    // stored before #187 with "Cheap" and "CHEAP" must still pass its own check. Event.checkInvariants does
+    // not run that check yet; once it does, SystemIntegrityVerifier runs it on every stored event when the
+    // market opens. The second name is written in SQL, as such a row was, and read back through the adapter.
+    @Test
+    void GivenAStoredMapWhoseZonesAreNamedAlike_WhenLoaded_ThenItsInvariantsPass() {
+        repository.save(buildMultiZoneEvent(1));
+        entityManager.flush();
+        entityManager.getEntityManager()
+                .createNativeQuery("update inventory_zones set name = 'CHEAP' where name = 'Mid'")
+                .executeUpdate();
+        entityManager.clear();
+
+        Event loaded = repository.findById(1);
+
+        assertEquals(List.of("CHEAP", "Cheap", "Premium"), loaded.getVenueMap().getInventoryZones().stream()
+                .map(InventoryZone::getName).sorted().toList(),
+                "arrangement: the stored map holds two zones named alike");
+        assertDoesNotThrow(loaded.getVenueMap()::checkInvariants);
     }
 
     // Flush and clear so the zone is read back from events.time_zone, not the persistence context.

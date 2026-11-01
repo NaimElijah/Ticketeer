@@ -1,14 +1,10 @@
 package com.ticketing.system.unit.domain;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -147,30 +143,5 @@ public class VenueMapTest extends BaseDomainTest {
         assertThrows(IllegalArgumentException.class, () -> map.setLocation(null));
 
         assertEquals(LOCATION, map.getLocation());
-    }
-
-    // The rule sits in the constructor, not in checkInvariants, on purpose: SystemIntegrityVerifier checks
-    // every stored map at the market's open, and one stored before #187 with two zones named alike must
-    // not block it. The map is built here as JPA loads one: the no-arg constructor, then the fields.
-    @Test
-    void GivenAStoredMapWithTwoZonesNamedAlike_WhenItsInvariantsAreChecked_ThenTheyPass()
-            throws ReflectiveOperationException {
-        VenueMap stored = loadedAsJpaWould(
-                List.of(new StandingZone(1, "Floor", 10, 50), new StandingZone(2, "FLOOR", 10, 50)));
-
-        assertDoesNotThrow(stored::checkInvariants);
-    }
-
-    private static VenueMap loadedAsJpaWould(List<InventoryZone> zones) throws ReflectiveOperationException {
-        Constructor<VenueMap> jpaConstructor = VenueMap.class.getDeclaredConstructor();
-        jpaConstructor.setAccessible(true);
-        VenueMap map = jpaConstructor.newInstance();
-        Field zonesField = VenueMap.class.getDeclaredField("inventoryZones");
-        zonesField.setAccessible(true);
-        zonesField.set(map, new ArrayList<>(zones));
-        Field nextZoneIdField = VenueMap.class.getDeclaredField("nextZoneId");
-        nextZoneIdField.setAccessible(true);
-        nextZoneIdField.setInt(map, zones.size() + 1);
-        return map;
     }
 }

@@ -35,8 +35,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.BarcodeDTO;
-import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
@@ -175,7 +175,7 @@ class CheckoutServiceTest {
         checkoutService = new CheckoutService(
                 mockActiveOrderRepo,
                 mockEventRepo,
-                new InventoryService(mockEventRepo, companiesWithoutPolicies(),
+                new InventoryService(mockEventRepo, CompanyRepositories.everyCompanyWithoutAPolicy(),
                         TestTransactions.noOpManager()),
                 mockTicketRepo,
                 mockOrderReceiptRepo,
@@ -2858,12 +2858,5 @@ private AtomicBoolean trackReceiptSave() {
 
         assertEquals(first, retry);
         verify(mockPaymentGateway, times(1)).charge(any()); // no second charge
-    }
-
-    // Every company exists and has no purchase policy of its own; a test that needs one stubs it.
-    private static ProductionCompanyRepository companiesWithoutPolicies() {
-        ProductionCompanyRepository companies = mock(ProductionCompanyRepository.class);
-        when(companies.getCompanyById(anyInt())).thenReturn(mock(ProductionCompany.class));
-        return companies;
     }
 }

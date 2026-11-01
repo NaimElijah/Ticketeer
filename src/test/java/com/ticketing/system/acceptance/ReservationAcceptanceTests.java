@@ -1,7 +1,7 @@
 package com.ticketing.system.acceptance;
 
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
-import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -78,7 +78,7 @@ public class ReservationAcceptanceTests {
         // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
         // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, companiesWithoutPolicies(), TestTransactions.noOpManager());
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,
@@ -518,12 +518,5 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
         assertTrue(savedGuestOrder.isGuest());
         assertEquals(List.of("C1", "C2"),
                 savedGuestOrder.getItems().stream().map(CartLineItem::getSeatNumber).toList());
-    }
-
-    // Every company exists and has no purchase policy of its own; a test that needs one stubs it.
-    private static ProductionCompanyRepository companiesWithoutPolicies() {
-        ProductionCompanyRepository companies = mock(ProductionCompanyRepository.class);
-        when(companies.getCompanyById(anyInt())).thenReturn(mock(ProductionCompany.class));
-        return companies;
     }
 }

@@ -1,7 +1,7 @@
 package com.ticketing.system.unit.application;
 
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
-import com.ticketing.system.organization.domain.ProductionCompany;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
@@ -118,7 +118,7 @@ public class ReservationServiceTest {
         // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
         // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, companiesWithoutPolicies(), TestTransactions.noOpManager());
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,
@@ -1401,12 +1401,5 @@ public class ReservationServiceTest {
                 ZoneId.of("Asia/Jerusalem"),
                 acceptingPurchasePolicy(),
                 noDiscountPolicy());
-    }
-
-    // Every company exists and has no purchase policy of its own; a test that needs one stubs it.
-    private static ProductionCompanyRepository companiesWithoutPolicies() {
-        ProductionCompanyRepository companies = mock(ProductionCompanyRepository.class);
-        when(companies.getCompanyById(anyInt())).thenReturn(mock(ProductionCompany.class));
-        return companies;
     }
 }
