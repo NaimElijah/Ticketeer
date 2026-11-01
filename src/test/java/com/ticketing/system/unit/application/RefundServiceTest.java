@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,6 +25,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
@@ -364,6 +367,53 @@ class RefundServiceTest {
         }
     }
 
+    // ---- G3: the flips always get a transaction of their own (#187, ADR-018) ----
+    // Joining a caller's transaction, a failed flip would mark it rollback-only and undo the receipt's REFUNDED
+    // after the money is back, and a retry would refund again.
+
+    // The refund's own transaction too: joined to a caller's, that caller's later rollback would undo the
+    // receipt's REFUNDED after the gateway paid the money back.
+    @Test
+    void GivenOwnPaidOrder_WhenRequestRefund_ThenTheRefundAndTheTicketFlipsEachAskForANewTransaction() {
+        RecordingTransactionManager transactions = new RecordingTransactionManager();
+        RefundService transactionalService = new RefundService(authenticationService, orderReceiptRepository,
+                ticketRepository, paymentGateway, inventoryPort, transactions);
+        givenOwnPaidOrderOfTwoTicketsRefundedByTheGateway();
+
+        transactionalService.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
+
+        assertThat(transactions.propagationOf(1))
+                .as("the refund, the first transaction, must never join a caller's transaction")
+                .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        assertThat(transactions.propagationOf(2))
+                .as("the ticket flips, the second transaction, must never join a caller's transaction")
+                .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    // The flips can fail at their commit too, after every save went through: the refund still stands.
+    @Test
+    void GivenTheTicketFlipsCommitFails_WhenRequestRefund_ThenTheRefundStandsAnErrorNamesTheOrderAndNoStockIsReturned() {
+        RecordingTransactionManager transactions = new RecordingTransactionManager();
+        TransactionSystemException commitFailed = new TransactionSystemException("commit failed");
+        transactions.failCommitOf(2, commitFailed);
+        RefundService transactionalService = new RefundService(authenticationService, orderReceiptRepository,
+                ticketRepository, paymentGateway, inventoryPort, transactions);
+        OrderReceipt receipt = givenOwnPaidOrderOfTwoTicketsRefundedByTheGateway();
+
+        try (LogCapture logs = LogCapture.of(RefundService.class)) {
+            RefundResultDTO returned = transactionalService.requestRefund(VALID_TOKEN, ORDER_ID, "x");
+
+            assertThat(returned).as("the money is back, so the member is told the refund is done")
+                    .isEqualTo(gatewayResult());
+            assertThat(receipt.isFullyRefunded()).as("the receipt stays refunded").isTrue();
+            assertThat(logs.messagesAt(Level.ERROR))
+                    .as("an operator must learn which refunded order kept valid tickets")
+                    .anyMatch(message -> message.contains("order " + ORDER_ID));
+            assertThat(logs.throwableClassNamesAt(Level.ERROR)).contains(commitFailed.getClass().getName());
+            Mockito.verify(inventoryPort, Mockito.never()).returnSoldToStock(Mockito.anyList());
+        }
+    }
+
     // The member's own PAID order with two PAID standing tickets, which the gateway refunds.
     private OrderReceipt givenOwnPaidOrderOfTwoTicketsRefundedByTheGateway() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
@@ -382,14 +432,17 @@ class RefundServiceTest {
     }
 
     /**
-     * Records, in order, each transaction begun, committed and rolled back, numbered from 1, and each
-     * receipt save, ticket save and stock return with the number of the transaction it ran in (0: none).
+     * Records, in order, each transaction begun, committed and rolled back, numbered from 1, the propagation
+     * each asked for, and each receipt save, ticket save and stock return with the number of the transaction
+     * it ran in (0: none). A test can make one transaction's commit fail.
      */
     private static final class RecordingTransactionManager implements PlatformTransactionManager {
 
         private static final int NO_TRANSACTION = 0;
 
         private final List<String> events = new ArrayList<>();
+        private final Map<Integer, Integer> propagations = new HashMap<>();
+        private final Map<Integer, RuntimeException> commitFailures = new HashMap<>();
         private int begun;
         private int current = NO_TRANSACTION;
         private int commits;
@@ -398,15 +451,30 @@ class RefundServiceTest {
         @Override
         public TransactionStatus getTransaction(TransactionDefinition definition) {
             current = ++begun;
+            propagations.put(current, definition.getPropagationBehavior());
             events.add("begin " + current);
             return new SimpleTransactionStatus();
         }
 
         @Override
         public void commit(TransactionStatus status) {
+            RuntimeException failure = commitFailures.get(current);
+            if (failure != null) {
+                events.add("commit failed " + current);
+                current = NO_TRANSACTION;
+                throw failure;
+            }
             events.add("commit " + current);
             current = NO_TRANSACTION;
             commits++;
+        }
+
+        void failCommitOf(int transaction, RuntimeException failure) {
+            commitFailures.put(transaction, failure);
+        }
+
+        int propagationOf(int transaction) {
+            return propagations.get(transaction);
         }
 
         @Override
