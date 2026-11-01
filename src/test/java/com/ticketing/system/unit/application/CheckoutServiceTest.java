@@ -3202,11 +3202,15 @@ private AtomicBoolean trackReceiptSave() {
     // ---- G2: a lost race tells the buyer to try again, and the failure path tells the truth (#187) ----
 
     private static final String CART_CHANGED = "Your cart changed while you were paying. Please try again.";
+    private static final String PLACES_TAKEN =
+            "These places were taken while you were paying. Any charge is being refunded; please choose again.";
     private static final String NOTHING_CHANGED = "Checkout failed, nothing was changed";
 
-    // CheckoutPresenter shows a DomainException's message, so the buyer reads why and what to do.
+    // CheckoutPresenter shows a DomainException's message, so the buyer reads why and what to do. A race lost
+    // after the freeze rolls the checkout back: the holds are released, the cart is cleared and the charge is
+    // refunded, so "try again" would send the buyer to an empty cart.
     @Test
-    void GivenPhase3LosesEveryVersionRace_WhenCheckoutMember_ThenTheBuyerIsToldTheCartChangedAndToTryAgain() {
+    void GivenPhase3LosesEveryVersionRace_WhenCheckoutMember_ThenTheBuyerIsToldThePlacesWereTakenAndToChooseAgain() {
         arrangeOneStandingLineCheckout();
         doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
                 .when(mockOrderReceiptRepo).save(any());
@@ -3214,9 +3218,27 @@ private AtomicBoolean trackReceiptSave() {
         RuntimeException failed = assertThrows(RuntimeException.class,
                 () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
+        assertTheBuyerIsToldThePlacesWereTaken(failed);
+    }
+
+    @Test
+    void GivenPhase3LosesEveryVersionRace_WhenCheckoutGuest_ThenTheBuyerIsToldThePlacesWereTakenAndToChooseAgain() {
+        arrangeGuestStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlagGuest(1);
+        doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+                .when(mockOrderReceiptRepo).save(any());
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+        assertTheBuyerIsToldThePlacesWereTaken(failed);
+    }
+
+    private static void assertTheBuyerIsToldThePlacesWereTaken(RuntimeException failed) {
         ConcurrentReservationException cause = assertInstanceOf(ConcurrentReservationException.class,
-                failed.getCause(), "a lost race must reach the buyer as a concurrent change they can retry");
-        assertEquals(CART_CHANGED, cause.getMessage());
+                failed.getCause(), "a race lost after the freeze must reach the buyer as a concurrent change");
+        assertEquals(PLACES_TAKEN, cause.getMessage(),
+                "the checkout rolled back and its cart is gone, so the buyer must not be told to try again");
     }
 
     @Test

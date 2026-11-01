@@ -76,8 +76,12 @@ public class CheckoutService {
     private static final String FAILED_TICKETS_RETURNED = "Checkout failed, tickets returned to stock";
     private static final String FAILED_NOTHING_CHANGED = "Checkout failed, nothing was changed";
     // What a buyer reads when the checkout lost a concurrency race (CheckoutPresenter shows a DomainException's
-    // message): the buyer did nothing wrong, so trying again is the remedy.
+    // message). Lost at the freeze, the attempt changed nothing and the cart is intact, so trying again is the
+    // remedy. Lost later, the rollback has released the holds, cleared the cart and refunded any charge, so the
+    // buyer must choose again.
     private static final String CART_CHANGED = "Your cart changed while you were paying. Please try again.";
+    private static final String PLACES_TAKEN =
+            "These places were taken while you were paying. Any charge is being refunded; please choose again.";
 
     private final ActiveOrderRepository activeOrderRepository;
     // Retained ONLY for the Phase-3 event buyer-lock (lockEvents/unlockEvents): the lock must be held in
@@ -359,7 +363,7 @@ public class CheckoutService {
             // checkout failure handling will: reset CHECKOUT_IN_PROGRESS safely, refund
             // payment if needed, not release inventory without locks, not clear the cart
             // unsafely.
-            throw new RuntimeException(failureMessage(freeze), asBuyerFacing(e));
+            throw new RuntimeException(failureMessage(freeze), asBuyerFacing(e, freeze));
         } finally {
             if (frozenOrderKey != null) {
                 uncountAttemptInFlight(frozenOrderKey);
@@ -511,7 +515,7 @@ public class CheckoutService {
         } catch (Exception e) {
             handleGuestCheckoutFailure(order, orderLockKey, paymentResult, totalPrice,
                     inventorySaleConfirmed, freeze, e);
-            throw new RuntimeException(failureMessage(freeze), asBuyerFacing(e));
+            throw new RuntimeException(failureMessage(freeze), asBuyerFacing(e, freeze));
         } finally {
             if (frozenOrderKey != null) {
                 uncountAttemptInFlight(frozenOrderKey);
@@ -528,11 +532,13 @@ public class CheckoutService {
     }
 
     // A lost concurrency race (a version conflict, a deadlock, a lock wait) is Spring's, and no DomainException,
-    // so CheckoutPresenter would show generic text and log it as unexpected. Re-typed, the buyer is told to
-    // try again; the race stays its cause. The failure handler has already logged the original.
-    private static Exception asBuyerFacing(Exception failure) {
+    // so CheckoutPresenter would show generic text and log it as unexpected. Re-typed, the buyer is told what
+    // happened to the cart and what to do; the race stays its cause. The failure handler has already logged
+    // the original.
+    private static Exception asBuyerFacing(Exception failure, FreezeState freeze) {
         if (failure instanceof ConcurrencyFailureException lostRace) {
-            return new ConcurrentReservationException(CART_CHANGED, lostRace);
+            String message = freeze == FreezeState.SAVING ? CART_CHANGED : PLACES_TAKEN;
+            return new ConcurrentReservationException(message, lostRace);
         }
         return failure;
     }
