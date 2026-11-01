@@ -87,7 +87,7 @@ including `ui`. No backend module depends on either, and nothing depends on `boo
 add it to this paragraph in the same change, since nothing checks the two agree ([ADR-011](../docs/ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md)). Known
 exception, due to move behind an inbound port (#53): `identity`'s `AuthenticationService` calls
 `notifications`' `NotificationDispatchService` directly. The map allows that one class pair, nothing
-wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstrap's edges allow.
+wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstrap's edges allow; it delivers only to a live member, checked through `ui`'s `SessionIdentity`.
 
 | Module | Holds |
 |---|---|

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
@@ -17,10 +18,13 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.bootstrap.scheduling.ActiveUiRegistry;
 import com.ticketing.system.bootstrap.scheduling.NotificationPollingScheduler;
+import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import com.ticketing.system.ui.session.SessionIdentity;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.server.Command;
 
@@ -33,6 +37,7 @@ class NotificationPollingSchedulerTest {
 
     private static final int SHARED_ID = 1;
     private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
+    private static final String MEMBER_TOKEN = "member-jwt";
 
     private ActiveUiRegistry uiRegistry;
     private NotificationDispatchService dispatchService;
@@ -44,7 +49,12 @@ class NotificationPollingSchedulerTest {
         uiRegistry = mock(ActiveUiRegistry.class);
         dispatchService = mock(NotificationDispatchService.class);
         when(dispatchService.deliverPending(anyInt())).thenReturn(List.of());
-        scheduler = new NotificationPollingScheduler(uiRegistry, dispatchService);
+        // The member's token is live; an admin token never reaches the liveness check (SessionIdentity).
+        AuthenticationService authenticationService = mock(AuthenticationService.class);
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(SHARED_ID));
+        SessionIdentity sessionIdentity =
+                new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService));
+        scheduler = new NotificationPollingScheduler(uiRegistry, dispatchService, sessionIdentity);
     }
 
     @AfterEach
@@ -64,7 +74,7 @@ class NotificationPollingSchedulerTest {
 
     @Test
     void GivenMemberUi_WhenPoll_ThenTheMembersPendingNotificationsAreDelivered() {
-        AuthSession.storeAuth(new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
         registerOneUiRunningAccessInline();
 
         scheduler.poll();
