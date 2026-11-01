@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.presentation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
@@ -96,5 +98,23 @@ class CheckoutPresenterTest {
 
         assertInstanceOf(CheckoutPresenter.PayOutcome.OrderExpired.class, outcome,
                 "a cart checkout refuses as a state transition must read as an expired order, but was: " + outcome);
+    }
+
+    // ---- G2: a lost race reads as "your cart changed, try again" (#187) ----
+    // The presenter's half of CheckoutServiceTest's G2 tests: the service re-types a lost race into a
+    // ConcurrentReservationException, whose message the buyer then reads.
+
+    @Test
+    void GivenCheckoutLosesAConcurrencyRace_WhenPay_ThenTheBuyerIsToldTheCartChangedAndToTryAgain() {
+        String cartChanged = "Your cart changed while you were paying. Please try again.";
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Checkout failed, nothing was changed",
+                        new ConcurrentReservationException(cartChanged, new RuntimeException("version conflict"))));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        CheckoutPresenter.PayOutcome.Failure failure = assertInstanceOf(CheckoutPresenter.PayOutcome.Failure.class,
+                outcome, "a lost race must read as a failure with its own reason, but was: " + outcome);
+        assertEquals(cartChanged, failure.reason());
     }
 }

@@ -70,6 +70,15 @@ public class CheckoutService {
     // How many times Phase 3 runs before a lost concurrency race fails the checkout (see runPhase3).
     private static final int PHASE3_ATTEMPTS = 3;
 
+    // The failure wrapper's message. "Tickets returned to stock" is also given for a failure before the order
+    // was read, where nothing was held: tests and callers have long read that text on that path, so it was
+    // kept there (NaimElijah/Ticketeer#187). A failed freeze save changed nothing, and says so.
+    private static final String FAILED_TICKETS_RETURNED = "Checkout failed, tickets returned to stock";
+    private static final String FAILED_NOTHING_CHANGED = "Checkout failed, nothing was changed";
+    // What a buyer reads when the checkout lost a concurrency race (CheckoutPresenter shows a DomainException's
+    // message): the buyer did nothing wrong, so trying again is the remedy.
+    private static final String CART_CHANGED = "Your cart changed while you were paying. Please try again.";
+
     private final ActiveOrderRepository activeOrderRepository;
     // Retained ONLY for the Phase-3 event buyer-lock (lockEvents/unlockEvents): the lock must be held in
     // sales across the whole validate -> persist -> confirm section, spanning several port calls plus
@@ -350,7 +359,7 @@ public class CheckoutService {
             // checkout failure handling will: reset CHECKOUT_IN_PROGRESS safely, refund
             // payment if needed, not release inventory without locks, not clear the cart
             // unsafely.
-            throw new RuntimeException("Checkout failed, tickets returned to stock", e);
+            throw new RuntimeException(failureMessage(freeze), asBuyerFacing(e));
         } finally {
             if (frozenOrderKey != null) {
                 uncountAttemptInFlight(frozenOrderKey);
@@ -502,7 +511,7 @@ public class CheckoutService {
         } catch (Exception e) {
             handleGuestCheckoutFailure(order, orderLockKey, paymentResult, totalPrice,
                     inventorySaleConfirmed, freeze, e);
-            throw new RuntimeException("Checkout failed, tickets returned to stock", e);
+            throw new RuntimeException(failureMessage(freeze), asBuyerFacing(e));
         } finally {
             if (frozenOrderKey != null) {
                 uncountAttemptInFlight(frozenOrderKey);
@@ -514,10 +523,24 @@ public class CheckoutService {
         }
     }
 
-    // Releases the order lock at the end of a checkout. A failure here must not replace the checkout's own
-    // outcome, a committed purchase or the failure being thrown, so it is logged with its exception rather
-    // than thrown. The line names the order, never the lock key: a guest's embeds the session id, the
-    // guest's credential.
+    private static String failureMessage(FreezeState freeze) {
+        return freeze == FreezeState.SAVING ? FAILED_NOTHING_CHANGED : FAILED_TICKETS_RETURNED;
+    }
+
+    // A lost concurrency race (a version conflict, a deadlock, a lock wait) is Spring's, and no DomainException,
+    // so CheckoutPresenter would show generic text and log it as unexpected. Re-typed, the buyer is told to
+    // try again; the race stays its cause. The failure handler has already logged the original.
+    private static Exception asBuyerFacing(Exception failure) {
+        if (failure instanceof ConcurrencyFailureException lostRace) {
+            return new ConcurrentReservationException(CART_CHANGED, lostRace);
+        }
+        return failure;
+    }
+
+    // Releases the order lock, at the end of a checkout or of its rollback. A failure here must not replace
+    // the checkout's own outcome, a committed purchase or the failure being thrown, nor skip the refund that
+    // follows a rollback, so it is logged with its exception rather than thrown. The line names the order,
+    // never the lock key: a guest's embeds the session id, the guest's credential.
     private void unlockOrderKeepingTheOutcome(String orderLockKey, ActiveOrder order) {
         try {
             activeOrderRepository.unlock(orderLockKey);
@@ -1265,8 +1288,8 @@ public class CheckoutService {
         // as that change left them, so a rollback here would release seats this attempt never froze
         // (NaimElijah/Ticketeer#187).
         if (freeze == FreezeState.SAVING) {
-            log.info("Checkout rollback skipped: this attempt's freeze lost to a concurrent change. orderKey={}",
-                    orderKeyOf(fallbackOrder));
+            log.info("Checkout rollback skipped: this attempt's freeze save failed, so it changed nothing "
+                    + "(usually a concurrent cart change). orderKey={}", orderKeyOf(fallbackOrder));
             return;
         }
 
@@ -1310,7 +1333,7 @@ public class CheckoutService {
             log.error("Atomic checkout rollback failed for orderKey={}", orderKeyOf(fallbackOrder), rollbackFailure);
         } finally {
             unlockEvents(lockedEventIds);
-            activeOrderRepository.unlock(orderLockKey);
+            unlockOrderKeepingTheOutcome(orderLockKey, fallbackOrder);
         }
     }
 

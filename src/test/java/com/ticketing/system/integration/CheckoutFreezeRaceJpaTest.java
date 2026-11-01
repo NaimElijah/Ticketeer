@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -46,6 +48,7 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 
 /**
  * UC-15 / UC-16, the 3-phase checkout (#187): a checkout whose Phase-1 freeze loses to a cart edit
@@ -110,10 +113,11 @@ class CheckoutFreezeRaceJpaTest {
                 () -> reservationService.reserveForMember(member.token(), show.eventId(), show.zoneId(),
                         seat(SECOND_SEAT)));
 
-        assertThrows(RuntimeException.class,
+        RuntimeException failed = assertThrows(RuntimeException.class,
                 () -> checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD),
                 "arrangement: an attempt whose freeze lost to another tab must fail, as it priced a stale cart");
 
+        assertFailedAsAConcurrentChange(failed);
         assertNull(otherTabFailure.get(), "arrangement: the other tab's reservation must commit");
         verify(paymentGateway, never()).charge(any());
         assertCartAndHoldsKept(activeOrderRepository.getByUserId(member.userId()));
@@ -127,17 +131,30 @@ class CheckoutFreezeRaceJpaTest {
                 () -> reservationService.reserveForGuest(guestSessionId, show.eventId(), show.zoneId(),
                         seat(SECOND_SEAT)));
 
-        assertThrows(RuntimeException.class,
+        RuntimeException failed = assertThrows(RuntimeException.class,
                 () -> checkoutService.checkoutGuest(guestSessionId, GUEST_EMAIL, newIdempotencyKey(), CURRENCY, CARD,
                         SeatedShowFixture.MEMBER_AGE),
                 "arrangement: an attempt whose freeze lost to another tab must fail, as it priced a stale cart");
 
+        assertFailedAsAConcurrentChange(failed);
         assertNull(otherTabFailure.get(), "arrangement: the other tab's reservation must commit");
         verify(paymentGateway, never()).charge(any());
         assertCartAndHoldsKept(activeOrderRepository.getBySessionId(guestSessionId).orElse(null));
     }
 
     // ---- assertions and arrangement ----
+
+    // The lost freeze reaches the buyer as a concurrent change they can retry, not as an unexpected failure.
+    private static void assertFailedAsAConcurrentChange(Throwable failure) {
+        List<String> chain = new ArrayList<>();
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof ConcurrentReservationException) {
+                return;
+            }
+            chain.add(t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+        fail("the failure must carry a ConcurrentReservationException, but the cause chain was " + chain);
+    }
 
     // Each facet is reported on its own, so a partial fix shows what is left.
     private void assertCartAndHoldsKept(ActiveOrder order) {
