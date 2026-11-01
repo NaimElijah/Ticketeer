@@ -122,4 +122,17 @@ class SalesSummaryCalculatorTest {
         return new TicketRecordDTO(1, 1, eventId, 1, null, price, TicketStatus.PAID,
                 eventName, "Zone", "Co", "CONCERT", null, "Venue", null, false);
     }
+
+    // ---- Review follow-up 7g: a tie between two events' takings goes to the lower event id (#187) ----
+
+    // Without a rule the winner depends on the grouping's iteration order. Event 17 is met before event 2
+    // in the unordered grouping, so this case shows the rule rather than the order.
+    @Test
+    void GivenTwoEventsWithEqualTakings_WhenSummarised_ThenTheLowerEventIdIsTheTopEvent() {
+        PurchaseRecordDTO later = orderOf(lineOf(17, "Later Show", 200.0));
+        PurchaseRecordDTO earlier = orderOf(lineOf(2, "Earlier Show", 200.0));
+
+        assertEquals(Optional.of("Earlier Show"), calculator.summarize(List.of(later, earlier)).topEvent(),
+                "equal takings: the event with the lower id is the top event");
+    }
 }
