@@ -20,9 +20,9 @@ import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.UserRepositories;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +53,8 @@ public class ReservationAcceptanceTests {
     // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+    // The age of every member these tests reserve for; no event here has an age policy.
+    private static final int MEMBER_AGE = 30;
 
     private ReservationService reservationService;
 
@@ -84,7 +86,7 @@ public class ReservationAcceptanceTests {
                 activeOrderRepository,
                 sessionManager,
                 eventPublisher,
-                mock(UserRepository.class),
+                UserRepositories.everyMemberExistsAged(MEMBER_AGE),
                 marketGate,
                 mock(ISystemMetrics.class),
                 Clock.fixed(T0, ZoneOffset.UTC)

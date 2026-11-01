@@ -3,6 +3,7 @@ package com.ticketing.system.unit.infrastructure.external;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.net.ConnectException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -24,6 +26,7 @@ import com.ticketing.system.shared.config.WsepProperties;
 import com.ticketing.system.shared.dto.IssuanceRequestDTO;
 import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 import com.ticketing.system.shared.external.WsepCommunicationException;
 import com.ticketing.system.shared.external.WsepHttpClient;
 import com.ticketing.system.sales.adapter.out.wsep.WsepTicketIssuer;
@@ -143,6 +146,76 @@ class WsepTicketIssuerTest {
 
             assertThrows(TicketIssuanceFailedException.class, () -> realIssuer.issue(twoTicketRequest()),
                     "an HTTP 500 body must never become a ticket barcode");
+        }
+    }
+
+    // ---- Defect 8: an unreachable issuer's failure keeps the transport cause (#187) ----
+    // The checkout logs the failure with its stack trace; without the cause, the timeout or refused
+    // connection behind it is lost.
+
+    @Test
+    void GivenIssuerUnreachable_WhenIssue_ThenTheIssuanceFailureCarriesTheTransportCause() {
+        WsepCommunicationException transportFailure =
+                new WsepCommunicationException("refused", new ConnectException("Connection refused"));
+        when(http.post(any())).thenThrow(transportFailure);
+
+        TicketIssuanceFailedException failure = assertThrows(TicketIssuanceFailedException.class,
+                () -> issuer.issue(twoTicketRequest()));
+
+        assertSame(transportFailure, failure.getCause(),
+                "the issuance failure must keep the transport failure as its cause, but the cause was "
+                        + failure.getCause());
+    }
+
+    // ---- G1: an unreachable issuer is an outage, typed apart from a refusal (#187) ----
+    // CheckoutService logs an outage at ERROR and a refusal at WARN, and tells them apart by type.
+
+    @Test
+    void GivenIssuerUnreachable_WhenIssue_ThenTheFailureIsTypedAsUnreachable() {
+        when(http.post(any())).thenThrow(
+                new WsepCommunicationException("refused", new ConnectException("Connection refused")));
+
+        assertThrows(TicketIssuerUnreachableException.class, () -> issuer.issue(twoTicketRequest()),
+                "an issuer that could not be reached is an outage, typed as such");
+    }
+
+    @Test
+    void GivenIssuerRejectsTheIssuance_WhenIssue_ThenTheFailureIsNotTypedAsUnreachable() {
+        when(http.post(any())).thenReturn("-1");
+
+        TicketIssuanceFailedException failure = assertThrows(TicketIssuanceFailedException.class,
+                () -> issuer.issue(twoTicketRequest()));
+
+        assertFalse(failure instanceof TicketIssuerUnreachableException,
+                "an issuer that answered with a refusal was reachable, so it is no outage");
+    }
+
+    // ---- R2: the outage covers every answer that is no usable one, a non-2xx status included ----
+
+    @Test
+    void GivenIssuerUnreachable_WhenIssue_ThenTheMessageSaysUnreachableOrNoUsableAnswer() {
+        when(http.post(any())).thenThrow(
+                new WsepCommunicationException("refused", new ConnectException("Connection refused")));
+
+        TicketIssuerUnreachableException failure = assertThrows(TicketIssuerUnreachableException.class,
+                () -> issuer.issue(twoTicketRequest()));
+
+        assertTrue(failure.getMessage().contains("unreachable or gave no usable answer"),
+                "the outage covers more than an unreachable issuer, so its message must say so, but was: "
+                        + failure.getMessage());
+    }
+
+    // Through the real client and real HTTP: a non-2xx answer is an outage too, not a refusal.
+    @Test
+    void GivenIssuerAnswersHttp500_WhenIssue_ThenTheFailureIsTypedAsAnOutage() {
+        try (LoopbackHttpServer server = LoopbackHttpServer.start()) {
+            server.respondWith(500, "Internal Server Error");
+            WsepTicketIssuer realIssuer = new WsepTicketIssuer(
+                    new WsepHttpClient(new WsepProperties(
+                            server.baseUrl(), REQUEST_TIMEOUT_SECONDS, SINGLE_ATTEMPT, NO_BACKOFF_MS)), FIXED_CLOCK);
+
+            assertThrows(TicketIssuerUnreachableException.class, () -> realIssuer.issue(twoTicketRequest()),
+                    "an issuer that answered HTTP 500 gave no usable answer, which is an outage");
         }
     }
 }

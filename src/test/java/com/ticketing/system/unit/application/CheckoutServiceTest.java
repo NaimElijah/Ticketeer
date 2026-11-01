@@ -1,17 +1,20 @@
 package com.ticketing.system.unit.application;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -35,6 +38,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
+import ch.qos.logback.classic.Level;
+
 import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.BarcodeDTO;
 import com.ticketing.system.testutil.LogCapture;
@@ -54,8 +59,15 @@ import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.PaymentGatewayException;
+import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
@@ -906,7 +918,8 @@ void GivenPhase3LosesEveryVersionRace_WhenCheckout_ThenItFailsAfterThreeAttempts
     RuntimeException failed = assertThrows(RuntimeException.class,
             () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-    assertInstanceOf(ObjectOptimisticLockingFailureException.class, failed.getCause(),
+    // The race reaches the buyer re-typed as ConcurrentReservationException, which keeps it as its cause.
+    assertInstanceOf(ObjectOptimisticLockingFailureException.class, failed.getCause().getCause(),
             "the checkout fails on the race it kept losing, not on something else");
     verify(mockOrderReceiptRepo, times(3)).save(any());
     verify(mockPaymentGateway, times(1)).refund(PAYMENT_TRANSACTION_ID, 100.0);
@@ -2858,5 +2871,440 @@ private AtomicBoolean trackReceiptSave() {
 
         assertEquals(first, retry);
         verify(mockPaymentGateway, times(1)).charge(any()); // no second charge
+    }
+
+    // ---- Defect 2: a cart that cannot be checked out is refused as a state transition (#187) ----
+    // Checkout wraps every pre-flight failure in its generic checkout failure, so the reason is in the
+    // cause chain. CheckoutPresenter shows "Order expired" only for an InvalidStateTransitionException
+    // there; any other cause that is no domain exception reaches the buyer as "Something went wrong".
+
+    @Test
+    void GivenMemberCartWhoseHoldHasRunOut_WhenCheckoutMember_ThenRefusedAsAnInvalidStateTransitionAndNothingCharged() {
+        ActiveOrder expired = new ActiveOrder(USER_ID, NOW);
+        expired.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, aHoldStartThatHasRunOut());
+        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(expired);
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        assertCauseChainHasInvalidStateTransition(failed);
+        verify(mockPaymentGateway, never()).charge(any());
+    }
+
+    @Test
+    void GivenEmptyMemberCart_WhenCheckoutMember_ThenRefusedAsAnInvalidStateTransitionAndNothingCharged() {
+        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        assertCauseChainHasInvalidStateTransition(failed);
+        verify(mockPaymentGateway, never()).charge(any());
+    }
+
+    @Test
+    void GivenGuestCartWhoseHoldHasRunOut_WhenCheckoutGuest_ThenRefusedAsAnInvalidStateTransitionAndNothingCharged() {
+        givenValidGuestSession();
+        ActiveOrder expired = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
+        expired.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, aHoldStartThatHasRunOut());
+        givenGuestOrder(expired);
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+        assertCauseChainHasInvalidStateTransition(failed);
+        verify(mockPaymentGateway, never()).charge(any());
+    }
+
+    // A line added this long ago has run out at NOW, by a minute.
+    private static LocalDateTime aHoldStartThatHasRunOut() {
+        return NOW.minus(CartLineItem.getExpirationLimit()).minusMinutes(1);
+    }
+
+    private static void assertCauseChainHasInvalidStateTransition(Throwable failure) {
+        List<String> chain = new java.util.ArrayList<>();
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof InvalidStateTransitionException) {
+                return;
+            }
+            chain.add(t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+        fail("the refusal must carry an InvalidStateTransitionException, but the cause chain was " + chain);
+    }
+
+    // ---- Defect 3: an expected checkout failure is not logged at ERROR (#187) ----
+    // ERROR means actionable now (global CLAUDE.md, Observability): a declined card is the buyer's to
+    // fix, not an operator's; an unexpected failure still is.
+
+    @Test
+    void GivenCardDeclined_WhenCheckoutMember_ThenCheckoutServiceLogsNoError() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(PaymentGatewayException.class, failed.getCause(),
+                    "arrangement: the checkout fails on the decline");
+            assertEquals(List.of(), logs.messagesAt(Level.ERROR),
+                    "a declined card needs no operator, so CheckoutService must not log it at ERROR");
+        }
+    }
+
+    @Test
+    void GivenCardDeclined_WhenCheckoutGuest_ThenCheckoutServiceLogsNoError() {
+        arrangeGuestStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                    VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+            assertInstanceOf(PaymentGatewayException.class, failed.getCause(),
+                    "arrangement: the checkout fails on the decline");
+            assertEquals(List.of(), logs.messagesAt(Level.ERROR),
+                    "a declined card needs no operator, so CheckoutService must not log it at ERROR");
+        }
+    }
+
+    @Test
+    void GivenUnexpectedFailureFromAPort_WhenCheckoutMember_ThenCheckoutServiceLogsItAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new NullPointerException("gateway bug"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            List<String> errorThrowables = logs.throwableClassNamesAt(Level.ERROR);
+            assertTrue(errorThrowables.contains(NullPointerException.class.getName()),
+                    "an unexpected failure needs an operator, so it must be logged at ERROR with the exception, "
+                            + "but ERROR carried " + errorThrowables);
+        }
+    }
+
+    @Test
+    void GivenCardDeclined_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertLoggedAtWarnNotError(logs, PaymentGatewayException.class);
+        }
+    }
+
+    // A race lost on every Phase 3 attempt is an expected outcome under load, not an operator's problem.
+    @Test
+    void GivenPhase3LosesEveryVersionRace_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {
+        arrangeOneStandingLineCheckout();
+        doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+                .when(mockOrderReceiptRepo).save(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertLoggedAtWarnNotError(logs, ObjectOptimisticLockingFailureException.class);
+        }
+    }
+
+    // An attempt whose freeze save loses a version race leaves the order alone (CheckoutFreezeRaceJpaTest);
+    // the skipped rollback is a state transition worth one INFO line, and the lost race itself a WARN.
+    @Test
+    void GivenFreezeSaveLosesAVersionRace_WhenCheckoutMember_ThenTheSkippedRollbackIsLoggedAtInfoNamingTheOrder() {
+        arrangeMemberStandingCart();
+        String orderKey = mockActiveOrderRepo.getByUserId(USER_ID).getOrderKey();
+        doAnswer(invocation -> {
+            if (invocation.<ActiveOrder>getArgument(0).isCheckoutInProgress()) {
+                throw new ObjectOptimisticLockingFailureException(ActiveOrder.class, orderKey);
+            }
+            return null;
+        }).when(mockActiveOrderRepo).save(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            List<String> info = logs.messagesAt(Level.INFO);
+            assertTrue(info.stream().anyMatch(message -> message.contains(orderKey)),
+                    "the skipped rollback must be logged at INFO naming the order, but INFO carried " + info);
+            assertLoggedAtWarnNotError(logs, ObjectOptimisticLockingFailureException.class);
+            verify(mockPaymentGateway, never()).charge(any());
+        }
+    }
+
+    private static void assertLoggedAtWarnNotError(LogCapture logs, Class<? extends Throwable> failure) {
+        List<String> warnThrowables = logs.throwableClassNamesAt(Level.WARN);
+        List<String> errorThrowables = logs.throwableClassNamesAt(Level.ERROR);
+        assertAll(
+                () -> assertTrue(warnThrowables.contains(failure.getName()),
+                        "an expected checkout failure must be logged at WARN with the exception, but WARN carried "
+                                + warnThrowables),
+                () -> assertFalse(errorThrowables.contains(failure.getName()),
+                        "an expected checkout failure needs no operator, but ERROR carried " + errorThrowables));
+    }
+
+    // ---- G1: an outage is logged at ERROR, though it is a DomainException (#187) ----
+    // An unreachable payment gateway may have charged the card with no receipt and no refund (#99), and an
+    // unreachable issuer or external service needs an operator too. A refusal and a lost race stay WARN.
+
+    @Test
+    void GivenPaymentGatewayUnreachable_WhenCheckoutMember_ThenTheFailureIsLoggedAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayUnreachableException("timed out"));
+
+        assertCheckoutFailureLoggedAtErrorNotWarn(PaymentGatewayUnreachableException.class);
+    }
+
+    @Test
+    void GivenTicketIssuerUnreachable_WhenCheckoutMember_ThenTheFailureIsLoggedAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        when(mockTicketIssuer.issue(any())).thenThrow(
+                new TicketIssuerUnreachableException("ticket issuer unreachable", new RuntimeException("refused")));
+
+        assertCheckoutFailureLoggedAtErrorNotWarn(TicketIssuerUnreachableException.class);
+    }
+
+    @Test
+    void GivenExternalServiceUnavailable_WhenCheckoutMember_ThenTheFailureIsLoggedAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new ExternalServiceUnavailableException("no payment service"));
+
+        assertCheckoutFailureLoggedAtErrorNotWarn(ExternalServiceUnavailableException.class);
+    }
+
+    // Guard: an issuer that answered with a refusal was reachable, so its failure stays WARN.
+    @Test
+    void GivenTicketIssuerRefuses_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        when(mockTicketIssuer.issue(any())).thenThrow(new TicketIssuanceFailedException("rejected by the issuer"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertLoggedAtWarnNotError(logs, TicketIssuanceFailedException.class);
+        }
+    }
+
+    private void assertCheckoutFailureLoggedAtErrorNotWarn(Class<? extends Throwable> outage) {
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(outage, failed.getCause(), "arrangement: the checkout fails on the outage");
+            List<String> errorThrowables = logs.throwableClassNamesAt(Level.ERROR);
+            List<String> warnThrowables = logs.throwableClassNamesAt(Level.WARN);
+            assertAll(
+                    () -> assertTrue(errorThrowables.contains(outage.getName()),
+                            "an outage needs an operator, so it must be logged at ERROR with the exception, "
+                                    + "but ERROR carried " + errorThrowables),
+                    () -> assertFalse(warnThrowables.contains(outage.getName()),
+                            "an outage must not be logged as an expected failure, but WARN carried "
+                                    + warnThrowables));
+        }
+    }
+
+    // One standing ticket of a real event, held by the member's real cart.
+    private void arrangeMemberStandingCart() {
+        StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
+        Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+        ActiveOrder order = new ActiveOrder(USER_ID, NOW);
+        order.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+        zone.reserve(InventorySelection.standing(1, order.getOrderKey()));
+        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(order);
+        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+    }
+
+    // One standing ticket of a real event, held by a live guest's real cart.
+    private void arrangeGuestStandingCart() {
+        givenValidGuestSession();
+        StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
+        Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+        ActiveOrder order = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
+        order.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+        zone.reserve(InventorySelection.standing(1, order.getOrderKey()));
+        givenGuestOrder(order);
+        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+    }
+
+    // ---- Defect 9: a failed order unlock in checkout's finally is logged, not swallowed (#187) ----
+    // On success the order is unlocked twice: after Phase 1, and in finally. A failed checkout also
+    // unlocks it in its rollback, between the two.
+
+    @Test
+    void GivenFinalOrderUnlockFails_WhenCheckoutMemberSucceeds_ThenThePurchaseStandsAndTheFailureIsLoggedAtWarn() {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        doNothing().doThrow(new IllegalMonitorStateException("order lock not held"))
+                .when(mockActiveOrderRepo).unlock(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            CheckoutResultDTO result = checkoutService.checkoutMember(
+                    VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+            assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId(),
+                    "a failed unlock after the sale committed must not undo the purchase");
+            assertUnlockFailureLoggedAtWarn(logs);
+            verify(mockActiveOrderRepo, times(2)).unlock(any());
+        }
+    }
+
+    @Test
+    void GivenFinalOrderUnlockFails_WhenCheckoutGuestSucceeds_ThenThePurchaseStandsAndTheFailureIsLoggedAtWarn() {
+        arrangeGuestStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlagGuest(1);
+        doNothing().doThrow(new IllegalMonitorStateException("order lock not held"))
+                .when(mockActiveOrderRepo).unlock(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            CheckoutResultDTO result = checkoutService.checkoutGuest(
+                    VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE);
+
+            assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId(),
+                    "a failed unlock after the sale committed must not undo the purchase");
+            assertUnlockFailureLoggedAtWarn(logs);
+            verify(mockActiveOrderRepo, times(2)).unlock(any());
+        }
+    }
+
+    @Test
+    void GivenFinalOrderUnlockFails_WhenCheckoutMemberIsDeclined_ThenTheDeclineIsTheOutcomeAndTheFailureIsLoggedAtWarn() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+        doNothing().doNothing().doThrow(new IllegalMonitorStateException("order lock not held"))
+                .when(mockActiveOrderRepo).unlock(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(PaymentGatewayException.class, failed.getCause(),
+                    "a failed unlock must not replace the checkout's own failure");
+            assertUnlockFailureLoggedAtWarn(logs);
+            verify(mockActiveOrderRepo, times(3)).unlock(any());
+        }
+    }
+
+    private static void assertUnlockFailureLoggedAtWarn(LogCapture logs) {
+        List<String> warnThrowables = logs.throwableClassNamesAt(Level.WARN);
+        assertTrue(warnThrowables.contains(IllegalMonitorStateException.class.getName()),
+                "a failed order unlock must be logged at WARN with its exception, but WARN carried "
+                        + warnThrowables);
+    }
+
+    // ---- G2: a lost race tells the buyer to try again, and the failure path tells the truth (#187) ----
+
+    private static final String CART_CHANGED = "Your cart changed while you were paying. Please try again.";
+    private static final String PLACES_TAKEN =
+            "These places were taken while you were paying. Any charge is being refunded; please choose again.";
+    private static final String NOTHING_CHANGED = "Checkout failed, nothing was changed";
+
+    // CheckoutPresenter shows a DomainException's message, so the buyer reads why and what to do. A race lost
+    // after the freeze rolls the checkout back: the holds are released, the cart is cleared and the charge is
+    // refunded, so "try again" would send the buyer to an empty cart.
+    @Test
+    void GivenPhase3LosesEveryVersionRace_WhenCheckoutMember_ThenTheBuyerIsToldThePlacesWereTakenAndToChooseAgain() {
+        arrangeOneStandingLineCheckout();
+        doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+                .when(mockOrderReceiptRepo).save(any());
+
+        RuntimeException failed = assertThrows(RuntimeException.class,
+                () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        assertTheBuyerIsToldThePlacesWereTaken(failed);
+    }
+
+    @Test
+    void GivenPhase3LosesEveryVersionRace_WhenCheckoutGuest_ThenTheBuyerIsToldThePlacesWereTakenAndToChooseAgain() {
+        arrangeGuestStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlagGuest(1);
+        doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+                .when(mockOrderReceiptRepo).save(any());
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+        assertTheBuyerIsToldThePlacesWereTaken(failed);
+    }
+
+    private static void assertTheBuyerIsToldThePlacesWereTaken(RuntimeException failed) {
+        ConcurrentReservationException cause = assertInstanceOf(ConcurrentReservationException.class,
+                failed.getCause(), "a race lost after the freeze must reach the buyer as a concurrent change");
+        assertEquals(PLACES_TAKEN, cause.getMessage(),
+                "the checkout rolled back and its cart is gone, so the buyer must not be told to try again");
+    }
+
+    @Test
+    void GivenFreezeSaveLosesAVersionRace_WhenCheckoutMember_ThenTheFailureSaysNothingChangedAndToTryAgain() {
+        arrangeMemberStandingCart();
+        String orderKey = mockActiveOrderRepo.getByUserId(USER_ID).getOrderKey();
+        loseTheFreezeSave(orderKey);
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertNothingChangedAndCartChanged(failed);
+            List<String> info = logs.messagesAt(Level.INFO);
+            assertTrue(info.stream().anyMatch(message -> message.contains("changed nothing")),
+                    "the skipped rollback must say the failed freeze changed nothing, but INFO carried " + info);
+        }
+    }
+
+    @Test
+    void GivenFreezeSaveLosesAVersionRace_WhenCheckoutGuest_ThenTheFailureSaysNothingChangedAndToTryAgain() {
+        arrangeGuestStandingCart();
+        String orderKey = mockActiveOrderRepo.getBySessionId(VALID_GUEST_SID).orElseThrow().getOrderKey();
+        loseTheFreezeSave(orderKey);
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+        assertNothingChangedAndCartChanged(failed);
+    }
+
+    // The rollback's own unlock runs before the refund: if it fails, the refund must still happen.
+    @Test
+    void GivenRollbackUnlockFails_WhenCheckoutFailsAfterTheCharge_ThenTheChargeIsStillRefunded() {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        when(mockTicketIssuer.issue(any())).thenThrow(new TicketIssuanceFailedException("rejected by the issuer"));
+        doNothing().doThrow(new IllegalMonitorStateException("order lock not held")).doNothing()
+                .when(mockActiveOrderRepo).unlock(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(TicketIssuanceFailedException.class, failed.getCause(),
+                    "a failed unlock must not replace the checkout's own failure");
+            verify(mockPaymentGateway).refund(eq(PAYMENT_TRANSACTION_ID), anyDouble());
+            assertUnlockFailureLoggedAtWarn(logs);
+            verify(mockActiveOrderRepo, times(3)).unlock(any());
+        }
+    }
+
+    private void loseTheFreezeSave(String orderKey) {
+        doAnswer(invocation -> {
+            if (invocation.<ActiveOrder>getArgument(0).isCheckoutInProgress()) {
+                throw new ObjectOptimisticLockingFailureException(ActiveOrder.class, orderKey);
+            }
+            return null;
+        }).when(mockActiveOrderRepo).save(any());
+    }
+
+    private static void assertNothingChangedAndCartChanged(RuntimeException failed) {
+        assertEquals(NOTHING_CHANGED, failed.getMessage(),
+                "the attempt's freeze save failed, so it changed nothing and returned nothing to stock");
+        ConcurrentReservationException cause = assertInstanceOf(ConcurrentReservationException.class,
+                failed.getCause(), "a lost freeze must reach the buyer as a concurrent change they can retry");
+        assertEquals(CART_CHANGED, cause.getMessage());
     }
 }

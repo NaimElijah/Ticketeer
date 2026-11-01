@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -521,10 +522,17 @@ public class ActiveOrder implements InvariantChecked {
 
 
     /**
-     * Guest→Member promotion: claim this cart for a user. Throws if the cart
-     * already belongs to a different user.
+     * Guest→Member promotion: claim this cart for a user.
+     *
+     * @param newUserId the member's user id
+     * @throws IllegalArgumentException if {@code newUserId} is below 1, which no user has; the cart is
+     *     left as it was
+     * @throws IllegalStateException if the cart already belongs to a different user
      */
     public void attachToUser(int newUserId) {
+        if (newUserId < 1) {
+            throw new IllegalArgumentException("userId must be positive");
+        }
         if (this.userId != null && this.userId != newUserId) {
             throw new IllegalStateException("cart already belongs to user " + this.userId);
         }
@@ -553,20 +561,29 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
-    /** Checks the order can be checked out at {@code now}: not already in checkout, not empty, no hold run out. */
+    /**
+     * Checks the order can be checked out at {@code now}: not already in checkout, not empty, no hold run out.
+     *
+     * @param now the current UTC wall time, against which each line's hold is checked
+     * @return {@code true}; every refusal throws instead
+     * @throws IllegalStateException if the order is already in checkout
+     * @throws InvalidStateTransitionException if the order is empty or a line's hold has run out
+     */
     public boolean validateCanCheckout(LocalDateTime now) {
         synchronized (itemsLock) {
+            // Stays an IllegalStateException: SecondCheckoutAttemptJpaTest pins it as the cause of a second
+            // attempt's failure, and retyping it is tracked as NaimElijah/Ticketeer#240.
             if (status == ActiveOrderStatus.CHECKOUT_IN_PROGRESS) {
                 throw new IllegalStateException("Order is already being checked out");
             }
 
             if (items.isEmpty()) {
-                throw new IllegalStateException("Cannot checkout an empty order");
+                throw new InvalidStateTransitionException("Cannot checkout an empty order");
             }
 
             for (CartLineItem item : items) {
                 if (item.isExpired(now)) {
-                    throw new IllegalStateException("Cannot checkout because one or more tickets expired");
+                    throw new InvalidStateTransitionException("Cannot checkout because one or more tickets expired");
                 }
             }
 
