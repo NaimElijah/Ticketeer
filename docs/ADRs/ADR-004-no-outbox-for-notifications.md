@@ -1,6 +1,6 @@
 # ADR-004: Deliver notifications after commit on a background thread, without an outbox
 
-- **Status:** Accepted
+- **Status:** Accepted; extended by [ADR-019](ADR-019-one-notice-per-business-event.md)
 - **Date:** 2026-10-18
 - **Issue:** #29 (dispatch notifications after commit, off the request thread)
 

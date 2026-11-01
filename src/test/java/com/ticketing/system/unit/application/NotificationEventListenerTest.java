@@ -32,7 +32,7 @@ class NotificationEventListenerTest {
         verifyNoMoreInteractions(notificationService);
     }
 
-    // One outreach is one notice and one call, so its notifications are stored together (#187).
+    // One outreach is one notice and one call to the port, whatever its recipient count (ADR-019, #187).
     @Test
     void GivenOutreachSentNotice_WhenOn_ThenEveryRecipientIsNotifiedInOneCall() {
         List<OutreachSentNotice.Recipient> recipients = List.of(

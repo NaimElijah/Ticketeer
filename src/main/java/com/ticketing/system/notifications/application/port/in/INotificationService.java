@@ -52,8 +52,9 @@ public interface INotificationService {
 
     /**
      * Raises one DIRECT_MESSAGE notification per recipient of an admin outreach, each reading as
-     * {@link #notifyNewMessage} would for that recipient and conversation, and stores them all in one
-     * transaction: a failure stores none of them.
+     * {@link #notifyNewMessage} would for that recipient and conversation. Each is stored on its own
+     * transaction, in the recipients' order (ADR-019). A store failure stops the fan-out and propagates:
+     * the notifications already stored stay, and the rest are not stored.
      *
      * @param recipients  every recipient and the conversation opened for them, at least one
      * @param senderLabel human-readable origin, e.g. "a system admin"

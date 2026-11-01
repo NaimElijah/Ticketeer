@@ -130,9 +130,9 @@ public class NotificationEventListener {
     }
 
     /**
-     * Raises a direct-message notification for every recipient of an admin outreach, all stored in
-     * one transaction. The send arrives as one notice, so it takes one slot in the {@code notify-}
-     * queue however many recipients it has (#187).
+     * Raises a direct-message notification for every recipient of an admin outreach, each stored on its
+     * own transaction. The send arrives as one notice, so it takes one slot in the {@code notify-}
+     * queue however many recipients it has (ADR-019, #187).
      */
     @TransactionalEventListener(fallbackExecution = true)
     public void on(OutreachSentNotice notice) {

@@ -10,7 +10,8 @@ import java.util.List;
  *
  * <p>One notice per send, not one per recipient: notices wait in the {@code notify-} executor's
  * bounded queue, which drops what does not fit (ADR-004), so a send to more members than the queue
- * holds would lose their alerts and other users' (#187).
+ * holds would lose their alerts and other users' (#187). The consumer stores each recipient's alert on
+ * its own transaction ({@code docs/ADRs/ADR-019-one-notice-per-business-event.md}).
  *
  * @param recipients  every recipient of the send, at least one; copied, so later changes to the
  *                    caller's list do not reach the notice

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
@@ -208,15 +209,17 @@ public class NotificationService implements INotificationService {
                 LocalDateTime.now(clock)));
     }
 
+    // NOT_SUPPORTED overrides the class's transaction, so each dispatch commits on its own through the
+    // dispatcher's proxy: one transaction per alert, not one for the whole send (ADR-019).
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void notifyOutreach(List<OutreachSentNotice.Recipient> recipients, String senderLabel, String subject,
             String snippet) {
         LocalDateTime now = LocalDateTime.now(clock);
-        List<Notification> notifications = recipients.stream()
-                .map(r -> newMessageNotification(r.recipientUserId(), r.conversationId(), senderLabel, subject,
-                        snippet, now))
-                .toList();
-        dispatcher.dispatchAll(notifications);
+        for (OutreachSentNotice.Recipient r : recipients) {
+            dispatcher.dispatch(newMessageNotification(r.recipientUserId(), r.conversationId(), senderLabel,
+                    subject, snippet, now));
+        }
     }
 
     private static Notification newMessageNotification(int recipientUserId, String conversationId,

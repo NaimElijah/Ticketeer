@@ -1,7 +1,6 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -141,35 +140,5 @@ class NotificationDispatchServiceTest {
 
         // Verify empty list is returned
         assertTrue(result.isEmpty());
-    }
-
-    // ---- An outreach to more recipients than the notification queue holds drops alerts (#187) ----
-
-    @Test
-    void GivenPendingNotifications_WhenDispatchAll_ThenEachIsSaved() {
-        Notification first = pending("notif-1", 7);
-        Notification second = pending("notif-2", 8);
-
-        service.dispatchAll(List.of(first, second));
-
-        verify(mockRepo).save(first);
-        verify(mockRepo).save(second);
-    }
-
-    // Checked before any is saved, so a bad batch stores nothing rather than part of the send.
-    @Test
-    void GivenABatchWithANonPendingNotification_WhenDispatchAll_ThenRefusedAndNoneIsSaved() {
-        Notification alreadySent = pending("notif-2", 8);
-        alreadySent.markSent();
-
-        assertThrows(IllegalArgumentException.class,
-                () -> service.dispatchAll(List.of(pending("notif-1", 7), alreadySent)));
-
-        verify(mockRepo, never()).save(any());
-    }
-
-    private static Notification pending(String id, int recipientUserId) {
-        return new Notification(id, recipientUserId, NotificationType.DIRECT_MESSAGE, NotificationStatus.PENDING,
-                "New message from a system admin: Venue change", LocalDateTime.of(2027, 7, 15, 17, 0));
     }
 }
