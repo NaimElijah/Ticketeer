@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -592,12 +593,8 @@ public class MessagingService {
         switch (otherType) {
             case MEMBER -> publishNewMessage(otherId, conversation.getConversationId(), label,
                     conversation.getSubject(), body);
-            case COMPANY -> {
-                ProductionCompany company = tryGetCompany(otherId);
-                if (company != null) {
-                    notifyCompanyOwners(company, conversation, label, body);
-                }
-            }
+            case COMPANY -> tryGetCompany(otherId)
+                    .ifPresent(company -> notifyCompanyOwners(company, conversation, label, body));
             // Admins are never notified (see class comment); the reply shows in their inbox or queue.
             case ADMIN, ADMIN_GROUP -> { }
             default -> { /* SYSTEM — no single recipient to notify */ }
@@ -674,14 +671,14 @@ public class MessagingService {
                 .orElseThrow(() -> new ConversationNotFoundException(conversationId));
     }
 
-    // Company lookup for a notification fan-out: null when the company no longer exists, so a reply to
+    // Company lookup for a notification fan-out: empty when the company no longer exists, so a reply to
     // a deleted company's inquiry is still stored, with no one to notify. A store failure propagates,
     // as in resolveDisplayName.
-    private ProductionCompany tryGetCompany(int companyId) {
+    private Optional<ProductionCompany> tryGetCompany(int companyId) {
         try {
-            return companyRepository.getCompanyById(companyId);
+            return Optional.of(companyRepository.getCompanyById(companyId));
         } catch (CompanyNotFoundException e) {
-            return null;
+            return Optional.empty();
         }
     }
 
