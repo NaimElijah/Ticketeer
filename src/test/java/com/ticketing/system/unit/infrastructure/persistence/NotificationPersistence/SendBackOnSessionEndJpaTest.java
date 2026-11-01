@@ -8,6 +8,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,9 +82,12 @@ class SendBackOnSessionEndJpaTest {
         assertThrows(DataAccessResourceFailureException.class,
                 () -> notificationService.revertSentToPending(RECIPIENT));
 
-        assertEquals(NotificationStatus.PENDING, repository.findById(FIRST).getStatus(),
+        // The read has no ORDER BY, so either row may be the one saved first: exactly one is PENDING.
+        Map<NotificationStatus, Long> statuses = Stream.of(FIRST, SECOND)
+                .map(id -> repository.findById(id).getStatus())
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+        assertEquals(Map.of(NotificationStatus.PENDING, 1L, NotificationStatus.SENT, 1L), statuses,
                 "the row sent back before the failure should stay PENDING, so the next delivery shows it");
-        assertEquals(NotificationStatus.SENT, repository.findById(SECOND).getStatus());
     }
 
     @TestConfiguration
