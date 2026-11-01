@@ -40,7 +40,7 @@ class MarketSelfHealSchedulerTest {
         order.verify(admin).refreshServiceReachability();
     }
 
-    // A probe can take a minute against a hanging WSEP: one per tick is enough.
+    // A probe takes about two minutes against a hanging WSEP: one per tick is enough.
     @Test
     void GivenEnsureMarketOpenProbed_WhenTheTickRuns_ThenItDoesNotProbeAgain() {
         SystemAdminService admin = mock(SystemAdminService.class);

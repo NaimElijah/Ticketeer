@@ -14,8 +14,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * annotation the scheduled method would never fire in production.
  *
  * <p>The market self-heal ({@link MarketSelfHealScheduler}) runs on a single-thread scheduler of its
- * own: its WSEP probe can take about a minute while WSEP hangs, and on the shared scheduler that would
- * delay every sweeper. Every other {@code @Scheduled} method runs on {@code taskScheduler}.
+ * own: while WSEP hangs, its probe takes about two minutes (two handshakes of up to three 20-second
+ * attempts each), and on the shared scheduler that would delay every sweeper. Every other
+ * {@code @Scheduled} method runs on {@code taskScheduler}.
  *
  * <p>Disabled in the {@code test} profile so acceptance tests don't kick
  * off a real scheduler thread (tests drive the sweep method directly).

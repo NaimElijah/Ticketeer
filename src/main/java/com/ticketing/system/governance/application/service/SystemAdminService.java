@@ -70,7 +70,8 @@ public class SystemAdminService {
     private volatile LocalDateTime lastInitializedAt;
     private volatile LocalDateTime lastOpenedAt;
     // The last WSEP probe (init, open, every self-heal tick). The market view reports it instead of
-    // probing: a probe can take a minute against a hanging WSEP, and the dashboard polls every 5 s.
+    // probing: against a hanging WSEP a probe takes about two minutes (two handshakes of up to three
+    // 20-second attempts each), and the dashboard polls every 5 s.
     // One immutable snapshot, so a reader never pairs one probe's flags with another's time.
     private record Reachability(boolean payment, boolean issuer, LocalDateTime probedAt) { }
     private static final Reachability NOT_CHECKED = new Reachability(false, false, null);
@@ -268,9 +269,10 @@ public class SystemAdminService {
      * market view. Called by the self-heal scheduler on every tick in which {@link #ensureMarketOpen()}
      * did not probe, so the view stays current while the market is OPEN or CLOSED.
      *
-     * <p>Deliberately not synchronized: a probe can take a minute against a hanging WSEP, and neither
-     * a close nor a view may wait for it. Two probes that race both record a fresh result. Never
-     * throws: an unreachable service is recorded as such.
+     * <p>Deliberately not synchronized: against a hanging WSEP a probe takes about two minutes (two
+     * handshakes of up to three 20-second attempts each), and neither a close nor a view may wait for
+     * it. Two probes that race both record a fresh result. Never throws: an unreachable service is
+     * recorded as such.
      */
     public void refreshServiceReachability() {
         probeServices();

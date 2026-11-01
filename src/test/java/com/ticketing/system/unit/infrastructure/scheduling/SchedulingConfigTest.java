@@ -17,7 +17,7 @@ import com.ticketing.system.bootstrap.scheduling.SchedulingConfig;
 
 /**
  * The market self-heal runs on a scheduler of its own (#187 review follow-up 2): its WSEP probe can take
- * about a minute while WSEP hangs, and on the shared scheduler thread that would delay every sweeper.
+ * about two minutes while WSEP hangs, and on the shared scheduler thread that would delay every sweeper.
  * Proven by wiring, not timing: the self-heal names its own single-thread scheduler, and every other
  * {@code @Scheduled} method still resolves Boot's default one.
  */

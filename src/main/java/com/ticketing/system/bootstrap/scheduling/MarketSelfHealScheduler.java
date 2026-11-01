@@ -34,7 +34,8 @@ public class MarketSelfHealScheduler {
 
     /**
      * One self-heal tick: tries to open the market, then refreshes the WSEP reachability unless that
-     * probed. Runs on its own scheduler, since a probe can take about a minute while WSEP hangs.
+     * probed. Runs on its own scheduler, since a probe takes about two minutes while WSEP hangs (two
+     * handshakes of up to three 20-second attempts each).
      */
     @Scheduled(fixedDelayString = "${market.self-heal-delay-ms:30000}",
             scheduler = SchedulingConfig.MARKET_SELF_HEAL_TASK_SCHEDULER)

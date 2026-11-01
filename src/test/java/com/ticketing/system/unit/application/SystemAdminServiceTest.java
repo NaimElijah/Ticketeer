@@ -573,7 +573,7 @@ class SystemAdminServiceTest {
 
     // ---- Defect 3: the market state view probes WSEP on every call (#187) ----
 
-    // The dashboard polls the view every 5 s, and a probe can take a minute against a hanging WSEP:
+    // The dashboard polls the view every 5 s, and against a hanging WSEP a probe takes about two minutes:
     // the view and the synchronized close report the result of the last init, open or self-heal probe.
     @Test
     void GivenReadyPlatform_WhenViewMarketState_ThenNoConnectionCheckIsMade() {
