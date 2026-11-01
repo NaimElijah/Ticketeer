@@ -8,4 +8,12 @@ public class MissingDefaultAdminException extends DomainException {
     public MissingDefaultAdminException(String reason) {
         super("Could not establish default System Admin: " + reason);
     }
+
+    /**
+     * @param reason what went wrong, without credentials: the message is logged
+     * @param cause the failure that kept the default admin from being created
+     */
+    public MissingDefaultAdminException(String reason, Throwable cause) {
+        super("Could not establish default System Admin: " + reason, cause);
+    }
 }

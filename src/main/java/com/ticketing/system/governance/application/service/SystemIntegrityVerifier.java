@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -143,21 +144,24 @@ public class SystemIntegrityVerifier {
     // Re-run every loaded aggregate's own invariant. A row persisted (or hand-edited) into a state
     // that breaks its aggregate invariant blocks the market from opening.
     private void revalidateLoadedAggregates() {
-        revalidateEach(userRepository.findAll(), "user");
-        revalidateEach(companyRepository.findAll(), "company");
-        revalidateEach(eventRepository.findAll(), "event");
-        revalidateEach(activeOrderRepository.findAll(), "active order");
+        revalidateEach(userRepository.findAll(), "user", User::getUserId);
+        revalidateEach(companyRepository.findAll(), "company", ProductionCompany::getCompanyId);
+        revalidateEach(eventRepository.findAll(), "event", Event::getId);
+        revalidateEach(activeOrderRepository.findAll(), "active order", ActiveOrder::getOrderKey);
     }
 
-    private void revalidateEach(List<? extends InvariantChecked> aggregates, String type) {
-        for (InvariantChecked aggregate : aggregates) {
+    // The id names the row to repair; the cause keeps the invariant's own stack trace.
+    private <T extends InvariantChecked> void revalidateEach(List<T> aggregates, String type,
+                                                             Function<? super T, ?> idOf) {
+        for (T aggregate : aggregates) {
             try {
                 aggregate.checkInvariants();
             } catch (RuntimeException e) {
                 // checkInvariants throws a plain IllegalStateException; wrap it as a DomainException so
                 // PlatformInitializationRunner's catch leaves the platform uninitialized gracefully.
                 throw new SystemIntegrityViolationException(
-                        "loaded " + type + " violates its invariant: " + e.getMessage());
+                        "loaded " + type + " " + idOf.apply(aggregate) + " violates its invariant: "
+                                + e.getMessage(), e);
             }
         }
     }

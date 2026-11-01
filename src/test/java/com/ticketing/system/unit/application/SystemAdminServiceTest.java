@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -738,4 +739,17 @@ class SystemAdminServiceTest {
         }
     }
 
+    // ---- Defect 6: causes are dropped (#187) ----
+
+    @Test
+    void GivenDefaultAdminSaveFails_WhenInitializePlatform_ThenMissingDefaultAdminCarriesTheCause() {
+        when(adminRepository.existsAny()).thenReturn(false);
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("database unavailable");
+        doThrow(failure).when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        MissingDefaultAdminException thrown = assertThrows(MissingDefaultAdminException.class, svc::initializePlatform);
+
+        assertSame(failure, thrown.getCause(), "the save failure must be kept as the cause");
+    }
 }

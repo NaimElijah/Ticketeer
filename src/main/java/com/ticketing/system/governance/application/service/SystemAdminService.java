@@ -166,7 +166,7 @@ public class SystemAdminService {
                 log.info("The default System Admin was created concurrently; continuing.");
                 return;
             }
-            throw new MissingDefaultAdminException(e.getMessage());
+            throw new MissingDefaultAdminException(e.getMessage(), e);
         }
 
         // Confirm the write actually took — a silent persistence failure must fail init.

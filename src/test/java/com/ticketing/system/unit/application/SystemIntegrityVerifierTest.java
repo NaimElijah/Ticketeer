@@ -1,7 +1,9 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
@@ -12,6 +14,7 @@ import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -269,4 +272,49 @@ class SystemIntegrityVerifierTest {
         assertFalse(message.contains(SESSION_ID_MARKER), "a session id must not reach the message: " + message);
     }
 
+    // ---- Defect 6: causes are dropped (#187) ----
+
+    private static final int CORRUPT_EVENT_ID = 4242;
+
+    @Test
+    void GivenLoadedEventBreakingItsInvariant_WhenVerify_ThenViolationNamesTheEventAndCarriesTheCause() {
+        Event corrupt = realEvent(CORRUPT_EVENT_ID);
+        setPrivateField(corrupt, "rating", 9.0);   // a stored row out of the 0..5 range
+        when(eventRepository.findAll()).thenReturn(List.of(corrupt));
+
+        SystemIntegrityViolationException thrown =
+                assertThrows(SystemIntegrityViolationException.class, verifier::verify);
+
+        String message = thrown.getMessage();
+        assertTrue(message.toLowerCase(Locale.ROOT).contains("event")
+                        && message.contains(String.valueOf(CORRUPT_EVENT_ID)),
+                "expected the aggregate type and id " + CORRUPT_EVENT_ID + " in: " + message);
+        IllegalStateException cause = assertInstanceOf(IllegalStateException.class, thrown.getCause(),
+                "the invariant failure must be kept as the cause");
+        assertEquals(invariantFailureOf(corrupt), cause.getMessage());
+    }
+
+    private static Event realEvent(int id) {
+        InventoryZone zone = new StandingZone(1, "Floor", 100, 50);
+        VenueMap venueMap = new VenueMap(1, new Location("Belgium", "Brussels"), List.of(zone));
+        return new Event(id, "Show", 4.5, List.of("Artist"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"),
+                new NoPurchasePolicy(), new DiscountPolicy(0));
+    }
+
+    private static String invariantFailureOf(Event event) {
+        return assertThrows(IllegalStateException.class, event::checkInvariants).getMessage();
+    }
+
+    // Simulates a corrupt stored row: the domain API never lets the field hold this value.
+    private static void setPrivateField(Object target, String fieldName, Object value) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("test could not corrupt " + fieldName, e);
+        }
+    }
 }
