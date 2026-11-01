@@ -31,7 +31,9 @@ import lombok.extern.slf4j.Slf4j;
  *       logged at WARN without either value. Its existing admin sessions end with the old password:
  *       a token issued under it no longer validates (ADR-012);</li>
  *   <li>any other admin whose stored hash matches it stops the boot (ADR-003): there is no configured
- *       password to give that admin. Nothing is changed then, the default admin included.</li>
+ *       password to give that admin. Each such admin's admin sessions end first, so once the operator
+ *       replaces the hash and starts again, no session issued under the committed password remains.
+ *       Nothing else is changed, the default admin included.</li>
  * </ul>
  *
  * <p>It runs while the application context starts, once every singleton exists
@@ -75,8 +77,8 @@ public class CommittedAdminPasswordRotation implements SmartInitializingSingleto
      * start. Called by Spring while the context starts; a throw fails the context refresh.
      *
      * @throws IllegalStateException outside {@code dev} and {@code test}, when an admin other than the
-     *         default one still has the committed password; the message names the admin's id, never a
-     *         password or a hash
+     *         default one still has the committed password, after ending that admin's admin sessions; the
+     *         message names the admin's id, never a password or a hash
      */
     @Override
     public void afterSingletonsInstantiated() {
@@ -93,21 +95,25 @@ public class CommittedAdminPasswordRotation implements SmartInitializingSingleto
                 .toList();
         if (!otherAdminIds.isEmpty()) {
             // No admin password can be changed from the platform yet (#77), so the operator replaces the
-            // stored hash in the admins table.
+            // stored hash in the admins table. Their sessions end now, so none issued under the committed
+            // password outlives that fix.
+            otherAdminIds.forEach(sessions::deleteAdminSessions);
             throw new IllegalStateException("Refusing to start outside the dev and test profiles: the System "
                     + "Admin(s) with id " + otherAdminIds + " still have the default admin password committed "
-                    + "in application.yml. Replace each one's stored password hash, then start again.");
+                    + "in application.yml, and their admin sessions have been ended. Replace each one's stored "
+                    + "password hash, then start again.");
         }
         Optional<Admin> defaultAdmin = onCommittedPassword.stream().filter(Admin::isDefault).findFirst();
         defaultAdmin.ifPresent(this::giveTheConfiguredPassword);
     }
 
     private void giveTheConfiguredPassword(Admin defaultAdmin) {
-        defaultAdmin.changePasswordHash(passwordHasher.hash(adminProperties.password()));
-        // Sessions end before the new hash is stored: if the boot fails in between, the stored password is
-        // still the committed one, so the next boot does both steps again. Stored first, a failure here
-        // would leave the old sessions with nothing left to end them.
+        String configuredHash = passwordHasher.hash(adminProperties.password());
+        // Sessions end before the new hash is set and stored: if ending them fails, the admin still has the
+        // committed password, so the next boot does both steps again. Stored first, a failure here would
+        // leave the old sessions with nothing left to end them.
         sessions.deleteAdminSessions(defaultAdmin.getId());
+        defaultAdmin.changePasswordHash(configuredHash);
         admins.save(defaultAdmin);
         log.warn("The default System Admin id={} still had the default password committed in "
                 + "application.yml; it now has the configured platform.admin.password (PLATFORM_ADMIN_PASSWORD), "

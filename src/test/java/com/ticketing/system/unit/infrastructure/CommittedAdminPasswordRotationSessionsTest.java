@@ -2,9 +2,12 @@ package com.ticketing.system.unit.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -12,6 +15,8 @@ import java.time.ZoneOffset;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import com.ticketing.system.bootstrap.CommittedAdminPasswordRotation;
@@ -132,6 +137,47 @@ class CommittedAdminPasswordRotationSessionsTest {
             assertTrue(sessionManager.validateAdminToken(adminToken), "no rotation means no session is ended");
             assertFalse(hasher.matches(CONFIGURED_PASSWORD, admins.findById(DEFAULT_ADMIN_ID).getPasswordHash()),
                     "precondition: the admin's password is the operator's and is not rotated");
+        });
+    }
+
+    // ---- F3: the step order, and the refusal path (#187) ----
+
+    // Sessions end before the new password is stored: when ending them fails, the stored password stays the
+    // committed one, so the next boot rotates again and ends the sessions then.
+    @Test
+    void GivenEndingTheAdminsSessionsFails_WhenTheRotationRuns_ThenItThrowsAndTheNewPasswordIsNotStored() {
+        Admin onCommittedPassword = defaultAdminWithPassword(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD);
+        String committedHash = onCommittedPassword.getPasswordHash();
+        admins.save(onCommittedPassword);
+        SessionRepository failingSessions = mock(SessionRepository.class);
+        doThrow(new DataAccessResourceFailureException("session store unreachable"))
+                .when(failingSessions).deleteAdminSessions(DEFAULT_ADMIN_ID);
+        CommittedAdminPasswordRotation rotation = new CommittedAdminPasswordRotation(new MockEnvironment(), admins,
+                hasher, failingSessions, new PlatformAdminProperties(DEFAULT_ADMIN_USERNAME, CONFIGURED_PASSWORD));
+
+        assertThrows(DataAccessResourceFailureException.class, rotation::afterSingletonsInstantiated,
+                "a failure to end the admin's sessions must stop the rotation");
+
+        assertEquals(committedHash, admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
+                "the new password must not be stored before the admin's sessions have ended");
+    }
+
+    @Test
+    void GivenAnotherAdminOnTheCommittedPassword_WhenTheBootIsRefused_ThenThatAdminsSessionsEndAndAMembersWithItsIdStay() {
+        admins.save(defaultAdminWithPassword(EARLIER_ROTATED_PASSWORD));
+        admins.save(new Admin(OTHER_ADMIN_ID, OTHER_ADMIN_USERNAME,
+                hasher.hash(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD), false));
+        String otherAdminToken = sessionManager.generateAdminToken(OTHER_ADMIN_ID, OTHER_ADMIN_USERNAME);
+        String memberTokenWithTheOtherAdminsId = sessionManager.generateToken(OTHER_ADMIN_ID, MEMBER_USERNAME);
+
+        contextWithTheRotation().run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure()).isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining(String.valueOf(OTHER_ADMIN_ID));
+            assertThrows(InvalidTokenException.class, () -> sessionManager.validateAdminToken(otherAdminToken),
+                    "an admin refused for the committed password must not keep a session issued under it");
+            assertDoesNotThrow(() -> sessionManager.validateToken(memberTokenWithTheOtherAdminsId),
+                    "a member whose id equals the refused admin's is not that admin; the member's session must stay");
         });
     }
 
