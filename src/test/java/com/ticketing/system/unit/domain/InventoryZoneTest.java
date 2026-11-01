@@ -321,6 +321,66 @@ public class InventoryZoneTest extends BaseDomainTest {
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
     }
 
+    // A member can read this refusal (it is an IllegalStateException), so it names only the seat, never
+    // an order key: neither the order holding the seat nor the one asking (#187).
+    private static final String HOLDING_ORDER = "holding-order-key";
+    private static final String ASKING_ORDER = "asking-order-key";
+    private static final String SEAT_NO_LONGER_HELD = "Seat A1 is no longer held for this order.";
+
+    @Test
+    void GivenASeatHeldByAnotherOrder_WhenReleaseSeats_ThenTheRefusalNamesOnlyTheSeat() {
+        SeatedZone seatedZone = track(new SeatedZone(1, "Orchestra", 120.0, List.of(new Seat("A1", 0, 0))));
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> seatedZone.release(InventorySelection.seated(List.of("A1"), ASKING_ORDER)));
+
+        assertEquals(SEAT_NO_LONGER_HELD, refused.getMessage());
+        assertFalse(refused.getMessage().contains(HOLDING_ORDER) || refused.getMessage().contains(ASKING_ORDER));
+        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
+    }
+
+    @Test
+    void GivenASeatHeldByAnotherOrder_WhenConfirmSale_ThenTheRefusalNamesOnlyTheSeat() {
+        SeatedZone seatedZone = track(new SeatedZone(1, "Orchestra", 120.0, List.of(new Seat("A1", 0, 0))));
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> seatedZone.confirmSale(InventorySelection.seated(List.of("A1"), ASKING_ORDER)));
+
+        assertEquals(SEAT_NO_LONGER_HELD, refused.getMessage());
+        assertFalse(refused.getMessage().contains(HOLDING_ORDER) || refused.getMessage().contains(ASKING_ORDER));
+        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
+    }
+
+    // The standing zone's refusals follow the same rule: they say what was refused, never an order key.
+    @Test
+    void GivenAnOrderHoldingTwoStandingPlaces_WhenItReleasesThree_ThenTheRefusalNamesNoOrderKey() {
+        StandingZone standingZone = track(new StandingZone(1, "General Admission", 100, 50.0));
+        standingZone.reserve(InventorySelection.standing(2, HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> standingZone.release(InventorySelection.standing(3, HOLDING_ORDER)));
+
+        assertEquals("Cannot release 3 tickets: this order holds only 2 in this zone.", refused.getMessage());
+        assertFalse(refused.getMessage().contains(HOLDING_ORDER));
+        assertEquals(2, standingZone.getReservedAmount());
+    }
+
+    @Test
+    void GivenAnOrderHoldingTwoStandingPlaces_WhenItConfirmsTheSaleOfThree_ThenTheRefusalNamesNoOrderKey() {
+        StandingZone standingZone = track(new StandingZone(1, "General Admission", 100, 50.0));
+        standingZone.reserve(InventorySelection.standing(2, HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> standingZone.confirmSale(InventorySelection.standing(3, HOLDING_ORDER)));
+
+        assertEquals("Cannot confirm the sale of 3 tickets: this order holds only 2 in this zone.",
+                refused.getMessage());
+        assertFalse(refused.getMessage().contains(HOLDING_ORDER));
+        assertEquals(0, standingZone.getSoldAmount());
+    }
+
     @Test
     void GivenStandingZone_WhenReserveSeatSelection_ThenThrowsException() {
         StandingZone standingZone = track(new StandingZone(1, "General Admission", 100, 50.0));

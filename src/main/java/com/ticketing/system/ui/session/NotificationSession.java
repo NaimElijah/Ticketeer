@@ -61,14 +61,6 @@ public final class NotificationSession {
         store(updated);
     }
 
-    /** Mark every notification in the session snapshot READ. */
-    public static void markAllRead() {
-        List<NotificationDTO> updated = getAll().stream()
-                .map(n -> new NotificationDTO(n.notificationId(), n.type(), "READ", n.message(), n.createdAt()))
-                .toList();
-        store(updated);
-    }
-
     /**
      * Prepend fresh notifications to the existing list, deduplicating by notificationId.
      * Called by the polling scheduler when new notifications arrive mid-session.

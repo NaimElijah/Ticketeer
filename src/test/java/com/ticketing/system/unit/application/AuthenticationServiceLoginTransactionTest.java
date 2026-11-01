@@ -32,6 +32,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
@@ -53,7 +54,6 @@ import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
-import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.testutil.LogCapture;
@@ -212,9 +212,10 @@ class AuthenticationServiceLoginTransactionTest {
     }
 
     @Test
-    void GivenDeliveryFailsWithAConcurrentReservationExceptionAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
-        // What OptimisticLockTranslationAspect makes of a lost @Version race in deliverPending.
-        givenDeliveryFailsWith(new ConcurrentReservationException("notification updated concurrently"));
+    void GivenDeliveryCannotGetAConnectionAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
+        // What Spring raises when deliverPending's own transaction cannot get a connection: a
+        // TransactionException, not a DataAccessException, yet the same store failure.
+        givenDeliveryFailsWith(new CannotCreateTransactionException("Could not open JPA EntityManager for transaction"));
 
         runner.run(context -> {
             LoginDTO login = context.getBean(AuthenticationService.class)
@@ -229,10 +230,10 @@ class AuthenticationServiceLoginTransactionTest {
     }
 
     @Test
-    void GivenDeliveryCannotGetAConnectionAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
-        // What Spring raises when deliverPending's own transaction cannot get a connection: a
-        // TransactionException, not a DataAccessException, yet the same store failure.
-        givenDeliveryFailsWith(new CannotCreateTransactionException("Could not open JPA EntityManager for transaction"));
+    void GivenDeliveryFailsToCommitItsReadAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
+        // What Spring can raise when the read's own transaction fails to commit: a TransactionException
+        // other than CannotCreateTransactionException, yet the same store failure.
+        givenDeliveryFailsWith(new TransactionSystemException("Could not commit JPA transaction"));
 
         runner.run(context -> {
             LoginDTO login = context.getBean(AuthenticationService.class)

@@ -79,10 +79,25 @@ class NotificationTest extends BaseDomainTest {
         assertEquals(fits, n.getMessage());
     }
 
+    // A session ending in another browser or on another device sends SENT rows back to PENDING while
+    // this session's bell still shows them, so a click on a PENDING notification must still record the
+    // read (#187).
     @Test
-    void givenPendingNotification_whenMarkRead_thenThrows() {
+    void GivenAPendingNotification_WhenMarkRead_ThenItIsRead() {
         Notification n = pending();
-        // markRead requires SENT; from PENDING it must throw before mutating state.
+
+        n.markRead();
+
+        assertTrue(n.isRead());
+    }
+
+    @Test
+    void GivenAReadNotification_WhenMarkRead_ThenThrowsAndStaysRead() {
+        Notification n = pending();
+        n.markSent();
+        n.markRead();
+
         assertThrows(IllegalStateException.class, n::markRead);
+        assertTrue(n.isRead());
     }
 }

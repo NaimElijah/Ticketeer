@@ -4,6 +4,9 @@ import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.NotificationSession;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.ticketing.system.ui.support.ServiceErrors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -16,10 +19,13 @@ import org.springframework.stereotype.Component;
 public class AdminLoginPresenter {
 
     private final AuthenticationService authenticationService;
+    private final UnreadAlertsSendBack unreadAlertsSendBack;
 
     @Autowired
-    public AdminLoginPresenter(AuthenticationService authenticationService) {
+    public AdminLoginPresenter(AuthenticationService authenticationService,
+            UnreadAlertsSendBack unreadAlertsSendBack) {
         this.authenticationService = authenticationService;
+        this.unreadAlertsSendBack = unreadAlertsSendBack;
     }
 
     /** Authenticates against the admin pool; translates domain exceptions into a typed outcome. */
@@ -39,6 +45,20 @@ public class AdminLoginPresenter {
             }
             return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
+    }
+
+    /**
+     * Makes this browser session the admin's, after {@link #attemptAdminLogin} succeeded. A member who
+     * signed in on this session before gets their shown-but-unread alerts sent back to pending, while
+     * the session still names them; then the bell is emptied, and only then is the admin's auth stored,
+     * since admin and member ids share one id space (ADR-012).
+     *
+     * @param adminAuth the token {@link Outcome.Success} carried
+     */
+    public void signIn(AuthTokenDTO adminAuth) {
+        unreadAlertsSendBack.sendBackForSignedInMember();
+        NotificationSession.clear();
+        AuthSession.storeAuth(adminAuth);
     }
 
     public sealed interface Outcome {

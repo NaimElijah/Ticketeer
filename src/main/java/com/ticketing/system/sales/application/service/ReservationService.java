@@ -34,6 +34,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.exception.UserFacingErrors;
 
 
 @Service
@@ -195,7 +196,7 @@ public class ReservationService {
                     orderModified);
 
             notifyFailureAfterUnlock = true;
-            failureNotificationReason = "Reservation failed: " + e.getMessage();
+            failureNotificationReason = memberReadableReason(e);
             // The failure notice is published inside this transaction, which the rethrow rolls back, so
             // it is never delivered (ADR-004); the caller sees the failure directly. #63 decides whether
             // failure alerts are wanted, and if so they must be published after the transaction ends.
@@ -312,7 +313,7 @@ public class ReservationService {
                     removedPricePerTicket);
 
             notifyFailureAfterUnlock = true;
-            failureNotificationReason = "Remove reservation failed: " + e.getMessage();
+            failureNotificationReason = memberReadableReason(e);
 
             log.warn("remove failed: eventId={}, zoneId={}, selectionQuantity={}, seats={}, reason={}",
                     eventId, zoneId,
@@ -594,6 +595,12 @@ public class ReservationService {
             // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
+    }
+
+    // The reason goes into the member's notification, so it follows the rule the UI applies to what a
+    // user may read: a refusal's own message, and the generic text for anything else.
+    private static String memberReadableReason(RuntimeException failure) {
+        return UserFacingErrors.isUserFacing(failure) ? failure.getMessage() : UserFacingErrors.GENERIC_MESSAGE;
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
