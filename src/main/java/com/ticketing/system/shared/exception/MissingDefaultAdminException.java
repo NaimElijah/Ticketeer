@@ -1,8 +1,18 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown if SystemAdminService cannot create the default admin during startup.
-// I.1.4 — UC-1. Almost always indicates an environment/configuration problem
-// (missing seed credentials, DB unavailable for the bootstrap write).
+/**
+ * The platform could not establish its default System Admin (UC-1, I.1.4), so it has no admin at all.
+ *
+ * <p>Thrown by {@code SystemAdminService.createDefaultAdminIfMissing} when no admin exists and saving the
+ * default one fails, or when the save reports success but no admin can be found afterwards. It almost
+ * always means an environment problem: the database unavailable for the bootstrap write, or invalid
+ * {@code platform.admin.*} settings. Initialization does not treat it as transient: at boot it stops the
+ * application, and the market self-heal logs it at ERROR on every tick (ADR-003).
+ *
+ * <p>Carries the reason in its message, prefixed "Could not establish default System Admin: ", and, when
+ * a save failed, that failure as its cause; a failing re-check after the save is attached as suppressed.
+ * The message is logged, so it never contains the admin's credentials.
+ */
 public class MissingDefaultAdminException extends DomainException {
 
     public MissingDefaultAdminException(String reason) {
