@@ -1,8 +1,10 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
@@ -20,10 +22,15 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -225,4 +232,89 @@ class NotificationServiceTest {
                 "Purchase completed successfully.", LocalDateTime.ofInstant(T0, ZoneOffset.UTC));
     }
 
+    // ---- Defect 5: Notification text shows raw doubles and ids (#187) ----
+
+    // A locale that writes decimals with a comma: the total must still read 35.98.
+    private static final Locale COMMA_DECIMAL_LOCALE = Locale.GERMANY;
+
+    @Test
+    void GivenATotalWithThreeDecimals_WhenNotifyPurchaseCompleted_ThenItReadsWithTwoDecimalsWhateverTheJvmLocale() {
+        Locale jvmLocale = Locale.getDefault();
+        Locale.setDefault(COMMA_DECIMAL_LOCALE);
+        try {
+            service.notifyPurchaseCompleted(RECIPIENT, 35.982, List.of(1, 2));
+        } finally {
+            Locale.setDefault(jvmLocale);
+        }
+
+        String message = dispatchedMessage();
+        assertTrue(message.contains("35.98") && !message.contains("35.982"),
+                "the total should read 35.98, two decimals with a point under any JVM locale, but the message was: "
+                        + message);
+    }
+
+    static Stream<Arguments> reservationNotices() {
+        return Stream.of(
+                Arguments.of("reservation succeeded",
+                        (Consumer<NotificationService>) s -> s.notifyTicketReservationSuccess(RECIPIENT, 4021, 3, 2)),
+                Arguments.of("reservation failed",
+                        (Consumer<NotificationService>) s -> s.notifyTicketReservationFailure(RECIPIENT, 4021, 3,
+                                "Sold out")),
+                Arguments.of("reservation removal succeeded",
+                        (Consumer<NotificationService>) s -> s.notifyRemoveTicketReservationSuccess(RECIPIENT, 4021,
+                                3, 2)),
+                Arguments.of("reservation removal failed",
+                        (Consumer<NotificationService>) s -> s.notifyRemoveTicketReservationFailure(RECIPIENT, 4021,
+                                3, "Order not found")));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("reservationNotices")
+    void GivenAReservationNotice_WhenItsNotificationIsComposed_ThenTheTextCarriesNoRawIds(String notice,
+            Consumer<NotificationService> notify) {
+        notify.accept(service);
+
+        String message = dispatchedMessage();
+        assertFalse(message.contains("eventId=") || message.contains("zoneId="),
+                "the member reads this text, so it should not show raw ids, but the message was: " + message);
+    }
+
+    static Stream<Arguments> reservationNoticesAndWhatTheyMustSay() {
+        return Stream.of(
+                Arguments.of("reservation succeeded",
+                        (Consumer<NotificationService>) s -> s.notifyTicketReservationSuccess(RECIPIENT, 4021, 3, 2),
+                        "2 tickets"),
+                Arguments.of("one ticket reserved",
+                        (Consumer<NotificationService>) s -> s.notifyTicketReservationSuccess(RECIPIENT, 4021, 3, 1),
+                        "1 ticket."),
+                Arguments.of("reservation failed",
+                        (Consumer<NotificationService>) s -> s.notifyTicketReservationFailure(RECIPIENT, 4021, 3,
+                                "Sold out"),
+                        "Sold out"),
+                Arguments.of("reservation removal succeeded",
+                        (Consumer<NotificationService>) s -> s.notifyRemoveTicketReservationSuccess(RECIPIENT, 4021,
+                                3, 2),
+                        "2 tickets"),
+                Arguments.of("reservation removal failed",
+                        (Consumer<NotificationService>) s -> s.notifyRemoveTicketReservationFailure(RECIPIENT, 4021,
+                                3, "Order not found"),
+                        "Order not found"));
+    }
+
+    // Without the ids, the quantity or the reason is all the member learns, so it must stay, in words.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("reservationNoticesAndWhatTheyMustSay")
+    void GivenAReservationNotice_WhenItsNotificationIsComposed_ThenTheTextKeepsTheQuantityOrTheReasonInWords(
+            String notice, Consumer<NotificationService> notify, String mustSay) {
+        notify.accept(service);
+
+        String message = dispatchedMessage();
+        assertTrue(message.contains(mustSay), "the text should say \"" + mustSay + "\", but was: " + message);
+    }
+
+    private String dispatchedMessage() {
+        ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
+        verify(dispatcher).dispatch(sent.capture());
+        return sent.getValue().getMessage();
+    }
 }

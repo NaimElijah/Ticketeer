@@ -9,17 +9,59 @@ import java.util.List;
 // V1 implementation is NotificationService.
 public interface INotificationService {
 
-    void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> list);
+    /**
+     * Tells a member their purchase completed, with its total.
+     *
+     * @param userId     the buyer
+     * @param totalPrice the amount paid; the text shows it with two decimals and a point, whatever
+     *                   the JVM's locale
+     * @param ticketIds  the tickets issued; not shown in the text
+     */
+    void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> ticketIds);
 
     void notifyPurchaseFailed(int userId, String string);
 
+    /**
+     * Tells a member how many tickets they reserved. The text names no event and shows no id (#187).
+     *
+     * @param userId   the member
+     * @param eventId  the event; not shown in the text
+     * @param zoneId   the zone; not shown in the text
+     * @param quantity how many tickets were reserved
+     */
     void notifyTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity);
 
+    /**
+     * Tells a member their reservation failed, and why. The text names no event and shows no id (#187).
+     *
+     * @param userId  the member
+     * @param eventId the event; not shown in the text
+     * @param zoneId  the zone; not shown in the text
+     * @param reason  why it failed, shown as given
+     */
     void notifyTicketReservationFailure(int userId, int eventId, int zoneId, String reason);
 
-    void notifyRemoveTicketReservationFailure(int userId, int eventId, int zoneId, String string);
+    /**
+     * Tells a member that removing reserved tickets failed, and why. The text names no event and shows
+     * no id (#187).
+     *
+     * @param userId  the member
+     * @param eventId the event; not shown in the text
+     * @param zoneId  the zone; not shown in the text
+     * @param reason  why it failed, shown as given
+     */
+    void notifyRemoveTicketReservationFailure(int userId, int eventId, int zoneId, String reason);
 
-    void notifyRemoveTicketReservationSuccess(int userId, int eventId, int zoneId, int i);
+    /**
+     * Tells a member how many reserved tickets they removed. The text names no event and shows no id
+     * (#187).
+     *
+     * @param userId   the member
+     * @param eventId  the event; not shown in the text
+     * @param zoneId   the zone; not shown in the text
+     * @param quantity how many tickets were removed
+     */
+    void notifyRemoveTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity);
 
     void notifyEventCancelled(int userId, int eventId, String eventName);
 

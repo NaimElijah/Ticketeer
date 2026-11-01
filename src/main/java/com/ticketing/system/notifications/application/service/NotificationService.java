@@ -4,6 +4,7 @@ import com.ticketing.system.notifications.application.service.NotificationDispat
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -44,7 +45,8 @@ public class NotificationService implements INotificationService {
                 userId,
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
-                "Purchase completed successfully. Total price: " + totalPrice,
+                // Locale.ROOT: the member reads the same total, with a point, whatever the JVM's locale.
+                String.format(Locale.ROOT, "Purchase completed successfully. Total price: %.2f", totalPrice),
                 LocalDateTime.now(clock)
         );
         dispatcher.dispatch(notification);
@@ -65,8 +67,7 @@ public class NotificationService implements INotificationService {
 
     @Override
     public void notifyTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity) {
-        String message = String.format("Ticket reservation completed successfully. eventId=%d, zoneId=%d, quantity=%d",
-                eventId, zoneId, quantity);
+        String message = String.format("You reserved %s.", tickets(quantity));
 
         Notification notification = new Notification(
                 UUID.randomUUID().toString(),
@@ -81,8 +82,7 @@ public class NotificationService implements INotificationService {
 
     @Override
     public void notifyTicketReservationFailure(int userId, int eventId, int zoneId, String reason) {
-        String message = String.format("Ticket reservation failed. eventId=%d, zoneId=%d, reason=%s",
-                eventId, zoneId, reason);
+        String message = String.format("Your ticket reservation failed: %s", reason);
 
         Notification notification = new Notification(
                 UUID.randomUUID().toString(),
@@ -97,8 +97,7 @@ public class NotificationService implements INotificationService {
 
     @Override
     public void notifyRemoveTicketReservationFailure(int userId, int eventId, int zoneId, String reason) {
-        String message = String.format("Remove Ticket reservation failed. eventId=%d, zoneId=%d, reason=%s",
-                eventId, zoneId, reason);
+        String message = String.format("Removing your reserved tickets failed: %s", reason);
 
         Notification notification = new Notification(
                 UUID.randomUUID().toString(),
@@ -113,8 +112,7 @@ public class NotificationService implements INotificationService {
 
     @Override
     public void notifyRemoveTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity) {
-        String message = String.format("Remove Ticket reservation completed successfully. eventId=%d, zoneId=%d, quantity=%d",
-                eventId, zoneId, quantity);
+        String message = String.format("You removed %s from your reservation.", tickets(quantity));
 
         Notification notification = new Notification(
                 UUID.randomUUID().toString(),
@@ -223,6 +221,12 @@ public class NotificationService implements INotificationService {
             dispatcher.dispatch(newMessageNotification(r.userId(), r.conversationId(), senderLabel,
                     subject, snippet, now));
         }
+    }
+
+    // The reservation texts name no event: that would need the event's name in their notices and a read
+    // in sales' finally path, where a failing read would mask the reservation's own exception (#187).
+    private static String tickets(int quantity) {
+        return quantity + (quantity == 1 ? " ticket" : " tickets");
     }
 
     private static Notification newMessageNotification(int recipientUserId, String conversationId,
