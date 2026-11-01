@@ -195,8 +195,11 @@ public class SystemIntegrityVerifier {
             for (Integer eventId : eventIds) {
                 String previous = byEvent.put(eventId, order.getOrderKey());
                 if (previous != null && !previous.equals(order.getOrderKey())) {
+                    // Name the carts by order key, never by session id: a session id is a credential,
+                    // and LoggingAspect logs this message at WARN.
                     throw new SystemIntegrityViolationException(
-                            "member " + memberId + " has more than one active order for event " + eventId);
+                            "member " + memberId + " has more than one active order for event " + eventId
+                                    + ": orders " + previous + " and " + order.getOrderKey());
                 }
             }
         }

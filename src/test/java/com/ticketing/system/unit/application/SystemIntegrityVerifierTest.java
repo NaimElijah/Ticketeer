@@ -1,6 +1,8 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -242,6 +244,29 @@ class SystemIntegrityVerifierTest {
         ActiveOrder cart = ActiveOrder.forMember(userId, sessionId, CART_OPENED_AT);
         cart.addStandingReservation(eventId, 1, 1, 50.0, CART_OPENED_AT);
         return cart;
+    }
+
+    // ---- Defect 2: the integrity failure message carries a guest's session id (#187) ----
+
+    // Nine digits, so the id cannot turn up by chance inside a random order-key UUID.
+    private static final int DUPLICATED_EVENT_ID = 987654321;
+    private static final String SESSION_ID_MARKER = "SECRET-SESSION-ID";
+
+    // A session id is a credential, and LoggingAspect logs this message at WARN: name the carts, not the session.
+    @Test
+    void GivenMemberWithTwoCartsOnOneEvent_WhenVerify_ThenMessageNamesOrderKeysAndEventButNoSessionId() {
+        ActiveOrder first = memberCartHolding(MEMBER_ID, SESSION_ID_MARKER + "-1", DUPLICATED_EVENT_ID);
+        ActiveOrder second = memberCartHolding(MEMBER_ID, SESSION_ID_MARKER + "-2", DUPLICATED_EVENT_ID);
+        when(activeOrderRepository.findAll()).thenReturn(List.of(first, second));
+
+        String message = assertThrows(SystemIntegrityViolationException.class, verifier::verify).getMessage();
+
+        assertTrue(message.contains(first.getOrderKey()) && message.contains(second.getOrderKey()),
+                "expected both order keys " + first.getOrderKey() + " and " + second.getOrderKey()
+                        + " in: " + message);
+        assertTrue(message.contains(String.valueOf(DUPLICATED_EVENT_ID)),
+                "expected event id " + DUPLICATED_EVENT_ID + " in: " + message);
+        assertFalse(message.contains(SESSION_ID_MARKER), "a session id must not reach the message: " + message);
     }
 
 }
