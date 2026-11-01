@@ -4,7 +4,8 @@
 #  This file boots the system to a known state by running ONE operation per
 #  line through the real application services. Blank lines and lines starting
 #  with '#' are ignored, so this header is just documentation. Edit any value
-#  and reboot (or boot with --seed.mode=wipe) to re-run the edited scenario.
+#  and reboot (or boot with --seed.mode=reset --seed.assume-yes=true) to
+#  re-run the edited scenario.
 #
 #  ALIASES: refer to users / companies / events by short names (u1, p1, e1).
 #  The engine maps each alias to the real id the service mints, so you never
