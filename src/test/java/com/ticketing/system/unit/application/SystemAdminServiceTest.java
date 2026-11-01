@@ -24,6 +24,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -878,5 +883,59 @@ class SystemAdminServiceTest {
             assertTrue(log.eventsContaining("buyerUserId").isEmpty(),
                     "a refused call must not log its filters, got " + log.eventsContaining("buyerUserId"));
         }
+    }
+
+    // ---- PR #244 review item 3: an unlocked refresh, and no probe claimed before one (#187) ----
+
+    // Bounds a failure, not a wait: each step below returns at once when the code is right.
+    private static final long BOUND_SECONDS = 5;
+
+    // A probe takes about two minutes against a hanging WSEP. The refresh holds no lock, so a close or a
+    // view must not queue behind it. The gateway is held mid-probe on a latch, never by sleeping.
+    @Test
+    void GivenARefreshHeldMidProbe_WhenCloseMarketAndViewMarketState_ThenBothCompleteWithoutWaitingForIt()
+            throws Exception {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        CountDownLatch probeEntered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(gateway.verifyConnection()).thenAnswer(invocation -> {
+            probeEntered.countDown();
+            return release.await(BOUND_SECONDS, TimeUnit.SECONDS);
+        });
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+        try {
+            Future<?> refresh = executor.submit(svc::refreshServiceReachability);
+            assertTrue(probeEntered.await(BOUND_SECONDS, TimeUnit.SECONDS),
+                    "the refresh never reached its probe");
+
+            Future<MarketStateDTO> close = executor.submit(() -> svc.closeMarket(closeRequest()));
+            Future<MarketStateDTO> view = executor.submit(() -> svc.viewMarketState(ADMIN_TOKEN));
+
+            assertEquals("CLOSED", close.get(BOUND_SECONDS, TimeUnit.SECONDS).currentStatus(),
+                    "a close must not wait for the refresh's probe");
+            assertNotNull(view.get(BOUND_SECONDS, TimeUnit.SECONDS),
+                    "a view must not wait for the refresh's probe");
+            assertFalse(refresh.isDone(), "the probe was still held while both completed");
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    // The self-heal refreshes when this returns false, so a failure before the probe must not claim one.
+    @Test
+    void GivenInitFailsBeforeItsProbe_WhenEnsureMarketOpen_ThenItReportsNoProbe() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        doThrow(new SystemIntegrityViolationException("active company 7 has no owner"))
+                .when(integrityVerifier).verify();
+        PaymentGateway gateway = reachablePayment();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
+
+        assertFalse(svc.ensureMarketOpen(), "init failed before probing WSEP, so nothing was probed");
+        verify(gateway, never()).verifyConnection();
     }
 }
