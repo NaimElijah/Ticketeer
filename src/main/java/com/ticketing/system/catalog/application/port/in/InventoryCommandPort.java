@@ -44,7 +44,7 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  * {@link #returnSoldToStock} after the refund commits, and {@code CheckoutService}'s failure rollback
  * calls {@link #releaseHeld} outside its Phase-3 transaction. Those two methods open a transaction when
  * the caller has none: one per event, so that event's load and save commit together and a lost
- * concurrency race can run again.
+ * concurrency race can run again (ADR-017).
  */
 public interface InventoryCommandPort {
 
