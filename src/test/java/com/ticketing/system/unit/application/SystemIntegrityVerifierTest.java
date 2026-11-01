@@ -368,4 +368,25 @@ class SystemIntegrityVerifierTest {
         return new ProductionCompany(GHOST_COMPANY_ID, FOUNDER_ID, GHOST_COMPANY_NAME, CompanyStatus.ACTIVE,
                 "a company for the integrity scan", 4.0);
     }
+
+    // ---- Review follow-up 7e: a corrupt cart is named by its order key, never its session id (#187) ----
+
+    private static final int CORRUPT_USER_ID = -3;
+
+    // The message is logged at ERROR on every self-heal tick, and a session id is a credential.
+    @Test
+    void GivenLoadedCartBreakingItsInvariant_WhenVerify_ThenViolationNamesTheOrderKeyAndNoSessionId() {
+        ActiveOrder cart = memberCartHolding(MEMBER_ID, SESSION_ID_MARKER + "-cart", SHARED_EVENT_ID);
+        setPrivateField(cart, "userId", CORRUPT_USER_ID);   // a stored row the domain API cannot produce
+        when(activeOrderRepository.findAll()).thenReturn(List.of(cart));
+
+        SystemIntegrityViolationException thrown =
+                assertThrows(SystemIntegrityViolationException.class, verifier::verify);
+
+        String message = thrown.getMessage();
+        assertTrue(message.contains("active order " + cart.getOrderKey()),
+                "expected the cart's order key in: " + message);
+        assertFalse(message.contains(SESSION_ID_MARKER), "a session id must not reach the message: " + message);
+        assertInstanceOf(IllegalStateException.class, thrown.getCause(), "the invariant failure is kept as the cause");
+    }
 }
