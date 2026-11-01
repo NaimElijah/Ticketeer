@@ -30,18 +30,24 @@ public class MyAccountPresenter {
         this.memberAccountService = memberAccountService;
     }
 
-    /** The signed-in member's purchase history; empty when signed out or on failure. */
-    public PurchaseHistoryDTO loadHistory() {
+    /** The signed-in member's purchase history; an empty history when signed out or on failure. */
+    public Outcome loadHistory() {
         AuthTokenDTO token = currentToken();
         if (token == null) {
-            return new PurchaseHistoryDTO(List.of());
+            return new Outcome.Success(new PurchaseHistoryDTO(List.of()));
         }
         try {
-            return memberAccountService.viewMyHistory(token);
+            return new Outcome.Success(memberAccountService.viewMyHistory(token));
         } catch (RuntimeException e) {
             log.warn("Failed to load purchase history: {}", e.getMessage());
-            return new PurchaseHistoryDTO(List.of());
+            return new Outcome.Success(new PurchaseHistoryDTO(List.of()));
         }
+    }
+
+    /** Sealed outcome the view switches on to render the history or an error state. */
+    public sealed interface Outcome {
+        record Success(PurchaseHistoryDTO history) implements Outcome { }
+        record Failure(String reason) implements Outcome { }
     }
 
     private AuthTokenDTO currentToken() {

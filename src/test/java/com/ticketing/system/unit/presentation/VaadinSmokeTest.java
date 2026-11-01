@@ -241,7 +241,7 @@ class VaadinSmokeTest {
         // Member account page (#284 refund affordance). It builds in the constructor, so the
         // presenter must return a (here empty) history; bare mocks for the rest.
         MyAccountPresenter presenter = mock(MyAccountPresenter.class);
-        when(presenter.loadHistory()).thenReturn(new PurchaseHistoryDTO(List.of()));
+        when(presenter.loadHistory()).thenReturn(new MyAccountPresenter.Outcome.Success(new PurchaseHistoryDTO(List.of())));
         RefundPresenter refundPresenter = mock(RefundPresenter.class);
         SessionIdentity sessionIdentity = mock(SessionIdentity.class);
         assertDoesNotThrow(() -> new MyAccountView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),

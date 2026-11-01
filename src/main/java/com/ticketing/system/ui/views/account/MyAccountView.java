@@ -54,7 +54,10 @@ public class MyAccountView extends LkPage {
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
                          SessionIdentity sessionIdentity, DisplayTime displayTime) {
         this.displayTime = displayTime;   // the rows below are rendered during construction
-        this.history = presenter.loadHistory();
+        this.history = switch (presenter.loadHistory()) {
+            case MyAccountPresenter.Outcome.Success success -> success.history();
+            case MyAccountPresenter.Outcome.Failure failure -> new PurchaseHistoryDTO(List.of());
+        };
         this.refundPresenter = refundPresenter;
         this.sessionIdentity = sessionIdentity;
 

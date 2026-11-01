@@ -254,6 +254,16 @@ public class SystemAdminService {
         return buildMarketState();
     }
 
+    /**
+     * The market/health snapshot for the admin dashboard.
+     *
+     * @param adminToken the caller's admin session token; not checked yet
+     * @return the current market state
+     */
+    public MarketStateDTO viewMarketState(String adminToken) {
+        return buildMarketState();
+    }
+
     // Read boundary for the private status enum: the sales gate
     // (ReservationService / CheckoutService) blocks transactions while the market
     // is not OPEN. (I.2.1 / UC-32)
