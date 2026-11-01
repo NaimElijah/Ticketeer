@@ -101,7 +101,7 @@ final class EventSearchSpecification {
 
     private static EventCategory parseCategory(String raw) {
         try {
-            return EventCategory.valueOf(raw.toUpperCase());
+            return EventCategory.valueOf(raw.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return null;
         }

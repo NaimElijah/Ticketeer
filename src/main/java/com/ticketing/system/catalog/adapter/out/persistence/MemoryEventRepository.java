@@ -194,7 +194,7 @@ public class MemoryEventRepository implements EventRepository {
         // category — exact enum match by name (case-insensitive).
         if (filters.category() != null) {
             try {
-                EventCategory filterCategory = EventCategory.valueOf(filters.category().toUpperCase());
+                EventCategory filterCategory = EventCategory.valueOf(filters.category().toUpperCase(Locale.ROOT));
                 if (event.getCategory() != filterCategory) {
                     return false;
                 }

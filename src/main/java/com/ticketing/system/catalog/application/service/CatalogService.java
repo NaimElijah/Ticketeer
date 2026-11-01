@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -270,7 +271,7 @@ public class CatalogService {
             log.warn("Invalid credential provided while performing top-bar search");
             throw new InvalidTokenException();
         }
-        String q = query == null ? "" : query.trim().toLowerCase();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         if (q.isEmpty() || limit <= 0) {
             return List.of();
         }
@@ -291,7 +292,7 @@ public class CatalogService {
             }
 
             String eventName = event.getName();
-            if (events.size() < limit && eventName != null && eventName.toLowerCase().contains(q)) {
+            if (events.size() < limit && eventName != null && eventName.toLowerCase(Locale.ROOT).contains(q)) {
                 events.add(new SearchResultDTO("EVENT", eventName, company.getName(), event.getId()));
             }
 
@@ -300,16 +301,16 @@ public class CatalogService {
                     if (artists.size() >= limit) {
                         break;
                     }
-                    if (artist != null && artist.toLowerCase().contains(q)
-                            && seenArtists.add(artist.toLowerCase())) {
+                    if (artist != null && artist.toLowerCase(Locale.ROOT).contains(q)
+                            && seenArtists.add(artist.toLowerCase(Locale.ROOT))) {
                         artists.add(new SearchResultDTO("ARTIST", artist, "Artist · " + eventName, event.getId()));
                     }
                 }
             }
 
             String venue = venueLabel(event);
-            if (venues.size() < limit && venue != null && venue.toLowerCase().contains(q)
-                    && seenVenues.add(venue.toLowerCase())) {
+            if (venues.size() < limit && venue != null && venue.toLowerCase(Locale.ROOT).contains(q)
+                    && seenVenues.add(venue.toLowerCase(Locale.ROOT))) {
                 venues.add(new SearchResultDTO("VENUE", venue, "Venue · " + eventName, event.getId()));
             }
         }
@@ -361,10 +362,10 @@ public class CatalogService {
     //* returns all active companies so the picker can show an initial list. No credential needed —
     //* company names are public (same audience as browse).
     public List<CompanySummaryDTO> searchCompaniesByName(String substring) {
-        String needle = substring == null ? "" : substring.trim().toLowerCase();
+        String needle = substring == null ? "" : substring.trim().toLowerCase(Locale.ROOT);
         return productionCompanyRepository.findActive().stream()
                 .filter(c -> needle.isEmpty()
-                        || (c.getName() != null && c.getName().toLowerCase().contains(needle)))
+                        || (c.getName() != null && c.getName().toLowerCase(Locale.ROOT).contains(needle)))
                 .sorted(Comparator.comparing(ProductionCompany::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .map(c -> new CompanySummaryDTO(c.getCompanyId(), c.getName(),
                         CompanyRatings.fromEvents(eventRepository.findByCompanyId(c.getCompanyId()))))

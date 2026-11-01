@@ -1112,4 +1112,41 @@ class CatalogServiceTest {
 
         verify(mockEventRepository, never()).searchONSALE(any());
     }
+
+    // ---- case-insensitive matching ignores the JVM's locale (#187) ----
+    // Under a Turkish default locale, "TITLE".toLowerCase() has a dotless i and matches nothing. Browse
+    // lower-cases with Locale.ROOT, so the top bar and the company picker must too.
+
+    @Test
+    void GivenATurkishDefaultLocale_WhenTheTopBarSearchesForAnUppercaseTerm_ThenTheEventMatches() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        Event e = searchEvent(1, 10, "Title Night", List.of("Artist A"));
+        ProductionCompany company = createMockCompany("Live Nation", 4.5);
+        when(mockEventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
+
+        List<SearchResultDTO> results = underTurkishLocale(() -> catalogService.search(VALID_TOKEN, "TITLE", 8));
+
+        assertEquals(List.of("Title Night"), results.stream().map(SearchResultDTO::title).toList());
+    }
+
+    @Test
+    void GivenATurkishDefaultLocale_WhenCompaniesAreSearchedForAnUppercaseTerm_ThenTheCompanyMatches() {
+        ProductionCompany company = createMockCompany("Indie Live", 4.5);
+        when(mockCompanyRepository.findActive()).thenReturn(List.of(company));
+
+        var found = underTurkishLocale(() -> catalogService.searchCompaniesByName("INDIE"));
+
+        assertEquals(1, found.size());
+    }
+
+    private static <T> T underTurkishLocale(java.util.function.Supplier<T> call) {
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            return call.get();
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
+    }
 }

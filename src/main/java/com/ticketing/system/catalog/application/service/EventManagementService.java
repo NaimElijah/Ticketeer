@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
@@ -400,7 +401,7 @@ public class EventManagementService {
             EventCategory newCategory = null;
             if (update.category() != null && !update.category().isBlank()) {
                 try {
-                    newCategory = EventCategory.valueOf(update.category().trim().toUpperCase());
+                    newCategory = EventCategory.valueOf(update.category().trim().toUpperCase(Locale.ROOT));
                 } catch (IllegalArgumentException e) {
                     throw new IllegalArgumentException("Unknown event category: " + update.category());
                 }

@@ -575,6 +575,24 @@ public abstract class IEventRepositoryContractTest {
                 new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 
+    // Under a Turkish default locale "music".toUpperCase() has a dotted capital I and names no category.
+    @Test
+    void GivenATurkishDefaultLocale_WhenSearchingByALowercaseCategory_ThenOnlyThatCategoryMatches() {
+        eventRepo.save(buildEvent(1, "Jazz Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.MUSIC));
+        eventRepo.save(buildEvent(2, "Hamlet", 4.5, 10, EventStatus.ON_SALE, EventCategory.THEATER));
+        java.util.Locale defaultLocale = java.util.Locale.getDefault();
+        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+        List<Event> found;
+        try {
+            found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                    null, null, "music", null, null, null, null, null, null, null, null, null, null));
+        } finally {
+            java.util.Locale.setDefault(defaultLocale);
+        }
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
     private List<String> namesFoundSearchingFor(String eventName) {
         return eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 eventName, null, null, null, null, null, null, null, null, null, null, null, null))
