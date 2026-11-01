@@ -427,10 +427,12 @@ public class AuthenticationService {
      * is held during the hash work. The promotion, the cart merge and the token issue then run in
      * one transaction, and the member's pending notifications (UC-37) are delivered only after it
      * commits: delivery opens connections of its own, and must not mark a notification sent for a
-     * login that then rolls back. If that delivery then fails with a store failure, a lost
-     * connection or a lost concurrent update, the member is still signed in: the response carries
-     * no notifications and the failure is logged at WARN. Notifications the delivery had not reached
-     * stay PENDING for the notification poller; any it had already saved as SENT are not shown.
+     * login that then rolls back. A store failure or a lost connection part-way through delivery,
+     * and a notification another delivery or a click saved first, are handled by the delivery,
+     * which returns what it delivered. If it fails before delivering anything (reading the pending
+     * notifications, or getting a connection for that read), the member is still signed in: the
+     * response carries no notifications, the failure is logged at WARN, and every notification stays
+     * PENDING for the notification poller.
      *
      * @return the member's token, restored active order and delivered notifications
      * @throws GuestSessionRequiredException no / unknown / expired / non-guest

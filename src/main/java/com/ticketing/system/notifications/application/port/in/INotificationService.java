@@ -107,13 +107,19 @@ public interface INotificationService {
 
     /**
      * Mark one of the member's notifications READ, from SENT or from PENDING: a session ending in
-     * another tab sends SENT notifications back to PENDING while this tab's bell still shows them.
+     * another browser or on another device sends SENT notifications back to PENDING while this
+     * session's bell still shows them.
      * Nothing changes when the id is unknown, belongs to another member, or is already READ.
      *
      * @param userId         the member who clicked the notification
      * @param notificationId the notification's id
      * @throws org.springframework.dao.DataAccessException if the store fails to read or save it; the
      *         notification then stays as it was
+     * @throws org.springframework.transaction.CannotCreateTransactionException if no connection can be
+     *         had; the notification stays as it was
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if a delivery or
+     *         another click saved the notification first (a lost {@code @Version} race, re-typed by
+     *         {@code OptimisticLockTranslationAspect}); it stays as that save left it
      */
     void markRead(int userId, String notificationId);
 

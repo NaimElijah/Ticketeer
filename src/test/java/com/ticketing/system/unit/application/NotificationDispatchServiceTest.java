@@ -179,8 +179,8 @@ class NotificationDispatchServiceTest {
     // ---- Defect 2: A lost race in deliverPending fails the whole delivery (#187) ----
 
     // A poll on one device and a login on another can read the same PENDING row; the second save holds a
-    // stale @Version. That row is delivered by the other caller, so this one skips it, says so at DEBUG
-    // (a race is routine, not degraded), and goes on. ConcurrentNotificationDeliveryJpaTest drives the
+    // stale @Version. That row was saved first by the other delivery, so this one skips it, says so at
+    // DEBUG (a race is routine, not degraded), and goes on. ConcurrentNotificationDeliveryJpaTest drives the
     // same race on the real adapter.
     @Test
     void GivenTheSecondOfThreeSavesLosesAnOptimisticLockRace_WhenDeliverPending_ThenItIsSkippedAtDebugAndTheOthersAreDelivered() {
@@ -202,7 +202,8 @@ class NotificationDispatchServiceTest {
                     delivered.stream().map(NotificationDTO::notificationId).toList(),
                     "the raced row belongs to the other caller's delivery; the rest are this caller's");
             verify(mockRepo).save(third);
-            assertEquals(List.of("Notification id=notif-2 for userId=42 was delivered by another caller first; skipped"),
+            assertEquals(List.of("Notification id=notif-2 for userId=42 was saved first by another delivery"
+                    + " or a click; skipped"),
                     logs.messagesAt(Level.DEBUG).stream().filter(m -> m.contains("notif-2")).toList(),
                     "the skip should be logged at DEBUG");
         }

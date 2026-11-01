@@ -80,8 +80,9 @@ public class NotificationDispatchService {
      * TransactionTemplate commits. Per-item by design (Eval 5 acceptance #1's documented exception).
      *
      * <p>Two callers can deliver the same row at once, such as a poll on one device and a login on
-     * another. A save that loses that {@code @Version} race is skipped, logged at DEBUG: the other caller
-     * delivered the row, so it is not returned here, and delivery goes on with the next row (#187).
+     * another, or a click can mark it read meanwhile. A save that loses that {@code @Version} race is
+     * skipped, logged at DEBUG: the row was saved first by another delivery or a click, so it is not
+     * returned here, and delivery goes on with the next row (#187).
      *
      * <p>Any other store failure on a save, a lost connection included, stops delivery there and is
      * logged at WARN. What was already saved as SENT is still returned, since it is never PENDING again
@@ -107,9 +108,9 @@ public class NotificationDispatchService {
                 try {
                     notificationRepository.save(notification);
                 } catch (OptimisticLockingFailureException lostRace) {
-                    // Handled: the other caller saved this row first and returns it itself.
-                    log.debug("Notification id={} for userId={} was delivered by another caller first; skipped",
-                            notification.getId(), userId);
+                    // Handled: another delivery, which returns the row itself, or a click saved it first.
+                    log.debug("Notification id={} for userId={} was saved first by another delivery or a click;"
+                            + " skipped", notification.getId(), userId);
                     continue;
                 } catch (DataAccessException | CannotCreateTransactionException storeFailure) {
                     // Handled by stopping: the next saves would most likely fail too, and the rows
