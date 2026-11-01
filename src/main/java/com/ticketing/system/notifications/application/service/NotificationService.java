@@ -129,7 +129,8 @@ public class NotificationService implements INotificationService {
 
     @Override
     public void notifyEventCancelled(int userId, int eventId, String eventName) {
-        String message = String.format("Event '%s' (ID: %d) has been cancelled. Refunds have been processed.", eventName, eventId);
+        // The id stays in the data map below; the member reads only the event's name.
+        String message = String.format("Event '%s' has been cancelled. Refunds have been processed.", eventName);
         Notification notification = new Notification(
                 UUID.randomUUID().toString(),
                 userId,

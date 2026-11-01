@@ -340,6 +340,18 @@ class NotificationServiceTest {
         assertTrue(message.contains(mustSay), "the text should say \"" + mustSay + "\", but was: " + message);
     }
 
+    // The event's id stays in the notification's data for a link; the member reads only its name.
+    @Test
+    void GivenACancelledEvent_WhenNotifyEventCancelled_ThenTheTextNamesTheEventWithoutItsId() {
+        service.notifyEventCancelled(RECIPIENT, 4021, "Summer Jazz Night");
+
+        ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
+        verify(dispatcher).dispatch(sent.capture());
+        assertEquals("Event 'Summer Jazz Night' has been cancelled. Refunds have been processed.",
+                sent.getValue().getMessage());
+        assertEquals(4021, sent.getValue().getData().get("eventId"));
+    }
+
     private String dispatchedMessage() {
         ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
         verify(dispatcher).dispatch(sent.capture());
