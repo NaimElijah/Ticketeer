@@ -175,7 +175,10 @@ public class Ticket implements InvariantChecked {
         moveTo(TicketStatus.REFUNDED);
     }
 
-    /** Any state → VOIDED: an event cancellation or a refund voids what was never sold. Never refused. */
+    /**
+     * Any state → VOIDED. Never refused: {@link TicketStatus} lets every state become VOIDED, including USED
+     * and REFUNDED, which is an open question (requirements.md, OQ-30).
+     */
     public void markVoided() {
         moveTo(TicketStatus.VOIDED);
     }

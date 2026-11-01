@@ -11,8 +11,10 @@ package com.ticketing.system.sales.domain;
  *   <li>ISSUED → USED (gate scan, no UC yet, {@link Ticket#markUsed})</li>
  *   <li>PAID or ISSUED → REFUNDED (UC-4 refund, {@link Ticket#markRefunded})</li>
  *   <li>RESERVED → AVAILABLE (UC-2 expiry release, {@link Ticket#release})</li>
- *   <li>any state → VOIDED (an event cancellation or a refund voids what was never sold,
- *       {@link Ticket#markVoided})</li>
+ *   <li>any state → VOIDED ({@link Ticket#markVoided}). An event cancellation voids the tickets never
+ *       sold, and the USED ones of a refunded receipt; a member refund voids every ticket of the order that
+ *       is not PAID or ISSUED. Whether a USED or REFUNDED ticket should be voidable is an open question
+ *       (requirements.md, OQ-30).</li>
  * </ul>
  * Every other change is refused: reserving a ticket that is not AVAILABLE with
  * {@code TicketNotAvailableException}, and any other illegal change with
