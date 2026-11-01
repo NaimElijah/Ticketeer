@@ -1,9 +1,11 @@
 package com.ticketing.system.unit.application;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -16,6 +18,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import ch.qos.logback.classic.Level;
 
@@ -163,4 +166,42 @@ class NotificationDispatchServiceTest {
                     log.messagesAt(Level.DEBUG));
         }
     }
+
+    private static Notification pending(String id, int recipientUserId) {
+        return new Notification(id, recipientUserId, NotificationType.DIRECT_MESSAGE, NotificationStatus.PENDING,
+                "New message from a system admin: Venue change", LocalDateTime.of(2027, 7, 15, 17, 0));
+    }
+
+    // ---- Defect 2: A lost race in deliverPending fails the whole delivery (#187) ----
+
+    // A poll on one device and a login on another can read the same PENDING row; the second save holds a
+    // stale @Version. That row is delivered by the other caller, so this one skips it, says so at DEBUG
+    // (a race is routine, not degraded), and goes on. ConcurrentNotificationDeliveryJpaTest drives the
+    // same race on the real adapter.
+    @Test
+    void GivenTheSecondOfThreeSavesLosesAnOptimisticLockRace_WhenDeliverPending_ThenItIsSkippedAtDebugAndTheOthersAreDelivered() {
+        int userId = 42;
+        Notification first = pending("notif-1", userId);
+        Notification raced = pending("notif-2", userId);
+        Notification third = pending("notif-3", userId);
+        when(mockRepo.findByRecipientAndStatus(userId, NotificationStatus.PENDING))
+                .thenReturn(List.of(first, raced, third));
+        when(mockPushService.send(anyInt(), any(Notification.class))).thenReturn(true);
+        doThrow(new OptimisticLockingFailureException("row updated by another transaction"))
+                .when(mockRepo).save(raced);
+
+        try (LogCapture logs = LogCapture.of(NotificationDispatchService.class)) {
+            List<NotificationDTO> delivered = assertDoesNotThrow(() -> service.deliverPending(userId),
+                    "a row another caller delivered first should be skipped, not fail this delivery");
+
+            assertEquals(List.of("notif-1", "notif-3"),
+                    delivered.stream().map(NotificationDTO::notificationId).toList(),
+                    "the raced row belongs to the other caller's delivery; the rest are this caller's");
+            verify(mockRepo).save(third);
+            assertEquals(List.of("Notification id=notif-2 for userId=42 was delivered by another caller first; skipped"),
+                    logs.messagesAt(Level.DEBUG).stream().filter(m -> m.contains("notif-2")).toList(),
+                    "the skip should be logged at DEBUG");
+        }
+    }
+
 }

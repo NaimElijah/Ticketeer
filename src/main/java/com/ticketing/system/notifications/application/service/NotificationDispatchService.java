@@ -16,6 +16,7 @@ import com.ticketing.system.notifications.domain.NotificationStatus;
 //
 // The Domain-Events pattern was committed at UC-35 (see design_walkthrough_summary.md §6).
 // Listener wiring (which domain events trigger dispatchFromEvent) lives in code, off-diagram.
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,11 +68,23 @@ public class NotificationDispatchService {
         dispatch(notification);
     }
 
-    // UC-37: triggered by MemberLoggedIn event.
-    // Deliberately NOT part of a surrounding transaction: NOT_SUPPORTED suspends any caller's tx, so
-    // each pending notification is delivered + persisted on its own repository transaction. One failed
-    // push — or a mid-flush error — can't roll back the others. Login calls this only after its own
-    // TransactionTemplate commits. Per-item by design (Eval 5 acceptance #1's documented exception).
+    /**
+     * Deliver the member's PENDING notifications (UC-37), at login and on every poll, and mark each one
+     * delivered SENT.
+     *
+     * <p>Deliberately NOT part of a surrounding transaction: NOT_SUPPORTED suspends any caller's tx, so
+     * each pending notification is delivered + persisted on its own repository transaction. One failed
+     * push — or a mid-flush error — can't roll back the others. Login calls this only after its own
+     * TransactionTemplate commits. Per-item by design (Eval 5 acceptance #1's documented exception).
+     *
+     * <p>Two callers can deliver the same row at once, such as a poll on one device and a login on
+     * another. A save that loses that {@code @Version} race is skipped, logged at DEBUG: the other caller
+     * delivered the row, so it is not returned here, and delivery goes on with the next row (#187).
+     *
+     * @param userId the member whose notifications are delivered
+     * @return the notifications this call delivered, as shown to the member; empty when none
+     * @throws org.springframework.dao.DataAccessException if the store fails other than by a lost race
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<NotificationDTO> deliverPending(int userId) {
         log.info("Delivering pending notifications for userId={}", userId);
@@ -84,8 +97,15 @@ public class NotificationDispatchService {
             boolean pushSuccess = pushService.send(userId, notification);
             if (pushSuccess) {
                 notification.markSent();
-                notificationRepository.save(notification); // persist the status change
-                deliveredNotifications.add(notification.toDTO()); // convert to DTO for return
+                try {
+                    notificationRepository.save(notification);
+                } catch (OptimisticLockingFailureException lostRace) {
+                    // Handled: the other caller saved this row first and returns it itself.
+                    log.debug("Notification id={} for userId={} was delivered by another caller first; skipped",
+                            notification.getId(), userId);
+                    continue;
+                }
+                deliveredNotifications.add(notification.toDTO());
             } else {
                 log.error(
                         "Failed to push notification id={} to userId={}. Will remain pending for next login attempt.",
