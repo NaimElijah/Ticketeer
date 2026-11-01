@@ -399,7 +399,20 @@ public class MessagingService {
                 .toList();
     }
 
-    // II.6.3.1 — admin queue of complaints with filters.
+    /**
+     * II.6.3.1: the admin complaint queue, newest first, narrowed by whichever filters are set.
+     *
+     * @param token   a live admin token whose admin still exists
+     * @param filters status, member and creation-date filters, each optional; {@code null} for none. A
+     *                null or blank status means every status; any other must name a
+     *                {@link ConversationStatus}, case aside
+     * @return the matching complaints, seen by the calling admin
+     * @throws IllegalArgumentException if the status names no {@link ConversationStatus} (#187): an
+     *         unknown status is refused rather than read as "every status"
+     * @throws UnauthorizedActionException if the token is a member's, or its admin no longer exists
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked
+     */
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewAllComplaints(String token, ComplaintFilterDTO filters) {
         int adminId = requireSystemAdmin(token);
@@ -665,6 +678,8 @@ public class MessagingService {
         return true;
     }
 
+    // Null means no status filter: only a null or blank status asks for that. An unknown one is refused,
+    // never read as "every status" (#187).
     private ConversationStatus parseStatusOrNull(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -672,7 +687,7 @@ public class MessagingService {
         try {
             return ConversationStatus.valueOf(raw.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            return null;
+            throw new IllegalArgumentException("Unknown complaint status: " + raw.trim(), e);
         }
     }
 
