@@ -354,11 +354,8 @@ public class CheckoutService {
             }
             unlockEvents(lockedEventIds);
 
-            if (orderLockKey != null && activeOrderRepository != null) {
-                try {
-                    activeOrderRepository.unlock(orderLockKey);
-                } catch (Exception ignored) {
-                }
+            if (orderLockKey != null) {
+                unlockOrderKeepingTheOutcome(orderLockKey, order);
             }
             if (checkoutSucceeded && userId > 0 && receiptLinesToNotifyAfterUnlock != null) {
                 notifyPurchaseCompleted(userId, totalPrice, receiptLinesToNotifyAfterUnlock);
@@ -509,11 +506,20 @@ public class CheckoutService {
             }
             unlockEvents(lockedEventIds);
             if (orderLockKey != null) {
-                try {
-                    activeOrderRepository.unlock(orderLockKey);
-                } catch (Exception ignored) {
-                }
+                unlockOrderKeepingTheOutcome(orderLockKey, order);
             }
+        }
+    }
+
+    // Releases the order lock at the end of a checkout. A failure here must not replace the checkout's own
+    // outcome, a committed purchase or the failure being thrown, so it is logged with its exception rather
+    // than thrown. The line names the order, never the lock key: a guest's embeds the session id, the
+    // guest's credential.
+    private void unlockOrderKeepingTheOutcome(String orderLockKey, ActiveOrder order) {
+        try {
+            activeOrderRepository.unlock(orderLockKey);
+        } catch (RuntimeException unlockFailure) {
+            log.warn("Checkout could not release the order lock. orderKey={}", orderKeyOf(order), unlockFailure);
         }
     }
 

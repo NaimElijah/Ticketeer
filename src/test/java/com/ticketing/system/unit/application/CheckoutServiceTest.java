@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -3064,4 +3065,65 @@ private AtomicBoolean trackReceiptSave() {
         when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
     }
 
+    // ---- Defect 9: a failed order unlock in checkout's finally is logged, not swallowed (#187) ----
+    // On success the order is unlocked twice: after Phase 1, and in finally. A failed checkout also
+    // unlocks it in its rollback, between the two.
+
+    @Test
+    void GivenFinalOrderUnlockFails_WhenCheckoutMemberSucceeds_ThenThePurchaseStandsAndTheFailureIsLoggedAtWarn() {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        doNothing().doThrow(new IllegalMonitorStateException("order lock not held"))
+                .when(mockActiveOrderRepo).unlock(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            CheckoutResultDTO result = checkoutService.checkoutMember(
+                    VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+            assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId(),
+                    "a failed unlock after the sale committed must not undo the purchase");
+            assertUnlockFailureLoggedAtWarn(logs);
+        }
+    }
+
+    @Test
+    void GivenFinalOrderUnlockFails_WhenCheckoutGuestSucceeds_ThenThePurchaseStandsAndTheFailureIsLoggedAtWarn() {
+        arrangeGuestStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlagGuest(1);
+        doNothing().doThrow(new IllegalMonitorStateException("order lock not held"))
+                .when(mockActiveOrderRepo).unlock(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            CheckoutResultDTO result = checkoutService.checkoutGuest(
+                    VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE);
+
+            assertEquals(PAYMENT_TRANSACTION_ID, result.paymentTransactionId(),
+                    "a failed unlock after the sale committed must not undo the purchase");
+            assertUnlockFailureLoggedAtWarn(logs);
+        }
+    }
+
+    @Test
+    void GivenFinalOrderUnlockFails_WhenCheckoutMemberIsDeclined_ThenTheDeclineIsTheOutcomeAndTheFailureIsLoggedAtWarn() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+        doNothing().doNothing().doThrow(new IllegalMonitorStateException("order lock not held"))
+                .when(mockActiveOrderRepo).unlock(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(PaymentGatewayException.class, failed.getCause(),
+                    "a failed unlock must not replace the checkout's own failure");
+            assertUnlockFailureLoggedAtWarn(logs);
+        }
+    }
+
+    private static void assertUnlockFailureLoggedAtWarn(LogCapture logs) {
+        List<String> warnThrowables = logs.throwableClassNamesAt(Level.WARN);
+        assertTrue(warnThrowables.contains(IllegalMonitorStateException.class.getName()),
+                "a failed order unlock must be logged at WARN with its exception, but WARN carried "
+                        + warnThrowables);
+    }
 }
