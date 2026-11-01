@@ -89,6 +89,21 @@ class ViewMyActiveOrderFailureTest {
         verify(sessionManager, never()).validateGuestSession(MEMBER_TOKEN);
     }
 
+    // A member token revoked between its check and the read of its user id was a member's: the refusal reaches
+    // the caller, and the token is not tried as a guest session id.
+    @Test
+    void GivenAMemberTokenRevokedAfterItsCheck_WhenViewMyActiveOrder_ThenTheRefusalPropagatesWithoutTheGuestPath() {
+        InvalidTokenException revoked = new InvalidTokenException("token revoked");
+        when(sessionManager.validateToken(MEMBER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(MEMBER_TOKEN)).thenThrow(revoked);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> reservationService.viewMyActiveOrder(MEMBER_TOKEN));
+
+        assertSame(revoked, thrown, "the member token's own refusal must reach the caller");
+        verify(sessionManager, never()).validateGuestSession(MEMBER_TOKEN);
+    }
+
     // Guard: a guest's raw session id is no JWT, so the member check rejects it and the guest path runs.
     @Test
     void GivenAGuestsSessionIdThatIsNoMemberToken_WhenViewMyActiveOrder_ThenTheGuestsCartIsShown() {

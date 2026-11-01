@@ -62,7 +62,6 @@ class RefundServiceTest {
     @Mock TicketRepository ticketRepository;
     @Mock PaymentGateway paymentGateway;
     @Mock InventoryCommandPort inventoryPort;
-    @Mock Ticket ticket;
 
     RefundService service;
 
@@ -76,6 +75,10 @@ class RefundServiceTest {
     static final int    PAYMENT_TX    = 555;
     static final double TOTAL         = 150.00;
     static final LocalDateTime WHEN   = LocalDateTime.of(2026, 6, 1, 12, 0);
+
+    // Real tickets, so a refund drives Ticket's own state machine. A new Ticket is PAID.
+    private final Ticket ticket = new Ticket(EVENT_ID, ZONE_ID, ORDER_ID, null, TOTAL, 501, "barcode-1");
+    private final Ticket secondTicket = new Ticket(EVENT_ID, ZONE_ID, ORDER_ID, null, TOTAL, 502, "barcode-2");
 
     @BeforeEach
     void setUp() {
@@ -103,14 +106,13 @@ class RefundServiceTest {
         Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(result);
         Mockito.when(paymentGateway.getId()).thenReturn("stub");
         Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(ticket));
-        Mockito.when(ticket.getStatus()).thenReturn(TicketStatus.PAID);
 
         RefundResultDTO returned = service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
 
         assertThat(returned).isSameAs(result);
         assertThat(receipt.isFullyRefunded()).isTrue();
         Mockito.verify(paymentGateway).refund(PAYMENT_TX, TOTAL);
-        Mockito.verify(ticket).markRefunded();
+        assertThat(ticket.getStatus()).isEqualTo(TicketStatus.REFUNDED);
         Mockito.verify(ticketRepository).save(ticket);
         Mockito.verify(orderReceiptRepository).save(receipt);
     }
@@ -124,16 +126,12 @@ class RefundServiceTest {
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(receipt));
         Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(result);
         Mockito.when(paymentGateway.getId()).thenReturn("stub");
-        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(ticket));
-        Mockito.when(ticket.getStatus()).thenReturn(TicketStatus.PAID);
-        Mockito.when(ticket.getEventId()).thenReturn(EVENT_ID);
-        Mockito.when(ticket.getZoneId()).thenReturn(ZONE_ID);
-        Mockito.when(ticket.isSeatedTicket()).thenReturn(true);
-        Mockito.when(ticket.getSeatNumber()).thenReturn("A9");
+        Ticket seated = seatedTicket();
+        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(seated));
 
         service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
 
-        Mockito.verify(ticket).markRefunded();
+        assertThat(seated.getStatus()).isEqualTo(TicketStatus.REFUNDED);
         // The refunded seat is handed to the catalog inventory port as a flat line (event, zone, seat).
         // The port owns the buyer-lock / returnSoldToStock / save (now verified in InventoryServiceTest).
         @SuppressWarnings("unchecked")
@@ -156,12 +154,8 @@ class RefundServiceTest {
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(receipt));
         Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(result);
         Mockito.when(paymentGateway.getId()).thenReturn("stub");
-        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(ticket));
-        Mockito.when(ticket.getStatus()).thenReturn(TicketStatus.PAID);
-        Mockito.when(ticket.getEventId()).thenReturn(EVENT_ID);
-        Mockito.when(ticket.getZoneId()).thenReturn(ZONE_ID);
-        Mockito.when(ticket.isSeatedTicket()).thenReturn(true);
-        Mockito.when(ticket.getSeatNumber()).thenReturn("A9");
+        Ticket seated = seatedTicket();
+        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(seated));
         Mockito.doThrow(new IllegalStateException("Event " + EVENT_ID + " must be locked before saving"))
                 .when(inventoryPort).returnSoldToStock(Mockito.anyList());
 
@@ -169,7 +163,7 @@ class RefundServiceTest {
 
         assertThat(returned).isSameAs(result);
         assertThat(receipt.isFullyRefunded()).isTrue();
-        Mockito.verify(ticket).markRefunded();
+        assertThat(seated.getStatus()).isEqualTo(TicketStatus.REFUNDED);
         // The port was invoked (and its failure swallowed) after the refund committed.
         Mockito.verify(inventoryPort).returnSoldToStock(Mockito.anyList());
     }
@@ -319,8 +313,6 @@ class RefundServiceTest {
     // transaction fails, the refund still stands: an ERROR names the order, the tickets stay valid, and no
     // stock is returned, since freeing seats whose tickets are still valid could sell a seat twice.
 
-    @Mock Ticket secondTicket;
-
     @Test
     void GivenOwnPaidOrder_WhenRequestRefund_ThenTheTicketFlipsAreSavedInOneTransactionBegunAfterTheRefundCommitted() {
         RecordingTransactionManager transactions = new RecordingTransactionManager();
@@ -338,6 +330,9 @@ class RefundServiceTest {
                         "begin 1", "receipt saved in 1", "commit 1",
                         "begin 2", "ticket saved in 2", "ticket saved in 2", "commit 2",
                         "stock returned in 0");
+        assertThat(List.of(ticket.getStatus(), secondTicket.getStatus()))
+                .as("both paid tickets are refunded")
+                .containsOnly(TicketStatus.REFUNDED);
     }
 
     @Test
@@ -423,12 +418,12 @@ class RefundServiceTest {
         Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(gatewayResult());
         Mockito.when(paymentGateway.getId()).thenReturn("stub");
         Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(ticket, secondTicket));
-        for (Ticket each : List.of(ticket, secondTicket)) {
-            Mockito.lenient().when(each.getStatus()).thenReturn(TicketStatus.PAID);
-            Mockito.lenient().when(each.getEventId()).thenReturn(EVENT_ID);
-            Mockito.lenient().when(each.getZoneId()).thenReturn(ZONE_ID);
-        }
         return receipt;
+    }
+
+    // A PAID seated ticket of the order, in seat A9.
+    private static Ticket seatedTicket() {
+        return new Ticket(EVENT_ID, ZONE_ID, ORDER_ID, "A9", TOTAL, 503, "barcode-3");
     }
 
     /**
