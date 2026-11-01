@@ -134,6 +134,9 @@ class MessagingServiceTest {
         User member = plainUser(MEMBER_ID);
         when(userRepository.getUserById(MEMBER_ID)).thenReturn(member);
 
+        User member2 = plainUser(MEMBER2_ID);
+        when(userRepository.getUserById(MEMBER2_ID)).thenReturn(member2);
+
         stubToken(SHARED_ID_MEMBER_TOKEN, COMPANY_ID);
         User sharedIdMember = plainUser(COMPANY_ID);
         when(userRepository.getUserById(COMPANY_ID)).thenReturn(sharedIdMember);
