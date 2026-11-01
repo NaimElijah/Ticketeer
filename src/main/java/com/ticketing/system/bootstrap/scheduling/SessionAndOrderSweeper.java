@@ -141,23 +141,25 @@ public class SessionAndOrderSweeper {
     }
 
     /**
-     * Returns the count of orders deleted. Public for the same reason. A line's hold is judged
-     * against {@code now}, both in the scan and in the re-check under the lock.
+     * Returns the count of orders released and deleted; an order skipped under the lock, because its
+     * checkout is in progress or it is no longer expired, is not counted. Public for the same reason. A
+     * line's hold is judged against {@code now}, both in the scan and in the re-check under the lock.
      */
     public int sweepExpiredOrders(Instant now) {
         LocalDateTime holdNow = holdTime(now);
         List<ActiveOrder> expired = activeOrderRepository.findExpired(holdNow);
+        int released = 0;
         for (ActiveOrder order : expired) {
             // requireStillExpired=true: only release/delete if the cart is still expired when we lock it
             // (a buyer may have manually removed the expired line since findExpired() scanned). Publish the
             // OrderExpired event only when we actually released, so a salvaged cart doesn't trigger a
             // spurious "your order expired" notification.
-            boolean released = releaseTicketsToInventory(order, true, holdNow);
-            if (released) {
+            if (releaseTicketsToInventory(order, true, holdNow)) {
                 eventPublisher.publishEvent(new OrderExpiredEvent(order.getUserId(), order.getSessionId()));
+                released++;
             }
         }
-        return expired.size();
+        return released;
     }
 
     /**
