@@ -76,8 +76,9 @@ public class MessagingService {
     // Company-membership/authorization checks (moved off the User aggregate, task #20) used to decide
     // whether a caller may act for a company; messaging already depends on organization.
     private final CompanyMembershipService companyMembershipService;
-    // Publisher for cross-context integration events (NewMessageNotice); the notifications
-    // context listens for these instead of messaging calling it directly.
+    // Publisher for cross-context integration events (NewMessageNotice per message, OutreachSentNotice
+    // per outreach send); the notifications context listens for these instead of messaging calling it
+    // directly.
     private final ApplicationEventPublisher eventPublisher;
     // Stamps messages and conversations: UTC wall time (ADR-008).
     private final Clock clock;
