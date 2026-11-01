@@ -160,8 +160,9 @@ public class SystemIntegrityVerifier {
             try {
                 aggregate.checkInvariants();
             } catch (RuntimeException e) {
-                // checkInvariants throws a plain IllegalStateException; wrap it as a DomainException so
-                // PlatformInitializationRunner's catch leaves the platform uninitialized gracefully.
+                // checkInvariants throws a plain IllegalStateException: the wrap gives the failure
+                // a domain type and keeps it as the cause. At boot it stops the application; before
+                // a later open it keeps the market closed (ADR-003).
                 throw new SystemIntegrityViolationException(
                         "loaded " + type + " " + idOf.apply(aggregate) + " violates its invariant: "
                                 + e.getMessage(), e);
