@@ -34,8 +34,8 @@ Because every line is a real service call, each is classified in the end-of-run 
 |---|---|
 | **PASS** | The service call succeeded. |
 | **SKIPPED** | The call threw `UnsupportedOperationException` — a known, not-yet-built feature stub (e.g. `add-coupon`). |
-| **FAIL** | Any other exception — a real bug worth surfacing. |
-| **BLOCKED** | A dependent step skipped because a prerequisite failed (recorded to avoid cascade noise). |
+| **FAIL** | Any other exception — a real bug worth surfacing — or an `expect-error` step whose operation threw nothing or another exception type. |
+| **BLOCKED** | Reserved for a step skipped because a prerequisite failed. The scenario engine records none today (#50). |
 
 With `seed.fail-fast=true` the run aborts at the first unexpected failure (a partial report is still
 logged) and startup fails. That is the default outside `dev`; `dev` sets it to `false` so a broken demo
@@ -189,9 +189,10 @@ add-coupon u2 p1 code=sale123 percent=20
 logout-all
 ```
 
-Each line ends up PASS, SKIPPED, FAIL or BLOCKED in the end-of-run `SeedReport` (see
-[How dev seeding works](#how-dev-seeding-works)). With `seed.fail-fast=true` (the default outside
-`dev`) the run stops at the first unexpected failure, and startup fails with it.
+Each line ends up PASS, SKIPPED or FAIL in the end-of-run `SeedReport` (see
+[How dev seeding works](#how-dev-seeding-works)); the scenario engine records no BLOCKED step. With
+`seed.fail-fast=true` (the default outside `dev`) the run stops at the first unexpected failure, and
+startup fails with it.
 
 ## Date relativity
 

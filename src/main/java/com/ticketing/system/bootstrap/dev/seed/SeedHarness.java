@@ -19,7 +19,7 @@ import java.util.Optional;
  * <p>When {@code failFast} is true, the first FAIL (or a failed negative
  * assertion) is rethrown as a {@link SeedAbortException} so the whole seed
  * stops with a full stack trace — for debugging one bug cleanly. When false
- * (the default), every stage runs and failures are collected into the
+ * ({@code dev}'s setting), every stage runs and failures are collected into the
  * end-of-run summary.
  */
 @Slf4j
