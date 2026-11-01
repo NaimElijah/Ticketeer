@@ -124,7 +124,8 @@ class MessagingServiceTest {
         ProductionCompany company = companyMock(COMPANY_ID, OWNER_ID);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
 
-        User owner = ownerUser(OWNER_ID, COMPANY_ID);
+        // A plain member account: ownership comes from the membership gate below, not from the User.
+        User owner = plainUser(OWNER_ID);
         when(userRepository.getUserById(OWNER_ID)).thenReturn(owner);
         // The owner "acts for" its company — the membership gate answers true for that (userId, companyId).
         when(membershipService.isOwnerInCompany(OWNER_ID, COMPANY_ID)).thenReturn(true);
@@ -570,12 +571,6 @@ class MessagingServiceTest {
         }
         when(c.getOwnerIds()).thenReturn(owners);
         return c;
-    }
-
-    private User ownerUser(int userId, int companyId) {
-        User u = mock(User.class);
-        when(u.getUserId()).thenReturn(userId);
-        return u;
     }
 
     private static User plainUser(int userId) {
