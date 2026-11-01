@@ -126,17 +126,32 @@ class ConversationTest extends BaseDomainTest {
     }
 
     @Test
-    void markReadBy_onlyMarksTheOtherSidesMessages_andIsIdempotent() {
+    void GivenTheMembersOpeningMessage_WhenTheMemberMarksTheThreadRead_ThenItStaysUnreadForTheCompany() {
         Conversation c = inquiry();                                   // 1 message from the member
-        // The sender reading the thread leaves their own message unread for the recipient.
+
         c.markReadBy(MEMBER_ID, ParticipantType.MEMBER);
+
         assertEquals(1, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
-        // The recipient reads it.
+    }
+
+    @Test
+    void GivenTheMembersOpeningMessage_WhenTheCompanyMarksTheThreadRead_ThenNothingIsUnreadForTheCompany() {
+        Conversation c = inquiry();
+
         c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
+
         assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
-        // Idempotent.
+    }
+
+    @Test
+    void GivenAThreadTheCompanyHasRead_WhenItMarksItReadAgain_ThenNothingChanges() {
+        Conversation c = inquiry();
         c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
+
+        c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
+
         assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
+        assertEquals(0, c.unreadCountFor(MEMBER_ID, ParticipantType.MEMBER));
     }
 
     @Test

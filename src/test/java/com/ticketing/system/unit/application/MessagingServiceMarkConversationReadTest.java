@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,12 +24,15 @@ import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.organization.adapter.out.persistence.MemoryProductionCompanyRepository;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.OutreachRequestDTO;
 import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.shared.dto.StartConversationRequestDTO;
 import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
+import com.ticketing.system.shared.exception.ConversationNotFoundException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 
 // ---- Nothing ever marks a conversation read (#187) ----
@@ -49,6 +53,12 @@ class MessagingServiceMarkConversationReadTest {
     private static final int ADMIN_A_ID = 1;
     private static final String ADMIN_B_TOKEN = "admin-b-tok";
     private static final int ADMIN_B_ID = 2;
+    // An admin token whose admin no longer exists in the admin pool.
+    private static final String REMOVED_ADMIN_TOKEN = "removed-admin-tok";
+    private static final int REMOVED_ADMIN_ID = 3;
+    // A company staff member who holds a permission, but not RESPOND_TO_INQUIRIES.
+    private static final String STAFF_TOKEN = "staff-tok";
+    private static final int STAFF_ID = 30;
     private static final int MEMBER_AGE = 30;
     private static final Instant NOW = Instant.parse("2027-07-15T17:00:00Z");
 
@@ -60,18 +70,22 @@ class MessagingServiceMarkConversationReadTest {
         memberToken(sessions, MEMBER_TOKEN, MEMBER_ID);
         memberToken(sessions, OWNER_TOKEN, OWNER_ID);
         memberToken(sessions, OUTSIDER_TOKEN, OUTSIDER_ID);
+        memberToken(sessions, STAFF_TOKEN, STAFF_ID);
         AdminRepository admins = mock(AdminRepository.class);
         adminToken(sessions, admins, ADMIN_A_TOKEN, ADMIN_A_ID);
         adminToken(sessions, admins, ADMIN_B_TOKEN, ADMIN_B_ID);
+        removedAdminToken(sessions, REMOVED_ADMIN_TOKEN, REMOVED_ADMIN_ID);
 
         MemoryUserRepository users = new MemoryUserRepository();
         users.save(new User(MEMBER_ID, "member", "member@example.test", "unused-password-hash", MEMBER_AGE));
         users.save(new User(OWNER_ID, "owner", "owner@example.test", "unused-password-hash", MEMBER_AGE));
         users.save(new User(OUTSIDER_ID, "outsider", "outsider@example.test", "unused-password-hash", MEMBER_AGE));
+        users.save(new User(STAFF_ID, "staff", "staff@example.test", "unused-password-hash", MEMBER_AGE));
         MemoryProductionCompanyRepository companies = new MemoryProductionCompanyRepository();
         companies.save(new ProductionCompany(COMPANY_ID, OWNER_ID, "Acme Live", CompanyStatus.ACTIVE, null, null));
         CompanyMembershipService membership = mock(CompanyMembershipService.class);
         when(membership.isOwnerInCompany(OWNER_ID, COMPANY_ID)).thenReturn(true);
+        when(membership.hasPermissionInCompany(STAFF_ID, COMPANY_ID, Permission.VIEW_SALES)).thenReturn(true);
 
         service = new MessagingService(new MemoryConversationRepository(), sessions, admins, users, companies,
                 membership, mock(ApplicationEventPublisher.class), Clock.fixed(NOW, ZoneOffset.UTC));
@@ -146,6 +160,95 @@ class MessagingServiceMarkConversationReadTest {
     private static void memberToken(SessionManager sessions, String token, int userId) {
         when(sessions.validateToken(token)).thenReturn(true);
         when(sessions.extractUserId(token)).thenReturn(userId);
+    }
+
+    // ---- Authorisation and error cases (#187 review) ----
+
+    @Test
+    void GivenAdminAsOutreachThread_WhenAdminBMarksItRead_ThenRefusedAndNothingChanges() {
+        String outreach = outreachByAdminAWithAMemberReply();
+
+        assertThrows(InvalidParticipantException.class, () -> service.markConversationRead(ADMIN_B_TOKEN, outreach));
+
+        assertEquals(1, service.viewConversation(ADMIN_A_TOKEN, outreach).unreadCountForViewer());
+        assertEquals(1, service.viewConversation(MEMBER_TOKEN, outreach).unreadCountForViewer());
+    }
+
+    @Test
+    void GivenAnInquiry_WhenAnAdminMarksItRead_ThenRefusedAndNothingChanges() {
+        String inquiry = inquiryWithTwoCompanyReplies();
+
+        assertThrows(InvalidParticipantException.class, () -> service.markConversationRead(ADMIN_A_TOKEN, inquiry));
+
+        assertEquals(2, service.viewConversation(MEMBER_TOKEN, inquiry).unreadCountForViewer());
+        assertEquals(1, companyUnread(inquiry));
+    }
+
+    // The admin gate treats a token whose admin is gone from the pool as no participant at all.
+    @Test
+    void GivenAnAdminTokenWhoseAdminNoLongerExists_WhenTheyMarkAComplaintRead_ThenRefusedAndNothingChanges() {
+        String complaint = complaintAnsweredByAdminA();
+
+        assertThrows(InvalidParticipantException.class,
+                () -> service.markConversationRead(REMOVED_ADMIN_TOKEN, complaint));
+
+        assertEquals(1, service.viewConversation(ADMIN_B_TOKEN, complaint).unreadCountForViewer());
+        assertEquals(1, service.viewConversation(MEMBER_TOKEN, complaint).unreadCountForViewer());
+    }
+
+    @Test
+    void GivenCompanyStaffWithoutRespondToInquiries_WhenTheyMarkAnInquiryRead_ThenRefusedAndNothingChanges() {
+        String inquiry = inquiryWithTwoCompanyReplies();
+
+        assertThrows(InvalidParticipantException.class, () -> service.markConversationRead(STAFF_TOKEN, inquiry));
+
+        assertEquals(2, service.viewConversation(MEMBER_TOKEN, inquiry).unreadCountForViewer());
+        assertEquals(1, companyUnread(inquiry));
+    }
+
+    @Test
+    void GivenAnUnknownConversationId_WhenMarkConversationRead_ThenConversationNotFound() {
+        assertThrows(ConversationNotFoundException.class,
+                () -> service.markConversationRead(MEMBER_TOKEN, "no-such-conversation"));
+    }
+
+    // A closed thread stays readable, so opening it still marks it read: closing ends the replies, not
+    // the reading.
+    @Test
+    void GivenAClosedInquiryWithUnreadReplies_WhenTheMemberMarksItRead_ThenItsRepliesAreRead() {
+        String inquiry = inquiryWithTwoCompanyReplies();
+        service.closeConversation(MEMBER_TOKEN, inquiry);
+
+        service.markConversationRead(MEMBER_TOKEN, inquiry);
+
+        ConversationDTO seenByMember = service.viewConversation(MEMBER_TOKEN, inquiry);
+        assertEquals("CLOSED", seenByMember.status());
+        assertEquals(0, seenByMember.unreadCountForViewer());
+        assertEquals(1, companyUnread(inquiry));
+    }
+
+    @Test
+    void GivenAdminAsOutreachThreadWithAMemberReply_WhenAdminAMarksItRead_ThenNothingIsUnreadForAAndTheMemberStillHasTheOpenerUnread() {
+        String outreach = outreachByAdminAWithAMemberReply();
+
+        service.markConversationRead(ADMIN_A_TOKEN, outreach);
+
+        assertEquals(0, service.viewConversation(ADMIN_A_TOKEN, outreach).unreadCountForViewer());
+        assertEquals(1, service.viewConversation(MEMBER_TOKEN, outreach).unreadCountForViewer());
+    }
+
+    private String outreachByAdminAWithAMemberReply() {
+        String id = service.sendOutreach(ADMIN_A_TOKEN, new OutreachRequestDTO(
+                "Venue change", "The show moves to Hall B.", List.of(MEMBER_ID), false, false))
+                .firstConversationId();
+        service.sendMessage(MEMBER_TOKEN, new SendMessageRequestDTO(id, 0, null, "Thanks, noted."));
+        return id;
+    }
+
+    private static void removedAdminToken(SessionManager sessions, String token, int adminId) {
+        when(sessions.isAdminToken(token)).thenReturn(true);
+        when(sessions.validateAdminToken(token)).thenReturn(true);
+        when(sessions.extractAdminId(token)).thenReturn(adminId);
     }
 
     private static void adminToken(SessionManager sessions, AdminRepository admins, String token, int adminId) {

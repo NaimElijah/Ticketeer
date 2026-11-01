@@ -31,14 +31,15 @@ import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.organization.adapter.out.persistence.MemoryProductionCompanyRepository;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.shared.dto.OutreachRequestDTO;
-import com.ticketing.system.shared.exception.DomainException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
 
 // ---- Outreach recipient ids are not validated (#187) ----
 //
 // An outreach is one admin action, and sendOutreach already refuses a send that matches no recipient
 // outright. So an explicit recipient list naming an id with no member refuses the whole send, before
 // any conversation is stored or any notice published: a partial send would leave the admin unable to
-// tell who got it. The refusal is a DomainException, whose message reaches the admin (ServiceErrors).
+// tell who got it. The refusal is a UserNotFoundException, a DomainException, whose message reaches the
+// admin (ServiceErrors).
 class MessagingServiceOutreachRecipientTest {
 
     private static final String ADMIN_TOKEN = "admin-tok";
@@ -75,7 +76,7 @@ class MessagingServiceOutreachRecipientTest {
     void GivenARecipientIdWithNoMember_WhenAnAdminSendsOutreach_ThenTheWholeSendIsRefusedAndNothingIsStored() {
         OutreachRequestDTO request = outreachTo(List.of(MEMBER_ID, NO_SUCH_MEMBER_ID));
 
-        assertThrows(DomainException.class, () -> service.sendOutreach(ADMIN_TOKEN, request));
+        assertThrows(UserNotFoundException.class, () -> service.sendOutreach(ADMIN_TOKEN, request));
 
         assertNothingSent();
     }
@@ -84,7 +85,7 @@ class MessagingServiceOutreachRecipientTest {
     void GivenRecipientIdZero_WhenAnAdminSendsOutreach_ThenTheWholeSendIsRefusedAndNothingIsStored() {
         OutreachRequestDTO request = outreachTo(List.of(MEMBER_ID, ID_ZERO));
 
-        assertThrows(DomainException.class, () -> service.sendOutreach(ADMIN_TOKEN, request));
+        assertThrows(UserNotFoundException.class, () -> service.sendOutreach(ADMIN_TOKEN, request));
 
         assertNothingSent();
     }

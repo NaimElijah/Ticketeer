@@ -72,6 +72,7 @@ class MessagingServiceTest {
     private static final String ADMIN_TOKEN = "admin-tok";
     private static final int ADMIN_ID = 1;
     private static final int COMPANY_ID = 5;
+    private static final int MEMBER_AGE = 30;
     // Member and company ids come from separate sequences, so a member often has its company's id.
     private static final String SHARED_ID_MEMBER_TOKEN = "shared-id-member-tok";
     // Messages are stamped from the injected clock, as UTC wall time (ADR-008).
@@ -335,8 +336,6 @@ class MessagingServiceTest {
 
     @Test
     void sendOutreach_allMembers_fansOutDirect_andNotifiesEach() {
-        // Build the mock users into locals first — stubbing a mock inside thenReturn(...) trips
-        // Mockito's "unfinished stubbing" guard.
         User u10 = plainUser(MEMBER_ID);
         User u11 = plainUser(MEMBER2_ID);
         when(userRepository.findAll()).thenReturn(List.of(u10, u11));
@@ -579,10 +578,9 @@ class MessagingServiceTest {
         return u;
     }
 
-    private User plainUser(int userId) {
-        User u = mock(User.class);
-        when(u.getUserId()).thenReturn(userId);
-        return u;
+    private static User plainUser(int userId) {
+        return new User(userId, "user" + userId, "user" + userId + "@example.test", "unused-password-hash",
+                MEMBER_AGE);
     }
 
     // ---- An outreach to more recipients than the notification queue holds drops alerts (#187) ----
