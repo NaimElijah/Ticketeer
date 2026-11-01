@@ -262,8 +262,9 @@ public class ScenarioRunner implements ApplicationRunner {
         try {
             return promptForAnswer(label, options, dflt).orElse(dflt);
         } catch (IOException e) {
-            // No usable console is the no-terminal case: take the default, as for EOF.
-            log.debug("seed.mode=ask: could not read the console; taking the default '{}'", dflt, e);
+            // No usable console is the no-terminal case: take the default, as for EOF. Logged at WARN, since
+            // the operator asked for a menu and did not get one.
+            log.warn("seed.mode=ask: could not read the console; taking the default '{}'", dflt, e);
             return dflt;
         }
     }

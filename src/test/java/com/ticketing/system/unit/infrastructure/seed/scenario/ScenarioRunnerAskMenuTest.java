@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import ch.qos.logback.classic.Level;
 
 import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioRunner;
@@ -90,5 +93,25 @@ class ScenarioRunnerAskMenuTest {
 
         assertFalse(logs.eventsContaining(DEFAULT_SCENARIO).isEmpty(),
                 "a console that ends before the scenario question is answered gets the default, " + DEFAULT_SCENARIO);
+    }
+
+    // ---- F7: a console that cannot be read is logged at WARN, with its exception (#187) ----
+
+    @Test
+    void GivenAConsoleThatCannotBeRead_WhenTheAskMenuRuns_ThenAWarningCarriesTheExceptionAndNothingIsSeeded() {
+        System.setIn(new InputStream() {
+            @Override
+            public int read() throws IOException {
+                throw new IOException("console unavailable");
+            }
+        });
+        ScenarioRunner runner = fixture.runner(SeedProperties.Mode.ASK, false, CONFIGURED_SCENARIO);
+
+        assertDoesNotThrow(() -> runner.run(null), "an unreadable console takes the default mode, off");
+
+        assertTrue(logs.throwableClassNamesAt(Level.WARN).contains(IOException.class.getName()),
+                "the failed read must be logged at WARN with its exception, but the WARN throwables were "
+                        + logs.throwableClassNamesAt(Level.WARN));
+        fixture.verifyNoScenarioStepRan();
     }
 }
