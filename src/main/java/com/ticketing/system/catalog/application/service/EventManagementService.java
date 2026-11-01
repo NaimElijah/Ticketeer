@@ -128,7 +128,7 @@ public class EventManagementService {
      * @param request the event's details; its location is required
      * @return the new event
      * @throws InvalidTokenException     if {@code token} is not a live member token
-     * @throws IllegalArgumentException  if the request has no venue location, checked before any lookup
+     * @throws IllegalArgumentException  if the request has no venue location, checked before the company lookup
      * @throws CompanyNotFoundException  if the company does not exist
      */
     @Transactional
