@@ -2,6 +2,8 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -18,7 +20,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 import ch.qos.logback.classic.Level;
 
@@ -202,6 +206,85 @@ class NotificationDispatchServiceTest {
                     logs.messagesAt(Level.DEBUG).stream().filter(m -> m.contains("notif-2")).toList(),
                     "the skip should be logged at DEBUG");
         }
+    }
+
+    // ---- Defect 3: Partial delivery is returned nowhere (#187) ----
+
+    // Login and the poller show only the list deliverPending returns (login shows nothing when it
+    // throws), and a row saved as SENT is never PENDING again, so the next delivery skips it too. What
+    // was saved before a store failure therefore has to come back as the return value. Delivery stops at
+    // the failure: the rows after it stay PENDING for the next login or poll.
+    @Test
+    void GivenTheSecondOfThreePendingSavesFails_WhenDeliverPending_ThenTheFirstIsReturnedAndTheThirdStaysPending() {
+        int userId = 42;
+        Notification first = pending("notif-1", userId);
+        Notification second = pending("notif-2", userId);
+        Notification third = pending("notif-3", userId);
+        when(mockRepo.findByRecipientAndStatus(userId, NotificationStatus.PENDING))
+                .thenReturn(List.of(first, second, third));
+        when(mockPushService.send(anyInt(), any(Notification.class))).thenReturn(true);
+        doThrow(new DataAccessResourceFailureException("store unavailable")).when(mockRepo).save(second);
+
+        List<NotificationDTO> delivered = assertDoesNotThrow(() -> service.deliverPending(userId),
+                "a store failure part-way should still hand back what was already delivered");
+
+        assertEquals(List.of("notif-1"), delivered.stream().map(NotificationDTO::notificationId).toList(),
+                "the row saved as SENT before the failure should reach the caller");
+        assertEquals(NotificationStatus.PENDING, third.getStatus(),
+                "the row after the failure should stay PENDING for the next delivery");
+        verify(mockRepo, never()).save(third);
+    }
+
+    @Test
+    void GivenTheSecondOfThreePendingSavesFails_WhenDeliverPending_ThenTheFailureIsLoggedAtWarnWithTheException() {
+        int userId = 42;
+        Notification second = pending("notif-2", userId);
+        when(mockRepo.findByRecipientAndStatus(userId, NotificationStatus.PENDING))
+                .thenReturn(List.of(pending("notif-1", userId), second, pending("notif-3", userId)));
+        when(mockPushService.send(anyInt(), any(Notification.class))).thenReturn(true);
+        doThrow(new DataAccessResourceFailureException("store unavailable")).when(mockRepo).save(second);
+
+        try (LogCapture logs = LogCapture.of(NotificationDispatchService.class)) {
+            service.deliverPending(userId);
+
+            assertEquals(List.of(DataAccessResourceFailureException.class.getName()),
+                    logs.throwableClassNamesAt(Level.WARN),
+                    "a delivery cut short by the store is degraded, so WARN with the exception attached");
+        }
+    }
+
+    // With the database down, the adapter's @Transactional save fails as it begins: a
+    // CannotCreateTransactionException, which is no DataAccessException, and the commonest outage.
+    @Test
+    void GivenTheSecondOfThreePendingSavesCannotGetAConnection_WhenDeliverPending_ThenTheFirstIsReturnedAndTheThirdStaysPending() {
+        int userId = 42;
+        Notification first = pending("notif-1", userId);
+        Notification second = pending("notif-2", userId);
+        Notification third = pending("notif-3", userId);
+        when(mockRepo.findByRecipientAndStatus(userId, NotificationStatus.PENDING))
+                .thenReturn(List.of(first, second, third));
+        when(mockPushService.send(anyInt(), any(Notification.class))).thenReturn(true);
+        doThrow(new CannotCreateTransactionException("Could not open JPA EntityManager for transaction"))
+                .when(mockRepo).save(second);
+
+        List<NotificationDTO> delivered = assertDoesNotThrow(() -> service.deliverPending(userId),
+                "a lost connection part-way should still hand back what was already delivered");
+
+        assertEquals(List.of("notif-1"), delivered.stream().map(NotificationDTO::notificationId).toList());
+        assertEquals(NotificationStatus.PENDING, third.getStatus());
+        verify(mockRepo, never()).save(third);
+    }
+
+    // Nothing is delivered yet when the read fails, so there is nothing to hand back; login and the
+    // poller catch it.
+    @Test
+    void GivenTheStoreFailsReadingThePendingNotifications_WhenDeliverPending_ThenTheFailurePropagates() {
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("store unavailable");
+        when(mockRepo.findByRecipientAndStatus(42, NotificationStatus.PENDING)).thenThrow(storeDown);
+
+        assertSame(storeDown, assertThrows(DataAccessResourceFailureException.class,
+                () -> service.deliverPending(42)));
+        verify(mockRepo, never()).save(any());
     }
 
 }

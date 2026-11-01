@@ -53,7 +53,6 @@ import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
-import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.testutil.LogCapture;
@@ -198,23 +197,6 @@ class AuthenticationServiceLoginTransactionTest {
     @Test
     void GivenDeliveryFailsWithAStoreFailureAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
         givenDeliveryFailsWith(new DataAccessResourceFailureException("notification store unreachable"));
-
-        runner.run(context -> {
-            LoginDTO login = context.getBean(AuthenticationService.class)
-                    .login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID));
-
-            assertThat(journal).as("the login commits, and only then is delivery attempted")
-                    .containsExactly(BEGIN, COMMIT, DELIVER_PENDING);
-            assertThat(login.authToken().token()).as("a committed login still hands back its token")
-                    .isEqualTo("TOK");
-            assertThat(login.notifications()).as("nothing was delivered, so nothing is shown").isEmpty();
-        });
-    }
-
-    @Test
-    void GivenDeliveryFailsWithAConcurrentReservationExceptionAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
-        // What OptimisticLockTranslationAspect makes of a lost @Version race in deliverPending.
-        givenDeliveryFailsWith(new ConcurrentReservationException("notification updated concurrently"));
 
         runner.run(context -> {
             LoginDTO login = context.getBean(AuthenticationService.class)

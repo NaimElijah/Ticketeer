@@ -45,7 +45,6 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.AccountLockedException;
-import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
@@ -476,15 +475,16 @@ public class AuthenticationService {
     }
 
     // The promotion has committed: the guest session is now the member's, so failing the login here
-    // would leave them without a token, and a retry would fail for want of a guest session. Only a
-    // store failure, a connection that cannot be had (CannotCreateTransactionException, raised as a
-    // save's transaction begins) and a lost race (what OptimisticLockTranslationAspect makes of a
-    // lost @Version race in deliverPending) are absorbed. Notifications not yet reached stay PENDING
-    // for the poller; ones deliverPending already saved as SENT before the failure are not shown.
+    // would leave them without a token, and a retry would fail for want of a guest session. What
+    // deliverPending can still throw is absorbed: a store failure reading the pending notifications,
+    // or a connection that cannot be had for that read (CannotCreateTransactionException, raised as
+    // its transaction begins). Nothing was delivered then, and everything stays PENDING for the
+    // poller. A failure part-way, or a lost race, deliverPending handles itself, returning what it
+    // delivered (#187).
     private List<NotificationDTO> deliverPendingAfterLogin(int userId) {
         try {
             return notificationDispatchService.deliverPending(userId);
-        } catch (DataAccessException | CannotCreateTransactionException | ConcurrentReservationException e) {
+        } catch (DataAccessException | CannotCreateTransactionException e) {
             log.warn("pending notifications not delivered at login, left for the poller: id={}", userId, e);
             return List.of();
         }

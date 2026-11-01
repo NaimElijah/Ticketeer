@@ -16,8 +16,10 @@ import com.ticketing.system.notifications.domain.NotificationStatus;
 //
 // The Domain-Events pattern was committed at UC-35 (see design_walkthrough_summary.md §6).
 // Listener wiring (which domain events trigger dispatchFromEvent) lives in code, off-diagram.
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,9 +83,14 @@ public class NotificationDispatchService {
      * another. A save that loses that {@code @Version} race is skipped, logged at DEBUG: the other caller
      * delivered the row, so it is not returned here, and delivery goes on with the next row (#187).
      *
+     * <p>Any other store failure on a save, a lost connection included, stops delivery there and is
+     * logged at WARN. What was already saved as SENT is still returned, since it is never PENDING again
+     * and would otherwise be shown nowhere; the rows not reached stay PENDING for the next poll (#187).
+     *
      * @param userId the member whose notifications are delivered
      * @return the notifications this call delivered, as shown to the member; empty when none
-     * @throws org.springframework.dao.DataAccessException if the store fails other than by a lost race
+     * @throws DataAccessException             if the store fails reading the pending notifications
+     * @throws CannotCreateTransactionException if no connection can be had for that read
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<NotificationDTO> deliverPending(int userId) {
@@ -104,6 +111,13 @@ public class NotificationDispatchService {
                     log.debug("Notification id={} for userId={} was delivered by another caller first; skipped",
                             notification.getId(), userId);
                     continue;
+                } catch (DataAccessException | CannotCreateTransactionException storeFailure) {
+                    // Handled by stopping: the next saves would most likely fail too, and the rows
+                    // already saved as SENT are never PENDING again, so they must reach the caller.
+                    log.warn("Delivery to userId={} stopped at notification id={} on a store failure; {} delivered,"
+                            + " the rest stay PENDING", userId, notification.getId(),
+                            deliveredNotifications.size(), storeFailure);
+                    break;
                 }
                 deliveredNotifications.add(notification.toDTO());
             } else {
