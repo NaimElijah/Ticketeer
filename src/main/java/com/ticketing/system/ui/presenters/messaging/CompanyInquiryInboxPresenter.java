@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.presenters.messaging;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -138,6 +139,42 @@ public class CompanyInquiryInboxPresenter {
         } catch (RuntimeException e) {
             return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
         }
+    }
+
+    /**
+     * Opens {@code conversation} at the reader's request (a row click or a deep link): marks it read
+     * for the signed-in company's side and, on success, records it in {@code opened}, so {@link #badge}
+     * shows no badge for it until a newer message arrives. A failed mark records nothing, so the badge
+     * stays. A thread the view selects on its own is shown, not opened: a mark reads it for the
+     * reader's whole side, so the view must not call this for it (#187).
+     *
+     * @param token        the signed-in caller's token; {@code null} when signed out
+     * @param conversation the thread the reader opened
+     * @param opened       the view's own record of the threads it opened
+     * @return the outcome of marking the thread read
+     */
+    public ActionOutcome open(String token, ConversationDTO conversation, OpenedThreads opened) {
+        ActionOutcome outcome = markRead(token, conversation.conversationId());
+        if (outcome instanceof ActionOutcome.Success) {
+            opened.record(conversation);
+        }
+        return outcome;
+    }
+
+    /**
+     * The unread badge for {@code conversation}'s row: none once this view has opened it and no newer
+     * message has arrived since, so a re-render from the same list keeps a cleared badge cleared;
+     * otherwise the unread count, and none when that is 0.
+     *
+     * @param conversation the row's thread, as last loaded
+     * @param opened       the view's own record of the threads it opened
+     * @return the badge text, or empty for no badge
+     */
+    public Optional<String> badge(ConversationDTO conversation, OpenedThreads opened) {
+        if (opened.isOpenAsOf(conversation) || conversation.unreadCountForViewer() == 0) {
+            return Optional.empty();
+        }
+        return Optional.of(String.valueOf(conversation.unreadCountForViewer()));
     }
 
     /** Sealed outcome the view switches on to render the inbox or an empty/error state. */
