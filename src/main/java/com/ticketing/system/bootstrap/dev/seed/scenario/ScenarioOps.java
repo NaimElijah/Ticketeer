@@ -42,6 +42,7 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.bootstrap.dev.seed.DemoClock;
 import com.ticketing.system.bootstrap.dev.seed.SeedHarness;
+import com.ticketing.system.governance.config.PlatformAdminProperties;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -78,10 +79,18 @@ public final class ScenarioOps {
     private final UserRepository userRepository;
     private final DemoClock clock;
     private final ZoneId timeZone;
+    private final PlatformAdminProperties defaultAdmin;
 
     private final Map<String, OpHandler> registry = new LinkedHashMap<>();
     private int seq = 0;
 
+    /**
+     * Builds the operation registry over the application services a scenario calls.
+     *
+     * @param timeZone     the zone seeded show dates are written in
+     * @param defaultAdmin the configured default-admin credentials ({@code platform.admin.*}), which
+     *                     {@code login-admin <alias>} signs in with
+     */
     public ScenarioOps(AuthenticationService auth,
             CompanyManagementService companyService,
             EventManagementService eventService,
@@ -91,7 +100,8 @@ public final class ScenarioOps {
             MessagingService messaging,
             UserRepository userRepository,
             DemoClock clock,
-            ZoneId timeZone) {
+            ZoneId timeZone,
+            PlatformAdminProperties defaultAdmin) {
         this.auth = auth;
         this.companyService = companyService;
         this.eventService = eventService;
@@ -102,6 +112,7 @@ public final class ScenarioOps {
         this.userRepository = userRepository;
         this.clock = clock;
         this.timeZone = timeZone;
+        this.defaultAdmin = defaultAdmin;
         buildRegistry();
     }
 
@@ -187,10 +198,16 @@ public final class ScenarioOps {
         p.token = out.authToken().token();
     }
 
+    /**
+     * {@code login-admin <alias>} signs in the configured default admin, so a committed scenario runs
+     * under whatever password the deployment sets; {@code login-admin <alias> <username> <password>}
+     * signs in the admin the file names.
+     */
     private void loginAdmin(ScenarioCommand cmd, ScenarioContext ctx) {
         String alias = cmd.requirePos(0, "admin alias");
-        String username = cmd.requirePos(1, "admin username");
-        String password = cmd.requirePos(2, "admin password");
+        boolean defaultAdminForm = cmd.positional().size() == 1;
+        String username = defaultAdminForm ? defaultAdmin.username() : cmd.requirePos(1, "admin username");
+        String password = defaultAdminForm ? defaultAdmin.password() : cmd.requirePos(2, "admin password");
         AuthTokenDTO tok = auth.signInAsAdmin(username, password);
         ScenarioContext.Principal p = ctx.registerPrincipal(alias, username, password, tok.userId());
         p.token = tok.token();

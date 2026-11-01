@@ -145,7 +145,8 @@ service call).
 |---|---|
 | `register <alias> <password> <email> <age>` | `AuthenticationService.register` |
 | `login <alias>` | `AuthenticationService.login` |
-| `login-admin <alias> <username> <password>` | `AuthenticationService.signInAsAdmin` |
+| `login-admin <alias>` | `AuthenticationService.signInAsAdmin` with the configured default admin's `platform.admin.username` and `platform.admin.password`, so the file holds no password |
+| `login-admin <alias> <username> <password>` | `AuthenticationService.signInAsAdmin` with the credentials the file names |
 | `logout <alias>` / `logout-all` | `AuthenticationService.logout` |
 | `guest <alias>` | `AuthenticationService.startGuestSession` |
 | `open-company <owner> <companyAlias> "<name>" ["<desc>"]` | `CompanyManagementService.registerCompany` |

@@ -18,7 +18,8 @@
 #   register <alias> <password> <email> <age>     register a member
 #                                                 e.g. register u1 password123 u1@x.com 30
 #   login <alias>                                 log a registered member in
-#   login-admin <alias> <username> <password>     sign in to the admin pool (default admin/admin)
+#   login-admin <alias>                           sign in the configured default admin (platform.admin.*)
+#   login-admin <alias> <username> <password>     sign in the admin named here
 #   logout <alias>                                log one user out
 #   logout-all                                    log every logged-in user out
 #   guest <alias>                                 open an anonymous guest session (for guest buys)

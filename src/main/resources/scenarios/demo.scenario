@@ -23,7 +23,7 @@ login carol
 login dave
 login erin
 guest g1
-login-admin admin admin admin
+login-admin admin
 
 # --- companies + an accepted manager appointment (bob manages Live Nation) ---
 open-company alice live "Live Nation Israel" "Arena tours and festivals"

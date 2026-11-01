@@ -98,7 +98,7 @@ public class ScenarioRunner implements ApplicationRunner {
     private final boolean failFast;
     private final boolean assumeYes;
     private final String scenarioLocation;
-    private final String adminUsername;
+    private final PlatformAdminProperties platformAdmin;
     private final ZoneId timeZone;
     private final String datasourceUrl;
 
@@ -145,7 +145,7 @@ public class ScenarioRunner implements ApplicationRunner {
         this.failFast = seed.failFast();
         this.assumeYes = seed.assumeYes();
         this.scenarioLocation = seed.scenario();
-        this.adminUsername = platformAdmin.username();
+        this.platformAdmin = platformAdmin;
         this.timeZone = platformTime.timeZone();
         this.datasourceUrl = datasourceUrl;
     }
@@ -222,7 +222,7 @@ public class ScenarioRunner implements ApplicationRunner {
     /** Opens the trading market via the real admin path so the scenario's reserve/checkout steps work. */
     private void ensureMarketOpen() {
         try {
-            String adminToken = sessionManager.generateAdminToken(DEFAULT_ADMIN_ID, adminUsername);
+            String adminToken = sessionManager.generateAdminToken(DEFAULT_ADMIN_ID, platformAdmin.username());
             systemAdminService.openMarket(new MarketControlRequestDTO("OPEN", "seed auto-open", adminToken));
             log.info("seed: market opened so seeded purchases can run");
         } catch (RuntimeException e) {
@@ -280,7 +280,7 @@ public class ScenarioRunner implements ApplicationRunner {
         ScenarioOps ops = new ScenarioOps(
             authenticationService, companyManagementService, eventManagementService,
             reservationService, checkoutService, catalogService, messagingService,
-            userRepository, new DemoClock(clock), timeZone);
+            userRepository, new DemoClock(clock), timeZone, platformAdmin);
 
         log.info("running scenario '{}' ({} operations)", scenario, commands.size());
         try {
