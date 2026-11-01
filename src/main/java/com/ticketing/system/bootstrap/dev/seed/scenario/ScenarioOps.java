@@ -56,7 +56,7 @@ import java.util.Map;
  * to a real application service and updating the {@link ScenarioContext}. The
  * runner calls {@link #execute} per parsed line; this class owns the
  * {@link SeedHarness} interaction so each line is classified PASS / SKIPPED /
- * FAIL (and {@code expect-error} flips a throw into a PASS).
+ * FAIL (and {@code expect-error} flips the exception it names into a PASS).
  *
  * <p>
  * Plain class (not a bean) — instantiated per run by {@code ScenarioRunner}
@@ -144,7 +144,7 @@ public final class ScenarioOps {
 
     /** Dispatch one command, recording its outcome through the harness. */
     public void execute(ScenarioCommand cmd, ScenarioContext ctx, SeedHarness harness) {
-        if (cmd.op().equals("expect-error")) {
+        if (cmd.op().equals(ScenarioParser.EXPECT_ERROR_OP)) {
             executeExpectError(cmd, ctx, harness);
             return;
         }
@@ -160,11 +160,13 @@ public final class ScenarioOps {
     }
 
     /**
-     * {@code expect-error <op> <args…>} — the wrapped op must throw; if it doesn't,
-     * that's a FAIL.
+     * {@code expect-error <op> <args…> error=<ExceptionSimpleName>} — the wrapped op must throw exactly
+     * that exception type; nothing thrown, or another type, is a FAIL. The parser has already refused a
+     * line without {@code error=}. The {@code error=} argument is not passed on to the wrapped op.
      */
     private void executeExpectError(ScenarioCommand cmd, ScenarioContext ctx, SeedHarness harness) {
         String innerOp = cmd.requirePos(0, "operation to expect-error");
+        String expectedError = cmd.named(ScenarioParser.EXPECTED_ERROR_ARG);
         OpHandler handler = registry.get(innerOp);
         String label = "expect-error " + innerOp;
         if (handler == null) {
@@ -174,8 +176,10 @@ public final class ScenarioOps {
             return;
         }
         List<String> innerPos = new ArrayList<>(cmd.positional().subList(1, cmd.positional().size()));
-        ScenarioCommand inner = new ScenarioCommand(cmd.line(), innerOp, innerPos, cmd.named());
-        harness.expectFailure("scenario", label, RuntimeException.class, () -> handler.run(inner, ctx));
+        Map<String, String> innerNamed = new LinkedHashMap<>(cmd.named());
+        innerNamed.remove(ScenarioParser.EXPECTED_ERROR_ARG);
+        ScenarioCommand inner = new ScenarioCommand(cmd.line(), innerOp, innerPos, innerNamed);
+        harness.expectFailure("scenario", label, expectedError, () -> handler.run(inner, ctx));
     }
 
     // -- identity --------------------------------------------------------

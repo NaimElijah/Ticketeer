@@ -43,7 +43,9 @@
 #   announce <adminAlias> title="..." body="..." [audience=BROADCAST_MEMBERS|BROADCAST_PRODUCERS]
 #   assert-status <event> <STATUS> by=<owner>     fail unless the event is in <STATUS>
 #                                                 (DRAFT/SCHEDULED/ON_SALE/SOLD_OUT/CANCELED/COMPLETED)
-#   expect-error <op> <args...>                   PASS only if the wrapped op throws (negative test)
+#   expect-error <op> <args...> error=<Type>      PASS only if the wrapped op throws exactly <Type>,
+#                                                 an exception's simple class name (negative test)
+#                                                 e.g. expect-error reserve u2 e1 standing qty=1 error=IllegalStateException
 #   add-coupon ...                                SKIPPED — coupons are out of scope in this system
 # ============================================================================
 

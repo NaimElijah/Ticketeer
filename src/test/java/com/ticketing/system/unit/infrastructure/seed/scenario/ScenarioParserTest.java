@@ -60,4 +60,29 @@ class ScenarioParserTest {
             () -> c.requirePos(0, "user alias"));
         assertTrue(ex.getMessage().contains("user alias"));
     }
+
+    // ---- Defect 4: a bare expect-error is refused when the file is parsed (#187) ----
+
+    @Test
+    void GivenExpectErrorWithoutErrorType_WhenParsed_ThenRefusedNamingTheLine() {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+            () -> parser.parse("login u1\n\nexpect-error reserve u1 e1 standing qty=1\n"));
+
+        assertTrue(refused.getMessage().contains("line 3"), "the refusal must name the line, but was: " + refused.getMessage());
+        assertTrue(refused.getMessage().contains("error="), "the refusal must say what is missing, but was: " + refused.getMessage());
+    }
+
+    @Test
+    void GivenExpectErrorWithABlankErrorType_WhenParsed_ThenRefused() {
+        assertThrows(IllegalArgumentException.class,
+            () -> parser.parse("expect-error reserve u1 e1 standing qty=1 error=\n"));
+    }
+
+    @Test
+    void GivenExpectErrorNamingItsErrorType_WhenParsed_ThenTheTypeIsANamedArgument() {
+        ScenarioCommand c = parser.parse("expect-error reserve u1 e1 standing qty=1 error=IllegalStateException").get(0);
+
+        assertEquals("expect-error", c.op());
+        assertEquals("IllegalStateException", c.named("error"));
+    }
 }

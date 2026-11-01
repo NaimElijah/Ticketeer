@@ -67,8 +67,8 @@ The default dataset boots a small but complete marketplace:
 | Beyonce | Live Nation Israel | CONCERT | 2 standing | On sale |
 | Othello | Habima Theatre | THEATER | 2 seated | On sale |
 | Indie Night | Live Nation Israel | CONCERT | 1 standing (cap 6) | **SOLD_OUT** (bought out) |
-| Postponed Gala | Habima Theatre | OTHER | 1 standing (cap 50) | **CANCELED** (+ refunded) |
-| Not On Sale Yet | Live Nation Israel | CONCERT (the `add-event` default when `category` is omitted) | 1 standing | **SCHEDULED** (unpublished; a negative `expect-error` check reserves against it and must fail) |
+| Postponed Gala | Habima Theatre | OTHER | 1 standing (cap 50) | **CANCELED** (+ refunded; a negative `expect-error` check then reserves against it, and the reservation guard refuses it as not on sale) |
+| Not On Sale Yet | Live Nation Israel | CONCERT (the `add-event` default when `category` is omitted) | 1 standing | **SCHEDULED** (unpublished, so buyers do not see it) |
 
 Event dates are relative to boot (`days=` offsets), so they are always in the future.
 
@@ -162,7 +162,7 @@ service call).
 | `submit-complaint <from> subject= body=` | `MessagingService.submitComplaint` |
 | `announce <admin> title= body= [audience=BROADCAST_MEMBERS\|BROADCAST_PRODUCERS]` | `MessagingService.sendOutreach` |
 | `assert-status <event> <STATUS> by=<owner>` | Read-only assertion via `EventManagementService.getEventDetail` |
-| `expect-error <op> <args…>` | Negative test: passes only if the wrapped operation throws |
+| `expect-error <op> <args…> error=<ExceptionSimpleName>` | Negative test: passes only if the wrapped operation throws an exception whose simple class name is exactly `<ExceptionSimpleName>` (a subclass does not count); another exception fails the step, naming both types. A line without `error=` is refused when the file is parsed |
 | `add-coupon …` | Not built: always throws `UnsupportedOperationException`, so the step is SKIPPED |
 
 Manager permissions (`perms=`) are any of `CONFIGURE_VENUE`, `MANAGE_INVENTORY`, `EDIT_POLICIES`,

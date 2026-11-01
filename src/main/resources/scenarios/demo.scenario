@@ -59,10 +59,11 @@ reserve carol gala standing qty=2
 checkout carol
 cancel-event carol gala
 assert-status gala CANCELED by=carol
+# negative check: a cancelled event is still listed, but the reservation guard refuses it (not on sale)
+expect-error reserve dave gala standing qty=1 error=IllegalStateException
 
-# --- negative check: reserving on an unpublished (SCHEDULED) event must fail ---
+# --- an unpublished (SCHEDULED) event, left for its owner to publish; buyers do not see it yet ---
 add-event alice live draft standing:100@100 name="Not On Sale Yet" days=40 rating=4.2
-expect-error reserve carol draft standing qty=1
 
 # --- messaging (centralized Conversation aggregate) ---
 contact-company carol live subject="Parking at the venue" body="Is there free parking near the arena, or should I plan for a paid lot?"
