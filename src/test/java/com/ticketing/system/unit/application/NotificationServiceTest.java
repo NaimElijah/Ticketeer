@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.time.Clock;
@@ -20,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -109,5 +112,17 @@ class NotificationServiceTest {
         order.verify(dispatcher).dispatch(argThat(n -> n.getRecipientUserId() == 8));
         verify(dispatcher, never()).dispatch(argThat(n -> n.getRecipientUserId() == 9));
         verify(dispatcher, times(2)).dispatch(any());
+    }
+
+    // The port's contract is "at least one recipient": a send without one is the caller's mistake, so it
+    // is refused outright rather than stored as nothing (#187).
+    @ParameterizedTest
+    @NullAndEmptySource
+    void GivenNoRecipients_WhenNotifyOutreach_ThenRefusedWithIllegalArgumentAndNothingIsDispatched(
+            List<OutreachRecipient> recipients) {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.notifyOutreach(recipients, "a system admin", "Venue change", "Hall B."));
+
+        verifyNoInteractions(dispatcher);
     }
 }

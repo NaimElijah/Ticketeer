@@ -215,6 +215,9 @@ public class NotificationService implements INotificationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
             String snippet) {
+        if (recipients == null || recipients.isEmpty()) {
+            throw new IllegalArgumentException("An outreach needs at least one recipient");
+        }
         LocalDateTime now = LocalDateTime.now(clock);
         for (OutreachRecipient r : recipients) {
             dispatcher.dispatch(newMessageNotification(r.userId(), r.conversationId(), senderLabel,

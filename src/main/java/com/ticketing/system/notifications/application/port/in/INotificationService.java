@@ -58,6 +58,7 @@ public interface INotificationService {
      * @param senderLabel human-readable origin, e.g. "a system admin"
      * @param subject     the conversations' shared subject; null reads as empty
      * @param snippet     a short preview of the message body; null reads as empty
+     * @throws IllegalArgumentException if {@code recipients} is null or empty; nothing is stored
      */
     void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
             String snippet);
