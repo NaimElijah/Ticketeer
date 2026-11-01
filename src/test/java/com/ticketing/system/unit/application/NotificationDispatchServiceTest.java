@@ -287,4 +287,33 @@ class NotificationDispatchServiceTest {
         verify(mockRepo, never()).save(any());
     }
 
+    // ---- Defect 4: INFO on every poll (#187) ----
+
+    // The poller calls deliverPending for every signed-in tab once a minute, so a call with nothing to
+    // deliver is the common case and must not reach the INFO log.
+    @Test
+    void GivenNothingPending_WhenDeliverPending_ThenNothingIsLoggedAtInfo() {
+        when(mockRepo.findByRecipientAndStatus(42, NotificationStatus.PENDING)).thenReturn(List.of());
+
+        try (LogCapture logs = LogCapture.of(NotificationDispatchService.class)) {
+            service.deliverPending(42);
+
+            assertEquals(List.of(), logs.messagesAt(Level.INFO),
+                    "a delivery with nothing pending should log nothing at INFO");
+        }
+    }
+
+    @Test
+    void GivenOnePendingNotification_WhenDeliverPending_ThenOneLineIsLoggedAtInfo() {
+        Notification waiting = pending("notif-1", 42);
+        when(mockRepo.findByRecipientAndStatus(42, NotificationStatus.PENDING)).thenReturn(List.of(waiting));
+        when(mockPushService.send(42, waiting)).thenReturn(true);
+
+        try (LogCapture logs = LogCapture.of(NotificationDispatchService.class)) {
+            service.deliverPending(42);
+
+            List<String> info = logs.messagesAt(Level.INFO);
+            assertEquals(1, info.size(), "a delivery that delivers something should log one INFO line, but logged " + info);
+        }
+    }
 }

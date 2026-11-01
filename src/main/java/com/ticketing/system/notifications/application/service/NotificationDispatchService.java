@@ -87,6 +87,8 @@ public class NotificationDispatchService {
      * logged at WARN. What was already saved as SENT is still returned, since it is never PENDING again
      * and would otherwise be shown nowhere; the rows not reached stay PENDING for the next poll (#187).
      *
+     * <p>Logs one INFO line per call, and only when it delivered something (#187).
+     *
      * @param userId the member whose notifications are delivered
      * @return the notifications this call delivered, as shown to the member; empty when none
      * @throws DataAccessException             if the store fails reading the pending notifications
@@ -94,8 +96,6 @@ public class NotificationDispatchService {
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<NotificationDTO> deliverPending(int userId) {
-        log.info("Delivering pending notifications for userId={}", userId);
-
         List<Notification> pendingNotifications = notificationRepository.findByRecipientAndStatus(userId,
                 NotificationStatus.PENDING);
         List<NotificationDTO> deliveredNotifications = new java.util.ArrayList<>();
@@ -126,7 +126,11 @@ public class NotificationDispatchService {
                         notification.getId(), userId);
             }
         }
-        log.info("Delivered {} pending notifications to userId={}", deliveredNotifications.size(), userId);
+        // INFO only when something changed state: the poller calls this for every signed-in tab each
+        // minute, and most calls deliver nothing (#187).
+        if (!deliveredNotifications.isEmpty()) {
+            log.info("Delivered {} pending notifications to userId={}", deliveredNotifications.size(), userId);
+        }
         return deliveredNotifications;
     }
 }
