@@ -1,15 +1,19 @@
 package com.ticketing.system.notifications.adapter.in.event;
 
+import java.util.List;
+
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.config.NotificationAsyncConfig;
 import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.NewMessageNotice;
+import com.ticketing.system.shared.event.OutreachSentNotice;
 import com.ticketing.system.shared.event.OwnerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.PurchaseCompletedNotice;
 import com.ticketing.system.shared.event.PurchaseFailedNotice;
@@ -126,6 +130,19 @@ public class NotificationEventListener {
     public void on(RoleChangedNotice notice) {
         notificationService.notifyRoleChanged(
                 notice.userId(), notice.companyId(), notice.companyName(), notice.newRole());
+    }
+
+    /**
+     * Raises a direct-message notification for every recipient of an admin outreach, each stored on its
+     * own transaction. The send arrives as one notice, so it takes one slot in the {@code notify-}
+     * queue however many recipients it has (ADR-019, #187).
+     */
+    @TransactionalEventListener(fallbackExecution = true)
+    public void on(OutreachSentNotice notice) {
+        List<OutreachRecipient> recipients = notice.recipients().stream()
+                .map(r -> new OutreachRecipient(r.recipientUserId(), r.conversationId()))
+                .toList();
+        notificationService.notifyOutreach(recipients, notice.senderLabel(), notice.subject(), notice.snippet());
     }
 
     /** Raises a direct-message notification when a new message arrives for a recipient. */

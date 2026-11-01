@@ -13,7 +13,6 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
-import com.ticketing.system.shared.exception.MessageNotFoundException;
 import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.messaging.domain.ConversationStatus;
 import com.ticketing.system.messaging.domain.ConversationType;
@@ -127,25 +126,41 @@ class ConversationTest extends BaseDomainTest {
     }
 
     @Test
-    void markMessageRead_onlyByNonSender_andIsIdempotent() {
-        Conversation c = inquiry();
-        String firstId = c.getMessages().get(0).getMessageId(); // authored by the member
-        // The sender marking their own message is a no-op (stays unread for the recipient).
-        c.markMessageRead(firstId, MEMBER_ID, ParticipantType.MEMBER);
+    void GivenTheMembersOpeningMessage_WhenTheMemberMarksTheThreadRead_ThenItStaysUnreadForTheCompany() {
+        Conversation c = inquiry();                                   // 1 message from the member
+
+        c.markReadBy(MEMBER_ID, ParticipantType.MEMBER);
+
         assertEquals(1, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
-        // The recipient marks it read.
-        c.markMessageRead(firstId, COMPANY_ID, ParticipantType.COMPANY);
-        assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
-        // Idempotent.
-        c.markMessageRead(firstId, COMPANY_ID, ParticipantType.COMPANY);
+    }
+
+    @Test
+    void GivenTheMembersOpeningMessage_WhenTheCompanyMarksTheThreadRead_ThenNothingIsUnreadForTheCompany() {
+        Conversation c = inquiry();
+
+        c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
+
         assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
     }
 
     @Test
-    void markMessageRead_missingMessage_throws() {
+    void GivenAThreadTheCompanyHasRead_WhenItMarksItReadAgain_ThenNothingChanges() {
         Conversation c = inquiry();
-        assertThrows(MessageNotFoundException.class,
-                () -> c.markMessageRead("no-such-id", COMPANY_ID, ParticipantType.COMPANY));
+        c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
+
+        c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
+
+        assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
+        assertEquals(0, c.unreadCountFor(MEMBER_ID, ParticipantType.MEMBER));
+    }
+
+    @Test
+    void GivenAnOutsider_WhenMarkReadBy_ThenRefusedAndNothingIsRead() {
+        Conversation c = inquiry();
+
+        assertThrows(InvalidParticipantException.class, () -> c.markReadBy(OUTSIDER_ID, ParticipantType.MEMBER));
+
+        assertEquals(1, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
     }
 
     @Test
@@ -169,21 +184,19 @@ class ConversationTest extends BaseDomainTest {
     }
 
     @Test
-    void GivenAMemberMessageToTheCompanyThatSharesItsId_WhenTheCompanyMarksItRead_ThenItIsRead() {
+    void GivenAMemberMessageToTheCompanyThatSharesItsId_WhenTheCompanyMarksTheThreadRead_ThenItIsRead() {
         Conversation c = inquiryBetweenSharedIds();
-        String memberMessage = c.getMessages().get(0).getMessageId();
 
-        c.markMessageRead(memberMessage, SHARED_ID, ParticipantType.COMPANY);
+        c.markReadBy(SHARED_ID, ParticipantType.COMPANY);
 
         assertTrue(c.getMessages().get(0).isRead(), "the company read the member's message");
     }
 
     @Test
-    void GivenAMemberMessageToTheCompanyThatSharesItsId_WhenTheMemberMarksItsOwnMessage_ThenItStaysUnread() {
+    void GivenAMemberMessageToTheCompanyThatSharesItsId_WhenTheMemberMarksTheThreadRead_ThenTheirOwnMessageStaysUnread() {
         Conversation c = inquiryBetweenSharedIds();
-        String memberMessage = c.getMessages().get(0).getMessageId();
 
-        c.markMessageRead(memberMessage, SHARED_ID, ParticipantType.MEMBER);
+        c.markReadBy(SHARED_ID, ParticipantType.MEMBER);
 
         assertFalse(c.getMessages().get(0).isRead(), "only the other side reads a message");
     }

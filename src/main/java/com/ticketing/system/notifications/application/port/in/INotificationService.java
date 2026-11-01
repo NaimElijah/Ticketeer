@@ -48,6 +48,21 @@ public interface INotificationService {
     void notifyNewMessage(int recipientUserId, String conversationId, String senderLabel,
             String subject, String snippet);
 
+    /**
+     * Raises one DIRECT_MESSAGE notification per recipient of an admin outreach, each reading as
+     * {@link #notifyNewMessage} would for that recipient and conversation. Each is stored on its own
+     * transaction, in the recipients' order (ADR-019). A store failure stops the fan-out and propagates:
+     * the notifications already stored stay, and the rest are not stored.
+     *
+     * @param recipients  every recipient and the conversation opened for them, at least one
+     * @param senderLabel human-readable origin, e.g. "a system admin"
+     * @param subject     the conversations' shared subject; null reads as empty
+     * @param snippet     a short preview of the message body; null reads as empty
+     * @throws IllegalArgumentException if {@code recipients} is null or empty; nothing is stored
+     */
+    void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
+            String snippet);
+
     /** Mark a single notification as READ (SENT → READ). No-op if already READ. */
     void markRead(int userId, String notificationId);
 

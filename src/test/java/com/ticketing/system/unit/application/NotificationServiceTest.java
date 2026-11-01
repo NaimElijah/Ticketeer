@@ -1,8 +1,17 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -12,8 +21,13 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.springframework.dao.DataAccessResourceFailureException;
 
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.notifications.application.service.NotificationService;
@@ -53,5 +67,62 @@ class NotificationServiceTest {
         assertEquals("You have a pending manager appointment for company 'Acme'. Please accept or reject it.",
                 notification.getMessage());
         assertEquals(Map.of("companyId", 100, "companyName", "Acme"), notification.getData());
+    }
+
+    // ---- An outreach to more recipients than the notification queue holds drops alerts (#187) ----
+
+    // Each recipient's notification reads as a single new message would, and goes to the dispatcher on
+    // its own, in the recipients' order, so each is stored on its own transaction (ADR-019).
+    @Test
+    void GivenTwoOutreachRecipients_WhenNotifyOutreach_ThenEachGetsANewMessageNotificationDispatchedInOrder() {
+        service.notifyOutreach(List.of(
+                new OutreachRecipient(7, "conv-7"), new OutreachRecipient(8, "conv-8")),
+                "a system admin", "Venue change", "Hall B.");
+
+        ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
+        verify(dispatcher, times(2)).dispatch(sent.capture());
+        verifyNoMoreInteractions(dispatcher);
+        List<Notification> notifications = sent.getAllValues();
+        assertEquals(List.of(7, 8), notifications.stream().map(Notification::getRecipientUserId).toList());
+        for (Notification n : notifications) {
+            assertEquals(NotificationType.DIRECT_MESSAGE, n.getType());
+            assertEquals(NotificationStatus.PENDING, n.getStatus());
+            assertEquals("New message from a system admin: Venue change", n.getMessage());
+            assertEquals(LocalDateTime.ofInstant(T0, ZoneOffset.UTC), n.getCreatedAt());
+            assertEquals(Map.of("conversationId", "conv-" + n.getRecipientUserId(), "senderLabel", "a system admin",
+                    "subject", "Venue change", "snippet", "Hall B."), n.getData());
+        }
+    }
+
+    // A store failure stops the fan-out where it happens: the recipients before it were dispatched, the
+    // ones after it never are, and the failure reaches the async handler (ADR-004, ADR-019).
+    @Test
+    void GivenTheSecondOfThreeDispatchesFails_WhenNotifyOutreach_ThenItPropagatesAndTheThirdIsNeverDispatched() {
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("connection refused");
+        doThrow(storeDown).when(dispatcher).dispatch(argThat(n -> n.getRecipientUserId() == 8));
+
+        DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
+                () -> service.notifyOutreach(List.of(new OutreachRecipient(7, "conv-7"),
+                        new OutreachRecipient(8, "conv-8"), new OutreachRecipient(9, "conv-9")),
+                        "a system admin", "Venue change", "Hall B."));
+
+        assertEquals(storeDown, thrown);
+        InOrder order = inOrder(dispatcher);
+        order.verify(dispatcher).dispatch(argThat(n -> n.getRecipientUserId() == 7));
+        order.verify(dispatcher).dispatch(argThat(n -> n.getRecipientUserId() == 8));
+        verify(dispatcher, never()).dispatch(argThat(n -> n.getRecipientUserId() == 9));
+        verify(dispatcher, times(2)).dispatch(any());
+    }
+
+    // The port's contract is "at least one recipient": a send without one is the caller's mistake, so it
+    // is refused outright rather than stored as nothing (#187).
+    @ParameterizedTest
+    @NullAndEmptySource
+    void GivenNoRecipients_WhenNotifyOutreach_ThenRefusedWithIllegalArgumentAndNothingIsDispatched(
+            List<OutreachRecipient> recipients) {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.notifyOutreach(recipients, "a system admin", "Venue change", "Hall B."));
+
+        verifyNoInteractions(dispatcher);
     }
 }

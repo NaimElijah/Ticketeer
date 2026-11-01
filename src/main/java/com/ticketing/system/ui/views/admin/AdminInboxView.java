@@ -14,6 +14,7 @@ import com.ticketing.system.ui.components.messaging.MdReplyBar;
 import com.ticketing.system.ui.components.messaging.MdThread;
 import com.ticketing.system.ui.layouts.PlatformAdminLayout;
 import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
+import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
@@ -48,6 +49,8 @@ public class AdminInboxView extends LkPage {
     private List<ConversationDTO> conversations = List.of();
     private final List<MdConvRow> convRows = new ArrayList<>();
     private String selectedId;
+    // The threads this view opened; the presenter reads it to keep a cleared badge cleared (#187).
+    private final OpenedThreads opened = new OpenedThreads();
     private LkCard detailCard;
 
     public AdminInboxView(AdminInboxPresenter presenter, DisplayTime displayTime) {
@@ -95,9 +98,9 @@ public class AdminInboxView extends LkPage {
         convRows.clear();
         for (ConversationDTO c : conversations) {
             MdConvRow row = new MdConvRow("comment", c.subject(), c.counterpartyDisplayName(),
-                displayTime.ageShort(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
+                displayTime.ageShort(c.lastMessageAt()), presenter.badge(c, opened).orElse(null));
             if (c.conversationId().equals(selectedId)) row.active();
-            row.onSelect(() -> selectById(c.conversationId()));
+            row.onSelect(() -> openById(c.conversationId()));
             convRows.add(row);
             card.add(row);
         }
@@ -143,6 +146,32 @@ public class AdminInboxView extends LkPage {
             MdReplyBar reply = new MdReplyBar();
             reply.onSend(this::handleReply);
             detailCard.add(reply);
+        }
+    }
+
+    /** A row click: the reader opens the thread, so it is shown and marked read. */
+    private void openById(String conversationId) {
+        selectById(conversationId);
+        markOpened(conversationId);
+    }
+
+    // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the
+    // row this view selects on its own is shown but not marked (#187). The presenter decides the badge.
+    // A reader whose session ended is told so, as a reply from this view tells them. A failed open
+    // leaves the badge and tells the reader nothing, since they can do nothing about it: the
+    // presenter's markRead logs an internal failure at ERROR through ServiceErrors, and LoggingAspect
+    // logs a refused one (a DomainException) at WARN.
+    private void markOpened(String conversationId) {
+        int idx = indexOf(conversationId);
+        if (idx < 0) return;
+        ConversationDTO conv = byId(conversationId);
+        switch (presenter.open(AuthSession.token(), conv, opened)) {
+            case AdminInboxPresenter.ActionOutcome.Success ignored -> {
+                if (presenter.badge(conv, opened).isEmpty()) convRows.get(idx).clearUnread();
+            }
+            case AdminInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
+                Toasts.failure("Your session has expired — please sign in again.");
+            case AdminInboxPresenter.ActionOutcome.Failure ignored -> { }
         }
     }
 
@@ -214,10 +243,6 @@ public class AdminInboxView extends LkPage {
             out.add(new MdThread.Message(from, displayTime.ageShort(m.sentAt()), me, m.body()));
         }
         return out;
-    }
-
-    private static String unreadBadge(int unreadCount) {
-        return unreadCount > 0 ? String.valueOf(unreadCount) : null;
     }
 
     private static boolean isTerminal(String status) {

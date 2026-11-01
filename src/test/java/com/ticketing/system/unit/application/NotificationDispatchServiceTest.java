@@ -17,6 +17,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import ch.qos.logback.classic.Level;
+
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.notifications.application.port.out.PushNotificationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
@@ -24,6 +26,7 @@ import com.ticketing.system.notifications.application.port.out.NotificationRepos
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
+import com.ticketing.system.testutil.LogCapture;
 
 class NotificationDispatchServiceTest {
 
@@ -140,5 +143,24 @@ class NotificationDispatchServiceTest {
 
         // Verify empty list is returned
         assertTrue(result.isEmpty());
+    }
+
+    // ---- The per-alert dispatch line is DEBUG (#187, ADR-019) ----
+
+    // Under an outreach fan-out, dispatch runs once per recipient, and an alert being stored is not a
+    // state transition anyone acts on, so its line stays below INFO.
+    @Test
+    void GivenAPendingNotification_WhenDispatch_ThenItsLineIsLoggedAtDebugNotInfo() {
+        Notification notification = new Notification("notif-1", 42, NotificationType.DIRECT_MESSAGE,
+                NotificationStatus.PENDING, "New message from a system admin: Venue change",
+                LocalDateTime.of(2027, 7, 15, 17, 0));
+
+        try (LogCapture log = LogCapture.of(NotificationDispatchService.class)) {
+            service.dispatch(notification);
+
+            assertEquals(List.of(), log.messagesAt(Level.INFO));
+            assertEquals(List.of("Dispatching notification for userId=42, type=DIRECT_MESSAGE"),
+                    log.messagesAt(Level.DEBUG));
+        }
     }
 }
