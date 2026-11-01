@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import jakarta.persistence.PersistenceException;
 
@@ -386,5 +388,44 @@ class CompanyInquiryInboxPresenterTest {
         assertInstanceOf(CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
 
         assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    // ---- The respond page survives a failed mark-read (#187) ----
+    //
+    // Marking the thread read is a side effect of opening it. When the mark fails, the reader still
+    // gets the thread; only an expired session stops the page.
+
+    @Test
+    void GivenTheMarkFailsInternally_WhenLoadOne_ThenTheThreadIsStillShown() {
+        ConversationDTO thread = conversation("c1", "INQUIRY");
+        doThrow(new RuntimeException("could not execute statement [update messages set is_read=?]"))
+            .when(messaging).markConversationRead(TOKEN, "c1");
+        when(messaging.viewConversation(TOKEN, "c1")).thenReturn(thread);
+
+        CompanyInquiryInboxPresenter.SingleOutcome.Success shown =
+            assertInstanceOf(CompanyInquiryInboxPresenter.SingleOutcome.Success.class, presenter.loadOne(TOKEN, "c1"));
+
+        assertEquals(thread, shown.conversation());
+    }
+
+    @Test
+    void GivenTheSessionExpiredWhenMarking_WhenLoadOne_ThenNotAuthenticatedAndTheThreadIsNotLoaded() {
+        doThrow(new InvalidTokenException("bad")).when(messaging).markConversationRead(TOKEN, "c1");
+
+        assertInstanceOf(CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated.class, presenter.loadOne(TOKEN, "c1"));
+
+        verify(messaging, never()).viewConversation(anyString(), anyString());
+    }
+
+    // Marked first, so the thread the page shows already counts nothing unread.
+    @Test
+    void GivenAThread_WhenTheCompanyOpensTheRespondPage_ThenItIsMarkedReadBeforeItIsLoaded() {
+        when(messaging.viewConversation(TOKEN, "c1")).thenReturn(conversation("c1", "INQUIRY"));
+
+        presenter.loadOne(TOKEN, "c1");
+
+        InOrder order = inOrder(messaging);
+        order.verify(messaging).markConversationRead(TOKEN, "c1");
+        order.verify(messaging).viewConversation(TOKEN, "c1");
     }
 }

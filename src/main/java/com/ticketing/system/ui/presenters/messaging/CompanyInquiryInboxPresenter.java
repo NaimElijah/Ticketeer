@@ -73,7 +73,8 @@ public class CompanyInquiryInboxPresenter {
 
     /**
      * Opens a single inquiry thread for the dedicated respond page, marking it read for the caller
-     * first, so the thread it returns already counts nothing unread.
+     * first, so the thread it returns already counts nothing unread. A failed mark still shows the
+     * thread; only an invalid or expired session stops the page.
      */
     public SingleOutcome loadOne(String token, String conversationId) {
         if (token == null) {
@@ -81,6 +82,14 @@ public class CompanyInquiryInboxPresenter {
         }
         try {
             messagingService.markConversationRead(token, conversationId);
+        } catch (InvalidTokenException e) {
+            return new SingleOutcome.NotAuthenticated();
+        } catch (RuntimeException e) {
+            // Deliberately ignored: marking read is a side effect of opening the thread, and the reader can
+            // do nothing about its failure. LoggingAspect has already logged it at WARN. Any failure that
+            // also stops the thread loading surfaces from viewConversation below.
+        }
+        try {
             return new SingleOutcome.Success(messagingService.viewConversation(token, conversationId));
         } catch (InvalidTokenException e) {
             return new SingleOutcome.NotAuthenticated();
