@@ -64,6 +64,9 @@ import java.util.Map;
  */
 public final class ScenarioOps {
 
+    /** The operation that registers a member; its users are what an idempotent reseed looks for. */
+    static final String REGISTER_OP = "register";
+
     @FunctionalInterface
     interface OpHandler {
         void run(ScenarioCommand cmd, ScenarioContext ctx) throws Exception;
@@ -117,7 +120,7 @@ public final class ScenarioOps {
     }
 
     private void buildRegistry() {
-        registry.put("register", this::register);
+        registry.put(REGISTER_OP, this::register);
         registry.put("login", this::login);
         registry.put("login-admin", this::loginAdmin);
         registry.put("logout", this::logout);
@@ -177,12 +180,20 @@ public final class ScenarioOps {
 
     // -- identity --------------------------------------------------------
 
+    /**
+     * The username a {@code register} line creates: its {@code username=} when given, else its alias;
+     * {@code null} when the line has neither.
+     */
+    static String registeredUsername(ScenarioCommand register) {
+        return register.named("username", register.pos(0));
+    }
+
     private void register(ScenarioCommand cmd, ScenarioContext ctx) {
         String alias = cmd.requirePos(0, "user alias");
         String password = cmd.requirePos(1, "password");
         String email = cmd.requirePos(2, "email");
         int age = Integer.parseInt(cmd.requirePos(3, "age"));
-        String username = cmd.named("username", alias);
+        String username = registeredUsername(cmd);
         GuestSessionDTO guest = auth.startGuestSession();
         auth.register(new RegisterRequestDTO(username, email, password, guest.sessionId(), age));
         User user = userRepository.findByUsername(username)

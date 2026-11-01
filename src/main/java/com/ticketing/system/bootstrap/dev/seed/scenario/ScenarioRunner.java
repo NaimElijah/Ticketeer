@@ -39,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Boots the system from an editable scenario file (#366). Reads {@code seed.scenario}, parses it, and
@@ -52,8 +53,11 @@ import java.util.Locale;
  * <p>{@code seed.mode}:
  * <ul>
  *   <li>{@code off} (default) — do nothing.</li>
- *   <li>{@code reseed} — run the scenario (creates what's missing); opens the market first so the
- *       scenario's purchases can run.</li>
+ *   <li>{@code reseed} — run the scenario, opening the market first so its purchases can run. Before any
+ *       step, it looks up the users the scenario registers (by username, honouring a line's
+ *       {@code username=}); if one already exists, the scenario has run against this database before, so
+ *       no step runs, a WARN points at {@code reset}, and the boot goes on. Users the scenario does not
+ *       register, such as {@code DevUserSeeder}'s, do not count.</li>
  *   <li>{@code wipe} — delete all business data, then stop.</li>
  *   <li>{@code reset} — {@code wipe} then reseed.</li>
  *   <li>{@code ask} — interactive startup menu: choose the mode <em>and</em> the scenario on the
@@ -160,9 +164,16 @@ public class ScenarioRunner implements ApplicationRunner {
         switch (mode) {
             case OFF -> log.info("seed.mode=off — no seeding");
             case RESEED -> {
-                log.info("seed.mode=reseed — seeding (idempotent)");
-                ensureMarketOpen();
-                runScenario(scenario);
+                List<ScenarioCommand> commands = readScenario(scenario);
+                if (registersAnExistingUser(commands)) {
+                    log.warn("seed.mode=reseed — skipping scenario '{}': a user it registers already exists in "
+                            + "this database, so it has run here before. To replay it, wipe and reseed with "
+                            + "seed.mode=reset and seed.assume-yes=true.", scenario);
+                } else {
+                    log.info("seed.mode=reseed — seeding");
+                    ensureMarketOpen();
+                    runScenario(scenario, commands);
+                }
             }
             case WIPE -> {
                 if (destructiveAllowed("wipe")) {
@@ -175,7 +186,7 @@ public class ScenarioRunner implements ApplicationRunner {
                     repoCleaner.clearAll();
                     ensureMarketOpen();
                     devUserSeeder.ifAvailable(seeder -> seeder.run(null));
-                    runScenario(scenario);
+                    runScenario(scenario, readScenario(scenario));
                     log.info("seed.mode=reset — done; database wiped and reseeded");
                 }
             }
@@ -259,9 +270,18 @@ public class ScenarioRunner implements ApplicationRunner {
         return consoleReader.readLine();
     }
 
+    // Only the scenario's own users count: DevUserSeeder may have registered others earlier in this boot.
+    private boolean registersAnExistingUser(List<ScenarioCommand> commands) {
+        return commands.stream()
+                .filter(cmd -> cmd.op().equals(ScenarioOps.REGISTER_OP))
+                .map(ScenarioOps::registeredUsername)
+                .filter(Objects::nonNull)
+                .anyMatch(userRepository::existsByUsername);
+    }
+
     // V3 2.a.ii / ADR-003: a requested initial-state file is part of initialization, so a missing or
-    // unreadable file, or a failed step under fail-fast, propagates and stops the boot.
-    private void runScenario(String scenario) {
+    // unreadable file propagates and stops the boot.
+    private List<ScenarioCommand> readScenario(String scenario) {
         Resource resource = resourceLoader.getResource(scenario);
         if (!resource.exists()) {
             throw new IllegalStateException("Initial-state file not found: " + scenario + " (seed.scenario)");
@@ -272,8 +292,11 @@ public class ScenarioRunner implements ApplicationRunner {
         } catch (IOException e) {
             throw new IllegalStateException("Could not read initial-state file " + scenario, e);
         }
+        return new ScenarioParser().parse(text);
+    }
 
-        List<ScenarioCommand> commands = new ScenarioParser().parse(text);
+    // A failed step under fail-fast propagates and stops the boot (V3 2.a.ii, ADR-003).
+    private void runScenario(String scenario, List<ScenarioCommand> commands) {
         SeedReport report = new SeedReport();
         SeedHarness harness = new SeedHarness(report, failFast);
         ScenarioContext ctx = new ScenarioContext();

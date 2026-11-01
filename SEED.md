@@ -97,7 +97,7 @@ stops the boot with a bind error naming `seed.mode` (ADR-003).
 | Mode | What it does |
 |---|---|
 | `off` (default outside dev) | Do nothing. |
-| `reseed` | Open the market and run the scenario (creates what's missing). **dev's default.** |
+| `reseed` | Open the market and run the scenario. If a user the scenario registers already exists (by username, honouring a line's `username=`), the scenario has run against this database before: no step runs, a WARN points at `seed.mode=reset`, and the boot goes on. Users the scenario does not register, such as `dev.member`, do not count. **dev's default.** |
 | `wipe` | Delete **all business data** (keeping the platform admin), then stop. *Destructive.* |
 | `reset` | `wipe`, then reseed (`DevUserSeeder` + scenario). *Destructive.* |
 | `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. If stdin yields EOF/empty input (or an `IOException`), each prompt falls back to its default (`off` for the mode). An unrecognised answer is skipped with a warning. |
