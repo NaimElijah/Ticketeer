@@ -1,7 +1,6 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -266,43 +265,46 @@ class NotificationServiceTest {
     @Test
     void GivenATotalWithThreeDecimals_WhenNotifyPurchaseCompleted_ThenItReadsWithTwoDecimalsWhateverTheJvmLocale() {
         Locale jvmLocale = Locale.getDefault();
+        // setDefault(Locale) resets every category, so the format category is put back on its own.
+        Locale jvmFormatLocale = Locale.getDefault(Locale.Category.FORMAT);
         Locale.setDefault(COMMA_DECIMAL_LOCALE);
         try {
             service.notifyPurchaseCompleted(RECIPIENT, 35.982, List.of(1, 2));
         } finally {
             Locale.setDefault(jvmLocale);
+            Locale.setDefault(Locale.Category.FORMAT, jvmFormatLocale);
         }
 
-        String message = dispatchedMessage();
-        assertTrue(message.contains("35.98") && !message.contains("35.982"),
-                "the total should read 35.98, two decimals with a point under any JVM locale, but the message was: "
-                        + message);
+        assertEquals("Purchase completed successfully. Total price: 35.98", dispatchedMessage(),
+                "the total should read 35.98, two decimals with a point under any JVM locale");
     }
 
     static Stream<Arguments> reservationNotices() {
         return Stream.of(
                 Arguments.of("reservation succeeded",
-                        (Consumer<NotificationService>) s -> s.notifyTicketReservationSuccess(RECIPIENT, 4021, 3, 2)),
+                        (Consumer<NotificationService>) s -> s.notifyTicketReservationSuccess(RECIPIENT, 4021, 3, 2),
+                        "You reserved 2 tickets."),
                 Arguments.of("reservation failed",
                         (Consumer<NotificationService>) s -> s.notifyTicketReservationFailure(RECIPIENT, 4021, 3,
-                                "Sold out")),
+                                "Sold out"),
+                        "Your ticket reservation failed: Sold out"),
                 Arguments.of("reservation removal succeeded",
                         (Consumer<NotificationService>) s -> s.notifyRemoveTicketReservationSuccess(RECIPIENT, 4021,
-                                3, 2)),
+                                3, 2),
+                        "You removed 2 tickets from your reservation."),
                 Arguments.of("reservation removal failed",
                         (Consumer<NotificationService>) s -> s.notifyRemoveTicketReservationFailure(RECIPIENT, 4021,
-                                3, "Order not found")));
+                                3, "Order not found"),
+                        "Removing your reserved tickets failed: Order not found"));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("reservationNotices")
     void GivenAReservationNotice_WhenItsNotificationIsComposed_ThenTheTextCarriesNoRawIds(String notice,
-            Consumer<NotificationService> notify) {
+            Consumer<NotificationService> notify, String expected) {
         notify.accept(service);
 
-        String message = dispatchedMessage();
-        assertFalse(message.contains("eventId=") || message.contains("zoneId="),
-                "the member reads this text, so it should not show raw ids, but the message was: " + message);
+        assertEquals(expected, dispatchedMessage(), "the member reads this text, so it shows no raw ids");
     }
 
     static Stream<Arguments> reservationNoticesAndWhatTheyMustSay() {
