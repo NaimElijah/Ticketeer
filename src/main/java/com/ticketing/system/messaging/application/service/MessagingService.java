@@ -161,11 +161,30 @@ public class MessagingService {
 
 
 
-    // II.3.3 — Member submits a COMPLAINT (counterparty = ADMIN_GROUP).
+    /**
+     * II.3.3: the member files a COMPLAINT with the admins (counterparty ADMIN_GROUP). A related-entity
+     * reference, when given, is appended to the details in the stored body.
+     *
+     * @param token   the member's token
+     * @param request the subject, the details the member typed, and an optional related-entity reference
+     * @return the new complaint, seen by the member
+     * @throws IllegalArgumentException if the details are null or blank. Checked before the reference is
+     *         appended, so that a reference alone never passes for details (#187). Also if the reference
+     *         leaves no room for details (see {@link #complaintDetailsLimit})
+     * @throws BusinessRuleViolationException if the details are longer than {@link #complaintDetailsLimit}
+     *         allows, or the subject is longer than {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     */
     @Transactional
     public ConversationDTO submitComplaint(String token, SubmitComplaintRequestDTO request) {
         int memberId = authenticate(token);
         String body = request.body();
+        if (body == null || body.isBlank()) {
+            throw new IllegalArgumentException("Complaint details must not be blank");
+        }
         if (hasRelatedRef(request.relatedEntityRef())) {
             // Checked here rather than left to Message, whose refusal would name the whole body's
             // limit: the member types only the details, and the reference shares their column (#186).
