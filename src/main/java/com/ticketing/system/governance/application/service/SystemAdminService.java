@@ -142,7 +142,13 @@ public class SystemAdminService {
         log.info("Platform initialized — status READY.");
     }
 
-    // UC-1 / I.1.4 — auto-create the default admin if none exists.
+    /**
+     * UC-1 / I.1.4: creates the default System Admin if no admin exists. A save that loses to another
+     * instance creating it first is not a failure (ADR-003).
+     *
+     * @throws MissingDefaultAdminException if the admin cannot be created and none exists. Its cause is the
+     *         save failure; a failure of the re-check that follows it is attached as suppressed
+     */
     public void createDefaultAdminIfMissing() {
         if (adminRepository.existsAny()) {
             log.info("A System Admin already exists; no default needed.");
@@ -160,14 +166,23 @@ public class SystemAdminService {
                     true);
             defaultAdmin.checkInvariants();
             adminRepository.save(defaultAdmin);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException saveFailure) {
+            MissingDefaultAdminException failure =
+                    new MissingDefaultAdminException(saveFailure.getMessage(), saveFailure);
             // Another instance booting against the same database may have inserted it first. An admin
             // then exists, so the lost insert is not an init failure and must not stop this boot (ADR-003).
-            if (adminRepository.existsAny()) {
+            boolean createdConcurrently;
+            try {
+                createdConcurrently = adminRepository.existsAny();
+            } catch (RuntimeException reCheckFailure) {
+                failure.addSuppressed(reCheckFailure);
+                throw failure;
+            }
+            if (createdConcurrently) {
                 log.info("The default System Admin was created concurrently; continuing.");
                 return;
             }
-            throw new MissingDefaultAdminException(e.getMessage(), e);
+            throw failure;
         }
 
         // Confirm the write actually took — a silent persistence failure must fail init.

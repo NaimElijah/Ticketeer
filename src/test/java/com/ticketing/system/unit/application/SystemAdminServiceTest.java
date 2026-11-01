@@ -845,4 +845,23 @@ class SystemAdminServiceTest {
             assertEquals(List.of("Market auto-open failed (will retry)."), log.messagesAt(Level.ERROR));
         }
     }
+
+    // ---- Review follow-up 6: the save failure survives a failing re-check (#187) ----
+
+    // After a failed save the service re-checks whether another instance created the admin. If that check
+    // fails too, the save failure must stay the cause, and the check's failure must not be lost either.
+    @Test
+    void GivenSaveAndReCheckBothFail_WhenCreateDefaultAdmin_ThenSaveFailureIsTheCauseAndReCheckFailureIsSuppressed() {
+        DataAccessResourceFailureException saveFailure = new DataAccessResourceFailureException("insert failed");
+        DataAccessResourceFailureException reCheckFailure = new DataAccessResourceFailureException("connection lost");
+        when(adminRepository.existsAny()).thenReturn(false).thenThrow(reCheckFailure);
+        doThrow(saveFailure).when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        MissingDefaultAdminException thrown =
+                assertThrows(MissingDefaultAdminException.class, svc::createDefaultAdminIfMissing);
+
+        assertSame(saveFailure, thrown.getCause(), "the save failure stays the cause");
+        assertEquals(List.of(reCheckFailure), List.of(thrown.getSuppressed()), "the re-check failure is kept");
+    }
 }
