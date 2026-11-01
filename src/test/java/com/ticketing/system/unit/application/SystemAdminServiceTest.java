@@ -53,6 +53,7 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.MissingDefaultAdminException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
@@ -232,7 +233,7 @@ class SystemAdminServiceTest {
         svc.initializePlatform();                          // READY
         when(gateway.verifyConnection()).thenReturn(false); // gateway drops before open
         assertThrows(ExternalServiceUnavailableException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -243,7 +244,7 @@ class SystemAdminServiceTest {
         svc.initializePlatform();                          // READY
         when(issuer.verifyConnection()).thenReturn(false);  // issuer drops before open
         assertThrows(ExternalServiceUnavailableException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -253,7 +254,7 @@ class SystemAdminServiceTest {
         svc.initializePlatform();                          // READY
         when(adminRepository.existsAny()).thenReturn(false); // admin removed before open
         assertThrows(InitializationIntegrityException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -262,7 +263,7 @@ class SystemAdminServiceTest {
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", "member-token");
         assertThrows(InvalidTokenException.class, () -> svc.openMarket(request));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -270,7 +271,7 @@ class SystemAdminServiceTest {
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", null);
         assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(request));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -278,7 +279,9 @@ class SystemAdminServiceTest {
         when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(null);
         SystemAdminService svc = readyService();
         assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        // The market view is admin-gated too, so read the state as an admin who is on record.
+        when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(new Admin(ADMIN_USER_ID, "admin", "hash", true));
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -373,7 +376,7 @@ class SystemAdminServiceTest {
         svc.closeMarket(closeRequest());                      // admin deliberately closes the market
         svc.ensureMarketOpen();                               // must NOT auto-reopen a deliberate close
         assertFalse(svc.isMarketOpen());
-        assertEquals("CLOSED", svc.viewMarketState().currentStatus());
+        assertEquals("CLOSED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -386,7 +389,7 @@ class SystemAdminServiceTest {
     @Test
     void givenInitializedPlatform_whenViewMarketState_thenReportsHealth() {
         SystemAdminService svc = readyService();
-        MarketStateDTO state = svc.viewMarketState();
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
         assertEquals("READY", state.currentStatus());
         assertTrue(state.paymentGatewayHealthy());
         assertTrue(state.ticketIssuerHealthy());
@@ -628,6 +631,48 @@ class SystemAdminServiceTest {
         assertFalse(state.ticketIssuerHealthy(), "no probe has checked the ticket issuer yet");
         verify(gateway, never()).verifyConnection();
         verify(issuer, never()).verifyConnection();
+    }
+
+    // ---- Defect 4: viewMarketState has no admin gate (#187) ----
+
+    // Refusals match openMarket's: the admin readers' own exceptions, or UnauthorizedActionException.
+    @Test
+    void GivenLiveMemberToken_WhenViewMarketState_ThenInvalidToken() {
+        stubLiveMemberToken("member-token");
+        SystemAdminService svc = readyService();
+
+        assertThrows(InvalidTokenException.class, () -> svc.viewMarketState("member-token"));
+    }
+
+    @Test
+    void GivenNoToken_WhenViewMarketState_ThenUnauthorized() {
+        SystemAdminService svc = readyService();
+
+        assertThrows(UnauthorizedActionException.class, () -> svc.viewMarketState(null));
+    }
+
+    @Test
+    void GivenExpiredAdminToken_WhenViewMarketState_ThenSessionExpired() {
+        when(sessionManager.validateAdminToken("expired-admin-token")).thenThrow(new SessionExpiredException());
+        when(sessionManager.extractAdminId("expired-admin-token")).thenThrow(new SessionExpiredException());
+        SystemAdminService svc = readyService();
+
+        assertThrows(SessionExpiredException.class, () -> svc.viewMarketState("expired-admin-token"));
+    }
+
+    @Test
+    void GivenAdminTokenWhoseAdminNoLongerExists_WhenViewMarketState_ThenUnauthorized() {
+        when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(null);
+        SystemAdminService svc = readyService();
+
+        assertThrows(UnauthorizedActionException.class, () -> svc.viewMarketState(ADMIN_TOKEN));
+    }
+
+    @Test
+    void GivenLiveAdminToken_WhenViewMarketState_ThenStateReturned() {
+        SystemAdminService svc = readyService();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
 }

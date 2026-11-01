@@ -62,7 +62,7 @@ class SystemAnalyticsPresenterTest {
     void load_returnsSuccess_withMarketAndAnalytics() {
         MarketStateDTO market = marketState("OPEN");
         SystemAnalyticsDTO analytics = zeroAnalytics();
-        when(adminService.viewMarketState()).thenReturn(market);
+        when(adminService.viewMarketState(TOKEN)).thenReturn(market);
         when(analyticsService.computeAnalytics(TOKEN)).thenReturn(analytics);
 
         SystemAnalyticsPresenter.Outcome outcome = presenter.load();
@@ -75,7 +75,7 @@ class SystemAnalyticsPresenterTest {
 
     @Test
     void load_returnsFailure_whenAServiceThrows() {
-        when(adminService.viewMarketState()).thenThrow(new RuntimeException("boom"));
+        when(adminService.viewMarketState(TOKEN)).thenThrow(new RuntimeException("boom"));
 
         assertInstanceOf(SystemAnalyticsPresenter.Outcome.Failure.class, presenter.load());
     }

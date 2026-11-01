@@ -253,21 +253,21 @@ public class SystemAdminService {
         return buildMarketState();
     }
 
-    // Read-only market/health snapshot for admin dashboards. No token — the admin
-    // route is already access-gated and this exposes no sensitive data.
-    public MarketStateDTO viewMarketState() {
-        return buildMarketState();
-    }
-
     /**
      * The market/health snapshot for the admin dashboard. The services' reachability is the result of
      * the last initialization, open or self-heal probe, and unreachable before any; this call never
-     * probes WSEP.
+     * probes WSEP. Gated like {@link #openMarket}: the UI's route guard only steers navigation.
      *
-     * @param adminToken the caller's admin session token; not checked yet
+     * @param adminToken the caller's admin session token
      * @return the current market state
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     public MarketStateDTO viewMarketState(String adminToken) {
+        requireSystemAdmin(adminToken);
         return buildMarketState();
     }
 
