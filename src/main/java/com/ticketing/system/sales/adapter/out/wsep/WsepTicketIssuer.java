@@ -96,7 +96,7 @@ public class WsepTicketIssuer implements TicketIssuer {
             try {
                 code = http.post(form);
             } catch (WsepCommunicationException e) {
-                throw new TicketIssuanceFailedException("ticket issuer unreachable: " + e.getMessage());
+                throw new TicketIssuanceFailedException("ticket issuer unreachable: " + e.getMessage(), e);
             }
 
             if (code == null || code.isBlank() || FAILURE.equals(code)) {

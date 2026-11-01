@@ -3,6 +3,7 @@ package com.ticketing.system.unit.infrastructure.external;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.net.ConnectException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -144,5 +146,23 @@ class WsepTicketIssuerTest {
             assertThrows(TicketIssuanceFailedException.class, () -> realIssuer.issue(twoTicketRequest()),
                     "an HTTP 500 body must never become a ticket barcode");
         }
+    }
+
+    // ---- Defect 8: an unreachable issuer's failure keeps the transport cause (#187) ----
+    // The checkout logs the failure with its stack trace; without the cause, the timeout or refused
+    // connection behind it is lost.
+
+    @Test
+    void GivenIssuerUnreachable_WhenIssue_ThenTheIssuanceFailureCarriesTheTransportCause() {
+        WsepCommunicationException transportFailure =
+                new WsepCommunicationException("refused", new ConnectException("Connection refused"));
+        when(http.post(any())).thenThrow(transportFailure);
+
+        TicketIssuanceFailedException failure = assertThrows(TicketIssuanceFailedException.class,
+                () -> issuer.issue(twoTicketRequest()));
+
+        assertSame(transportFailure, failure.getCause(),
+                "the issuance failure must keep the transport failure as its cause, but the cause was "
+                        + failure.getCause());
     }
 }
