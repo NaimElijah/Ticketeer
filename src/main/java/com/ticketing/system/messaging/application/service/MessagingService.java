@@ -263,11 +263,26 @@ public class MessagingService {
         log.info("Admin {} resolved complaint {}", adminId, conversationId);
     }
 
-    // II.6.3.2 — admin proactive messaging. Resolves the recipient set (explicit members, and/or
-    // all members, and/or all producers' owner accounts), then opens one two-way DIRECT
-    // conversation per recipient so each lands in that member's Support Inbox as a chat.
-    // The whole send publishes one OutreachSentNotice, not one notice per recipient: the notify-
-    // queue is bounded and drops what does not fit (ADR-004, #187).
+    /**
+     * II.6.3.2: an admin messages members proactively. Resolves the recipients (every member, and/or
+     * every active company's owners, or else the explicit member list), then opens one two-way DIRECT
+     * conversation per recipient, so each lands in that member's Support Inbox as a chat.
+     *
+     * <p>The send is all or nothing: an explicit recipient that names no member refuses it before any
+     * conversation is stored, since a partial send would leave the admin unable to tell who got it
+     * (#187). The whole send publishes one {@link OutreachSentNotice}, not one notice per recipient:
+     * the notify- queue is bounded and drops what does not fit (ADR-004, #187).
+     *
+     * @param token   a live admin token whose admin still exists
+     * @param request the subject, the body, and who receives it
+     * @return how many recipients the send reached, and the first conversation opened
+     * @throws UserNotFoundException if an explicit recipient id names no member, 0 and negative ids
+     *         included; nothing is stored or published
+     * @throws BusinessRuleViolationException if the send matches no recipient
+     * @throws UnauthorizedActionException if the token is a member's, or its admin no longer exists
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked
+     */
     @Transactional
     public OutreachResultDTO sendOutreach(String token, OutreachRequestDTO request) {
         int adminId = requireSystemAdmin(token);
@@ -287,7 +302,10 @@ public class MessagingService {
         }
         if (!request.allMembers() && !request.allProducers()) {
             for (Integer memberId : safeList(request.recipientMemberIds())) {
-                if (memberId != null) recipientIds.add(memberId);
+                if (memberId != null) {
+                    requireMember(memberId);
+                    recipientIds.add(memberId);
+                }
             }
         }
 
@@ -645,6 +663,11 @@ public class MessagingService {
     // ---------------------------------------------------------------------------
     // Misc helpers
     // ---------------------------------------------------------------------------
+
+    // Throws UserNotFoundException for an id that names no member; 0 and negative ids never do.
+    private void requireMember(int memberId) {
+        userRepository.getUserById(memberId);
+    }
 
     private Conversation loadConversation(String conversationId) {
         return conversationRepository.findById(conversationId)
