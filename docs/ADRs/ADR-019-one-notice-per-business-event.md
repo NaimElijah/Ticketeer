@@ -36,11 +36,14 @@ in-app alert about a conversation the member can open in the Support Inbox anywa
 Two publishers still publish one notice per recipient. Each is bounded, so the queue does not
 overflow:
 
-- **`EventCancellationRefundService`** publishes one `EventCancelledNotice` per refunded receipt.
-  Each notice follows a WSEP refund call, so notices arrive no faster than the gateway answers, and
-  the `notify-` thread stores each with one row insert, far faster than that. **Revisit** if refunds
-  stop going one gateway call per receipt (a batch refund), or if storing an alert gets slower than
-  a refund.
+- **`EventCancellationRefundService`** publishes one `EventCancelledNotice` per member holder of a
+  refunded receipt, at most once per holder in a run; a guest receipt gets none.
+  Each notice follows that receipt's own two `REQUIRES_NEW` transactions, the claim and then the
+  completion, plus a WSEP refund call when the receipt's amount is above zero; a free event's
+  receipts call no gateway. So notices arrive no faster than two committed transactions per receipt,
+  and the `notify-` thread stores each with one row insert, less work than those two. **Revisit** if
+  refunds are batched so that one transaction completes many receipts, or if storing an alert gets
+  slower than a receipt's refund transactions.
 - **`MessagingService.notifyCompanyOwners`** publishes one `NewMessageNotice` per company owner. A
   company has a handful of owners. **Revisit** if a company can have many owners, or a notice goes to
   all of a company's staff.
