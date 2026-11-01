@@ -31,6 +31,8 @@ import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.company.MyCompaniesView;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterListener;
@@ -71,7 +73,8 @@ class AuthBootstrapTest {
         when(authenticationService.startGuestSession())
                 .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
         when(authenticationService.isLiveGuestSession(GUEST_SESSION_ID)).thenReturn(true);
-        FreshGuestSession freshGuestSession = new FreshGuestSession(authenticationService);
+        FreshGuestSession freshGuestSession = new FreshGuestSession(authenticationService,
+                new UnreadAlertsSendBack(mock(INotificationService.class)));
         SessionIdentity sessionIdentity = new SessionIdentity(authenticationService, freshGuestSession);
         guard = registeredGuard(new AuthBootstrap(sessionIdentity, authenticationService, freshGuestSession));
     }

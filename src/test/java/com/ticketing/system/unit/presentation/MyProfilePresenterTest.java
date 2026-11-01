@@ -26,6 +26,8 @@ import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 
 /**
  * {@link MyProfilePresenter} shows the signed-in member's profile, and only a member's.
@@ -59,7 +61,8 @@ class MyProfilePresenterTest {
         authenticationService = mock(AuthenticationService.class);
         when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
         when(memberQueryService.getMemberProfile(MEMBER_TOKEN)).thenReturn(MEMBER);
-        SessionIdentity identity = new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService));
+        SessionIdentity identity = new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService,
+                new UnreadAlertsSendBack(mock(INotificationService.class))));
         presenter = new MyProfilePresenter(memberQueryService, identity);
     }
 

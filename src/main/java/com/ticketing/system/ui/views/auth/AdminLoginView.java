@@ -4,8 +4,6 @@ import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
-import com.ticketing.system.ui.session.AuthSession;
-import com.ticketing.system.ui.session.NotificationSession;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.vaadin.flow.component.Key;
@@ -63,10 +61,7 @@ public class AdminLoginView extends LkAuthCard {
 
         switch (outcome) {
             case AdminLoginPresenter.Outcome.Success ok -> {
-                // A member signed in on this session before holds their notifications here; an admin's
-                // bell must not show them, since admin and member ids share one id space (ADR-012).
-                NotificationSession.clear();
-                AuthSession.storeAuth(ok.authToken());
+                presenter.signIn(ok.authToken());
                 Toasts.success("Signed in as admin · " + ok.authToken().username());
                 UI.getCurrent().navigate(AdminDashboardView.class);
             }

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 
 /**
  * {@link SessionIdentity}'s contract (class Javadoc): a member is a visitor whose token is still live;
@@ -55,7 +56,8 @@ class SessionIdentityTest {
         authenticationService = mock(AuthenticationService.class);
         when(authenticationService.startGuestSession())
                 .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
-        freshGuestSession = spy(new FreshGuestSession(authenticationService));
+        freshGuestSession = spy(new FreshGuestSession(authenticationService,
+                new UnreadAlertsSendBack(mock(INotificationService.class))));
     }
 
     @AfterEach
