@@ -291,15 +291,29 @@ public class MessagingService {
 
 
 
-    // UI action — mark a single message as read by the viewer.
+    /**
+     * Marks the thread read for the caller's side: every message the other side sent becomes read, so
+     * the caller's unread count for it drops to 0. The UI calls it when the caller opens the thread.
+     * The other side's count is unchanged. An admin reads for all admins: opening a complaint marks the
+     * member's message read for the whole queue, and never marks an admin's reply read for the member.
+     *
+     * @param token the caller's member or admin token
+     * @param conversationId the thread to mark read
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     * @throws ConversationNotFoundException if no conversation has that id
+     * @throws InvalidParticipantException if the caller is not a participant of the conversation
+     */
     @Transactional
-    public void markMessageAsRead(String token, String conversationId, String messageId) {
+    public void markConversationRead(String token, String conversationId) {
         Caller caller = authenticateCaller(token);
         conversationRepository.lockForUpdate(conversationId);
         try {
             Conversation conversation = loadConversation(conversationId);
             CallerSide reader = resolveCallerSide(caller, conversation);
-            conversation.markMessageRead(messageId, reader.id(), reader.type());
+            conversation.markReadBy(reader.id(), reader.type());
             conversationRepository.save(conversation);
         } finally {
             conversationRepository.unlock(conversationId);

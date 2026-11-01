@@ -158,6 +158,7 @@ public class AdminComplaintQueueView extends LkPage {
         detailCard.removeAll();
         ConversationDTO conv = byId(selectedId);
         if (conv == null) return;
+        markRead(conv.conversationId());
 
         detailCard.title(conv.subject());
         detailCard.subtitle(conv.initiatorDisplayName() + " · " + humanizeStatus(conv.status()));
@@ -174,6 +175,15 @@ public class AdminComplaintQueueView extends LkPage {
                 .icon(new LkIcon("arrowRight", 15))
                 .onClick(e -> navigateToRespond()));
             detailCard.add(actionRow);
+        }
+    }
+
+    // Showing the thread is reading it. A failed mark-read leaves the badge and tells the viewer
+    // nothing: they can do nothing about it, and the presenter has already logged it (ServiceErrors).
+    private void markRead(String conversationId) {
+        if (presenter.markRead(AuthSession.token(), conversationId) instanceof AdminComplaintQueuePresenter.ActionOutcome.Success) {
+            int idx = indexOf(conversationId);
+            if (idx >= 0) convRows.get(idx).clearUnread();
         }
     }
 

@@ -493,18 +493,7 @@ class MessagingServiceTest {
         assertEquals(MEMBER_ID, filtered.get(0).initiatorId());
     }
 
-    // --- markMessageAsRead / closeConversation ---
-
-    @Test
-    void markMessageAsRead_flipsReadFlag() {
-        ConversationDTO created = service.startConversation(MEMBER_TOKEN, inquiryReq());
-        String msgId = created.messages().get(0).messageId();
-
-        service.markMessageAsRead(OWNER_TOKEN, created.conversationId(), msgId);
-
-        var conv = conversationRepository.findById(created.conversationId()).orElseThrow();
-        assertTrue(conv.getMessages().get(0).isRead());
-    }
+    // --- markConversationRead / closeConversation ---
 
     // Each call must pass the side it resolved: with the id alone, the member and the company that share
     // it would each take the other's messages for their own. The member writes twice, so the two counts
@@ -523,11 +512,10 @@ class MessagingServiceTest {
     }
 
     @Test
-    void GivenAMemberWithTheCompanysId_WhenTheCompanyMarksTheMembersMessageRead_ThenTheCompanyHasNothingUnread() {
+    void GivenAMemberWithTheCompanysId_WhenTheCompanyMarksTheThreadRead_ThenTheCompanyHasNothingUnread() {
         ConversationDTO created = service.startConversation(SHARED_ID_MEMBER_TOKEN, inquiryReq());
-        String memberMessage = created.messages().get(0).messageId();
 
-        service.markMessageAsRead(OWNER_TOKEN, created.conversationId(), memberMessage);
+        service.markConversationRead(OWNER_TOKEN, created.conversationId());
 
         assertEquals(0, service.viewCompanyInbox(OWNER_TOKEN, COMPANY_ID).get(0).unreadCountForViewer());
     }

@@ -166,4 +166,38 @@ class AdminInboxPresenterTest {
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "x"));
         assertEquals(rule.getMessage(), fail.reason());
     }
+
+    // ---- Nothing ever marks a conversation read (#187) ----
+
+    @Test
+    void GivenAThread_WhenTheAdminOpensIt_ThenTheThreadIsMarkedRead() {
+        AdminInboxPresenter.ActionOutcome outcome = presenter.markRead(TOKEN, "c1");
+
+        assertInstanceOf(AdminInboxPresenter.ActionOutcome.Success.class, outcome);
+        verify(messaging).markConversationRead(TOKEN, "c1");
+    }
+
+    @Test
+    void GivenNoToken_WhenMarkRead_ThenNotAuthenticatedAndNothingIsMarked() {
+        assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.markRead(null, "c1"));
+
+        verify(messaging, never()).markConversationRead(anyString(), anyString());
+    }
+
+    @Test
+    void GivenAnExpiredToken_WhenMarkRead_ThenNotAuthenticated() {
+        doThrow(new InvalidTokenException("bad")).when(messaging).markConversationRead(anyString(), anyString());
+
+        assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.markRead(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheMarkFailsInternally_WhenMarkRead_ThenTheReasonIsTheGenericText() {
+        doThrow(new RuntimeException("could not execute statement [update messages set is_read=?]"))
+            .when(messaging).markConversationRead(anyString(), anyString());
+
+        AdminInboxPresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.markRead(TOKEN, "c1"));
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
 }

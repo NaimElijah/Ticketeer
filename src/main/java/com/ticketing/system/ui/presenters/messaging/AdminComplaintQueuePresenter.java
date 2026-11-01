@@ -74,12 +74,16 @@ public class AdminComplaintQueuePresenter {
         };
     }
 
-    /** Loads a single complaint thread for the dedicated respond page. */
+    /**
+     * Opens a single complaint thread for the dedicated respond page, marking it read for the caller
+     * first, so the thread it returns already counts nothing unread.
+     */
     public SingleOutcome loadOne(String token, String conversationId) {
         if (token == null) {
             return new SingleOutcome.NotAuthenticated();
         }
         try {
+            messagingService.markConversationRead(token, conversationId);
             return new SingleOutcome.Success(messagingService.viewConversation(token, conversationId));
         } catch (InvalidTokenException e) {
             return new SingleOutcome.NotAuthenticated();
@@ -109,6 +113,21 @@ public class AdminComplaintQueuePresenter {
         }
     }
 
+    /** Marks {@code conversationId} read for the signed-in admin, as the view shows the thread. */
+    public ActionOutcome markRead(String token, String conversationId) {
+        if (token == null) {
+            return new ActionOutcome.NotAuthenticated();
+        }
+        try {
+            messagingService.markConversationRead(token, conversationId);
+            return new ActionOutcome.Success();
+        } catch (InvalidTokenException e) {
+            return new ActionOutcome.NotAuthenticated();
+        } catch (RuntimeException e) {
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
+        }
+    }
+
     /** Sealed outcome the view switches on to render the queue or an empty/error state. */
     public sealed interface Outcome {
         record Success(List<ConversationDTO> complaints) implements Outcome { }
@@ -123,7 +142,7 @@ public class AdminComplaintQueuePresenter {
         record Failure(String reason) implements SingleOutcome { }
     }
 
-    /** Result of a respond the view reacts to. */
+    /** Result of a respond or a mark-read the view reacts to. */
     public sealed interface ActionOutcome {
         record Success() implements ActionOutcome { }
         record NotAuthenticated() implements ActionOutcome { }

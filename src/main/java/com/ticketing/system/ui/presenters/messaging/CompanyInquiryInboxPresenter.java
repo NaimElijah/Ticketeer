@@ -70,12 +70,16 @@ public class CompanyInquiryInboxPresenter {
         }
     }
 
-    /** Loads a single inquiry thread for the dedicated respond page. */
+    /**
+     * Opens a single inquiry thread for the dedicated respond page, marking it read for the caller
+     * first, so the thread it returns already counts nothing unread.
+     */
     public SingleOutcome loadOne(String token, String conversationId) {
         if (token == null) {
             return new SingleOutcome.NotAuthenticated();
         }
         try {
+            messagingService.markConversationRead(token, conversationId);
             return new SingleOutcome.Success(messagingService.viewConversation(token, conversationId));
         } catch (InvalidTokenException e) {
             return new SingleOutcome.NotAuthenticated();
@@ -121,6 +125,21 @@ public class CompanyInquiryInboxPresenter {
         }
     }
 
+    /** Marks {@code conversationId} read for the signed-in company, as the view shows the thread. */
+    public ActionOutcome markRead(String token, String conversationId) {
+        if (token == null) {
+            return new ActionOutcome.NotAuthenticated();
+        }
+        try {
+            messagingService.markConversationRead(token, conversationId);
+            return new ActionOutcome.Success();
+        } catch (InvalidTokenException e) {
+            return new ActionOutcome.NotAuthenticated();
+        } catch (RuntimeException e) {
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
+        }
+    }
+
     /** Sealed outcome the view switches on to render the inbox or an empty/error state. */
     public sealed interface Outcome {
         record Success(List<MyCompanyDTO> companies, MyCompanyDTO selected,
@@ -137,7 +156,7 @@ public class CompanyInquiryInboxPresenter {
         record Failure(String reason) implements SingleOutcome { }
     }
 
-    /** Result of a reply / close the view reacts to. */
+    /** Result of a reply / close / mark-read the view reacts to. */
     public sealed interface ActionOutcome {
         record Success() implements ActionOutcome { }
         record NotAuthenticated() implements ActionOutcome { }

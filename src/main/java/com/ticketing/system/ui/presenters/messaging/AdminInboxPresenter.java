@@ -78,6 +78,21 @@ public class AdminInboxPresenter {
         }
     }
 
+    /** Marks {@code conversationId} read for the signed-in admin, as the view opens the thread. */
+    public ActionOutcome markRead(String token, String conversationId) {
+        if (token == null) {
+            return new ActionOutcome.NotAuthenticated();
+        }
+        try {
+            messagingService.markConversationRead(token, conversationId);
+            return new ActionOutcome.Success();
+        } catch (InvalidTokenException e) {
+            return new ActionOutcome.NotAuthenticated();
+        } catch (RuntimeException e) {
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
+        }
+    }
+
     /** Sealed outcome the view switches on to render the inbox or an empty/error state. */
     public sealed interface Outcome {
         record Success(List<ConversationDTO> conversations) implements Outcome { }
@@ -85,7 +100,7 @@ public class AdminInboxPresenter {
         record Failure(String reason) implements Outcome { }
     }
 
-    /** Result of a reply / close the view reacts to. */
+    /** Result of a reply / close / mark-read the view reacts to. */
     public sealed interface ActionOutcome {
         record Success() implements ActionOutcome { }
         record NotAuthenticated() implements ActionOutcome { }

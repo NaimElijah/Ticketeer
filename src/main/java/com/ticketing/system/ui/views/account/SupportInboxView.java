@@ -171,6 +171,7 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
         detailCard.removeAll();
         ConversationDTO conv = byId(selectedId);
         if (conv == null) return;
+        markRead(conv.conversationId());
 
         detailCard.title(conv.subject());
         detailCard.subtitle(whoFor(conv) + " · " + humanizeStatus(conv.status()));
@@ -191,6 +192,15 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             // Closed inquiry / admin outreach — read-only history, no reply bar.
             detailCard.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 17),
                 "This conversation has been closed — you can read the history, but replies are no longer accepted."));
+        }
+    }
+
+    // Showing the thread is reading it. A failed mark-read leaves the badge and tells the viewer
+    // nothing: they can do nothing about it, and the presenter has already logged it (ServiceErrors).
+    private void markRead(String conversationId) {
+        if (presenter.markRead(AuthSession.token(), conversationId) instanceof SupportInboxPresenter.ActionOutcome.Success) {
+            int idx = indexOf(conversationId);
+            if (idx >= 0) convRows.get(idx).clearUnread();
         }
     }
 

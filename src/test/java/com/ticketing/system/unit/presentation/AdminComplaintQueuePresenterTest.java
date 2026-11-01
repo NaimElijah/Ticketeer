@@ -234,4 +234,47 @@ class AdminComplaintQueuePresenterTest {
             AdminComplaintQueuePresenter.ActionOutcome.Failure.class, presenter.respond(TOKEN, "c1", "late"));
         assertEquals(rule.getMessage(), fail.reason());
     }
+
+    // ---- Nothing ever marks a conversation read (#187) ----
+
+    @Test
+    void GivenAComplaintThread_WhenTheAdminOpensIt_ThenTheThreadIsMarkedRead() {
+        when(messaging.viewConversation(TOKEN, "c1")).thenReturn(complaint("c1", "OPEN"));
+
+        presenter.loadOne(TOKEN, "c1");
+
+        verify(messaging).markConversationRead(TOKEN, "c1");
+    }
+
+    @Test
+    void GivenAThreadShownInTheDetailCard_WhenMarkRead_ThenTheThreadIsMarkedRead() {
+        AdminComplaintQueuePresenter.ActionOutcome outcome = presenter.markRead(TOKEN, "c1");
+
+        assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.Success.class, outcome);
+        verify(messaging).markConversationRead(TOKEN, "c1");
+    }
+
+    @Test
+    void GivenNoToken_WhenMarkRead_ThenNotAuthenticatedAndNothingIsMarked() {
+        assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated.class, presenter.markRead(null, "c1"));
+
+        verify(messaging, never()).markConversationRead(anyString(), anyString());
+    }
+
+    @Test
+    void GivenAnExpiredToken_WhenMarkRead_ThenNotAuthenticated() {
+        doThrow(new InvalidTokenException("bad")).when(messaging).markConversationRead(anyString(), anyString());
+
+        assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated.class, presenter.markRead(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheMarkFailsInternally_WhenMarkRead_ThenTheReasonIsTheGenericText() {
+        doThrow(new RuntimeException("could not execute statement [update messages set is_read=?]"))
+            .when(messaging).markConversationRead(anyString(), anyString());
+
+        AdminComplaintQueuePresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.Failure.class, presenter.markRead(TOKEN, "c1"));
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
 }

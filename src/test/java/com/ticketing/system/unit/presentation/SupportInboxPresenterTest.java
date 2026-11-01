@@ -176,4 +176,38 @@ class SupportInboxPresenterTest {
             SupportInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "late reply"));
         assertEquals(rule.getMessage(), fail.reason());
     }
+
+    // ---- Nothing ever marks a conversation read (#187) ----
+
+    @Test
+    void GivenAThread_WhenTheMemberOpensIt_ThenTheThreadIsMarkedRead() {
+        SupportInboxPresenter.ActionOutcome outcome = presenter.markRead(TOKEN, "c1");
+
+        assertInstanceOf(SupportInboxPresenter.ActionOutcome.Success.class, outcome);
+        verify(service).markConversationRead(TOKEN, "c1");
+    }
+
+    @Test
+    void GivenNoToken_WhenMarkRead_ThenNotAuthenticatedAndNothingIsMarked() {
+        assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.markRead(null, "c1"));
+
+        verify(service, never()).markConversationRead(anyString(), anyString());
+    }
+
+    @Test
+    void GivenAnExpiredToken_WhenMarkRead_ThenNotAuthenticated() {
+        doThrow(new InvalidTokenException("bad")).when(service).markConversationRead(anyString(), anyString());
+
+        assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.markRead(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheMarkFailsInternally_WhenMarkRead_ThenTheReasonIsTheGenericText() {
+        doThrow(new RuntimeException("could not execute statement [update messages set is_read=?]"))
+            .when(service).markConversationRead(anyString(), anyString());
+
+        SupportInboxPresenter.ActionOutcome.Failure fail =
+            assertInstanceOf(SupportInboxPresenter.ActionOutcome.Failure.class, presenter.markRead(TOKEN, "c1"));
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
 }
