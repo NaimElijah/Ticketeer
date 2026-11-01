@@ -168,7 +168,7 @@ public final class ScenarioOps {
         String innerOp = cmd.requirePos(0, "operation to expect-error");
         String expectedError = cmd.named(ScenarioParser.EXPECTED_ERROR_ARG);
         OpHandler handler = registry.get(innerOp);
-        String label = "expect-error " + innerOp;
+        String label = label(cmd);
         if (handler == null) {
             harness.step("scenario", label, () -> {
                 throw new IllegalArgumentException("unknown operation '" + innerOp + "' at line " + cmd.line());
@@ -564,10 +564,13 @@ public final class ScenarioOps {
         }
     }
 
-    /** Short, stable label for harness output: line number, op, and up to 3 args. */
+    /**
+     * The step's name in the harness log, the report and a fail-fast abort: {@code L<n> <op> <first argument>}.
+     * Later arguments are left out because they can be credentials or personal data, such as a
+     * {@code register} line's password and email (SLR.2).
+     */
     private static String label(ScenarioCommand cmd) {
-        int take = Math.min(3, cmd.positional().size());
-        String args = String.join(" ", cmd.positional().subList(0, take));
-        return ("L" + cmd.line() + " " + cmd.op() + (args.isBlank() ? "" : " " + args)).trim();
+        String first = cmd.pos(0);
+        return "L" + cmd.line() + " " + cmd.op() + (first == null || first.isBlank() ? "" : " " + first);
     }
 }
