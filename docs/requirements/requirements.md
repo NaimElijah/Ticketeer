@@ -128,7 +128,7 @@ Where the course documents contradict each other or leave a gap, the item is lis
 | II.2.5.b | UC-9 | Choose a number of tickets in a standing zone. | Built | `InventoryService.reserve` · `ReservationServiceTest` |
 | II.2.6 | — | Wait in a queue under extreme load, see a position or estimated wait, and get time-boxed access when admitted; access lapses, and the visitor leaves the queue, if they do not act in time. | Deferred (#71) | — |
 | II.2.7 | — | View and change the active order (remove tickets, change quantities) until it expires. | Partial: viewing and removing are built; changing a quantity is #64 | `ReservationService` · `ReservationServiceTest` |
-| II.2.8 | UC-10 | Check out under the company's purchase and discount policies before the hold expires. All or nothing: a payment or issuing failure, or an expired hold, buys nothing and releases the tickets. | Built for the policies that exist (II.4.3); money is a `double` (#73) | `CheckoutService` · `CheckoutServiceTest`, `CheckoutServiceAcceptanceTest` |
+| II.2.8 | UC-10 | Check out under the company's purchase and discount policies before the hold expires. All or nothing: a payment or issuing failure, or an expired hold, buys nothing and releases the tickets. | Built for the policies that exist (II.4.3); money is a `double` (#73) | `CheckoutService`; a cart whose hold has run out, or an empty one, is refused before any charge with an `InvalidStateTransitionException`, which the buyer sees as an expired order (`ActiveOrder.validateCanCheckout`, `CheckoutPresenter`, #187) · `CheckoutServiceTest` (the `…RefusedAsAnInvalidStateTransitionAndNothingCharged` tests), `CheckoutPresenterTest`, `CheckoutServiceAcceptanceTest` |
 
 ### II.3 Purchasing as a member
 

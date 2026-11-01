@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
@@ -79,5 +80,21 @@ class CheckoutPresenterTest {
 
         assertInstanceOf(CheckoutPresenter.PayOutcome.OrderNotCompleted.class, outcome,
                 "a ticket-issuance failure after the charge is its own outcome, but was: " + outcome);
+    }
+
+    // ---- Defect 2: a cart checkout refuses as a state transition reads as an expired order (#187) ----
+    // The presenter's half of CheckoutServiceTest's defect-2 tests: the service must refuse an expired,
+    // empty or frozen cart with an InvalidStateTransitionException, and this is what the buyer then sees.
+
+    @Test
+    void GivenCheckoutRefusesTheCartAsAnInvalidStateTransition_WhenPay_ThenOrderExpired() {
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock",
+                        new InvalidStateTransitionException("Cannot checkout because one or more tickets expired")));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertInstanceOf(CheckoutPresenter.PayOutcome.OrderExpired.class, outcome,
+                "a cart checkout refuses as a state transition must read as an expired order, but was: " + outcome);
     }
 }

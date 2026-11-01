@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -55,6 +56,7 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -2859,4 +2861,64 @@ private AtomicBoolean trackReceiptSave() {
         assertEquals(first, retry);
         verify(mockPaymentGateway, times(1)).charge(any()); // no second charge
     }
+
+    // ---- Defect 2: a cart that cannot be checked out is refused as a state transition (#187) ----
+    // Checkout wraps every pre-flight failure in its generic checkout failure, so the reason is in the
+    // cause chain. CheckoutPresenter shows "Order expired" only for an InvalidStateTransitionException
+    // there; any other cause that is no domain exception reaches the buyer as "Something went wrong".
+
+    @Test
+    void GivenMemberCartWhoseHoldHasRunOut_WhenCheckoutMember_ThenRefusedAsAnInvalidStateTransitionAndNothingCharged() {
+        ActiveOrder expired = new ActiveOrder(USER_ID, NOW);
+        expired.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, aHoldStartThatHasRunOut());
+        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(expired);
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        assertCauseChainHasInvalidStateTransition(failed);
+        verify(mockPaymentGateway, never()).charge(any());
+    }
+
+    @Test
+    void GivenEmptyMemberCart_WhenCheckoutMember_ThenRefusedAsAnInvalidStateTransitionAndNothingCharged() {
+        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        assertCauseChainHasInvalidStateTransition(failed);
+        verify(mockPaymentGateway, never()).charge(any());
+    }
+
+    @Test
+    void GivenGuestCartWhoseHoldHasRunOut_WhenCheckoutGuest_ThenRefusedAsAnInvalidStateTransitionAndNothingCharged() {
+        givenValidGuestSession();
+        ActiveOrder expired = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
+        expired.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, aHoldStartThatHasRunOut());
+        givenGuestOrder(expired);
+
+        RuntimeException failed = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+        assertCauseChainHasInvalidStateTransition(failed);
+        verify(mockPaymentGateway, never()).charge(any());
+    }
+
+    // A line added this long ago has run out at NOW, by a minute.
+    private static LocalDateTime aHoldStartThatHasRunOut() {
+        return NOW.minus(CartLineItem.getExpirationLimit()).minusMinutes(1);
+    }
+
+    private static void assertCauseChainHasInvalidStateTransition(Throwable failure) {
+        List<String> chain = new java.util.ArrayList<>();
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof InvalidStateTransitionException) {
+                return;
+            }
+            chain.add(t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+        fail("the refusal must carry an InvalidStateTransitionException, but the cause chain was " + chain);
+    }
+
 }
