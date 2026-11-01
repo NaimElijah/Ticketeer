@@ -14,6 +14,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.ticketing.system.sales.application.event.OrderExpiredEvent;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
@@ -95,19 +97,47 @@ public class SessionAndOrderSweeper {
     /**
      * Returns the count of sessions deleted. Public so unit tests can drive
      * each pass independently of the {@code @Scheduled} cadence.
+     *
+     * <p>Each swept-out guest session is a visitor exit (analytics, UC-46), recorded only once the
+     * surrounding transaction commits; without one, it is recorded at once.
      */
     public int sweepExpiredSessions(Instant now) {
         List<Session> expired = sessionRepository.findExpiredBefore(now);
+        int visitorExits = 0;
         for (Session session : expired) {
             cleanUpAttachedCart(session, holdTime(now));
             sessionRepository.delete(session.getSessionId());
-            // A swept-out guest session is a visitor exit (analytics, UC-46). Member
-            // sessions persist their cart by userId, so they are not counted here.
+            // Member sessions persist their cart by userId, so they are not counted as exits.
             if (session.isGuest()) {
-                systemMetrics.record(MetricType.VISITOR_EXIT);
+                visitorExits++;
             }
         }
+        recordVisitorExitsAfterCommit(visitorExits);
         return expired.size();
+    }
+
+    // A tick that rolls back deleted nothing, and the next tick sweeps the same sessions again, so an
+    // exit counted before the commit would be counted twice.
+    private void recordVisitorExitsAfterCommit(int visitorExits) {
+        if (visitorExits == 0) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            recordVisitorExits(visitorExits);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                recordVisitorExits(visitorExits);
+            }
+        });
+    }
+
+    private void recordVisitorExits(int visitorExits) {
+        for (int i = 0; i < visitorExits; i++) {
+            systemMetrics.record(MetricType.VISITOR_EXIT);
+        }
     }
 
     /**
