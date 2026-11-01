@@ -168,10 +168,7 @@ public class AdminComplaintQueuePresenter {
      * @return the badge text, or empty for no badge
      */
     public Optional<String> badge(ConversationDTO conversation, OpenedThreads opened) {
-        if (opened.isOpenAsOf(conversation) || conversation.unreadCountForViewer() == 0) {
-            return Optional.empty();
-        }
-        return Optional.of(String.valueOf(conversation.unreadCountForViewer()));
+        return opened.badgeFor(conversation);
     }
 
     /** Sealed outcome the view switches on to render the queue or an empty/error state. */
