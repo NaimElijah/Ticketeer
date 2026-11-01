@@ -86,8 +86,9 @@ public class Message implements InvariantChecked {
 
     public boolean isRead() { return read; }
 
-    // UI action — flips false -> true. Idempotent.
-    public void markRead() {
+    // Flips false -> true. Idempotent. Package-private: only Conversation.markReadBy decides which
+    // messages a reader has read (#187).
+    void markRead() {
         this.read = true;
     }
 }

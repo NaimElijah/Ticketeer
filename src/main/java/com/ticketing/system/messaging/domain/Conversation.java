@@ -40,7 +40,7 @@ import jakarta.persistence.Version;
 // — never @ManyToOne. @Version drives optimistic locking. messages are owned children
 // (@OneToMany cascade-all + orphan-removal) kept in send order via @OrderColumn, loaded eagerly so a
 // detached Conversation is fully usable. A protected no-arg ctor lets Hibernate hydrate; the public
-// ctor still enforces the invariants.
+// ctor still enforces the invariants and the message shape.
 @Entity
 @Table(name = "conversations")
 public class Conversation implements InvariantChecked {
@@ -89,6 +89,24 @@ public class Conversation implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected Conversation() { }
 
+    /**
+     * Builds an OPEN conversation from its parts, and validates them: application code opens one with
+     * {@link #start} instead. The conversation keeps its own copy of {@code messages}, so later changes
+     * to the caller's list do not reach it.
+     *
+     * <p>The messages must form a thread that {@link #start} and {@link #addMessage} could have built,
+     * one message at a time: at least one message, none null, the first from the initiator, and each
+     * later one from a sender {@code addMessage} would accept (a participant; on a complaint, a single
+     * admin reply and nothing from the member). Each message has the effect {@code addMessage} gives
+     * it, so the status and {@link #getLastMessageAt} follow the thread: a counterparty reply makes it
+     * RESPONDED, an initiator reply reopens it.
+     *
+     * @throws IllegalArgumentException if {@code messages} breaks that shape
+     * @throws IllegalStateException if a field breaks an invariant ({@link #checkInvariants}), such as
+     *         a message sent before {@code createdAt}
+     * @throws com.ticketing.system.shared.exception.BusinessRuleViolationException if the subject is
+     *         longer than {@link TextLimits#MAX_TEXT_LENGTH}
+     */
     public Conversation(String conversationId, ConversationType type,
                         int initiatorId, ParticipantType initiatorType,
                         int counterpartyId, ParticipantType counterpartyType,
@@ -105,7 +123,9 @@ public class Conversation implements InvariantChecked {
         this.subject = subject;
         this.createdAt = createdAt;
         this.lastMessageAt = createdAt;
-        this.messages = messages;
+        this.messages = new ArrayList<>();
+        checkInvariants();
+        appendInSendOrder(messages);
         checkInvariants();
     }
 
@@ -144,6 +164,28 @@ public class Conversation implements InvariantChecked {
         if (isClosed()) {
             throw new ConversationClosedException(conversationId);
         }
+        requireMayReply(senderId, senderType);
+        append(new Message(UUID.randomUUID().toString(), senderId, senderType, body, now));
+        checkInvariants();
+    }
+
+    // Adds an accepted message and applies its effect. The one path for addMessage and the public
+    // constructor, so a rebuilt thread reads as the one addMessage built.
+    private void append(Message message) {
+        messages.add(message);
+        this.lastMessageAt = message.getSentAt();
+        // Auto status flip between the two sides: the initiator re-opens; the other side responds.
+        if (isInitiatorSide(message.getSenderId(), message.getSenderType())) {
+            if (status == ConversationStatus.RESPONDED) {
+                status = ConversationStatus.OPEN;
+            }
+        } else if (status == ConversationStatus.OPEN) {
+            status = ConversationStatus.RESPONDED;
+        }
+    }
+
+    // The rules addMessage applies to every message after the first, against the messages so far.
+    private void requireMayReply(int senderId, ParticipantType senderType) {
         // One-shot complaint: a COMPLAINT carries the member's single opening message and accepts
         // exactly one admin reply (which resolves it). The member can never reply, and a second
         // admin reply is rejected — enforced here so no service path can bypass it.
@@ -162,17 +204,33 @@ public class Conversation implements InvariantChecked {
         if (!involvesParticipant(senderId, senderType)) {
             throw new InvalidParticipantException(senderId, conversationId);
         }
-        messages.add(new Message(UUID.randomUUID().toString(), senderId, senderType, body, now));
-        this.lastMessageAt = now;
-        // Auto status flip between the two sides: the initiator re-opens; the other side responds.
-        if (isInitiatorSide(senderId, senderType)) {
-            if (status == ConversationStatus.RESPONDED) {
-                status = ConversationStatus.OPEN;
-            }
-        } else if (status == ConversationStatus.OPEN) {
-            status = ConversationStatus.RESPONDED;
+    }
+
+    // Adds the given messages one at a time under the rules start and addMessage enforce, and with the
+    // effect addMessage gives each, so the public constructor builds only a thread they could have
+    // built, in the state they would have left it (#187).
+    private void appendInSendOrder(List<Message> given) {
+        if (given == null || given.isEmpty()) {
+            throw new IllegalArgumentException("A conversation opens with its first message");
         }
-        checkInvariants();
+        for (Message message : given) {
+            if (message == null) {
+                throw new IllegalArgumentException("A conversation's messages must not be null");
+            }
+            if (messages.isEmpty()) {
+                if (message.getSenderId() != initiatorId || message.getSenderType() != initiatorType) {
+                    throw new IllegalArgumentException("The initiator writes a conversation's first message");
+                }
+            } else {
+                try {
+                    requireMayReply(message.getSenderId(), message.getSenderType());
+                } catch (BusinessRuleViolationException | InvalidParticipantException e) {
+                    throw new IllegalArgumentException(
+                            "Message " + message.getMessageId() + " could not have been added: " + e.getMessage(), e);
+                }
+            }
+            append(message);
+        }
     }
 
     /**
