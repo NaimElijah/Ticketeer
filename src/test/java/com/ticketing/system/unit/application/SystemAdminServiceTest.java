@@ -26,6 +26,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
@@ -60,6 +61,9 @@ import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
+import com.ticketing.system.testutil.LogCapture;
+
+import ch.qos.logback.classic.Level;
 
 class SystemAdminServiceTest {
 
@@ -673,6 +677,65 @@ class SystemAdminServiceTest {
         SystemAdminService svc = readyService();
 
         assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
+    }
+
+    // ---- Defect 5: ensureMarketOpen hides failures (#187) ----
+
+    // Only a WSEP outage self-heals (ADR-003); any other failure repeats every 30 s until someone acts.
+    @Test
+    void GivenWsepUnreachable_WhenEnsureMarketOpen_ThenWarnsAndLogsNoError() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway unreachable = mock(PaymentGateway.class);
+        when(unreachable.verifyConnection()).thenReturn(false);
+        SystemAdminService svc = serviceWith(List.of(unreachable), List.of(reachableIssuer()));
+
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            assertDoesNotThrow(svc::ensureMarketOpen);
+
+            assertTrue(log.messagesAt(Level.WARN).stream().anyMatch(m -> m.contains("no reachable payment service")),
+                    "expected a WARN naming the outage, got " + log.messagesAt(Level.WARN));
+            assertTrue(log.messagesAt(Level.ERROR).isEmpty(),
+                    "a WSEP outage self-heals and is no ERROR, got " + log.messagesAt(Level.ERROR));
+        }
+    }
+
+    @Test
+    void GivenIntegrityViolation_WhenEnsureMarketOpen_ThenLogsErrorWithTheException() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        doThrow(new SystemIntegrityViolationException("active company 7 has no owner"))
+                .when(integrityVerifier).verify();
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertSelfHealLogsErrorWith(svc, SystemIntegrityViolationException.class);
+    }
+
+    @Test
+    void GivenDefaultAdminCannotBeCreated_WhenEnsureMarketOpen_ThenLogsErrorWithTheException() {
+        when(adminRepository.existsAny()).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("database unavailable"))
+                .when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertSelfHealLogsErrorWith(svc, MissingDefaultAdminException.class);
+    }
+
+    @Test
+    void GivenUnexpectedNullPointer_WhenEnsureMarketOpen_ThenLogsErrorWithTheException() {
+        when(adminRepository.existsAny()).thenThrow(new NullPointerException("admin store not wired"));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertSelfHealLogsErrorWith(svc, NullPointerException.class);
+    }
+
+    private static void assertSelfHealLogsErrorWith(SystemAdminService svc, Class<? extends Throwable> expected) {
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            assertDoesNotThrow(svc::ensureMarketOpen);
+
+            assertTrue(log.throwableClassNamesAt(Level.ERROR).contains(expected.getName()),
+                    "expected an ERROR carrying " + expected.getSimpleName() + ", got ERROR throwables "
+                            + log.throwableClassNamesAt(Level.ERROR) + " and WARN messages "
+                            + log.messagesAt(Level.WARN));
+        }
     }
 
 }

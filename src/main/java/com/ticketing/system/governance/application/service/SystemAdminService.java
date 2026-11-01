@@ -213,11 +213,17 @@ public class SystemAdminService {
         return buildMarketState();
     }
 
-    // System-internal, idempotent recovery hook (#455): bring the market to OPEN if it safely can.
-    // Used by the dev auto-opener and the self-heal scheduler so a transient external-service blip at
-    // boot (e.g. a cold-starting WSEP endpoint) doesn't leave the market closed with no recovery
-    // (V3 Req 6). NOT admin-gated — the platform acts on itself, not on a user request. Respects an
-    // admin's deliberate close: never auto-reopens a CLOSED market. Never throws.
+    /**
+     * System-internal, idempotent recovery hook (#455): brings the market to OPEN if it safely can.
+     * Used by the auto-opener and the self-heal scheduler so a transient external-service blip at boot
+     * (e.g. a cold-starting WSEP endpoint) doesn't leave the market closed with no recovery (V3 Req 6).
+     * Not admin-gated: the platform acts on itself, not on a user request. Respects an admin's
+     * deliberate close: never auto-reopens a CLOSED market.
+     *
+     * <p>Never throws; the caller retries on its own schedule. A WSEP outage, the one failure that
+     * self-heals (ADR-003), is logged at WARN. Any other failure (an integrity violation, a missing
+     * admin, a bug) will not clear by retrying, so it is logged at ERROR with its stack trace.
+     */
     public synchronized void ensureMarketOpen() {
         if (status == PlatformStatus.OPEN || status == PlatformStatus.CLOSED) {
             return; // already open, or deliberately closed by an admin — leave it alone
@@ -229,8 +235,10 @@ public class SystemAdminService {
             if (status == PlatformStatus.READY) {
                 doOpenMarket();         // READY -> OPEN
             }
+        } catch (ExternalServiceUnavailableException e) {
+            log.warn("Market auto-open is waiting for WSEP (will retry): {}", e.getMessage());
         } catch (RuntimeException e) {
-            log.warn("Market auto-open attempt did not succeed (will retry): {}", e.getMessage());
+            log.error("Market auto-open failed for a reason retrying will not fix (will retry anyway).", e);
         }
     }
 
