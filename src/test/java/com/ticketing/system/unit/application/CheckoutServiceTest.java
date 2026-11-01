@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.application;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -36,6 +37,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
+import ch.qos.logback.classic.Level;
+
 import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.BarcodeDTO;
 import com.ticketing.system.testutil.LogCapture;
@@ -58,6 +61,7 @@ import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
@@ -2919,6 +2923,145 @@ private AtomicBoolean trackReceiptSave() {
             chain.add(t.getClass().getSimpleName() + ": " + t.getMessage());
         }
         fail("the refusal must carry an InvalidStateTransitionException, but the cause chain was " + chain);
+    }
+
+    // ---- Defect 3: an expected checkout failure is not logged at ERROR (#187) ----
+    // ERROR means actionable now (global CLAUDE.md, Observability): a declined card is the buyer's to
+    // fix, not an operator's; an unexpected failure still is.
+
+    @Test
+    void GivenCardDeclined_WhenCheckoutMember_ThenCheckoutServiceLogsNoError() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(PaymentGatewayException.class, failed.getCause(),
+                    "arrangement: the checkout fails on the decline");
+            assertEquals(List.of(), logs.messagesAt(Level.ERROR),
+                    "a declined card needs no operator, so CheckoutService must not log it at ERROR");
+        }
+    }
+
+    @Test
+    void GivenCardDeclined_WhenCheckoutGuest_ThenCheckoutServiceLogsNoError() {
+        arrangeGuestStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                    VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
+
+            assertInstanceOf(PaymentGatewayException.class, failed.getCause(),
+                    "arrangement: the checkout fails on the decline");
+            assertEquals(List.of(), logs.messagesAt(Level.ERROR),
+                    "a declined card needs no operator, so CheckoutService must not log it at ERROR");
+        }
+    }
+
+    @Test
+    void GivenUnexpectedFailureFromAPort_WhenCheckoutMember_ThenCheckoutServiceLogsItAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new NullPointerException("gateway bug"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            List<String> errorThrowables = logs.throwableClassNamesAt(Level.ERROR);
+            assertTrue(errorThrowables.contains(NullPointerException.class.getName()),
+                    "an unexpected failure needs an operator, so it must be logged at ERROR with the exception, "
+                            + "but ERROR carried " + errorThrowables);
+        }
+    }
+
+    @Test
+    void GivenCardDeclined_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertLoggedAtWarnNotError(logs, PaymentGatewayException.class);
+        }
+    }
+
+    // A race lost on every Phase 3 attempt is an expected outcome under load, not an operator's problem.
+    @Test
+    void GivenPhase3LosesEveryVersionRace_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {
+        arrangeOneStandingLineCheckout();
+        doThrow(new ObjectOptimisticLockingFailureException(StandingZone.class, ZONE_ID_1))
+                .when(mockOrderReceiptRepo).save(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertLoggedAtWarnNotError(logs, ObjectOptimisticLockingFailureException.class);
+        }
+    }
+
+    // An attempt whose freeze save loses a version race leaves the order alone (CheckoutFreezeRaceJpaTest);
+    // the skipped rollback is a state transition worth one INFO line, and the lost race itself a WARN.
+    @Test
+    void GivenFreezeSaveLosesAVersionRace_WhenCheckoutMember_ThenTheSkippedRollbackIsLoggedAtInfoNamingTheOrder() {
+        arrangeMemberStandingCart();
+        String orderKey = mockActiveOrderRepo.getByUserId(USER_ID).getOrderKey();
+        doAnswer(invocation -> {
+            if (invocation.<ActiveOrder>getArgument(0).isCheckoutInProgress()) {
+                throw new ObjectOptimisticLockingFailureException(ActiveOrder.class, orderKey);
+            }
+            return null;
+        }).when(mockActiveOrderRepo).save(any());
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            List<String> info = logs.messagesAt(Level.INFO);
+            assertTrue(info.stream().anyMatch(message -> message.contains(orderKey)),
+                    "the skipped rollback must be logged at INFO naming the order, but INFO carried " + info);
+            assertLoggedAtWarnNotError(logs, ObjectOptimisticLockingFailureException.class);
+            verify(mockPaymentGateway, never()).charge(any());
+        }
+    }
+
+    private static void assertLoggedAtWarnNotError(LogCapture logs, Class<? extends Throwable> failure) {
+        List<String> warnThrowables = logs.throwableClassNamesAt(Level.WARN);
+        List<String> errorThrowables = logs.throwableClassNamesAt(Level.ERROR);
+        assertAll(
+                () -> assertTrue(warnThrowables.contains(failure.getName()),
+                        "an expected checkout failure must be logged at WARN with the exception, but WARN carried "
+                                + warnThrowables),
+                () -> assertFalse(errorThrowables.contains(failure.getName()),
+                        "an expected checkout failure needs no operator, but ERROR carried " + errorThrowables));
+    }
+
+    // One standing ticket of a real event, held by the member's real cart.
+    private void arrangeMemberStandingCart() {
+        StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
+        Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+        ActiveOrder order = new ActiveOrder(USER_ID, NOW);
+        order.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+        zone.reserve(InventorySelection.standing(1, order.getOrderKey()));
+        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(order);
+        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+    }
+
+    // One standing ticket of a real event, held by a live guest's real cart.
+    private void arrangeGuestStandingCart() {
+        givenValidGuestSession();
+        StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
+        Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+        ActiveOrder order = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
+        order.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+        zone.reserve(InventorySelection.standing(1, order.getOrderKey()));
+        givenGuestOrder(order);
+        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
     }
 
 }

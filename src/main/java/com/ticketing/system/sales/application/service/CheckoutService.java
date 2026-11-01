@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.event.Level;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,6 +44,7 @@ import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
@@ -1124,13 +1126,12 @@ public class CheckoutService {
             boolean inventorySaleConfirmed,
             FreezeState freeze,
             Exception originalFailure) {
-        log.error(
+        log.atLevel(failureLogLevel(originalFailure)).setCause(originalFailure).log(
                 "Checkout failed. userId={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
                 userId,
                 totalPrice,
                 paymentResult != null,
-                inventorySaleConfirmed,
-                originalFailure);
+                inventorySaleConfirmed);
 
         // Reset the CHECKOUT_IN_PROGRESS status, return the reserved inventory to stock, and clear the cart
         // atomically under one lock scope. The guards inside the helper skip the rollback once the sale is
@@ -1177,13 +1178,12 @@ public class CheckoutService {
             boolean inventorySaleConfirmed,
             FreezeState freeze,
             Exception originalFailure) {
-        log.error(
+        log.atLevel(failureLogLevel(originalFailure)).setCause(originalFailure).log(
                 "Guest checkout failed. orderKey={}, totalPrice={}, paymentDone={}, inventorySaleConfirmed={}",
                 orderKeyOf(order),
                 totalPrice,
                 paymentResult != null,
-                inventorySaleConfirmed,
-                originalFailure);
+                inventorySaleConfirmed);
 
         // Roll back inventory + cart + status atomically under one lock scope (see handleCheckoutFailure).
         rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed, freeze);
@@ -1199,6 +1199,15 @@ public class CheckoutService {
         if (paymentResult != null && !inventorySaleConfirmed) {
             safelyRefundPayment(paymentResult, totalPrice);
         }
+    }
+
+    // A business refusal (a declined card, an expired cart, a policy rejection, a sold-out zone) or a lost
+    // concurrency race is an outcome the buyer can act on, so it is WARN; ConcurrentReservationException is a
+    // DomainException. Anything else is unexpected and needs an operator, so it is ERROR. The other ERROR
+    // lines on the failure path (SOLD then failed, refund failed, rollback failed) stay ERROR whatever the cause.
+    private static Level failureLogLevel(Exception failure) {
+        boolean expected = failure instanceof DomainException || failure instanceof ConcurrencyFailureException;
+        return expected ? Level.WARN : Level.ERROR;
     }
 
     private void countAttemptInFlight(String orderKey) {
@@ -1235,6 +1244,8 @@ public class CheckoutService {
         // as that change left them, so a rollback here would release seats this attempt never froze
         // (NaimElijah/Ticketeer#187).
         if (freeze == FreezeState.SAVING) {
+            log.info("Checkout rollback skipped: this attempt's freeze lost to a concurrent change. orderKey={}",
+                    orderKeyOf(fallbackOrder));
             return;
         }
 
