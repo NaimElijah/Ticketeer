@@ -11,7 +11,7 @@ package com.ticketing.system.shared.exception;
  *
  * <p>Carries the reason in its message, prefixed "Could not establish default System Admin: ", and, when
  * a save failed, that failure as its cause; a failing re-check after the save is attached as suppressed.
- * The message is logged, so it never contains the admin's credentials.
+ * When a save failed, the reason is that failure's own message.
  */
 public class MissingDefaultAdminException extends DomainException {
 
@@ -20,7 +20,7 @@ public class MissingDefaultAdminException extends DomainException {
     }
 
     /**
-     * @param reason what went wrong, without credentials: the message is logged
+     * @param reason what went wrong; it becomes part of the message, which is logged
      * @param cause the failure that kept the default admin from being created
      */
     public MissingDefaultAdminException(String reason, Throwable cause) {

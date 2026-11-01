@@ -628,7 +628,7 @@ class SystemAdminServiceTest {
         assertTrue(state.ticketIssuerHealthy(), "the view reports the issuer probe of the last open");
     }
 
-    // The DTO has no probe time, so a service nobody has checked yet is reported unreachable, never healthy.
+    // Before any probe, the view reports neither service reachable, and building it probes nothing.
     @Test
     void GivenNoProbeHasRunYet_WhenViewMarketState_ThenNeitherServiceIsReportedReachable() {
         when(adminRepository.existsAny()).thenReturn(true);

@@ -18,8 +18,9 @@ import lombok.extern.slf4j.Slf4j;
  * except {@code test} (tests drive the market state themselves); an admin can still open/close via UC-32.
  *
  * <p>Each tick also leaves a fresh WSEP reachability result for the admin dashboard: when
- * {@code ensureMarketOpen()} did not probe (the market is OPEN or CLOSED), it calls
- * {@link SystemAdminService#refreshServiceReachability()}, so one tick never probes twice.
+ * {@code ensureMarketOpen()} did not probe (the market is OPEN or CLOSED, or an initialization or open
+ * failed before its probe), it calls {@link SystemAdminService#refreshServiceReachability()}, so one
+ * tick never probes twice.
  */
 @Component
 @Profile("!test")
