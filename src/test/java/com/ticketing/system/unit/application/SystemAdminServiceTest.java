@@ -683,7 +683,7 @@ class SystemAdminServiceTest {
 
     // ---- Defect 5: ensureMarketOpen hides failures (#187) ----
 
-    // Only a WSEP outage self-heals (ADR-003); any other failure repeats every 30 s until someone acts.
+    // Only a WSEP outage is expected to self-heal (ADR-003); any other failure is an ERROR on every tick it lasts.
     @Test
     void GivenWsepUnreachable_WhenEnsureMarketOpen_ThenWarnsAndLogsNoError() {
         when(adminRepository.existsAny()).thenReturn(true);
@@ -828,5 +828,21 @@ class SystemAdminServiceTest {
         svc.openMarket(openRequest());
 
         assertFalse(svc.ensureMarketOpen(), "an open market is left alone, so nothing was probed");
+    }
+
+    // ---- Review follow-up 3: the self-heal's ERROR text claims nothing about the cause (#187) ----
+
+    // A database outage also reaches this catch, and the next tick clears it: the text must not say
+    // that retrying cannot help. The exception it carries says what failed.
+    @Test
+    void GivenANonWsepFailure_WhenEnsureMarketOpen_ThenTheErrorSaysOnlyThatItFailedAndWillRetry() {
+        when(adminRepository.existsAny()).thenThrow(new DataAccessResourceFailureException("database unavailable"));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            svc.ensureMarketOpen();
+
+            assertEquals(List.of("Market auto-open failed (will retry)."), log.messagesAt(Level.ERROR));
+        }
     }
 }

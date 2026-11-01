@@ -221,9 +221,9 @@ public class SystemAdminService {
      * Not admin-gated: the platform acts on itself, not on a user request. Respects an admin's
      * deliberate close: never auto-reopens a CLOSED market.
      *
-     * <p>Never throws; the caller retries on its own schedule. A WSEP outage, the one failure that
-     * self-heals (ADR-003), is logged at WARN. Any other failure (an integrity violation, a missing
-     * admin, a bug) will not clear by retrying, so it is logged at ERROR with its stack trace.
+     * <p>Never throws; the caller retries on its own schedule. A WSEP outage, the one failure ADR-003
+     * expects to self-heal, is logged at WARN. Any other failure (an integrity violation, a missing
+     * admin, a database outage, a bug) is logged at ERROR with its exception.
      *
      * @return {@code true} if this call probed WSEP (an initialization or open got as far as its
      *         reachability check), so a caller that keeps the market view current need not probe again
@@ -243,7 +243,7 @@ public class SystemAdminService {
         } catch (ExternalServiceUnavailableException e) {
             log.warn("Market auto-open is waiting for WSEP (will retry): {}", e.getMessage());
         } catch (RuntimeException e) {
-            log.error("Market auto-open failed for a reason retrying will not fix (will retry anyway).", e);
+            log.error("Market auto-open failed (will retry).", e);
         }
         return lastProbe != probeBefore;
     }
