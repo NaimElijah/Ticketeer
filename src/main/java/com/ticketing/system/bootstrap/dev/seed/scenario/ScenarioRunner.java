@@ -29,6 +29,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
@@ -90,6 +91,8 @@ public class ScenarioRunner implements ApplicationRunner {
     private static final List<String> SCENARIOS = List.of("demo", "review");
     private static final String DEFAULT_SCENARIO = "demo";
     private static final String SCENARIO_QUESTION = "Scenario";
+    private static final String COMMITTED_SCENARIO_PREFIX = "classpath:scenarios/";
+    private static final Profiles DEV_PROFILE = Profiles.of("dev");
 
     private final AuthenticationService authenticationService;
     private final CompanyManagementService companyManagementService;
@@ -349,6 +352,15 @@ public class ScenarioRunner implements ApplicationRunner {
         return new ScenarioParser().parse(text);
     }
 
+    // A committed scenario's accounts have passwords anyone can read in the repository. Under dev the
+    // database is in memory; elsewhere it may be reachable, so say so. Refusing is #78's decision.
+    private void warnIfCommittedScenarioOutsideDev(String scenario) {
+        if (scenario.startsWith(COMMITTED_SCENARIO_PREFIX) && !environment.acceptsProfiles(DEV_PROFILE)) {
+            log.warn("seed: scenario '{}' is a committed one, and the accounts it registers have passwords "
+                    + "published in the repository; run it only against a database others cannot reach.", scenario);
+        }
+    }
+
     // A failed step under fail-fast propagates and stops the boot (V3 2.a.ii, ADR-003).
     private void runScenario(String scenario, List<ScenarioCommand> commands) {
         SeedReport report = new SeedReport();
@@ -360,6 +372,7 @@ public class ScenarioRunner implements ApplicationRunner {
             userRepository, new DemoClock(clock), timeZone, platformAdmin);
 
         log.info("running scenario '{}' ({} operations)", scenario, commands.size());
+        warnIfCommittedScenarioOutsideDev(scenario);
         try {
             for (ScenarioCommand cmd : commands) {
                 ops.execute(cmd, ctx, harness);

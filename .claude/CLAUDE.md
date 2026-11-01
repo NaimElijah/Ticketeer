@@ -34,7 +34,7 @@ UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 `reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
 on a persistent DB; dev's H2 is in memory, already empty on every boot. A missing or unreadable
 scenario file stops the boot in every profile. A failing scenario step stops it only while
-`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Full reference: `SEED.md`.
+`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Outside `dev`, running a committed scenario logs a WARN that its accounts' passwords are published; nothing refuses it (#78). Full reference: `SEED.md`.
 
 ## Tests and CI
 

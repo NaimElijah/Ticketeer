@@ -43,6 +43,12 @@ line doesn't block local work. A missing or unreadable scenario file stops start
 ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against whatever database
 the run is configured with, not just H2 — but stays gated behind `seed.mode` so it is opt-in there.
 
+> **Warning:** the committed scenarios (`classpath:scenarios/…`) register accounts whose passwords are
+> published in this repository (see [Credentials](#credentials)). Seeding one into a database others can
+> reach creates logins anyone can use. Outside `dev` the runner logs a WARN before the first step; it does
+> not refuse (#78). On a shared or reachable database, use a scenario file of your own with passwords
+> nobody else knows.
+
 ## What gets seeded (`demo.scenario`)
 
 The default dataset boots a small but complete marketplace:
