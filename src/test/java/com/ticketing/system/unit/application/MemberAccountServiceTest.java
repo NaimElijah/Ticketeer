@@ -142,6 +142,8 @@ class MemberAccountServiceTest {
     private static final int TICKET_ID = 101;
     private static final int LATER_RECEIPT_ID = 8;
     private static final int LATER_TICKET_ID = 102;
+    // Differs from every receipt line's price: a line showing it would read the ticket, not the receipt.
+    private static final double TICKET_RECORD_PRICE = 999.00;
 
     // An empty history on failure tells a member they bought nothing: the failure must reach the caller.
     @Test
@@ -244,19 +246,20 @@ class MemberAccountServiceTest {
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(Mockito.anyInt());
     }
 
-    // UC-16 + II.3.5.2: a zone repriced after a sale leaves that sale's record at the price paid. The later
-    // sale of the same zone at the new price shows that price, so neither record reads a current price.
+    // UC-16 + II.3.5.2: each history line shows the price stored on its own receipt line (OrderReceiptMapper),
+    // so two sales of one zone at different prices each keep theirs. The tickets carry another price, which
+    // must not show. No repricing path exists to drive this end to end.
     @Test
-    void GivenPriceChangedAfterSale_WhenViewMyHistory_ThenOriginalPriceShown() {
-        OrderReceipt beforeChange = soldReceipt(RECEIPT_ID, USER_ID, TICKET_ID, 150.00);
-        OrderReceipt afterChange = soldReceipt(LATER_RECEIPT_ID, USER_ID, LATER_TICKET_ID, 120.00);
+    void GivenTwoSalesAtDifferentPrices_WhenViewMyHistory_ThenEachShowsItsOwnReceiptLinePrice() {
+        OrderReceipt firstSale = soldReceipt(RECEIPT_ID, USER_ID, TICKET_ID, 150.00);
+        OrderReceipt secondSale = soldReceipt(LATER_RECEIPT_ID, USER_ID, LATER_TICKET_ID, 120.00);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of(beforeChange, afterChange));
+        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of(firstSale, secondSale));
         Mockito.when(ticketRepository.findByOrderReceiptId(RECEIPT_ID))
-                .thenReturn(List.of(issuedTicket(RECEIPT_ID, TICKET_ID, 150.00)));
+                .thenReturn(List.of(issuedTicket(RECEIPT_ID, TICKET_ID, TICKET_RECORD_PRICE)));
         Mockito.when(ticketRepository.findByOrderReceiptId(LATER_RECEIPT_ID))
-                .thenReturn(List.of(issuedTicket(LATER_RECEIPT_ID, LATER_TICKET_ID, 120.00)));
+                .thenReturn(List.of(issuedTicket(LATER_RECEIPT_ID, LATER_TICKET_ID, TICKET_RECORD_PRICE)));
         Mockito.when(eventDisplayPort.describeEvent(EVENT_ID)).thenReturn(rockNight());
 
         PurchaseHistoryDTO history = service.viewMyHistory(memberAuth(VALID_TOKEN, USER_ID));
