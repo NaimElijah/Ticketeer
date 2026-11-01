@@ -30,6 +30,7 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
@@ -39,6 +40,9 @@ import com.ticketing.system.shared.exception.SessionExpiredException;
 @Service
 @Slf4j
 public class ReservationService {
+    // The reason a failure notice gives for anything but a refusal; see memberReadableReason.
+    private static final String GENERIC_FAILURE_REASON = "An unexpected error occurred; please try again.";
+
     // Catalog inbound port: owns event lock/load, purchase-policy validation, and inventory
     // reserve/release/restore. Sales locks the ACTIVE ORDER before every port call; the port acquires
     // the EVENT buyer-lock internally — preserving the global order-before-event acquisition order.
@@ -195,7 +199,7 @@ public class ReservationService {
                     orderModified);
 
             notifyFailureAfterUnlock = true;
-            failureNotificationReason = "Reservation failed: " + e.getMessage();
+            failureNotificationReason = memberReadableReason(e);
             // The failure notice is published inside this transaction, which the rethrow rolls back, so
             // it is never delivered (ADR-004); the caller sees the failure directly. #63 decides whether
             // failure alerts are wanted, and if so they must be published after the transaction ends.
@@ -312,7 +316,7 @@ public class ReservationService {
                     removedPricePerTicket);
 
             notifyFailureAfterUnlock = true;
-            failureNotificationReason = "Remove reservation failed: " + e.getMessage();
+            failureNotificationReason = memberReadableReason(e);
 
             log.warn("remove failed: eventId={}, zoneId={}, selectionQuantity={}, seats={}, reason={}",
                     eventId, zoneId,
@@ -594,6 +598,17 @@ public class ReservationService {
             // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
+    }
+
+    // The reason goes into the member's notification, so it follows the rule ui's ServiceErrors applies to
+    // what a user may read (sales cannot depend on ui): a refusal's own message, which the domain writes
+    // for the member, and a fixed generic reason for anything else, whose text is written for operators.
+    private static String memberReadableReason(RuntimeException failure) {
+        boolean refusal = failure instanceof DomainException
+                || failure instanceof IllegalArgumentException
+                || failure instanceof IllegalStateException;
+        String message = failure.getMessage();
+        return refusal && message != null && !message.isBlank() ? message : GENERIC_FAILURE_REASON;
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
