@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
+import ch.qos.logback.classic.Level;
 import jakarta.persistence.PersistenceException;
 
 import com.ticketing.system.shared.dto.ConversationDTO;
@@ -34,6 +35,7 @@ import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter
 import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.ConversationClosedException;
+import com.ticketing.system.testutil.LogCapture;
 
 class CompanyInquiryInboxPresenterTest {
 
@@ -315,7 +317,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void GivenALoadedInbox_WhenItsRowsAreRenderedWithoutAnOpen_ThenNothingIsMarkedReadAndTheBadgeStays() {
+    void GivenAnUnreadThread_WhenTheInboxIsLoadedAndBadged_ThenNothingIsMarkedReadAndTheBadgeShowsTheUnreadCount() {
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
         when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder")));
         when(messaging.viewCompanyInbox(TOKEN, 7)).thenReturn(List.of(thread));
@@ -406,6 +408,23 @@ class CompanyInquiryInboxPresenterTest {
             assertInstanceOf(CompanyInquiryInboxPresenter.SingleOutcome.Success.class, presenter.loadOne(TOKEN, "c1"));
 
         assertEquals(thread, shown.conversation());
+    }
+
+    // As a failed row-click open logs it: at ERROR with the exception, not only LoggingAspect's one-line WARN.
+    @Test
+    void GivenTheMarkFailsInternally_WhenLoadOne_ThenTheFailureIsLoggedAtErrorWithItsExceptionAndTheThreadIsShown() {
+        ConversationDTO thread = conversation("c1", "INQUIRY");
+        doThrow(new PersistenceException("could not execute statement [update messages set is_read=?]"))
+            .when(messaging).markConversationRead(TOKEN, "c1");
+        when(messaging.viewConversation(TOKEN, "c1")).thenReturn(thread);
+
+        try (LogCapture logs = LogCapture.of(ServiceErrors.class)) {
+            CompanyInquiryInboxPresenter.SingleOutcome.Success shown = assertInstanceOf(
+                CompanyInquiryInboxPresenter.SingleOutcome.Success.class, presenter.loadOne(TOKEN, "c1"));
+
+            assertEquals(thread, shown.conversation());
+            assertEquals(List.of(PersistenceException.class.getName()), logs.throwableClassNamesAt(Level.ERROR));
+        }
     }
 
     @Test

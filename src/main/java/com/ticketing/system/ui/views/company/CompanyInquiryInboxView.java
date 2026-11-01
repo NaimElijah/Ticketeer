@@ -3,6 +3,7 @@ package com.ticketing.system.ui.views.company;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -217,14 +218,22 @@ public class CompanyInquiryInboxView extends LkPage {
 
     // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the
     // row this view selects on its own is shown but not marked (#187). The presenter decides the badge.
-    // A failed open leaves it and tells the reader nothing, since they can do nothing about it;
-    // LoggingAspect logs the failure at WARN.
+    // A reader whose session ended is told so, as a reply from the respond page tells them. A failed
+    // open leaves the badge and tells the reader nothing, since they can do nothing about it: the
+    // presenter's markRead logs an internal failure at ERROR through ServiceErrors, and LoggingAspect
+    // logs a refused one (a DomainException) at WARN.
     private void markOpened(String conversationId) {
         int idx = indexOf(conversationId);
         if (idx < 0) return;
         ConversationDTO conv = byId(conversationId);
-        presenter.open(AuthSession.token(), conv, opened);
-        if (presenter.badge(conv, opened).isEmpty()) convRows.get(idx).clearUnread();
+        switch (presenter.open(AuthSession.token(), conv, opened)) {
+            case CompanyInquiryInboxPresenter.ActionOutcome.Success ignored -> {
+                if (presenter.badge(conv, opened).isEmpty()) convRows.get(idx).clearUnread();
+            }
+            case CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
+                Toasts.failure("Your session has expired — please sign in again.");
+            case CompanyInquiryInboxPresenter.ActionOutcome.Failure ignored -> { }
+        }
     }
 
     private void navigateToRespond(String conversationId) {
