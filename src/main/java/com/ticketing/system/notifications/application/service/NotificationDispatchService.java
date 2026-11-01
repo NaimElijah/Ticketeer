@@ -19,7 +19,7 @@ import com.ticketing.system.notifications.domain.NotificationStatus;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,16 +84,19 @@ public class NotificationDispatchService {
      * skipped, logged at DEBUG: the row was saved first by another delivery or a click, so it is not
      * returned here, and delivery goes on with the next row (#187).
      *
-     * <p>Any other store failure on a save, a lost connection included, stops delivery there and is
-     * logged at WARN. What was already saved as SENT is still returned, since it is never PENDING again
-     * and would otherwise be shown nowhere; the rows not reached stay PENDING for the next poll (#187).
+     * <p>Any other store failure on a save, a lost connection or a failed commit included, stops
+     * delivery there and is logged at WARN. What was already saved as SENT is still returned, since it
+     * is never PENDING again and would otherwise be shown nowhere; the rows not reached stay PENDING
+     * for the next poll (#187).
      *
      * <p>Logs one INFO line per call, and only when it delivered something (#187).
      *
      * @param userId the member whose notifications are delivered
      * @return the notifications this call delivered, as shown to the member; empty when none
-     * @throws DataAccessException             if the store fails reading the pending notifications
-     * @throws CannotCreateTransactionException if no connection can be had for that read
+     * @throws DataAccessException  if the store fails reading the pending notifications
+     * @throws TransactionException if that read's transaction fails: no connection can be had for it
+     *                              ({@code CannotCreateTransactionException}), or it fails to commit
+     *                              ({@code TransactionSystemException})
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<NotificationDTO> deliverPending(int userId) {
@@ -112,7 +115,7 @@ public class NotificationDispatchService {
                     log.debug("Notification id={} for userId={} was saved first by another delivery or a click;"
                             + " skipped", notification.getId(), userId);
                     continue;
-                } catch (DataAccessException | CannotCreateTransactionException storeFailure) {
+                } catch (DataAccessException | TransactionException storeFailure) {
                     // Handled by stopping: the next saves would most likely fail too, and the rows
                     // already saved as SENT are never PENDING again, so they must reach the caller.
                     log.warn("Delivery to userId={} stopped at notification id={} on a store failure; {} delivered,"

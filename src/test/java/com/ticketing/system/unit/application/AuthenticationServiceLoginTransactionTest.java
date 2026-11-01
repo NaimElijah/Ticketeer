@@ -32,6 +32,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
@@ -215,6 +216,24 @@ class AuthenticationServiceLoginTransactionTest {
         // What Spring raises when deliverPending's own transaction cannot get a connection: a
         // TransactionException, not a DataAccessException, yet the same store failure.
         givenDeliveryFailsWith(new CannotCreateTransactionException("Could not open JPA EntityManager for transaction"));
+
+        runner.run(context -> {
+            LoginDTO login = context.getBean(AuthenticationService.class)
+                    .login(new LoginRequestDTO("alice", PASSWORD, GUEST_SID));
+
+            assertThat(journal).as("the login commits, and only then is delivery attempted")
+                    .containsExactly(BEGIN, COMMIT, DELIVER_PENDING);
+            assertThat(login.authToken().token()).as("a committed login still hands back its token")
+                    .isEqualTo("TOK");
+            assertThat(login.notifications()).as("nothing was delivered, so nothing is shown").isEmpty();
+        });
+    }
+
+    @Test
+    void GivenDeliveryFailsToCommitItsReadAfterCommit_WhenLogin_ThenSignedInWithNoNotifications() {
+        // What Spring can raise when the read's own transaction fails to commit: a TransactionException
+        // other than CannotCreateTransactionException, yet the same store failure.
+        givenDeliveryFailsWith(new TransactionSystemException("Could not commit JPA transaction"));
 
         runner.run(context -> {
             LoginDTO login = context.getBean(AuthenticationService.class)

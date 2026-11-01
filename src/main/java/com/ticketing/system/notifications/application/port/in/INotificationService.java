@@ -115,8 +115,9 @@ public interface INotificationService {
      * @param notificationId the notification's id
      * @throws org.springframework.dao.DataAccessException if the store fails to read or save it; the
      *         notification then stays as it was
-     * @throws org.springframework.transaction.CannotCreateTransactionException if no connection can be
-     *         had; the notification stays as it was
+     * @throws org.springframework.transaction.TransactionException if no connection can be had
+     *         ({@code CannotCreateTransactionException}) or the save fails to commit
+     *         ({@code TransactionSystemException}); the notification stays as it was
      * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if a delivery or
      *         another click saved the notification first (a lost {@code @Version} race, re-typed by
      *         {@code OptimisticLockTranslationAspect}); it stays as that save left it
@@ -133,9 +134,10 @@ public interface INotificationService {
      * @param userId the member whose session closed
      * @throws org.springframework.dao.DataAccessException if the store fails; the notifications already
      *         sent back stay PENDING, and the rest stay SENT
-     * @throws org.springframework.transaction.CannotCreateTransactionException if no connection can be
-     *         had for a notification's save; the notifications already sent back stay PENDING, and the
-     *         rest stay SENT
+     * @throws org.springframework.transaction.TransactionException if a notification's save gets no
+     *         connection ({@code CannotCreateTransactionException}) or fails to commit
+     *         ({@code TransactionSystemException}); the notifications already sent back stay PENDING, and
+     *         the rest stay SENT
      */
     void revertSentToPending(int userId);
 }

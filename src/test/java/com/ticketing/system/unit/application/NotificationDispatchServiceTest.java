@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionSystemException;
 
 import ch.qos.logback.classic.Level;
 
@@ -270,6 +271,27 @@ class NotificationDispatchServiceTest {
 
         List<NotificationDTO> delivered = assertDoesNotThrow(() -> service.deliverPending(userId),
                 "a lost connection part-way should still hand back what was already delivered");
+
+        assertEquals(List.of("notif-1"), delivered.stream().map(NotificationDTO::notificationId).toList());
+        assertEquals(NotificationStatus.PENDING, third.getStatus());
+        verify(mockRepo, never()).save(third);
+    }
+
+    // A connection lost while a row's own transaction commits can surface as a TransactionSystemException,
+    // which is no DataAccessException: it is the same store failure, so it stops delivery the same way.
+    @Test
+    void GivenTheSecondOfThreeSavesFailsToCommit_WhenDeliverPending_ThenTheFirstIsReturnedAndTheThirdStaysPending() {
+        int userId = 42;
+        Notification first = pending("notif-1", userId);
+        Notification second = pending("notif-2", userId);
+        Notification third = pending("notif-3", userId);
+        when(mockRepo.findByRecipientAndStatus(userId, NotificationStatus.PENDING))
+                .thenReturn(List.of(first, second, third));
+        when(mockPushService.send(anyInt(), any(Notification.class))).thenReturn(true);
+        doThrow(new TransactionSystemException("Could not commit JPA transaction")).when(mockRepo).save(second);
+
+        List<NotificationDTO> delivered = assertDoesNotThrow(() -> service.deliverPending(userId),
+                "a commit failure part-way should still hand back what was already delivered");
 
         assertEquals(List.of("notif-1"), delivered.stream().map(NotificationDTO::notificationId).toList());
         assertEquals(NotificationStatus.PENDING, third.getStatus());
