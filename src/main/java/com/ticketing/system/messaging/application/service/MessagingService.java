@@ -30,6 +30,7 @@ import com.ticketing.system.organization.application.service.CompanyMembershipSe
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.ConversationNotFoundException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -610,16 +611,18 @@ public class MessagingService {
     }
 
     // Human-readable label for a conversation party: member username, company name, or a fixed
-    // label for the admin side / system. Falls back to "<Kind> #id" if the entity can't be loaded.
+    // label for the admin side / system. Falls back to "<Kind> #id" only when the member or company no
+    // longer exists. A store failure propagates: under JPA it has already marked the transaction
+    // rollback-only, so swallowing it would surface as an UnexpectedRollbackException without its cause.
     private String resolveDisplayName(int id, ParticipantType type) {
         return switch (type) {
             case MEMBER -> {
                 try { yield userRepository.getUserById(id).getUsername(); }
-                catch (RuntimeException e) { yield "Member #" + id; }
+                catch (UserNotFoundException e) { yield "Member #" + id; }
             }
             case COMPANY -> {
                 try { yield companyRepository.getCompanyById(id).getName(); }
-                catch (RuntimeException e) { yield "Company #" + id; }
+                catch (CompanyNotFoundException e) { yield "Company #" + id; }
             }
             case ADMIN, ADMIN_GROUP -> "TicketHub Support";
             case SYSTEM -> "TicketHub";
@@ -635,12 +638,13 @@ public class MessagingService {
                 .orElseThrow(() -> new ConversationNotFoundException(conversationId));
     }
 
-    // Best-effort company lookup — returns null instead of throwing so a missing company
-    // never aborts a notification fan-out (the repository throws when the id is unknown).
+    // Company lookup for a notification fan-out: null when the company no longer exists, so a reply to
+    // a deleted company's inquiry is still stored, with no one to notify. A store failure propagates,
+    // as in resolveDisplayName.
     private ProductionCompany tryGetCompany(int companyId) {
         try {
             return companyRepository.getCompanyById(companyId);
-        } catch (RuntimeException e) {
+        } catch (CompanyNotFoundException e) {
             return null;
         }
     }
