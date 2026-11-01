@@ -104,9 +104,8 @@ class ReserveMemberAgeLookupTest {
     // Guard: a member whose age is read reserves with that age, for the port's age policy to judge.
     @Test
     void GivenMemberWithKnownAge_WhenMemberReserves_ThenThePortJudgesThatAge() {
-        User minor = mock(User.class);
-        when(minor.getAge()).thenReturn(MINOR_AGE);
-        when(userRepository.getUserById(USER_ID)).thenReturn(minor);
+        when(userRepository.getUserById(USER_ID)).thenReturn(
+                new User(USER_ID, "minor", "minor@example.test", "unused-password-hash", MINOR_AGE));
 
         reservationService.reserveForMember(MEMBER_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(1));
 

@@ -85,8 +85,8 @@ class CheckoutPresenterTest {
     }
 
     // ---- Defect 2: a cart checkout refuses as a state transition reads as an expired order (#187) ----
-    // The presenter's half of CheckoutServiceTest's defect-2 tests: the service must refuse an expired,
-    // empty or frozen cart with an InvalidStateTransitionException, and this is what the buyer then sees.
+    // The presenter's half of CheckoutServiceTest's defect-2 tests: the service must refuse an expired or
+    // empty cart with an InvalidStateTransitionException, and this is what the buyer then sees.
 
     @Test
     void GivenCheckoutRefusesTheCartAsAnInvalidStateTransition_WhenPay_ThenOrderExpired() {

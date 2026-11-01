@@ -86,7 +86,7 @@ class RefundServiceTest {
     private static OrderReceipt memberReceiptWithCharge(int userId) {
         ReceiptLine line = new ReceiptLine(101, TOTAL, 2, 1, "15", WHEN);
         TransactionRecord charge = TransactionRecord.paymentCharge(PAYMENT_TX, "stub", TOTAL, "ILS", WHEN);
-        return OrderReceipt.forMember(ORDER_ID, userId, TOTAL, List.of(line), LocalDateTime.now(), List.of(charge));
+        return OrderReceipt.forMember(ORDER_ID, userId, TOTAL, List.of(line), WHEN, List.of(charge));
     }
 
     private static RefundResultDTO gatewayResult() {
