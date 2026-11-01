@@ -1380,6 +1380,33 @@ class EventManagementServiceTest {
                                 () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
         }
 
+        // A stored map can predate the rule that a venue has a location (V1 allows none). The new map keeps
+        // the stored location, so saving the layout must say what to do first, not just refuse (#187).
+        @Test
+        void GivenAStoredMapWithoutALocation_WhenConfigureVenueMap_ThenRefusedWithWhatToDoFirst() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                VenueMap storedWithoutLocation = mock(VenueMap.class);
+                when(storedWithoutLocation.getLocation()).thenReturn(null);
+                Event stored = mock(Event.class);
+                when(stored.getCompanyId()).thenReturn(COMPANY_ID);
+                when(stored.getVenueMap()).thenReturn(storedWithoutLocation);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(stored);
+
+                VenueMapConfigDTO config = new VenueMapConfigDTO(
+                                String.valueOf(EVENT_ID), "Test Venue", 3, 3,
+                                List.of(new VenueMapConfigDTO.ZoneConfigDTO(
+                                                "Zone A", false, 100, null, 50.0, new GridPlacementDTO(1, 1, 1, 1))));
+
+                IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                                () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
+                assertTrue(refusal.getMessage().contains("Edit details"),
+                                "the refusal should say to set the location in Edit details, but was: "
+                                                + refusal.getMessage());
+        }
+
         // -------------------------------------------------------------------------
         // #185: configureVenueMap enforces the venue size limits server-side. The editor's field
         // limits are advisory only, so a client can send any size. Small limits keep each case cheap;

@@ -319,6 +319,14 @@ public class EventManagementService {
                 throw new UnauthorizedActionException("act on an event that does not belong to this company");
             }
 
+            // The new map keeps the stored location, and a stored map can predate the rule that a venue has one
+            // (V1 allows none), so say what to do first rather than only refuse.
+            Location location = event.getVenueMap() == null ? null : event.getVenueMap().getLocation();
+            if (location == null) {
+                throw new IllegalStateException(
+                        "Set the event's venue location in Edit details before configuring its venue map");
+            }
+
             int gridRows = config.gridRows() > 0 ? config.gridRows() : VenueMap.DEFAULT_GRID_ROWS;
             int gridCols = config.gridCols() > 0 ? config.gridCols() : VenueMap.DEFAULT_GRID_COLS;
             requireVenueWithinLimits(config.zones(), gridRows, gridCols);
@@ -351,8 +359,7 @@ public class EventManagementService {
 
             VenueMap venueMap = new VenueMap(
                     event.getVenueMap() != null ? event.getVenueMap().getId() : eventRepository.nextVenueMapId(),
-                    event.getVenueMap() != null ? event.getVenueMap().getLocation() : null,
-                    zones, gridRows, gridCols);
+                    location, zones, gridRows, gridCols);
 
             // Apply each zone's grid placement. Zone IDs were assigned 1..N in config
             // order,
