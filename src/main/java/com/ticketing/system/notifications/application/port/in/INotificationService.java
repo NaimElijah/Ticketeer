@@ -121,9 +121,12 @@ public interface INotificationService {
      * Send all of the member's SENT notifications back to PENDING, so the next login or poll delivers
      * them again. Called when a session closes before the member read them.
      *
+     * <p>Each notification is sent back on its own transaction. One that a click or a delivery saved
+     * first is skipped, since it is no longer SENT.
+     *
      * @param userId the member whose session closed
-     * @throws org.springframework.dao.DataAccessException if the store fails; the whole revert rolls
-     *         back, so every one of those notifications stays SENT
+     * @throws org.springframework.dao.DataAccessException if the store fails; the notifications already
+     *         sent back stay PENDING, and the rest stay SENT
      */
     void revertSentToPending(int userId);
 }

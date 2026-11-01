@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +30,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-// Each write op (notify*/markRead/revertSentToPending) runs inside one service-level transaction (Eval 5).
+// Each write op runs inside one service-level transaction (Eval 5), except notifyOutreach and
+// revertSentToPending, which commit each row on its own.
 @Transactional
 public class NotificationService implements INotificationService {
 
@@ -257,15 +259,28 @@ public class NotificationService implements INotificationService {
         notificationRepository.save(n);
     }
 
+    // NOT_SUPPORTED overrides the class's transaction, as deliverPending does: each row's save commits on
+    // its own, so a failure part-way leaves the rows already sent back PENDING instead of rolling them all
+    // back to SENT, where no later delivery would show them (#187).
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void revertSentToPending(int userId) {
         List<Notification> sent = notificationRepository.findByRecipientAndStatus(userId, NotificationStatus.SENT);
+        int sentBack = 0;
         for (Notification n : sent) {
             n.markPending();
-            notificationRepository.save(n);
+            try {
+                notificationRepository.save(n);
+            } catch (OptimisticLockingFailureException lostRace) {
+                // Handled: a click or another delivery saved this row first, so it is not SENT any more.
+                log.debug("Notification id={} for userId={} was saved first by a click or a delivery; not sent back",
+                        n.getId(), userId);
+                continue;
+            }
+            sentBack++;
         }
-        if (!sent.isEmpty()) {
-            log.info("reverted {} SENT notification(s) to PENDING for userId={}", sent.size(), userId);
+        if (sentBack > 0) {
+            log.info("reverted {} SENT notification(s) to PENDING for userId={}", sentBack, userId);
         }
     }
 }

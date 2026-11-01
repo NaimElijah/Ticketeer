@@ -1,18 +1,26 @@
 package com.ticketing.system.ui.security;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
+
+import ch.qos.logback.classic.Level;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.vaadin.flow.server.ServiceInitEvent;
@@ -89,6 +97,27 @@ class NotificationSessionListenerTest {
         destroyListener.sessionDestroy(destroyEventFor(signedOut));
 
         verify(notificationService, never()).revertSentToPending(anyInt());
+    }
+
+    // Nothing above a session-destroy callback can handle a failure, so the WARN is all that is left of
+    // it: it must carry the exception and say whose notifications stayed SENT. The session must still be
+    // unlocked, or every later request on it would block.
+    @Test
+    void GivenTheSendBackFails_WhenDestroyed_ThenAWarnCarriesTheExceptionAndTheUserAndTheSessionIsUnlocked() {
+        VaadinSession memberSession = sessionSignedInAs(
+                new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
+        doThrow(new DataAccessResourceFailureException("store unavailable"))
+                .when(notificationService).revertSentToPending(SHARED_ID);
+
+        try (LogCapture logs = LogCapture.of(NotificationSessionListener.class)) {
+            destroyListener.sessionDestroy(destroyEventFor(memberSession));
+
+            assertEquals(List.of("SENT notifications not sent back on session end; they will not be shown again: "
+                    + "userId=" + SHARED_ID), logs.messagesAt(Level.WARN));
+            assertEquals(List.of(DataAccessResourceFailureException.class.getName()),
+                    logs.throwableClassNamesAt(Level.WARN));
+        }
+        verify(memberSession).unlock();
     }
 
     /** A session signed in as {@code auth} through {@link AuthSession}, no longer the current one. */

@@ -36,6 +36,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
@@ -225,6 +226,31 @@ class NotificationServiceTest {
                 () -> readingService.revertSentToPending(RECIPIENT),
                 "a store failure should reach the caller, not be logged and dropped");
         assertSame(storeDown, thrown);
+    }
+
+    // A click marks a shown row READ, or another browser's delivery saves it, between this send-back's
+    // read and its save: that row has nothing to send back, and the rest still go back to PENDING.
+    @Test
+    void GivenTheSecondOfThreeSavesLosesAnOptimisticLockRace_WhenRevertSentToPending_ThenTheFirstAndThirdAreSentBack() {
+        Notification first = sentNotification("n1");
+        Notification raced = sentNotification("n2");
+        Notification third = sentNotification("n3");
+        when(notifications.findByRecipientAndStatus(RECIPIENT, NotificationStatus.SENT))
+                .thenReturn(List.of(first, raced, third));
+        doThrow(new OptimisticLockingFailureException("row updated by another transaction"))
+                .when(notifications).save(raced);
+
+        readingService.revertSentToPending(RECIPIENT);
+
+        verify(notifications).save(first);
+        verify(notifications).save(third);
+        assertEquals(NotificationStatus.PENDING, first.getStatus());
+        assertEquals(NotificationStatus.PENDING, third.getStatus());
+    }
+
+    private static Notification sentNotification(String id) {
+        return new Notification(id, RECIPIENT, NotificationType.PURCHASE_CONFIRMED, NotificationStatus.SENT,
+                "Purchase completed successfully.", LocalDateTime.ofInstant(T0, ZoneOffset.UTC));
     }
 
     private static Notification notification(int recipientUserId, NotificationStatus status) {

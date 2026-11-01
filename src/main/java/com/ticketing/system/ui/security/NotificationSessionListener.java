@@ -40,8 +40,10 @@ public class NotificationSessionListener implements VaadinServiceInitListener {
                 Integer userId = AuthSession.userId(session);
                 if (userId == null) return;
                 notificationService.revertSentToPending(userId);
-            } catch (Exception ex) {
-                log.warn("failed to revert notifications on session destroy: {}", ex.getMessage());
+            } catch (RuntimeException ex) {
+                // Handled by logging: nothing above a session-destroy callback can act on it.
+                log.warn("SENT notifications not sent back on session end; they will not be shown again: userId={}",
+                        AuthSession.userId(session), ex);
             } finally {
                 session.unlock();
             }
