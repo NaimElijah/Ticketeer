@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import ch.qos.logback.classic.Level;
@@ -107,6 +109,10 @@ class InventoryServiceReleaseHeldTest {
 
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> inventory.releaseHeld(heldLines(), ORDER_KEY));
 
+        // The failing event must come first, or a release that stopped at the first failure would pass too.
+        InOrder loads = inOrder(events);
+        loads.verify(events).findById(DELETED_EVENT_ID);
+        loads.verify(events).findById(LIVE_EVENT_ID);
         assertSame(outage, thrown);
         assertEquals(0, liveEvent.getVenueMap().getZone(ZONE_ID).getReservedAmount(),
                 "event " + LIVE_EVENT_ID + "'s holds should be released despite the other event's failure");

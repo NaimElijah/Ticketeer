@@ -16,10 +16,14 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -1100,17 +1104,42 @@ class CatalogServiceTest {
     }
 
     // A search term is bound as a LIKE parameter. One longer than any stored text can match nothing, so it is
-    // refused before the query, rather than sent in whatever size a caller chooses (#187).
-    @Test
-    void GivenASearchTermLongerThanAnyStoredText_WhenSearchGlobal_ThenItIsRefusedBeforeTheQuery() {
+    // refused before the query, rather than sent in whatever size a caller chooses (#187). Every text filter,
+    // on both entry points.
+    @ParameterizedTest(name = "{0} through {1}")
+    @MethodSource("textFiltersAndSearchEntryPoints")
+    void GivenASearchTermLongerThanAnyStoredText_WhenSearching_ThenItIsRefusedBeforeTheQuery(
+            String filter, String entryPoint) {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        String tooLong = "a".repeat(TextLimits.MAX_TEXT_LENGTH + 1);
-        CatalogSearchFiltersDTO filters = new CatalogSearchFiltersDTO(
-                null, null, null, tooLong, null, null, null, null, null, null, null, null, null);
+        ProductionCompany company = createMockCompany("Live Nation", 4.5);
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
+        CatalogSearchFiltersDTO filters = filtersWithOnly(filter, "a".repeat(TextLimits.MAX_TEXT_LENGTH + 1));
 
-        assertThrows(BusinessRuleViolationException.class, () -> catalogService.searchGlobal(VALID_TOKEN, filters));
+        assertThrows(BusinessRuleViolationException.class, () -> {
+            if (entryPoint.equals("searchGlobal")) {
+                catalogService.searchGlobal(VALID_TOKEN, filters);
+            } else {
+                catalogService.searchByCompany(VALID_TOKEN, 10, filters);
+            }
+        });
 
         verify(mockEventRepository, never()).searchONSALE(any());
+    }
+
+    static Stream<Arguments> textFiltersAndSearchEntryPoints() {
+        return Stream.of("eventName", "artistName", "category", "keywords", "location")
+                .flatMap(filter -> Stream.of(Arguments.of(filter, "searchGlobal"), Arguments.of(filter, "searchByCompany")));
+    }
+
+    private static CatalogSearchFiltersDTO filtersWithOnly(String filter, String term) {
+        return new CatalogSearchFiltersDTO(
+                filter.equals("eventName") ? term : null,
+                filter.equals("artistName") ? term : null,
+                filter.equals("category") ? term : null,
+                filter.equals("keywords") ? term : null,
+                null, null, null, null,
+                filter.equals("location") ? term : null,
+                null, null, null, null);
     }
 
     // ---- case-insensitive matching ignores the JVM's locale (#187) ----
