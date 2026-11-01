@@ -81,9 +81,9 @@ public final class SeedHarness {
 
     /**
      * Negative assertion: PASS only if the action throws an exception whose simple class name is exactly
-     * {@code expectedSimpleName}. A subclass, a superclass or a cause does not count, so the check proves
-     * the guard it names and not whatever failed first. FAIL if nothing throws ("guard not enforced") or
-     * another type is thrown; that failure names both types.
+     * {@code expectedSimpleName}. The type must match exactly, so a different type fails: a subclass, a
+     * superclass or a cause does not count. FAIL if nothing throws ("guard not enforced") or another type
+     * is thrown; that failure names both types.
      *
      * @param expectedSimpleName the expected exception's {@link Class#getSimpleName()}, e.g.
      *                           {@code IllegalStateException}

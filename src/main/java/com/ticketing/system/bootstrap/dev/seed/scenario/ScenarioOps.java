@@ -394,7 +394,7 @@ public final class ScenarioOps {
     private void announce(ScenarioCommand cmd, ScenarioContext ctx) {
         ScenarioContext.Principal admin = ctx.principal(cmd.requirePos(0, "admin alias"));
         if (admin.token == null) {
-            throw new IllegalStateException("announce needs an admin logged in via 'login-admin'");
+            throw new IllegalArgumentException("announce needs an admin logged in via 'login-admin'");
         }
         boolean allProducers = cmd.named("audience", "BROADCAST_MEMBERS").toUpperCase(Locale.ROOT).contains("PRODUCER");
         messaging.sendOutreach(admin.token, new OutreachRequestDTO(
@@ -430,10 +430,13 @@ public final class ScenarioOps {
 
     // -- helpers ---------------------------------------------------------
 
+    // A lookup that fails because of the scenario itself throws IllegalArgumentException, as ScenarioContext
+    // does, never the IllegalStateException the services' guards throw: an expect-error naming a guard's type
+    // must not pass on the scenario's own failure before the service is called.
     private InventoryZoneDTO resolveZone(String credential, int eventId, String zoneRef) {
         VenueMapDTO map = catalogService.getEventVenueMap(credential, eventId);
         if (map == null) {
-            throw new IllegalStateException("no venue map for event " + eventId);
+            throw new IllegalArgumentException("no venue map for event " + eventId);
         }
         Integer index = tryParseInt(zoneRef);
         if (index != null) {
@@ -441,13 +444,13 @@ public final class ScenarioOps {
                     .filter(z -> z.getId() == index)
                     .findFirst()
                     .orElseThrow(
-                            () -> new IllegalStateException("no zone with id " + zoneRef + " on event " + eventId));
+                            () -> new IllegalArgumentException("no zone with id " + zoneRef + " on event " + eventId));
         }
         String type = zoneRef.equalsIgnoreCase("seated") ? "SEATED" : "STANDING";
         return map.inventoryZones().stream()
                 .filter(z -> type.equals(z.getZoneType()) && z.getAvailableAmount() > 0)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("no available " + type + " zone on event " + eventId));
+                .orElseThrow(() -> new IllegalArgumentException("no available " + type + " zone on event " + eventId));
     }
 
     private static List<String> pickAvailableSeats(InventoryZoneDTO zone, int n) {
@@ -463,7 +466,7 @@ public final class ScenarioOps {
             }
         }
         if (labels.size() < n) {
-            throw new IllegalStateException(
+            throw new IllegalArgumentException(
                     "not enough available seats in zone " + zone.getName() + " (" + labels.size() + "/" + n + ")");
         }
         return labels;
