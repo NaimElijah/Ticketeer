@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -162,5 +163,74 @@ class LogbackPatternTest {
         assertTrue(formattedWithoutException.endsWith(message + CoreConstants.LINE_SEPARATOR),
                 "nothing but the line separator may follow the message of an event without an exception, but the"
                         + " event was: " + escaped(formattedWithoutException));
+    }
+
+    // ---- F4: line breaks of any kind, and terminal escapes (#187) ----
+    // Besides CR and LF, a line break can be NEL (U+0085), LINE or PARAGRAPH SEPARATOR (U+2028, U+2029),
+    // VT or FF, and ESC starts a terminal control sequence. None of them may reach the log line.
+
+    private static final int[] LINE_BREAKS_AND_ESCAPE = {
+            '\r', '\n', 0x000B, 0x000C, 0x0085, 0x2028, 0x2029, 0x001B};
+
+    @ParameterizedTest
+    @ValueSource(ints = {0x2028, 0x2029, 0x0085, 0x000B, 0x000C, 0x001B})
+    void GivenMessageWithAnyLineBreakOrAnEscape_WhenFormattedWithLogPattern_ThenNoneReachesTheLine(int codePoint)
+            throws Exception {
+        PatternLayout layout = layoutOf(logPattern());
+        Logger logger = ((LoggerContext) layout.getContext()).getLogger("control.test");
+        String inserted = Character.toString(codePoint);
+        LoggingEvent event = new LoggingEvent(Logger.class.getName(), logger, Level.INFO,
+                "sign-in failed for username={}", null, new Object[] {"mallory" + inserted + "INFO forged"});
+
+        String body = bodyOf(layout.doLayout(event));
+
+        assertNoLineBreakOrEscape(body, codePoint);
+        assertTrue(body.contains("INFO forged"), "the text around the character must still be logged, but the event was: "
+                + visible(body));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0x2028, 0x2029, 0x0085, 0x000B, 0x000C, 0x001B})
+    void GivenExceptionMessageWithAnyLineBreakOrAnEscape_WhenFormattedWithLogPattern_ThenNoneReachesTheLine(
+            int codePoint) throws Exception {
+        PatternLayout layout = layoutOf(logPattern());
+        Logger logger = ((LoggerContext) layout.getContext()).getLogger("control.test");
+        String inserted = Character.toString(codePoint);
+        LoggingEvent event = new LoggingEvent(Logger.class.getName(), logger, Level.WARN, "request failed",
+                new IllegalStateException("lookup failed for mallory" + inserted + "INFO forged"), null);
+
+        String body = bodyOf(layout.doLayout(event));
+
+        assertNoLineBreakOrEscape(body, codePoint);
+        assertTrue(body.contains(IllegalStateException.class.getName()) && body.contains("INFO forged"),
+                "the exception must still be logged, on the event's line, but the event was: " + visible(body));
+    }
+
+    private static String bodyOf(String formatted) {
+        assertTrue(formatted.endsWith(CoreConstants.LINE_SEPARATOR),
+                "each event must end with one line separator, but was: " + visible(formatted));
+        return formatted.substring(0, formatted.length() - CoreConstants.LINE_SEPARATOR.length());
+    }
+
+    private static void assertNoLineBreakOrEscape(String body, int inserted) {
+        for (int forbidden : LINE_BREAKS_AND_ESCAPE) {
+            assertTrue(body.indexOf(forbidden) < 0, String.format(Locale.ROOT,
+                    "U+%04X must not reach the log line (U+%04X was logged), but the event was: %s",
+                    forbidden, inserted, visible(body)));
+        }
+    }
+
+    // Shows every control and separator character as U+XXXX, so a failure message is readable.
+    private static String visible(String text) {
+        StringBuilder shown = new StringBuilder();
+        text.codePoints().forEach(c -> {
+            if (Character.isISOControl(c) || Character.getType(c) == Character.LINE_SEPARATOR
+                    || Character.getType(c) == Character.PARAGRAPH_SEPARATOR) {
+                shown.append(String.format(Locale.ROOT, "<U+%04X>", c));
+            } else {
+                shown.appendCodePoint(c);
+            }
+        });
+        return shown.toString();
     }
 }
