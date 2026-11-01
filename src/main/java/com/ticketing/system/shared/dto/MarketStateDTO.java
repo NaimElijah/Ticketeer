@@ -8,7 +8,7 @@ public record MarketStateDTO(
     String currentStatus,              // UNINITIALIZED / READY / OPEN / CLOSED
     LocalDateTime lastInitializedAt,
     LocalDateTime lastOpenedAt,
-    boolean paymentGatewayHealthy,
-    boolean ticketIssuerHealthy,
+    boolean paymentGatewayHealthy,     // as of the last init/open/self-heal probe; false before any
+    boolean ticketIssuerHealthy,       // likewise
     boolean defaultAdminPresent
 ) {}

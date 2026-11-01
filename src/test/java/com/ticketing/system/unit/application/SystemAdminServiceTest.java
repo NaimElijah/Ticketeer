@@ -9,8 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -559,4 +561,73 @@ class SystemAdminServiceTest {
         when(issuer.verifyConnection()).thenReturn(true);
         return issuer;
     }
+
+    // ---- Defect 3: the market state view probes WSEP on every call (#187) ----
+
+    // The dashboard polls the view every 5 s, and a probe can take a minute against a hanging WSEP:
+    // the view and the synchronized close report the result of the last init, open or self-heal probe.
+    @Test
+    void GivenReadyPlatform_WhenViewMarketState_ThenNoConnectionCheckIsMade() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        clearInvocations(gateway, issuer);
+
+        svc.viewMarketState(ADMIN_TOKEN);
+
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+    }
+
+    @Test
+    void GivenOpenMarket_WhenCloseMarket_ThenNoConnectionCheckIsMade() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        clearInvocations(gateway, issuer);
+
+        svc.closeMarket(closeRequest());
+
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+    }
+
+    @Test
+    void GivenMarketOpenedWithBothServicesReachable_WhenViewMarketStateAfterThemDrop_ThenTheOpenProbeIsReported() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        when(gateway.verifyConnection()).thenThrow(new ExternalServiceUnavailableException("WSEP hangs"));
+        when(issuer.verifyConnection()).thenReturn(false);
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+
+        assertTrue(state.paymentGatewayHealthy(), "the view reports the payment probe of the last open");
+        assertTrue(state.ticketIssuerHealthy(), "the view reports the issuer probe of the last open");
+    }
+
+    // The DTO has no probe time, so a service nobody has checked yet is reported unreachable, never healthy.
+    @Test
+    void GivenNoProbeHasRunYet_WhenViewMarketState_ThenNeitherServiceIsReportedReachable() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+
+        assertFalse(state.paymentGatewayHealthy(), "no probe has checked the payment service yet");
+        assertFalse(state.ticketIssuerHealthy(), "no probe has checked the ticket issuer yet");
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+    }
+
 }

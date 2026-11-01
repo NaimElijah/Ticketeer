@@ -69,6 +69,11 @@ public class SystemAdminService {
     private volatile PlatformStatus status = PlatformStatus.UNINITIALIZED;
     private volatile LocalDateTime lastInitializedAt;
     private volatile LocalDateTime lastOpenedAt;
+    // Each service kind's result at its last WSEP probe (init, open, self-heal). The market view reports
+    // these instead of probing: a probe can take a minute against a hanging WSEP, and the dashboard
+    // polls every 5 s. False until a probe has run, so the view never calls an unchecked service healthy.
+    private volatile boolean paymentReachableAtLastProbe;
+    private volatile boolean issuerReachableAtLastProbe;
     // Stamps the lifecycle transitions above: UTC wall time (ADR-008).
     private final Clock clock;
 
@@ -255,7 +260,9 @@ public class SystemAdminService {
     }
 
     /**
-     * The market/health snapshot for the admin dashboard.
+     * The market/health snapshot for the admin dashboard. The services' reachability is the result of
+     * the last initialization, open or self-heal probe, and unreachable before any; this call never
+     * probes WSEP.
      *
      * @param adminToken the caller's admin session token; not checked yet
      * @return the current market state
@@ -271,17 +278,15 @@ public class SystemAdminService {
         return status == PlatformStatus.OPEN;
     }
 
-    // *HELPER* — single builder for the market snapshot so health probing lives in one place.
+    // *HELPER* — single builder for the market snapshot. It never probes WSEP: it reports the last probe.
     private MarketStateDTO buildMarketState() {
-        boolean paymentHealthy = paymentGateways.stream().anyMatch(this::isReachable);
-        boolean issuerHealthy = ticketIssuers.stream().anyMatch(this::isReachable);
         boolean adminPresent = adminRepository.existsAny();
         return new MarketStateDTO(
                 status.name(),
                 lastInitializedAt,
                 lastOpenedAt,
-                paymentHealthy,
-                issuerHealthy,
+                paymentReachableAtLastProbe,
+                issuerReachableAtLastProbe,
                 adminPresent);
     }
 
@@ -302,12 +307,15 @@ public class SystemAdminService {
 
     // *HELPER* — I.1.2/I.1.3 & I.2.2 external-service quorum: at least one payment
     // gateway and one ticket issuer must be reachable. Shared by initialize and
-    // openMarket so the "service down" failure is identical in both paths.
+    // openMarket so the "service down" failure is identical in both paths. Records each result for
+    // the market view; an issuer left unprobed because payment failed keeps its previous result.
     private void requireExternalServicesReachable() {
-        if (paymentGateways.stream().noneMatch(this::isReachable)) {
+        paymentReachableAtLastProbe = paymentGateways.stream().anyMatch(this::isReachable);
+        if (!paymentReachableAtLastProbe) {
             throw new ExternalServiceUnavailableException("no reachable payment service");
         }
-        if (ticketIssuers.stream().noneMatch(this::isReachable)) {
+        issuerReachableAtLastProbe = ticketIssuers.stream().anyMatch(this::isReachable);
+        if (!issuerReachableAtLastProbe) {
             throw new ExternalServiceUnavailableException("no reachable ticket issuance service");
         }
     }
