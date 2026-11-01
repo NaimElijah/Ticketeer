@@ -61,7 +61,9 @@ import java.util.Optional;
  *       no step runs, a WARN points at {@code reset}, and the boot goes on. Users the scenario does not
  *       register, such as {@code DevUserSeeder}'s, do not count.</li>
  *   <li>{@code wipe} — delete all business data, then stop.</li>
- *   <li>{@code reset} — {@code wipe} then reseed.</li>
+ *   <li>{@code reset} — read the scenario, {@code wipe}, then run it. A scenario that cannot be read or
+ *       parsed stops the boot before anything is deleted, and the scenario runs even if its users
+ *       existed, since the wipe removed them.</li>
  *   <li>{@code ask} — interactive startup menu: choose the mode <em>and</em> the scenario on the
  *       console at boot, then run that choice.</li>
  * </ul>
@@ -190,10 +192,13 @@ public class ScenarioRunner implements ApplicationRunner {
             }
             case RESET -> {
                 if (destructiveAllowed("reset")) {
+                    // Read before the wipe: a missing file, or one the parser refuses, then stops the boot
+                    // with the data still there. The reseed's skip does not apply: the wipe removes its users.
+                    List<ScenarioCommand> commands = readScenario(scenario);
                     repoCleaner.clearAll();
                     ensureMarketOpen();
                     devUserSeeder.ifAvailable(seeder -> seeder.run(null));
-                    runScenario(scenario, readScenario(scenario));
+                    runScenario(scenario, commands);
                     log.info("seed.mode=reset — done; database wiped and reseeded");
                 }
             }
