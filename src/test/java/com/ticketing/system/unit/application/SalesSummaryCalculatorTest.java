@@ -22,8 +22,8 @@ class SalesSummaryCalculatorTest {
 
     @Test
     void GivenAPaidAndARefundedOrder_WhenSummarised_ThenOnlyThePaidOrderCounts() {
-        PurchaseRecordDTO paid = order(ticket("Gala", 600.0, false));
-        PurchaseRecordDTO refunded = order(ticket("Gala", 300.0, true));
+        PurchaseRecordDTO paid = order(ticket(1, "Gala", 600.0, false));
+        PurchaseRecordDTO refunded = order(ticket(1, "Gala", 300.0, true));
 
         SalesSummaryDTO s = calculator.summarize(List.of(paid, refunded));
 
@@ -37,8 +37,8 @@ class SalesSummaryCalculatorTest {
     // #21: cancelling one event of a multi-event order refunds only that event's lines.
     @Test
     void GivenMultiEventOrderWithOneEventRefunded_WhenSummarised_ThenItsOtherLinesStillCount() {
-        PurchaseRecordDTO multiEvent = order(ticket("Cancelled", 100.0, true), ticket("Kept", 40.0, false),
-                ticket("Kept", 40.0, false));
+        PurchaseRecordDTO multiEvent = order(ticket(1, "Cancelled", 100.0, true),
+                ticket(2, "Kept", 40.0, false), ticket(2, "Kept", 40.0, false));
 
         SalesSummaryDTO s = calculator.summarize(List.of(multiEvent));
 
@@ -53,7 +53,7 @@ class SalesSummaryCalculatorTest {
     // cancellation leaves unrefunded.
     @Test
     void GivenACompanysLinesOfASharedOrderWhoseOtherEventWasRefunded_WhenSummarised_ThenTheyAllCount() {
-        PurchaseRecordDTO ownLinesOnly = order(ticket("Ours", 70.0, false), ticket("Ours", 30.0, false));
+        PurchaseRecordDTO ownLinesOnly = order(ticket(1, "Ours", 70.0, false), ticket(1, "Ours", 30.0, false));
 
         SalesSummaryDTO s = calculator.summarize(List.of(ownLinesOnly));
 
@@ -64,7 +64,7 @@ class SalesSummaryCalculatorTest {
 
     @Test
     void GivenOnlyRefundedOrders_WhenSummarised_ThenEverythingIsZeroAndThereIsNoTopEvent() {
-        SalesSummaryDTO s = calculator.summarize(List.of(order(ticket("X", 300.0, true))));
+        SalesSummaryDTO s = calculator.summarize(List.of(order(ticket(1, "X", 300.0, true))));
 
         assertEquals(0.0, s.revenue());
         assertEquals(0, s.ticketsSold());
@@ -85,12 +85,14 @@ class SalesSummaryCalculatorTest {
     private static PurchaseRecordDTO order(TicketRecordDTO... tickets) {
         List<TicketRecordDTO> lines = List.of(tickets);
         double total = lines.stream().mapToDouble(TicketRecordDTO::pricePaid).sum();
-        return new PurchaseRecordDTO(1, 1, null, LocalDateTime.now(), total, RefundStatus.of(lines),
+        return new PurchaseRecordDTO(1, 1, null, PURCHASED_AT, total, RefundStatus.of(lines),
                 List.of(), lines, "buyer");
     }
 
-    private static TicketRecordDTO ticket(String eventName, double price, boolean refunded) {
-        return new TicketRecordDTO(1, 1, 1, 1, null, price, refunded ? TicketStatus.REFUNDED : TicketStatus.PAID,
+    // Lines of one event share an id and different events get different ones: the top event is grouped by id.
+    private static TicketRecordDTO ticket(int eventId, String eventName, double price, boolean refunded) {
+        return new TicketRecordDTO(1, 1, eventId, 1, null, price,
+                refunded ? TicketStatus.REFUNDED : TicketStatus.PAID,
                 eventName, "Zone", "Co", "CONCERT", null, "Venue", null, refunded);
     }
 
