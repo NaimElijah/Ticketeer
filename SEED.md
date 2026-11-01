@@ -100,7 +100,7 @@ stops the boot with a bind error naming `seed.mode` (ADR-003).
 | `reseed` | Open the market and run the scenario. If a user the scenario registers already exists (by username, honouring a line's `username=`), the scenario has run against this database before: no step runs, a WARN points at `seed.mode=reset`, and the boot goes on. Users the scenario does not register, such as `dev.member`, do not count. **dev's default.** |
 | `wipe` | Delete **all business data** (keeping the platform admin), then stop. *Destructive.* |
 | `reset` | `wipe`, then reseed (`DevUserSeeder` + scenario). *Destructive.* |
-| `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. If stdin yields EOF/empty input (or an `IOException`), each prompt falls back to its default (`off` for the mode). An unrecognised answer is skipped with a warning. |
+| `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. If stdin yields EOF/empty input (or an `IOException`), each prompt falls back to its default (`off` for the mode, `demo` for the scenario). An unrecognised mode is skipped with a warning. An unrecognised scenario is refused, the valid names are shown, and the question is asked again; if the console ends after one, the boot stops with a message naming the valid choices. |
 
 **Destructive modes are gated by an explicit opt-in**, not a console prompt: `wipe`/`reset` only proceed
 when `seed.assume-yes=true` (env: `SEED_ASSUME_YES=true`). Without it they log exactly what *would* be

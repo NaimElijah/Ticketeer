@@ -41,6 +41,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Boots the system from an editable scenario file (#366). Reads {@code seed.scenario}, parses it, and
@@ -69,7 +70,9 @@ import java.util.Objects;
  * would be deleted plus the command to enable it, and refuse. This holds whether the mode came from
  * {@code SEED_MODE} directly or was chosen in the {@code ask} menu — picking a destructive mode is not by
  * itself sufficient. The wipe keeps the bootstrap admin (see {@code JpaRepoCleaner}). The {@code ask} menu
- * reads stdin only to choose mode/scenario; with no terminal it falls back to {@code off} (safe).
+ * reads stdin only to choose mode/scenario; with no terminal it falls back to {@code off} (safe). A
+ * scenario answer that names no committed scenario is asked again; if the console ends after one, the
+ * boot stops with the valid choices named.
  * {@code seed.fail-fast=true} (the default outside {@code dev}) stops the scenario at the first unexpected
  * error and fails startup, as does a missing or unreadable scenario file (V3 2.a.ii, ADR-003).
  */
@@ -83,6 +86,8 @@ public class ScenarioRunner implements ApplicationRunner {
     private static final int DEFAULT_ADMIN_ID = 1;
     private static final List<String> MODES = List.of("off", "reseed", "wipe", "reset");
     private static final List<String> SCENARIOS = List.of("demo", "review");
+    private static final String DEFAULT_SCENARIO = "demo";
+    private static final String SCENARIO_QUESTION = "Scenario";
 
     private final AuthenticationService authenticationService;
     private final CompanyManagementService companyManagementService;
@@ -209,27 +214,69 @@ public class ScenarioRunner implements ApplicationRunner {
         }
         String scenario = scenarioLocation;
         if (mode.equals("reseed") || mode.equals("reset")) {
-            scenario = "classpath:scenarios/" + askChoice("Scenario", SCENARIOS, "demo") + ".scenario";
+            scenario = "classpath:scenarios/" + askScenario() + ".scenario";
         }
         executeMode(SeedProperties.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), scenario);
     }
 
-    /** Prompts with a list of options and a default; returns the lowercased answer, or the default on empty/EOF. */
+    /**
+     * Asks which committed scenario to run. An answer that names none would name a missing file and stop
+     * the boot, so it is refused, the valid names are shown, and the question is asked again. With no
+     * console the default is taken, as for every question.
+     *
+     * @throws IllegalStateException when the console ends after an unknown answer, naming the valid choices
+     */
+    private String askScenario() {
+        String answer = askChoice(SCENARIO_QUESTION, SCENARIOS, DEFAULT_SCENARIO);
+        while (!SCENARIOS.contains(answer)) {
+            System.out.println("  '" + answer + "' is not a scenario; choose one of " + SCENARIOS + ".");
+            String unknown = answer;
+            try {
+                answer = promptForAnswer(SCENARIO_QUESTION, SCENARIOS, DEFAULT_SCENARIO)
+                        .orElseThrow(() -> consoleEndedAfter(unknown, null));
+            } catch (IOException e) {
+                throw consoleEndedAfter(unknown, e);
+            }
+        }
+        return answer;
+    }
+
+    private static IllegalStateException consoleEndedAfter(String unknownAnswer, IOException cause) {
+        return new IllegalStateException("seed.mode=ask: '" + unknownAnswer + "' is not a scenario, and the"
+                + " console ended before a valid one was chosen. Choose one of " + SCENARIOS + ".", cause);
+    }
+
+    /**
+     * Prompts with a list of options and a default; returns the answer, or the default on empty input,
+     * EOF or a read error.
+     */
     private String askChoice(String label, List<String> options, String dflt) {
+        try {
+            return promptForAnswer(label, options, dflt).orElse(dflt);
+        } catch (IOException e) {
+            // No usable console is the no-terminal case: take the default, as for EOF.
+            log.debug("seed.mode=ask: could not read the console; taking the default '{}'", dflt, e);
+            return dflt;
+        }
+    }
+
+    /**
+     * Prompts once and reads one line.
+     *
+     * @return the trimmed, lowercased answer, the default for an empty line, or empty when the console has ended
+     * @throws IOException when the console cannot be read
+     */
+    private Optional<String> promptForAnswer(String label, List<String> options, String dflt) throws IOException {
         System.out.println();
         System.out.println("  " + label + "? " + options + "  [default: " + dflt + "]");
         System.out.print("  > ");
         System.out.flush();
-        try {
-            String line = readConsoleLine();
-            if (line == null) {
-                return dflt;
-            }
-            String value = line.trim().toLowerCase();
-            return value.isEmpty() ? dflt : value;
-        } catch (IOException e) {
-            return dflt;
+        String line = readConsoleLine();
+        if (line == null) {
+            return Optional.empty();
         }
+        String value = line.trim().toLowerCase(Locale.ROOT);
+        return Optional.of(value.isEmpty() ? dflt : value);
     }
 
     /** Opens the trading market via the real admin path so the scenario's reserve/checkout steps work. */
