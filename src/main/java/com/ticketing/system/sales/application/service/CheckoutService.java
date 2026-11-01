@@ -45,12 +45,15 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.DomainException;
+import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
+import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
@@ -1209,11 +1212,23 @@ public class CheckoutService {
 
     // A business refusal (a declined card, an expired cart, a policy rejection, a sold-out zone) or a lost
     // concurrency race is an outcome the buyer can act on, so it is WARN; ConcurrentReservationException is a
-    // DomainException. Anything else is unexpected and needs an operator, so it is ERROR. The other ERROR
-    // lines on the failure path (SOLD then failed, refund failed, rollback failed) stay ERROR whatever the cause.
+    // DomainException. An outage is ERROR though it is a DomainException: an unreachable payment gateway may
+    // have charged the card with no receipt and no refund (NaimElijah/Ticketeer#99), and an unreachable
+    // issuer or external service needs an operator too. Anything else is unexpected, so it is ERROR. The other
+    // ERROR lines on the failure path (SOLD then failed, refund failed, rollback failed) stay ERROR whatever the
+    // cause.
     private static Level failureLogLevel(Exception failure) {
+        if (isOutage(failure)) {
+            return Level.ERROR;
+        }
         boolean expected = failure instanceof DomainException || failure instanceof ConcurrencyFailureException;
         return expected ? Level.WARN : Level.ERROR;
+    }
+
+    private static boolean isOutage(Exception failure) {
+        return failure instanceof PaymentGatewayUnreachableException
+                || failure instanceof TicketIssuerUnreachableException
+                || failure instanceof ExternalServiceUnavailableException;
     }
 
     private void countAttemptInFlight(String orderKey) {

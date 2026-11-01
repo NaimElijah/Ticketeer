@@ -19,6 +19,7 @@ import com.ticketing.system.shared.dto.IssuanceRequestDTO;
 import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -96,7 +97,7 @@ public class WsepTicketIssuer implements TicketIssuer {
             try {
                 code = http.post(form);
             } catch (WsepCommunicationException e) {
-                throw new TicketIssuanceFailedException("ticket issuer unreachable: " + e.getMessage(), e);
+                throw new TicketIssuerUnreachableException("ticket issuer unreachable: " + e.getMessage(), e);
             }
 
             if (code == null || code.isBlank() || FAILURE.equals(code)) {

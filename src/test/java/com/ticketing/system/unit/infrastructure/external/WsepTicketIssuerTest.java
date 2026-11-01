@@ -26,6 +26,7 @@ import com.ticketing.system.shared.config.WsepProperties;
 import com.ticketing.system.shared.dto.IssuanceRequestDTO;
 import com.ticketing.system.shared.dto.IssuanceResultDTO;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 import com.ticketing.system.shared.external.WsepCommunicationException;
 import com.ticketing.system.shared.external.WsepHttpClient;
 import com.ticketing.system.sales.adapter.out.wsep.WsepTicketIssuer;
@@ -164,5 +165,28 @@ class WsepTicketIssuerTest {
         assertSame(transportFailure, failure.getCause(),
                 "the issuance failure must keep the transport failure as its cause, but the cause was "
                         + failure.getCause());
+    }
+
+    // ---- G1: an unreachable issuer is an outage, typed apart from a refusal (#187) ----
+    // CheckoutService logs an outage at ERROR and a refusal at WARN, and tells them apart by type.
+
+    @Test
+    void GivenIssuerUnreachable_WhenIssue_ThenTheFailureIsTypedAsUnreachable() {
+        when(http.post(any())).thenThrow(
+                new WsepCommunicationException("refused", new ConnectException("Connection refused")));
+
+        assertThrows(TicketIssuerUnreachableException.class, () -> issuer.issue(twoTicketRequest()),
+                "an issuer that could not be reached is an outage, typed as such");
+    }
+
+    @Test
+    void GivenIssuerRejectsTheIssuance_WhenIssue_ThenTheFailureIsNotTypedAsUnreachable() {
+        when(http.post(any())).thenReturn("-1");
+
+        TicketIssuanceFailedException failure = assertThrows(TicketIssuanceFailedException.class,
+                () -> issuer.issue(twoTicketRequest()));
+
+        assertFalse(failure instanceof TicketIssuerUnreachableException,
+                "an issuer that answered with a refusal was reachable, so it is no outage");
     }
 }

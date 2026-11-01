@@ -60,9 +60,13 @@ import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
+import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
+import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
@@ -3040,6 +3044,69 @@ private AtomicBoolean trackReceiptSave() {
                                 + warnThrowables),
                 () -> assertFalse(errorThrowables.contains(failure.getName()),
                         "an expected checkout failure needs no operator, but ERROR carried " + errorThrowables));
+    }
+
+    // ---- G1: an outage is logged at ERROR, though it is a DomainException (#187) ----
+    // An unreachable payment gateway may have charged the card with no receipt and no refund (#99), and an
+    // unreachable issuer or external service needs an operator too. A refusal and a lost race stay WARN.
+
+    @Test
+    void GivenPaymentGatewayUnreachable_WhenCheckoutMember_ThenTheFailureIsLoggedAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayUnreachableException("timed out"));
+
+        assertCheckoutFailureLoggedAtErrorNotWarn(PaymentGatewayUnreachableException.class);
+    }
+
+    @Test
+    void GivenTicketIssuerUnreachable_WhenCheckoutMember_ThenTheFailureIsLoggedAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        when(mockTicketIssuer.issue(any())).thenThrow(
+                new TicketIssuerUnreachableException("ticket issuer unreachable", new RuntimeException("refused")));
+
+        assertCheckoutFailureLoggedAtErrorNotWarn(TicketIssuerUnreachableException.class);
+    }
+
+    @Test
+    void GivenExternalServiceUnavailable_WhenCheckoutMember_ThenTheFailureIsLoggedAtErrorWithTheException() {
+        arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenThrow(new ExternalServiceUnavailableException("no payment service"));
+
+        assertCheckoutFailureLoggedAtErrorNotWarn(ExternalServiceUnavailableException.class);
+    }
+
+    // Guard: an issuer that answered with a refusal was reachable, so its failure stays WARN.
+    @Test
+    void GivenTicketIssuerRefuses_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        when(mockTicketIssuer.issue(any())).thenThrow(new TicketIssuanceFailedException("rejected by the issuer"));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertLoggedAtWarnNotError(logs, TicketIssuanceFailedException.class);
+        }
+    }
+
+    private void assertCheckoutFailureLoggedAtErrorNotWarn(Class<? extends Throwable> outage) {
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failed = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(outage, failed.getCause(), "arrangement: the checkout fails on the outage");
+            List<String> errorThrowables = logs.throwableClassNamesAt(Level.ERROR);
+            List<String> warnThrowables = logs.throwableClassNamesAt(Level.WARN);
+            assertAll(
+                    () -> assertTrue(errorThrowables.contains(outage.getName()),
+                            "an outage needs an operator, so it must be logged at ERROR with the exception, "
+                                    + "but ERROR carried " + errorThrowables),
+                    () -> assertFalse(warnThrowables.contains(outage.getName()),
+                            "an outage must not be logged as an expected failure, but WARN carried "
+                                    + warnThrowables));
+        }
     }
 
     // One standing ticket of a real event, held by the member's real cart.
