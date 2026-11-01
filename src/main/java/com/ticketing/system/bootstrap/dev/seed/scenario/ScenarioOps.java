@@ -49,6 +49,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -302,7 +303,7 @@ public final class ScenarioOps {
         String token = ctx.token(by);
         int companyId = ctx.companyId(company);
         String name = cmd.named("name", eventAlias);
-        EventCategory category = EventCategory.valueOf(cmd.named("category", "CONCERT").toUpperCase());
+        EventCategory category = EventCategory.valueOf(cmd.named("category", "CONCERT").toUpperCase(Locale.ROOT));
         int days = cmd.intNamed("days", 30);
         String city = cmd.named("city", "Tel Aviv");
         LocalDateTime start = LocalDateTime.ofInstant(clock.plusDays(days), timeZone);
@@ -395,7 +396,7 @@ public final class ScenarioOps {
         if (admin.token == null) {
             throw new IllegalStateException("announce needs an admin logged in via 'login-admin'");
         }
-        boolean allProducers = cmd.named("audience", "BROADCAST_MEMBERS").toUpperCase().contains("PRODUCER");
+        boolean allProducers = cmd.named("audience", "BROADCAST_MEMBERS").toUpperCase(Locale.ROOT).contains("PRODUCER");
         messaging.sendOutreach(admin.token, new OutreachRequestDTO(
                 cmd.named("title", "Message"),
                 cmd.named("body", "Platform message."),
@@ -406,7 +407,7 @@ public final class ScenarioOps {
 
     private void assertStatus(ScenarioCommand cmd, ScenarioContext ctx) {
         String eventAlias = cmd.requirePos(0, "event alias");
-        EventStatus expected = EventStatus.valueOf(cmd.requirePos(1, "expected status").toUpperCase());
+        EventStatus expected = EventStatus.valueOf(cmd.requirePos(1, "expected status").toUpperCase(Locale.ROOT));
         String by = cmd.named("by");
         if (by == null) {
             throw new IllegalArgumentException(
@@ -481,13 +482,13 @@ public final class ScenarioOps {
         if (typeSize.length != 2) {
             throw new IllegalArgumentException("bad zone spec '" + spec + "' (expected type:size@price)");
         }
-        String type = typeSize[0].toLowerCase();
+        String type = typeSize[0].toLowerCase(Locale.ROOT);
         String size = typeSize[1];
         if (type.equals("standing")) {
             return new ZoneConfigDTO("Standing " + index, false, Integer.parseInt(size), null, price, null);
         }
         if (type.equals("seated")) {
-            String[] rc = size.toLowerCase().split("x");
+            String[] rc = size.toLowerCase(Locale.ROOT).split("x");
             if (rc.length != 2) {
                 throw new IllegalArgumentException("bad seated spec '" + spec + "' (expected seated:RxC@price)");
             }
@@ -540,7 +541,7 @@ public final class ScenarioOps {
         }
         for (String p : csv.split(",")) {
             if (!p.isBlank()) {
-                perms.add(Permission.valueOf(p.trim().toUpperCase()));
+                perms.add(Permission.valueOf(p.trim().toUpperCase(Locale.ROOT)));
             }
         }
         return perms;

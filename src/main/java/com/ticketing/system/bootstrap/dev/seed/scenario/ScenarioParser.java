@@ -3,6 +3,7 @@ package com.ticketing.system.bootstrap.dev.seed.scenario;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -48,7 +49,7 @@ public final class ScenarioParser {
             if (tokens.isEmpty()) {
                 continue;
             }
-            String op = stripQuotes(tokens.get(0)).toLowerCase();
+            String op = stripQuotes(tokens.get(0)).toLowerCase(Locale.ROOT);
             List<String> positional = new ArrayList<>();
             Map<String, String> named = new LinkedHashMap<>();
             for (int t = 1; t < tokens.size(); t++) {
