@@ -17,9 +17,9 @@ import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for {@code SystemAnalyticsView} (UC-46 / #43, #279). Vaadin-free
- * POJO: combines the market snapshot ({@link SystemAdminService#viewMarketState()})
- * with the live platform metrics ({@link SystemAnalyticsService#computeAnalytics(String)}, read with
- * the signed-in admin's token)
+ * POJO: combines the market snapshot ({@link SystemAdminService#viewMarketState(String)})
+ * with the live platform metrics ({@link SystemAnalyticsService#computeAnalytics(String)}), both read
+ * with the signed-in admin's token,
  * and translates market open/close calls into a sealed outcome the view switches on.
  *
  * <p>Mirrors {@code OwnerDashboardPresenter}, which likewise combines two
@@ -46,11 +46,17 @@ public class SystemAnalyticsPresenter {
         return refreshIntervalMs;
     }
 
-    /** Loads the market snapshot + live analytics for the dashboard. */
+    /**
+     * Loads the market snapshot + live analytics for the dashboard with the signed-in admin's token.
+     *
+     * @return {@code Success} with both, or {@code Failure} with a {@link ServiceErrors} message when
+     *         either service refuses the token or fails
+     */
     public Outcome load() {
         try {
-            MarketStateDTO market = systemAdminService.viewMarketState();
-            SystemAnalyticsDTO analytics = systemAnalyticsService.computeAnalytics(AuthSession.token());
+            String adminToken = AuthSession.token();
+            MarketStateDTO market = systemAdminService.viewMarketState(adminToken);
+            SystemAnalyticsDTO analytics = systemAnalyticsService.computeAnalytics(adminToken);
             return new Outcome.Success(market, analytics);
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessage(e));
