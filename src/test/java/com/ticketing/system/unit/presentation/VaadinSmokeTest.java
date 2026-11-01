@@ -91,7 +91,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Smoke tests for the V2 Presentation layer.
@@ -293,12 +295,50 @@ class VaadinSmokeTest {
         // market-card + KPI-stat build path without a UI context.
         SystemAnalyticsPresenter presenter = mock(SystemAnalyticsPresenter.class);
         MarketStateDTO market = new MarketStateDTO(
-            "OPEN", LocalDateTime.now(), LocalDateTime.now(), true, true, true);
+            "OPEN", LocalDateTime.now(), LocalDateTime.now(), true, true, LocalDateTime.now(), true);
         SystemAnalyticsDTO analytics = new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
         when(presenter.load()).thenReturn(
             new SystemAnalyticsPresenter.Outcome.Success(market, analytics));
         assertDoesNotThrow(() -> new SystemAnalyticsView(presenter, context.getBean(DisplayTime.class)),
             "SystemAnalyticsView failed to construct");
+    }
+
+    // ---- The dashboard's WSEP line reports the last probe and its time (#187 review follow-up 1) ----
+
+    private static final LocalDateTime LAST_CHECK = LocalDateTime.of(2027, 7, 15, 17, 0, 5);
+    private static final DateTimeFormatter CHECK_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", Locale.US);
+
+    @Test
+    void GivenBothServicesAnsweredTheLastProbe_WhenSystemAnalyticsViewIsBuilt_ThenItSaysReachableAndWhen() {
+        String text = analyticsViewText(new MarketStateDTO("OPEN", null, null, true, true, LAST_CHECK, true));
+
+        String checkedAt = context.getBean(DisplayTime.class).format(LAST_CHECK, CHECK_FMT);
+        assertTrue(text.contains("Payment gateway: reachable · Ticket issuer: reachable (at last check, " + checkedAt + ")"),
+            "expected both reachable with the check time in: " + text);
+    }
+
+    @Test
+    void GivenTheIssuerFailedTheLastProbe_WhenSystemAnalyticsViewIsBuilt_ThenItSaysUnreachable() {
+        String text = analyticsViewText(new MarketStateDTO("OPEN", null, null, true, false, LAST_CHECK, true));
+
+        assertTrue(text.contains("Payment gateway: reachable · Ticket issuer: unreachable (at last check, "),
+            "expected the issuer unreachable at the last check in: " + text);
+    }
+
+    @Test
+    void GivenNoProbeHasRun_WhenSystemAnalyticsViewIsBuilt_ThenItSaysNotCheckedYet() {
+        String text = analyticsViewText(new MarketStateDTO("UNINITIALIZED", null, null, false, false, null, true));
+
+        assertTrue(text.contains("Payment gateway and ticket issuer: not checked yet"),
+            "expected the services as not checked yet in: " + text);
+        assertFalse(text.contains("unreachable"), "an unchecked service is not reported down: " + text);
+    }
+
+    private String analyticsViewText(MarketStateDTO market) {
+        SystemAnalyticsPresenter presenter = mock(SystemAnalyticsPresenter.class);
+        SystemAnalyticsDTO analytics = new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
+        when(presenter.load()).thenReturn(new SystemAnalyticsPresenter.Outcome.Success(market, analytics));
+        return new SystemAnalyticsView(presenter, context.getBean(DisplayTime.class)).getElement().getTextRecursively();
     }
 
     @Test

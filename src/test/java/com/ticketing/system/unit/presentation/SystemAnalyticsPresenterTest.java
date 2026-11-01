@@ -134,7 +134,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     private static MarketStateDTO marketState(String status) {
-        return new MarketStateDTO(status, LocalDateTime.now(), LocalDateTime.now(), true, true, true);
+        return new MarketStateDTO(status, LocalDateTime.now(), LocalDateTime.now(), true, true, LocalDateTime.now(), true);
     }
 
     private static SystemAnalyticsDTO zeroAnalytics() {

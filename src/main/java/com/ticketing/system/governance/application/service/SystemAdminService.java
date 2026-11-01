@@ -69,11 +69,12 @@ public class SystemAdminService {
     private volatile PlatformStatus status = PlatformStatus.UNINITIALIZED;
     private volatile LocalDateTime lastInitializedAt;
     private volatile LocalDateTime lastOpenedAt;
-    // Each service kind's result at its last WSEP probe (init, open, self-heal). The market view reports
-    // these instead of probing: a probe can take a minute against a hanging WSEP, and the dashboard
-    // polls every 5 s. False until a probe has run, so the view never calls an unchecked service healthy.
-    private volatile boolean paymentReachableAtLastProbe;
-    private volatile boolean issuerReachableAtLastProbe;
+    // The last WSEP probe (init, open, every self-heal tick). The market view reports it instead of
+    // probing: a probe can take a minute against a hanging WSEP, and the dashboard polls every 5 s.
+    // One immutable snapshot, so a reader never pairs one probe's flags with another's time.
+    private record Reachability(boolean payment, boolean issuer, LocalDateTime probedAt) { }
+    private static final Reachability NOT_CHECKED = new Reachability(false, false, null);
+    private volatile Reachability lastProbe = NOT_CHECKED;
     // Stamps the lifecycle transitions above: UTC wall time (ADR-008).
     private final Clock clock;
 
@@ -223,11 +224,15 @@ public class SystemAdminService {
      * <p>Never throws; the caller retries on its own schedule. A WSEP outage, the one failure that
      * self-heals (ADR-003), is logged at WARN. Any other failure (an integrity violation, a missing
      * admin, a bug) will not clear by retrying, so it is logged at ERROR with its stack trace.
+     *
+     * @return {@code true} if this call probed WSEP (an initialization or open got as far as its
+     *         reachability check), so a caller that keeps the market view current need not probe again
      */
-    public synchronized void ensureMarketOpen() {
+    public synchronized boolean ensureMarketOpen() {
         if (status == PlatformStatus.OPEN || status == PlatformStatus.CLOSED) {
-            return; // already open, or deliberately closed by an admin — leave it alone
+            return false; // already open, or deliberately closed by an admin — leave it alone
         }
+        Reachability probeBefore = lastProbe;
         try {
             if (status == PlatformStatus.UNINITIALIZED) {
                 initializePlatform();   // UNINITIALIZED -> READY (the WSEP handshake now retries internally)
@@ -240,6 +245,20 @@ public class SystemAdminService {
         } catch (RuntimeException e) {
             log.error("Market auto-open failed for a reason retrying will not fix (will retry anyway).", e);
         }
+        return lastProbe != probeBefore;
+    }
+
+    /**
+     * Probes the payment and ticket-issuing services and records both results, with the time, for the
+     * market view. Called by the self-heal scheduler on every tick in which {@link #ensureMarketOpen()}
+     * did not probe, so the view stays current while the market is OPEN or CLOSED.
+     *
+     * <p>Deliberately not synchronized: a probe can take a minute against a hanging WSEP, and neither
+     * a close nor a view may wait for it. Two probes that race both record a fresh result. Never
+     * throws: an unreachable service is recorded as such.
+     */
+    public void refreshServiceReachability() {
+        probeServices();
     }
 
     // UC-32 — close the trading market (admin/ops incident control; no dedicated
@@ -262,9 +281,11 @@ public class SystemAdminService {
     }
 
     /**
-     * The market/health snapshot for the admin dashboard. The services' reachability is the result of
-     * the last initialization, open or self-heal probe, and unreachable before any; this call never
-     * probes WSEP. Gated like {@link #openMarket}: the UI's route guard only steers navigation.
+     * The market/health snapshot for the admin dashboard. The services' reachability and its time are
+     * those of the last probe: initialization, open, or a self-heal tick
+     * ({@link #refreshServiceReachability()}). Before any probe the time is {@code null} and both flags
+     * are {@code false}. This call never probes WSEP. Gated like {@link #openMarket}: the UI's route
+     * guard only steers navigation.
      *
      * @param adminToken the caller's admin session token
      * @return the current market state
@@ -289,12 +310,14 @@ public class SystemAdminService {
     // *HELPER* — single builder for the market snapshot. It never probes WSEP: it reports the last probe.
     private MarketStateDTO buildMarketState() {
         boolean adminPresent = adminRepository.existsAny();
+        Reachability probe = lastProbe;
         return new MarketStateDTO(
                 status.name(),
                 lastInitializedAt,
                 lastOpenedAt,
-                paymentReachableAtLastProbe,
-                issuerReachableAtLastProbe,
+                probe.payment(),
+                probe.issuer(),
+                probe.probedAt(),
                 adminPresent);
     }
 
@@ -315,17 +338,25 @@ public class SystemAdminService {
 
     // *HELPER* — I.1.2/I.1.3 & I.2.2 external-service quorum: at least one payment
     // gateway and one ticket issuer must be reachable. Shared by initialize and
-    // openMarket so the "service down" failure is identical in both paths. Records each result for
-    // the market view; an issuer left unprobed because payment failed keeps its previous result.
+    // openMarket so the "service down" failure is identical in both paths. Both kinds are probed
+    // before either failure is thrown, so the market view never shows a stale result for one of them.
     private void requireExternalServicesReachable() {
-        paymentReachableAtLastProbe = paymentGateways.stream().anyMatch(this::isReachable);
-        if (!paymentReachableAtLastProbe) {
+        Reachability probe = probeServices();
+        if (!probe.payment()) {
             throw new ExternalServiceUnavailableException("no reachable payment service");
         }
-        issuerReachableAtLastProbe = ticketIssuers.stream().anyMatch(this::isReachable);
-        if (!issuerReachableAtLastProbe) {
+        if (!probe.issuer()) {
             throw new ExternalServiceUnavailableException("no reachable ticket issuance service");
         }
+    }
+
+    // Probes both service kinds and records the result with the time it finished.
+    private Reachability probeServices() {
+        boolean payment = paymentGateways.stream().anyMatch(this::isReachable);
+        boolean issuer = ticketIssuers.stream().anyMatch(this::isReachable);
+        Reachability probe = new Reachability(payment, issuer, LocalDateTime.now(clock));
+        lastProbe = probe;
+        return probe;
     }
 
     // *HELPER* — UC-1 step 4 / I.1.1: re-assert that a System Admin exists. The external-service

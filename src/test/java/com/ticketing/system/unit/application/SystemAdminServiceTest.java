@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -751,5 +752,81 @@ class SystemAdminServiceTest {
         MissingDefaultAdminException thrown = assertThrows(MissingDefaultAdminException.class, svc::initializePlatform);
 
         assertSame(failure, thrown.getCause(), "the save failure must be kept as the cause");
+    }
+
+    // ---- Review follow-up 1: live WSEP reachability while the market is open (#187) ----
+
+    private static final LocalDateTime PROBED_AT = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+
+    @Test
+    void GivenPaymentDownAtInit_WhenViewMarketState_ThenPaymentIsReportedUnreachableAtTheProbeTime() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.verifyConnection()).thenReturn(false);
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
+        assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+
+        assertFalse(state.paymentGatewayHealthy(), "the failed payment probe is reported");
+        assertEquals(PROBED_AT, state.lastProbedAt(), "the probe time is reported with it");
+    }
+
+    // A down payment service must not leave the issuer's state stale or unchecked: both are probed.
+    @Test
+    void GivenPaymentDownAtInit_WhenInitializePlatform_ThenTheIssuerIsProbedAndReportedToo() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.verifyConnection()).thenReturn(false);
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+
+        assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
+
+        verify(issuer).verifyConnection();
+        assertTrue(svc.viewMarketState(ADMIN_TOKEN).ticketIssuerHealthy(), "the issuer answered the same probe");
+    }
+
+    @Test
+    void GivenOpenMarket_WhenWsepDropsAndReachabilityIsRefreshed_ThenTheViewReportsBothUnreachable() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        when(gateway.verifyConnection()).thenReturn(false);
+        when(issuer.verifyConnection()).thenThrow(new ExternalServiceUnavailableException("WSEP hangs"));
+
+        svc.refreshServiceReachability();
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+        assertFalse(state.paymentGatewayHealthy(), "the refresh's payment probe is reported while OPEN");
+        assertFalse(state.ticketIssuerHealthy(), "the refresh's issuer probe is reported while OPEN");
+        assertEquals("OPEN", state.currentStatus(), "a refresh probes; it never changes the market state");
+    }
+
+    @Test
+    void GivenNoProbeHasRunYet_WhenViewMarketState_ThenNoProbeTimeIsReported() {
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertNull(svc.viewMarketState(ADMIN_TOKEN).lastProbedAt(), "no probe has run, so nothing was checked");
+    }
+
+    // The self-heal scheduler refreshes only when this tick's ensureMarketOpen did not probe already.
+    @Test
+    void GivenUninitializedPlatform_WhenEnsureMarketOpen_ThenItReportsThatItProbed() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertTrue(svc.ensureMarketOpen(), "init and open probed WSEP in this call");
+    }
+
+    @Test
+    void GivenOpenMarket_WhenEnsureMarketOpen_ThenItReportsNoProbe() {
+        SystemAdminService svc = readyService();
+        svc.openMarket(openRequest());
+
+        assertFalse(svc.ensureMarketOpen(), "an open market is left alone, so nothing was probed");
     }
 }

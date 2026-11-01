@@ -261,7 +261,7 @@ overrides them. Set each value in one place.
 | `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window, at most `120` (`ISystemMetrics.MAX_WINDOW_MINUTES`, the longest window the metrics answer; a longer one stops the boot) · dashboard refresh (`0` stops it) | `5` · `5000` |
 | `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
-| `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
+| `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening, and WSEP reachability is re-checked for the admin dashboard | `30000` |
 | `SWEEPER_FIXED_DELAY_MS` | Pause between sweeps that release expired sessions and carts | `60000` |
 | `EVENT_COMPLETION_FIXED_DELAY_MS` | Pause between sweeps that mark finished events completed | `60000` |
 | `NOTIFICATIONS_POLL_DELAY_MS` | Pause between pushes of new notifications to connected users | `60000` |

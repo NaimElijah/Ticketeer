@@ -52,6 +52,8 @@ public class SystemAnalyticsView extends LkPage {
     private final SystemAnalyticsPresenter presenter;
     private final DisplayTime displayTime;
     private static final DateTimeFormatter OPENED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.US);
+    // Seconds, since the self-heal re-checks WSEP every 30 s by default.
+    private static final DateTimeFormatter CHECKED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", Locale.US);
 
     private final LkBadge statusBadge = new LkBadge("—");
     private final Span marketDetail = new Span();
@@ -137,11 +139,25 @@ public class SystemAnalyticsView extends LkPage {
         statusBadge.setText(status);
         statusBadge.tone(toneFor(status));
         marketDetail.setText(String.format(
-            "Payment gateway: %s · Ticket issuer: %s · Default admin: %s%s",
-            market.paymentGatewayHealthy() ? "healthy" : "down",
-            market.ticketIssuerHealthy() ? "healthy" : "down",
+            "%s · Default admin: %s%s",
+            servicesText(market),
             market.defaultAdminPresent() ? "present" : "missing",
             market.lastOpenedAt() == null ? "" : " · Last opened: " + displayTime.format(market.lastOpenedAt(), OPENED_FMT)));
+    }
+
+    // The flags are a past probe's result, so say when; before any probe they mean nothing.
+    private String servicesText(MarketStateDTO market) {
+        if (market.lastProbedAt() == null) {
+            return "Payment gateway and ticket issuer: not checked yet";
+        }
+        return String.format("Payment gateway: %s · Ticket issuer: %s (at last check, %s)",
+            reachability(market.paymentGatewayHealthy()),
+            reachability(market.ticketIssuerHealthy()),
+            displayTime.format(market.lastProbedAt(), CHECKED_FMT));
+    }
+
+    private static String reachability(boolean reachable) {
+        return reachable ? "reachable" : "unreachable";
     }
 
     private static LkBadge.Tone toneFor(String status) {
