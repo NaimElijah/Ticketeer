@@ -112,12 +112,15 @@ public class SystemIntegrityVerifier {
         log.info("System integrity verified.");
     }
 
+    // Every message below names its records by id, never by a company name or a username: the self-heal
+    // logs a violation at ERROR on every tick while it lasts.
+
     // #6 — every active production company has at least one Owner.
     private void verifyActiveCompaniesHaveOwner() {
         for (ProductionCompany company : companyRepository.findActive()) {
             if (company.getOwnerIds().isEmpty()) {
                 throw new SystemIntegrityViolationException(
-                        "active company '" + company.getName() + "' has no owner");
+                        "active company " + company.getCompanyId() + " has no owner");
             }
         }
     }
@@ -132,8 +135,8 @@ public class SystemIntegrityVerifier {
                     userRepository.getUserById(userId);
                 } catch (UserNotFoundException e) {
                     throw new SystemIntegrityViolationException(
-                            "company '" + company.getName() + "' has producer " + userId
-                                    + " that is not a registered user");
+                            "company " + company.getCompanyId() + " has producer " + userId
+                                    + " that is not a registered user", e);
                 }
             }
         }
@@ -170,12 +173,16 @@ public class SystemIntegrityVerifier {
     // forbids a duplicate; this scan still covers the Memory adapter and any row written around the
     // adapters.
     private void verifyUniqueUsernames() {
-        Set<String> seen = new HashSet<>();
+        Map<String, Integer> userIdByUsername = new HashMap<>();
         for (User user : userRepository.findAll()) {
             String username = user.getUsername();
-            if (username != null && !seen.add(username)) {
+            if (username == null) {
+                continue;
+            }
+            Integer firstUserId = userIdByUsername.putIfAbsent(username, user.getUserId());
+            if (firstUserId != null) {
                 throw new SystemIntegrityViolationException(
-                        "duplicate username '" + username + "' in the member pool");
+                        "users " + firstUserId + " and " + user.getUserId() + " share one username");
             }
         }
     }

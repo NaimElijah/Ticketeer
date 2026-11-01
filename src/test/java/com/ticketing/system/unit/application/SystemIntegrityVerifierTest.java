@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -24,6 +25,7 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
@@ -316,5 +318,54 @@ class SystemIntegrityVerifierTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("test could not corrupt " + fieldName, e);
         }
+    }
+
+    // ---- Review follow-up 5: integrity messages name records by id (#187) ----
+
+    // These messages are logged at ERROR on every self-heal tick while the violation lasts: name each record
+    // by its id, never by a company name or a username.
+    private static final int GHOST_COMPANY_ID = 12;
+    private static final String GHOST_COMPANY_NAME = "Ghost Productions";
+    private static final int FOUNDER_ID = 5;
+
+    @Test
+    void GivenActiveCompanyWithoutOwner_WhenVerify_ThenMessageNamesTheCompanyIdNotItsName() {
+        ProductionCompany company = activeCompany();
+        setPrivateField(company, "ownerIds", new ArrayList<Integer>());   // a stored row the domain API cannot produce
+        when(companyRepository.findActive()).thenReturn(List.of(company));
+
+        String message = assertThrows(SystemIntegrityViolationException.class, verifier::verify).getMessage();
+
+        assertTrue(message.contains("company " + GHOST_COMPANY_ID), "expected the company id in: " + message);
+        assertFalse(message.contains(GHOST_COMPANY_NAME), "the company name must not reach the message: " + message);
+    }
+
+    @Test
+    void GivenProducerWhoIsNotAUser_WhenVerify_ThenMessageNamesTheCompanyIdAndUserIdNotTheName() {
+        when(companyRepository.findActive()).thenReturn(List.of(activeCompany()));
+        when(userRepository.getUserById(FOUNDER_ID)).thenThrow(new UserNotFoundException(FOUNDER_ID));
+
+        String message = assertThrows(SystemIntegrityViolationException.class, verifier::verify).getMessage();
+
+        assertTrue(message.contains("company " + GHOST_COMPANY_ID) && message.contains("producer " + FOUNDER_ID),
+                "expected the company and producer ids in: " + message);
+        assertFalse(message.contains(GHOST_COMPANY_NAME), "the company name must not reach the message: " + message);
+    }
+
+    @Test
+    void GivenTwoUsersWithOneUsername_WhenVerify_ThenMessageNamesTheUserIdsNotTheUsername() {
+        User first = new User(3, "shared-name", "first@example.com", "HASH", 30);
+        User second = new User(9, "shared-name", "second@example.com", "HASH", 30);
+        when(userRepository.findAll()).thenReturn(List.of(first, second));
+
+        String message = assertThrows(SystemIntegrityViolationException.class, verifier::verify).getMessage();
+
+        assertTrue(message.contains("users 3 and 9"), "expected both user ids in: " + message);
+        assertFalse(message.contains("shared-name"), "the username must not reach the message: " + message);
+    }
+
+    private static ProductionCompany activeCompany() {
+        return new ProductionCompany(GHOST_COMPANY_ID, FOUNDER_ID, GHOST_COMPANY_NAME, CompanyStatus.ACTIVE,
+                "a company for the integrity scan", 4.0);
     }
 }
