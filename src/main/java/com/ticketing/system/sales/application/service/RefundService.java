@@ -34,7 +34,8 @@ import lombok.extern.slf4j.Slf4j;
  * "Request refund" path from {@code ReceiptView} / {@code MyAccountView}.
  *
  * <p>Mirrors the cancellation refund mechanics, scoped to a single member-owned receipt: charge
- * the gateway refund first, then flip the receipt + its tickets to refunded. Refunds are
+ * the gateway refund first, then flip the receipt to refunded in the same transaction, and its tickets
+ * in one transaction of their own once that has committed. Refunds are
  * <strong>immediate</strong> (no request lifecycle exists in the domain) and whole-order: an order
  * with any line already refunded or claimed by an event-cancellation refund is not eligible (#20).
  * It deliberately dispatches <strong>no</strong>
@@ -55,7 +56,8 @@ public class RefundService {
     private final InventoryCommandPort inventoryPort;
     // Programmatic transaction for the refund critical section: it must hold a real row lock on the
     // receipt (SELECT … FOR UPDATE) across the eligibility check + gateway refund + receipt flip so a
-    // double-click can't refund twice (#410). The gateway-first call runs inside it by design.
+    // double-click can't refund twice (#410). The gateway-first call runs inside it by design. Once it
+    // has committed, the same template runs the ticket flips as a second transaction.
     private final TransactionTemplate transactionTemplate;
 
     public RefundService(
@@ -76,6 +78,15 @@ public class RefundService {
     /**
      * Refunds the whole order identified by {@code orderId} on behalf of the authenticated member.
      *
+     * <p>Once the gateway refund and the receipt flip have committed, the order's tickets are flipped
+     * in one transaction of their own and their places returned to stock. If the flips fail, the refund
+     * still succeeds: the failure is logged at ERROR naming the order, the tickets stay valid, and no
+     * place is returned to stock.
+     *
+     * @param token   the member's session token
+     * @param orderId the receipt id of the order to refund
+     * @param reason  the member's free-text reason; only its length is logged
+     * @return the gateway's refund result
      * @throws InvalidTokenException          token missing/invalid
      * @throws EntityNotFoundException        no such receipt
      * @throws UnauthorizedActionException    the receipt isn't the caller's (403)
@@ -136,20 +147,22 @@ public class RefundService {
             }
         });
 
-        // The money refund + receipt flip have committed under the lock; the remaining ticket flips and
-        // inventory return run outside it (best-effort, idempotent-by-state). A second concurrent request
-        // already bailed on the eligibility check above, so only this caller reaches here.
-        // PAID/ISSUED tickets become REFUNDED; anything else (e.g. reserved-but-unissued) is voided.
-        List<Ticket> tickets = ticketRepository.findByOrderReceiptId(orderId);
-        List<Ticket> refundedTickets = new ArrayList<>();
-        for (Ticket ticket : tickets) {
-            if (ticket.getStatus() == TicketStatus.PAID || ticket.getStatus() == TicketStatus.ISSUED) {
-                ticket.markRefunded();
-                refundedTickets.add(ticket);
-            } else {
-                ticket.markVoided();
-            }
-            ticketRepository.save(ticket);
+        // The money refund + receipt flip have committed under the lock. A second concurrent request
+        // already bailed on the eligibility check above, so only this caller reaches here. The ticket
+        // flips run in a transaction of their own, never in the refund's: the gateway has already paid
+        // the money back, so rolling the refund back over a failed flip would leave a refund the receipt
+        // does not record, and a retry would refund again.
+        List<Ticket> refundedTickets;
+        try {
+            refundedTickets = transactionTemplate.execute(status -> flipTicketsOfRefundedOrder(orderId));
+        } catch (RuntimeException flipFailure) {
+            // Whatever failed, the refund is done: the money is back and the receipt says so, and a retry
+            // would only be told "already refunded". So the member is told it succeeded, and no stock is
+            // returned, since freeing seats whose tickets are still valid could sell a seat twice. Repairing
+            // such an order is the member-refund redesign's (NaimElijah/Ticketeer#130). See ADR-018.
+            log.error("Member refund of order {} completed, but its tickets could not be flipped: they stay "
+                    + "valid and their places stay SOLD until repaired", orderId, flipFailure);
+            return refundResult;
         }
 
         // The refunded seats/places were SOLD — return them to AVAILABLE stock so they're bookable
@@ -160,6 +173,22 @@ public class RefundService {
         log.info("Member refund completed for order {} — {} refunded (ref {})",
                 orderId, refundResult.totalRefunded(), refundResult.refundTransactionId());
         return refundResult;
+    }
+
+    // Flips every ticket of the refunded order, all in the caller's transaction: PAID/ISSUED tickets become
+    // REFUNDED; anything else (e.g. reserved-but-unissued) is voided. Returns the tickets now REFUNDED.
+    private List<Ticket> flipTicketsOfRefundedOrder(int orderId) {
+        List<Ticket> refundedTickets = new ArrayList<>();
+        for (Ticket ticket : ticketRepository.findByOrderReceiptId(orderId)) {
+            if (ticket.getStatus() == TicketStatus.PAID || ticket.getStatus() == TicketStatus.ISSUED) {
+                ticket.markRefunded();
+                refundedTickets.add(ticket);
+            } else {
+                ticket.markVoided();
+            }
+            ticketRepository.save(ticket);
+        }
+        return refundedTickets;
     }
 
     /**

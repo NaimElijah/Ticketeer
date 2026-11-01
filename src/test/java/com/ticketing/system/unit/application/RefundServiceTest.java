@@ -19,6 +19,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
@@ -41,7 +46,10 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryOrderReceiptRepository;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
+
+import ch.qos.logback.classic.Level;
 
 @ExtendWith(MockitoExtension.class)
 class RefundServiceTest {
@@ -299,5 +307,133 @@ class RefundServiceTest {
         assertThat(succeeded.get()).isEqualTo(1);
         assertThat(alreadyRefunded.get()).isEqualTo(1);
         assertThat(receipt.isFullyRefunded()).isTrue();
+    }
+
+    // ---- Defect 4: the ticket flips commit together, after the refund has committed (#187) ----
+    // The gateway has paid the money back by the time the refund transaction commits, so the flips must not
+    // join it: rolling it back over a failed flip would undo a refund the gateway made, and a retry would
+    // refund again. They run in one transaction of their own once it has committed, all or nothing. If that
+    // transaction fails, the refund still stands: an ERROR names the order, the tickets stay valid, and no
+    // stock is returned, since freeing seats whose tickets are still valid could sell a seat twice.
+
+    @Mock Ticket secondTicket;
+
+    @Test
+    void GivenOwnPaidOrder_WhenRequestRefund_ThenTheTicketFlipsAreSavedInOneTransactionBegunAfterTheRefundCommitted() {
+        RecordingTransactionManager transactions = new RecordingTransactionManager();
+        RefundService transactionalService = new RefundService(authenticationService, orderReceiptRepository,
+                ticketRepository, paymentGateway, inventoryPort, transactions);
+        givenOwnPaidOrderOfTwoTicketsRefundedByTheGateway();
+        transactions.recordEach(orderReceiptRepository, ticketRepository, inventoryPort);
+
+        transactionalService.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
+
+        assertThat(transactions.events())
+                .as("the receipt is refunded in the first transaction; both ticket flips share a second one, "
+                        + "begun after the first committed; the stock return follows once they have committed")
+                .containsExactly(
+                        "begin 1", "receipt saved in 1", "commit 1",
+                        "begin 2", "ticket saved in 2", "ticket saved in 2", "commit 2",
+                        "stock returned in 0");
+    }
+
+    @Test
+    void GivenTicketSaveFails_WhenRequestRefund_ThenTheRefundStandsAnErrorNamesTheOrderAndNoStockIsReturned() {
+        RecordingTransactionManager transactions = new RecordingTransactionManager();
+        RefundService transactionalService = new RefundService(authenticationService, orderReceiptRepository,
+                ticketRepository, paymentGateway, inventoryPort, transactions);
+        OrderReceipt receipt = givenOwnPaidOrderOfTwoTicketsRefundedByTheGateway();
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("database unreachable");
+        Mockito.doReturn(true).when(ticketRepository).save(ticket);
+        Mockito.doThrow(storeDown).when(ticketRepository).save(secondTicket);
+
+        try (LogCapture logs = LogCapture.of(RefundService.class)) {
+            RefundResultDTO returned = transactionalService.requestRefund(VALID_TOKEN, ORDER_ID, "x");
+
+            assertThat(returned).as("the money is back, so the member is told the refund is done")
+                    .isEqualTo(gatewayResult());
+            assertThat(receipt.isFullyRefunded()).as("the receipt stays refunded").isTrue();
+            Mockito.verify(orderReceiptRepository).save(receipt);
+            assertThat(transactions.commits()).as("the refund transaction committed").isEqualTo(1);
+            assertThat(transactions.rollbacks()).as("the ticket flips roll back together").isEqualTo(1);
+            assertThat(logs.messagesAt(Level.ERROR))
+                    .as("an operator must learn which refunded order kept valid tickets")
+                    .anyMatch(message -> message.contains("order " + ORDER_ID));
+            assertThat(logs.throwableClassNamesAt(Level.ERROR)).contains(storeDown.getClass().getName());
+            Mockito.verify(inventoryPort, Mockito.never()).returnSoldToStock(Mockito.anyList());
+        }
+    }
+
+    // The member's own PAID order with two PAID standing tickets, which the gateway refunds.
+    private OrderReceipt givenOwnPaidOrderOfTwoTicketsRefundedByTheGateway() {
+        OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(receipt));
+        Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(gatewayResult());
+        Mockito.when(paymentGateway.getId()).thenReturn("stub");
+        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(ticket, secondTicket));
+        for (Ticket each : List.of(ticket, secondTicket)) {
+            Mockito.lenient().when(each.getStatus()).thenReturn(TicketStatus.PAID);
+            Mockito.lenient().when(each.getEventId()).thenReturn(EVENT_ID);
+            Mockito.lenient().when(each.getZoneId()).thenReturn(ZONE_ID);
+        }
+        return receipt;
+    }
+
+    /**
+     * Records, in order, each transaction begun, committed and rolled back, numbered from 1, and each
+     * receipt save, ticket save and stock return with the number of the transaction it ran in (0: none).
+     */
+    private static final class RecordingTransactionManager implements PlatformTransactionManager {
+
+        private static final int NO_TRANSACTION = 0;
+
+        private final List<String> events = new ArrayList<>();
+        private int begun;
+        private int current = NO_TRANSACTION;
+        private int commits;
+        private int rollbacks;
+
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            current = ++begun;
+            events.add("begin " + current);
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+            events.add("commit " + current);
+            current = NO_TRANSACTION;
+            commits++;
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+            events.add("rollback " + current);
+            current = NO_TRANSACTION;
+            rollbacks++;
+        }
+
+        // Each call is recorded, then left to do nothing; a stub set up later still overrides it.
+        void recordEach(OrderReceiptRepository receipts, TicketRepository tickets, InventoryCommandPort inventory) {
+            Mockito.doAnswer(invocation -> events.add("receipt saved in " + current)).when(receipts).save(Mockito.any());
+            Mockito.doAnswer(invocation -> events.add("ticket saved in " + current)).when(tickets).save(Mockito.any());
+            Mockito.doAnswer(invocation -> events.add("stock returned in " + current))
+                    .when(inventory).returnSoldToStock(Mockito.anyList());
+        }
+
+        List<String> events() {
+            return List.copyOf(events);
+        }
+
+        int commits() {
+            return commits;
+        }
+
+        int rollbacks() {
+            return rollbacks;
+        }
     }
 }
