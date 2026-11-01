@@ -201,4 +201,47 @@ class SystemIntegrityVerifierTest {
             throw new IllegalStateException("test could not corrupt " + fieldName, e);
         }
     }
+
+    // ---- Defect 1: a race-legal pair of guest carts stops the boot (#187) ----
+
+    // Carts are stamped from a fixed instant, never the system clock (ADR-008).
+    private static final LocalDateTime CART_OPENED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+    private static final int SHARED_EVENT_ID = 7;
+    private static final int MEMBER_ID = 5;
+
+    // Two carts on one guest session id are a known, accepted race (#224, requirements.md §1 #8).
+    // Failing the scan on them would stop the boot (ADR-003) and block openMarket from CLOSED.
+    @Test
+    void GivenTwoGuestCartsOnOneSessionHoldingOneEvent_WhenVerify_ThenPasses() {
+        ActiveOrder first = guestCartHolding("guest-session-1", SHARED_EVENT_ID);
+        ActiveOrder second = guestCartHolding("guest-session-1", SHARED_EVENT_ID);
+        when(activeOrderRepository.findAll()).thenReturn(List.of(first, second));
+
+        assertDoesNotThrow(verifier::verify,
+                "two guest carts on one session id are a known race (#224), not a boot-stopping violation");
+    }
+
+    // Members stay in the scan: uk_active_orders_user_id holds them, so two carts are corrupt state.
+    @Test
+    void GivenTwoMemberCartsHoldingOneEvent_WhenVerify_ThenIntegrityViolation() {
+        ActiveOrder first = memberCartHolding(MEMBER_ID, "member-session-1", SHARED_EVENT_ID);
+        ActiveOrder second = memberCartHolding(MEMBER_ID, "member-session-2", SHARED_EVENT_ID);
+        when(activeOrderRepository.findAll()).thenReturn(List.of(first, second));
+
+        assertThrows(SystemIntegrityViolationException.class, verifier::verify,
+                "a member with two carts on one event must still fail the scan");
+    }
+
+    private static ActiveOrder guestCartHolding(String sessionId, int eventId) {
+        ActiveOrder cart = ActiveOrder.forGuest(sessionId, CART_OPENED_AT);
+        cart.addStandingReservation(eventId, 1, 1, 50.0, CART_OPENED_AT);
+        return cart;
+    }
+
+    private static ActiveOrder memberCartHolding(int userId, String sessionId, int eventId) {
+        ActiveOrder cart = ActiveOrder.forMember(userId, sessionId, CART_OPENED_AT);
+        cart.addStandingReservation(eventId, 1, 1, 50.0, CART_OPENED_AT);
+        return cart;
+    }
+
 }

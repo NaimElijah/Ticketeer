@@ -40,8 +40,9 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li><b>§1 #6 active company has ≥1 Owner — VERIFIED.</b></li>
  *   <li><b>§1 #4 producer (owner/manager) is a registered user — VERIFIED.</b></li>
- *   <li><b>§1 #1 unique username, #8 ≤1 active order/buyer/event, #12 sellable ≤ inventory —
- *       VERIFIED.</b></li>
+ *   <li><b>§1 #1 unique username, #8 ≤1 active order/member/event, #12 sellable ≤ inventory —
+ *       VERIFIED.</b> Guest carts are left out of #8: a race can leave two on one session id, an
+ *       accepted state until NaimElijah/Ticketeer#224, and this scan's failure stops the boot.</li>
  *   <li>The II.4.8.3 appointment tree (single appointer, no ownership cycles) is structural but
  *       not scanned, and owner revocation can currently break it (#126).</li>
  * </ul>
@@ -105,7 +106,7 @@ public class SystemIntegrityVerifier {
         verifyProducersAreUsers();             // constraint #4
         revalidateLoadedAggregates();          // #372 — re-run each loaded aggregate's own invariants
         verifyUniqueUsernames();               // constraint #1
-        verifyOneActiveOrderPerBuyerEvent();   // constraint #8
+        verifyOneActiveOrderPerMemberEvent();  // constraint #8, members only
         verifyInventoryWithinCapacity();       // constraint #12
         log.info("System integrity verified.");
     }
@@ -175,16 +176,18 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #8 — at most one active order per buyer per event. A buyer is keyed by userId (member) or
-    // sessionId (guest); flag a buyer whose two distinct orders both hold the same event.
-    private void verifyOneActiveOrderPerBuyerEvent() {
-        Map<String, Map<Integer, String>> orderByBuyerEvent = new HashMap<>();
+    // #8 — at most one active order per member per event; flag a member whose two distinct orders
+    // both hold the same event. Guest carts are skipped: two on one session id are a known race
+    // (NaimElijah/Ticketeer#224, requirements.md §1 #8) that the sweeper clears, and failing here
+    // would stop the boot (ADR-003) and block reopening the market.
+    private void verifyOneActiveOrderPerMemberEvent() {
+        Map<Integer, Map<Integer, String>> orderByMemberEvent = new HashMap<>();
         for (ActiveOrder order : activeOrderRepository.findAll()) {
-            String buyer = buyerKey(order);
-            if (buyer == null) {
-                continue; // an order with no identity is caught by the aggregate's own checkInvariants
+            Integer memberId = order.userIdOrNull();
+            if (memberId == null) {
+                continue;
             }
-            Map<Integer, String> byEvent = orderByBuyerEvent.computeIfAbsent(buyer, b -> new HashMap<>());
+            Map<Integer, String> byEvent = orderByMemberEvent.computeIfAbsent(memberId, m -> new HashMap<>());
             Set<Integer> eventIds = new HashSet<>();
             for (CartLineItem item : order.getItems()) {
                 eventIds.add(item.geteventId());
@@ -193,19 +196,10 @@ public class SystemIntegrityVerifier {
                 String previous = byEvent.put(eventId, order.getOrderKey());
                 if (previous != null && !previous.equals(order.getOrderKey())) {
                     throw new SystemIntegrityViolationException(
-                            "buyer " + buyer + " has more than one active order for event " + eventId);
+                            "member " + memberId + " has more than one active order for event " + eventId);
                 }
             }
         }
-    }
-
-    private static String buyerKey(ActiveOrder order) {
-        Integer userId = order.userIdOrNull();
-        if (userId != null) {
-            return "user:" + userId;
-        }
-        String sessionId = order.getSessionId();
-        return sessionId == null ? null : "sess:" + sessionId;
     }
 
     // #12 — a zone's committed tickets (sold + reserved) must not exceed its physical capacity.
