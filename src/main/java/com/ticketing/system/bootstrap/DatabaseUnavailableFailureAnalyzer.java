@@ -94,7 +94,6 @@ public class DatabaseUnavailableFailureAnalyzer implements FailureAnalyzer {
         if (url == null || url.isBlank()) {
             return UNKNOWN_URL;
         }
-        int query = url.indexOf('?');
-        return query < 0 ? url : url.substring(0, query);
+        return DatasourceUrls.withoutQuery(url);
     }
 }

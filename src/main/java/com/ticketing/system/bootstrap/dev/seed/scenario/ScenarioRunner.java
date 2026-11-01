@@ -1,5 +1,6 @@
 package com.ticketing.system.bootstrap.dev.seed.scenario;
 
+import com.ticketing.system.bootstrap.DatasourceUrls;
 import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
@@ -104,6 +105,7 @@ public class ScenarioRunner implements ApplicationRunner {
     private final String scenarioLocation;
     private final PlatformAdminProperties platformAdmin;
     private final ZoneId timeZone;
+    // Logged and shown on the console, so it is held without its query string, which can carry credentials.
     private final String datasourceUrl;
 
     // One reader for the whole interactive session: a fresh BufferedReader per prompt would
@@ -151,7 +153,7 @@ public class ScenarioRunner implements ApplicationRunner {
         this.scenarioLocation = seed.scenario();
         this.platformAdmin = platformAdmin;
         this.timeZone = platformTime.timeZone();
-        this.datasourceUrl = datasourceUrl;
+        this.datasourceUrl = DatasourceUrls.withoutQuery(datasourceUrl);
     }
 
     @Override
