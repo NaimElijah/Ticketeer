@@ -876,7 +876,9 @@ public class ReservationService {
      * @param userOrSessionId a member token or a guest's raw session id
      * @return the cart, or {@code null} for a blank credential or a buyer with no cart
      * @throws SessionExpiredException if the credential is neither a live member token nor a live
-     *     guest session id
+     *     guest session id, or a member token expired between its check and the read of its user id
+     * @throws InvalidTokenException if a member token was revoked between its check and the read of its
+     *     user id
      * @throws RuntimeException a failure of the session or cart store, propagated unchanged
      */
     @Transactional(readOnly = true)

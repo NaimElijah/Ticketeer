@@ -10,7 +10,7 @@
 1. the order's tickets are flipped to REFUNDED, or VOIDED;
 2. their places are returned to stock (`InventoryCommandPort.returnSoldToStock`, ADR-017).
 
-Until #187, the ticket flips ran with no transaction and outside any `try`. A failed save left some tickets flipped and others not. It also propagated to the member as a failure, although the money was back, and it skipped the stock return. A retry was then told "already refunded".
+Until #187, no transaction spanned the ticket flips: each ticket's `save` was `@Transactional` and committed on its own, and the flips ran outside any `try`. A failed save left some tickets flipped and others not. It also propagated to the member as a failure, although the money was back, and it skipped the stock return. A retry was then told "already refunded".
 
 Forces:
 - **The gateway refund cannot be undone.** Once it has answered, the money is back with the member.
@@ -21,6 +21,7 @@ Forces:
 
 - **The ticket flips run in one transaction of their own, after the refund's has committed.** All of an order's flips commit together or not at all. They never run inside the refund's transaction: rolling that back over a failed flip would leave money returned with a receipt that does not record it, and a retry would refund again.
 - **If the flips fail, the refund still stands and is reported as done.** The failure is logged at ERROR, naming the order. The tickets stay valid and their places stay SOLD, so no seat can be sold twice.
+- **Both transactions are always new ones** (`PROPAGATION_REQUIRES_NEW`), never a caller's: joined to a caller's transaction, that caller's rollback would undo the receipt's refund after the gateway has paid it back.
 - **The stock is returned only after the flips commit.**
 
 ## Consequences

@@ -572,7 +572,7 @@ public class ActiveOrder implements InvariantChecked {
     public boolean validateCanCheckout(LocalDateTime now) {
         synchronized (itemsLock) {
             // Stays an IllegalStateException: SecondCheckoutAttemptJpaTest pins it as the cause of a second
-            // attempt's failure, and retyping it is outside NaimElijah/Ticketeer#187.
+            // attempt's failure, and retyping it is tracked as NaimElijah/Ticketeer#240.
             if (status == ActiveOrderStatus.CHECKOUT_IN_PROGRESS) {
                 throw new IllegalStateException("Order is already being checked out");
             }
