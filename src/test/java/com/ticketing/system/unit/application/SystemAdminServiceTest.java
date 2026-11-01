@@ -4,13 +4,17 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,10 +24,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.dto.GlobalHistoryFiltersDTO;
@@ -51,12 +61,16 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.MissingDefaultAdminException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.SystemIntegrityViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
+import com.ticketing.system.testutil.LogCapture;
+
+import ch.qos.logback.classic.Level;
 
 class SystemAdminServiceTest {
 
@@ -230,7 +244,7 @@ class SystemAdminServiceTest {
         svc.initializePlatform();                          // READY
         when(gateway.verifyConnection()).thenReturn(false); // gateway drops before open
         assertThrows(ExternalServiceUnavailableException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -241,7 +255,7 @@ class SystemAdminServiceTest {
         svc.initializePlatform();                          // READY
         when(issuer.verifyConnection()).thenReturn(false);  // issuer drops before open
         assertThrows(ExternalServiceUnavailableException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -251,7 +265,7 @@ class SystemAdminServiceTest {
         svc.initializePlatform();                          // READY
         when(adminRepository.existsAny()).thenReturn(false); // admin removed before open
         assertThrows(InitializationIntegrityException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -260,7 +274,7 @@ class SystemAdminServiceTest {
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", "member-token");
         assertThrows(InvalidTokenException.class, () -> svc.openMarket(request));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -268,7 +282,7 @@ class SystemAdminServiceTest {
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", null);
         assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(request));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -276,7 +290,9 @@ class SystemAdminServiceTest {
         when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(null);
         SystemAdminService svc = readyService();
         assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(openRequest()));
-        assertEquals("READY", svc.viewMarketState().currentStatus());
+        // The market view is admin-gated too, so read the state as an admin who is on record.
+        when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(new Admin(ADMIN_USER_ID, "admin", "hash", true));
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -371,7 +387,7 @@ class SystemAdminServiceTest {
         svc.closeMarket(closeRequest());                      // admin deliberately closes the market
         svc.ensureMarketOpen();                               // must NOT auto-reopen a deliberate close
         assertFalse(svc.isMarketOpen());
-        assertEquals("CLOSED", svc.viewMarketState().currentStatus());
+        assertEquals("CLOSED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -384,7 +400,7 @@ class SystemAdminServiceTest {
     @Test
     void givenInitializedPlatform_whenViewMarketState_thenReportsHealth() {
         SystemAdminService svc = readyService();
-        MarketStateDTO state = svc.viewMarketState();
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
         assertEquals("READY", state.currentStatus());
         assertTrue(state.paymentGatewayHealthy());
         assertTrue(state.ticketIssuerHealthy());
@@ -558,5 +574,368 @@ class SystemAdminServiceTest {
         TicketIssuer issuer = mock(TicketIssuer.class);
         when(issuer.verifyConnection()).thenReturn(true);
         return issuer;
+    }
+
+    // ---- Defect 3: the market state view probes WSEP on every call (#187) ----
+
+    // The dashboard polls the view every 5 s, and against a hanging WSEP a probe takes about two minutes:
+    // the view and the synchronized close report the result of the last init, open or self-heal probe.
+    @Test
+    void GivenReadyPlatform_WhenViewMarketState_ThenNoConnectionCheckIsMade() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        clearInvocations(gateway, issuer);
+
+        svc.viewMarketState(ADMIN_TOKEN);
+
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+    }
+
+    @Test
+    void GivenOpenMarket_WhenCloseMarket_ThenNoConnectionCheckIsMade() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        clearInvocations(gateway, issuer);
+
+        svc.closeMarket(closeRequest());
+
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+    }
+
+    @Test
+    void GivenMarketOpenedWithBothServicesReachable_WhenViewMarketStateAfterThemDrop_ThenTheOpenProbeIsReported() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        when(gateway.verifyConnection()).thenThrow(new ExternalServiceUnavailableException("WSEP hangs"));
+        when(issuer.verifyConnection()).thenReturn(false);
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+
+        assertTrue(state.paymentGatewayHealthy(), "the view reports the payment probe of the last open");
+        assertTrue(state.ticketIssuerHealthy(), "the view reports the issuer probe of the last open");
+    }
+
+    // Before any probe, the view reports neither service reachable, and building it probes nothing.
+    @Test
+    void GivenNoProbeHasRunYet_WhenViewMarketState_ThenNeitherServiceIsReportedReachable() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+
+        assertFalse(state.paymentGatewayHealthy(), "no probe has checked the payment service yet");
+        assertFalse(state.ticketIssuerHealthy(), "no probe has checked the ticket issuer yet");
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+    }
+
+    // ---- Defect 4: viewMarketState has no admin gate (#187) ----
+
+    // Refusals match openMarket's: the admin readers' own exceptions, or UnauthorizedActionException.
+    @Test
+    void GivenLiveMemberToken_WhenViewMarketState_ThenInvalidToken() {
+        stubLiveMemberToken("member-token");
+        SystemAdminService svc = readyService();
+
+        assertThrows(InvalidTokenException.class, () -> svc.viewMarketState("member-token"));
+    }
+
+    @Test
+    void GivenNoToken_WhenViewMarketState_ThenUnauthorized() {
+        SystemAdminService svc = readyService();
+
+        assertThrows(UnauthorizedActionException.class, () -> svc.viewMarketState(null));
+    }
+
+    @Test
+    void GivenExpiredAdminToken_WhenViewMarketState_ThenSessionExpired() {
+        when(sessionManager.validateAdminToken("expired-admin-token")).thenThrow(new SessionExpiredException());
+        when(sessionManager.extractAdminId("expired-admin-token")).thenThrow(new SessionExpiredException());
+        SystemAdminService svc = readyService();
+
+        assertThrows(SessionExpiredException.class, () -> svc.viewMarketState("expired-admin-token"));
+    }
+
+    @Test
+    void GivenAdminTokenWhoseAdminNoLongerExists_WhenViewMarketState_ThenUnauthorized() {
+        when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(null);
+        SystemAdminService svc = readyService();
+
+        assertThrows(UnauthorizedActionException.class, () -> svc.viewMarketState(ADMIN_TOKEN));
+    }
+
+    @Test
+    void GivenLiveAdminToken_WhenViewMarketState_ThenStateReturned() {
+        SystemAdminService svc = readyService();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
+    }
+
+    // ---- Defect 5: ensureMarketOpen hides failures (#187) ----
+
+    // Only a WSEP outage is expected to self-heal (ADR-003); any other failure is an ERROR on every tick it lasts.
+    @Test
+    void GivenWsepUnreachable_WhenEnsureMarketOpen_ThenWarnsAndLogsNoError() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway unreachable = mock(PaymentGateway.class);
+        when(unreachable.verifyConnection()).thenReturn(false);
+        SystemAdminService svc = serviceWith(List.of(unreachable), List.of(reachableIssuer()));
+
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            assertDoesNotThrow(svc::ensureMarketOpen);
+
+            assertTrue(log.messagesAt(Level.WARN).stream().anyMatch(m -> m.contains("no reachable payment service")),
+                    "expected a WARN naming the outage, got " + log.messagesAt(Level.WARN));
+            assertTrue(log.messagesAt(Level.ERROR).isEmpty(),
+                    "a WSEP outage self-heals and is no ERROR, got " + log.messagesAt(Level.ERROR));
+        }
+    }
+
+    @Test
+    void GivenIntegrityViolation_WhenEnsureMarketOpen_ThenLogsErrorWithTheException() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        doThrow(new SystemIntegrityViolationException("active company 7 has no owner"))
+                .when(integrityVerifier).verify();
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertSelfHealLogsErrorWith(svc, SystemIntegrityViolationException.class);
+    }
+
+    @Test
+    void GivenDefaultAdminCannotBeCreated_WhenEnsureMarketOpen_ThenLogsErrorWithTheException() {
+        when(adminRepository.existsAny()).thenReturn(false);
+        doThrow(new DataAccessResourceFailureException("database unavailable"))
+                .when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertSelfHealLogsErrorWith(svc, MissingDefaultAdminException.class);
+    }
+
+    @Test
+    void GivenUnexpectedNullPointer_WhenEnsureMarketOpen_ThenLogsErrorWithTheException() {
+        when(adminRepository.existsAny()).thenThrow(new NullPointerException("admin store not wired"));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertSelfHealLogsErrorWith(svc, NullPointerException.class);
+    }
+
+    private static void assertSelfHealLogsErrorWith(SystemAdminService svc, Class<? extends Throwable> expected) {
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            assertDoesNotThrow(svc::ensureMarketOpen);
+
+            assertTrue(log.throwableClassNamesAt(Level.ERROR).contains(expected.getName()),
+                    "expected an ERROR carrying " + expected.getSimpleName() + ", got ERROR throwables "
+                            + log.throwableClassNamesAt(Level.ERROR) + " and WARN messages "
+                            + log.messagesAt(Level.WARN));
+        }
+    }
+
+    // ---- Defect 6: causes are dropped (#187) ----
+
+    @Test
+    void GivenDefaultAdminSaveFails_WhenInitializePlatform_ThenMissingDefaultAdminCarriesTheCause() {
+        when(adminRepository.existsAny()).thenReturn(false);
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("database unavailable");
+        doThrow(failure).when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        MissingDefaultAdminException thrown = assertThrows(MissingDefaultAdminException.class, svc::initializePlatform);
+
+        assertSame(failure, thrown.getCause(), "the save failure must be kept as the cause");
+    }
+
+    // ---- Review follow-up 1: live WSEP reachability while the market is open (#187) ----
+
+    private static final LocalDateTime PROBED_AT = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+
+    @Test
+    void GivenPaymentDownAtInit_WhenViewMarketState_ThenPaymentIsReportedUnreachableAtTheProbeTime() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.verifyConnection()).thenReturn(false);
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
+        assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+
+        assertFalse(state.paymentGatewayHealthy(), "the failed payment probe is reported");
+        assertEquals(PROBED_AT, state.lastProbedAt(), "the probe time is reported with it");
+    }
+
+    // A down payment service must not leave the issuer's state stale or unchecked: both are probed.
+    @Test
+    void GivenPaymentDownAtInit_WhenInitializePlatform_ThenTheIssuerIsProbedAndReportedToo() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = mock(PaymentGateway.class);
+        when(gateway.verifyConnection()).thenReturn(false);
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+
+        assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
+
+        verify(issuer).verifyConnection();
+        assertTrue(svc.viewMarketState(ADMIN_TOKEN).ticketIssuerHealthy(), "the issuer answered the same probe");
+    }
+
+    @Test
+    void GivenOpenMarket_WhenWsepDropsAndReachabilityIsRefreshed_ThenTheViewReportsBothUnreachable() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        when(gateway.verifyConnection()).thenReturn(false);
+        when(issuer.verifyConnection()).thenThrow(new ExternalServiceUnavailableException("WSEP hangs"));
+
+        svc.refreshServiceReachability();
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+        assertFalse(state.paymentGatewayHealthy(), "the refresh's payment probe is reported while OPEN");
+        assertFalse(state.ticketIssuerHealthy(), "the refresh's issuer probe is reported while OPEN");
+        assertEquals("OPEN", state.currentStatus(), "a refresh probes; it never changes the market state");
+    }
+
+    @Test
+    void GivenNoProbeHasRunYet_WhenViewMarketState_ThenNoProbeTimeIsReported() {
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertNull(svc.viewMarketState(ADMIN_TOKEN).lastProbedAt(), "no probe has run, so nothing was checked");
+    }
+
+    // The self-heal scheduler refreshes only when this tick's ensureMarketOpen did not probe already.
+    @Test
+    void GivenUninitializedPlatform_WhenEnsureMarketOpen_ThenItReportsThatItProbed() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        assertTrue(svc.ensureMarketOpen(), "init and open probed WSEP in this call");
+    }
+
+    @Test
+    void GivenOpenMarket_WhenEnsureMarketOpen_ThenItReportsNoProbe() {
+        SystemAdminService svc = readyService();
+        svc.openMarket(openRequest());
+
+        assertFalse(svc.ensureMarketOpen(), "an open market is left alone, so nothing was probed");
+    }
+
+    // ---- Review follow-up 3: the self-heal's ERROR text claims nothing about the cause (#187) ----
+
+    // A database outage also reaches this catch, and the next tick clears it: the text must not say
+    // that retrying cannot help. The exception it carries says what failed.
+    @Test
+    void GivenANonWsepFailure_WhenEnsureMarketOpen_ThenTheErrorSaysOnlyThatItFailedAndWillRetry() {
+        when(adminRepository.existsAny()).thenThrow(new DataAccessResourceFailureException("database unavailable"));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            svc.ensureMarketOpen();
+
+            assertEquals(List.of("Market auto-open failed (will retry)."), log.messagesAt(Level.ERROR));
+        }
+    }
+
+    // ---- Review follow-up 6: the save failure survives a failing re-check (#187) ----
+
+    // After a failed save the service re-checks whether another instance created the admin. If that check
+    // fails too, the save failure must stay the cause, and the check's failure must not be lost either.
+    @Test
+    void GivenSaveAndReCheckBothFail_WhenCreateDefaultAdmin_ThenSaveFailureIsTheCauseAndReCheckFailureIsSuppressed() {
+        DataAccessResourceFailureException saveFailure = new DataAccessResourceFailureException("insert failed");
+        DataAccessResourceFailureException reCheckFailure = new DataAccessResourceFailureException("connection lost");
+        when(adminRepository.existsAny()).thenReturn(false).thenThrow(reCheckFailure);
+        doThrow(saveFailure).when(adminRepository).save(any(Admin.class));
+        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+
+        MissingDefaultAdminException thrown =
+                assertThrows(MissingDefaultAdminException.class, svc::createDefaultAdminIfMissing);
+
+        assertSame(saveFailure, thrown.getCause(), "the save failure stays the cause");
+        assertEquals(List.of(reCheckFailure), List.of(thrown.getSuppressed()), "the re-check failure is kept");
+    }
+
+    // ---- Review follow-up 6b: no filter reaches the log before the admin check (#187) ----
+
+    // The filters name a buyer: an unauthorized caller must not get them written to the log.
+    @Test
+    void GivenNoAdminToken_WhenViewGlobalHistory_ThenRefusedAndTheFiltersAreNotLogged() {
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(77, null, null, null, null);
+
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            assertThrows(UnauthorizedActionException.class, () -> service.viewGlobalHistory(null, filters));
+
+            assertTrue(log.eventsContaining("buyerUserId").isEmpty(),
+                    "a refused call must not log its filters, got " + log.eventsContaining("buyerUserId"));
+        }
+    }
+
+    // ---- PR #244 review item 3: an unlocked refresh, and no probe claimed before one (#187) ----
+
+    // Bounds a failure, not a wait: each step below returns at once when the code is right.
+    private static final long BOUND_SECONDS = 5;
+
+    // A probe takes about two minutes against a hanging WSEP. The refresh holds no lock, so a close or a
+    // view must not queue behind it. The gateway is held mid-probe on a latch, never by sleeping.
+    @Test
+    void GivenARefreshHeldMidProbe_WhenCloseMarketAndViewMarketState_ThenBothCompleteWithoutWaitingForIt()
+            throws Exception {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway gateway = reachablePayment();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
+        svc.initializePlatform();
+        svc.openMarket(openRequest());
+        CountDownLatch probeEntered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(gateway.verifyConnection()).thenAnswer(invocation -> {
+            probeEntered.countDown();
+            return release.await(BOUND_SECONDS, TimeUnit.SECONDS);
+        });
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+        try {
+            Future<?> refresh = executor.submit(svc::refreshServiceReachability);
+            assertTrue(probeEntered.await(BOUND_SECONDS, TimeUnit.SECONDS),
+                    "the refresh never reached its probe");
+
+            Future<MarketStateDTO> close = executor.submit(() -> svc.closeMarket(closeRequest()));
+            Future<MarketStateDTO> view = executor.submit(() -> svc.viewMarketState(ADMIN_TOKEN));
+
+            assertEquals("CLOSED", close.get(BOUND_SECONDS, TimeUnit.SECONDS).currentStatus(),
+                    "a close must not wait for the refresh's probe");
+            assertNotNull(view.get(BOUND_SECONDS, TimeUnit.SECONDS),
+                    "a view must not wait for the refresh's probe");
+            assertFalse(refresh.isDone(), "the probe was still held while both completed");
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    // The self-heal refreshes when this returns false, so a failure before the probe must not claim one.
+    @Test
+    void GivenInitFailsBeforeItsProbe_WhenEnsureMarketOpen_ThenItReportsNoProbe() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        doThrow(new SystemIntegrityViolationException("active company 7 has no owner"))
+                .when(integrityVerifier).verify();
+        PaymentGateway gateway = reachablePayment();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
+
+        assertFalse(svc.ensureMarketOpen(), "init failed before probing WSEP, so nothing was probed");
+        verify(gateway, never()).verifyConnection();
     }
 }
