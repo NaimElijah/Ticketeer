@@ -22,6 +22,7 @@ import com.ticketing.system.catalog.application.port.in.EventDisplayInfoDTO;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.sales.application.dtoMappers.OrderReceiptMapper;
@@ -54,6 +55,9 @@ class OrderReceiptMapperFailureTest {
     private static final String ZONE_NAME = "Floor";
     private static final String COMPANY_NAME = "Acme Shows";
     private static final String BUYER_NAME = "buyer42";
+    private static final String BUYER_EMAIL = "buyer42@example.test";
+    private static final int BUYER_AGE = 30;
+    private static final int FOUNDER_ID = 1;
 
     private final OrderReceiptMapper mapper = new OrderReceiptMapper();
     private final TicketRepository ticketRepository = mock(TicketRepository.class);
@@ -70,12 +74,10 @@ class OrderReceiptMapperFailureTest {
         when(eventDisplay.describeEvent(EVENT_ID)).thenReturn(new EventDisplayInfoDTO(EVENT_ID, EVENT_NAME, COMPANY_ID,
                 "CONCERT", ZonedDateTime.of(PURCHASED_AT.plusDays(10), ZoneOffset.UTC), "Tel Aviv",
                 List.of(new EventDisplayInfoDTO.ZoneNameDTO(ZONE_ID, ZONE_NAME))));
-        ProductionCompany company = mock(ProductionCompany.class);
-        when(company.getName()).thenReturn(COMPANY_NAME);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
-        User buyer = mock(User.class);
-        when(buyer.getUsername()).thenReturn(BUYER_NAME);
-        when(userRepository.getUserById(BUYER_ID)).thenReturn(buyer);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(
+                new ProductionCompany(COMPANY_ID, FOUNDER_ID, COMPANY_NAME, CompanyStatus.ACTIVE, null, null));
+        when(userRepository.getUserById(BUYER_ID)).thenReturn(
+                new User(BUYER_ID, BUYER_NAME, BUYER_EMAIL, "unused-password-hash", BUYER_AGE));
     }
 
     // ---- a store failure propagates ----
