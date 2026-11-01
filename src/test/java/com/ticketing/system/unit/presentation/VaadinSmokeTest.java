@@ -299,6 +299,9 @@ class VaadinSmokeTest {
             "AdminDashboardView failed to construct");
     }
 
+    // A fixed instant for the market state's recorded times (ADR-008): the view only formats them.
+    private static final LocalDateTime MARKET_STATE_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     @Test
     void systemAnalyticsViewInstantiates() {
         // System Analytics dashboard wired to a presenter (UC-46 / #43, #279). The constructor
@@ -306,7 +309,7 @@ class VaadinSmokeTest {
         // market-card + KPI-stat build path without a UI context.
         SystemAnalyticsPresenter presenter = mock(SystemAnalyticsPresenter.class);
         MarketStateDTO market = new MarketStateDTO(
-            "OPEN", LocalDateTime.now(), LocalDateTime.now(), true, true, LocalDateTime.now(), true);
+            "OPEN", MARKET_STATE_AT, MARKET_STATE_AT, true, true, MARKET_STATE_AT, true);
         SystemAnalyticsDTO analytics = new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
         when(presenter.load()).thenReturn(
             new SystemAnalyticsPresenter.Outcome.Success(market, analytics));
