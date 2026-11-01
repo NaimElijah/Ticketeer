@@ -3,6 +3,7 @@ package com.ticketing.system.unit.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -20,6 +21,7 @@ import com.ticketing.system.notifications.application.service.NotificationServic
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
+import com.ticketing.system.shared.event.OutreachSentNotice;
 
 class NotificationServiceTest {
 
@@ -53,5 +55,31 @@ class NotificationServiceTest {
         assertEquals("You have a pending manager appointment for company 'Acme'. Please accept or reject it.",
                 notification.getMessage());
         assertEquals(Map.of("companyId", 100, "companyName", "Acme"), notification.getData());
+    }
+
+    // ---- An outreach to more recipients than the notification queue holds drops alerts (#187) ----
+
+    // Each recipient's notification reads as a single new message would, and the send's notifications
+    // reach the dispatcher in one call, so they are stored in one transaction.
+    @Test
+    void GivenTwoOutreachRecipients_WhenNotifyOutreach_ThenOneNewMessageNotificationEachIsDispatchedTogether() {
+        service.notifyOutreach(List.of(
+                new OutreachSentNotice.Recipient(7, "conv-7"), new OutreachSentNotice.Recipient(8, "conv-8")),
+                "a system admin", "Venue change", "Hall B.");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Notification>> sent = ArgumentCaptor.forClass(List.class);
+        verify(dispatcher).dispatchAll(sent.capture());
+        verifyNoMoreInteractions(dispatcher);
+        List<Notification> notifications = sent.getValue();
+        assertEquals(List.of(7, 8), notifications.stream().map(Notification::getRecipientUserId).toList());
+        for (Notification n : notifications) {
+            assertEquals(NotificationType.DIRECT_MESSAGE, n.getType());
+            assertEquals(NotificationStatus.PENDING, n.getStatus());
+            assertEquals("New message from a system admin: Venue change", n.getMessage());
+            assertEquals(LocalDateTime.ofInstant(T0, ZoneOffset.UTC), n.getCreatedAt());
+            assertEquals(Map.of("conversationId", "conv-" + n.getRecipientUserId(), "senderLabel", "a system admin",
+                    "subject", "Venue change", "snippet", "Hall B."), n.getData());
+        }
     }
 }

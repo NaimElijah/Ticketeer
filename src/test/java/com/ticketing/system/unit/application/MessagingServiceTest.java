@@ -1,6 +1,8 @@
 package com.ticketing.system.unit.application;
 
+import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -16,10 +18,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.dto.ComplaintFilterDTO;
@@ -32,6 +37,7 @@ import com.ticketing.system.shared.dto.StartConversationRequestDTO;
 import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.NewMessageNotice;
+import com.ticketing.system.shared.event.OutreachSentNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
@@ -142,6 +148,14 @@ class MessagingServiceTest {
                 && notice.recipientUserId() == recipientUserId                     // targeted recipient
                 && (conversationId == null || conversationId.equals(notice.conversationId())) // optional convo id
                 && (subject == null || subject.equals(notice.subject())));         // optional subject
+    }
+
+    // Mockito matcher for the single OutreachSentNotice of a send, naming exactly these recipients in
+    // this order. An outreach publishes one notice for the whole send, never one per recipient (#187).
+    private static Object publishedOutreachTo(int... recipientUserIds) {
+        return argThat((Object event) -> event instanceof OutreachSentNotice notice
+                && Arrays.equals(recipientUserIds, notice.recipients().stream()
+                        .mapToInt(OutreachSentNotice.Recipient::recipientUserId).toArray()));
     }
 
     // --- startConversation (II.3.10) ---
@@ -329,8 +343,7 @@ class MessagingServiceTest {
 
         assertEquals(2, result.recipientCount());
         assertEquals(2, conversationRepository.findByType(ConversationType.DIRECT).size());
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER_ID, null, "Notice"));
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER2_ID, null, "Notice"));
+        verify(eventPublisher).publishEvent(publishedOutreachTo(MEMBER_ID, MEMBER2_ID));
     }
 
     @Test
@@ -343,7 +356,7 @@ class MessagingServiceTest {
         assertEquals(1, convs.size());
         assertEquals(ParticipantType.MEMBER, convs.get(0).getCounterpartyType());
         assertEquals(MEMBER2_ID, convs.get(0).getCounterpartyId());
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER2_ID, null, null));
+        verify(eventPublisher).publishEvent(publishedOutreachTo(MEMBER2_ID));
     }
 
     @Test
@@ -360,7 +373,7 @@ class MessagingServiceTest {
         // Producers resolve to the owners' member accounts — the thread targets a MEMBER, not a COMPANY.
         assertEquals(ParticipantType.MEMBER, convs.get(0).getCounterpartyType());
         assertEquals(OWNER_ID, convs.get(0).getCounterpartyId());
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(OWNER_ID, null, null));
+        verify(eventPublisher).publishEvent(publishedOutreachTo(OWNER_ID));
     }
 
     @Test
@@ -567,5 +580,27 @@ class MessagingServiceTest {
         User u = mock(User.class);
         when(u.getUserId()).thenReturn(userId);
         return u;
+    }
+
+    // ---- An outreach to more recipients than the notification queue holds drops alerts (#187) ----
+
+    @Test
+    void GivenThreeRecipients_WhenSendOutreach_ThenOneNoticeNamesEachRecipientWithTheConversationOpenedForThem() {
+        service.sendOutreach(ADMIN_TOKEN, new OutreachRequestDTO("Venue change", "The show moves to Hall B.",
+                List.of(MEMBER_ID, OWNER_ID, OUTSIDER_ID), false, false));
+
+        ArgumentCaptor<Object> published = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(published.capture());
+        OutreachSentNotice notice = assertInstanceOf(OutreachSentNotice.class, published.getValue());
+        Map<Integer, String> conversationOf = conversationRepository.findByType(ConversationType.DIRECT).stream()
+                .collect(toMap(Conversation::getCounterpartyId, Conversation::getConversationId));
+        assertEquals(List.of(
+                new OutreachSentNotice.Recipient(MEMBER_ID, conversationOf.get(MEMBER_ID)),
+                new OutreachSentNotice.Recipient(OWNER_ID, conversationOf.get(OWNER_ID)),
+                new OutreachSentNotice.Recipient(OUTSIDER_ID, conversationOf.get(OUTSIDER_ID))),
+                notice.recipients());
+        assertEquals("a system admin", notice.senderLabel());
+        assertEquals("Venue change", notice.subject());
+        assertEquals("The show moves to Hall B.", notice.snippet());
     }
 }

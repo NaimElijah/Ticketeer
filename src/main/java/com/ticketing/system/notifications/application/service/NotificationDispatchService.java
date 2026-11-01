@@ -51,6 +51,26 @@ public class NotificationDispatchService {
         notificationRepository.save(notification);
     }
 
+    /**
+     * Persists a batch of notifications as PENDING in one transaction, for a single business event
+     * with many recipients (an admin outreach). Every notification is checked before any is saved, so
+     * a bad batch stores nothing. Logs once for the batch rather than once per notification.
+     *
+     * @param notifications the batch, each PENDING
+     * @throws IllegalArgumentException if any notification is not PENDING; none is saved
+     */
+    @Transactional
+    public void dispatchAll(List<Notification> notifications) {
+        for (Notification notification : notifications) {
+            if (!notification.isPending()) {
+                throw new IllegalArgumentException("dispatchAll() requires PENDING notifications, but got status: "
+                        + notification.getStatus());
+            }
+        }
+        log.info("Dispatching {} notifications in one batch", notifications.size());
+        notifications.forEach(notificationRepository::save);
+    }
+
     // UC-35: triggered from a domain event.
     public void dispatchFromEvent(Object domainEvent) {
         // This will eventually resolve the notification details from the event 

@@ -22,6 +22,7 @@ import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.messaging.application.dtoMappers.ConversationMapper;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.NewMessageNotice;
+import com.ticketing.system.shared.event.OutreachSentNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -245,6 +246,8 @@ public class MessagingService {
     // II.6.3.2 — admin proactive messaging. Resolves the recipient set (explicit members, and/or
     // all members, and/or all producers' owner accounts), then opens one two-way DIRECT
     // conversation per recipient so each lands in that member's Support Inbox as a chat.
+    // The whole send publishes one OutreachSentNotice, not one notice per recipient: the notify-
+    // queue is bounded and drops what does not fit (ADR-004, #187).
     @Transactional
     public OutreachResultDTO sendOutreach(String token, OutreachRequestDTO request) {
         int adminId = requireSystemAdmin(token);
@@ -273,6 +276,7 @@ public class MessagingService {
         }
 
         List<Conversation> created = new ArrayList<>();
+        List<OutreachSentNotice.Recipient> notified = new ArrayList<>();
         for (Integer memberId : recipientIds) {
             Conversation conversation = Conversation.start(
                     ConversationType.DIRECT,
@@ -280,10 +284,11 @@ public class MessagingService {
                     memberId, ParticipantType.MEMBER,
                     request.subject(), request.body(), LocalDateTime.now(clock));
             conversationRepository.save(conversation);
-            publishNewMessage(memberId, conversation.getConversationId(),
-                    senderLabel(ParticipantType.ADMIN), request.subject(), request.body());
             created.add(conversation);
+            notified.add(new OutreachSentNotice.Recipient(memberId, conversation.getConversationId()));
         }
+        eventPublisher.publishEvent(new OutreachSentNotice(notified,
+                senderLabel(ParticipantType.ADMIN), request.subject(), snippet(request.body())));
 
         log.info("Admin {} sent outreach to {} recipient(s)", adminId, created.size());
         return new OutreachResultDTO(created.size(), created.get(0).getConversationId());

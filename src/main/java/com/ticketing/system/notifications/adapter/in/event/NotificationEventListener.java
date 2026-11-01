@@ -10,6 +10,7 @@ import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.NewMessageNotice;
+import com.ticketing.system.shared.event.OutreachSentNotice;
 import com.ticketing.system.shared.event.OwnerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.PurchaseCompletedNotice;
 import com.ticketing.system.shared.event.PurchaseFailedNotice;
@@ -126,6 +127,17 @@ public class NotificationEventListener {
     public void on(RoleChangedNotice notice) {
         notificationService.notifyRoleChanged(
                 notice.userId(), notice.companyId(), notice.companyName(), notice.newRole());
+    }
+
+    /**
+     * Raises a direct-message notification for every recipient of an admin outreach, all stored in
+     * one transaction. The send arrives as one notice, so it takes one slot in the {@code notify-}
+     * queue however many recipients it has (#187).
+     */
+    @TransactionalEventListener(fallbackExecution = true)
+    public void on(OutreachSentNotice notice) {
+        notificationService.notifyOutreach(
+                notice.recipients(), notice.senderLabel(), notice.subject(), notice.snippet());
     }
 
     /** Raises a direct-message notification when a new message arrives for a recipient. */

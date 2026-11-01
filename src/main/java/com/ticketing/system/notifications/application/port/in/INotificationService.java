@@ -2,6 +2,8 @@ package com.ticketing.system.notifications.application.port.in;
 
 import java.util.List;
 
+import com.ticketing.system.shared.event.OutreachSentNotice;
+
 // High-level, application-facing notification facade. Each notifyXxx method translates a
 // business event into a Notification domain object and delegates to NotificationDispatchService,
 // which persists it and routes delivery. The low-level push channel (WebSocket / SSE / email)
@@ -47,6 +49,19 @@ public interface INotificationService {
      */
     void notifyNewMessage(int recipientUserId, String conversationId, String senderLabel,
             String subject, String snippet);
+
+    /**
+     * Raises one DIRECT_MESSAGE notification per recipient of an admin outreach, each reading as
+     * {@link #notifyNewMessage} would for that recipient and conversation, and stores them all in one
+     * transaction: a failure stores none of them.
+     *
+     * @param recipients  every recipient and the conversation opened for them, at least one
+     * @param senderLabel human-readable origin, e.g. "a system admin"
+     * @param subject     the conversations' shared subject; null reads as empty
+     * @param snippet     a short preview of the message body; null reads as empty
+     */
+    void notifyOutreach(List<OutreachSentNotice.Recipient> recipients, String senderLabel, String subject,
+            String snippet);
 
     /** Mark a single notification as READ (SENT → READ). No-op if already READ. */
     void markRead(int userId, String notificationId);
