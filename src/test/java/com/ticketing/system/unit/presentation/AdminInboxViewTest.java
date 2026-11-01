@@ -9,7 +9,10 @@ import static com.ticketing.system.unit.presentation.InboxViewHarness.thread;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
@@ -47,6 +50,29 @@ class AdminInboxViewTest {
     @AfterEach
     void tearDown() {
         harness.close();
+    }
+
+    // ---- Review item 4: only an explicit open marks a thread read ----
+    //
+    // The view selects the first row on its own when it loads; that row is shown, not opened, because
+    // an open marks the thread read for the reader's whole side.
+
+    @Test
+    void GivenAnInboxOfTwoThreads_WhenTheViewIsBuilt_ThenNoThreadIsOpenedAndEveryBadgeStays() {
+        AdminInboxView view = new AdminInboxView(presenter, displayTime());
+
+        verify(presenter, never()).open(any(), any(), any());
+        assertEquals(List.of("2", "2"), rows(view).stream().map(InboxViewHarness::badge).toList());
+    }
+
+    @Test
+    void GivenAnInboxOfTwoThreads_WhenTheReaderClicksTheSecondRow_ThenOnlyThatThreadIsOpened() {
+        AdminInboxView view = new AdminInboxView(presenter, displayTime());
+
+        click(rows(view).get(1));
+
+        verify(presenter).open(any(), eq(second), any());
+        verify(presenter, never()).open(any(), eq(first), any());
     }
 
     // ---- Review item 3: an open's outcome ----

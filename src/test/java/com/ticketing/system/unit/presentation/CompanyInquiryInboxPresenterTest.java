@@ -317,7 +317,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void GivenALoadedInbox_WhenItsRowsAreRenderedWithoutAnOpen_ThenNothingIsMarkedReadAndTheBadgeStays() {
+    void GivenAnUnreadThread_WhenTheInboxIsLoadedAndBadged_ThenNothingIsMarkedReadAndTheBadgeShowsTheUnreadCount() {
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
         when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder")));
         when(messaging.viewCompanyInbox(TOKEN, 7)).thenReturn(List.of(thread));

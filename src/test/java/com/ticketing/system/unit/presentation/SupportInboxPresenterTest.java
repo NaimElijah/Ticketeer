@@ -205,7 +205,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void GivenALoadedInbox_WhenItsRowsAreRenderedWithoutAnOpen_ThenNothingIsMarkedReadAndTheBadgeStays() {
+    void GivenAnUnreadThread_WhenTheInboxIsLoadedAndBadged_ThenNothingIsMarkedReadAndTheBadgeShowsTheUnreadCount() {
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
         when(service.viewMyConversations(TOKEN)).thenReturn(List.of(thread));
         List<ConversationDTO> listed = assertInstanceOf(SupportInboxPresenter.Outcome.Success.class,

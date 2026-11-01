@@ -4,12 +4,17 @@ import static com.ticketing.system.unit.presentation.InboxViewHarness.SESSION_EX
 import static com.ticketing.system.unit.presentation.InboxViewHarness.badge;
 import static com.ticketing.system.unit.presentation.InboxViewHarness.click;
 import static com.ticketing.system.unit.presentation.InboxViewHarness.displayTime;
+import static com.ticketing.system.unit.presentation.InboxViewHarness.find;
 import static com.ticketing.system.unit.presentation.InboxViewHarness.rows;
 import static com.ticketing.system.unit.presentation.InboxViewHarness.thread;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
@@ -23,8 +28,10 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.ui.components.kit.LkFilterChip;
 import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
 import com.ticketing.system.ui.views.company.CompanyInquiryInboxView;
+import com.vaadin.flow.component.html.NativeButton;
 
 /**
  * {@link CompanyInquiryInboxView} with a mocked presenter: which threads the view opens, and what it
@@ -50,6 +57,41 @@ class CompanyInquiryInboxViewTest {
     @AfterEach
     void tearDown() {
         harness.close();
+    }
+
+    // ---- Review item 4: only an explicit open marks a thread read ----
+    //
+    // The view selects a row on its own when it loads and when the status filter re-renders the list;
+    // that row is shown, not opened, because an open marks the thread read for the reader's whole side.
+
+    @Test
+    void GivenAnInboxOfTwoThreads_WhenTheViewIsBuilt_ThenNoThreadIsOpenedAndEveryBadgeStays() {
+        CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+
+        verify(presenter, never()).open(any(), any(), any());
+        assertEquals(List.of("2", "2"), rows(view).stream().map(InboxViewHarness::badge).toList());
+    }
+
+    @Test
+    void GivenAnInboxOfTwoThreads_WhenTheReaderClicksTheSecondRow_ThenOnlyThatThreadIsOpened() {
+        CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+
+        click(rows(view).get(1));
+
+        verify(presenter).open(any(), eq(second), any());
+        verify(presenter, never()).open(any(), eq(first), any());
+    }
+
+    // The filter hides the selected (closed) thread, so the view selects the open one on its own.
+    @Test
+    void GivenAnInboxOfTwoThreads_WhenTheStatusFilterLeavesOnlyTheSecond_ThenTheViewSelectsItWithoutOpeningIt() {
+        CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        clearInvocations(presenter);
+
+        applyStatusFilter(view, "Open");
+
+        assertEquals(1, rows(view).size());
+        verify(presenter, never()).open(any(), any(), any());
     }
 
     // ---- Review item 3: an open's outcome ----
@@ -96,5 +138,19 @@ class CompanyInquiryInboxViewTest {
 
         assertNull(badge(rows(view).get(1)));
         assertEquals(List.of(), harness.toasts());
+    }
+
+    // Picks the option in the Status chip's menu, then presses its Apply button, as the reader does.
+    private static void applyStatusFilter(CompanyInquiryInboxView view, String option) {
+        click(menuButton(view, option));
+        click(menuButton(view, "Apply"));
+    }
+
+    private static NativeButton menuButton(CompanyInquiryInboxView view, String text) {
+        LkFilterChip chip = find(view, LkFilterChip.class).get(0);
+        return find(chip, NativeButton.class).stream()
+            .filter(button -> text.equals(button.getElement().getTextRecursively()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no '" + text + "' button in the Status chip"));
     }
 }

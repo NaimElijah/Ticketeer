@@ -280,7 +280,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void GivenALoadedInbox_WhenItsRowsAreRenderedWithoutAnOpen_ThenNothingIsMarkedReadAndTheBadgeStays() {
+    void GivenAnUnreadThread_WhenTheInboxIsLoadedAndBadged_ThenNothingIsMarkedReadAndTheBadgeShowsTheUnreadCount() {
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
         when(messaging.viewAllComplaints(eq(TOKEN), any())).thenReturn(List.of(thread));
         List<ConversationDTO> listed = assertInstanceOf(AdminComplaintQueuePresenter.Outcome.Success.class,
