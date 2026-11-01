@@ -36,17 +36,20 @@ public class NotificationBellPresenter {
     }
 
     /**
-     * Mark one notification read for the signed-in member.
+     * Mark one notification read for the signed-in member. An admin session marks nothing.
      *
      * @param notificationId the notification the member clicked
-     * @return {@link MarkReadOutcome.Success} once the read is stored; {@link MarkReadOutcome.NotAuthenticated}
-     *         when nobody is signed in; {@link MarkReadOutcome.Failure} with the reason to show when the
-     *         store refused it. Only on success does the bell show the item read, so it agrees with what
-     *         the next login delivers
+     * @return {@link MarkReadOutcome.Success} once the read is stored;
+     *         {@link MarkReadOutcome.NotAuthenticated} when no member is signed in, an admin session
+     *         included; {@link MarkReadOutcome.Failure} with the reason to show when the store refused it.
+     *         Only on success does the bell show the item read, so it agrees with what the next login
+     *         delivers
      */
     public MarkReadOutcome markRead(String notificationId) {
         Integer userId = AuthSession.userId();
-        if (userId == null) {
+        // Admin and member ids share one id space (ADR-012): an admin's id would name a member's
+        // notifications, so an admin session marks nothing, as the poller and session listener skip it.
+        if (userId == null || AuthSession.isAdmin()) {
             return new MarkReadOutcome.NotAuthenticated();
         }
         try {

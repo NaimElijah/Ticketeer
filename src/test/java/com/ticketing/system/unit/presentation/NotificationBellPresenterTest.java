@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
 
@@ -103,6 +104,19 @@ class NotificationBellPresenterTest {
 
         assertInstanceOf(MarkReadOutcome.NotAuthenticated.class, outcome, "with nobody signed in there is no read to store");
         verify(notificationService, never()).markRead(anyInt(), anyString());
+    }
+
+    // Admin and member ids share one id space (ADR-012), so an admin's id would name some member's
+    // notifications; the poller and the session listener skip admins for the same reason.
+    @Test
+    void GivenAnAdminSession_WhenMarkRead_ThenItIsNotAuthenticatedAndNothingIsCalled() {
+        AuthSession.storeAuth(new AuthTokenDTO(TOKEN, 0L, USER_ID, "admin", true));
+
+        MarkReadOutcome outcome = presenter.markRead(NOTIFICATION_ID);
+
+        assertInstanceOf(MarkReadOutcome.NotAuthenticated.class, outcome,
+                "an admin session has no member notifications to mark");
+        verifyNoInteractions(notificationService);
     }
 
     private static void signIn() {
