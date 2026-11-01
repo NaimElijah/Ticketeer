@@ -39,23 +39,28 @@ public class NotificationBellPresenter {
      * Mark one notification read for the signed-in member.
      *
      * @param notificationId the notification the member clicked
-     * @return whether the read was stored; {@code false} when nobody is signed in or the store failed,
-     *         so the bell keeps the item unread and agrees with what the next login delivers
+     * @return {@link MarkReadOutcome.Success} once the read is stored; {@link MarkReadOutcome.NotAuthenticated}
+     *         when nobody is signed in; {@link MarkReadOutcome.Failure} with the reason to show when the
+     *         store refused it. Only on success does the bell show the item read, so it agrees with what
+     *         the next login delivers
      */
-    public boolean markRead(String notificationId) {
+    public MarkReadOutcome markRead(String notificationId) {
         Integer userId = AuthSession.userId();
         if (userId == null) {
-            return false;
+            return new MarkReadOutcome.NotAuthenticated();
         }
         try {
             notificationService.markRead(userId, notificationId);
-            return true;
+            return new MarkReadOutcome.Success();
         } catch (RuntimeException e) {
-            // Handled by leaving the item unread. The bell shows no message, so the text is discarded;
-            // the call is for its logging: like every presenter, an internal failure is logged at ERROR
-            // with the exception, which LoggingAspect's one-line WARN does not carry.
-            ServiceErrors.userMessage(e);
-            return false;
+            return new MarkReadOutcome.Failure(ServiceErrors.userMessage(e));
         }
+    }
+
+    /** What became of one mark-read: stored, nobody signed in, or refused with a reason to show. */
+    public sealed interface MarkReadOutcome {
+        record Success() implements MarkReadOutcome { }
+        record NotAuthenticated() implements MarkReadOutcome { }
+        record Failure(String reason) implements MarkReadOutcome { }
     }
 }

@@ -1,8 +1,7 @@
 package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -24,15 +23,16 @@ import com.ticketing.system.notifications.application.port.in.INotificationServi
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.presenters.notifications.NotificationBellPresenter;
+import com.ticketing.system.ui.presenters.notifications.NotificationBellPresenter.MarkReadOutcome;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * {@link NotificationBellPresenter#markRead} tells the bell whether the read was stored, so the bell
- * marks the item read only when the store agrees and the unread badge never hides a notification the
- * next login shows again (#187).
+ * {@link NotificationBellPresenter#markRead} tells the bell whether the read was stored, and why not, so
+ * the bell marks the item read only when the store agrees, the unread badge never hides a notification
+ * the next login shows again, and a refused read is reported (#187).
  */
 class NotificationBellPresenterTest {
 
@@ -59,45 +59,49 @@ class NotificationBellPresenterTest {
     void GivenASignedInMemberAndAWorkingStore_WhenMarkRead_ThenTheReadIsStoredAndReportedAsDone() {
         signIn();
 
-        boolean marked = presenter.markRead(NOTIFICATION_ID);
+        MarkReadOutcome outcome = presenter.markRead(NOTIFICATION_ID);
 
-        assertTrue(marked, "a read the store saved should be reported as done");
+        assertInstanceOf(MarkReadOutcome.Success.class, outcome, "a read the store saved should be reported as done");
         verify(notificationService).markRead(USER_ID, NOTIFICATION_ID);
     }
 
     @Test
-    void GivenTheStoreFails_WhenMarkRead_ThenItIsReportedAsNotDone() {
+    void GivenTheStoreIsUnreachable_WhenMarkRead_ThenItFailsWithTheOutageMessage() {
         signIn();
         doThrow(new DataAccessResourceFailureException("store unavailable"))
                 .when(notificationService).markRead(USER_ID, NOTIFICATION_ID);
 
-        boolean marked = presenter.markRead(NOTIFICATION_ID);
+        MarkReadOutcome outcome = presenter.markRead(NOTIFICATION_ID);
 
-        assertFalse(marked, "a read the store did not save should be reported as not done, so the bell keeps it unread");
+        MarkReadOutcome.Failure failure = assertInstanceOf(MarkReadOutcome.Failure.class, outcome,
+                "a read the store did not save should be reported as not done, so the bell keeps it unread");
+        assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, failure.reason());
     }
 
     // LoggingAspect logs a failed service call at WARN with its message only, no stack; an internal
     // failure needs the ERROR with the exception that ServiceErrors writes for every presenter.
     @Test
-    void GivenAnInternalFailure_WhenMarkRead_ThenItIsReportedAsNotDoneAndLoggedAtErrorWithTheException() {
+    void GivenAnInternalFailure_WhenMarkRead_ThenItFailsWithTheGenericTextAndIsLoggedAtErrorWithTheException() {
         signIn();
         doThrow(new PersistenceException("mapping broke"))
                 .when(notificationService).markRead(USER_ID, NOTIFICATION_ID);
 
         try (LogCapture logs = LogCapture.of(ServiceErrors.class)) {
-            boolean marked = presenter.markRead(NOTIFICATION_ID);
+            MarkReadOutcome outcome = presenter.markRead(NOTIFICATION_ID);
 
-            assertFalse(marked, "a read the store did not save should be reported as not done");
+            MarkReadOutcome.Failure failure = assertInstanceOf(MarkReadOutcome.Failure.class, outcome,
+                    "a read the store did not save should be reported as not done");
+            assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.reason());
             assertEquals(List.of(PersistenceException.class.getName()), logs.throwableClassNamesAt(Level.ERROR),
                     "an internal failure should be logged at ERROR with the exception attached");
         }
     }
 
     @Test
-    void GivenNoSignedInMember_WhenMarkRead_ThenNothingIsStoredAndItIsReportedAsNotDone() {
-        boolean marked = presenter.markRead(NOTIFICATION_ID);
+    void GivenNoSignedInMember_WhenMarkRead_ThenNothingIsStoredAndItIsNotAuthenticated() {
+        MarkReadOutcome outcome = presenter.markRead(NOTIFICATION_ID);
 
-        assertFalse(marked, "with nobody signed in there is no read to store");
+        assertInstanceOf(MarkReadOutcome.NotAuthenticated.class, outcome, "with nobody signed in there is no read to store");
         verify(notificationService, never()).markRead(anyInt(), anyString());
     }
 
