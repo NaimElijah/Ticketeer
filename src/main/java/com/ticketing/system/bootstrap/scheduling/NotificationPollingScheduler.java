@@ -30,6 +30,9 @@ import java.util.List;
 @Slf4j
 public class NotificationPollingScheduler {
 
+    // What a failure's log line shows for the user id when it fails before the member is resolved.
+    private static final String UNKNOWN_USER_ID = "unknown";
+
     private final ActiveUiRegistry uiRegistry;
     private final NotificationDispatchService dispatchService;
     private final SessionIdentity sessionIdentity;
@@ -51,7 +54,7 @@ public class NotificationPollingScheduler {
     public void poll() {
         for (UI ui : uiRegistry.getActiveUIs()) {
             try {
-                ui.access(this::deliverToCurrentUi);
+                ui.access(() -> deliverTo(ui));
             } catch (UIDetachedException detached) {
                 // The UI closed between the registry read and this access; the others still get theirs.
                 log.debug("skipping a UI that detached before its notification poll");
@@ -60,15 +63,17 @@ public class NotificationPollingScheduler {
     }
 
     // Runs under the UI's session lock, so the session state read here is that UI's.
-    private void deliverToCurrentUi() {
+    private void deliverTo(UI ui) {
+        String userId = UNKNOWN_USER_ID;
         try {
             // Notifications are addressed by bare user id, and admin ids share the member id space, so only a
             // live member's id may drain an inbox (ADR-012).
-            int userId = sessionIdentity.memberUserId();
-            if (userId == SessionIdentity.NO_MEMBER_USER_ID) {
+            int memberId = sessionIdentity.memberUserId();
+            if (memberId == SessionIdentity.NO_MEMBER_USER_ID) {
                 return;
             }
-            List<NotificationDTO> fresh = dispatchService.deliverPending(userId);
+            userId = String.valueOf(memberId);
+            List<NotificationDTO> fresh = dispatchService.deliverPending(memberId);
             if (fresh.isEmpty()) {
                 return;
             }
@@ -78,7 +83,8 @@ public class NotificationPollingScheduler {
                 bell.refresh();
             }
         } catch (RuntimeException e) {
-            log.warn("notification poll failed for one UI; it is polled again on the next tick", e);
+            log.warn("notification poll failed: uiId={} userId={}; the UI is polled again on the next tick",
+                    ui.getUIId(), userId, e);
         }
     }
 }

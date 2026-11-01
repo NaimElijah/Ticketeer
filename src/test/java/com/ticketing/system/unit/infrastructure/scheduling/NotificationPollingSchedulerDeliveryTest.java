@@ -57,6 +57,7 @@ class NotificationPollingSchedulerDeliveryTest {
     // ---- Defect 9: the poller skips detached UIs and dead tokens (#187) ----
 
     private static final int MEMBER_ID = 1;
+    private static final int UI_ID = 42;
     private static final String LIVE_TOKEN = "live-member-jwt";
     private static final String DEAD_TOKEN = "dead-member-jwt";
     private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
@@ -147,6 +148,26 @@ class NotificationPollingSchedulerDeliveryTest {
             assertTrue(attached.contains(IllegalStateException.class.getName()),
                     "the failed delivery must be logged with its exception attached, but the attached throwables were "
                             + attached);
+        });
+    }
+
+    // ---- F7: the failure names the UI and, once known, the member, as key=value (#187) ----
+
+    @Test
+    void GivenDeliveryFails_WhenPoll_ThenTheWarningNamesTheUiAndTheMember() {
+        AuthSession.storeAuth(memberToken(LIVE_TOKEN));
+        UI ui = uiRunningAccessInline();
+        when(ui.getUIId()).thenReturn(UI_ID);
+        activeUis(ui);
+        when(dispatchService.deliverPending(MEMBER_ID)).thenThrow(new IllegalStateException("dispatch store unavailable"));
+
+        withPoller(poller -> {
+            poller.poll();
+
+            List<String> warnings = logs.messagesAt(Level.WARN);
+            assertTrue(warnings.stream().anyMatch(message -> message.contains("uiId=" + UI_ID)
+                            && message.contains("userId=" + MEMBER_ID)),
+                    "the failure's WARN must carry uiId and userId as key=value, but the WARNs were " + warnings);
         });
     }
 
