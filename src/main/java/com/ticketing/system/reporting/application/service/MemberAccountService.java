@@ -14,7 +14,6 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
 
-import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
@@ -48,49 +47,41 @@ public class MemberAccountService {
         this.eventDisplayPort = eventDisplayPort;
     }
 
-    // UC-16: comprehensive personal purchase history + real-time status of upcoming
-    // tickets.
-    // Authorization is a domain concern: only returns history for the authenticated
-    // user.
+    /**
+     * UC-16: the signed-in member's purchase history, each order with its tickets' current status.
+     *
+     * <p>The member is the one the token names, exactly as in {@link #viewMyReceipt}. The
+     * {@code userId} the DTO carries is ignored: a caller can set it to anyone.
+     *
+     * @param authToken the member's credential; only its {@code token} is read
+     * @return the member's orders, empty only when the member has bought nothing
+     * @throws InvalidTokenException if the token is missing or blank, or the session manager rejects it
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException if the session has expired
+     * @throws RuntimeException a failure of the receipt, ticket or catalog store, propagated unchanged
+     *         so it is never shown as an empty history (#192)
+     */
     public PurchaseHistoryDTO viewMyHistory(AuthTokenDTO authToken) {
-        try {
-            log.debug("Received request to view purchase history.");
-            if (!authenticationService.validateToken(authToken.token())) {
-                throw new SecurityException("Invalid auth token");
-            }
-            int userId = authenticationService.extractUserId(authToken.token());
-            log.debug("User {} requested purchase history.", userId);
-            List<OrderReceipt> receipts = orderReceiptRepository.findByHolderUserId(userId);
-            List<PurchaseRecordDTO> purchaseRecords = new ArrayList<>();
-
-            OrderReceiptMapper receiptMapper = new OrderReceiptMapper();
-            for (OrderReceipt receipt : receipts) {
-                // Resolve event + zone names via eventRepository; buyer is the member
-                // themselves and company is not shown on the account view, so pass null.
-                purchaseRecords.add(receiptMapper.toPurchaseRecordDTO(
-                        receipt, ticketRepository, eventDisplayPort, null, null));
-            }
-
-            log.info("Successfully retrieved purchase history for userId={}, recordsCount={}", userId,
-                    purchaseRecords.size());
-            return new PurchaseHistoryDTO(purchaseRecords);
-
-        } catch (SecurityException e) {
-            log.error("Error retrieving purchase history for user {}: {}",
-                    authenticationService.extractUserId(authToken.token()), e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected error retrieving purchase history for user {}: {}",
-                    authenticationService.extractUserId(authToken.token()), e.getMessage(), e);
+        String token = authToken == null ? null : authToken.token();
+        if (!authenticationService.validateToken(token)) {
+            throw new InvalidTokenException();
         }
-        return new PurchaseHistoryDTO(new ArrayList<>()); // Return empty history on failure.
+        int userId = authenticationService.extractUserId(token);
+
+        OrderReceiptMapper receiptMapper = new OrderReceiptMapper();
+        // The buyer is the member themselves and the account view shows no company, so neither
+        // repository is passed (the mapper leaves those names null).
+        List<PurchaseRecordDTO> purchaseRecords = orderReceiptRepository.findByHolderUserId(userId).stream()
+                .map(receipt -> receiptMapper.toPurchaseRecordDTO(
+                        receipt, ticketRepository, eventDisplayPort, null, null))
+                .toList();
+
+        log.info("Retrieved purchase history for userId={}, recordsCount={}", userId, purchaseRecords.size());
+        return new PurchaseHistoryDTO(purchaseRecords);
     }
 
-    // UC-16 (single receipt): one member-owned order, enriched for the receipt page
-    // (#276).
-    // Unlike viewMyHistory (which degrades to an empty list), this THROWS so the
-    // presenter can
-    // tell apart auth failure, a missing receipt, and a receipt that isn't the
-    // caller's (403).
+    // UC-16 (single receipt): one member-owned order, enriched for the receipt page (#276). It
+    // throws, as viewMyHistory does, so the presenter can tell apart an auth failure, a missing
+    // receipt, and a receipt that isn't the caller's (403).
     public PurchaseRecordDTO viewMyReceipt(String token, int receiptId) {
         log.info("Received request to view receipt {} for the authenticated member", receiptId);
         if (!authenticationService.validateToken(token)) {

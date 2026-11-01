@@ -9,6 +9,7 @@ import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.buyer.BzRefundDialog;
 import com.ticketing.system.ui.components.buyer.BzTicketDialog;
 import com.ticketing.system.ui.components.kit.Lk;
+import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkGrid;
 import com.ticketing.system.ui.components.kit.LkIcon;
@@ -46,7 +47,6 @@ public class MyAccountView extends LkPage {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
 
-    private final PurchaseHistoryDTO history;
     private final RefundPresenter refundPresenter;
     private final SessionIdentity sessionIdentity;
     private final DisplayTime displayTime;
@@ -54,21 +54,28 @@ public class MyAccountView extends LkPage {
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
                          SessionIdentity sessionIdentity, DisplayTime displayTime) {
         this.displayTime = displayTime;   // the rows below are rendered during construction
-        this.history = switch (presenter.loadHistory()) {
-            case MyAccountPresenter.Outcome.Success success -> success.history();
-            case MyAccountPresenter.Outcome.Failure failure -> new PurchaseHistoryDTO(List.of());
-        };
         this.refundPresenter = refundPresenter;
         this.sessionIdentity = sessionIdentity;
 
-        add(buildHero());
-        add(Lk.h2("My Orders"));
-        add(buildOrdersCard());
-        add(Lk.h2("My Tickets"));
-        add(buildTicketsCard());
+        Div hero = buildHero();
+        add(hero);
+        switch (presenter.loadHistory()) {
+            case MyAccountPresenter.Outcome.Success success -> {
+                PurchaseHistoryDTO history = success.history();
+                hero.add(buildStats(history));
+                add(Lk.h2("My Orders"));
+                add(buildOrdersCard(history));
+                add(Lk.h2("My Tickets"));
+                add(buildTicketsCard(history));
+            }
+            // No counts and no empty cards: "0 orders" would tell the member they bought nothing (#192).
+            case MyAccountPresenter.Outcome.Failure failure -> add(new LkBanner(LkBanner.Tone.error,
+                    new LkIcon("warning", 16),
+                    Lk.withReason("Could not load your orders and tickets", failure.reason())));
+        }
     }
 
-    private Component buildHero() {
+    private Div buildHero() {
         String name = AuthSession.displayName();
         if (name == null || name.isBlank()) name = "there";
         String first = name.split("\\s+")[0];
@@ -86,6 +93,11 @@ public class MyAccountView extends LkPage {
         sub.getStyle().set("color", "rgba(255,255,255,0.9)").set("font-size", "14.5px");
         meta.add(welcome, sub);
 
+        hero.add(avatar, meta);
+        return hero;
+    }
+
+    private Div buildStats(PurchaseHistoryDTO history) {
         int orderCount = history.records().size();
         long ticketCount = history.records().stream().mapToLong(r -> r.tickets().size()).sum();
 
@@ -93,9 +105,7 @@ public class MyAccountView extends LkPage {
         stats.addClassName("acct-hero-stats");
         stats.add(statBlock(String.valueOf(orderCount), orderCount == 1 ? "order" : "orders"),
                 statBlock(String.valueOf(ticketCount), ticketCount == 1 ? "ticket" : "tickets"));
-
-        hero.add(avatar, meta, stats);
-        return hero;
+        return stats;
     }
 
     private Div statBlock(String value, String label) {
@@ -107,7 +117,7 @@ public class MyAccountView extends LkPage {
         return d;
     }
 
-    private Component buildOrdersCard() {
+    private Component buildOrdersCard(PurchaseHistoryDTO history) {
         LkCard card = new LkCard().pad(0);
         if (history.records().isEmpty()) {
             card.add(Lk.muted("No orders yet — your purchases will appear here."));
@@ -188,7 +198,7 @@ public class MyAccountView extends LkPage {
         }
     }
 
-    private Component buildTicketsCard() {
+    private Component buildTicketsCard(PurchaseHistoryDTO history) {
         LkCard card = new LkCard().pad(0);
         // Refunded / voided tickets are no longer usable, so they drop out of "My Tickets"
         // (the order still shows as Refunded under "My Orders").

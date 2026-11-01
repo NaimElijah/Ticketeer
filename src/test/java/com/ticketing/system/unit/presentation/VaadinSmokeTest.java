@@ -82,6 +82,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -246,6 +247,21 @@ class VaadinSmokeTest {
         SessionIdentity sessionIdentity = mock(SessionIdentity.class);
         assertDoesNotThrow(() -> new MyAccountView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),
             "MyAccountView failed to construct");
+    }
+
+    // #192: a failed history load is shown as an error, never as "no orders yet".
+    @Test
+    void GivenHistoryLoadFailed_WhenMyAccountViewIsBuilt_ThenItShowsTheErrorAndNoEmptyHistory() {
+        MyAccountPresenter presenter = mock(MyAccountPresenter.class);
+        when(presenter.loadHistory()).thenReturn(new MyAccountPresenter.Outcome.Failure("database unreachable"));
+
+        MyAccountView view = new MyAccountView(presenter, mock(RefundPresenter.class), mock(SessionIdentity.class),
+                context.getBean(DisplayTime.class));
+
+        String text = view.getElement().getTextRecursively();
+        assertTrue(text.contains("Could not load your orders and tickets: database unreachable"),
+                "expected the load error in: " + text);
+        assertFalse(text.contains("No orders yet"), "a failed load must not read as an empty history: " + text);
     }
 
     @Test

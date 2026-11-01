@@ -8,8 +8,7 @@ import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.reporting.application.service.MemberAccountService;
 import com.ticketing.system.ui.session.AuthSession;
-
-import lombok.extern.slf4j.Slf4j;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * Read-only presenter for {@code MyAccountView}. Loads the signed-in member's
@@ -18,9 +17,9 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Holds no Vaadin imports. Reconstructs the {@link AuthTokenDTO} from the
  * session because {@link MemberAccountService#viewMyHistory} takes the DTO but
- * only reads its token. Degrades to an empty history when signed out / on error.
+ * only reads its token. Gives an empty history when signed out, and a failure
+ * outcome, never an empty history, when the load fails.
  */
-@Slf4j
 @Component
 public class MyAccountPresenter {
 
@@ -30,7 +29,13 @@ public class MyAccountPresenter {
         this.memberAccountService = memberAccountService;
     }
 
-    /** The signed-in member's purchase history; an empty history when signed out or on failure. */
+    /**
+     * The signed-in member's purchase history.
+     *
+     * @return {@code Success} with the history (empty when signed out), or {@code Failure} with a
+     *         {@link ServiceErrors} message when the service refuses the token or fails, so a failed
+     *         load is never shown as "no purchases" (#192)
+     */
     public Outcome loadHistory() {
         AuthTokenDTO token = currentToken();
         if (token == null) {
@@ -39,8 +44,7 @@ public class MyAccountPresenter {
         try {
             return new Outcome.Success(memberAccountService.viewMyHistory(token));
         } catch (RuntimeException e) {
-            log.warn("Failed to load purchase history: {}", e.getMessage());
-            return new Outcome.Success(new PurchaseHistoryDTO(List.of()));
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
