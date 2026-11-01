@@ -275,8 +275,10 @@ public class VenueMap implements InvariantChecked {
         zone.checkInvariants();
     }
 
-    // Checked where a location comes in, not in checkInvariants: SystemIntegrityVerifier checks every stored
-    // map when the market opens, and the schema still allows a map stored without one (V1).
+    // Checked where a location comes in, not in checkInvariants, because the schema still allows a map stored
+    // without one (V1). Event.checkInvariants does not run the map's own check yet; once it does,
+    // SystemIntegrityVerifier runs it on every stored event when the market opens, and an old row must not
+    // keep the market closed.
     private static void requireLocation(Location location) {
         if (location == null) {
             throw new IllegalArgumentException("A venue needs a location");
