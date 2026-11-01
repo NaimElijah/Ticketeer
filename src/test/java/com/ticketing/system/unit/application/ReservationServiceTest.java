@@ -54,11 +54,11 @@ import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.UserRepositories;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -95,6 +95,8 @@ public class ReservationServiceTest {
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
     // Every guest session id these tests use starts with this and names a live guest session.
     private static final String LIVE_GUEST_SESSION_PREFIX = "guest-session";
+    // The age of every member these tests reserve for; no event here has an age policy.
+    private static final int MEMBER_AGE = 30;
 
     @BeforeEach
     void setUp() {
@@ -124,7 +126,7 @@ public class ReservationServiceTest {
                 activeOrderRepository,
                 sessionManager,
                 eventPublisher,
-                mock(UserRepository.class),
+                UserRepositories.everyMemberExistsAged(MEMBER_AGE),
                 marketGate,
                 mock(ISystemMetrics.class),
                 Clock.fixed(T0, ZoneOffset.UTC)
@@ -1350,7 +1352,8 @@ public class ReservationServiceTest {
     // The same service as setUp's, with the inventory port as a mock so a test can make it fail.
     private ReservationService reservationServiceOver(InventoryCommandPort inventory) {
         return new ReservationService(inventory, activeOrderRepository, sessionManager, eventPublisher,
-                mock(UserRepository.class), marketGate, mock(ISystemMetrics.class), Clock.fixed(T0, ZoneOffset.UTC));
+                UserRepositories.everyMemberExistsAged(MEMBER_AGE), marketGate, mock(ISystemMetrics.class),
+                Clock.fixed(T0, ZoneOffset.UTC));
     }
 
     private void memberWithCart() {
