@@ -24,13 +24,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.dao.DataAccessResourceFailureException;
 
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.notifications.application.service.NotificationService;
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
-import com.ticketing.system.shared.event.OutreachSentNotice;
 
 class NotificationServiceTest {
 
@@ -73,7 +73,7 @@ class NotificationServiceTest {
     @Test
     void GivenTwoOutreachRecipients_WhenNotifyOutreach_ThenEachGetsANewMessageNotificationDispatchedInOrder() {
         service.notifyOutreach(List.of(
-                new OutreachSentNotice.Recipient(7, "conv-7"), new OutreachSentNotice.Recipient(8, "conv-8")),
+                new OutreachRecipient(7, "conv-7"), new OutreachRecipient(8, "conv-8")),
                 "a system admin", "Venue change", "Hall B.");
 
         ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
@@ -99,8 +99,8 @@ class NotificationServiceTest {
         doThrow(storeDown).when(dispatcher).dispatch(argThat(n -> n.getRecipientUserId() == 8));
 
         DataAccessResourceFailureException thrown = assertThrows(DataAccessResourceFailureException.class,
-                () -> service.notifyOutreach(List.of(new OutreachSentNotice.Recipient(7, "conv-7"),
-                        new OutreachSentNotice.Recipient(8, "conv-8"), new OutreachSentNotice.Recipient(9, "conv-9")),
+                () -> service.notifyOutreach(List.of(new OutreachRecipient(7, "conv-7"),
+                        new OutreachRecipient(8, "conv-8"), new OutreachRecipient(9, "conv-9")),
                         "a system admin", "Venue change", "Hall B."));
 
         assertEquals(storeDown, thrown);

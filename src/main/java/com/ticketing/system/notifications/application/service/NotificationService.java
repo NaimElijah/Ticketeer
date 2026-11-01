@@ -12,11 +12,11 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
-import com.ticketing.system.shared.event.OutreachSentNotice;
 import lombok.extern.slf4j.Slf4j;
 
 import lombok.RequiredArgsConstructor;
@@ -213,11 +213,11 @@ public class NotificationService implements INotificationService {
     // dispatcher's proxy: one transaction per alert, not one for the whole send (ADR-019).
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void notifyOutreach(List<OutreachSentNotice.Recipient> recipients, String senderLabel, String subject,
+    public void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
             String snippet) {
         LocalDateTime now = LocalDateTime.now(clock);
-        for (OutreachSentNotice.Recipient r : recipients) {
-            dispatcher.dispatch(newMessageNotification(r.recipientUserId(), r.conversationId(), senderLabel,
+        for (OutreachRecipient r : recipients) {
+            dispatcher.dispatch(newMessageNotification(r.userId(), r.conversationId(), senderLabel,
                     subject, snippet, now));
         }
     }

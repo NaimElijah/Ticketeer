@@ -27,12 +27,12 @@ import com.ticketing.system.notifications.adapter.out.persistence.JpaNotificatio
 import com.ticketing.system.notifications.adapter.out.persistence.SpringDataNotificationRepository;
 import com.ticketing.system.notifications.adapter.out.push.InMemoryNotificationService;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.notifications.application.service.NotificationService;
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
-import com.ticketing.system.shared.event.OutreachSentNotice;
 
 /**
  * An outreach's alerts are stored one transaction each (ADR-019, #187): when one fails to store, the
@@ -80,9 +80,9 @@ class OutreachNotificationFanOutJpaTest {
     @Test
     void GivenTheSecondRecipientsAlertFailsToStore_WhenNotifyOutreach_ThenTheFirstIsKeptAndTheThirdIsNeverStored() {
         assertThrows(DataAccessResourceFailureException.class, () -> notifications.notifyOutreach(List.of(
-                new OutreachSentNotice.Recipient(FIRST, "conv-7"),
-                new OutreachSentNotice.Recipient(FAILING, "conv-8"),
-                new OutreachSentNotice.Recipient(THIRD, "conv-9")),
+                new OutreachRecipient(FIRST, "conv-7"),
+                new OutreachRecipient(FAILING, "conv-8"),
+                new OutreachRecipient(THIRD, "conv-9")),
                 "a system admin", "Venue change", "Hall B."));
 
         assertAll(

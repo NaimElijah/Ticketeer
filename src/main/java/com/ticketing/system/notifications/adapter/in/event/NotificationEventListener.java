@@ -1,10 +1,13 @@
 package com.ticketing.system.notifications.adapter.in.event;
 
+import java.util.List;
+
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.config.NotificationAsyncConfig;
 import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
@@ -136,8 +139,10 @@ public class NotificationEventListener {
      */
     @TransactionalEventListener(fallbackExecution = true)
     public void on(OutreachSentNotice notice) {
-        notificationService.notifyOutreach(
-                notice.recipients(), notice.senderLabel(), notice.subject(), notice.snippet());
+        List<OutreachRecipient> recipients = notice.recipients().stream()
+                .map(r -> new OutreachRecipient(r.recipientUserId(), r.conversationId()))
+                .toList();
+        notificationService.notifyOutreach(recipients, notice.senderLabel(), notice.subject(), notice.snippet());
     }
 
     /** Raises a direct-message notification when a new message arrives for a recipient. */

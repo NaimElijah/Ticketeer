@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.notifications.adapter.in.event.NotificationEventListener;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.OutreachSentNotice;
 
@@ -33,14 +34,16 @@ class NotificationEventListenerTest {
     }
 
     // One outreach is one notice and one call to the port, whatever its recipient count (ADR-019, #187).
+    // The listener maps the notice's recipients onto the port's own record, in order.
     @Test
     void GivenOutreachSentNotice_WhenOn_ThenEveryRecipientIsNotifiedInOneCall() {
-        List<OutreachSentNotice.Recipient> recipients = List.of(
-                new OutreachSentNotice.Recipient(7, "conv-7"), new OutreachSentNotice.Recipient(8, "conv-8"));
+        listener.on(new OutreachSentNotice(List.of(
+                new OutreachSentNotice.Recipient(7, "conv-7"), new OutreachSentNotice.Recipient(8, "conv-8")),
+                "a system admin", "Venue change", "Hall B."));
 
-        listener.on(new OutreachSentNotice(recipients, "a system admin", "Venue change", "Hall B."));
-
-        verify(notificationService).notifyOutreach(recipients, "a system admin", "Venue change", "Hall B.");
+        verify(notificationService).notifyOutreach(
+                List.of(new OutreachRecipient(7, "conv-7"), new OutreachRecipient(8, "conv-8")),
+                "a system admin", "Venue change", "Hall B.");
         verifyNoMoreInteractions(notificationService);
     }
 }
