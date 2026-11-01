@@ -39,6 +39,7 @@ import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.Tickets;
 
 /**
  * Unit tests for {@link EventCancellationRefundService}: the refund / ticket-flip / holder-notice flow
@@ -178,8 +179,7 @@ class EventCancellationRefundServiceTest {
         paidReceipt(1, 7, 50.0);
         OrderReceipt second = paidReceipt(2, 8, 50.0);
         OrderReceipt third = paidReceipt(3, 9, 50.0);
-        Ticket unsold = new Ticket(EVENT_ID, ZONE_ID, 99, "Z9", 50.0, 99, "BC99");
-        unsold.release();
+        Ticket unsold = Tickets.storedAs(TicketStatus.AVAILABLE, EVENT_ID, ZONE_ID, 99, "Z9", 50.0, 99, "BC99");
         tickets.add(unsold);
         when(paymentGateway.refund(eq(chargeOf(1)), anyDouble())).thenThrow(new RefundFailedException(1, "declined"));
 
@@ -357,8 +357,7 @@ class EventCancellationRefundServiceTest {
 
     @Test
     void GivenUnsoldTicket_WhenRefundCancelledEvent_ThenTicketVoided() {
-        Ticket available = new Ticket(EVENT_ID, ZONE_ID, 99, "Z9", 50.0, 99, "BC99");
-        available.release(); // -> AVAILABLE
+        Ticket available = Tickets.storedAs(TicketStatus.AVAILABLE, EVENT_ID, ZONE_ID, 99, "Z9", 50.0, 99, "BC99");
         tickets.add(available);
 
         refundCancelledEvent();

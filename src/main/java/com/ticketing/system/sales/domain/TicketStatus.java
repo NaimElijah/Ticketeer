@@ -1,14 +1,23 @@
 package com.ticketing.system.sales.domain;
 
-// Lifecycle states for a Ticket (unified inventory + post-purchase aggregate).
-// State machine:
-//   AVAILABLE -> RESERVED          (UC-9 reservation)
-//   RESERVED  -> PAID              (UC-10 successful charge)
-//   PAID      -> ISSUED            (UC-34 successful issuance)
-//   ISSUED    -> USED              (gate scan — no UC in v0)
-//   PAID/ISSUED -> REFUNDED        (UC-4 auto-refund)
-//   RESERVED  -> AVAILABLE         (UC-2 expiry release)
-//   *         -> VOIDED            (admin / ops)
+/**
+ * Lifecycle states of a {@link Ticket} (unified inventory + post-purchase aggregate).
+ *
+ * <p>The legal transitions, which {@link Ticket} enforces through {@link #canBecome}:
+ * <ul>
+ *   <li>AVAILABLE → RESERVED (UC-9 reservation, {@link Ticket#reserve})</li>
+ *   <li>RESERVED → PAID (UC-10 successful charge, {@link Ticket#markPaid})</li>
+ *   <li>PAID → ISSUED (UC-34 successful issuance, {@link Ticket#markIssued})</li>
+ *   <li>ISSUED → USED (gate scan, no UC yet, {@link Ticket#markUsed})</li>
+ *   <li>PAID or ISSUED → REFUNDED (UC-4 refund, {@link Ticket#markRefunded})</li>
+ *   <li>RESERVED → AVAILABLE (UC-2 expiry release, {@link Ticket#release})</li>
+ *   <li>any state → VOIDED (an event cancellation or a refund voids what was never sold,
+ *       {@link Ticket#markVoided})</li>
+ * </ul>
+ * Every other change is refused. A ticket is created PAID, at checkout, since the current design
+ * creates tickets only once they are paid for; AVAILABLE and RESERVED are reached only by a row
+ * stored with them.
+ */
 public enum TicketStatus {
     AVAILABLE,
     RESERVED,
@@ -16,5 +25,23 @@ public enum TicketStatus {
     ISSUED,
     USED,
     REFUNDED,
-    VOIDED
+    VOIDED;
+
+    /**
+     * Whether a ticket in this state may move to {@code next}, per the transitions listed on the type.
+     *
+     * @param next the state asked for
+     * @return {@code true} if the transition is legal
+     */
+    public boolean canBecome(TicketStatus next) {
+        return switch (next) {
+            case AVAILABLE -> this == RESERVED;
+            case RESERVED -> this == AVAILABLE;
+            case PAID -> this == RESERVED;
+            case ISSUED -> this == PAID;
+            case USED -> this == ISSUED;
+            case REFUNDED -> this == PAID || this == ISSUED;
+            case VOIDED -> true;
+        };
+    }
 }

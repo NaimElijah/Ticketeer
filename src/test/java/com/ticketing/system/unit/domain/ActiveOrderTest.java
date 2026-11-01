@@ -309,4 +309,43 @@ class ActiveOrderTest extends BaseDomainTest {
                 order.getItems().stream().map(CartLineItem::getSeatNumber).toList());
     }
 
+    // ---- Defect 10: attachToUser refuses an id no user can have (#187) ----
+    // A user id is positive (checkInvariants). Whether the refusal is an argument or a state exception is
+    // left to the fix; either way the cart must stay a guest cart.
+
+    private static final String GUEST_SESSION_ID = "guest-session-1";
+
+    @Test
+    void GivenGuestCart_WhenAttachToUserZero_ThenRefusedAndTheCartStaysAGuestCart() {
+        ActiveOrder cart = track(ActiveOrder.forGuest(GUEST_SESSION_ID, NOW));
+
+        assertAttachRefused(cart, 0);
+    }
+
+    @Test
+    void GivenGuestCart_WhenAttachToANegativeUserId_ThenRefusedAndTheCartStaysAGuestCart() {
+        ActiveOrder cart = track(ActiveOrder.forGuest(GUEST_SESSION_ID, NOW));
+
+        assertAttachRefused(cart, -1);
+    }
+
+    // Guard: the guest-to-member promotion still claims the cart for a real user.
+    @Test
+    void GivenGuestCart_WhenAttachToAPositiveUserId_ThenTheCartBelongsToThatUser() {
+        ActiveOrder cart = track(ActiveOrder.forGuest(GUEST_SESSION_ID, NOW));
+
+        cart.attachToUser(USER_ID);
+
+        assertTrue(cart.isMember(), "the promoted cart must be a member cart");
+        assertEquals(USER_ID, cart.getUserId());
+    }
+
+    private static void assertAttachRefused(ActiveOrder cart, int userId) {
+        RuntimeException refused = assertThrows(RuntimeException.class, () -> cart.attachToUser(userId),
+                "no user has id " + userId + ", so a cart must not be attached to it");
+
+        assertTrue(refused instanceof IllegalArgumentException || refused instanceof IllegalStateException,
+                "attaching to user id " + userId + " must be refused as invalid, but threw " + refused);
+        assertTrue(cart.isGuest(), "a refused attach must leave the cart a guest cart");
+    }
 }

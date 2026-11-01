@@ -522,10 +522,17 @@ public class ActiveOrder implements InvariantChecked {
 
 
     /**
-     * Guest→Member promotion: claim this cart for a user. Throws if the cart
-     * already belongs to a different user.
+     * Guest→Member promotion: claim this cart for a user.
+     *
+     * @param newUserId the member's user id
+     * @throws IllegalArgumentException if {@code newUserId} is below 1, which no user has; the cart is
+     *     left as it was
+     * @throws IllegalStateException if the cart already belongs to a different user
      */
     public void attachToUser(int newUserId) {
+        if (newUserId < 1) {
+            throw new IllegalArgumentException("userId must be positive");
+        }
         if (this.userId != null && this.userId != newUserId) {
             throw new IllegalStateException("cart already belongs to user " + this.userId);
         }

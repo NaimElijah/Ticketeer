@@ -1,6 +1,7 @@
 package com.ticketing.system.sales.domain;
 
 
+import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.TicketNotAvailableException;
 import com.ticketing.system.shared.InvariantChecked;
 
@@ -113,8 +114,7 @@ public class Ticket implements InvariantChecked {
     }
 
     // ---------------------------------------------------------------------------
-    // Skeleton additions for the unified-Ticket aggregate.
-    // State machine: AVAILABLE -> RESERVED -> PAID -> ISSUED -> USED | REFUNDED | VOIDED
+    // Lifecycle transitions: TicketStatus documents the legal ones and refuses the rest.
     // ---------------------------------------------------------------------------
 
     // UC-9 / UC-5 — AVAILABLE -> RESERVED. Throws TicketNotAvailableException if not AVAILABLE.
@@ -131,41 +131,70 @@ public class Ticket implements InvariantChecked {
         checkInvariants();
     }
 
-    // UC-10 — RESERVED -> PAID after successful charge.
+    /**
+     * UC-10: RESERVED → PAID after a successful charge.
+     *
+     * @throws InvalidStateTransitionException unless the ticket is RESERVED
+     */
     public void markPaid() {
-        this.status = TicketStatus.PAID;
-        checkInvariants();
+        moveTo(TicketStatus.PAID);
     }
 
-    // UC-10 / UC-34 — PAID -> ISSUED after successful external issuance, stores barcode locally.
+    /**
+     * UC-10 / UC-34: PAID → ISSUED after a successful external issuance, storing the barcode locally.
+     *
+     * @param barcodeValue the issuer's ticket code
+     * @throws InvalidStateTransitionException unless the ticket is PAID; the barcode is then left as it was
+     */
     public void markIssued(String barcodeValue) {
+        requireCanBecome(TicketStatus.ISSUED);
         this.barcodeValue = barcodeValue;
-        this.status = TicketStatus.ISSUED;
-        checkInvariants();
+        moveTo(TicketStatus.ISSUED);
     }
 
-    // ISSUED -> USED at venue gate scan (no UC in v0; defined for completeness).
+    /**
+     * ISSUED → USED at a venue gate scan (no UC yet).
+     *
+     * @throws InvalidStateTransitionException unless the ticket is ISSUED
+     */
     public void markUsed() {
-        this.status = TicketStatus.USED;
-        checkInvariants();
+        moveTo(TicketStatus.USED);
     }
 
-    // UC-4 — PAID/ISSUED -> REFUNDED via auto-refund pipeline.
+    /**
+     * UC-4: PAID or ISSUED → REFUNDED.
+     *
+     * @throws InvalidStateTransitionException unless the ticket is PAID or ISSUED
+     */
     public void markRefunded() {
-        this.status = TicketStatus.REFUNDED;
-        checkInvariants();
+        moveTo(TicketStatus.REFUNDED);
     }
 
-    // Admin / ops action — any state -> VOIDED.
+    /** Any state → VOIDED: an event cancellation or a refund voids what was never sold. Never refused. */
     public void markVoided() {
-        this.status = TicketStatus.VOIDED;
+        moveTo(TicketStatus.VOIDED);
+    }
+
+    /**
+     * UC-2: RESERVED → AVAILABLE when the hold expires.
+     *
+     * @throws InvalidStateTransitionException unless the ticket is RESERVED
+     */
+    public void release() {
+        moveTo(TicketStatus.AVAILABLE);
+    }
+
+    // The one way a transition method changes the status, so none can skip TicketStatus's machine.
+    private void moveTo(TicketStatus next) {
+        requireCanBecome(next);
+        this.status = next;
         checkInvariants();
     }
 
-    // UC-2 — RESERVED -> AVAILABLE on cart expiration. Releases the lock.
-    public void release() {
-        this.status = TicketStatus.AVAILABLE;
-        checkInvariants();
+    private void requireCanBecome(TicketStatus next) {
+        if (!status.canBecome(next)) {
+            throw new InvalidStateTransitionException("Ticket", status.name(), next.name());
+        }
     }
 
     // State checks.
