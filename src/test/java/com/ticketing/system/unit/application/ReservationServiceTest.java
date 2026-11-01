@@ -7,6 +7,7 @@ import com.ticketing.system.shared.event.ReservationRemovalFailedNotice;
 import com.ticketing.system.shared.event.TicketReservationFailedNotice;
 import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.UserFacingErrors;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
@@ -1361,7 +1362,7 @@ public class ReservationServiceTest {
 
     private static final String REFUSAL = "refusal-reason-under-test";
     private static final String INTERNAL_FAILURE_TEXT = "internal-failure-text-under-test";
-    private static final String GENERIC_REASON = "An unexpected error occurred; please try again.";
+    private static final String GENERIC_REASON = UserFacingErrors.GENERIC_MESSAGE;
 
     @Test
     void GivenTheInventoryRefusesTheReservation_WhenReserveForMember_ThenTheFailureNoticeCarriesTheRefusalsReason() {
