@@ -23,6 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
+import ch.qos.logback.classic.Level;
+import jakarta.persistence.PersistenceException;
+
 import com.ticketing.system.shared.dto.ComplaintFilterDTO;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
@@ -32,6 +35,7 @@ import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter
 import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.ConversationClosedException;
+import com.ticketing.system.testutil.LogCapture;
 
 class AdminComplaintQueuePresenterTest {
 
@@ -366,6 +370,23 @@ class AdminComplaintQueuePresenterTest {
             assertInstanceOf(AdminComplaintQueuePresenter.SingleOutcome.Success.class, presenter.loadOne(TOKEN, "c1"));
 
         assertEquals(thread, shown.conversation());
+    }
+
+    // As a failed row-click open logs it: at ERROR with the exception, not only LoggingAspect's one-line WARN.
+    @Test
+    void GivenTheMarkFailsInternally_WhenLoadOne_ThenTheFailureIsLoggedAtErrorWithItsExceptionAndTheThreadIsShown() {
+        ConversationDTO thread = complaint("c1", "OPEN");
+        doThrow(new PersistenceException("could not execute statement [update messages set is_read=?]"))
+            .when(messaging).markConversationRead(TOKEN, "c1");
+        when(messaging.viewConversation(TOKEN, "c1")).thenReturn(thread);
+
+        try (LogCapture logs = LogCapture.of(ServiceErrors.class)) {
+            AdminComplaintQueuePresenter.SingleOutcome.Success shown = assertInstanceOf(
+                AdminComplaintQueuePresenter.SingleOutcome.Success.class, presenter.loadOne(TOKEN, "c1"));
+
+            assertEquals(thread, shown.conversation());
+            assertEquals(List.of(PersistenceException.class.getName()), logs.throwableClassNamesAt(Level.ERROR));
+        }
     }
 
     @Test

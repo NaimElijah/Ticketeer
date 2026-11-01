@@ -80,14 +80,12 @@ public class CompanyInquiryInboxPresenter {
         if (token == null) {
             return new SingleOutcome.NotAuthenticated();
         }
-        try {
-            messagingService.markConversationRead(token, conversationId);
-        } catch (InvalidTokenException e) {
+        // Any other failed mark still shows the thread: marking read is a side effect of opening it, and the
+        // reader can do nothing about its failure. markRead passes the failure to ServiceErrors, which logs
+        // an internal one at ERROR. A failure that also stops the thread loading surfaces from
+        // viewConversation below.
+        if (markRead(token, conversationId) instanceof ActionOutcome.NotAuthenticated) {
             return new SingleOutcome.NotAuthenticated();
-        } catch (RuntimeException e) {
-            // Deliberately ignored: marking read is a side effect of opening the thread, and the reader can
-            // do nothing about its failure. LoggingAspect has already logged it at WARN. Any failure that
-            // also stops the thread loading surfaces from viewConversation below.
         }
         try {
             return new SingleOutcome.Success(messagingService.viewConversation(token, conversationId));
@@ -135,7 +133,7 @@ public class CompanyInquiryInboxPresenter {
         }
     }
 
-    // Marks the thread read for the caller's side; open is its only caller.
+    // Marks the thread read for the caller's side; open and loadOne call it.
     private ActionOutcome markRead(String token, String conversationId) {
         if (token == null) {
             return new ActionOutcome.NotAuthenticated();
