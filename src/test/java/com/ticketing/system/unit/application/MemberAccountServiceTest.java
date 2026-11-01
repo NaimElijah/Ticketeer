@@ -19,6 +19,7 @@ import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.domain.OrderReceipt;
+import com.ticketing.system.testutil.LogCapture;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,8 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
+
+import ch.qos.logback.classic.Level;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -276,5 +279,20 @@ class MemberAccountServiceTest {
     private static EventDisplayInfoDTO rockNight() {
         return new EventDisplayInfoDTO(EVENT_ID, "Rock Night", 10, "CONCERT", null, "Venue",
                 List.of(new EventDisplayInfoDTO.ZoneNameDTO(ZONE_ID, "Floor")));
+    }
+
+    // ---- Review follow-up 6b: a history read is no state transition, so it logs nothing at INFO (#187) ----
+
+    @Test
+    void GivenAuthenticatedMember_WhenViewMyHistory_ThenNothingIsLoggedAtInfo() {
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of());
+
+        try (LogCapture log = LogCapture.of(MemberAccountService.class)) {
+            service.viewMyHistory(memberAuth(VALID_TOKEN, USER_ID));
+
+            assertThat(log.messagesAt(Level.INFO)).isEmpty();
+        }
     }
 }

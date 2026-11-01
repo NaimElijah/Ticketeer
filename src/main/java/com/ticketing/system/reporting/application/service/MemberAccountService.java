@@ -75,7 +75,7 @@ public class MemberAccountService {
                         receipt, ticketRepository, eventDisplayPort, null, null))
                 .toList();
 
-        log.info("Retrieved purchase history for userId={}, recordsCount={}", userId, purchaseRecords.size());
+        log.debug("Retrieved purchase history for userId={}, recordsCount={}", userId, purchaseRecords.size());
         return new PurchaseHistoryDTO(purchaseRecords);
     }
 

@@ -418,8 +418,9 @@ public class SystemAdminService {
     // this function filters by buyer, production company, or specific event, and by date range. All filters are optional and can be combined.
     @Transactional(readOnly = true)
     public List<PurchaseHistoryDTO> viewGlobalHistory(String token, GlobalHistoryFiltersDTO filters) {
-        log.info("Admin request to view global purchase history with filters: {}", filters);
         requireSystemAdmin(token);
+        // Logged only after the check: the filters can name a buyer.
+        log.info("Admin request to view global purchase history with filters: {}", filters);
 
         // If companyId is provided, we ensure that the eventIds filter (if provided) is a subset of the events for that company, in the normalizeGlobalHistoryFilters() method.
         GlobalHistoryFiltersDTO effectiveFilters = normalizeGlobalHistoryFilters(filters);

@@ -864,4 +864,19 @@ class SystemAdminServiceTest {
         assertSame(saveFailure, thrown.getCause(), "the save failure stays the cause");
         assertEquals(List.of(reCheckFailure), List.of(thrown.getSuppressed()), "the re-check failure is kept");
     }
+
+    // ---- Review follow-up 6b: no filter reaches the log before the admin check (#187) ----
+
+    // The filters name a buyer: an unauthorized caller must not get them written to the log.
+    @Test
+    void GivenNoAdminToken_WhenViewGlobalHistory_ThenRefusedAndTheFiltersAreNotLogged() {
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(77, null, null, null, null);
+
+        try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
+            assertThrows(UnauthorizedActionException.class, () -> service.viewGlobalHistory(null, filters));
+
+            assertTrue(log.eventsContaining("buyerUserId").isEmpty(),
+                    "a refused call must not log its filters, got " + log.eventsContaining("buyerUserId"));
+        }
+    }
 }
