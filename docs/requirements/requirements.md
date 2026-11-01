@@ -326,6 +326,10 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   `MinTicketsPurchasePolicy`, `MaxTicketsPurchasePolicy` · `PurchasePolicyAcceptanceTest`). A
   refused purchase is told the conditions it broke and none it met
   (`Event.validateEffectivePolicy` · `EventTest`).
+- A member's reservation is judged with the member's stored age. An age that cannot be read, because
+  the user store fails or the member has no user row, fails the reservation rather than passing as an
+  unknown age, which an age policy lets through until checkout (`ReservationService`, #187 ·
+  `ReserveMemberAgeLookupTest`).
 - Discounts (V2) are percentages. There are three kinds:
   - simple;
   - conditional, which applies only while its condition holds; V2 requires ticket-count (minimum

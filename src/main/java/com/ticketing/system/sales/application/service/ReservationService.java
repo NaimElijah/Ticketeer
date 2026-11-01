@@ -30,7 +30,6 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
@@ -438,14 +437,11 @@ public class ReservationService {
 
     // Resolves a member's age for the purchase-policy context. Kept in sales because buyer identity is
     // a sales/identity concern; the age is passed as a primitive into the inventory port, which owns the
-    // effective-policy validation against the event + company policy.
+    // effective-policy validation against the event + company policy. An unknown age passes the reserve
+    // stage of an age policy, so a failed lookup must never stand in for one: a store failure, and a member
+    // with no user row (UserNotFoundException), both fail the reservation (NaimElijah/Ticketeer#187).
     private Integer resolveMemberAge(int userId) {
-        try {
-            User user = userRepository.getUserById(userId);
-            return user == null ? null : user.getAge();
-        } catch (RuntimeException e) {
-            return null;
-        }
+        return userRepository.getUserById(userId).getAge();
     }
 
     private void validateReservationArguments(int eventId, int zoneId, InventorySelectionDTO selection) {
