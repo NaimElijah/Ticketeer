@@ -63,9 +63,25 @@ public interface INotificationService {
     void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
             String snippet);
 
-    /** Mark a single notification as READ (SENT → READ). No-op if already READ. */
+    /**
+     * Mark one of the member's notifications READ, from SENT or from PENDING: a session ending in
+     * another tab sends SENT notifications back to PENDING while this tab's bell still shows them.
+     * Nothing changes when the id is unknown, belongs to another member, or is already READ.
+     *
+     * @param userId         the member who clicked the notification
+     * @param notificationId the notification's id
+     * @throws org.springframework.dao.DataAccessException if the store fails to read or save it; the
+     *         notification then stays as it was
+     */
     void markRead(int userId, String notificationId);
 
-    /** Revert all SENT notifications for a user back to PENDING — called on disconnect. */
+    /**
+     * Send all of the member's SENT notifications back to PENDING, so the next login or poll delivers
+     * them again. Called when a session closes before the member read them.
+     *
+     * @param userId the member whose session closed
+     * @throws org.springframework.dao.DataAccessException if the store fails; the whole revert rolls
+     *         back, so every one of those notifications stays SENT
+     */
     void revertSentToPending(int userId);
 }

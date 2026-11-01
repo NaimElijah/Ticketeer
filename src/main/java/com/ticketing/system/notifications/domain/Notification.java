@@ -170,11 +170,13 @@ public class Notification implements InvariantChecked {
         checkInvariants();
     }
 
-    // Lifecycle transition: SENT → READ (user clicked the notification item).
+    // Lifecycle transition: SENT or PENDING → READ (user clicked the notification item). PENDING is
+    // allowed because a session ending in another tab sends SENT rows back to PENDING while this tab's
+    // bell still shows them, and that click must still count (#187).
     public void markRead() {
-        if (status != NotificationStatus.SENT) {
+        if (status != NotificationStatus.SENT && status != NotificationStatus.PENDING) {
             throw new IllegalStateException(
-                    "Cannot mark as READ a notification that is not SENT. Current status: " + status);
+                    "Cannot mark as READ a notification that is not SENT or PENDING. Current status: " + status);
         }
         this.status = NotificationStatus.READ;
         checkInvariants();

@@ -1,17 +1,19 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -25,6 +27,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
@@ -125,4 +128,101 @@ class NotificationServiceTest {
 
         verifyNoInteractions(dispatcher);
     }
+
+    // ---- Defect 1: A click on a notification that went back to PENDING is lost, silently (#187) ----
+
+    private static final int RECIPIENT = 7;
+    private static final int ANOTHER_MEMBER = 8;
+    private static final String NOTIFICATION_ID = "notif-1";
+
+    private final NotificationRepository notifications = mock(NotificationRepository.class);
+    private final NotificationService readingService = new NotificationService(
+            dispatcher, notifications, Clock.fixed(T0, ZoneOffset.UTC));
+    private final DataAccessResourceFailureException storeDown =
+            new DataAccessResourceFailureException("store unavailable");
+
+    // A session ending on another device sends the member's SENT notifications back to PENDING, while
+    // this device's bell still shows them; a click there must still record the read.
+    @Test
+    void GivenAPendingNotificationOfTheRecipient_WhenMarkRead_ThenItIsSavedAsRead() {
+        Notification revertedToPending = notification(RECIPIENT, NotificationStatus.PENDING);
+        when(notifications.findById(NOTIFICATION_ID)).thenReturn(revertedToPending);
+
+        readingService.markRead(RECIPIENT, NOTIFICATION_ID);
+
+        assertEquals(NotificationStatus.READ, revertedToPending.getStatus(),
+                "a click on a notification sent back to PENDING should mark it read");
+        verify(notifications).save(revertedToPending);
+    }
+
+    @Test
+    void GivenTheStoreFailsOnTheLookup_WhenMarkRead_ThenTheFailurePropagates() {
+        when(notifications.findById(NOTIFICATION_ID)).thenThrow(storeDown);
+
+        DataAccessException thrown = assertThrows(DataAccessException.class,
+                () -> readingService.markRead(RECIPIENT, NOTIFICATION_ID),
+                "a store failure should reach the caller, not be logged and dropped");
+        assertSame(storeDown, thrown);
+    }
+
+    @Test
+    void GivenTheStoreFailsOnTheSave_WhenMarkRead_ThenTheFailurePropagates() {
+        when(notifications.findById(NOTIFICATION_ID)).thenReturn(notification(RECIPIENT, NotificationStatus.SENT));
+        doThrow(storeDown).when(notifications).save(any(Notification.class));
+
+        DataAccessException thrown = assertThrows(DataAccessException.class,
+                () -> readingService.markRead(RECIPIENT, NOTIFICATION_ID),
+                "a store failure should reach the caller, not be logged and dropped");
+        assertSame(storeDown, thrown);
+    }
+
+    @Test
+    void GivenAnotherMembersNotification_WhenMarkRead_ThenItIsLeftUnreadAndNotSaved() {
+        Notification theirs = notification(ANOTHER_MEMBER, NotificationStatus.SENT);
+        when(notifications.findById(NOTIFICATION_ID)).thenReturn(theirs);
+
+        readingService.markRead(RECIPIENT, NOTIFICATION_ID);
+
+        assertEquals(NotificationStatus.SENT, theirs.getStatus(),
+                "a member must not mark another member's notification read");
+        verify(notifications, never()).save(any(Notification.class));
+    }
+
+    @Test
+    void GivenAnUnknownNotificationId_WhenMarkRead_ThenNothingIsSaved() {
+        when(notifications.findById(NOTIFICATION_ID)).thenReturn(null);
+
+        readingService.markRead(RECIPIENT, NOTIFICATION_ID);
+
+        verify(notifications, never()).save(any(Notification.class));
+    }
+
+    @Test
+    void GivenAnAlreadyReadNotification_WhenMarkRead_ThenItIsNotSavedAgain() {
+        Notification alreadyRead = notification(RECIPIENT, NotificationStatus.READ);
+        when(notifications.findById(NOTIFICATION_ID)).thenReturn(alreadyRead);
+
+        readingService.markRead(RECIPIENT, NOTIFICATION_ID);
+
+        assertEquals(NotificationStatus.READ, alreadyRead.getStatus());
+        verify(notifications, never()).save(any(Notification.class));
+    }
+
+    @Test
+    void GivenTheStoreFailsWhileRevertingASentNotification_WhenRevertSentToPending_ThenTheFailurePropagates() {
+        Notification sent = notification(RECIPIENT, NotificationStatus.SENT);
+        when(notifications.findByRecipientAndStatus(RECIPIENT, NotificationStatus.SENT)).thenReturn(List.of(sent));
+        doThrow(storeDown).when(notifications).save(sent);
+
+        DataAccessException thrown = assertThrows(DataAccessException.class,
+                () -> readingService.revertSentToPending(RECIPIENT),
+                "a store failure should reach the caller, not be logged and dropped");
+        assertSame(storeDown, thrown);
+    }
+
+    private static Notification notification(int recipientUserId, NotificationStatus status) {
+        return new Notification(NOTIFICATION_ID, recipientUserId, NotificationType.PURCHASE_CONFIRMED, status,
+                "Purchase completed successfully.", LocalDateTime.ofInstant(T0, ZoneOffset.UTC));
+    }
+
 }

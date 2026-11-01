@@ -12,8 +12,9 @@ import com.vaadin.flow.component.popover.PopoverPosition;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Self-contained bell icon + unread badge + notification dropdown.
@@ -22,15 +23,18 @@ import java.util.function.Function;
  */
 public class NotificationBellComponent extends Span {
 
-    private final Consumer<String> onRead;
+    private final Predicate<String> markRead;
     private final Function<LocalDateTime, String> age;
 
     /**
-     * @param onRead called with a notification id when the user marks it read
-     * @param age    renders a notification's creation time as a short age ("5m", "Yesterday")
+     * @param markRead stores the read of the notification id it is given and answers whether that
+     *                 worked; the bell shows the item read only when it did, so the badge and the
+     *                 store agree
+     * @param age      renders a notification's creation time as a short age ("5m", "Yesterday")
+     * @throws NullPointerException if either argument is null
      */
-    public NotificationBellComponent(Consumer<String> onRead, Function<LocalDateTime, String> age) {
-        this.onRead = onRead;
+    public NotificationBellComponent(Predicate<String> markRead, Function<LocalDateTime, String> age) {
+        this.markRead = Objects.requireNonNull(markRead, "markRead");
         this.age = age;
         addAttachListener(e -> NotificationSession.setBell(this));
         addDetachListener(e -> NotificationSession.setBell(null));
@@ -65,20 +69,19 @@ public class NotificationBellComponent extends Span {
         }
 
         Runnable onMarkAll = () -> {
-            if (onRead != null) {
-                NotificationSession.getAll().stream()
-                        .filter(n -> !"READ".equals(n.status()))
-                        .map(NotificationDTO::notificationId)
-                        .filter(id -> id != null && !id.isEmpty())
-                        .forEach(onRead);
-            }
-            NotificationSession.markAllRead();
+            NotificationSession.getAll().stream()
+                    .filter(n -> !"READ".equals(n.status()))
+                    .map(NotificationDTO::notificationId)
+                    .filter(id -> id != null && !id.isEmpty())
+                    .filter(markRead)
+                    .forEach(NotificationSession::markRead);
             refresh();
         };
 
         java.util.function.Consumer<String> onMarkOne = notifId -> {
-            NotificationSession.markRead(notifId);
-            if (onRead != null) onRead.accept(notifId);
+            if (markRead.test(notifId)) {
+                NotificationSession.markRead(notifId);
+            }
             refresh();
         };
 

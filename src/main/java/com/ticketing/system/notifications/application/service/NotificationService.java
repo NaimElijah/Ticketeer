@@ -247,26 +247,18 @@ public class NotificationService implements INotificationService {
 
     @Override
     public void markRead(int userId, String notificationId) {
-        try {
-            Notification n = notificationRepository.findById(notificationId);
-            if (n == null || n.getRecipientUserId() != userId || n.isRead()) return;
-            n.markRead();
-            notificationRepository.save(n);
-        } catch (Exception e) {
-            log.warn("markRead failed for userId={} notifId={}: {}", userId, notificationId, e.getMessage());
-        }
+        Notification n = notificationRepository.findById(notificationId);
+        if (n == null || n.getRecipientUserId() != userId || n.isRead()) return;
+        n.markRead();
+        notificationRepository.save(n);
     }
 
     @Override
     public void revertSentToPending(int userId) {
         List<Notification> sent = notificationRepository.findByRecipientAndStatus(userId, NotificationStatus.SENT);
         for (Notification n : sent) {
-            try {
-                n.markPending();
-                notificationRepository.save(n);
-            } catch (Exception e) {
-                log.warn("revertSentToPending failed for notifId={}: {}", n.getId(), e.getMessage());
-            }
+            n.markPending();
+            notificationRepository.save(n);
         }
         if (!sent.isEmpty()) {
             log.info("reverted {} SENT notification(s) to PENDING for userId={}", sent.size(), userId);
