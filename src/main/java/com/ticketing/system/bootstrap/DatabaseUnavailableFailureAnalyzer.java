@@ -1,5 +1,6 @@
 package com.ticketing.system.bootstrap;
 
+import java.net.SocketTimeoutException;
 import java.sql.SQLException;
 import java.util.Set;
 
@@ -27,6 +28,12 @@ import org.springframework.core.env.Environment;
  * This analyzer turns either failure into a report that names the datasource and the settings to
  * check. Any other failure, including a SQL error of another class, is left to the next analyzer.
  *
+ * <p>One connection failure is not about reaching the database: the PostgreSQL driver reports a
+ * statement whose answer did not come within {@code database.socket-timeout} as SQLState {@code 08006}
+ * caused by a {@link SocketTimeoutException}. That report names the socket timeout instead. A connect
+ * that timed out is {@code 08001} with the same cause; the database was never reached, so it stays a
+ * failure to connect.
+ *
  * <p>Registered in {@code META-INF/spring.factories}. Spring Boot passes the {@link Environment} to
  * the constructor.
  */
@@ -41,6 +48,8 @@ public class DatabaseUnavailableFailureAnalyzer implements FailureAnalyzer {
     // 3D invalid catalog name.
     private static final Set<String> MISCONFIGURED_CONNECTION_CLASSES = Set.of("08", "28", "3D");
     private static final int SQL_STATE_CLASS_LENGTH = 2;
+    // SQLState 08006, connection failure: what pgjdbc raises when a read on an open connection times out.
+    private static final String CONNECTION_FAILURE_STATE = "08006";
     private static final String URL_PROPERTY = "spring.datasource.url";
     private static final String UNKNOWN_URL = "(spring.datasource.url is not set)";
 
@@ -63,6 +72,9 @@ public class DatabaseUnavailableFailureAnalyzer implements FailureAnalyzer {
         if (!isConnectionFailure(failure)) {
             return null;
         }
+        if (isStatementSocketTimeout(failure)) {
+            return statementTimedOut(failure);
+        }
         String description = "The application could not connect or sign in to its database at "
                 + datasourceUrl() + ". Every run stores its data in this database, so startup stops"
                 + " here. The database's error is logged above.";
@@ -70,6 +82,36 @@ public class DatabaseUnavailableFailureAnalyzer implements FailureAnalyzer {
                 + " DB_USER and DB_PASSWORD (or spring.datasource.*). For a local run without a database"
                 + " server, use the dev profile, which runs on in-memory H2.";
         return new FailureAnalysis(description, action, failure);
+    }
+
+    private FailureAnalysis statementTimedOut(Throwable failure) {
+        String description = "A statement against the database at " + datasourceUrl() + " got no answer within"
+                + " database.socket-timeout, so the driver ended it and startup stops here. The connection had"
+                + " been opened, so the address and credentials are not the problem. The database's error is"
+                + " logged above.";
+        String action = "Find what kept the statement waiting: a lock another session holds, an overloaded or"
+                + " hung database, or a database host that went away. If a migration legitimately takes longer,"
+                + " raise database.socket-timeout (DB_SOCKET_TIMEOUT) for that deploy.";
+        return new FailureAnalysis(description, action, failure);
+    }
+
+    private static boolean isStatementSocketTimeout(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql && CONNECTION_FAILURE_STATE.equals(sql.getSQLState())
+                    && causedBySocketTimeout(sql)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean causedBySocketTimeout(SQLException sql) {
+        for (Throwable cause = sql.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isConnectionFailure(Throwable failure) {
