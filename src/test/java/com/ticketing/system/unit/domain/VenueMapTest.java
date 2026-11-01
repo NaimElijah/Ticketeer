@@ -93,4 +93,55 @@ public class VenueMapTest extends BaseDomainTest {
         assertEquals(1, map.getZone(2).getGridRow());
         assertEquals(2, map.getZone(2).getGridCol());
     }
+
+    // ---- aggregate rules hold on every path: a constructed map's zones are unique (#187) ----
+    // addZone refuses a zone whose id is taken or whose name is taken ignoring case; the constructor
+    // took any list, so a whole-map reconfiguration could bring in what addZone refuses.
+
+    @Test
+    void GivenTwoZonesNamedFloorIgnoringCase_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50), new StandingZone(2, "FLOOR", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
+    }
+
+    @Test
+    void GivenTwoZonesWithTheSameId_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50), new StandingZone(1, "Balcony", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
+    }
+
+    // The constructor takes a whole map on reconfiguration, so it refuses every zone addZone refuses.
+    @Test
+    void GivenANullZone_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = java.util.Arrays.asList(new StandingZone(1, "Floor", 10, 50), null);
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
+    }
+
+    @Test
+    void GivenAZoneWithIdZero_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(0, "Floor", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, 3, 3));
+    }
+
+    // A map without a location broke every listing and detail view that prints it (EventMapper,
+    // VenueMapMapper); addEvent refused one, but any other way in did not.
+    @Test
+    void GivenNoLocation_WhenAVenueMapIsConstructed_ThenItIsRefused() {
+        List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, null, zones, 3, 3));
+    }
+
+    @Test
+    void GivenAVenueMap_WhenItsLocationIsSetToNull_ThenItIsRefusedAndKeepsItsLocation() {
+        VenueMap map = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 10, 50)));
+
+        assertThrows(IllegalArgumentException.class, () -> map.setLocation(null));
+
+        assertEquals(LOCATION, map.getLocation());
+    }
 }

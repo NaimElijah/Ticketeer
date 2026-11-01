@@ -10,6 +10,11 @@ import com.ticketing.system.shared.IRepository;
 // Aggregate-root entry point for the Event aggregate.
 public interface EventRepository extends IRepository<Event, Integer> {
 
+    /**
+     * Loads the event with the given id. Never returns {@code null}.
+     *
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
+     */
     Event findById(int eventId);
 
     /**

@@ -2,6 +2,7 @@ package com.ticketing.system.catalog.adapter.out.persistence;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.data.jpa.domain.Specification;
 
@@ -11,6 +12,7 @@ import com.ticketing.system.catalog.domain.EventCategory;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -23,9 +25,15 @@ import jakarta.persistence.criteria.Subquery;
  * category, rating, location) sit on the Event root; the "at least one matching element" filters
  * (artist, keyword-in-artist, show-date range) are correlated {@code EXISTS} subqueries, and the
  * price range compares against a correlated {@code min(zone price)} subquery (the event's cheapest
- * ticket) so the outer query never multiplies rows (no {@code distinct} needed).
+ * ticket) so the outer query never multiplies rows (no {@code distinct} needed). A text filter matches
+ * its term as a literal substring, ignoring case, as the in-memory adapter does: the LIKE wildcards in
+ * the term are escaped.
  */
 final class EventSearchSpecification {
+
+    // Escapes the wildcards in a term. Hibernate renders a LIKE without one as escape '' on both H2 and
+    // PostgreSQL, so the term's % and _ would stay wildcards; every LIKE here passes this one.
+    private static final char LIKE_ESCAPE = '\\';
 
     private EventSearchSpecification() { }
 
@@ -37,7 +45,7 @@ final class EventSearchSpecification {
             List<Predicate> predicates = new ArrayList<>();
 
             if (filters.eventName() != null) {
-                predicates.add(cb.like(cb.lower(root.get("name")), like(filters.eventName())));
+                predicates.add(containsIgnoringCase(cb, root.get("name"), filters.eventName()));
             }
             if (filters.artistName() != null) {
                 predicates.add(cb.exists(artistLike(query, cb, root, filters.artistName())));
@@ -48,7 +56,7 @@ final class EventSearchSpecification {
             }
             if (filters.keywords() != null) {
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("name")), like(filters.keywords())),
+                        containsIgnoringCase(cb, root.get("name"), filters.keywords()),
                         cb.exists(artistLike(query, cb, root, filters.keywords()))));
             }
             if (filters.fromDate() != null || filters.toDate() != null) {
@@ -71,20 +79,29 @@ final class EventSearchSpecification {
             if (filters.location() != null) {
                 Join<Object, Object> venue = root.join("venueMap", JoinType.LEFT);
                 predicates.add(cb.or(
-                        cb.like(cb.lower(venue.get("location").get("city")), like(filters.location())),
-                        cb.like(cb.lower(venue.get("location").get("country")), like(filters.location()))));
+                        containsIgnoringCase(cb, venue.get("location").get("city"), filters.location()),
+                        containsIgnoringCase(cb, venue.get("location").get("country"), filters.location())));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }
 
-    private static String like(String term) {
-        return "%" + term.toLowerCase() + "%";
+    /** {@code value} contains {@code term} as literal text, ignoring case. */
+    private static Predicate containsIgnoringCase(CriteriaBuilder cb, Expression<String> value, String term) {
+        return cb.like(cb.lower(value), "%" + escapeLikeWildcards(term.toLowerCase(Locale.ROOT)) + "%", LIKE_ESCAPE);
+    }
+
+    // The escape character first, so the escapes added for the wildcards are not escaped again.
+    private static String escapeLikeWildcards(String term) {
+        String escape = String.valueOf(LIKE_ESCAPE);
+        return term.replace(escape, escape + escape)
+                .replace("%", escape + "%")
+                .replace("_", escape + "_");
     }
 
     private static EventCategory parseCategory(String raw) {
         try {
-            return EventCategory.valueOf(raw.toUpperCase());
+            return EventCategory.valueOf(raw.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -95,7 +112,7 @@ final class EventSearchSpecification {
         Subquery<Integer> sub = query.subquery(Integer.class);
         Root<Event> subRoot = sub.from(Event.class);
         Join<Event, String> artists = subRoot.join("artistsNames");
-        sub.select(cb.literal(1)).where(cb.equal(subRoot, root), cb.like(cb.lower(artists), like(term)));
+        sub.select(cb.literal(1)).where(cb.equal(subRoot, root), containsIgnoringCase(cb, artists, term));
         return sub;
     }
 

@@ -48,6 +48,8 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventoryZone;
@@ -561,6 +563,26 @@ class EventManagementServiceTest {
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "MUSIC", null, null, null));
+
+                assertEquals(EventCategory.MUSIC, event.getCategory());
+        }
+
+        // Under a Turkish default locale "music".toUpperCase() is "MUS\u0130C", with a dotted capital I,
+        // which names no category (#187).
+        @Test
+        void GivenATurkishDefaultLocale_WhenEditEventDetailsWithALowercaseCategory_ThenCategoryIsUpdated() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                java.util.Locale defaultLocale = java.util.Locale.getDefault();
+                java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+                try {
+                        eventService.editEventDetails(OWNER_TOKEN,
+                                        new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "music", null, null, null));
+                } finally {
+                        java.util.Locale.setDefault(defaultLocale);
+                }
 
                 assertEquals(EventCategory.MUSIC, event.getCategory());
         }
@@ -1189,10 +1211,10 @@ class EventManagementServiceTest {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
                 when(mockEventRepo.findByCompanyId(COMPANY_ID)).thenReturn(List.of(event));
 
-                assertThrows(RuntimeException.class,
+                assertThrows(CompanyNotFoundException.class,
                                 () -> eventService.listEventsForCompany(OWNER_TOKEN, COMPANY_ID));
         }
 
@@ -1202,9 +1224,9 @@ class EventManagementServiceTest {
                 when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
                 when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
-                when(mockEventRepo.findById(EVENT_ID)).thenReturn(null);
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class,
+                assertThrows(EventNotFoundException.class,
                                 () -> eventService.getEventZones(MANAGER_TOKEN, EVENT_ID));
         }
 
@@ -1356,6 +1378,33 @@ class EventManagementServiceTest {
 
                 assertThrows(IllegalStateException.class,
                                 () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
+        }
+
+        // A stored map can predate the rule that a venue has a location (V1 allows none). The new map keeps
+        // the stored location, so saving the layout must say what to do first, not just refuse (#187).
+        @Test
+        void GivenAStoredMapWithoutALocation_WhenConfigureVenueMap_ThenRefusedWithWhatToDoFirst() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                VenueMap storedWithoutLocation = mock(VenueMap.class);
+                when(storedWithoutLocation.getLocation()).thenReturn(null);
+                Event stored = mock(Event.class);
+                when(stored.getCompanyId()).thenReturn(COMPANY_ID);
+                when(stored.getVenueMap()).thenReturn(storedWithoutLocation);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(stored);
+
+                VenueMapConfigDTO config = new VenueMapConfigDTO(
+                                String.valueOf(EVENT_ID), "Test Venue", 3, 3,
+                                List.of(new VenueMapConfigDTO.ZoneConfigDTO(
+                                                "Zone A", false, 100, null, 50.0, new GridPlacementDTO(1, 1, 1, 1))));
+
+                IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                                () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
+                assertTrue(refusal.getMessage().contains("Edit details"),
+                                "the refusal should say to set the location in Edit details, but was: "
+                                                + refusal.getMessage());
         }
 
         // -------------------------------------------------------------------------

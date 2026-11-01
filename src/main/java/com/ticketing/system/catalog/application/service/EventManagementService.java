@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +20,6 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
-import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -121,17 +121,28 @@ public class EventManagementService {
     // first create the event with basic details and then configure the venue map in
     // a second step.
 
-    // UC-19 — Owner adds an Event in DRAFT state.
+    /**
+     * UC-19: a company member with {@code MANAGE_INVENTORY} adds an event in DRAFT state.
+     *
+     * @param token   the member's session token
+     * @param request the event's details; its location is required
+     * @return the new event
+     * @throws InvalidTokenException     if {@code token} is not a live member token
+     * @throws IllegalArgumentException  if the request has no venue location, checked before the company lookup
+     * @throws CompanyNotFoundException  if the company does not exist
+     */
     @Transactional
     public EventDetailDTO addEvent(String token, EventCreationDTO request) {
         int ownerId = validateTokenAndGetUserId(token);
+        if (request.location() == null) {
+            throw new IllegalArgumentException("An event needs a venue location");
+        }
 
-        ProductionCompany company = null;
-        // TODO: see about all the other exceptions throws handlings/catches.
+        ProductionCompany company;
         try {
             company = companyRepository.getCompanyById(request.companyId());
-        } catch (RuntimeException e) {
-            log.error("Error - company not found: {}, {}", request.companyId(), e.getMessage());
+        } catch (CompanyNotFoundException e) {
+            log.warn("Request rejected: company not found. companyId={}", request.companyId());
             throw new CompanyNotFoundException();
         }
 
@@ -187,9 +198,6 @@ public class EventManagementService {
         }
 
         ProductionCompany company = companyRepository.getCompanyById(companyId);
-        if (company == null) {
-            throw new CompanyNotFoundException();
-        }
 
         // The events list is a read-only management hub. Any active member of the company may see
         // it (so e.g. a venue/sales manager can reach the per-event venue editor); the per-event
@@ -207,18 +215,12 @@ public class EventManagementService {
     public EventDetailDTO getEvent(String token, int eventId) {
         int userId = validateTokenAndGetUserId(token);
         Event event = eventRepository.findById(eventId);
-        if (event == null) {
-            throw new EventNotFoundException();
-        }
         User user = userRepository.getUserById(userId);
         if (user == null) {
             throw new UserNotFoundException();
         }
         companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
         ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
-        if (company == null) {
-            throw new CompanyNotFoundException();
-        }
 
         return new EventDetailDTO(
             String.valueOf(event.getId()),
@@ -251,9 +253,6 @@ public class EventManagementService {
             throw new UserNotFoundException();
         }
         Event event = eventRepository.findById(eventId);
-        if (event == null) {
-            throw new EventNotFoundException();
-        }
         companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.CONFIGURE_VENUE);
 
         VenueMap map = event.getVenueMap();
@@ -320,6 +319,14 @@ public class EventManagementService {
                 throw new UnauthorizedActionException("act on an event that does not belong to this company");
             }
 
+            // The new map keeps the stored location, and a stored map can predate the rule that a venue has one
+            // (V1 allows none), so say what to do first rather than only refuse.
+            Location location = event.getVenueMap() == null ? null : event.getVenueMap().getLocation();
+            if (location == null) {
+                throw new IllegalStateException(
+                        "Set the event's venue location in Edit details before configuring its venue map");
+            }
+
             int gridRows = config.gridRows() > 0 ? config.gridRows() : VenueMap.DEFAULT_GRID_ROWS;
             int gridCols = config.gridCols() > 0 ? config.gridCols() : VenueMap.DEFAULT_GRID_COLS;
             requireVenueWithinLimits(config.zones(), gridRows, gridCols);
@@ -352,8 +359,7 @@ public class EventManagementService {
 
             VenueMap venueMap = new VenueMap(
                     event.getVenueMap() != null ? event.getVenueMap().getId() : eventRepository.nextVenueMapId(),
-                    event.getVenueMap() != null ? event.getVenueMap().getLocation() : null,
-                    zones, gridRows, gridCols);
+                    location, zones, gridRows, gridCols);
 
             // Apply each zone's grid placement. Zone IDs were assigned 1..N in config
             // order,
@@ -402,7 +408,7 @@ public class EventManagementService {
             EventCategory newCategory = null;
             if (update.category() != null && !update.category().isBlank()) {
                 try {
-                    newCategory = EventCategory.valueOf(update.category().trim().toUpperCase());
+                    newCategory = EventCategory.valueOf(update.category().trim().toUpperCase(Locale.ROOT));
                 } catch (IllegalArgumentException e) {
                     throw new IllegalArgumentException("Unknown event category: " + update.category());
                 }
@@ -661,8 +667,8 @@ public class EventManagementService {
 
         try {
             companyRepository.getCompanyById(companyId);
-        } catch (RuntimeException e) {
-            log.error("Error - company not found: {}, {}", companyId, e.getMessage());
+        } catch (CompanyNotFoundException e) {
+            log.warn("Request rejected: company not found. companyId={}", companyId);
             throw new CompanyNotFoundException();
         }
 
@@ -952,6 +958,9 @@ public class EventManagementService {
         // cancellation process. This ensures that we have a consistent view of the event's state.
         eventRepository.lockForUpdate(eventId);
 
+        // Only a missing event is logged here. Any other failure, a RefundFailedException from the sales
+        // listener included, propagates unlogged here: LoggingAspect logs it at WARN, and the sales refund
+        // service logs its own refund failures. The presenter shows a DomainException's message unlogged.
         try {
             Event event = eventRepository.findById(eventId); // throws if not found, which is what we want here.
             User user = userRepository.getUserById(ownerId);                   // load caller for permission check
@@ -973,13 +982,6 @@ public class EventManagementService {
 
         } catch (EventNotFoundException e) {
             log.warn("Event {} not found for cancellation", eventId);
-            throw e;
-        } catch (RefundFailedException e) {
-            // Surfaced synchronously from the sales refund listener during publishEvent above.
-            log.error("Refund failed during cancellation of event {}: {}", eventId, e.getMessage());
-            throw e;
-        } catch (RuntimeException e) {
-            log.error("Unexpected error during cancellation of event {}: {}", eventId, e.getMessage());
             throw e;
         } finally {
             eventRepository.unlock(eventId);                                   // always release the lock
@@ -1013,10 +1015,7 @@ public class EventManagementService {
         try {
             int userId = sessionManager.extractUserId(token);
 
-            ProductionCompany company = companyRepository.getCompanyById(config.companyId());
-            if (company == null) {
-                throw new CompanyNotFoundException();
-            }
+            companyRepository.getCompanyById(config.companyId());
 
             User user = userRepository.getUserById(userId);
             if (user == null) {
@@ -1025,9 +1024,6 @@ public class EventManagementService {
             companyMembershipService.requirePermissionInCompany(user.getUserId(),config.companyId(), Permission.EDIT_POLICIES);
 
             Event event = eventRepository.findById(config.eventId());
-            if (event == null) {
-                throw new EventNotFoundException();
-            }
 
             if (event.getCompanyId() != config.companyId()) {
                 throw new UnauthorizedActionException("act on an event that does not belong to this company");
@@ -1058,16 +1054,12 @@ public class EventManagementService {
         if (!sessionManager.validateToken(token))
             throw new InvalidTokenException();
         int userId = sessionManager.extractUserId(token);
-        ProductionCompany company = companyRepository.getCompanyById(companyId);
-        if (company == null)
-            throw new CompanyNotFoundException();
+        companyRepository.getCompanyById(companyId);
         User user = userRepository.getUserById(userId);
         if (user == null)
             throw new UserNotFoundException();
         companyMembershipService.requirePermissionInCompany(user.getUserId(),companyId, Permission.EDIT_POLICIES);
         Event event = eventRepository.findById(eventId);
-        if (event == null)
-            throw new EventNotFoundException();
         if (event.getCompanyId() != companyId)
             throw new UnauthorizedActionException("act on an event that does not belong to this company");
         return PurchasePolicyDtoMapper.toDto(event.getPurchasePolicy());

@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -14,10 +16,14 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -43,6 +49,8 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.domain.TextLimits;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
 
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
@@ -325,7 +333,7 @@ class CatalogServiceTest {
     @Test
     void givenValidTokenAndNonExistentEvent_whenGetEventVenueMap_thenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class,
                 () -> catalogService.getEventVenueMap(VALID_TOKEN, EVENT_ID));
@@ -570,7 +578,7 @@ class CatalogServiceTest {
     @Test
     void givenNonExistentEvent_whenGetEventDetail_thenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class,
                 () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID));
@@ -585,7 +593,7 @@ class CatalogServiceTest {
 
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         // First read finds the closed company's event; the second finds no event under the same id.
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event, (Event) null);
+        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event).thenThrow(new EventNotFoundException(EVENT_ID));
         when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
 
         String hidden = assertThrows(EventNotFoundException.class,
@@ -1093,5 +1101,81 @@ class CatalogServiceTest {
         assertFalse(message.contains(DOUBLED_NOT_FOUND), "garbled not-found message: " + message);
         assertFalse(message.toLowerCase(Locale.ROOT).contains("while"),
                 "the message must not name the operation that was refused: " + message);
+    }
+
+    // A search term is bound as a LIKE parameter. One longer than any stored text can match nothing, so it is
+    // refused before the query, rather than sent in whatever size a caller chooses (#187). Every text filter,
+    // on both entry points.
+    @ParameterizedTest(name = "{0} through {1}")
+    @MethodSource("textFiltersAndSearchEntryPoints")
+    void GivenASearchTermLongerThanAnyStoredText_WhenSearching_ThenItIsRefusedBeforeTheQuery(
+            String filter, String entryPoint) {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        ProductionCompany company = createMockCompany("Live Nation", 4.5);
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
+        CatalogSearchFiltersDTO filters = filtersWithOnly(filter, "a".repeat(TextLimits.MAX_TEXT_LENGTH + 1));
+
+        assertThrows(BusinessRuleViolationException.class, () -> {
+            if (entryPoint.equals("searchGlobal")) {
+                catalogService.searchGlobal(VALID_TOKEN, filters);
+            } else {
+                catalogService.searchByCompany(VALID_TOKEN, 10, filters);
+            }
+        });
+
+        verify(mockEventRepository, never()).searchONSALE(any());
+    }
+
+    static Stream<Arguments> textFiltersAndSearchEntryPoints() {
+        return Stream.of("eventName", "artistName", "category", "keywords", "location")
+                .flatMap(filter -> Stream.of(Arguments.of(filter, "searchGlobal"), Arguments.of(filter, "searchByCompany")));
+    }
+
+    private static CatalogSearchFiltersDTO filtersWithOnly(String filter, String term) {
+        return new CatalogSearchFiltersDTO(
+                filter.equals("eventName") ? term : null,
+                filter.equals("artistName") ? term : null,
+                filter.equals("category") ? term : null,
+                filter.equals("keywords") ? term : null,
+                null, null, null, null,
+                filter.equals("location") ? term : null,
+                null, null, null, null);
+    }
+
+    // ---- case-insensitive matching ignores the JVM's locale (#187) ----
+    // Under a Turkish default locale, "TITLE".toLowerCase() has a dotless i and matches nothing. Browse
+    // lower-cases with Locale.ROOT, so the top bar and the company picker must too.
+
+    @Test
+    void GivenATurkishDefaultLocale_WhenTheTopBarSearchesForAnUppercaseTerm_ThenTheEventMatches() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        Event e = searchEvent(1, 10, "Title Night", List.of("Artist A"));
+        ProductionCompany company = createMockCompany("Live Nation", 4.5);
+        when(mockEventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
+
+        List<SearchResultDTO> results = underTurkishLocale(() -> catalogService.search(VALID_TOKEN, "TITLE", 8));
+
+        assertEquals(List.of("Title Night"), results.stream().map(SearchResultDTO::title).toList());
+    }
+
+    @Test
+    void GivenATurkishDefaultLocale_WhenCompaniesAreSearchedForAnUppercaseTerm_ThenTheCompanyMatches() {
+        ProductionCompany company = createMockCompany("Indie Live", 4.5);
+        when(mockCompanyRepository.findActive()).thenReturn(List.of(company));
+
+        var found = underTurkishLocale(() -> catalogService.searchCompaniesByName("INDIE"));
+
+        assertEquals(1, found.size());
+    }
+
+    private static <T> T underTurkishLocale(java.util.function.Supplier<T> call) {
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            return call.get();
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 }

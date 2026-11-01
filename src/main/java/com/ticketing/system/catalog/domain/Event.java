@@ -51,6 +51,8 @@ public class Event implements InvariantChecked {
     private static final String NAME_FIELD = "Event name";
     private static final String DESCRIPTION_FIELD = "Event description";
     private static final String ARTIST_FIELD = "Artist name";
+    // Scheduling needs inventory (transitionToScheduled), so a scheduled event may not lose all of it.
+    private static final String SCHEDULED_NEEDS_A_ZONE = "A scheduled event must keep at least one inventory zone";
 
     @Id
     private int id;
@@ -116,6 +118,7 @@ public class Event implements InvariantChecked {
     /**
      * @param showDates wall-clock times at the venue, read in {@code timeZone}
      * @param timeZone  the venue's IANA zone (ADR-008); required
+     * @throws IllegalArgumentException if an artist's name is null or blank
      */
     public Event(int id, String name, String description, Double rating, List<String> artistsNames,
             EventCategory category, int comapnyid, EventStatus status, VenueMap venueMap, List<ShowDate> showDates,
@@ -124,6 +127,7 @@ public class Event implements InvariantChecked {
         // (single source of truth). Collection copies are null-safe so a null input
         // reaches checkInvariants() as a clean IllegalStateException instead of an NPE here.
         requireTextFits(name, description, artistsNames);
+        requireNamedArtists(artistsNames);
         this.id = id;
         this.name = name;
         this.description = description;
@@ -265,8 +269,16 @@ public class Event implements InvariantChecked {
 
 
 
-    // UC-20 — only company that owns the event can configure the venue map; must be done before going ON_SALE.
-    // this is simply a setter for the venue map.
+    /**
+     * UC-20: replaces the event's venue map. Only the owning company may, before sales open.
+     *
+     * @param venueMap          the new map
+     * @param incomingCompanyId the company asking
+     * @throws UnauthorizedActionException if another company asks
+     * @throws IllegalArgumentException    if {@code venueMap} is null
+     * @throws IllegalStateException       if tickets are reserved or sold, or if the event is SCHEDULED and
+     *                                     the new map has no zone
+     */
     public void configureVenueMap(VenueMap venueMap, int incomingCompanyId) {
         if (comapnyid != incomingCompanyId) {
             throw new UnauthorizedActionException("configure the venue map of another company's event");
@@ -280,6 +292,10 @@ public class Event implements InvariantChecked {
 
         if (this.venueMap != null && hasReservedOrSoldInventory()) {
             throw new IllegalStateException("Cannot reconfigure venue map while tickets are reserved or sold");
+        }
+
+        if (status == EventStatus.SCHEDULED && venueMap.getInventoryZones().isEmpty()) {
+            throw new IllegalStateException(SCHEDULED_NEEDS_A_ZONE);
         }
 
         this.venueMap = venueMap;
@@ -338,10 +354,29 @@ public class Event implements InvariantChecked {
         return newZoneId;
     }
 
-    
+    /**
+     * Removes one inventory zone from the venue map, on the owning company's behalf.
+     *
+     * @param zoneId            the zone to remove
+     * @param incomingCompanyId the company asking
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map
+     * @throws IllegalArgumentException       if the map has no such zone
+     * @throws IllegalStateException          if the event is past SCHEDULED, is SCHEDULED and this is its
+     *                                        only zone, or the zone has reserved or sold places
+     */
     public void removeInventoryZone(int zoneId, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
+        if (status == EventStatus.SCHEDULED && isOnlyZone(zoneId)) {
+            throw new IllegalStateException(SCHEDULED_NEEDS_A_ZONE);
+        }
         venueMap.removeZone(zoneId);
+    }
+
+    // An id that is not on the map is not its only zone, so removeZone still reports it as not found.
+    private boolean isOnlyZone(int zoneId) {
+        List<InventoryZone> zones = venueMap.getInventoryZones();
+        return zones.size() == 1 && zones.get(0).getId() == zoneId;
     }
 
     
@@ -731,6 +766,19 @@ public class Event implements InvariantChecked {
         TextLimits.requireFits(DESCRIPTION_FIELD, description);
         if (artistsNames != null) {
             artistsNames.forEach(artist -> TextLimits.requireFits(ARTIST_FIELD, artist));
+        }
+    }
+
+    // A null artist broke every listing that reads the names (getArtistsNames copies them with
+    // List.copyOf), and a blank one names nobody. Checked before any field is assigned.
+    private static void requireNamedArtists(List<String> artistsNames) {
+        if (artistsNames == null) {
+            return; // a missing list is checkInvariants' to refuse
+        }
+        for (String artist : artistsNames) {
+            if (artist == null || artist.isBlank()) {
+                throw new IllegalArgumentException("Every artist needs a name");
+            }
         }
     }
 

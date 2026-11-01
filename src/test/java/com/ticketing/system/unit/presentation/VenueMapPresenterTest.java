@@ -127,4 +127,23 @@ class VenueMapPresenterTest {
                 String.valueOf(companyId), "Company " + companyId, EventStatus.SCHEDULED,
                 List.of(), ZoneId.of("Asia/Jerusalem"), List.of(), 0.0);
     }
+
+    // ---- default zone names stay unique (#187) ----
+    // A venue map refuses two zones named alike, ignoring case, so the editor must not hand out a taken
+    // name. Numbering by position did, once a zone before the last was removed.
+
+    @Test
+    void GivenZonesTwoAndThreeLeftAfterTheFirstWasRemoved_WhenANewZoneIsNamed_ThenItIsZoneOne() {
+        assertEquals("Zone 1", presenter.defaultZoneName(List.of("Zone 2", "Zone 3")));
+    }
+
+    @Test
+    void GivenAZoneNamedAlikeIgnoringCase_WhenANewZoneIsNamed_ThenThatNameIsSkipped() {
+        assertEquals("Zone 3", presenter.defaultZoneName(List.of("zone 1", "ZONE 2")));
+    }
+
+    @Test
+    void GivenNoZones_WhenANewZoneIsNamed_ThenItIsZoneOne() {
+        assertEquals("Zone 1", presenter.defaultZoneName(List.of()));
+    }
 }

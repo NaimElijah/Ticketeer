@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.application;
 
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
@@ -7,6 +8,7 @@ import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.sales.domain.ActiveOrder;
@@ -51,6 +53,7 @@ import org.mockito.ArgumentCaptor;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
 import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -115,7 +118,7 @@ public class ReservationServiceTest {
         // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
         // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, mock(ProductionCompanyRepository.class));
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,
@@ -184,9 +187,11 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenremoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        // The member's cart holds the line, so the removal reaches the event lookup.
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
@@ -347,9 +352,9 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenreserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
@@ -463,9 +468,9 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenreserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
@@ -1397,5 +1402,4 @@ public class ReservationServiceTest {
                 acceptingPurchasePolicy(),
                 noDiscountPolicy());
     }
-
 }

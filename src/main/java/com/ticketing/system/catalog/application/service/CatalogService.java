@@ -7,11 +7,13 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 import lombok.extern.slf4j.Slf4j;
 
+import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.exception.*;
 
 import com.ticketing.system.catalog.domain.Event;
@@ -155,7 +157,7 @@ public class CatalogService {
     //* UC-7: Search the catalog with filters, returning a list of EventSummaryDTOs. Accepts either a JWT (Member) or a raw sessionId (Guest) — 
     //* catalog search is open to anyone with an active session per UC-3 / UC-7 (auth rework #181 / Phase 4.3).
     public List<EventSummaryDTO> searchGlobal(String credential, CatalogSearchFiltersDTO filters) {
-        log.info("Starting global search with filters set: {}", filtersInUse(filters));
+        log.debug("Starting global search with filters set: {}", filtersInUse(filters));
         // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
             log.warn("Invalid credential provided while performing global search with filters set: {}",
@@ -205,7 +207,7 @@ public class CatalogService {
             results.add(mapper.convertEventToEventSummaryDTO(event, productionCompanyRepository));
         }
 
-        log.info("Global search with filters set: {} returning {} results",
+        log.debug("Global search with filters set: {} returning {} results",
                 filtersInUse(effectiveFilters), results.size());
         return results;
     }
@@ -216,7 +218,7 @@ public class CatalogService {
 
     //* the searchByCompany method is similar to searchGlobal but scoped to a specific company and without company-rating filters.
     public List<EventSummaryDTO> searchByCompany(String credential, int companyId, CatalogSearchFiltersDTO filters) {
-        log.info("Starting company-scoped search for companyId: {} with filters set: {}",
+        log.debug("Starting company-scoped search for companyId: {} with filters set: {}",
                 companyId, filtersInUse(filters));
         // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
@@ -249,7 +251,7 @@ public class CatalogService {
             results.add(mapper.convertEventToEventSummaryDTO(event, productionCompanyRepository));
         }
 
-        log.info("Company-scoped search for companyId: {} with filters set: {} returning {} results",
+        log.debug("Company-scoped search for companyId: {} with filters set: {} returning {} results",
                 companyId, filtersInUse(effectiveFilters), results.size());
 
         return results;
@@ -269,7 +271,7 @@ public class CatalogService {
             log.warn("Invalid credential provided while performing top-bar search");
             throw new InvalidTokenException();
         }
-        String q = query == null ? "" : query.trim().toLowerCase();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         if (q.isEmpty() || limit <= 0) {
             return List.of();
         }
@@ -290,7 +292,7 @@ public class CatalogService {
             }
 
             String eventName = event.getName();
-            if (events.size() < limit && eventName != null && eventName.toLowerCase().contains(q)) {
+            if (events.size() < limit && eventName != null && eventName.toLowerCase(Locale.ROOT).contains(q)) {
                 events.add(new SearchResultDTO("EVENT", eventName, company.getName(), event.getId()));
             }
 
@@ -299,16 +301,16 @@ public class CatalogService {
                     if (artists.size() >= limit) {
                         break;
                     }
-                    if (artist != null && artist.toLowerCase().contains(q)
-                            && seenArtists.add(artist.toLowerCase())) {
+                    if (artist != null && artist.toLowerCase(Locale.ROOT).contains(q)
+                            && seenArtists.add(artist.toLowerCase(Locale.ROOT))) {
                         artists.add(new SearchResultDTO("ARTIST", artist, "Artist · " + eventName, event.getId()));
                     }
                 }
             }
 
             String venue = venueLabel(event);
-            if (venues.size() < limit && venue != null && venue.toLowerCase().contains(q)
-                    && seenVenues.add(venue.toLowerCase())) {
+            if (venues.size() < limit && venue != null && venue.toLowerCase(Locale.ROOT).contains(q)
+                    && seenVenues.add(venue.toLowerCase(Locale.ROOT))) {
                 venues.add(new SearchResultDTO("VENUE", venue, "Venue · " + eventName, event.getId()));
             }
         }
@@ -321,7 +323,7 @@ public class CatalogService {
             if (i < artists.size()) { results.add(artists.get(i)); added = true; if (results.size() == limit) break; }
             if (i < venues.size())  { results.add(venues.get(i));  added = true; if (results.size() == limit) break; }
         }
-        log.info("Top-bar search of {} characters returning {} results", q.length(), results.size());
+        log.debug("Top-bar search of {} characters returning {} results", q.length(), results.size());
         return results;
     }
 
@@ -360,10 +362,10 @@ public class CatalogService {
     //* returns all active companies so the picker can show an initial list. No credential needed —
     //* company names are public (same audience as browse).
     public List<CompanySummaryDTO> searchCompaniesByName(String substring) {
-        String needle = substring == null ? "" : substring.trim().toLowerCase();
+        String needle = substring == null ? "" : substring.trim().toLowerCase(Locale.ROOT);
         return productionCompanyRepository.findActive().stream()
                 .filter(c -> needle.isEmpty()
-                        || (c.getName() != null && c.getName().toLowerCase().contains(needle)))
+                        || (c.getName() != null && c.getName().toLowerCase(Locale.ROOT).contains(needle)))
                 .sorted(Comparator.comparing(ProductionCompany::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .map(c -> new CompanySummaryDTO(c.getCompanyId(), c.getName(),
                         CompanyRatings.fromEvents(eventRepository.findByCompanyId(c.getCompanyId()))))
@@ -408,6 +410,13 @@ public class CatalogService {
                 ? CatalogSearchFiltersDTO.empty()
                 : filters.normalized();
 
+        // Each term is bound as a LIKE parameter; one longer than any stored text can match nothing.
+        TextLimits.requireFits("Event name", f.eventName());
+        TextLimits.requireFits("Artist name", f.artistName());
+        TextLimits.requireFits("Category", f.category());
+        TextLimits.requireFits("Keywords", f.keywords());
+        TextLimits.requireFits("Location", f.location());
+
         validateDoubleRange(f.minPrice(), f.maxPrice(), "price");
         validateDoubleRange(f.minEventRating(), f.maxEventRating(), "event rating");
         validateDoubleRange(f.minCompanyRating(), f.maxCompanyRating(), "company rating");
@@ -429,32 +438,20 @@ public class CatalogService {
     }
 
     // *HELPER METHOD* to return the active ProductionCompany for a given companyId, or null if not found or not active.
+    // Any other failure of the lookup propagates: a store that cannot answer is not a company that is not public.
     private ProductionCompany activeCompanyOrNull(int companyId) {
+        ProductionCompany company;
         try {
-            ProductionCompany company = productionCompanyRepository.getCompanyById(companyId);
-            // will throw if company not found, and if it doesn't throw but the company is not active, we'll return null to indicate that the company is not publicly visible.
-            if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
-                return null;
-            }
-            return company;
-        } catch (RuntimeException e) {
-            // If the company is not found or any other exception occurs, return null to indicate that the company does not exist.
+            company = productionCompanyRepository.getCompanyById(companyId);
+        } catch (CompanyNotFoundException e) {
             return null;
         }
+        return company.getStatus() == CompanyStatus.ACTIVE ? company : null;
     }
 
     // *HELPER METHOD* to require that a ProductionCompany exists and is active, throwing CompanyNotFoundException or CompanyClosedException if not.
     private ProductionCompany requireActiveCompany(int companyId) {
-        ProductionCompany company;
-        try {
-            company = productionCompanyRepository.getCompanyById(companyId);
-        } catch (RuntimeException e) {
-            throw new CompanyNotFoundException(companyId);
-        }
-
-        if (company == null) {
-            throw new CompanyNotFoundException(companyId);
-        }
+        ProductionCompany company = productionCompanyRepository.getCompanyById(companyId);
 
         if (company.getStatus() != CompanyStatus.ACTIVE) {
             throw new CompanyClosedException(companyId);
@@ -495,7 +492,7 @@ public class CatalogService {
     // viewing is open to anyone with an active session per UC-3 / UC-8
     // (auth rework #181 / Phase 4.3).
     public VenueMapDTO getEventVenueMap(String credential, int eventId) {
-        log.info("Fetching venue map for eventId: {}", eventId);
+        log.debug("Fetching venue map for eventId: {}", eventId);
 
             if (!this.sessionManager.validateCredential(credential)) {
                 log.warn("Invalid credential provided while getting venue map for eventId: {}", eventId);
@@ -504,15 +501,11 @@ public class CatalogService {
             
             // see that event exists and has a venue map
             Event event = this.eventRepository.findById(eventId);
-            if (event == null) {
-                log.warn("Event not found while getting venue map: {}", eventId);
-                throw new EventNotFoundException(eventId);
-            }
 
             // Only a closed company's owners and the system admins may see its information, so on this
             // public read its event is refused exactly like a missing one (II.2.2).
             ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
-            if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
+            if (company.getStatus() != CompanyStatus.ACTIVE) {
                 log.warn("Attempt to access venue map for eventId: {} from inactive company", eventId);
                 throw new EventNotFoundException(eventId);
             }
@@ -526,7 +519,7 @@ public class CatalogService {
                 throw new NullVenueMapException(eventId);
             }
 
-            log.info("Venue map found for eventId: {} while getting venue map and being returned", eventId);
+            log.debug("Venue map found for eventId: {} while getting venue map and being returned", eventId);
             return new VenueMapMapper().venueMapToVenueMapDTO(event.getVenueMap());
 
     }
@@ -535,7 +528,7 @@ public class CatalogService {
     // UC-8: Public single-event detail for the buyer event page (header, description, schedule, lineup).
     // Accepts either a JWT (Member) or a raw sessionId (Guest) — same audience as browse / getEventVenueMap.
     public EventDetailDTO getEventDetail(String credential, int eventId) {
-        log.info("Fetching event detail for eventId: {}", eventId);
+        log.debug("Fetching event detail for eventId: {}", eventId);
 
         if (!this.sessionManager.validateCredential(credential)) {
             log.warn("Invalid credential provided while getting event detail for eventId: {}", eventId);
@@ -543,22 +536,18 @@ public class CatalogService {
         }
 
         Event event = this.eventRepository.findById(eventId);
-        if (event == null) {
-            log.warn("Event not found while getting event detail: {}", eventId);
-            throw new EventNotFoundException(eventId);
-        }
 
         // Only a closed company's owners and the system admins may see its information, so on this
         // public read its event is refused exactly like a missing one (II.2.1).
         ProductionCompany company = productionCompanyRepository.getCompanyById(event.getCompanyId());
-        if (company == null || company.getStatus() != CompanyStatus.ACTIVE) {
+        if (company.getStatus() != CompanyStatus.ACTIVE) {
             log.warn("Attempt to access event detail for eventId: {} from inactive company", eventId);
             throw new EventNotFoundException(eventId);
         }
 
         requirePubliclyListed(event, "getting event detail");
 
-        log.info("Event detail found for eventId: {} and being returned", eventId);
+        log.debug("Event detail found for eventId: {} and being returned", eventId);
         return new EventMapper().toEventDetailDTO(event, company.getName());
     }
 

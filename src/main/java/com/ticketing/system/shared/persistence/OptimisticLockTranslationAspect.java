@@ -31,9 +31,10 @@ import lombok.extern.slf4j.Slf4j;
  * has already returned — so only an outer aspect can observe and translate it.
  *
  * <p>This aspect <strong>only re-types</strong> the exception; it never re-invokes the method, so it
- * is safe for operations with non-DB side effects (e.g. notification dispatch). The one retry is
- * {@code CheckoutService.runPhase3}, which runs a Phase 3 that lost a race again on Spring's
- * {@code ConcurrencyFailureException} inside the service, before this aspect sees it (ADR-015).
+ * is safe for operations with non-DB side effects (e.g. notification dispatch). Two places retry, each on
+ * Spring's {@code ConcurrencyFailureException} inside the service, before this aspect sees it:
+ * {@code CheckoutService.runPhase3} runs a Phase 3 that lost a race again (ADR-015), and
+ * {@code InventoryService} does the same for one event's stock return or hold release (ADR-017).
  */
 @Aspect
 @Component

@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
 
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
@@ -20,6 +21,8 @@ import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -74,7 +78,7 @@ public class ReservationAcceptanceTests {
         // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
         // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, mock(ProductionCompanyRepository.class));
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,
@@ -163,7 +167,7 @@ public class ReservationAcceptanceTests {
 
     @Test
     void GivenEventNotFound_WhenreserveStandingTicketsForMember_ThenThrowException() {
-        when(eventRepository.findById(100)).thenReturn(null);
+        when(eventRepository.findById(100)).thenThrow(new EventNotFoundException(100));
 
         String result;
 

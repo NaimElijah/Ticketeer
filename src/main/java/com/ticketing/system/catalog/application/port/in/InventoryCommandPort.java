@@ -37,13 +37,14 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  * </ul>
  *
  * <h2>Transaction contract</h2>
- * The port opens no transaction of its own: every method joins the caller's. A caller that needs a
- * multi-event call to be atomic must therefore call it inside its transaction. Without one, each
- * event's save commits on its own, and a failure part-way leaves the earlier events changed. Two
- * callers do that today, both best-effort steps after the main work has committed or failed:
- * {@code RefundService} calls {@link #returnSoldToStock} after the refund commits, and
- * {@code CheckoutService}'s failure rollback calls {@link #releaseHeld} outside its Phase-3
- * transaction.
+ * Every method joins the caller's transaction. A caller that needs a multi-event call to be atomic
+ * must therefore call it inside its transaction. Without one, each event's save commits on its own,
+ * and a failure part-way leaves the earlier events changed. Two callers do that today, both
+ * best-effort steps after the main work has committed or failed: {@code RefundService} calls
+ * {@link #returnSoldToStock} after the refund commits, and {@code CheckoutService}'s failure rollback
+ * calls {@link #releaseHeld} outside its Phase-3 transaction. Those two methods open a transaction when
+ * the caller has none: one per event, so that event's load and save commit together and a lost
+ * concurrency race can run again (ADR-017).
  */
 public interface InventoryCommandPort {
 
@@ -96,7 +97,10 @@ public interface InventoryCommandPort {
      * Returns previously SOLD inventory to AVAILABLE stock (member/cancellation refund) for the given
      * flat lines. SELF-LOCKING per event and fully best-effort: each event is locked, mutated, and
      * saved independently, and any per-zone or per-event failure is logged and swallowed so a
-     * stock-return hiccup never fails an already-committed refund.
+     * stock-return hiccup never fails an already-committed refund. Called without a transaction, each
+     * event's load, mutation and save run in a transaction of their own, and one that loses a
+     * concurrency race (a reservation committing in the same zone meanwhile) runs again, a bounded
+     * number of times; an event whose every attempt loses keeps its places SOLD and is logged at ERROR.
      *
      * @param lines the refunded lines (seat label per line, or {@code null} for one standing unit)
      */
@@ -167,12 +171,16 @@ public interface InventoryCommandPort {
 
     /**
      * Releases the given still-held (RESERVED) lines back to AVAILABLE during a checkout rollback,
-     * grouping by event and zone and saving each event once. Best-effort per zone: a zone that can no
-     * longer be released is logged and skipped so the rest still roll back. CALLER-LOCKED: the caller
+     * grouping by event and zone and saving each event once, in a transaction of its own when the caller
+     * has none, run again up to three attempts in all when it loses a concurrency race. Best-effort per
+     * zone: a zone that can no longer be released is logged and skipped so the rest still roll back. A
+     * deleted event is skipped. Every event is tried even when another fails. CALLER-LOCKED: the caller
      * must hold the event buyer-lock for every affected event.
      *
      * @param lines    the held lines to release
      * @param orderKey the owning order's key
+     * @throws RuntimeException the first event's failure, with the later ones suppressed, once every event
+     *                          has been tried, so the caller can keep the lines whose holds remain
      */
     void releaseHeld(List<InventoryLineDTO> lines, String orderKey);
 }
