@@ -189,4 +189,33 @@ class WsepTicketIssuerTest {
         assertFalse(failure instanceof TicketIssuerUnreachableException,
                 "an issuer that answered with a refusal was reachable, so it is no outage");
     }
+
+    // ---- R2: the outage covers every answer that is no usable one, a non-2xx status included ----
+
+    @Test
+    void GivenIssuerUnreachable_WhenIssue_ThenTheMessageSaysUnreachableOrNoUsableAnswer() {
+        when(http.post(any())).thenThrow(
+                new WsepCommunicationException("refused", new ConnectException("Connection refused")));
+
+        TicketIssuerUnreachableException failure = assertThrows(TicketIssuerUnreachableException.class,
+                () -> issuer.issue(twoTicketRequest()));
+
+        assertTrue(failure.getMessage().contains("unreachable or gave no usable answer"),
+                "the outage covers more than an unreachable issuer, so its message must say so, but was: "
+                        + failure.getMessage());
+    }
+
+    // Through the real client and real HTTP: a non-2xx answer is an outage too, not a refusal.
+    @Test
+    void GivenIssuerAnswersHttp500_WhenIssue_ThenTheFailureIsTypedAsAnOutage() {
+        try (LoopbackHttpServer server = LoopbackHttpServer.start()) {
+            server.respondWith(500, "Internal Server Error");
+            WsepTicketIssuer realIssuer = new WsepTicketIssuer(
+                    new WsepHttpClient(new WsepProperties(
+                            server.baseUrl(), REQUEST_TIMEOUT_SECONDS, SINGLE_ATTEMPT, NO_BACKOFF_MS)), FIXED_CLOCK);
+
+            assertThrows(TicketIssuerUnreachableException.class, () -> realIssuer.issue(twoTicketRequest()),
+                    "an issuer that answered HTTP 500 gave no usable answer, which is an outage");
+        }
+    }
 }

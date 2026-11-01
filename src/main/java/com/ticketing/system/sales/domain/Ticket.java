@@ -132,7 +132,6 @@ public class Ticket implements InvariantChecked {
         if (holderUserId <= 0) {
             throw new IllegalArgumentException("holderUserId must be positive");
         }
-        requireCanBecome(TicketStatus.RESERVED);
         this.holderUserId = holderUserId;
         moveTo(TicketStatus.RESERVED);
     }

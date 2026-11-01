@@ -1,8 +1,9 @@
 package com.ticketing.system.shared.exception;
 
 /**
- * The ticket issuer could not be reached (connection refused, timeout, no answer), so issuance never got a
- * verdict. An outage that needs an operator, unlike a refusal by the issuer, which stays a plain
+ * The ticket issuer was unreachable or gave no usable answer: a connection refused or timed out, an I/O
+ * error, a non-2xx status, or a body larger than any reply, so issuance never got a verdict. Each is an
+ * outage that needs an operator, unlike a refusal by the issuer, which stays a plain
  * {@link TicketIssuanceFailedException}. It extends that type, so every existing catch and the
  * presenter's reason-free outcome still apply. Mirrors {@link PaymentGatewayUnreachableException}.
  */
@@ -10,7 +11,7 @@ public class TicketIssuerUnreachableException extends TicketIssuanceFailedExcept
 
     /**
      * @param reason what failed
-     * @param cause  the transport failure
+     * @param cause  the transport failure, or the answer that could not be used
      */
     public TicketIssuerUnreachableException(String reason, Throwable cause) {
         super(reason, cause);
