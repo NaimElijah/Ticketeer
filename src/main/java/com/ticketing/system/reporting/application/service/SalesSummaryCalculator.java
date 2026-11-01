@@ -40,15 +40,21 @@ public class SalesSummaryCalculator {
         double avgOrderValue = ordersWithSales == 0 ? 0.0 : revenue / ordersWithSales;
         long refundedOrders = records.stream().filter(r -> r.refundStatus() != RefundStatus.NONE).count();
 
-        Optional<String> topEvent = sold.stream()
-                .filter(t -> t.eventName() != null)
+        return new SalesSummaryDTO(revenue, sold.size(), avgOrderValue, topEvent(sold), refundedOrders);
+    }
+
+    // Grouped by event id, not name: event names are not unique, and two events sharing one must
+    // not have their takings summed. Lines whose event name did not resolve are left out.
+    private static Optional<String> topEvent(List<TicketRecordDTO> sold) {
+        List<TicketRecordDTO> named = sold.stream().filter(t -> t.eventName() != null).toList();
+        Map<Integer, String> nameByEvent = named.stream()
+                .collect(Collectors.toMap(TicketRecordDTO::eventId, TicketRecordDTO::eventName, (a, b) -> a));
+        return named.stream()
                 .collect(Collectors.groupingBy(
-                        TicketRecordDTO::eventName,
+                        TicketRecordDTO::eventId,
                         Collectors.summingDouble(TicketRecordDTO::pricePaid)))
                 .entrySet().stream()
                 .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey);
-
-        return new SalesSummaryDTO(revenue, sold.size(), avgOrderValue, topEvent, refundedOrders);
+                .map(top -> nameByEvent.get(top.getKey()));
     }
 }
