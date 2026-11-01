@@ -3,7 +3,11 @@ package com.ticketing.system.unit.application;
 import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ReservationRemovalFailedNotice;
+import com.ticketing.system.shared.event.TicketReservationFailedNotice;
 import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.UserFacingErrors;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
@@ -33,6 +37,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+
+import jakarta.persistence.PersistenceException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -1347,6 +1354,102 @@ public class ReservationServiceTest {
                 "the reserve's own failure must propagate, not the cart rollback's");
         verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(ORDER_KEY));
         assertWarnCarrying(CART_ROLLBACK_FAILURE);
+    }
+
+    // --- #187: a failed reservation's notice reaches the member's notification, so its reason carries a
+    // refusal's own message, and only a generic reason for any other failure (the rule ServiceErrors
+    // applies in the UI). ---
+
+    private static final String REFUSAL = "refusal-reason-under-test";
+    private static final String INTERNAL_FAILURE_TEXT = "internal-failure-text-under-test";
+    private static final String GENERIC_REASON = UserFacingErrors.GENERIC_MESSAGE;
+
+    @Test
+    void GivenTheInventoryRefusesTheReservation_WhenReserveForMember_ThenTheFailureNoticeCarriesTheRefusalsReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithoutCart();
+        BusinessRuleViolationException refusal = new BusinessRuleViolationException(REFUSAL);
+        whenReserving(inventory).thenThrow(refusal);
+
+        assertSame(refusal, assertThrows(BusinessRuleViolationException.class,
+                () -> reservationServiceOver(inventory).reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        assertEquals(REFUSAL, publishedNotice(TicketReservationFailedNotice.class).reason());
+    }
+
+    @Test
+    void GivenAnInternalFailureWhileReserving_WhenReserveForMember_ThenTheFailureNoticeCarriesOnlyTheGenericReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithoutCart();
+        PersistenceException internal = new PersistenceException(INTERNAL_FAILURE_TEXT);
+        whenReserving(inventory).thenThrow(internal);
+
+        assertSame(internal, assertThrows(PersistenceException.class,
+                () -> reservationServiceOver(inventory).reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        String reason = publishedNotice(TicketReservationFailedNotice.class).reason();
+        assertEquals(GENERIC_REASON, reason, "an internal failure's text must not reach the member's notification");
+        assertFalse(reason.contains(INTERNAL_FAILURE_TEXT));
+    }
+
+    @Test
+    void GivenTheInventoryRefusesTheRemoval_WhenRemoveForMember_ThenTheFailureNoticeCarriesTheRefusalsReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithReservedStandingTickets();
+        BusinessRuleViolationException refusal = new BusinessRuleViolationException(REFUSAL);
+        when(inventory.release(anyInt(), anyInt(), any(), any())).thenThrow(refusal);
+
+        assertSame(refusal, assertThrows(BusinessRuleViolationException.class,
+                () -> reservationServiceOver(inventory).removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        assertEquals(REFUSAL, publishedNotice(ReservationRemovalFailedNotice.class).reason());
+    }
+
+    @Test
+    void GivenAnInternalFailureWhileRemoving_WhenRemoveForMember_ThenTheFailureNoticeCarriesOnlyTheGenericReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithReservedStandingTickets();
+        DataAccessResourceFailureException internal = new DataAccessResourceFailureException(INTERNAL_FAILURE_TEXT);
+        when(inventory.release(anyInt(), anyInt(), any(), any())).thenThrow(internal);
+
+        assertSame(internal, assertThrows(DataAccessResourceFailureException.class,
+                () -> reservationServiceOver(inventory).removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        String reason = publishedNotice(ReservationRemovalFailedNotice.class).reason();
+        assertEquals(GENERIC_REASON, reason, "an internal failure's text must not reach the member's notification");
+        assertFalse(reason.contains(INTERNAL_FAILURE_TEXT));
+    }
+
+    private org.mockito.stubbing.OngoingStubbing<Double> whenReserving(InventoryCommandPort inventory) {
+        return when(inventory.reserve(anyInt(), anyInt(), any(), any(), any(), anyInt(), any(), anyInt()));
+    }
+
+    // A member with no cart yet: the service creates a real ActiveOrder for them.
+    private void memberWithoutCart() {
+        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
+    }
+
+    private void memberWithReservedStandingTickets() {
+        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        cart.addStandingReservation(EVENT_ID, ZONE_ID, QUANTITY, 50.0, NOW);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
+    }
+
+    private <T> T publishedNotice(Class<T> type) {
+        ArgumentCaptor<Object> published = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(published.capture());
+        List<T> notices = published.getAllValues().stream().filter(type::isInstance).map(type::cast).toList();
+        assertEquals(1, notices.size(), "expected one " + type.getSimpleName() + ", published: "
+                + published.getAllValues());
+        return notices.get(0);
     }
 
     // The same service as setUp's, with the inventory port as a mock so a test can make it fail.

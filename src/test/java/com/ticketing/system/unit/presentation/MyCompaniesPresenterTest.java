@@ -34,6 +34,8 @@ import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 
 /**
  * {@link MyCompaniesPresenter} answers with the signed-in member's companies, and only a member's.
@@ -69,7 +71,8 @@ class MyCompaniesPresenterTest {
         when(companyManagementService.resolveUserId(MEMBER_TOKEN, INVITEE)).thenReturn(INVITEE_USER_ID);
         AuthenticationService authenticationService = mock(AuthenticationService.class);
         when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
-        SessionIdentity identity = new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService));
+        SessionIdentity identity = new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService,
+                new UnreadAlertsSendBack(mock(INotificationService.class))));
         presenter = new MyCompaniesPresenter(companyManagementService, identity);
     }
 

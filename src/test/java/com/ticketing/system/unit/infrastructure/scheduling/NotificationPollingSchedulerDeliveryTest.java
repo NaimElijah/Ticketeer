@@ -28,6 +28,7 @@ import ch.qos.logback.classic.Level;
 import com.ticketing.system.bootstrap.scheduling.ActiveUiRegistry;
 import com.ticketing.system.bootstrap.scheduling.NotificationPollingScheduler;
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.testutil.LogCapture;
@@ -35,6 +36,7 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.UIDetachedException;
 import com.vaadin.flow.server.Command;
@@ -138,6 +140,8 @@ class NotificationPollingSchedulerDeliveryTest {
                 .withBean(ActiveUiRegistry.class, () -> uiRegistry)
                 .withBean(NotificationDispatchService.class, () -> dispatchService)
                 .withBean(AuthenticationService.class, () -> authenticationService)
+                .withBean(INotificationService.class, () -> mock(INotificationService.class))
+                .withBean(UnreadAlertsSendBack.class)
                 .withBean(FreshGuestSession.class)
                 .withBean(SessionIdentity.class)
                 .withBean(NotificationPollingScheduler.class)

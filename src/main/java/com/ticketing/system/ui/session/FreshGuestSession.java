@@ -29,19 +29,26 @@ import lombok.extern.slf4j.Slf4j;
 public class FreshGuestSession {
 
     private final AuthenticationService authenticationService;
+    private final UnreadAlertsSendBack unreadAlertsSendBack;
 
-    public FreshGuestSession(AuthenticationService authenticationService) {
+    public FreshGuestSession(AuthenticationService authenticationService,
+            UnreadAlertsSendBack unreadAlertsSendBack) {
         this.authenticationService = authenticationService;
+        this.unreadAlertsSendBack = unreadAlertsSendBack;
     }
 
     /**
-     * Clears the member's auth, current company, notification inbox and recent searches, then pins a
-     * new guest session.
+     * Sends the member's shown-but-unread alerts back to pending, so their next login shows them
+     * ({@link UnreadAlertsSendBack}), then clears the member's auth, current company, notification inbox
+     * and recent searches, and pins a new guest session.
      *
      * <p>Never throws: if no guest session can be started, the stale id is cleared instead, so the dead
      * member session is never left pinned and the view that triggered this still renders.
      */
     public void restore() {
+        // First, while the auth still names the member: the session-end listener skips a signed-out
+        // session.
+        unreadAlertsSendBack.sendBackForSignedInMember();
         AuthSession.signOut();
         CurrentCompanies.clearCurrentCompany();
         NotificationSession.clear();

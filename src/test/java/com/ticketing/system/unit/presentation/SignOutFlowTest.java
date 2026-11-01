@@ -17,6 +17,8 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.vaadin.flow.server.VaadinSession;
 
 import ch.qos.logback.classic.Level;
@@ -37,7 +39,8 @@ class SignOutFlowTest {
     @BeforeEach
     void setUp() {
         authenticationService = mock(AuthenticationService.class);
-        signOutFlow = new SignOutFlow(authenticationService, new FreshGuestSession(authenticationService));
+        signOutFlow = new SignOutFlow(authenticationService, new FreshGuestSession(authenticationService,
+                new UnreadAlertsSendBack(mock(INotificationService.class))));
         when(authenticationService.startGuestSession())
             .thenReturn(new GuestSessionDTO("fresh-sid", Instant.now()));
     }

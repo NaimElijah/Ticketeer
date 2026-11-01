@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.security;
 
+import com.ticketing.system.shared.exception.UserFacingErrors;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.vaadin.flow.component.UI;
@@ -25,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GlobalUiErrorHandler implements VaadinServiceInitListener {
 
-    static final String GENERIC_MESSAGE = "Something went wrong — please try again.";
+    static final String GENERIC_MESSAGE = UserFacingErrors.GENERIC_MESSAGE;
 
     @Override
     public void serviceInit(ServiceInitEvent event) {

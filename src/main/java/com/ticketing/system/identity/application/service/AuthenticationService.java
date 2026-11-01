@@ -18,7 +18,7 @@ import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
-import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,7 +45,6 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.AccountLockedException;
-import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.shared.exception.DuplicateEmailException;
@@ -428,10 +427,12 @@ public class AuthenticationService {
      * is held during the hash work. The promotion, the cart merge and the token issue then run in
      * one transaction, and the member's pending notifications (UC-37) are delivered only after it
      * commits: delivery opens connections of its own, and must not mark a notification sent for a
-     * login that then rolls back. If that delivery then fails with a store failure, a lost
-     * connection or a lost concurrent update, the member is still signed in: the response carries
-     * no notifications and the failure is logged at WARN. Notifications the delivery had not reached
-     * stay PENDING for the notification poller; any it had already saved as SENT are not shown.
+     * login that then rolls back. A store failure, a lost connection or a failed commit part-way
+     * through delivery, and a notification another delivery or a click saved first, are handled by
+     * the delivery, which returns what it delivered. If it fails before delivering anything (reading
+     * the pending notifications, or that read's own transaction), the member is still signed in: the
+     * response carries no notifications, the failure is logged at WARN, and every notification stays
+     * PENDING for the notification poller.
      *
      * @return the member's token, restored active order and delivered notifications
      * @throws GuestSessionRequiredException no / unknown / expired / non-guest
@@ -476,15 +477,16 @@ public class AuthenticationService {
     }
 
     // The promotion has committed: the guest session is now the member's, so failing the login here
-    // would leave them without a token, and a retry would fail for want of a guest session. Only a
-    // store failure, a connection that cannot be had (CannotCreateTransactionException, raised as a
-    // save's transaction begins) and a lost race (what OptimisticLockTranslationAspect makes of a
-    // lost @Version race in deliverPending) are absorbed. Notifications not yet reached stay PENDING
-    // for the poller; ones deliverPending already saved as SENT before the failure are not shown.
+    // would leave them without a token, and a retry would fail for want of a guest session. What
+    // deliverPending can still throw is absorbed: a store failure reading the pending notifications,
+    // or a failure of that read's own transaction (a TransactionException: no connection as it
+    // begins, or a failed commit). Nothing was delivered then, and everything stays PENDING for the
+    // poller. A failure part-way, or a lost race, deliverPending handles itself, returning what it
+    // delivered (#187).
     private List<NotificationDTO> deliverPendingAfterLogin(int userId) {
         try {
             return notificationDispatchService.deliverPending(userId);
-        } catch (DataAccessException | CannotCreateTransactionException | ConcurrentReservationException e) {
+        } catch (DataAccessException | TransactionException e) {
             log.warn("pending notifications not delivered at login, left for the poller: id={}", userId, e);
             return List.of();
         }

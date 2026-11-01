@@ -19,12 +19,14 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.bootstrap.scheduling.ActiveUiRegistry;
 import com.ticketing.system.bootstrap.scheduling.NotificationPollingScheduler;
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.server.Command;
 
@@ -53,7 +55,8 @@ class NotificationPollingSchedulerTest {
         AuthenticationService authenticationService = mock(AuthenticationService.class);
         when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(SHARED_ID));
         SessionIdentity sessionIdentity =
-                new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService));
+                new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService,
+                        new UnreadAlertsSendBack(mock(INotificationService.class))));
         scheduler = new NotificationPollingScheduler(uiRegistry, dispatchService, sessionIdentity);
     }
 

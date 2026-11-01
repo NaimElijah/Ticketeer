@@ -9,17 +9,59 @@ import java.util.List;
 // V1 implementation is NotificationService.
 public interface INotificationService {
 
-    void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> list);
+    /**
+     * Tells a member their purchase completed, with its total.
+     *
+     * @param userId     the buyer
+     * @param totalPrice the amount paid; the text shows it with two decimals and a point, whatever
+     *                   the JVM's locale
+     * @param ticketIds  the tickets issued; not shown in the text
+     */
+    void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> ticketIds);
 
     void notifyPurchaseFailed(int userId, String string);
 
+    /**
+     * Tells a member how many tickets they reserved. The text names no event and shows no id (#187).
+     *
+     * @param userId   the member
+     * @param eventId  the event; not shown in the text
+     * @param zoneId   the zone; not shown in the text
+     * @param quantity how many tickets were reserved
+     */
     void notifyTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity);
 
+    /**
+     * Tells a member their reservation failed, and why. The text names no event and shows no id (#187).
+     *
+     * @param userId  the member
+     * @param eventId the event; not shown in the text
+     * @param zoneId  the zone; not shown in the text
+     * @param reason  why it failed, shown as given
+     */
     void notifyTicketReservationFailure(int userId, int eventId, int zoneId, String reason);
 
-    void notifyRemoveTicketReservationFailure(int userId, int eventId, int zoneId, String string);
+    /**
+     * Tells a member that removing reserved tickets failed, and why. The text names no event and shows
+     * no id (#187).
+     *
+     * @param userId  the member
+     * @param eventId the event; not shown in the text
+     * @param zoneId  the zone; not shown in the text
+     * @param reason  why it failed, shown as given
+     */
+    void notifyRemoveTicketReservationFailure(int userId, int eventId, int zoneId, String reason);
 
-    void notifyRemoveTicketReservationSuccess(int userId, int eventId, int zoneId, int i);
+    /**
+     * Tells a member how many reserved tickets they removed. The text names no event and shows no id
+     * (#187).
+     *
+     * @param userId   the member
+     * @param eventId  the event; not shown in the text
+     * @param zoneId   the zone; not shown in the text
+     * @param quantity how many tickets were removed
+     */
+    void notifyRemoveTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity);
 
     void notifyEventCancelled(int userId, int eventId, String eventName);
 
@@ -63,9 +105,39 @@ public interface INotificationService {
     void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
             String snippet);
 
-    /** Mark a single notification as READ (SENT → READ). No-op if already READ. */
+    /**
+     * Mark one of the member's notifications READ, from SENT or from PENDING: a session ending in
+     * another browser or on another device sends SENT notifications back to PENDING while this
+     * session's bell still shows them.
+     * Nothing changes when the id is unknown, belongs to another member, or is already READ.
+     *
+     * @param userId         the member who clicked the notification
+     * @param notificationId the notification's id
+     * @throws org.springframework.dao.DataAccessException if the store fails to read or save it; the
+     *         notification then stays as it was
+     * @throws org.springframework.transaction.TransactionException if no connection can be had
+     *         ({@code CannotCreateTransactionException}) or the save fails to commit
+     *         ({@code TransactionSystemException}); the notification stays as it was
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if a delivery or
+     *         another click saved the notification first (a lost {@code @Version} race, re-typed by
+     *         {@code OptimisticLockTranslationAspect}); it stays as that save left it
+     */
     void markRead(int userId, String notificationId);
 
-    /** Revert all SENT notifications for a user back to PENDING — called on disconnect. */
+    /**
+     * Send all of the member's SENT notifications back to PENDING, so the next login or poll delivers
+     * them again. Called when a session closes before the member read them.
+     *
+     * <p>Each notification is sent back on its own transaction. One that a click or a delivery saved
+     * first is skipped, since it is no longer SENT.
+     *
+     * @param userId the member whose session closed
+     * @throws org.springframework.dao.DataAccessException if the store fails; the notifications already
+     *         sent back stay PENDING, and the rest stay SENT
+     * @throws org.springframework.transaction.TransactionException if a notification's save gets no
+     *         connection ({@code CannotCreateTransactionException}) or fails to commit
+     *         ({@code TransactionSystemException}); the notifications already sent back stay PENDING, and
+     *         the rest stay SENT
+     */
     void revertSentToPending(int userId);
 }

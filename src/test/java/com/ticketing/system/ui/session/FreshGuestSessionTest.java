@@ -5,7 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -15,8 +18,10 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
@@ -37,13 +42,16 @@ class FreshGuestSessionTest {
     private static final LocalDateTime NOTIFIED_AT = LocalDateTime.of(2027, 1, 1, 12, 0);
 
     private AuthenticationService authenticationService;
+    private INotificationService notificationService;
     private FreshGuestSession freshGuestSession;
 
     @BeforeEach
     void setUp() {
         MapBackedVaadinSession.install();
         authenticationService = mock(AuthenticationService.class);
-        freshGuestSession = new FreshGuestSession(authenticationService);
+        notificationService = mock(INotificationService.class);
+        freshGuestSession = new FreshGuestSession(authenticationService,
+                new UnreadAlertsSendBack(notificationService));
         AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_USER_ID, "member"));
         GuestSession.setSessionId(MEMBER_SESSION_ID);
         CurrentCompanies.setCurrentCompany(COMPANY_ID);
@@ -87,6 +95,45 @@ class FreshGuestSessionTest {
 
         assertNull(GuestSession.sessionId(), "the member's dead session id must not stay pinned");
         assertNull(AuthSession.token(), "the member's token is dropped even when no guest session starts");
+    }
+
+    // ---- the member's shown-but-unread alerts go back to pending (I.6, #187) -------------------
+    // Once the auth is gone, the session-end listener treats the session as signed out and sends nothing
+    // back, so restore() does it first, while it still knows whose alerts they are.
+
+    @Test
+    void GivenASignedInMember_WhenRestored_ThenTheMembersShownAlertsAreSentBack() {
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+
+        freshGuestSession.restore();
+
+        verify(notificationService).revertSentToPending(MEMBER_USER_ID);
+    }
+
+    @Test
+    void GivenASignedInAdmin_WhenRestored_ThenNothingIsSentBack() {
+        AuthSession.storeAuth(new AuthTokenDTO("admin-jwt", 0L, MEMBER_USER_ID, "admin", true));
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+
+        freshGuestSession.restore();
+
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void GivenTheSendBackFails_WhenRestored_ThenTheRestoreStillFinishes() {
+        doThrow(new DataAccessResourceFailureException("store unavailable"))
+                .when(notificationService).revertSentToPending(MEMBER_USER_ID);
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+
+        assertDoesNotThrow(freshGuestSession::restore, "restore() never throws");
+
+        assertFalse(AuthSession.isSignedIn(), "the member is signed out even when the send-back fails");
+        assertEquals(List.of(), NotificationSession.getAll());
+        assertEquals(FRESH_GUEST_SESSION_ID, GuestSession.sessionId());
     }
 
     // ---- sign-out leaves nothing of the previous visitor -------------------------------------
