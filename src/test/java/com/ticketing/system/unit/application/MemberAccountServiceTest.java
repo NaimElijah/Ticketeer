@@ -214,28 +214,34 @@ class MemberAccountServiceTest {
         });
     }
 
-    // The API asks for no member id, but the AuthTokenDTO it takes carries one, which a caller can set to
-    // anyone. Only the token decides whose history is read. Whether a mismatch is ignored or refused is
-    // not decided yet, so either outcome passes; reading the other member's receipts never does.
+    // The AuthTokenDTO carries a member id a caller can set to anyone. Decided (#192): it is ignored, as
+    // viewMyReceipt reads only the token, so the history is the token's member's, never the named one's.
     @Test
-    void GivenTokenDtoNamingAnotherMember_WhenViewMyHistory_ThenThatMembersHistoryIsNeverRead() {
+    void GivenTokenDtoNamingAnotherMember_WhenViewMyHistory_ThenTheTokensMemberHistoryIsReturned() {
         AuthTokenDTO forged = new AuthTokenDTO(VALID_TOKEN, 1000, OTHER_USER, "someone-else");
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
-        Mockito.lenient().when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        Mockito.lenient().when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of());
-        Mockito.lenient().when(orderReceiptRepository.findByHolderUserId(OTHER_USER))
-                .thenReturn(List.of(soldReceipt(RECEIPT_ID, OTHER_USER, TICKET_ID, 150.00)));
-        Mockito.lenient().when(ticketRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(List.of());
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID))
+                .thenReturn(List.of(soldReceipt(RECEIPT_ID, USER_ID, TICKET_ID, 150.00)));
+        Mockito.when(ticketRepository.findByOrderReceiptId(RECEIPT_ID))
+                .thenReturn(List.of(issuedTicket(RECEIPT_ID, TICKET_ID, 150.00)));
+        Mockito.when(eventDisplayPort.describeEvent(EVENT_ID)).thenReturn(rockNight());
 
-        PurchaseHistoryDTO[] history = new PurchaseHistoryDTO[1];
-        Throwable refused = catchThrowable(() -> history[0] = service.viewMyHistory(forged));
+        PurchaseHistoryDTO history = service.viewMyHistory(forged);
 
+        assertThat(history.records()).singleElement().satisfies(record -> {
+            assertThat(record.orderReceiptId()).isEqualTo(RECEIPT_ID);
+            assertThat(record.buyerUserId()).isEqualTo(USER_ID);
+        });
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(OTHER_USER);
-        if (refused == null) {
-            assertThat(history[0].records()).extracting(PurchaseRecordDTO::buyerUserId).doesNotContain(OTHER_USER);
-        } else {
-            assertThat(refused).isInstanceOf(UnauthorizedActionException.class);
-        }
+    }
+
+    // As viewMyReceipt refuses a null token: a missing credential is an invalid one.
+    @Test
+    void GivenNullAuthToken_WhenViewMyHistory_ThenInvalidTokenThrown() {
+        assertThatThrownBy(() -> service.viewMyHistory(null)).isInstanceOf(InvalidTokenException.class);
+
+        Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(Mockito.anyInt());
     }
 
     // UC-16 + II.3.5.2: a zone repriced after a sale leaves that sale's record at the price paid. The later
