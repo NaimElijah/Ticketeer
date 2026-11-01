@@ -32,8 +32,12 @@ public class MarketSelfHealScheduler {
         this.systemAdminService = systemAdminService;
     }
 
-    /** One self-heal tick: tries to open the market, then refreshes the WSEP reachability unless that probed. */
-    @Scheduled(fixedDelayString = "${market.self-heal-delay-ms:30000}")
+    /**
+     * One self-heal tick: tries to open the market, then refreshes the WSEP reachability unless that
+     * probed. Runs on its own scheduler, since a probe can take about a minute while WSEP hangs.
+     */
+    @Scheduled(fixedDelayString = "${market.self-heal-delay-ms:30000}",
+            scheduler = SchedulingConfig.MARKET_SELF_HEAL_TASK_SCHEDULER)
     public void reopenMarketIfNeeded() {
         boolean probed = systemAdminService.ensureMarketOpen();
         if (!probed) {
