@@ -93,6 +93,20 @@ class NotificationBellComponentTest {
         assertEquals(List.of(REFUSAL), harness.toasts());
     }
 
+    // An admin session, or one whose member is gone, gets NotAuthenticated: nothing is marked and nothing
+    // is said, since there is no member read to report, and mark-all goes no further.
+    @Test
+    void GivenNoMemberToMarkFor_WhenMarkAllRead_ThenNothingIsMarkedNoToastIsShownAndItStopsAfterTheFirst() {
+        NotificationSession.store(List.of(unread("n1", 0), unread("n2", 1), unread("n3", 2)));
+        NotificationBellComponent bell = bell(id -> new MarkReadOutcome.NotAuthenticated());
+
+        InboxViewHarness.click(markAll(bell));
+
+        assertEquals(List.of("n1"), attempted, "mark-all should stop after the first read that is not stored");
+        assertEquals(Map.of("n1", UNREAD, "n2", UNREAD, "n3", UNREAD), statuses());
+        assertEquals(List.of(), harness.toasts());
+    }
+
     @Test
     void GivenNoAgeRenderer_WhenTheBellIsBuilt_ThenItRefusesAtOnce() {
         assertThrows(NullPointerException.class,
