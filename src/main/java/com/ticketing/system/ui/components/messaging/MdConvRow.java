@@ -13,6 +13,7 @@ import com.vaadin.flow.component.html.Span;
 public class MdConvRow extends NativeButton {
 
     private boolean active;
+    private Span unreadDot;
 
     public MdConvRow(String iconName, String subject, String who, String time, String unread) {
         addClassName("md-conv");
@@ -29,9 +30,9 @@ public class MdConvRow extends NativeButton {
         subj.addClassName("md-conv-subj");
         top.add(subj);
         if (unread != null && !unread.isEmpty()) {
-            Span dot = new Span(unread);
-            dot.addClassName("md-conv-dot");
-            top.add(dot);
+            unreadDot = new Span(unread);
+            unreadDot.addClassName("md-conv-dot");
+            top.add(unreadDot);
         }
         Span whoSpan = new Span(who);
         whoSpan.addClassName("md-conv-who");
@@ -48,6 +49,15 @@ public class MdConvRow extends NativeButton {
     public MdConvRow active(boolean on) {
         if (on && !active) { addClassName("on"); active = true; }
         else if (!on && active) { removeClassName("on"); active = false; }
+        return this;
+    }
+
+    /** Removes the unread badge, once the thread has been marked read. A row without one is left as is. */
+    public MdConvRow clearUnread() {
+        if (unreadDot != null) {
+            unreadDot.removeFromParent();
+            unreadDot = null;
+        }
         return this;
     }
 

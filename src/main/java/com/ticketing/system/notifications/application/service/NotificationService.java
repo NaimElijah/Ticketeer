@@ -8,9 +8,11 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.notifications.application.port.out.NotificationRepository;
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
@@ -203,23 +205,44 @@ public class NotificationService implements INotificationService {
     @Override
     public void notifyNewMessage(int recipientUserId, String conversationId, String senderLabel,
             String subject, String snippet) {
+        dispatcher.dispatch(newMessageNotification(recipientUserId, conversationId, senderLabel, subject, snippet,
+                LocalDateTime.now(clock)));
+    }
+
+    // NOT_SUPPORTED overrides the class's transaction, so each dispatch commits on its own through the
+    // dispatcher's proxy: one transaction per alert, not one for the whole send (ADR-019).
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
+            String snippet) {
+        if (recipients == null || recipients.isEmpty()) {
+            throw new IllegalArgumentException("An outreach needs at least one recipient");
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (OutreachRecipient r : recipients) {
+            dispatcher.dispatch(newMessageNotification(r.userId(), r.conversationId(), senderLabel,
+                    subject, snippet, now));
+        }
+    }
+
+    private static Notification newMessageNotification(int recipientUserId, String conversationId,
+            String senderLabel, String subject, String snippet, LocalDateTime now) {
         String safeSubject = subject == null ? "" : subject;
         String safeSnippet = snippet == null ? "" : snippet;
         String message = String.format("New message from %s: %s", senderLabel, safeSubject);
-        Notification notification = new Notification(
+        return new Notification(
                 UUID.randomUUID().toString(),
                 recipientUserId,
                 NotificationType.DIRECT_MESSAGE,
                 NotificationStatus.PENDING,
                 message,
-                LocalDateTime.now(clock),
+                now,
                 Map.<String, Object>of(
                         "conversationId", conversationId,
                         "senderLabel", senderLabel,
                         "subject", safeSubject,
                         "snippet", safeSnippet)
         );
-        dispatcher.dispatch(notification);
     }
 
     @Override

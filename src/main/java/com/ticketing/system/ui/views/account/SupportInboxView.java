@@ -14,6 +14,7 @@ import com.ticketing.system.ui.components.messaging.MdReplyBar;
 import com.ticketing.system.ui.components.messaging.MdThread;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
+import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
@@ -58,6 +59,8 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     private List<ConversationDTO> conversations = List.of();
     private final List<MdConvRow> convRows = new ArrayList<>();
     private String selectedId;
+    // The threads this view opened; the presenter reads it to keep a cleared badge cleared (#187).
+    private final OpenedThreads opened = new OpenedThreads();
     private String focusId;        // from ?c=, applied once on the next render
     private LkCard detailCard;
 
@@ -85,9 +88,11 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
         List<String> values = event.getLocation().getQueryParameters()
             .getParameters().getOrDefault("c", List.of());
         focusId = values.isEmpty() ? null : values.get(0);
-        // The constructor already loaded + rendered; just refine the selection.
+        // The constructor already loaded + rendered; just refine the selection. A deep link is an
+        // explicit open, applied once, so a later reload keeps the reader's own selection.
         if (focusId != null && !conversations.isEmpty()) {
-            selectById(focusId);
+            openById(focusId);
+            focusId = null;
         }
     }
 
@@ -119,6 +124,7 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             selIdx = indexOf(focusId);
             focusId = null;
         }
+        boolean deepLinked = selIdx >= 0;
         if (selIdx < 0) selIdx = indexOf(selectedId);
         if (selIdx < 0) selIdx = 0;
         selectedId = list.get(selIdx).conversationId();
@@ -127,6 +133,10 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
         split.addClassName("md-split");
         split.add(buildConversationList(), buildDetailCard());
         content.add(split);
+        // A deep-linked thread was opened by the reader; the other selections were the view's own.
+        if (deepLinked) {
+            markOpened(selectedId);
+        }
     }
 
     private Component buildConversationList() {
@@ -134,9 +144,9 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
         convRows.clear();
         for (ConversationDTO c : conversations) {
             MdConvRow row = new MdConvRow(iconFor(c.type()), c.subject(), whoFor(c),
-                displayTime.ageShort(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
+                displayTime.ageShort(c.lastMessageAt()), presenter.badge(c, opened).orElse(null));
             if (c.conversationId().equals(selectedId)) row.active();
-            row.onSelect(() -> selectById(c.conversationId()));
+            row.onSelect(() -> openById(c.conversationId()));
             if (isLocked(c)) {
                 // Admin closed this outreach: still selectable/readable, just dimmed as a "closed" cue.
                 // renderDetail() hides the reply bar for terminal threads, so the member can read the
@@ -191,6 +201,32 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             // Closed inquiry / admin outreach — read-only history, no reply bar.
             detailCard.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 17),
                 "This conversation has been closed — you can read the history, but replies are no longer accepted."));
+        }
+    }
+
+    /** A row click: the reader opens the thread, so it is shown and marked read. */
+    private void openById(String conversationId) {
+        selectById(conversationId);
+        markOpened(conversationId);
+    }
+
+    // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the
+    // row this view selects on its own is shown but not marked (#187). The presenter decides the badge.
+    // A reader whose session ended is told so, as a reply from this view tells them. A failed open
+    // leaves the badge and tells the reader nothing, since they can do nothing about it: the
+    // presenter's markRead logs an internal failure at ERROR through ServiceErrors, and LoggingAspect
+    // logs a refused one (a DomainException) at WARN.
+    private void markOpened(String conversationId) {
+        int idx = indexOf(conversationId);
+        if (idx < 0) return;
+        ConversationDTO conv = byId(conversationId);
+        switch (presenter.open(AuthSession.token(), conv, opened)) {
+            case SupportInboxPresenter.ActionOutcome.Success ignored -> {
+                if (presenter.badge(conv, opened).isEmpty()) convRows.get(idx).clearUnread();
+            }
+            case SupportInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
+                Toasts.failure("Your session has expired — please sign in again.");
+            case SupportInboxPresenter.ActionOutcome.Failure ignored -> { }
         }
     }
 
@@ -272,10 +308,6 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             case "INQUIRY" -> "comment";
             default -> "comment";
         };
-    }
-
-    private static String unreadBadge(int unreadCount) {
-        return unreadCount > 0 ? String.valueOf(unreadCount) : null;
     }
 
     private static boolean isTerminal(String status) {
