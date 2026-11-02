@@ -20,7 +20,6 @@ import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
@@ -163,14 +162,9 @@ public class MyInvitationsView extends LkPage {
             case MyInvitationsPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Accepted — you are now a " + humanize(inv.role()).toLowerCase(Locale.ENGLISH)
                     + " at " + inv.companyName() + ".");
-                // Accepting an owner invitation flips ownership; re-navigate so MainLayout
-                // rebuilds the avatar/persona chrome (and the view re-fetches). Manager
-                // accepts only need the local grid refresh.
-                if (OWNER_ROLE.equals(inv.role())) {
-                    UI.getCurrent().navigate(MyInvitationsView.class);
-                } else {
-                    reload();
-                }
+                // Reload in place: navigating to this view's own route is ignored, so it would
+                // refetch nothing (#187, UI-A10).
+                reload();
             }
             case MyInvitationsPresenter.ActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");

@@ -111,6 +111,12 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             // Linked editors, status and the danger zone all act on a persisted event.
             sideCol.setVisible(false);
         } else {
+            // After a create the router enters this same instance again for the new event, so the
+            // edit page undoes what the create page set (#187, UI-A10).
+            title(EDIT_TITLE);
+            subtitle(EDIT_SUBTITLE);
+            saveBtn.label(SAVE_LABEL);
+            sideCol.setVisible(true);
             artists.readOnly(true);
             loadEvent(eventId);
         }
