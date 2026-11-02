@@ -8,6 +8,8 @@ import com.vaadin.flow.server.VaadinSession;
 /**
  * The top bar's cart badge, cached in the Vaadin session so that not every page reads the cart from
  * the server: {@code MainLayout} shows a cached badge for {@link #MAX_AGE}, then reads the cart again.
+ * Whatever changes this session's cart calls {@link #invalidate()}, so the next page shows the cart as
+ * it is (#187, UI-A12).
  */
 public final class CartBadgeCache {
 
@@ -60,5 +62,21 @@ public final class CartBadgeCache {
         session.setAttribute(SIZE_KEY, badge.size());
         session.setAttribute(DEADLINE_KEY, badge.deadlineMs());
         session.setAttribute(FETCHED_AT_KEY, nowMs);
+    }
+
+    /**
+     * Drops the cached badge, so the next page reads the cart again. Call it after anything that changes
+     * this session's cart: a reservation, a removal, a checkout attempt, a member's sign-in, which restores
+     * and merges their held order, or a sign-out, which pins a guest session with a cart of its own. An
+     * admin's sign-in keeps the guest session, and so the cart. Does nothing without a Vaadin session.
+     */
+    public static void invalidate() {
+        VaadinSession session = VaadinSession.getCurrent();
+        if (session == null) {
+            return;
+        }
+        session.setAttribute(SIZE_KEY, null);
+        session.setAttribute(DEADLINE_KEY, null);
+        session.setAttribute(FETCHED_AT_KEY, null);
     }
 }

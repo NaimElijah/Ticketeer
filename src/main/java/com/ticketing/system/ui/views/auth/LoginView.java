@@ -8,6 +8,7 @@ import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.NotificationSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -125,6 +126,8 @@ public class LoginView extends LkAuthCard {
 
     private void onSuccess(LoginDTO dto) {
         AuthSession.storeAuth(dto.authToken());
+        // Login swaps the cart: the member's held order is restored and merged with the guest's.
+        CartBadgeCache.invalidate();
         NotificationSession.store(dto.notifications());
         String name = dto.authToken().username();
         if (AuthSession.isAdmin()) {

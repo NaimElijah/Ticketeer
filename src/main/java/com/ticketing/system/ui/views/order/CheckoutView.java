@@ -17,6 +17,7 @@ import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.OrderSession;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
@@ -494,6 +495,9 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                             + (f.reason() != null && !f.reason().isBlank() ? " (" + f.reason() + ")" : ""));
             }
         } finally {
+            // Whatever the outcome, the attempt may have changed the cart: a sale empties it, and a lost
+            // race or a failed issue releases its holds.
+            CartBadgeCache.invalidate();
             paymentInProgress.set(false);
             payButton.getElement().setEnabled(totalCents > 0);
         }

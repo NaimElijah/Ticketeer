@@ -16,6 +16,7 @@ import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.GuestSession;
@@ -95,6 +96,7 @@ public final class DevPanel {
             }
             var dto = AUTH.login(new LoginRequestDTO(username, password, guestSid));
             AuthSession.storeAuth(dto.authToken());
+            CartBadgeCache.invalidate(); // login swaps the cart, as LoginView's does
         } catch (RuntimeException e) {
             Toasts.failure(ServiceErrors.userMessage(e));
         }

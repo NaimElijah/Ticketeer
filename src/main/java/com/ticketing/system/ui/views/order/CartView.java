@@ -12,6 +12,7 @@ import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.order.CartPresenter;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -106,6 +107,7 @@ public class CartView extends LkPage {
             .onClick(e -> {
                 switch (presenter.removeLine(line)) {
                     case CartPresenter.RemoveOutcome.Removed r -> {
+                        CartBadgeCache.invalidate();
                         this.activeOrder   = r.cart();
                         this.subtotalCents = r.subtotalCents();
                         populateLines();

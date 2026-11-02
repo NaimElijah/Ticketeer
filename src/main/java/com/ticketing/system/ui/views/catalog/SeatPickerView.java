@@ -20,6 +20,7 @@ import com.ticketing.system.ui.components.venue.VkSeatedZonePicker;
 import com.ticketing.system.ui.components.venue.VkStandingZone;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.views.order.CartView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -227,6 +228,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         SeatPickerPresenter.ReserveOutcome outcome = presenter.reserveSeated(selection, eventId, zoneId);
         switch (outcome) {
             case SeatPickerPresenter.ReserveOutcome.Success s -> {
+                CartBadgeCache.invalidate();
                 seatPicker.clearSelection();
                 Toasts.success(count + " seat" + (count == 1 ? "" : "s") + " reserved — continue to cart.");
                 UI.getCurrent().navigate(CartView.class);
@@ -283,6 +285,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         SeatPickerPresenter.ReserveOutcome outcome = presenter.reserveStanding(q, eventId, zoneId);
         switch (outcome) {
             case SeatPickerPresenter.ReserveOutcome.Success s -> {
+                CartBadgeCache.invalidate();
                 Toasts.success(q + " ticket" + (q == 1 ? "" : "s") + " reserved — continue to cart.");
                 UI.getCurrent().navigate(CartView.class);
             }
