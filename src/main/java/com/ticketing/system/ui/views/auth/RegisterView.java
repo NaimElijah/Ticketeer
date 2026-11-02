@@ -7,7 +7,7 @@ import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
-import com.ticketing.system.ui.session.GuestSession;
+import com.ticketing.system.ui.session.SessionIdentity;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -32,13 +32,18 @@ public class RegisterView extends LkAuthCard {
 
     private final RegisterPresenter presenter;
     private final UsernameAvailabilityPresenter usernameAvailability;
+    // The guest id comes from here, not GuestSession: a guest session expires a fixed time after it
+    // starts, and SessionIdentity replaces a dead one before registration is given it.
+    private final SessionIdentity sessionIdentity;
 
     public RegisterView(RegisterPresenter presenter,
-                        UsernameAvailabilityPresenter usernameAvailability) {
+                        UsernameAvailabilityPresenter usernameAvailability,
+                        SessionIdentity sessionIdentity) {
         super("Create your account",
               "Join TicketHub to discover events and book in seconds.");
         this.presenter = presenter;
         this.usernameAvailability = usernameAvailability;
+        this.sessionIdentity = sessionIdentity;
 
         TextField username = new TextField("Username");
         username.setPlaceholder("3–32 characters, letters and digits");
@@ -163,7 +168,7 @@ public class RegisterView extends LkAuthCard {
             email.getValue(),
             password.getValue(),
             age.getValue(),
-            GuestSession.sessionId()
+            sessionIdentity.guestSessionId()
         );
 
         switch (outcome) {

@@ -7,8 +7,8 @@ import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.session.AuthSession;
-import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.NotificationSession;
+import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.catalog.BrowseEventsView;
@@ -31,11 +31,15 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 public class LoginView extends LkAuthCard {
 
     private final LoginPresenter presenter;
+    // The guest id comes from here, not GuestSession: a guest session expires a fixed time after it
+    // starts, and SessionIdentity replaces a dead one before login is asked to promote it.
+    private final SessionIdentity sessionIdentity;
 
-    public LoginView(LoginPresenter presenter) {
+    public LoginView(LoginPresenter presenter, SessionIdentity sessionIdentity) {
         super("Welcome back",
               "Sign in to buy tickets, manage events, and track your orders.");
         this.presenter = presenter;
+        this.sessionIdentity = sessionIdentity;
 
         TextField username = new TextField("Username");
         username.setRequired(true);
@@ -98,7 +102,7 @@ public class LoginView extends LkAuthCard {
         LoginPresenter.Outcome outcome = presenter.attemptLogin(
             username.getValue(),
             password.getValue(),
-            GuestSession.sessionId()
+            sessionIdentity.guestSessionId()
         );
 
         switch (outcome) {
