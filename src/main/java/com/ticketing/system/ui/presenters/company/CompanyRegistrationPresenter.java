@@ -12,6 +12,10 @@ import com.ticketing.system.ui.support.ServiceErrors;
 @Component
 public class CompanyRegistrationPresenter {
 
+    // CompanyManagementService.registerCompany refuses a taken name with a plain IllegalStateException,
+    // so its text is all that tells that refusal from any other (CompanyManagementServiceTest pins it).
+    private static final String NAME_TAKEN_MESSAGE = "A company with this name already exists";
+
     private final CompanyManagementService companyManagementService;
 
     public CompanyRegistrationPresenter(CompanyManagementService companyManagementService) {
@@ -33,7 +37,10 @@ public class CompanyRegistrationPresenter {
         } catch (IllegalArgumentException e) {
             return new Outcome.InvalidInput(ServiceErrors.userMessage(e));
         } catch (IllegalStateException e) {
-            return new Outcome.NameTaken(e.getMessage());
+            if (NAME_TAKEN_MESSAGE.equals(e.getMessage())) {
+                return new Outcome.NameTaken(e.getMessage());
+            }
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
