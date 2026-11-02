@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkCountdown;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -139,20 +140,7 @@ public class CartView extends LkPage {
         Span timer = new Span();
         timer.getStyle().set("font-size", "16px").set("font-weight", "700");
 
-        timer.getElement().executeJs(
-            "if (window.cartTimerId) { clearTimeout(window.cartTimerId); }" +
-            "const t=this; let s=$0;" +
-            "function tick(){" +
-            "  if(s<=0) return;" +
-            "  const m=Math.floor(s/60); const sec=s%60;" +
-            "  t.textContent='Time left: '+m+':' + (sec<10?'0'+sec:sec);" +
-            "  s--; " +
-            "  window.cartTimerId = setTimeout(tick,1000);" +
-            "}" +
-            "tick();", (int) remainingSeconds);   // Vaadin's JsonCodec can't encode Long — pass an int (a hold timer never overflows)
-
-        timer.addDetachListener(ev ->
-            timer.getElement().executeJs("if(window.cartTimerId) { clearTimeout(window.cartTimerId); }"));
+        LkCountdown.start(timer.getElement(), remainingSeconds, "Time left: ");
 
         LkBanner heldBanner = new LkBanner(LkBanner.Tone.info, new LkIcon("lock", 17),
             "Tickets are held just for you. They release automatically when the timer runs out.");

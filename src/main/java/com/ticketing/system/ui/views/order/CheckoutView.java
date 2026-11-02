@@ -12,6 +12,7 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkCountdown;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -45,6 +46,7 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNavigationObserver {
 
     private static final String IDEMPOTENCY_ATTR = "checkout.idempotencyKey";
+    private static final long MILLIS_PER_SECOND = 1000L;
 
     private final CheckoutPresenter presenter;
     private final Clock clock;
@@ -61,6 +63,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
     private ActiveOrderDTO activeOrder;
     private long subtotalCents;
     private long totalCents;
+    /** When the loaded order's hold ends, in epoch ms on the application clock; never sent to the browser. */
+    private long holdEndsAtMs;
 
     private final AtomicBoolean paymentInProgress = new AtomicBoolean(false);
 
@@ -104,7 +108,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         };
 
     /**
-     * @param clock the application clock (ADR-008), for the hold countdown's deadline
+     * @param clock the application clock (ADR-008), for the seconds the hold countdown has left
      */
     public CheckoutView(CheckoutPresenter presenter, Clock clock) {
         this.presenter = presenter;
@@ -173,6 +177,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 this.activeOrder   = l.order();
                 this.subtotalCents = l.pricing().subtotalCents();
                 this.totalCents    = l.pricing().totalCents();
+                this.holdEndsAtMs  = clock.millis() + l.order().remainingSecondsBeforeExpiry() * MILLIS_PER_SECOND;
             }
             case CheckoutPresenter.LoadOutcome.Empty e -> clearOrder();
             case CheckoutPresenter.LoadOutcome.Failure f -> clearOrder();
@@ -234,19 +239,10 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
 
         if (timerSpan != null && activeOrder != null
                 && activeOrder.remainingSecondsBeforeExpiry() > 0) {
-            double endMs = clock.millis()
-                    + activeOrder.remainingSecondsBeforeExpiry() * 1000.0;
-            timerSpan.getElement().executeJs(
-                    "const t = this;" +
-                    "const end = $0;" +
-                    "function pad(n){return String(n).padStart(2,'0');}" +
-                    "function tick(){" +
-                    "  const s=Math.max(0,Math.floor((end-Date.now())/1000));" +
-                    "  t.textContent=pad(Math.floor(s/60))+':'+pad(s%60);" +
-                    "  if(s>0) setTimeout(tick,1000);" +
-                    "}" +
-                    "tick();",
-                    endMs);
+            // The page may be shown again without a reload (beforeEnter on a built page), so the seconds
+            // left come from the hold's end on the server's clock, not from the order as first loaded.
+            long secondsLeft = Math.max(0, (holdEndsAtMs - clock.millis()) / MILLIS_PER_SECOND);
+            LkCountdown.start(timerSpan.getElement(), secondsLeft, "");
         }
     }
 

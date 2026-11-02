@@ -63,6 +63,8 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
             CheckoutView.class, "My Tickets",
             OrderConfirmationView.class, "My Tickets");
 
+    private static final long MILLIS_PER_SECOND = 1000L;
+
     private final CartBadgePresenter cartBadgePresenter;
     private LkTopBar topBar;
     private final SignOutFlow signOutFlow;
@@ -70,8 +72,8 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
     private final Clock clock;
 
     /**
-     * @param clock the application clock (ADR-008), for the cart badge's cache age and its countdown's
-     *              deadline
+     * @param clock the application clock (ADR-008), for the cart badge's cache age and the seconds its
+     *              countdown has left
      */
     public MainLayout(CartBadgePresenter cartBadgePresenter, SignOutFlow signOutFlow,
             NotificationBellPresenter bellPresenter, Clock clock) {
@@ -85,6 +87,11 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
     @Override
     public void afterNavigation(AfterNavigationEvent event) {
         rebuildTopBar(findActiveLabel(event));
+    }
+
+    // The cached hold end is on the server's clock; the browser gets only the seconds left (ADR-008).
+    private static Long secondsLeft(Long deadlineMs, long nowMs) {
+        return deadlineMs == null ? null : Math.max(0, (deadlineMs - nowMs) / MILLIS_PER_SECOND);
     }
 
     private void rebuildTopBar(String activeLabel) {
@@ -113,7 +120,7 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
                         case CartBadgePresenter.Outcome.Cart c -> {
                             cartSize = c.count();
                             if (c.remainingSeconds() > 0) {
-                                cartDeadlineMs = now + c.remainingSeconds() * 1000L;
+                                cartDeadlineMs = now + c.remainingSeconds() * MILLIS_PER_SECOND;
                             }
                         }
                         case CartBadgePresenter.Outcome.Empty ignored -> { /* no cart — leave 0 */ }
@@ -137,7 +144,7 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
         LkTopBar bar = new LkTopBar(LkTopBar.Variant.MAIN)
                 .brand("TicketHub", LandingView.class)
                 .nav(nav, activeLabel)
-                .cart(CartView.class, cartSize, cartDeadlineMs, now)
+                .cart(CartView.class, cartSize, secondsLeft(cartDeadlineMs, now))
                 .bell(new NotificationBellComponent(bellPresenter::markRead, bellPresenter::relativeTime));
 
         if (signedIn) {

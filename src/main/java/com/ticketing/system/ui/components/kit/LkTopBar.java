@@ -193,18 +193,15 @@ public class LkTopBar extends Header {
     /**
      * Cart trigger — bell-shaped icon button that navigates to {@code target}.
      * Shows an item-count badge when {@code itemCount > 0} and a live-ticking
-     * timer chip when {@code shortestDeadlineMs} is in the future (the
-     * earliest expiry across cart lines). Both decorations vanish when the
-     * cart is empty / no item still has a TTL.
+     * timer chip while the cart's hold has time left. Both decorations vanish
+     * when the cart is empty / no item still has a TTL.
      *
-     * @param target             the view the button opens, or {@code null} for none
-     * @param itemCount          the cart's item count
-     * @param shortestDeadlineMs the earliest line expiry in epoch milliseconds, or {@code null} for none
-     * @param nowEpochMillis     the current time in epoch milliseconds, from the {@code Clock} bean
-     *                           (ADR-008); a deadline not after it shows no timer
+     * @param target      the view the button opens, or {@code null} for none
+     * @param itemCount   the cart's item count
+     * @param secondsLeft the seconds the hold has left, computed on the server's clock (ADR-008), or
+     *                    {@code null} for no hold; zero or less shows no timer
      */
-    public LkTopBar cart(Class<? extends Component> target, int itemCount, Long shortestDeadlineMs,
-                         long nowEpochMillis) {
+    public LkTopBar cart(Class<? extends Component> target, int itemCount, Long secondsLeft) {
         ensureRightSlot();
         NativeButton btn = new NativeButton();
         btn.addClassName("lk-bell");
@@ -221,29 +218,15 @@ public class LkTopBar extends Header {
         }
         rightSlot.add(btn);
 
-        if (shortestDeadlineMs != null && shortestDeadlineMs > nowEpochMillis) {
+        if (secondsLeft != null && secondsLeft > 0) {
             Span chip = new Span();
             chip.addClassName("bz-timer");
             chip.getStyle().set("margin-left", "6px");
             chip.add(new LkIcon("clock", 13));
             Span text = new Span(" --:--");
             chip.add(text);
-            double endMs = (double) shortestDeadlineMs.longValue();
-            text.getElement().executeJs(
-                "const text = this;" +
-                "const chip = text.closest('.bz-timer');" +
-                "const end  = $0;" +
-                "function pad(n){return String(n).padStart(2,'0');}" +
-                "function tick(){" +
-                "  const s = Math.max(0, Math.floor((end - Date.now())/1000));" +
-                "  text.textContent = ' ' + pad(Math.floor(s/60)) + ':' + pad(s%60);" +
-                "  if (s <= 180 && chip) chip.classList.add('urgent');" +
-                "  if (s > 0) setTimeout(tick, 1000);" +
-                "  else if (chip) chip.remove();" +
-                "}" +
-                "tick();",
-                endMs);
             rightSlot.add(chip);
+            LkCountdown.start(text.getElement(), secondsLeft, " ");
         }
         return this;
     }
