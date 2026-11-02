@@ -10,7 +10,7 @@
  *       {@code dev} and {@code test} that still uses a secret committed in {@code application.yml}.</li>
  *   <li>{@link com.ticketing.system.bootstrap.CommittedAdminPasswordRotation} — outside {@code dev}
  *       and {@code test}, while the context starts, gives a default admin still stored with the
- *       committed password the configured one and ends that admin's sessions (ADR-014).</li>
+ *       committed password the configured one and ends that admin's sessions (ADR-014, ADR-021).</li>
  *   <li>{@link com.ticketing.system.bootstrap.DatabaseUnavailableFailureAnalyzer} — reports a
  *       database that cannot be reached or signed in to at startup, or a startup statement that
  *       exceeded {@code database.socket-timeout}, instead of a raw stack trace.

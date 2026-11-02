@@ -41,7 +41,7 @@ With `seed.fail-fast=true` the run aborts at the first unexpected failure (a par
 logged) and startup fails. That is the default outside `dev`; `dev` sets it to `false` so a broken demo
 line doesn't block local work. A missing or unreadable scenario file, or one the parser refuses (such as a
 bare `expect-error`), stops startup in every profile, before any step runs
-([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against whatever database
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md), [ADR-021](docs/ADRs/ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against whatever database
 the run is configured with, not just H2 — but stays gated behind `seed.mode` so it is opt-in there.
 
 > **Warning:** the committed scenarios (`classpath:scenarios/…`) register accounts whose passwords are
