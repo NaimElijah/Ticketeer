@@ -675,7 +675,7 @@ public class CompanyManagementServiceTest {
                         companyService.registerCompany(token, request);
                 });
 
-                assertEquals("A company with this name already exists", exception.getMessage());
+                assertEquals(CompanyManagementService.COMPANY_NAME_TAKEN_MESSAGE, exception.getMessage());
                 verify(mockCompanyRepo, never()).save(any());
         }
 

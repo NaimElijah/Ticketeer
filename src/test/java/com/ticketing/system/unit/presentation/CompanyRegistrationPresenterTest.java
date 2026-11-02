@@ -108,7 +108,7 @@ class CompanyRegistrationPresenterTest {
     @Test
     void GivenTheServiceRefusesATakenName_WhenRegister_ThenItReadsAsNameTaken() {
         when(companyManagementService.registerCompany(eq(TOKEN), any()))
-                .thenThrow(new IllegalStateException("A company with this name already exists"));
+                .thenThrow(new IllegalStateException(CompanyManagementService.COMPANY_NAME_TAKEN_MESSAGE));
 
         CompanyRegistrationPresenter.Outcome outcome = presenter.register(NAME, DESCRIPTION);
 
