@@ -21,7 +21,6 @@ import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.RefundFailedException;
-import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
@@ -154,8 +153,8 @@ public class EventManagementPresenter {
         } catch (InvalidTokenException e) {
             return new CancelOutcome.NotAuthenticated();
         } catch (RefundFailedException e) {
-            return new CancelOutcome.RefundFailed(ServiceErrors.userMessage(e),
-                    e instanceof RefundGatewayUnreachableException);
+            return new CancelOutcome.RefundFailed(CancelRefundFailure.reason(e),
+                    CancelRefundFailure.cancelAgainRetries(e));
         } catch (RuntimeException e) {
             return new CancelOutcome.Failure(ServiceErrors.userMessage(e));
         }

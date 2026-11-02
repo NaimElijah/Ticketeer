@@ -13,7 +13,6 @@ import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.RefundFailedException;
-import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.support.ServiceErrors;
 
@@ -127,8 +126,8 @@ public class CompanyEventListPresenter {
         } catch (InvalidTokenException e) {
             return new CancelOutcome.NotAuthenticated();
         } catch (RefundFailedException e) {
-            return new CancelOutcome.RefundFailed(ServiceErrors.userMessage(e),
-                    e instanceof RefundGatewayUnreachableException);
+            return new CancelOutcome.RefundFailed(CancelRefundFailure.reason(e),
+                    CancelRefundFailure.cancelAgainRetries(e));
         } catch (RuntimeException e) {
             return new CancelOutcome.Failure(ServiceErrors.userMessage(e));
         }
