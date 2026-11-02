@@ -53,7 +53,7 @@ public class LoginView extends LkAuthCard {
         signIn.setWidthFull();
         signIn.addClickShortcut(Key.ENTER);
 
-        // No remember-me, password reset (#104) or social sign-in: nothing behind them exists (#187, UI-A19).
+        // No password reset until #104 builds one: https://github.com/NaimElijah/Ticketeer/issues/104
         col(14, username, password, signIn);
 
         foot("Don't have an account?", "Create one →", RegisterView.class);

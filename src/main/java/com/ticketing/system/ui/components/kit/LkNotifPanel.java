@@ -12,8 +12,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Notification dropdown panel — header + scrollable list. It has no "view all" footer link: there is
- * no notifications page for one to open.
+ * Notification dropdown panel — header + scrollable list.
  * Ports the React {@code NotifPanel}. Static factory methods
  * {@link #buyer()} and {@link #admin()} produce the two reference
  * variants populated with the mock data from {@code lumo-kit.jsx}.

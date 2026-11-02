@@ -93,7 +93,6 @@ public class RegisterView extends LkAuthCard {
         create.setWidthFull();
         create.addClickShortcut(Key.ENTER);
 
-        // No terms checkbox: there are no terms to agree to, and nothing checked it (#187, UI-A19).
         col(14, username, email, age, password, strengthMeter, confirm, create);
         foot("Already have an account?", "Sign in →", LoginView.class);
     }

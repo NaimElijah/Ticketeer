@@ -64,7 +64,7 @@ public class LandingView extends LkPage {
         title.setText("Find your next unforgettable experience.");
         Div sub = new Div();
         sub.addClassName("bz-hero-sub");
-        // Names only categories that exist (EventCategoryLabels); there is no conference category (#187, UI-A19b).
+        // Names only categories that exist (EventCategoryLabels).
         sub.setText("Concerts, sports, theatre, comedy — across Israel, all in one place.");
         hero.add(title, sub);
         return hero;
@@ -163,8 +163,7 @@ public class LandingView extends LkPage {
         return grid;
     }
 
-    // Each card is a category that exists, under the label that filters Browse to it (#187, UI-A6). It
-    // shows no event count: the counts were made up (#187, UI-A19).
+    // Each card is a category that exists, under the label that filters Browse to it (#187, UI-A6).
     private Div categoryCard(EventCategory category, String iconName, String g1, String g2) {
         String name = EventCategoryLabels.label(category);
         Div card = new Div();

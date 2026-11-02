@@ -70,7 +70,7 @@ public class MyProfileView extends LkPage {
         Div nameDiv = new Div();
         nameDiv.addClassName("prof-name");
         nameDiv.setText(name);
-        // No "Verified" badge: nothing verifies an account (#103, #187 UI-A19).
+        // No "Verified" badge until #103 verifies accounts: https://github.com/NaimElijah/Ticketeer/issues/103
         info.add(nameDiv);
         idRow.add(avatar, info);
 
