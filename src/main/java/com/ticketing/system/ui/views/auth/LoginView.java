@@ -4,6 +4,7 @@ import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.session.AuthSession;
@@ -33,6 +34,7 @@ public class LoginView extends LkAuthCard {
     // The guest id comes from here, not GuestSession: a guest session expires a fixed time after it
     // starts, and SessionIdentity replaces a dead one before login is asked to promote it.
     private final SessionIdentity sessionIdentity;
+    private final LkFormErrors errors = new LkFormErrors();
 
     public LoginView(LoginPresenter presenter, SessionIdentity sessionIdentity) {
         super("Welcome back",
@@ -67,8 +69,16 @@ public class LoginView extends LkAuthCard {
     }
 
     private void attemptSignIn(TextField username, PasswordField password) {
-        if (username.isEmpty() || password.isEmpty()) {
+        errors.clear();
+        if (username.isEmpty()) {
+            errors.reject(username, "Enter your username.");
+        }
+        if (password.isEmpty()) {
+            errors.reject(password, "Enter your password.");
+        }
+        if (!errors.isEmpty()) {
             Toasts.failure("Please enter both username and password.");
+            errors.focusFirst();
             return;
         }
 

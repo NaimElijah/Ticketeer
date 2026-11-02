@@ -3,6 +3,7 @@ package com.ticketing.system.ui.views.auth;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -29,6 +30,7 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 public class AdminLoginView extends LkAuthCard {
 
     private final AdminLoginPresenter presenter;
+    private final LkFormErrors errors = new LkFormErrors();
 
     public AdminLoginView(AdminLoginPresenter presenter) {
         super("Admin sign-in", "Restricted — platform administrators only.");
@@ -57,8 +59,16 @@ public class AdminLoginView extends LkAuthCard {
     }
 
     private void attempt(TextField username, PasswordField password) {
-        if (username.isEmpty() || password.isEmpty()) {
+        errors.clear();
+        if (username.isEmpty()) {
+            errors.reject(username, "Enter your admin username.");
+        }
+        if (password.isEmpty()) {
+            errors.reject(password, "Enter your password.");
+        }
+        if (!errors.isEmpty()) {
             Toasts.failure("Please enter both username and password.");
+            errors.focusFirst();
             return;
         }
 
