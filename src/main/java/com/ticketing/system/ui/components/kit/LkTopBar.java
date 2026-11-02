@@ -196,8 +196,15 @@ public class LkTopBar extends Header {
      * timer chip when {@code shortestDeadlineMs} is in the future (the
      * earliest expiry across cart lines). Both decorations vanish when the
      * cart is empty / no item still has a TTL.
+     *
+     * @param target             the view the button opens, or {@code null} for none
+     * @param itemCount          the cart's item count
+     * @param shortestDeadlineMs the earliest line expiry in epoch milliseconds, or {@code null} for none
+     * @param nowEpochMillis     the current time in epoch milliseconds, from the {@code Clock} bean
+     *                           (ADR-008); a deadline not after it shows no timer
      */
-    public LkTopBar cart(Class<? extends Component> target, int itemCount, Long shortestDeadlineMs) {
+    public LkTopBar cart(Class<? extends Component> target, int itemCount, Long shortestDeadlineMs,
+                         long nowEpochMillis) {
         ensureRightSlot();
         NativeButton btn = new NativeButton();
         btn.addClassName("lk-bell");
@@ -214,7 +221,7 @@ public class LkTopBar extends Header {
         }
         rightSlot.add(btn);
 
-        if (shortestDeadlineMs != null && shortestDeadlineMs > System.currentTimeMillis()) {
+        if (shortestDeadlineMs != null && shortestDeadlineMs > nowEpochMillis) {
             Span chip = new Span();
             chip.addClassName("bz-timer");
             chip.getStyle().set("margin-left", "6px");

@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeSet;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -639,8 +640,8 @@ class HexagonalRulesTest {
      * JVM. Production code must not call or reference (e.g. {@code Instant::now}) anything that reads
      * the system clock or the default zone: {@code now()}/{@code now(ZoneId)} on a {@code java.time}
      * type, a {@code Clock.tick*(ZoneId)} or {@code InstantSource.system()} clock, {@code new Date()},
-     * {@code Calendar.getInstance}, or the default-zone lookups. {@code System.currentTimeMillis()} is
-     * left out on purpose: its uses are zone-free browser countdowns and a cache TTL.
+     * {@code Calendar.getInstance}, {@code System.currentTimeMillis()}, or the default-zone lookups.
+     * {@code System.nanoTime()} stays allowed: it measures a duration and reads no wall clock.
      */
     @Test
     void GivenProductionCode_WhenScanned_ThenNothingReadsTheSystemClockOrDefaultZone() {
@@ -678,6 +679,25 @@ class HexagonalRulesTest {
     @Test
     void GivenATickingSystemClock_WhenScanned_ThenTheClockRuleFails() {
         assertClockRuleFails(CreatesATickingClock.class);
+    }
+
+    // ---- UI-B17: System.currentTimeMillis() is a system-clock read too (#187) ----
+
+    @Test
+    void GivenACallToSystemCurrentTimeMillis_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(CallsSystemCurrentTimeMillis.class);
+    }
+
+    @Test
+    void GivenAReferenceToSystemCurrentTimeMillis_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(ReferencesSystemCurrentTimeMillis.class);
+    }
+
+    // A duration measure reads no wall clock, so the rule must leave it alone.
+    @Test
+    void GivenACallToSystemNanoTime_WhenScanned_ThenTheClockRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(MeasuresADuration.class);
+        assertThatCode(() -> NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE.check(imported)).doesNotThrowAnyException();
     }
 
     @Test
@@ -725,7 +745,8 @@ class HexagonalRulesTest {
                                 && !name.equals("tick"))
                         || (owner.equals(InstantSource.class.getName()) && name.equals("system"))
                         || (owner.equals(Date.class.getName()) && name.equals(CONSTRUCTOR) && parameters.isEmpty())
-                        || (owner.equals(Calendar.class.getName()) && name.equals("getInstance"));
+                        || (owner.equals(Calendar.class.getName()) && name.equals("getInstance"))
+                        || (owner.equals(System.class.getName()) && name.equals("currentTimeMillis"));
                 return systemNow || defaultZone || otherSystemClock;
             });
 
@@ -773,6 +794,24 @@ class HexagonalRulesTest {
     static class CreatesATickingClock {
         Clock read() {
             return Clock.tickSeconds(ZoneOffset.UTC);
+        }
+    }
+
+    static class CallsSystemCurrentTimeMillis {
+        long read() {
+            return System.currentTimeMillis();
+        }
+    }
+
+    static class ReferencesSystemCurrentTimeMillis {
+        LongSupplier read() {
+            return System::currentTimeMillis;
+        }
+    }
+
+    static class MeasuresADuration {
+        long read() {
+            return System.nanoTime();
         }
     }
 

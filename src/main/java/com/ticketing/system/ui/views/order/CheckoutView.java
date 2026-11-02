@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.order;
 
+import java.time.Clock;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -45,6 +46,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
     private static final String IDEMPOTENCY_ATTR = "checkout.idempotencyKey";
 
     private final CheckoutPresenter presenter;
+    private final Clock clock;
     private final Object uiLock = new Object();
 
     private String  memberToken;
@@ -100,8 +102,12 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             }
         };
 
-    public CheckoutView(CheckoutPresenter presenter) {
+    /**
+     * @param clock the application clock (ADR-008), for the hold countdown's deadline
+     */
+    public CheckoutView(CheckoutPresenter presenter, Clock clock) {
         this.presenter = presenter;
+        this.clock = clock;
         this.sessionId = "";
         this.linesContainer = new Div();
     }
@@ -227,7 +233,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
 
         if (timerSpan != null && activeOrder != null
                 && activeOrder.remainingSecondsBeforeExpiry() > 0) {
-            double endMs = System.currentTimeMillis()
+            double endMs = clock.millis()
                     + activeOrder.remainingSecondsBeforeExpiry() * 1000.0;
             timerSpan.getElement().executeJs(
                     "const t = this;" +

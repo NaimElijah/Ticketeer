@@ -33,6 +33,7 @@ import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
 import com.vaadin.flow.server.VaadinSession;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -64,12 +65,18 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
     private LkTopBar topBar;
     private final SignOutFlow signOutFlow;
     private final NotificationBellPresenter bellPresenter;
+    private final Clock clock;
 
+    /**
+     * @param clock the application clock (ADR-008), for the cart badge's cache age and its countdown's
+     *              deadline
+     */
     public MainLayout(CartBadgePresenter cartBadgePresenter, SignOutFlow signOutFlow,
-            NotificationBellPresenter bellPresenter) {
+            NotificationBellPresenter bellPresenter, Clock clock) {
         this.cartBadgePresenter = cartBadgePresenter;
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
+        this.clock = clock;
         rebuildTopBar(null);
     }
 
@@ -87,12 +94,12 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
 
         int cartSize = 0;
         Long cartDeadlineMs = null;
+        long now = clock.millis();
 
         VaadinSession session = VaadinSession.getCurrent();
         if (session != null) {
             session.lock();
             try {
-                long now = System.currentTimeMillis();
                 Long lastFetchMs = (Long) session.getAttribute("cart.fetch.time");
                 Integer cachedSize = (Integer) session.getAttribute("cart.size");
                 Long cachedDeadlineMs = (Long) session.getAttribute("cart.deadline");
@@ -133,7 +140,7 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
         LkTopBar bar = new LkTopBar(LkTopBar.Variant.MAIN)
                 .brand("TicketHub", LandingView.class)
                 .nav(nav, activeLabel)
-                .cart(CartView.class, cartSize, cartDeadlineMs)
+                .cart(CartView.class, cartSize, cartDeadlineMs, now)
                 .bell(new NotificationBellComponent(bellPresenter::markRead, bellPresenter::relativeTime));
 
         if (signedIn) {
