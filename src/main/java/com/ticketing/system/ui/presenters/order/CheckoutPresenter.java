@@ -63,7 +63,20 @@ public class CheckoutPresenter {
         };
     }
 
-    public record Identity(boolean member, String memberToken, String guestSessionId, int userId) { }
+    /**
+     * The visitor as {@link #resolveIdentity()} resolved it. Its {@code toString} shows neither credential.
+     *
+     * @param member         whether the visitor is a live member
+     * @param memberToken    the member token, a credential; {@code null} for a guest
+     * @param guestSessionId the guest session id, a credential; {@code null} for a member
+     * @param userId         the member's user id, or {@link SessionIdentity#NO_MEMBER_USER_ID} for a guest
+     */
+    public record Identity(boolean member, String memberToken, String guestSessionId, int userId) {
+        @Override
+        public String toString() {
+            return "Identity[member=" + member + ", userId=" + userId + "]";
+        }
+    }
 
     // ---- load -----------------------------------------------------------
 

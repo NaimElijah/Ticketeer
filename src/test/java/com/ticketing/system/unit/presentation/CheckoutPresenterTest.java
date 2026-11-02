@@ -212,6 +212,24 @@ class CheckoutPresenterTest {
         verify(authenticationService, times(1)).liveMemberId(BUYER_TOKEN);
     }
 
+    // ---- UI-B10b: CheckoutPresenter.Identity shows no credential (#187) ----
+    // A member token and a guest session id are both credentials, so neither may reach a log line or a
+    // failure message; whether the visitor is a member, and the member's id, may.
+
+    private static final String GUEST_SESSION_ID = "guest-sid";
+
+    @Test
+    void GivenAMemberAndAGuestIdentity_WhenToString_ThenNeitherShowsItsCredential() {
+        String member = new CheckoutPresenter.Identity(true, BUYER_TOKEN, null, BUYER_ID).toString();
+        String guest = new CheckoutPresenter.Identity(false, null, GUEST_SESSION_ID, SessionIdentity.NO_MEMBER_USER_ID)
+                .toString();
+
+        assertFalse(member.contains(BUYER_TOKEN), "the member token must not be shown, but was: " + member);
+        assertFalse(guest.contains(GUEST_SESSION_ID), "the guest session id must not be shown, but was: " + guest);
+        assertEquals("Identity[member=true, userId=" + BUYER_ID + "]", member);
+        assertEquals("Identity[member=false, userId=" + SessionIdentity.NO_MEMBER_USER_ID + "]", guest);
+    }
+
     // ---- UI-C2: a store failure from viewMyActiveOrder reads as the outage, not an expired session (#187) ----
 
     @Test
