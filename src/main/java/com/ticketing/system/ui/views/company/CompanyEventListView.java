@@ -29,6 +29,7 @@ import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.company.CompanySalesView;
 import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.HasAriaLabel;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.datepicker.DatePicker;
@@ -179,21 +180,23 @@ public class CompanyEventListView extends LkPage {
         });
 
         customFromPicker = new DatePicker();
-        customFromPicker.setPlaceholder("Start date");
+        customFromPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_FROM);
+        customFromPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_FROM);
         customFromPicker.addValueChangeListener(e -> { customToPicker.setMin(e.getValue()); reloadCustomIfValid(); });
         customToPicker = new DatePicker();
-        customToPicker.setPlaceholder("End date");
+        customToPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_TO);
+        customToPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_TO);
         customToPicker.addValueChangeListener(e -> { customFromPicker.setMax(e.getValue()); reloadCustomIfValid(); });
         customRangeRow = new Div();
         customRangeRow.getStyle().set("display", "flex").set("gap", "6px");
         customRangeRow.add(customFromPicker, customToPicker);
         customRangeRow.setVisible(false);
 
-        priceMin = numberRangeField("Min", v -> { filterPriceMin = v; reload(); });
-        priceMax = numberRangeField("Max", v -> { filterPriceMax = v; reload(); });
+        priceMin = numberRangeField(CatalogFilterSupport.BOUND_MIN, v -> { filterPriceMin = v; reload(); });
+        priceMax = numberRangeField(CatalogFilterSupport.BOUND_MAX, v -> { filterPriceMax = v; reload(); });
 
-        eventRatingMin = ratingField("Min", v -> { filterMinEventRating = v; reload(); });
-        eventRatingMax = ratingField("Max", v -> { filterMaxEventRating = v; reload(); });
+        eventRatingMin = ratingField(CatalogFilterSupport.BOUND_MIN, v -> { filterMinEventRating = v; reload(); });
+        eventRatingMax = ratingField(CatalogFilterSupport.BOUND_MAX, v -> { filterMaxEventRating = v; reload(); });
 
         countrySelect = new LkSelect(CatalogFilterSupport.COUNTRY_ALL,
                 CatalogFilterSupport.countryOptions(filterOptions(
@@ -231,8 +234,8 @@ public class CompanyEventListView extends LkPage {
             labelled("Keywords", keywordsField),
             labelled("Artist", artistField),
             dateRangeField, customRangeRow,
-            labelled("Price range", priceMin, priceMax),
-            labelled("Event rating", eventRatingMin, eventRatingMax),
+            rangeGroup("Price range", priceMin, priceMax),
+            rangeGroup("Event rating", eventRatingMin, eventRatingMax),
             countrySelect, citySelect, statusSelect,
             clear);
         return bar;
@@ -359,7 +362,20 @@ public class CompanyEventListView extends LkPage {
         return f;
     }
 
-    private static Component labelled(String labelText, Component... fields) {
+    // The span shows the label but is tied to nothing, so the field carries the same text as its name (#188).
+    private static <T extends Component & HasAriaLabel> Component labelled(String labelText, T field) {
+        field.setAriaLabel(labelText);
+        return labelBlock(labelText, field);
+    }
+
+    // A named group, so a screen reader hears each bound as "Price range, Min" rather than a bare "Min" (#188).
+    private static <T extends Component & HasAriaLabel> Component rangeGroup(String labelText, T min, T max) {
+        min.setAriaLabel(CatalogFilterSupport.BOUND_MIN);
+        max.setAriaLabel(CatalogFilterSupport.BOUND_MAX);
+        return Lk.asGroup(labelBlock(labelText, min, max), labelText);
+    }
+
+    private static Div labelBlock(String labelText, Component... fields) {
         Div wrap = new Div();
         Span label = new Span(labelText);
         label.addClassName("lk-label");
@@ -495,6 +511,8 @@ public class CompanyEventListView extends LkPage {
             case ON_SALE -> "Publish (On Sale)";
             default -> s.name();
         });
+        // A visible label names the select; the placeholder alone left a screen reader nothing to say (#188).
+        select.setLabel("New status");
         select.setPlaceholder("Select new status…");
 
         ConfirmDialog dialog = new ConfirmDialog();

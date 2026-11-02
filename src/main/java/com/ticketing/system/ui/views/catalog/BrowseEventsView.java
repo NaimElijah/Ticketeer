@@ -21,6 +21,7 @@ import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.HasAriaLabel;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.html.Div;
@@ -250,14 +251,16 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         // other (min/max) so an inverted range can't be entered, then re-queries — clearing a date
         // re-queries with that bound left open rather than leaving the grid stale.
         customFromPicker = new DatePicker();
-        customFromPicker.setPlaceholder("Start date");
+        customFromPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_FROM);
+        customFromPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_FROM);
         customFromPicker.addValueChangeListener(e -> {
             customToPicker.setMin(e.getValue());   // null clears the constraint
             runCustomSearchIfValid();
         });
 
         customToPicker = new DatePicker();
-        customToPicker.setPlaceholder("End date");
+        customToPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_TO);
+        customToPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_TO);
         customToPicker.addValueChangeListener(e -> {
             customFromPicker.setMax(e.getValue());
             runCustomSearchIfValid();
@@ -327,7 +330,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
     private Component buildPriceRange() {
         priceMin = new IntegerField();
-        priceMin.setPlaceholder("Min");
+        priceMin.setPlaceholder(CatalogFilterSupport.BOUND_MIN);
         priceMin.setMin(0);
         priceMin.setMax(1000);
         priceMin.setStep(10);
@@ -341,7 +344,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         });
 
         priceMax = new IntegerField();
-        priceMax.setPlaceholder("Max");
+        priceMax.setPlaceholder(CatalogFilterSupport.BOUND_MAX);
         priceMax.setMin(0);
         priceMax.setMax(1000);
         priceMax.setStep(10);
@@ -358,12 +361,12 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     }
 
     private Component buildEventRatingRange() {
-        eventRatingMin = ratingField("Min", v -> {
+        eventRatingMin = ratingField(CatalogFilterSupport.BOUND_MIN, v -> {
             if (Objects.equals(filterMinEventRating, v)) return;
             filterMinEventRating = v;
             runSearch();
         });
-        eventRatingMax = ratingField("Max", v -> {
+        eventRatingMax = ratingField(CatalogFilterSupport.BOUND_MAX, v -> {
             if (Objects.equals(filterMaxEventRating, v)) return;
             filterMaxEventRating = v;
             runSearch();
@@ -372,12 +375,12 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     }
 
     private Component buildCompanyRatingRange() {
-        companyRatingMin = ratingField("Min", v -> {
+        companyRatingMin = ratingField(CatalogFilterSupport.BOUND_MIN, v -> {
             if (Objects.equals(filterMinCompanyRating, v)) return;
             filterMinCompanyRating = v;
             runSearch();
         });
-        companyRatingMax = ratingField("Max", v -> {
+        companyRatingMax = ratingField(CatalogFilterSupport.BOUND_MAX, v -> {
             if (Objects.equals(filterMaxCompanyRating, v)) return;
             filterMaxCompanyRating = v;
             runSearch();
@@ -398,8 +401,11 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         return f;
     }
 
-    private static Component rangeWrap(String labelText, Component min, Component max) {
-        Div wrap = new Div();
+    // A named group, so a screen reader hears each bound as "Price range, Min" rather than a bare "Min" (#188).
+    private static <T extends Component & HasAriaLabel> Component rangeWrap(String labelText, T min, T max) {
+        min.setAriaLabel(CatalogFilterSupport.BOUND_MIN);
+        max.setAriaLabel(CatalogFilterSupport.BOUND_MAX);
+        Div wrap = Lk.asGroup(new Div(), labelText);
         Span label = new Span(labelText);
         label.addClassName("lk-label");
         label.getStyle().set("display", "block").set("margin-bottom", "6px");
@@ -601,7 +607,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
     // ---- helpers ----
 
-    private static Div labelledWrap(String labelText, Component field) {
+    // The span shows the label but is tied to nothing, so the field carries the same text as its name (#188).
+    private static <T extends Component & HasAriaLabel> Div labelledWrap(String labelText, T field) {
+        field.setAriaLabel(labelText);
         Div wrap = new Div();
         Span label = new Span(labelText);
         label.addClassName("lk-label");

@@ -18,7 +18,8 @@ import com.vaadin.flow.component.textfield.TextField;
  * <p>House-style kit component — reuses {@link LkBtn} and mirrors the add/remove-row idiom
  * from {@code VenueMapEditorView} (keep a state list, {@code removeAll()} then rebuild; an
  * {@link LkRemoveButton} per row, named by the row's position, since its text changes as the
- * user types). The backend contract is
+ * user types). Each row's field is named by the label and its position, "Artists 1", renumbered
+ * after a remove. The backend contract is
  * unchanged: {@link #getValues()} returns a trimmed, blank-free {@code List<String>} in row
  * order (the same shape the old comma-split parser produced).
  */
@@ -26,6 +27,8 @@ public class LkTextRows extends Div {
 
     // Names a row's remove button: "Artists row 2".
     private static final String ROW_NAME = "%s row %d";
+    // Names a row's field: "Artists 2". The label above the rows is tied to no field, and the rows share it.
+    private static final String ROW_FIELD_NAME = "%s %d";
 
     private final NativeLabel label = new NativeLabel();
     private final Div rowsHolder = new Div();
@@ -146,6 +149,8 @@ public class LkTextRows extends Div {
         rowsHolder.removeAll();
         for (int i = 0; i < rows.size(); i++) {
             TextField field = rows.get(i);
+            // Named here, on every rebuild, so the names follow the positions after a remove (#188).
+            field.setAriaLabel(String.format(Locale.ROOT, ROW_FIELD_NAME, label.getText(), i + 1));
             Div row = new Div();
             row.getStyle().set("display", "flex").set("align-items", "center").set("gap", "8px");
             field.getStyle().set("flex", "1");
