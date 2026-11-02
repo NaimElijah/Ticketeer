@@ -87,6 +87,7 @@
   .lk-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:var(--radius-s);
     font-weight:600;border:1px solid transparent;white-space:nowrap;transition:.12s;font-size:.88rem;line-height:1}
   .lk-btn-icon{font-size:1em}
+  .lk-btn:disabled{opacity:.5;cursor:not-allowed}
   .lk-btn-s{padding:6px 12px;font-size:.8rem}
   .lk-btn-m{padding:9px 16px}
   .lk-btn-l{padding:12px 20px;font-size:.95rem}
