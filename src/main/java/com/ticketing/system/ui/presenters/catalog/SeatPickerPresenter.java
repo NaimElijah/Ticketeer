@@ -26,6 +26,11 @@ import com.ticketing.system.ui.session.SessionIdentity;
 @Slf4j
 public class SeatPickerPresenter {
 
+    // Row labels are bijective base-26 (SeatLabels.rowLabel: A..Z, then AA, AB, ...), so a shorter label
+    // is always an earlier row; plain string order would draw AA between A and B.
+    private static final Comparator<String> ROW_ORDER =
+            Comparator.comparingInt(String::length).thenComparing(Comparator.naturalOrder());
+
     private final CatalogService catalogService;
     private final ReservationService reservationService;
     private final SessionIdentity identity;
@@ -104,8 +109,16 @@ public class SeatPickerPresenter {
         }
     }
 
+    /**
+     * Lays a seated zone's seats out as a grid: one row per row label, top to bottom, and the seats of
+     * a row left to right by seat number. The seats' own coordinates are ignored.
+     *
+     * @param zone           the zone whose seats to lay out
+     * @param seatStepPixels the distance between two neighbouring seats, across and down
+     * @return one model per seat, in row order
+     */
     public static List<VkSeatedZonePicker.SeatModel> buildSeatModels(InventoryZoneDTO zone, int seatStepPixels) {
-        TreeMap<String, List<SeatDTO>> byRow = new TreeMap<>();
+        TreeMap<String, List<SeatDTO>> byRow = new TreeMap<>(ROW_ORDER);
         for (SeatDTO s : zone.getSeats()) {
             byRow.computeIfAbsent(rowOf(s.label()), k -> new ArrayList<>()).add(s);
         }
