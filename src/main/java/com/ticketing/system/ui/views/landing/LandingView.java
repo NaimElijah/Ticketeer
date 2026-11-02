@@ -38,6 +38,9 @@ public class LandingView extends LkPage {
     private static final DateTimeFormatter DATE_FMT =
         DateTimeFormatter.ofPattern("d MMM · HH:mm zzz", Locale.ENGLISH);
 
+    // A colour family BzPoster does not know, so it draws its neutral gradient.
+    private static final String NEUTRAL_POSTER_GRADIENT = "";
+
     private final LandingPresenter presenter;
 
     public LandingView(LandingPresenter presenter) {
@@ -96,7 +99,8 @@ public class LandingView extends LkPage {
     }
 
     private BzPoster poster(EventSummaryDTO e) {
-        return new BzPoster(posterCategory(e.category()), e.name(), meta(e), priceLabel(e))
+        return new BzPoster(posterGradient(e.category()), EventCategoryLabels.labelOf(e.category()),
+                e.name(), meta(e), priceLabel(e))
             .onClick(() -> UI.getCurrent().navigate("events/" + e.eventId()));
     }
 
@@ -111,23 +115,15 @@ public class LandingView extends LkPage {
 
     // ---- poster field mapping ----
 
-    /** Map the domain {@link com.ticketing.system.catalog.domain.EventCategory} name to a
-     *  BzPoster category key (drives its gradient + chip label). */
-    private static String posterCategory(String category) {
+    /** Map the domain {@link EventCategory} name to a BzPoster colour family; its chip shows the
+     *  category's own label ({@link EventCategoryLabels}). Any other category gets the neutral gradient. */
+    private static String posterGradient(String category) {
         return switch (category == null ? "" : category.toUpperCase(Locale.ROOT)) {
             case "MUSIC", "CONCERT", "FESTIVAL" -> "Concert";
             case "SPORTS" -> "Sport";
             case "THEATER", "COMEDY" -> "Theatre";
-            default -> humanize(category);
+            default -> NEUTRAL_POSTER_GRADIENT;
         };
-    }
-
-    private static String humanize(String name) {
-        if (name == null || name.isBlank()) {
-            return "Event";
-        }
-        String lower = name.toLowerCase(Locale.ROOT);
-        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
     /** "Location · 26 Jun · 20:00" — location plus the earliest show date when present. */
