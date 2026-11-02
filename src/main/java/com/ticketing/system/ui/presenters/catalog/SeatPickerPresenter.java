@@ -21,6 +21,7 @@ import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.ui.components.venue.VkSeat;
 import com.ticketing.system.ui.components.venue.VkSeatedZonePicker;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 @Slf4j
@@ -78,11 +79,9 @@ public class SeatPickerPresenter {
                     eventId, zoneId, selection.getSeatNumbers(), e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            // Infrastructure errors (e.g. optimistic-lock contention) have technical messages — log the
-            // full trace but hand the view a null so it shows its friendly fallback, never the raw text.
             log.warn("seated reserve errored (eventId={}, zoneId={}, seats={})",
                     eventId, zoneId, selection.getSeatNumbers(), e);
-            return new ReserveOutcome.Failure(null);
+            return new ReserveOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -101,11 +100,9 @@ public class SeatPickerPresenter {
                     eventId, zoneId, quantity, e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            // Infrastructure errors (e.g. optimistic-lock contention) have technical messages — log the
-            // full trace but hand the view a null so it shows its friendly fallback, never the raw text.
             log.warn("standing reserve errored (eventId={}, zoneId={}, qty={})",
                     eventId, zoneId, quantity, e);
-            return new ReserveOutcome.Failure(null);
+            return new ReserveOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

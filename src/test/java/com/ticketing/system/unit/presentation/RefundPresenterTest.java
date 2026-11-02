@@ -18,6 +18,10 @@ import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
+import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.ui.support.ServiceErrors;
+import ch.qos.logback.classic.Level;
+import jakarta.persistence.PersistenceException;
 
 class RefundPresenterTest {
 
@@ -98,5 +102,23 @@ class RefundPresenterTest {
 
         assertInstanceOf(RefundPresenter.Outcome.Failure.class,
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
+    }
+
+    // ---- UI-B5: an internal failure goes through ServiceErrors (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenRequestRefund_ThenFailureCarriesTheGenericMessageAndServiceErrorsLogsIt() {
+        when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
+                .thenThrow(new PersistenceException("could not execute statement; constraint [fk_refund_receipt]"));
+
+        try (LogCapture serviceErrorsLog = LogCapture.of(ServiceErrors.class)) {
+            RefundPresenter.Outcome outcome = presenter.requestRefund(TOKEN, ORDER_ID, "reason");
+
+            RefundPresenter.Outcome.Failure failure = assertInstanceOf(RefundPresenter.Outcome.Failure.class, outcome);
+            assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.message());
+            assertEquals(List.of(PersistenceException.class.getName()),
+                    serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                    "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+        }
     }
 }

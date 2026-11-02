@@ -5,17 +5,15 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import lombok.extern.slf4j.Slf4j;
-
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
-@Slf4j
 public class CartPresenter {
 
     private final ReservationService reservationService;
@@ -41,8 +39,7 @@ public class CartPresenter {
         } catch (DomainException e) {
             return new LoadOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            log.error("Loading cart failed unexpectedly", e);
-            return new LoadOutcome.Failure(null);
+            return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -70,8 +67,7 @@ public class CartPresenter {
         } catch (DomainException e) {
             return new RemoveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            log.error("Removing cart line failed unexpectedly", e);
-            return new RemoveOutcome.Failure(null);
+            return new RemoveOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

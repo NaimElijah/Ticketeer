@@ -138,11 +138,10 @@ public class CheckoutPresenter {
                 return new PayOutcome.OrderExpired("Order expired during checkout");
             }
             if (cause instanceof IdempotencyConflictException)   return new PayOutcome.DuplicateSubmission();
-            // Surface the reason only for domain (business) exceptions — their messages are safe to show.
-            // Anything else is an unexpected/internal error: log it server-side, show only the generic message.
             if (cause instanceof DomainException)                return new PayOutcome.Failure(cause.getMessage());
-            log.error("Checkout failed unexpectedly", e);
-            return new PayOutcome.Failure(null);
+            // ServiceErrors decides what the buyer may read and logs an internal failure. It gets the
+            // cause, as every arm above does: CheckoutService wraps a failure in a RuntimeException of its own.
+            return new PayOutcome.Failure(ServiceErrors.userMessage(cause instanceof RuntimeException rc ? rc : e));
         }
     }
 

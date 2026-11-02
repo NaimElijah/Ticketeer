@@ -10,6 +10,7 @@ import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,7 +46,7 @@ public class EventDetailsPresenter {
             return new Outcome.Failure("Your session has expired - please refresh and try again.");
         } catch (RuntimeException e) {
             log.warn("Failed to load event detail for eventId {}: {}", eventId, e.getMessage());
-            return new Outcome.Failure("We couldn't load this event right now.");
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
 
         List<InventoryZoneDTO> zones = List.of();

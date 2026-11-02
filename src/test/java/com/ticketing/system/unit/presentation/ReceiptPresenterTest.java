@@ -18,6 +18,10 @@ import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
+import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.ui.support.ServiceErrors;
+import ch.qos.logback.classic.Level;
+import jakarta.persistence.PersistenceException;
 
 class ReceiptPresenterTest {
 
@@ -96,5 +100,23 @@ class ReceiptPresenterTest {
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
 
         assertInstanceOf(ReceiptPresenter.Outcome.Failure.class, outcome);
+    }
+
+    // ---- UI-B5: an internal failure goes through ServiceErrors (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenLoad_ThenFailureCarriesTheGenericMessageAndServiceErrorsLogsIt() {
+        when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
+                .thenThrow(new PersistenceException("could not prepare statement; table [order_receipts]"));
+
+        try (LogCapture serviceErrorsLog = LogCapture.of(ServiceErrors.class)) {
+            ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
+
+            ReceiptPresenter.Outcome.Failure failure = assertInstanceOf(ReceiptPresenter.Outcome.Failure.class, outcome);
+            assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.message());
+            assertEquals(List.of(PersistenceException.class.getName()),
+                    serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                    "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+        }
     }
 }

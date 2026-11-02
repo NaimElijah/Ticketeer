@@ -8,6 +8,7 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,7 +44,7 @@ public class RefundPresenter {
             return new Outcome.Failure("Please sign in to request a refund.");
         } catch (RuntimeException e) {
             log.warn("Refund failed for order {}: {}", orderId, e.getMessage());
-            return new Outcome.Failure("We couldn't process this refund right now.");
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

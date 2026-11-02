@@ -119,4 +119,35 @@ class SeatPickerPresenterTest {
                 "each row must be drawn at its own height");
     }
 
+    // ---- UI-B5: a reservation's internal failure goes through ServiceErrors (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenReserveSeated_ThenFailureCarriesTheGenericMessageAndTheErrorIsLogged() {
+        doThrow(new PersistenceException(INTERNAL_DETAIL)).when(reservationService)
+                .reserveForGuest(any(), anyInt(), anyInt(), any());
+
+        SeatPickerPresenter.ReserveOutcome outcome =
+                presenter.reserveSeated(InventorySelectionDTO.seated(List.of("A1")), EVENT_ID, ZONE_ID);
+
+        SeatPickerPresenter.ReserveOutcome.Failure failure =
+                assertInstanceOf(SeatPickerPresenter.ReserveOutcome.Failure.class, outcome);
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.message());
+        assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenReserveStanding_ThenFailureCarriesTheGenericMessageAndTheErrorIsLogged() {
+        doThrow(new PersistenceException(INTERNAL_DETAIL)).when(reservationService)
+                .reserveForGuest(any(), anyInt(), anyInt(), any());
+
+        SeatPickerPresenter.ReserveOutcome outcome = presenter.reserveStanding(2, EVENT_ID, ZONE_ID);
+
+        SeatPickerPresenter.ReserveOutcome.Failure failure =
+                assertInstanceOf(SeatPickerPresenter.ReserveOutcome.Failure.class, outcome);
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.message());
+        assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+    }
+
 }

@@ -142,6 +142,25 @@ class CheckoutPresenterTest {
         assertEquals(cartChanged, failure.reason());
     }
 
+    // ---- UI-B5: a checkout's internal failure goes through ServiceErrors (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenPay_ThenFailureCarriesTheGenericMessageAndServiceErrorsLogsIt() {
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new PersistenceException("could not execute statement; constraint [uk_ticket_seat]"));
+
+        try (LogCapture serviceErrorsLog = LogCapture.of(ServiceErrors.class)) {
+            CheckoutPresenter.PayOutcome outcome = pay();
+
+            CheckoutPresenter.PayOutcome.Failure failure = assertInstanceOf(CheckoutPresenter.PayOutcome.Failure.class,
+                    outcome, "an internal failure must read as a failure, but was: " + outcome);
+            assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.reason());
+            assertEquals(List.of(PersistenceException.class.getName()),
+                    serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                    "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+        }
+    }
+
     // ---- UI-C1: an empty cart at Pay reads as empty, not as expired (#187) ----
     // Each refusal is the one the domain itself throws (ActiveOrder.validateCanCheckout), wrapped as
     // CheckoutService wraps a checkout failure.

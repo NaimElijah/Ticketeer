@@ -7,6 +7,7 @@ import com.ticketing.system.reporting.application.service.MemberAccountService;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -41,7 +42,7 @@ public class ReceiptPresenter {
             return new Outcome.Failure("Please sign in to view this receipt.");
         } catch (RuntimeException e) {
             log.warn("Failed to load receipt {}: {}", receiptId, e.getMessage());
-            return new Outcome.Failure("We couldn't load this receipt right now.");
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

@@ -12,6 +12,13 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+
+import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.ui.support.ServiceErrors;
+
+import ch.qos.logback.classic.Level;
+import jakarta.persistence.PersistenceException;
 
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
@@ -103,5 +110,24 @@ class EventDetailsPresenterTest {
         assertTrue(ok.zones().isEmpty());
         assertEquals(3, ok.gridRows());
         assertEquals(3, ok.gridCols());
+    }
+
+    // ---- UI-B5: an internal failure goes through ServiceErrors (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenLoad_ThenFailureCarriesTheGenericMessageAndServiceErrorsLogsIt() {
+        when(catalogService.getEventDetail(CRED, EVENT_ID))
+                .thenThrow(new PersistenceException("could not prepare statement; table [events]"));
+
+        try (LogCapture serviceErrorsLog = LogCapture.of(ServiceErrors.class)) {
+            EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
+
+            EventDetailsPresenter.Outcome.Failure failure =
+                    assertInstanceOf(EventDetailsPresenter.Outcome.Failure.class, outcome);
+            assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.message());
+            assertEquals(List.of(PersistenceException.class.getName()),
+                    serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                    "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+        }
     }
 }
