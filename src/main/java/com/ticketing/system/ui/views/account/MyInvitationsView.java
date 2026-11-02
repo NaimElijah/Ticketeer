@@ -17,6 +17,8 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Span;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
 @Route(value = "my-invitations", layout = MainLayout.class)
 @PageTitle("Invitations · TicketHub")
 @PermitAll
+@RequireCapability(Capability.MANAGE_INVITATIONS)
 public class MyInvitationsView extends LkPage {
 
     private static final String OWNER_ROLE = "Owner";

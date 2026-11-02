@@ -15,6 +15,8 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.views.account.SupportInboxView;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -41,6 +43,7 @@ import java.util.List;
 @Route(value = "support/inquiry/new", layout = MainLayout.class)
 @PageTitle("New Inquiry · TicketHub")
 @PermitAll
+@RequireCapability(Capability.MEMBER_ACCOUNT)
 public class NewInquiryView extends LkPage implements BeforeEnterObserver {
 
     private final NewInquiryPresenter presenter;

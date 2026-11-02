@@ -23,6 +23,8 @@ import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -51,6 +53,7 @@ import java.util.Optional;
 @Route(value = "receipt/:receiptId", layout = MainLayout.class)
 @PageTitle("Receipt · TicketHub")
 @PermitAll
+@RequireCapability(Capability.MEMBER_ACCOUNT)
 public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");

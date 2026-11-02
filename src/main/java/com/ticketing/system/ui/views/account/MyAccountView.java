@@ -22,6 +22,8 @@ import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -42,6 +44,7 @@ import java.util.Map;
 @Route(value = "my-account", layout = MainLayout.class)
 @PageTitle("My Account · TicketHub")
 @PermitAll
+@RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyAccountView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
