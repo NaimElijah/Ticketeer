@@ -10,6 +10,7 @@ import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.account.MyAccountView;
@@ -37,6 +38,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Buyer-facing shell — composes {@link LkTopBar} with the tickethub
@@ -100,13 +102,10 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
         if (session != null) {
             session.lock();
             try {
-                Long lastFetchMs = (Long) session.getAttribute("cart.fetch.time");
-                Integer cachedSize = (Integer) session.getAttribute("cart.size");
-                Long cachedDeadlineMs = (Long) session.getAttribute("cart.deadline");
-
-                if (lastFetchMs != null && (now - lastFetchMs) < 10_000 && cachedSize != null) {
-                    cartSize = cachedSize;
-                    cartDeadlineMs = cachedDeadlineMs;
+                Optional<CartBadgeCache.Badge> cached = CartBadgeCache.fresh(now);
+                if (cached.isPresent()) {
+                    cartSize = cached.get().size();
+                    cartDeadlineMs = cached.get().deadlineMs();
                 } else {
                     // The presenter owns the service call + error handling; the shell only
                     // reads the typed Outcome and keeps caching the result in the Vaadin session.
@@ -120,9 +119,7 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
                         case CartBadgePresenter.Outcome.Empty ignored -> { /* no cart — leave 0 */ }
                         case CartBadgePresenter.Outcome.Failure ignored -> { /* don't fail topbar render */ }
                     }
-                    session.setAttribute("cart.size", cartSize);
-                    session.setAttribute("cart.deadline", cartDeadlineMs);
-                    session.setAttribute("cart.fetch.time", now);
+                    CartBadgeCache.store(new CartBadgeCache.Badge(cartSize, cartDeadlineMs), now);
                 }
             } finally {
                 session.unlock();
