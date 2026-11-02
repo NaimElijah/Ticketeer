@@ -26,6 +26,7 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.IntegerField;
@@ -55,6 +56,9 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private static final int MAX_ROWS_PER_ZONE = 99;
     private static final int MAX_SEATS_PER_ROW = 500;
     private static final String EVENT_NOT_FOUND = "Event not found.";
+    private static final String ARIA_PRESSED = "aria-pressed";
+    // What the seat preview shows, read instead of its seats (#188).
+    private static final String SEAT_PREVIEW = "Seat preview: %d rows of %d seats";
 
     private final VenueMapPresenter presenter;
     private final VenueLimitsProperties venueLimits;
@@ -219,8 +223,13 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
             if (idx == selectedZoneIdx) row.getStyle().set("font-weight", "600");
             row.getStyle().set("display", "flex").set("align-items", "center")
                     .set("gap", "8px").set("padding", "6px 4px").set("cursor", "pointer");
-            Span name = new Span(z.name());
-            name.getStyle().set("flex", "1");
+            // A button, so a keyboard can select the zone, pressed while it is the one being edited (#188).
+            // It has no listener of its own: its click reaches the row's, which selects the zone.
+            NativeButton name = new NativeButton(z.name());
+            name.getElement().setAttribute(ARIA_PRESSED, String.valueOf(idx == selectedZoneIdx));
+            name.getStyle().set("flex", "1").set("background", "none").set("border", "none")
+                    .set("padding", "0").set("font", "inherit").set("color", "inherit")
+                    .set("text-align", "left").set("cursor", "pointer");
             LkBadge type = new LkBadge(z.seated() ? "Seated" : "Standing",
                     z.seated() ? LkBadge.Tone.primary : LkBadge.Tone.contrast).small();
             Span cap = new Span(z.seated()
@@ -396,7 +405,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         for (int r = 0; r < block.length; r++) {
             block[r] = ".".repeat(Math.max(cols, 1));
         }
-        seatPreview.add(new VkSeatBlock(block));
+        seatPreview.add(new VkSeatBlock(block).asPreview(String.format(Locale.ROOT, SEAT_PREVIEW,
+                orDefault(rowsField.getValue(), 1), orDefault(seatsPerRowField.getValue(), 1))));
     }
 
     private void saveZone() {

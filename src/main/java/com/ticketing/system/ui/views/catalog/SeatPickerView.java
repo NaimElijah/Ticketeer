@@ -371,7 +371,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private Div stateCell(VkSeat.State state, String num, String title, String sub) {
         Div cell = new Div();
         cell.addClassName("vz-state-cell");
-        VkSeat seat = new VkSeat(state, num);
+        // The key's text says what the colour means; the seat is only a swatch (#188).
+        VkSeat seat = new VkSeat(state, num).decorative();
         Div meta = new Div();
         Span t = new Span();
         t.getElement().setProperty("innerHTML", "<b style='font-size:13.5px'>" + title + "</b>");

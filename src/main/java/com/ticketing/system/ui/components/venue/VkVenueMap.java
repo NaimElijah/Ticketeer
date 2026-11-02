@@ -13,6 +13,8 @@ import java.util.function.Consumer;
  */
 public class VkVenueMap extends Div {
 
+    private static final String ARIA_PRESSED = "aria-pressed";
+
     public record Zone(String id, String label, String price, String tone,
                        String note, String top, String left, String width, String height) { }
 
@@ -32,6 +34,8 @@ public class VkVenueMap extends Div {
             zb.addClassName("vk-zone");
             zb.addClassName("vk-zone-" + z.tone);
             if (z.id.equals(selectedId)) zb.addClassName("sel");
+            // The highlight shows the selected zone only to the eye (#188; SeatAndZoneStateTest).
+            zb.getElement().setAttribute(ARIA_PRESSED, String.valueOf(z.id.equals(selectedId)));
             zb.getStyle()
                 .set("position", "absolute")
                 .set("top", z.top).set("left", z.left)
