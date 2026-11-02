@@ -91,7 +91,8 @@ public class RegisterView extends LkAuthCard {
             e -> attemptRegister(username, email, age, password, confirm));
         create.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
         create.setWidthFull();
-        create.addClickShortcut(Key.ENTER);
+        // Enter in a field registers; on the page it would also take over Enter on the link below (#188).
+        create.addClickShortcut(Key.ENTER).listenOn(username, email, age, password, confirm);
 
         col(14, username, email, age, password, strengthMeter, confirm, create);
         foot("Already have an account?", "Sign in →", LoginView.class);

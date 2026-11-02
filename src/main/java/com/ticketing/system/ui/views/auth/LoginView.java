@@ -51,7 +51,8 @@ public class LoginView extends LkAuthCard {
         Button signIn = new Button("Sign in", e -> attemptSignIn(username, password));
         signIn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
         signIn.setWidthFull();
-        signIn.addClickShortcut(Key.ENTER);
+        // Enter in a field signs in; on the page it would also take over Enter on the links below (#188).
+        signIn.addClickShortcut(Key.ENTER).listenOn(username, password);
 
         // No password reset until #104 builds one: https://github.com/NaimElijah/Ticketeer/issues/104
         col(14, username, password, signIn);

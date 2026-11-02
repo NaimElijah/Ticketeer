@@ -384,7 +384,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 .size(LkBtn.Size.l)
                 .full()
                 .onClick(e -> attemptPay());
-        Shortcuts.addShortcutListener(payButton, this::attemptPay, Key.ENTER);
+        // Enter pays from inside the payment form only; on the page it would pay from "Edit Cart" too (#188).
+        Shortcuts.addShortcutListener(payButton, this::attemptPay, Key.ENTER).listenOn(col);
         payButton.getElement().setEnabled(totalCents > 0);
         col.add(payButton);
 

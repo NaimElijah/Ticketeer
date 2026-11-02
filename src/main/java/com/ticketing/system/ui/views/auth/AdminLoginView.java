@@ -45,7 +45,8 @@ public class AdminLoginView extends LkAuthCard {
         Button signIn = new Button("Sign in", e -> attempt(username, password));
         signIn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
         signIn.setWidthFull();
-        signIn.addClickShortcut(Key.ENTER);
+        // Enter in a field signs in; on the page it would also take over Enter on the link below (#188).
+        signIn.addClickShortcut(Key.ENTER).listenOn(username, password);
 
         col(14, username, password, signIn);
         foot("Not an administrator?", "Member sign in →", LoginView.class);

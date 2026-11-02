@@ -11,8 +11,8 @@ import com.vaadin.flow.component.textfield.TextField;
 /**
  * Inline reply bar — real Vaadin {@link TextField} + primary Send
  * button. Calls back via {@link #onSend(SendHandler)} with the text on
- * submit (Enter or button click), and clears the field only when the
- * handler reports the reply sent, so a refused reply is not lost. A reply
+ * submit (Enter in the field, or a button click), and clears the field
+ * only when the handler reports the reply sent, so a refused reply is not lost. A reply
  * over the stored length is flagged on the field and never sent.
  */
 public class MdReplyBar extends Div {
@@ -35,7 +35,8 @@ public class MdReplyBar extends Div {
         send.setIcon(new LkIcon("arrowRight", 15));
         send.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         send.addClickListener(e -> submit());
-        send.addClickShortcut(Key.ENTER);
+        // Enter in the field sends; on the page it would take over Enter on every other control (#188).
+        send.addClickShortcut(Key.ENTER).listenOn(input);
 
         add(input, send);
     }
