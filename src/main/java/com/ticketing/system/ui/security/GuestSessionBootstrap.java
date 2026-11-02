@@ -38,8 +38,8 @@ public class GuestSessionBootstrap implements VaadinServiceInitListener {
                 GuestSessionDTO dto = authenticationService.startGuestSession();
                 GuestSession.setSessionId(dto.sessionId());
                 log.debug("guest session bootstrapped");
-            } catch (Exception e) {
-                log.warn("failed to start guest session at bootstrap: {}", e.getMessage());
+            } catch (RuntimeException e) {
+                log.warn("failed to start guest session at bootstrap", e);
             }
         });
     }

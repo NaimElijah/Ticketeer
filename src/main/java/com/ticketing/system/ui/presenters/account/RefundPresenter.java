@@ -10,8 +10,6 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
-import lombok.extern.slf4j.Slf4j;
-
 /**
  * Presenter for the member "Request refund" action (#284), shared by {@code ReceiptView} and
  * {@code MyAccountView}. Vaadin-free; calls {@link RefundService} and returns a sealed
@@ -20,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
  * {@link Outcome.NotFound} as a missing id, so a member cannot tell which order ids exist on other
  * accounts.
  */
-@Slf4j
 @Component
 public class RefundPresenter {
 
@@ -43,8 +40,7 @@ public class RefundPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Please sign in to request a refund.");
         } catch (RuntimeException e) {
-            log.warn("Refund failed for order {}: {}", orderId, e.getMessage());
-            return new Outcome.Failure(ServiceErrors.userMessage(e));
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "request refund orderId=" + orderId));
         }
     }
 

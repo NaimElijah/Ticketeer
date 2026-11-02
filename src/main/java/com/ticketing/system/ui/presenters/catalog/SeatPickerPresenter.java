@@ -61,7 +61,8 @@ public class SeatPickerPresenter {
             ZoneType zoneType = ZoneType.valueOf(zone.getZoneType());
             return new LoadOutcome.Loaded(zone, zoneType);
         } catch (RuntimeException e) {
-            return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
+            return new LoadOutcome.Failure(ServiceErrors.userMessageLogged(e,
+                    "load zone eventId=" + eventId + " zoneId=" + zoneId));
         }
     }
 
@@ -79,9 +80,8 @@ public class SeatPickerPresenter {
                     eventId, zoneId, selection.getSeatNumbers(), e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            log.warn("seated reserve errored (eventId={}, zoneId={}, seats={})",
-                    eventId, zoneId, selection.getSeatNumbers(), e);
-            return new ReserveOutcome.Failure(ServiceErrors.userMessage(e));
+            return new ReserveOutcome.Failure(ServiceErrors.userMessageLogged(e, "seated reserve eventId=" + eventId
+                    + " zoneId=" + zoneId + " seats=" + selection.getSeatNumbers()));
         }
     }
 
@@ -100,9 +100,8 @@ public class SeatPickerPresenter {
                     eventId, zoneId, quantity, e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            log.warn("standing reserve errored (eventId={}, zoneId={}, qty={})",
-                    eventId, zoneId, quantity, e);
-            return new ReserveOutcome.Failure(ServiceErrors.userMessage(e));
+            return new ReserveOutcome.Failure(ServiceErrors.userMessageLogged(e, "standing reserve eventId=" + eventId
+                    + " zoneId=" + zoneId + " qty=" + quantity));
         }
     }
 

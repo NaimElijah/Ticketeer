@@ -25,6 +25,8 @@ import com.ticketing.system.notifications.application.port.in.INotificationServi
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
+import com.ticketing.system.testutil.LogCapture;
+import ch.qos.logback.classic.Level;
 
 /**
  * {@link FreshGuestSession#restore()} restores "every Vaadin session has a fresh guest session id"
@@ -172,5 +174,20 @@ class FreshGuestSessionTest {
         assertTrue(AuthSession.isAdmin(), "the admin stays signed in as an admin");
         assertEquals(COMPANY_ID, CurrentCompanies.currentCompanyId(), "the current company stays");
         assertEquals(List.of("jazz night"), RecentSearches.get(), "the recent searches stay");
+    }
+
+    // ---- UI-B6: a failed guest-session start is logged with its exception (#187) ----
+
+    @Test
+    void GivenTheGuestSessionCannotBeStarted_WhenRestored_ThenTheWarningCarriesTheException() {
+        when(authenticationService.startGuestSession())
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        try (LogCapture log = LogCapture.of(FreshGuestSession.class)) {
+            freshGuestSession.restore();
+
+            assertEquals(List.of(DataAccessResourceFailureException.class.getName()),
+                    log.throwableClassNamesAt(Level.WARN), "the warning must carry the exception, not only its message");
+        }
     }
 }

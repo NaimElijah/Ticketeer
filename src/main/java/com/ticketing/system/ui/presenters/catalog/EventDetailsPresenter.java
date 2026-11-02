@@ -47,8 +47,7 @@ public class EventDetailsPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Your session has expired - please refresh and try again.");
         } catch (RuntimeException e) {
-            log.warn("Failed to load event detail for eventId {}: {}", eventId, e.getMessage());
-            return new Outcome.Failure(ServiceErrors.userMessage(e));
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load event detail eventId=" + eventId));
         }
 
         List<InventoryZoneDTO> zones = List.of();
@@ -62,7 +61,7 @@ public class EventDetailsPresenter {
         } catch (NullVenueMapException e) {
             log.debug("No venue map for eventId {}: {}", eventId, e.getMessage());
         } catch (RuntimeException e) {
-            return new Outcome.Failure(ServiceErrors.userMessage(e));
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load venue map eventId=" + eventId));
         }
 
         // Organizer's DERIVED rating (mean of the company's events' ratings) — best-effort so a

@@ -2,6 +2,7 @@ package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -163,6 +164,45 @@ class SeatPickerPresenterTest {
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.message());
         assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                 "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+    }
+
+    // ---- UI-B6: a reservation's failure is logged once, with its exception and the ids that locate it (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenReserveSeated_ThenOneLogLineCarriesTheExceptionAndTheIds() {
+        doThrow(new PersistenceException(INTERNAL_DETAIL)).when(reservationService)
+                .reserveForGuest(any(), anyInt(), anyInt(), any());
+
+        try (LogCapture presenterLog = LogCapture.of(SeatPickerPresenter.class)) {
+            presenter.reserveSeated(InventorySelectionDTO.seated(List.of("A1")), EVENT_ID, ZONE_ID);
+
+            assertTheFailureIsLoggedOnceWithItsIds(presenterLog);
+        }
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenReserveStanding_ThenOneLogLineCarriesTheExceptionAndTheIds() {
+        doThrow(new PersistenceException(INTERNAL_DETAIL)).when(reservationService)
+                .reserveForGuest(any(), anyInt(), anyInt(), any());
+
+        try (LogCapture presenterLog = LogCapture.of(SeatPickerPresenter.class)) {
+            presenter.reserveStanding(2, EVENT_ID, ZONE_ID);
+
+            assertTheFailureIsLoggedOnceWithItsIds(presenterLog);
+        }
+    }
+
+    private void assertTheFailureIsLoggedOnceWithItsIds(LogCapture presenterLog) {
+        List<String> events = new ArrayList<>();
+        for (LogCapture log : List.of(presenterLog, serviceErrorsLog)) {
+            events.addAll(log.messagesAt(Level.WARN));
+            events.addAll(log.messagesAt(Level.ERROR));
+        }
+        assertEquals(1, events.size(), "the failure must be logged once; logged: " + events);
+        assertTrue(events.get(0).contains("eventId=" + EVENT_ID) && events.get(0).contains("zoneId=" + ZONE_ID),
+                "the one log line must name the event and the zone; logged: " + events);
+        assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                "the one log line must carry the exception");
     }
 
 }

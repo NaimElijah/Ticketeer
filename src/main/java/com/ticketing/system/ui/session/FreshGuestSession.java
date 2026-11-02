@@ -73,7 +73,7 @@ public class FreshGuestSession {
             GuestSessionDTO fresh = authenticationService.startGuestSession();
             GuestSession.setSessionId(fresh.sessionId());
         } catch (RuntimeException e) {
-            log.warn("failed to start a fresh guest session: {}", e.getMessage());
+            log.warn("failed to start a fresh guest session", e);
             GuestSession.clear();
         }
     }

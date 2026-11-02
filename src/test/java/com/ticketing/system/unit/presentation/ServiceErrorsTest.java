@@ -13,6 +13,8 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.support.ServiceErrors;
 
+import ch.qos.logback.classic.Level;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -180,5 +182,49 @@ class ServiceErrorsTest {
             new CannotCreateTransactionException("Could not open JPA EntityManager for transaction")));
 
         assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, message);
+    }
+
+    // ---- UI-B6: userMessageLogged logs every failure once, with its exception and the action (#187) ----
+
+    private static final String ACTION = "load receipt receiptId=42";
+
+    @Test
+    void GivenAnInternalFailure_WhenUserMessageLogged_ThenTheGenericTextAndOneErrorWithTheExceptionAndTheAction() {
+        serviceErrorsLog = LogCapture.of(ServiceErrors.class);
+
+        String message = ServiceErrors.userMessageLogged(new DataIntegrityViolationException(INTERNAL_FAILURE_TEXT), ACTION);
+
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, message);
+        assertEquals(1, serviceErrorsLog.eventCount(), "the failure must be logged once");
+        assertEquals(List.of(DataIntegrityViolationException.class.getName()),
+            serviceErrorsLog.throwableClassNamesAt(Level.ERROR));
+        assertEquals(1, serviceErrorsLog.eventsContaining(ACTION).size(), "the log line must name the action");
+    }
+
+    @Test
+    void GivenADatabaseOutage_WhenUserMessageLogged_ThenTheOutageTextAndOneWarningWithTheExceptionAndTheAction() {
+        serviceErrorsLog = LogCapture.of(ServiceErrors.class);
+
+        String message = ServiceErrors.userMessageLogged(
+            new DataAccessResourceFailureException("connection refused"), ACTION);
+
+        assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, message);
+        assertEquals(1, serviceErrorsLog.eventCount(), "the failure must be logged once");
+        assertEquals(List.of(DataAccessResourceFailureException.class.getName()),
+            serviceErrorsLog.throwableClassNamesAt(Level.WARN));
+        assertEquals(1, serviceErrorsLog.eventsContaining(ACTION).size(), "the log line must name the action");
+    }
+
+    @Test
+    void GivenABusinessRefusal_WhenUserMessageLogged_ThenItsOwnTextAndOneWarningWithTheException() {
+        serviceErrorsLog = LogCapture.of(ServiceErrors.class);
+
+        String message = ServiceErrors.userMessageLogged(
+            new BusinessRuleViolationException("This event is no longer on sale."), ACTION);
+
+        assertEquals("This event is no longer on sale.", message);
+        assertEquals(1, serviceErrorsLog.eventCount(), "the failure must be logged once");
+        assertEquals(List.of(BusinessRuleViolationException.class.getName()),
+            serviceErrorsLog.throwableClassNamesAt(Level.WARN));
     }
 }

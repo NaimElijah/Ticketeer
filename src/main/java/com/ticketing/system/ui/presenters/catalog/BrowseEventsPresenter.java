@@ -8,8 +8,6 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.support.ServiceErrors;
 
-import lombok.extern.slf4j.Slf4j;
-
 /**
  * Read-only presenter for {@code BrowseEventsView} (#271). Runs the public catalog search
  * server-side via {@link CatalogService#searchGlobal}: the view builds a
@@ -19,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Holds no Vaadin imports. Each read returns a {@link ListOutcome}, so a failed read reaches the
  * view as a failure with {@code ServiceErrors}' text, never as an empty catalog.
  */
-@Slf4j
 @Component
 public class BrowseEventsPresenter {
 
@@ -34,8 +31,7 @@ public class BrowseEventsPresenter {
         try {
             return new ListOutcome.Loaded<>(catalogService.searchGlobal(credential, filters));
         } catch (RuntimeException e) {
-            log.warn("Browse search failed: {}", e.getMessage());
-            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
+            return new ListOutcome.Failure<>(ServiceErrors.userMessageLogged(e, "browse search"));
         }
     }
 
@@ -44,8 +40,7 @@ public class BrowseEventsPresenter {
         try {
             return new ListOutcome.Loaded<>(catalogService.onSaleCountries());
         } catch (RuntimeException e) {
-            log.warn("Browse countries failed: {}", e.getMessage());
-            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
+            return new ListOutcome.Failure<>(ServiceErrors.userMessageLogged(e, "browse countries"));
         }
     }
 
@@ -54,8 +49,7 @@ public class BrowseEventsPresenter {
         try {
             return new ListOutcome.Loaded<>(catalogService.onSaleCitiesInCountry(country));
         } catch (RuntimeException e) {
-            log.warn("Browse cities failed: {}", e.getMessage());
-            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
+            return new ListOutcome.Failure<>(ServiceErrors.userMessageLogged(e, "browse cities"));
         }
     }
 }

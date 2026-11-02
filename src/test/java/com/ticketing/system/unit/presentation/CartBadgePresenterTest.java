@@ -78,4 +78,53 @@ class CartBadgePresenterTest {
         assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, failure.reason());
     }
 
+    // ---- UI-B6: a failure is logged once, with its exception (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenLoadBadge_ThenItIsLoggedOnceWithItsException() {
+        when(reservationService.viewMyActiveOrder(GUEST_SESSION_ID))
+                .thenThrow(new PersistenceException("could not prepare statement; table [active_orders]"));
+
+        presenter.loadBadge();
+
+        assertEquals(1, eventsAtWarnOrError(),
+                "the failure must be logged once; logged: " + loggedFailures());
+        assertEquals(List.of(PersistenceException.class.getName()), throwablesLoggedAtWarnOrError(),
+                "the one log event must carry the exception");
+    }
+
+    @Test
+    void GivenTheStoreIsDown_WhenLoadBadge_ThenItIsLoggedOnceWithItsException() {
+        when(reservationService.viewMyActiveOrder(GUEST_SESSION_ID))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        presenter.loadBadge();
+
+        assertEquals(1, eventsAtWarnOrError(),
+                "the failure must be logged once; logged: " + loggedFailures());
+        assertEquals(List.of(DataAccessResourceFailureException.class.getName()), throwablesLoggedAtWarnOrError(),
+                "the one log event must carry the exception");
+    }
+
+    private int eventsAtWarnOrError() {
+        int events = 0;
+        for (LogCapture log : List.of(presenterLog, serviceErrorsLog)) {
+            events += log.messagesAt(Level.WARN).size() + log.messagesAt(Level.ERROR).size();
+        }
+        return events;
+    }
+
+    private List<String> throwablesLoggedAtWarnOrError() {
+        List<String> throwables = new ArrayList<>();
+        for (LogCapture log : List.of(presenterLog, serviceErrorsLog)) {
+            throwables.addAll(log.throwableClassNamesAt(Level.WARN));
+            throwables.addAll(log.throwableClassNamesAt(Level.ERROR));
+        }
+        return throwables;
+    }
+
+    private String loggedFailures() {
+        return "CartBadgePresenter WARN " + presenterLog.messagesAt(Level.WARN)
+                + ", ServiceErrors ERROR " + serviceErrorsLog.messagesAt(Level.ERROR);
+    }
 }

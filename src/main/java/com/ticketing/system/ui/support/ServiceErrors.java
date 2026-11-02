@@ -77,6 +77,27 @@ public final class ServiceErrors {
         return GENERIC_FAILURE_MESSAGE;
     }
 
+    /**
+     * The text {@link #userMessage} gives, for a caller that wants the failure in the log whatever it
+     * is: logs it once, with its exception and the caller's {@code action}, so the caller logs nothing
+     * itself. An internal failure is logged at ERROR, as {@link #userMessage} logs it; a database outage
+     * or a business refusal, which {@link #userMessage} leaves unlogged, at WARN.
+     *
+     * @param error  the exception the service call threw; not {@code null}
+     * @param action what failed and the ids that locate it, in key=value form (for example
+     *               {@code "load receipt receiptId=42"}); it is logged, so never personal data
+     * @return the text to show the user, never {@code null}
+     */
+    public static String userMessageLogged(RuntimeException error, String action) {
+        if (isDatabaseUnavailable(error) || UserFacingErrors.isUserFacing(error)) {
+            log.warn("Service call failed action=\"{}\"", action, error);
+            return userMessage(error);
+        }
+        log.error("Service call failed with an internal error action=\"{}\"; the user sees the generic message",
+                action, error);
+        return GENERIC_FAILURE_MESSAGE;
+    }
+
     /** True when {@code error} (or anything in its cause chain) is the database being unreachable. */
     public static boolean isDatabaseUnavailable(Throwable error) {
         for (Throwable cause = error; cause != null; cause = nextCause(cause)) {

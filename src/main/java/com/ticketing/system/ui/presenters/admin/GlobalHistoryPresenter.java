@@ -13,8 +13,6 @@ import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.support.ServiceErrors;
 
-import lombok.extern.slf4j.Slf4j;
-
 /**
  * Read-only presenter for {@code GlobalHistoryView}. Loads every purchase
  * record across the platform via {@link SystemAdminService#viewGlobalHistory}
@@ -25,7 +23,6 @@ import lombok.extern.slf4j.Slf4j;
  * no server filter). A caller without a token gets no records; a failed read is a
  * {@link ListOutcome.Failure}, never an empty history.
  */
-@Slf4j
 @Component
 public class GlobalHistoryPresenter {
 
@@ -60,8 +57,7 @@ public class GlobalHistoryPresenter {
                     .flatMap(h -> h.records().stream())
                     .toList());
         } catch (RuntimeException e) {
-            log.warn("Failed to load global purchase history: {}", e.getMessage());
-            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
+            return new ListOutcome.Failure<>(ServiceErrors.userMessageLogged(e, "load global purchase history"));
         }
     }
 }

@@ -9,8 +9,6 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
-import lombok.extern.slf4j.Slf4j;
-
 /**
  * Read-only presenter for {@code ReceiptView} (#276). Loads one member-owned order receipt and
  * returns a sealed {@link Outcome} the view switches on — the view never calls the service
@@ -21,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
  * account gives the same {@link Outcome.NotFound} as a missing id, so a member cannot tell which
  * receipt ids exist on other accounts.
  */
-@Slf4j
 @Component
 public class ReceiptPresenter {
 
@@ -41,8 +38,7 @@ public class ReceiptPresenter {
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Please sign in to view this receipt.");
         } catch (RuntimeException e) {
-            log.warn("Failed to load receipt {}: {}", receiptId, e.getMessage());
-            return new Outcome.Failure(ServiceErrors.userMessage(e));
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load receipt receiptId=" + receiptId));
         }
     }
 
