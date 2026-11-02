@@ -52,7 +52,8 @@ spring:
 database:
   socket-timeout: ${DB_SOCKET_TIMEOUT:30s}
 
-# JWT signing secret (consumed by Infrastructure/security/JwtSessionManager — UC-12).
+# JWT signing secret (UC-12). Binds to identity's JwtProperties; the boot refuses a secret under 32
+# characters (JwtSessionManager), naming the key but never printing the value.
 # In production the secret MUST be supplied via environment variable, never committed. Outside dev and
 # test the boot refuses this default (CommittedDefaultSecretsGuard repeats it, and its test pins the two).
 jwt:
@@ -99,7 +100,8 @@ catalog:
 
 
 # System Analytics dashboard (UC-46 / #43, #279).
-#  - rate-window-minutes: trailing window the per-minute rates are computed over.
+#  - rate-window-minutes: trailing window the per-minute rates are computed over;
+#    at most 120, the longest window the metrics answer (ISystemMetrics.MAX_WINDOW_MINUTES).
 #  - refresh-interval-ms: how often the dashboard auto-refreshes its KPIs in the
 #    browser (Vaadin poll). 0 disables auto-refresh (manual "Refresh" still works).
 analytics:
@@ -155,7 +157,8 @@ wsep:
 #  - mode: off | reseed | wipe | reset | ask. An unknown mode stops the boot.
 #  - wipe/reset also need assume-yes=true.
 #  - fail-fast: a failing step stops the boot (V3 2.a.ii, ADR-003). The dev profile turns it off so
-#    a broken demo line doesn't block local work. A missing scenario file stops the boot either way.
+#    a broken demo line doesn't block local work. A scenario file that is missing, unreadable or
+#    refused by the parser stops the boot either way.
 seed:
   mode: ${SEED_MODE:off}
   fail-fast: ${SEED_FAIL_FAST:true}

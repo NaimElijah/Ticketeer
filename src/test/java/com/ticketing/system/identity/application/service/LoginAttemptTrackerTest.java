@@ -100,13 +100,46 @@ class LoginAttemptTrackerTest {
     }
 
     @Test
-    void GivenAttemptsUnderOneNameInOtherCasesAndPadding_WhenAdmit_ThenTheyCountOnOneKey() {
+    void GivenAttemptsUnderOneNameInOtherCasesAndPadding_WhenAdmit_ThenEachCountsOnItsOwnKey() {
         tracker.admit(Pool.MEMBER, "alice");
         tracker.admit(Pool.MEMBER, "ALICE");
         tracker.admit(Pool.MEMBER, "  Alice  ");
 
-        assertFalse(tracker.admit(Pool.MEMBER, "alice").admitted());
-        assertEquals(1, tracker.trackedKeyCount());
+        assertEquals(2, tracker.admit(Pool.MEMBER, "alice").attempts());
+        assertEquals(3, tracker.trackedKeyCount());
+    }
+
+    // #187: member accounts are matched exactly (requirements.md, business rule 1), so a member key
+    // must not merge names that are distinct accounts or that name no account.
+
+    @Test
+    void GivenMaxMemberAttemptsAtAlice_WhenALICEIsAdmitted_ThenItIsTheFirstAttemptOfItsOwnKey() {
+        admitTimes(Pool.MEMBER, "alice", MAX_ATTEMPTS);
+
+        Admission admission = tracker.admit(Pool.MEMBER, "ALICE");
+
+        assertTrue(admission.admitted(), "ALICE is a distinct member account from alice");
+        assertEquals(1, admission.attempts());
+    }
+
+    @Test
+    void GivenMaxMemberAttemptsAtAlice_WhenAliceWithALeadingSpaceIsAdmitted_ThenItIsTheFirstAttemptOfItsOwnKey() {
+        admitTimes(Pool.MEMBER, "alice", MAX_ATTEMPTS);
+
+        Admission admission = tracker.admit(Pool.MEMBER, " alice");
+
+        assertTrue(admission.admitted(), "' alice' is not the member account alice");
+        assertEquals(1, admission.attempts());
+    }
+
+    @Test
+    void GivenMaxMemberAttemptsAtAlice_WhenALICEIsCleared_ThenAliceIsStillRefused() {
+        admitTimes(Pool.MEMBER, "alice", MAX_ATTEMPTS);
+
+        tracker.clear(Pool.MEMBER, "ALICE");
+
+        assertFalse(tracker.admit(Pool.MEMBER, "alice").admitted(),
+                "a sign-in to ALICE must not clear the window of the distinct account alice");
     }
 
     @Test

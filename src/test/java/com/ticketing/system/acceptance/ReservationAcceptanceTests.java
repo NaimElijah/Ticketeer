@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
 
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
@@ -19,7 +20,9 @@ import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.UserRepositories;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,6 +53,8 @@ public class ReservationAcceptanceTests {
     // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+    // The age of every member these tests reserve for; no event here has an age policy.
+    private static final int MEMBER_AGE = 30;
 
     private ReservationService reservationService;
 
@@ -74,13 +80,13 @@ public class ReservationAcceptanceTests {
         // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
         // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, mock(ProductionCompanyRepository.class));
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,
                 sessionManager,
                 eventPublisher,
-                mock(UserRepository.class),
+                UserRepositories.everyMemberExistsAged(MEMBER_AGE),
                 marketGate,
                 mock(ISystemMetrics.class),
                 Clock.fixed(T0, ZoneOffset.UTC)
@@ -163,7 +169,7 @@ public class ReservationAcceptanceTests {
 
     @Test
     void GivenEventNotFound_WhenreserveStandingTicketsForMember_ThenThrowException() {
-        when(eventRepository.findById(100)).thenReturn(null);
+        when(eventRepository.findById(100)).thenThrow(new EventNotFoundException(100));
 
         String result;
 

@@ -1,6 +1,8 @@
 package com.ticketing.system.unit.application;
 
+import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -16,10 +18,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.dto.ComplaintFilterDTO;
@@ -32,6 +37,7 @@ import com.ticketing.system.shared.dto.StartConversationRequestDTO;
 import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.NewMessageNotice;
+import com.ticketing.system.shared.event.OutreachSentNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.identity.domain.Admin;
@@ -66,6 +72,7 @@ class MessagingServiceTest {
     private static final String ADMIN_TOKEN = "admin-tok";
     private static final int ADMIN_ID = 1;
     private static final int COMPANY_ID = 5;
+    private static final int MEMBER_AGE = 30;
     // Member and company ids come from separate sequences, so a member often has its company's id.
     private static final String SHARED_ID_MEMBER_TOKEN = "shared-id-member-tok";
     // Messages are stamped from the injected clock, as UTC wall time (ADR-008).
@@ -117,7 +124,8 @@ class MessagingServiceTest {
         ProductionCompany company = companyMock(COMPANY_ID, OWNER_ID);
         when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
 
-        User owner = ownerUser(OWNER_ID, COMPANY_ID);
+        // A plain member account: ownership comes from the membership gate below, not from the User.
+        User owner = plainUser(OWNER_ID);
         when(userRepository.getUserById(OWNER_ID)).thenReturn(owner);
         // The owner "acts for" its company — the membership gate answers true for that (userId, companyId).
         when(membershipService.isOwnerInCompany(OWNER_ID, COMPANY_ID)).thenReturn(true);
@@ -127,6 +135,9 @@ class MessagingServiceTest {
 
         User member = plainUser(MEMBER_ID);
         when(userRepository.getUserById(MEMBER_ID)).thenReturn(member);
+
+        User member2 = plainUser(MEMBER2_ID);
+        when(userRepository.getUserById(MEMBER2_ID)).thenReturn(member2);
 
         stubToken(SHARED_ID_MEMBER_TOKEN, COMPANY_ID);
         User sharedIdMember = plainUser(COMPANY_ID);
@@ -142,6 +153,14 @@ class MessagingServiceTest {
                 && notice.recipientUserId() == recipientUserId                     // targeted recipient
                 && (conversationId == null || conversationId.equals(notice.conversationId())) // optional convo id
                 && (subject == null || subject.equals(notice.subject())));         // optional subject
+    }
+
+    // Mockito matcher for the single OutreachSentNotice of a send, naming exactly these recipients in
+    // this order. An outreach publishes one notice for the whole send, never one per recipient (#187).
+    private static Object publishedOutreachTo(int... recipientUserIds) {
+        return argThat((Object event) -> event instanceof OutreachSentNotice notice
+                && Arrays.equals(recipientUserIds, notice.recipients().stream()
+                        .mapToInt(OutreachSentNotice.Recipient::recipientUserId).toArray()));
     }
 
     // --- startConversation (II.3.10) ---
@@ -318,8 +337,6 @@ class MessagingServiceTest {
 
     @Test
     void sendOutreach_allMembers_fansOutDirect_andNotifiesEach() {
-        // Build the mock users into locals first — stubbing a mock inside thenReturn(...) trips
-        // Mockito's "unfinished stubbing" guard.
         User u10 = plainUser(MEMBER_ID);
         User u11 = plainUser(MEMBER2_ID);
         when(userRepository.findAll()).thenReturn(List.of(u10, u11));
@@ -329,8 +346,7 @@ class MessagingServiceTest {
 
         assertEquals(2, result.recipientCount());
         assertEquals(2, conversationRepository.findByType(ConversationType.DIRECT).size());
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER_ID, null, "Notice"));
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER2_ID, null, "Notice"));
+        verify(eventPublisher).publishEvent(publishedOutreachTo(MEMBER_ID, MEMBER2_ID));
     }
 
     @Test
@@ -343,7 +359,7 @@ class MessagingServiceTest {
         assertEquals(1, convs.size());
         assertEquals(ParticipantType.MEMBER, convs.get(0).getCounterpartyType());
         assertEquals(MEMBER2_ID, convs.get(0).getCounterpartyId());
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(MEMBER2_ID, null, null));
+        verify(eventPublisher).publishEvent(publishedOutreachTo(MEMBER2_ID));
     }
 
     @Test
@@ -360,7 +376,7 @@ class MessagingServiceTest {
         // Producers resolve to the owners' member accounts — the thread targets a MEMBER, not a COMPANY.
         assertEquals(ParticipantType.MEMBER, convs.get(0).getCounterpartyType());
         assertEquals(OWNER_ID, convs.get(0).getCounterpartyId());
-        verify(eventPublisher).publishEvent(publishedNewMessageTo(OWNER_ID, null, null));
+        verify(eventPublisher).publishEvent(publishedOutreachTo(OWNER_ID));
     }
 
     @Test
@@ -493,18 +509,7 @@ class MessagingServiceTest {
         assertEquals(MEMBER_ID, filtered.get(0).initiatorId());
     }
 
-    // --- markMessageAsRead / closeConversation ---
-
-    @Test
-    void markMessageAsRead_flipsReadFlag() {
-        ConversationDTO created = service.startConversation(MEMBER_TOKEN, inquiryReq());
-        String msgId = created.messages().get(0).messageId();
-
-        service.markMessageAsRead(OWNER_TOKEN, created.conversationId(), msgId);
-
-        var conv = conversationRepository.findById(created.conversationId()).orElseThrow();
-        assertTrue(conv.getMessages().get(0).isRead());
-    }
+    // --- markConversationRead / closeConversation ---
 
     // Each call must pass the side it resolved: with the id alone, the member and the company that share
     // it would each take the other's messages for their own. The member writes twice, so the two counts
@@ -523,11 +528,10 @@ class MessagingServiceTest {
     }
 
     @Test
-    void GivenAMemberWithTheCompanysId_WhenTheCompanyMarksTheMembersMessageRead_ThenTheCompanyHasNothingUnread() {
+    void GivenAMemberWithTheCompanysId_WhenTheCompanyMarksTheThreadRead_ThenTheCompanyHasNothingUnread() {
         ConversationDTO created = service.startConversation(SHARED_ID_MEMBER_TOKEN, inquiryReq());
-        String memberMessage = created.messages().get(0).messageId();
 
-        service.markMessageAsRead(OWNER_TOKEN, created.conversationId(), memberMessage);
+        service.markConversationRead(OWNER_TOKEN, created.conversationId());
 
         assertEquals(0, service.viewCompanyInbox(OWNER_TOKEN, COMPANY_ID).get(0).unreadCountForViewer());
     }
@@ -569,15 +573,30 @@ class MessagingServiceTest {
         return c;
     }
 
-    private User ownerUser(int userId, int companyId) {
-        User u = mock(User.class);
-        when(u.getUserId()).thenReturn(userId);
-        return u;
+    private static User plainUser(int userId) {
+        return new User(userId, "user" + userId, "user" + userId + "@example.test", "unused-password-hash",
+                MEMBER_AGE);
     }
 
-    private User plainUser(int userId) {
-        User u = mock(User.class);
-        when(u.getUserId()).thenReturn(userId);
-        return u;
+    // ---- An outreach to more recipients than the notification queue holds drops alerts (#187) ----
+
+    @Test
+    void GivenThreeRecipients_WhenSendOutreach_ThenOneNoticeNamesEachRecipientWithTheConversationOpenedForThem() {
+        service.sendOutreach(ADMIN_TOKEN, new OutreachRequestDTO("Venue change", "The show moves to Hall B.",
+                List.of(MEMBER_ID, OWNER_ID, OUTSIDER_ID), false, false));
+
+        ArgumentCaptor<Object> published = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(published.capture());
+        OutreachSentNotice notice = assertInstanceOf(OutreachSentNotice.class, published.getValue());
+        Map<Integer, String> conversationOf = conversationRepository.findByType(ConversationType.DIRECT).stream()
+                .collect(toMap(Conversation::getCounterpartyId, Conversation::getConversationId));
+        assertEquals(List.of(
+                new OutreachSentNotice.Recipient(MEMBER_ID, conversationOf.get(MEMBER_ID)),
+                new OutreachSentNotice.Recipient(OWNER_ID, conversationOf.get(OWNER_ID)),
+                new OutreachSentNotice.Recipient(OUTSIDER_ID, conversationOf.get(OUTSIDER_ID))),
+                notice.recipients());
+        assertEquals("a system admin", notice.senderLabel());
+        assertEquals("Venue change", notice.subject());
+        assertEquals("The show moves to Hall B.", notice.snippet());
     }
 }

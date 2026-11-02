@@ -5,6 +5,7 @@ import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.SeatLabels;
+import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
@@ -34,9 +35,11 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Route(value = "owner/venue/:eventId", layout = WorkspaceLayout.class)
 @PageTitle("Venue Map · TicketHub")
@@ -50,9 +53,16 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     // zone into rows of seats, so it caps each dimension. 99 x 500 is the default seat limit.
     private static final int MAX_ROWS_PER_ZONE = 99;
     private static final int MAX_SEATS_PER_ROW = 500;
+    private static final String EVENT_NOT_FOUND = "Event not found.";
 
     private final VenueMapPresenter presenter;
     private final VenueLimitsProperties venueLimits;
+    private final LkBtn saveMapBtn;
+    /**
+     * Whether the event's map loaded. Until it does the editor holds only its placeholder zone, and saving
+     * that would replace the event's real map (#187, UI-A16).
+     */
+    private boolean mapLoaded;
     private String eventId = "0";
 
     private record ZoneState(String name, boolean seated, int rows, int seatsPerRow,
@@ -84,13 +94,14 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         this.presenter = presenter;
         this.venueLimits = venueLimits;
         zoneStates.add(new ZoneState("Zone 1", true, 10, 20, 0, 100.0, defaultPlacement(0)));
+        saveMapBtn = new LkBtn("Save Map").variant(LkBtn.Variant.primary)
+            .onClick(e -> saveMap());
         title("Venue Map Editor");
         subtitle("Place zones on the " + gridRows + "×" + gridCols + " venue grid, then define seats.");
         actions(
             new LkBtn("Cancel").variant(LkBtn.Variant.tertiary)
                 .onClick(e -> UI.getCurrent().navigate(CompanyEventListView.class)),
-            new LkBtn("Save Map").variant(LkBtn.Variant.primary)
-                .onClick(e -> saveMap())
+            saveMapBtn
         );
         add(buildSplit());
         loadZoneIntoEditor(0);
@@ -104,8 +115,15 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     }
 
     private void loadZonesFromBackend() {
+        setMapLoaded(false);
         if ("0".equals(eventId)) return;
-        switch (presenter.loadZones(AuthSession.token(), Integer.parseInt(eventId))) {
+        Optional<Integer> id = parseEventId(eventId);
+        if (id.isEmpty()) {
+            // The id is typed by the visitor: one that is no number names no event (#187, UI-A15).
+            Toasts.failure(EVENT_NOT_FOUND);
+            return;
+        }
+        switch (presenter.loadZones(AuthSession.token(), id.get())) {
             case VenueMapPresenter.LoadOutcome.Success ok -> {
                 gridRows = ok.layout().gridRows();
                 gridCols = ok.layout().gridCols();
@@ -124,6 +142,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                     loadZoneIntoEditor(0);
                 }
                 refreshAll();
+                setMapLoaded(true);
             }
             case VenueMapPresenter.LoadOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
@@ -240,7 +259,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
             zones.add(new VkVenueMap.Zone(
                     "z" + i,
                     z.name(),
-                    "$" + (int) z.price(),
+                    Money.format(Money.toCents(z.price())),
                     i == selectedZoneIdx ? "sel" : "ok",
                     null,
                     pct((p.row() - 1) * 100.0 / gridRows),
@@ -355,7 +374,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         if (idx < 0 || idx >= zoneStates.size()) return;
         ZoneState z = zoneStates.get(idx);
         zoneNameField.setValue(z.name());
-        priceField.setValue(String.valueOf((int) z.price()));
+        priceField.setValue(priceText(z.price()));
         zoneTypeGroup.setValue(z.seated() ? "Seated" : "Standing");
         rowsField.setValue(z.rows() == 0 ? 1 : z.rows());
         seatsPerRowField.setValue(z.seatsPerRow() == 0 ? 1 : z.seatsPerRow());
@@ -417,9 +436,10 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private void addZone(boolean seated) {
         int idx = zoneStates.size();
+        String name = presenter.defaultZoneName(zoneStates.stream().map(ZoneState::name).toList());
         ZoneState z = seated
-            ? new ZoneState("Zone " + (idx + 1), true, 10, 20, 0, 100.0, defaultPlacement(idx))
-            : new ZoneState("Zone " + (idx + 1), false, 0, 0, 500, 80.0, defaultPlacement(idx));
+            ? new ZoneState(name, true, 10, 20, 0, 100.0, defaultPlacement(idx))
+            : new ZoneState(name, false, 0, 0, 500, 80.0, defaultPlacement(idx));
         zoneStates.add(z);
         selectedZoneIdx = idx;
         loadZoneIntoEditor(idx);
@@ -445,7 +465,15 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     // ── Persist ───────────────────────────────────────────────────────────────
 
+    private void setMapLoaded(boolean loaded) {
+        mapLoaded = loaded;
+        saveMapBtn.setEnabled(loaded);
+    }
+
     private void saveMap() {
+        if (!mapLoaded) {
+            return;
+        }
         List<VenueMapConfigDTO.ZoneConfigDTO> zoneDTOs = new ArrayList<>();
         for (ZoneState z : zoneStates) {
             if (z.seated()) {
@@ -465,8 +493,6 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
             }
             case VenueMapPresenter.SaveOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
-            case VenueMapPresenter.SaveOutcome.NoCompany ignored ->
-                Toasts.failure("You don't own a company — register one first.");
             case VenueMapPresenter.SaveOutcome.Failure fail ->
                 Toasts.failure(Lk.withReason("Could not save the venue map", fail.reason()));
         }
@@ -487,6 +513,20 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         int row = (idx / gridCols) + 1;
         int col = (idx % gridCols) + 1;
         return new GridPlacementDTO(Math.min(row, gridRows), col, 1, 1);
+    }
+
+    // The field's text is parsed back on Apply Zone, so it must hold the exact price: a rounded one
+    // would be saved over the stored price even when the owner changed nothing.
+    private static String priceText(double price) {
+        return BigDecimal.valueOf(price).stripTrailingZeros().toPlainString();
+    }
+
+    private static Optional<Integer> parseEventId(String routeValue) {
+        try {
+            return Optional.of(Integer.parseInt(routeValue));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
     }
 
     private static int orDefault(Integer value, int fallback) {

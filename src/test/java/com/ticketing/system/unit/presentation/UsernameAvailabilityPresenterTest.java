@@ -45,6 +45,15 @@ class UsernameAvailabilityPresenterTest {
     }
 
     @Test
+    void GivenAnAvailableNameWithSurroundingWhitespace_WhenCheck_ThenInvalidFormat() {
+        when(memberQueryService.usernameExists("brand.new")).thenReturn(false);
+
+        assertInstanceOf(Outcome.InvalidFormat.class, presenter.check(" brand.new"),
+                "register refuses a name with surrounding whitespace, so it must not be called available");
+        assertInstanceOf(Outcome.InvalidFormat.class, presenter.check("brand.new "));
+    }
+
+    @Test
     void adminPoolName_returnsAdminReserved() {
         // Which names are reserved is the identity service's answer, the one register enforces.
         when(authenticationService.isUsernameReserved("admin")).thenReturn(true);

@@ -17,8 +17,8 @@ public class NotificationAsyncConfig {
     /** Bean name of the executor that {@code NotificationEventListener} runs on. */
     public static final String NOTIFICATION_EXECUTOR = "notificationExecutor";
 
-    // One thread stores notices in submission order (commit order across transactions); storing one
-    // is a single row insert.
+    // One thread stores notices in submission order (commit order across transactions). Storing most
+    // notices is a single row insert; an outreach notice stores one alert per recipient (ADR-019).
     private static final int POOL_SIZE = 1;
     // Bounds memory if storage stalls; beyond it a notice is dropped and logged (ADR-004).
     private static final int QUEUE_CAPACITY = 1_000;

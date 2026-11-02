@@ -22,6 +22,8 @@ import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
 
 /**
  * Maps {@link OrderReceipt} to {@link PurchaseHistoryDTO} read models.
@@ -177,14 +179,13 @@ public class OrderReceiptMapper {
     }
 
     // ---- name resolution (all null-safe; a null port/repo yields a null name) ----
+    // A record that no longer exists renders as a null name, each port saying so its own way. A failure of
+    // the store behind a lookup is no missing record: it propagates rather than render as one
+    // (NaimElijah/Ticketeer#187).
 
     private static EventDisplayInfoDTO describeEvent(CatalogEventDisplayPort eventDisplay, int eventId) {
         if (eventDisplay == null) return null;
-        try {
-            return eventDisplay.describeEvent(eventId);
-        } catch (RuntimeException e) {
-            return null;
-        }
+        return eventDisplay.describeEvent(eventId);
     }
 
     private static String resolveZoneName(EventDisplayInfoDTO event, int zoneId) {
@@ -200,7 +201,7 @@ public class OrderReceiptMapper {
         try {
             ProductionCompany company = companyRepository.getCompanyById(event.companyId());
             return company == null ? null : company.getName();
-        } catch (RuntimeException e) {
+        } catch (CompanyNotFoundException deleted) {
             return null;
         }
     }
@@ -210,7 +211,7 @@ public class OrderReceiptMapper {
         try {
             User user = userRepository.getUserById(holderUserId);
             return user == null ? null : user.getUsername();
-        } catch (RuntimeException e) {
+        } catch (UserNotFoundException deleted) {
             return null;
         }
     }

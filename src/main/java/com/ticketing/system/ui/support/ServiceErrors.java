@@ -9,6 +9,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 import com.ticketing.system.shared.exception.DomainException;
+import com.ticketing.system.shared.exception.UserFacingErrors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,10 +38,11 @@ public final class ServiceErrors {
         "The service is temporarily unavailable — please try again in a moment.";
 
     /**
-     * What the user sees for an internal failure, whose own text stays in the log. The same wording
+     * What the user sees for an internal failure, whose own text stays in the log: an alias of
+     * {@link UserFacingErrors#GENERIC_MESSAGE}, so the UI and the backend say the same. The same wording
      * as {@code GlobalUiErrorHandler}'s for an exception no presenter caught.
      */
-    public static final String GENERIC_FAILURE_MESSAGE = "Something went wrong — please try again.";
+    public static final String GENERIC_FAILURE_MESSAGE = UserFacingErrors.GENERIC_MESSAGE;
 
     private ServiceErrors() { }
 
@@ -50,9 +52,10 @@ public final class ServiceErrors {
      * <ul>
      *   <li>A database outage anywhere in the cause chain gives {@link #DB_UNAVAILABLE_MESSAGE}.</li>
      *   <li>A {@link DomainException}, {@link IllegalArgumentException} or
-     *       {@link IllegalStateException} gives its own message: the services signal business rules
-     *       with all three (for example "Cannot reconfigure venue map while tickets are reserved or
-     *       sold"), and hiding those would leave the user without a reason.</li>
+     *       {@link IllegalStateException} with a message gives that message
+     *       ({@link UserFacingErrors#isUserFacing}, the rule the backend applies too): the services
+     *       signal business rules with all three (for example "Cannot reconfigure venue map while
+     *       tickets are reserved or sold"), and hiding those would leave the user without a reason.</li>
      *   <li>Anything else (a Spring {@code DataAccessException}, a JPA {@code PersistenceException}, a
      *       {@code NullPointerException}, a {@code TransactionSystemException}, any other
      *       {@code RuntimeException}) is an internal failure. Its text can carry SQL, table, column and
@@ -67,17 +70,41 @@ public final class ServiceErrors {
         if (isDatabaseUnavailable(error)) {
             return DB_UNAVAILABLE_MESSAGE;
         }
-        if (isUserFacing(error) && error.getMessage() != null && !error.getMessage().isBlank()) {
+        if (UserFacingErrors.isUserFacing(error)) {
             return error.getMessage();
         }
         log.error("Service call failed with an internal error; the user sees the generic message", error);
         return GENERIC_FAILURE_MESSAGE;
     }
 
-    private static boolean isUserFacing(RuntimeException error) {
-        return error instanceof DomainException
-            || error instanceof IllegalArgumentException
-            || error instanceof IllegalStateException;
+    /**
+     * The text {@link #userMessage} gives, for a caller that wants the failure in the log whatever it
+     * is: logs it once, with its exception and the caller's {@code action}, so the caller logs nothing
+     * itself. The level says who must act (#187):
+     * <ul>
+     *   <li>an internal failure at ERROR, as {@link #userMessage} logs it;</li>
+     *   <li>a database outage at WARN: the service is degraded;</li>
+     *   <li>a refusal the user may read ({@link UserFacingErrors#isUserFacing}) at DEBUG: nobody needs to act,
+     *       and {@code LoggingAspect} already logs the refused service call at WARN.</li>
+     * </ul>
+     *
+     * @param error  the exception the service call threw; not {@code null}
+     * @param action what failed and the ids that locate it, in key=value form (for example
+     *               {@code "load receipt receiptId=42"}); it is logged, so never personal data
+     * @return the text to show the user, never {@code null}
+     */
+    public static String userMessageLogged(RuntimeException error, String action) {
+        if (isDatabaseUnavailable(error)) {
+            log.warn("Service call failed action=\"{}\"", action, error);
+            return userMessage(error);
+        }
+        if (UserFacingErrors.isUserFacing(error)) {
+            log.debug("Service call refused action=\"{}\"", action, error);
+            return userMessage(error);
+        }
+        log.error("Service call failed with an internal error action=\"{}\"; the user sees the generic message",
+                action, error);
+        return GENERIC_FAILURE_MESSAGE;
     }
 
     /** True when {@code error} (or anything in its cause chain) is the database being unreachable. */

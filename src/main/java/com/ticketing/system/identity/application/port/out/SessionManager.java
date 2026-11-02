@@ -53,6 +53,8 @@ public interface SessionManager {
      * Whether the token is a live admin token: the ADMIN role claim on a live Admin session row.
      *
      * @return {@code false} for a member token, and for a malformed, revoked or expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged: an unreachable
+     *     store is not a non-admin token
      */
     boolean isAdminToken(String token);
 
@@ -65,6 +67,7 @@ public interface SessionManager {
      *     malformed, bad signature, revoked, or not a member token (an admin token included)
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     boolean validateToken(String token);
 
@@ -77,6 +80,7 @@ public interface SessionManager {
      *     malformed, bad signature, revoked, or not an admin token (a member token included)
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     boolean validateAdminToken(String token);
 
@@ -87,8 +91,11 @@ public interface SessionManager {
      * token, and the raw id of a Member or Admin session, are not buyer credentials.
      *
      * <p>Used by guest-friendly endpoints (UC-3 / UC-8 catalog browse) where
-     * the caller may not have a JWT. Never throws — converts any internal
-     * validation failure to {@code false}.
+     * the caller may not have a JWT. A credential that is not valid, whatever the reason
+     * (malformed, bad signature, expired, revoked, of the wrong kind), gives {@code false}.
+     *
+     * @throws RuntimeException a failure of the session store, propagated unchanged: an unreachable
+     *     store is not an invalid credential
      */
     boolean validateCredential(String credential);
 
@@ -122,6 +129,7 @@ public interface SessionManager {
      *     for any token {@link #validateAdminToken} rejects as invalid, a member token included
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     for an expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     int extractAdminId(String token);
 
@@ -148,7 +156,11 @@ public interface SessionManager {
 
     /**
      * Revokes a member or admin token by deleting its session row, even when the token has
-     * expired. Idempotent. UC-14.
+     * expired. Idempotent. UC-14. A {@code null}, blank, malformed or wrongly signed token names no
+     * session, so revoking it is a no-op.
+     *
+     * @throws RuntimeException a failure of the session store, propagated unchanged, so a caller
+     *     never takes a revocation that did not happen for one that did
      */
     void invalidate(String token);
 
@@ -162,7 +174,9 @@ public interface SessionManager {
     /**
      * Returns the member id if the token is a valid member token, {@code Optional.empty()}
      * otherwise (an admin token included). Convenience wrapper for callers that prefer not to
-     * handle exceptions.
+     * handle the token exceptions of {@link #extractUserId}.
+     *
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     Optional<Integer> tryExtractUserId(String token);
 }

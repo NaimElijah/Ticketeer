@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ticketing.system.identity.application.service.MemberQueryService;
+import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +22,7 @@ class MemberQueryServiceTest {
     @BeforeEach
     void setUp() {
         userRepository = mock(UserRepository.class);
-        service = new MemberQueryService(userRepository);
+        service = new MemberQueryService(userRepository, mock(SessionManager.class));
     }
 
     @Test

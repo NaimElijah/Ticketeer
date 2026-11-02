@@ -30,10 +30,11 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
-import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.exception.UserFacingErrors;
 
 
 @Service
@@ -195,7 +196,7 @@ public class ReservationService {
                     orderModified);
 
             notifyFailureAfterUnlock = true;
-            failureNotificationReason = "Reservation failed: " + e.getMessage();
+            failureNotificationReason = memberReadableReason(e);
             // The failure notice is published inside this transaction, which the rethrow rolls back, so
             // it is never delivered (ADR-004); the caller sees the failure directly. #63 decides whether
             // failure alerts are wanted, and if so they must be published after the transaction ends.
@@ -312,7 +313,7 @@ public class ReservationService {
                     removedPricePerTicket);
 
             notifyFailureAfterUnlock = true;
-            failureNotificationReason = "Remove reservation failed: " + e.getMessage();
+            failureNotificationReason = memberReadableReason(e);
 
             log.warn("remove failed: eventId={}, zoneId={}, selectionQuantity={}, seats={}, reason={}",
                     eventId, zoneId,
@@ -437,14 +438,11 @@ public class ReservationService {
 
     // Resolves a member's age for the purchase-policy context. Kept in sales because buyer identity is
     // a sales/identity concern; the age is passed as a primitive into the inventory port, which owns the
-    // effective-policy validation against the event + company policy.
+    // effective-policy validation against the event + company policy. An unknown age passes the reserve
+    // stage of an age policy, so a failed lookup must never stand in for one: a store failure, and a member
+    // with no user row (UserNotFoundException), both fail the reservation (NaimElijah/Ticketeer#187).
     private Integer resolveMemberAge(int userId) {
-        try {
-            User user = userRepository.getUserById(userId);
-            return user == null ? null : user.getAge();
-        } catch (RuntimeException e) {
-            return null;
-        }
+        return userRepository.getUserById(userId).getAge();
     }
 
     private void validateReservationArguments(int eventId, int zoneId, InventorySelectionDTO selection) {
@@ -516,7 +514,9 @@ public class ReservationService {
     // Rollback / notifications / DTOs
     // ---------------------------------------------------------------------
 
-    // Helper method to roll back any changes made during the reservation or removal process if an exception occurs, in order to keep our data consistent. This includes releasing any inventory that was reserved and re-adding any reservations that were removed from the active order. We also log any exceptions that occur during the rollback process for monitoring and debugging purposes, but we do not rethrow those exceptions since we want to ensure that the original exception from the reservation or removal process is what gets propagated to indicate the failure of the operation, while still making a best effort to roll back any changes to keep our data consistent.
+    // Best-effort undo of a reserve that failed after the inventory hold: removes the cart line it added
+    // and releases the hold. A failing step is logged at WARN with its exception and not rethrown, so the
+    // caller rethrows the reserve's own failure; the WARN is the only trace of a seat or cart line left behind.
     private void rollbackReservationIfNeeded(ActiveOrder activeOrder, int eventId, int zoneId,
             InventorySelectionDTO selection, boolean inventoryReserved, boolean orderModified) {
 
@@ -529,8 +529,11 @@ public class ReservationService {
                 removeOrderReservation(activeOrder, eventId, zoneId, selection);
                 activeOrderRepository.save(activeOrder);
             }
-        } catch (RuntimeException ignored) {
-            // best-effort rollback; the main exception is rethrown by caller
+        } catch (RuntimeException rollbackFailure) {
+            log.warn("Rollback failed while removing cart lines after reserve failure. eventId={}, zoneId={}",
+                    eventId,
+                    zoneId,
+                    rollbackFailure);
         }
 
         try {
@@ -539,8 +542,11 @@ public class ReservationService {
                 // buyer-lock and verifies ownership via the order key). The order lock is still held.
                 inventoryPort.release(eventId, zoneId, selection, activeOrder.getOrderKey());
             }
-        } catch (RuntimeException ignored) {
-            // best-effort rollback; the main exception is rethrown by caller
+        } catch (RuntimeException rollbackFailure) {
+            log.warn("Rollback failed while releasing inventory after reserve failure. eventId={}, zoneId={}",
+                    eventId,
+                    zoneId,
+                    rollbackFailure);
         }
     }
 
@@ -589,6 +595,12 @@ public class ReservationService {
             // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new TicketReservationSucceededNotice(buyer.userId(), eventId, zoneId, quantity));
         }
+    }
+
+    // The reason goes into the member's notification, so it follows the rule the UI applies to what a
+    // user may read: a refusal's own message, and the generic text for anything else.
+    private static String memberReadableReason(RuntimeException failure) {
+        return UserFacingErrors.isUserFacing(failure) ? failure.getMessage() : UserFacingErrors.GENERIC_MESSAGE;
     }
 
     private void notifyReservationFailureIfMember(BuyerContextDTO buyer, int eventId, int zoneId, String reason) {
@@ -862,23 +874,42 @@ public class ReservationService {
         return s.indexOf('.', dot1 + 1) > dot1;
     }
 
-    // Helper method to view the current active order for a user (member or guest). For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we convert it to an ActiveOrderDTO and return it. If no active order is found, we return null. This allows the frontend to show the user their current reservations in the cart when they navigate to the cart page, etc.
+    /**
+     * The buyer's current cart, with event names, for a member token or a guest's session id.
+     *
+     * <p>The credential is tried as a member token first. Only one that is not a live member token
+     * (refused by the session manager as invalid or expired) is tried as a guest session id.
+     *
+     * @param userOrSessionId a member token or a guest's raw session id
+     * @return the cart, or {@code null} for a blank credential or a buyer with no cart
+     * @throws SessionExpiredException if the credential is neither a live member token nor a live
+     *     guest session id, or a member token expired between its check and the read of its user id
+     * @throws InvalidTokenException if a member token was revoked between its check and the read of its
+     *     user id
+     * @throws RuntimeException a failure of the session or cart store, propagated unchanged
+     */
     @Transactional(readOnly = true)
     public ActiveOrderDTO viewMyActiveOrder(String userOrSessionId) {
         if (userOrSessionId == null || userOrSessionId.isBlank()) {
             return null;
         }
-        try {
-            if (iSessionManager.validateToken(userOrSessionId)) {
-                int userId = iSessionManager.extractUserId(userOrSessionId);
-                return restoreActiveOrder(userId);
-            }
-        } catch (Exception ignored) {
-            // not a live member token — fall through to the guest path
+        if (isLiveMemberToken(userOrSessionId)) {
+            return restoreActiveOrder(iSessionManager.extractUserId(userOrSessionId));
         }
         // Only a live guest session's id passes here: a member's raw session id or a dead token gets
         // SessionExpiredException, never the cart bound to that id (ADR-012, decision 4).
         return restoreActiveOrderForGuest(userOrSessionId);
+    }
+
+    // Only the session manager's refusals mean "not a live member token". A store failure says nothing
+    // about the credential, so it propagates rather than sending a member down the guest path, whose
+    // refusal the UI would show as an expired session (NaimElijah/Ticketeer#187).
+    private boolean isLiveMemberToken(String credential) {
+        try {
+            return iSessionManager.validateToken(credential);
+        } catch (InvalidTokenException | SessionExpiredException notALiveMemberToken) {
+            return false;
+        }
     }
 
     

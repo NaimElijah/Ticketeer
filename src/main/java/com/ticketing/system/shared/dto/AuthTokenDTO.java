@@ -15,4 +15,16 @@ public record AuthTokenDTO(
     public AuthTokenDTO(String token, long expiresAtEpochMillis, int userId, String username) {
         this(token, expiresAtEpochMillis, userId, username, false);
     }
+
+    /**
+     * Leaves out the token, which is the session's credential, so a logged token or an exception
+     * message built from one does not carry it (SLR.2).
+     */
+    @Override
+    public String toString() {
+        return "AuthTokenDTO[expiresAtEpochMillis=" + expiresAtEpochMillis
+                + ", userId=" + userId
+                + ", username=" + username
+                + ", isAdmin=" + isAdmin + "]";
+    }
 }

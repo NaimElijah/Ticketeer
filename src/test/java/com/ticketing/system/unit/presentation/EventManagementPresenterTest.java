@@ -1,9 +1,12 @@
 package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -28,6 +31,9 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 
@@ -35,11 +41,13 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * Unit tests for {@link EventManagementPresenter#create}. The create flow assembles an
  * {@link EventCreationDTO} (resolving the owning company) and delegates to
  * {@code EventManagementService.addEvent}; these tests pin the company-resolution rule and the
- * exception → {@code CreateOutcome} mapping without a UI or Spring context.
+ * exception → {@code CreateOutcome} mapping without a UI or Spring context. They also pin
+ * {@link EventManagementPresenter#cancel}'s exception → {@code CancelOutcome} mapping.
  */
 class EventManagementPresenterTest {
 
     private static final String TOKEN = "owner-token";
+    private static final int EVENT_ID = 9;
     private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
 
     private EventManagementService eventService;
@@ -261,9 +269,77 @@ class EventManagementPresenterTest {
                 createWith(null, futureStart(), futureEnd()));
     }
 
+    // UI-A3 (#187): the event is cancelled before its refunds run, so a refund failure is not a failed cancel.
+    // A plain refund failure can mix declined receipts, which cancelling again retries, with pending ones,
+    // which it does not; its own message says which, so the outcome promises no retry.
+    @Test
+    void GivenARefundOfTheCancelFails_WhenCancel_ThenRefundFailedCarriesTheRefundFailure() {
+        RefundFailedException refundFailure = new RefundFailedException(List.of(12), "not refunded for cancelled event 9 (declined: [12], "
+                + "still pending: []); the other receipts were refunded, and cancelling again retries the declined ones");
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
+    }
+
+    // No money moved and the claim is released, so cancelling again retries the refund.
+    @Test
+    void GivenTheGatewayIsUnreachableForARefundOfTheCancel_WhenCancel_ThenRefundFailedSaysCancellingAgainRetriesIt() {
+        RefundFailedException refundFailure = RefundGatewayUnreachableException.forPaymentTransaction(9001,
+                "refund gateway unreachable: Connection refused", new RuntimeException("refused"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertCarriesNoGatewayText(refundFailed.reason());
+        assertTrue(refundFailed.cancelAgainRetries());
+    }
+
+    // The refund may have been made and stays pending for manual recovery; cancelling again skips it.
+    @Test
+    void GivenARefundOfTheCancelHasAnUnknownOutcome_WhenCancel_ThenRefundFailedSaysCancellingAgainDoesNotRetryIt() {
+        RefundFailedException refundFailure = RefundOutcomeUnknownException.forPaymentTransaction(9001,
+                "no answer from the refund gateway: Read timed out", new RuntimeException("timeout"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertCarriesNoGatewayText(refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
+    }
+
+    @Test
+    void GivenCancellingFailsForAnotherReason_WhenCancel_ThenFailureCarriesThatReason() {
+        String reason = "You lack the permission to cancel this event.";
+        doThrow(new BusinessRuleViolationException(reason)).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.Failure failure =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.Failure.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertEquals(reason, failure.reason());
+    }
+
     private static EventDetailDTO detailWithId(String id) {
         return new EventDetailDTO(id, "Gala Night", null, "A great show", EventCategory.COMEDY,
                 new Location("Israel", "Tel Aviv"), "1", "Company 1", EventStatus.DRAFT,
                 List.of(), JERUSALEM, List.of("Headliner"), 0.0);
+    }
+
+    // The payment gateway's own wording, and the charge it names, are operator text: the owner reads a
+    // fixed reason instead (#187).
+    private static void assertCarriesNoGatewayText(String reason) {
+        assertFalse(reason.isBlank(), "the owner must be told why");
+        for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
+            assertFalse(reason.contains(operatorText), "the reason shows operator text '" + operatorText + "': " + reason);
+        }
     }
 }

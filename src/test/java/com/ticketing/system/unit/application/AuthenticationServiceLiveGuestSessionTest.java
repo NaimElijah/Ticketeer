@@ -19,11 +19,13 @@ import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.config.IdentityProperties;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.testutil.AdjustableClock;
+import com.ticketing.system.testutil.TestTransactions;
 
 /**
  * {@link AuthenticationService#isLiveGuestSession(String)} is the read-only question the UI asks
@@ -53,13 +55,14 @@ class AuthenticationServiceLiveGuestSessionTest {
         clock = new AdjustableClock(T0);
         SessionProperties sessionProperties = new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES);
         MemorySessionRepository sessions = new MemorySessionRepository(clock);
-        sessionManager = new JwtSessionManager(JWT_TEST_SECRET, sessionProperties, sessions, clock);
+        sessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET), sessionProperties, sessions, clock);
         service = new AuthenticationService(
                 mock(UserRepository.class), mock(PasswordHasher.class), sessionManager,
                 mock(CartRestorationPort.class), mock(NotificationDispatchService.class),
                 sessions, mock(ISystemMetrics.class), clock, mock(AdminRepository.class),
                 sessionProperties, new LockoutProperties(5, 15L),
-                new IdentityProperties(List.of(), "admin"));
+                new IdentityProperties(List.of(), "admin"),
+                TestTransactions.noOpManager());
     }
 
     @Test

@@ -37,17 +37,21 @@ package com.ticketing.system.shared;
  * <h2>Implementation</h2>
  *
  * <ul>
- *   <li><b>In-memory implementations</b> (current) use a per-id
+ *   <li><b>In-memory implementations</b> ({@code Memory…Repository}, active only
+ *       under the {@code test} and {@code memory} profiles together) use a per-id
  *       {@link java.util.concurrent.locks.ReentrantLock} via
  *       {@code RepositoryLocks}. Reentrant: same thread re-locking is safe.</li>
- *   <li><b>JPA-backed implementations</b> (V3) make {@code lockForUpdate} and
+ *   <li><b>JPA-backed implementations</b> ({@code Jpa…Repository}, active in every
+ *       other run, ADR-005) make {@code lockForUpdate} and
  *       {@code unlock} <b>no-ops</b>, with one exception. Concurrency is handled
  *       by {@code @Version} OPTIMISTIC locking on the aggregate — at the
  *       granularity of the real contention (e.g. per-{@code Seat} for Event, so
  *       independent reservations don't conflict). A conflict fails the losing
  *       commit, and {@code OptimisticLockTranslationAspect} re-types it into
- *       {@code ConcurrentReservationException} for the caller; nothing retries
- *       automatically. The exception is {@code JpaOrderReceiptRepository}, whose
+ *       {@code ConcurrentReservationException} for the caller. The repository
+ *       and that aspect never retry; only {@code CheckoutService.runPhase3} runs
+ *       its unit again, after a {@code ConcurrencyFailureException} (ADR-015).
+ *       The exception is {@code JpaOrderReceiptRepository}, whose
  *       {@code lockForUpdate} takes a real pessimistic
  *       {@code SELECT ... FOR UPDATE} row lock so two concurrent refunds of one
  *       receipt cannot both reach the payment gateway (#410).</li>

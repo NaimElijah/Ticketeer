@@ -3,6 +3,7 @@ package com.ticketing.system.ui.views.company;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -16,6 +17,7 @@ import com.ticketing.system.ui.components.messaging.MdConvRow;
 import com.ticketing.system.ui.components.messaging.MdThread;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
 import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
+import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
@@ -66,6 +68,8 @@ public class CompanyInquiryInboxView extends LkPage {
     private List<ConversationDTO> visible = List.of();        // after the status filter
     private final List<MdConvRow> convRows = new ArrayList<>();
     private String selectedId;
+    // The threads this view opened; the presenter reads it to keep a cleared badge cleared (#187).
+    private final OpenedThreads opened = new OpenedThreads();
     private String statusFilter = ALL;
     private Integer companyId;   // the company currently being viewed (kept across reloads)
     private LkCard detailCard;
@@ -158,9 +162,9 @@ public class CompanyInquiryInboxView extends LkPage {
         convRows.clear();
         for (ConversationDTO c : visible) {
             MdConvRow row = new MdConvRow("comment", c.subject(), c.initiatorDisplayName(),
-                displayTime.ageShort(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
+                displayTime.ageShort(c.lastMessageAt()), presenter.badge(c, opened).orElse(null));
             if (c.conversationId().equals(selectedId)) row.active();
-            row.onSelect(() -> selectById(c.conversationId()));
+            row.onSelect(() -> openById(c.conversationId()));
             convRows.add(row);
             card.add(row);
         }
@@ -203,6 +207,32 @@ public class CompanyInquiryInboxView extends LkPage {
                 .icon(new LkIcon("arrowRight", 15))
                 .onClick(e -> navigateToRespond(conv.conversationId())));
             detailCard.add(actionRow);
+        }
+    }
+
+    /** A row click: the reader opens the thread, so it is shown and marked read. */
+    private void openById(String conversationId) {
+        selectById(conversationId);
+        markOpened(conversationId);
+    }
+
+    // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the
+    // row this view selects on its own is shown but not marked (#187). The presenter decides the badge.
+    // A reader whose session ended is told so, as a reply from the respond page tells them. A failed
+    // open leaves the badge and tells the reader nothing, since they can do nothing about it: the
+    // presenter's markRead logs an internal failure at ERROR through ServiceErrors, and LoggingAspect
+    // logs a refused one (a DomainException) at WARN.
+    private void markOpened(String conversationId) {
+        int idx = indexOf(conversationId);
+        if (idx < 0) return;
+        ConversationDTO conv = byId(conversationId);
+        switch (presenter.open(AuthSession.token(), conv, opened)) {
+            case CompanyInquiryInboxPresenter.ActionOutcome.Success ignored -> {
+                if (presenter.badge(conv, opened).isEmpty()) convRows.get(idx).clearUnread();
+            }
+            case CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
+                Toasts.failure("Your session has expired — please sign in again.");
+            case CompanyInquiryInboxPresenter.ActionOutcome.Failure ignored -> { }
         }
     }
 
@@ -278,10 +308,6 @@ public class CompanyInquiryInboxView extends LkPage {
             out.add(new MdThread.Message(from, displayTime.ageShort(m.sentAt()), me, m.body()));
         }
         return out;
-    }
-
-    private static String unreadBadge(int unreadCount) {
-        return unreadCount > 0 ? String.valueOf(unreadCount) : null;
     }
 
     private static boolean isTerminal(String status) {

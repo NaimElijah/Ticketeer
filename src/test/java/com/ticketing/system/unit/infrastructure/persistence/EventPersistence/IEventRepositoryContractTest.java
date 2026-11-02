@@ -101,6 +101,12 @@ public abstract class IEventRepositoryContractTest {
         assertEquals("Rock Night", found.getName());
     }
 
+    // The port promises "never null": catalog's services rely on it and no longer check for null.
+    @Test
+    void GivenNoSuchEvent_WhenFindById_ThenEventNotFound() {
+        assertThrows(EventNotFoundException.class, () -> eventRepo.findById(999));
+    }
+
     // === findForSale: the event a sale commits against (the Jpa lock itself is CancelDuringCheckoutJpaTest's) ===
 
     @Test
@@ -507,5 +513,89 @@ public abstract class IEventRepositoryContractTest {
 
         assertEquals(1, result.size());
         assertEquals(1, result.get(0).getId());
+    }
+
+    // ---- search terms match as literal text, not as LIKE patterns (#187) ----
+    // The Memory adapter matches a term as a substring; the Jpa one put it into a LIKE pattern
+    // unescaped, so "_" and "%" matched any character there, and the two backends answered differently.
+
+    @Test
+    void GivenAnUnderscoreAsTheSearchTerm_WhenSearchingByName_ThenOnlyNamesContainingAnUnderscoreMatch() {
+        eventRepo.save(buildEvent(1, "Under_score Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "Underscore Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        assertEquals(List.of("Under_score Night"), namesFoundSearchingFor("_"));
+    }
+
+    @Test
+    void GivenAPercentSignInTheSearchTerm_WhenSearchingByName_ThenOnlyNamesContainingThatTextMatch() {
+        eventRepo.save(buildEvent(1, "100% Hits", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "100 Days", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        assertEquals(List.of("100% Hits"), namesFoundSearchingFor("100%"));
+    }
+
+    // A backslash is the default LIKE escape character on H2 and PostgreSQL, so escaping the wildcards
+    // must escape it too.
+    @Test
+    void GivenABackslashInTheSearchTerm_WhenSearchingByName_ThenOnlyNamesContainingABackslashMatch() {
+        eventRepo.save(buildEvent(1, "AC\\DC Tribute", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "ACDC Tribute", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        assertEquals(List.of("AC\\DC Tribute"), namesFoundSearchingFor("c\\d"));
+    }
+
+    // The artist and location filters escape their term the same way as the name filter.
+    @Test
+    void GivenAnUnderscoreAsTheArtistTerm_WhenSearching_ThenOnlyArtistsContainingAnUnderscoreMatch() {
+        eventRepo.save(eventWithArtistAt(1, "DJ_Max", LOCATION));
+        eventRepo.save(eventWithArtistAt(2, "DJ Max", LOCATION));
+
+        List<Event> found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, "_", null, null, null, null, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
+    @Test
+    void GivenAnUnderscoreAsTheLocationTerm_WhenSearching_ThenOnlyLocationsContainingAnUnderscoreMatch() {
+        eventRepo.save(eventWithArtistAt(1, "Artist A", new Location("France", "Saint_Denis")));
+        eventRepo.save(eventWithArtistAt(2, "Artist A", new Location("France", "Saint Denis")));
+
+        List<Event> found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null, null, null, "_", null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
+    private Event eventWithArtistAt(int id, String artist, Location location) {
+        VenueMap venueMap = new VenueMap(id, location, List.of(new StandingZone(1, "Floor", 100, 50)));
+        return new Event(id, "Concert " + id, 4.5, List.of(artist), EventCategory.CONCERT, 10, EventStatus.ON_SALE,
+                venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)), ZoneId.of("Asia/Jerusalem"),
+                new NoPurchasePolicy(), new DiscountPolicy(0));
+    }
+
+    // Under a Turkish default locale "music".toUpperCase() has a dotted capital I and names no category.
+    @Test
+    void GivenATurkishDefaultLocale_WhenSearchingByALowercaseCategory_ThenOnlyThatCategoryMatches() {
+        eventRepo.save(buildEvent(1, "Jazz Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.MUSIC));
+        eventRepo.save(buildEvent(2, "Hamlet", 4.5, 10, EventStatus.ON_SALE, EventCategory.THEATER));
+        java.util.Locale defaultLocale = java.util.Locale.getDefault();
+        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+        List<Event> found;
+        try {
+            found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                    null, null, "music", null, null, null, null, null, null, null, null, null, null));
+        } finally {
+            java.util.Locale.setDefault(defaultLocale);
+        }
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
+    private List<String> namesFoundSearchingFor(String eventName) {
+        return eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                eventName, null, null, null, null, null, null, null, null, null, null, null, null))
+                .stream().map(Event::getName).toList();
     }
 }

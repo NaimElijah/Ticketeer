@@ -8,9 +8,10 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.NullVenueMapException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,20 +34,20 @@ public class EventDetailsPresenter {
     }
 
     /**
-     * Loads the event header/description/schedule/lineup plus its zone summary. The venue map is
-     * best-effort: an event with no accessible inventory still renders its detail (empty zones).
+     * Loads the event header/description/schedule/lineup plus its zone summary. An event without a
+     * venue map still renders its detail, with no zones; any other failure to read the map fails the
+     * load, so a store outage never reads as an event without a map.
      */
     public Outcome load(String credential, int eventId) {
         EventDetailDTO event;
         try {
             event = catalogService.getEventDetail(credential, eventId);
-        } catch (EventNotFoundException | CompanyClosedException e) {
+        } catch (EventNotFoundException e) {
             return new Outcome.NotFound("This event isn't available.");
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Your session has expired - please refresh and try again.");
         } catch (RuntimeException e) {
-            log.warn("Failed to load event detail for eventId {}: {}", eventId, e.getMessage());
-            return new Outcome.Failure("We couldn't load this event right now.");
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load event detail eventId=" + eventId));
         }
 
         List<InventoryZoneDTO> zones = List.of();
@@ -57,9 +58,10 @@ public class EventDetailsPresenter {
             zones = map.inventoryZones();
             gridRows = map.gridRows();
             gridCols = map.gridCols();
+        } catch (NullVenueMapException e) {
+            log.debug("No venue map for eventId {}: {}", eventId, e.getMessage());
         } catch (RuntimeException e) {
-            // No (accessible) venue map — show the detail with an empty zones rail.
-            log.debug("No accessible venue map for eventId {}: {}", eventId, e.getMessage());
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load venue map eventId=" + eventId));
         }
 
         // Organizer's DERIVED rating (mean of the company's events' ratings) — best-effort so a

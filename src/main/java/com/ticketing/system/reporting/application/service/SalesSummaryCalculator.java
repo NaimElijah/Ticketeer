@@ -1,5 +1,6 @@
 package com.ticketing.system.reporting.application.service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -17,11 +18,19 @@ import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecor
  * history (UC-31) show over the order records they list, so the views only render (#21).
  *
  * <p>Only lines that are not refunded count as sold: when one event of a multi-event or shared order
- * is cancelled, the order's other lines still count. The caller passes records it has already
- * authorized and filtered (for example by date range), so this does no access checks of its own.
+ * is cancelled, the order's other lines still count. The top event is the one with the highest
+ * takings, counted by event id; on a tie, the one with the lower event id. The caller passes records
+ * it has already authorized and filtered (for example by date range), so this does no access checks
+ * of its own.
  */
 @Service
 public class SalesSummaryCalculator {
+
+    // Highest takings first; on a tie the lower event id wins, so the result never depends on the
+    // grouping's iteration order. max() picks the greatest, hence the reversed key order.
+    private static final Comparator<Map.Entry<Integer, Double>> BY_TAKINGS_THEN_LOWER_EVENT_ID =
+            Map.Entry.<Integer, Double>comparingByValue()
+                    .thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder()));
 
     /**
      * @param records the order records to summarise; may be empty
@@ -40,15 +49,21 @@ public class SalesSummaryCalculator {
         double avgOrderValue = ordersWithSales == 0 ? 0.0 : revenue / ordersWithSales;
         long refundedOrders = records.stream().filter(r -> r.refundStatus() != RefundStatus.NONE).count();
 
-        Optional<String> topEvent = sold.stream()
-                .filter(t -> t.eventName() != null)
+        return new SalesSummaryDTO(revenue, sold.size(), avgOrderValue, topEvent(sold), refundedOrders);
+    }
+
+    // Grouped by event id, not name: event names are not unique, and two events sharing one must
+    // not have their takings summed. Lines whose event name did not resolve are left out.
+    private static Optional<String> topEvent(List<TicketRecordDTO> sold) {
+        List<TicketRecordDTO> named = sold.stream().filter(t -> t.eventName() != null).toList();
+        Map<Integer, String> nameByEvent = named.stream()
+                .collect(Collectors.toMap(TicketRecordDTO::eventId, TicketRecordDTO::eventName, (a, b) -> a));
+        return named.stream()
                 .collect(Collectors.groupingBy(
-                        TicketRecordDTO::eventName,
+                        TicketRecordDTO::eventId,
                         Collectors.summingDouble(TicketRecordDTO::pricePaid)))
                 .entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey);
-
-        return new SalesSummaryDTO(revenue, sold.size(), avgOrderValue, topEvent, refundedOrders);
+                .max(BY_TAKINGS_THEN_LOWER_EVENT_ID)
+                .map(top -> nameByEvent.get(top.getKey()));
     }
 }

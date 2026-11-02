@@ -7,8 +7,6 @@ import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 
-import lombok.extern.slf4j.Slf4j;
-
 /**
  * Read-only presenter for {@code MyProfileView}. Loads the signed-in member's
  * profile projection (id, username, email) so the view can show the real email
@@ -21,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
  * Degrades to {@link Outcome.NotAuthenticated} for anyone who is not a live member, an admin
  * included, and to {@link Outcome.Failure} on any service error.
  */
-@Slf4j
 @Component
 public class MyProfilePresenter {
 
@@ -41,15 +38,14 @@ public class MyProfilePresenter {
 
     /** The live member's profile; NotAuthenticated for a guest or an admin, Failure on error. */
     public Outcome load() {
-        int userId = identity.memberUserId();
-        if (userId == SessionIdentity.NO_MEMBER_USER_ID) {
+        String memberToken = identity.memberToken();
+        if (memberToken == null) {
             return new Outcome.NotAuthenticated();
         }
         try {
-            return new Outcome.Success(memberQueryService.getMemberProfile(userId));
+            return new Outcome.Success(memberQueryService.getMemberProfile(memberToken));
         } catch (RuntimeException e) {
-            log.warn("Failed to load profile for user {}: {}", userId, e.getMessage());
-            return new Outcome.Failure(ServiceErrors.userMessage(e));
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load profile"));
         }
     }
 }

@@ -45,13 +45,18 @@ public class SignOutFlow {
         this.freshGuestSession = freshGuestSession;
     }
 
+    /**
+     * Revokes the visitor's token, if any, then pins a fresh guest session. A failed revocation is
+     * logged at ERROR with its exception and does not stop the local sign-out: the visitor's Vaadin
+     * state is cleared either way, but the server-side session, and so the token, may stay live.
+     */
     public void execute() {
         String token = AuthSession.token();
         if (token != null && !token.isBlank()) {
             try {
                 authenticationService.logout(new LogoutRequestDTO(token));
             } catch (RuntimeException e) {
-                log.warn("logout call failed during sign-out flow: {}", e.getMessage());
+                log.error("logout failed during sign-out; the session may still be live", e);
             }
         }
 

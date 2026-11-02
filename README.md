@@ -60,7 +60,7 @@ course provides, until a Stripe test-mode adapter replaces it ([#98](https://git
   zones with a capacity, a venue map that shows free and taken places live, and purchase policies.
 - **Browse and search as a guest or a member.** Search by name, artist, category or keyword, and
   filter by price, date, location and rating.
-- **Hold, then buy.** Reserved tickets are locked for 10 minutes. Checkout charges, issues and
+- **Hold, then buy.** Reserved tickets are locked for 10 minutes by default (`TICKET_RESERVATION_DURATION`). Checkout charges, issues and
   confirms everything or nothing; a failure releases the tickets and refunds the charge.
 - **Keep your cart across logins.** A member who logs back in before the hold expires gets the
   cart back with its remaining time.
@@ -203,16 +203,18 @@ set these:
 | `SPRING_PROFILES_ACTIVE` | `supabase` for Supabase over SSL; plain PostgreSQL needs no profile | none: PostgreSQL through `DB_*` | No |
 | `DB_HOST` · `DB_PORT` · `DB_NAME` | PostgreSQL location | `localhost` · `5432` · `ticketing` | Yes |
 | `DB_USER` · `DB_PASSWORD` | PostgreSQL credentials | `postgres` · `postgres` | Yes |
-| `JWT_SECRET` | Token signing key, 256 bits or more | a dev-only value | Yes, outside `dev` and `test`: the boot stops on the committed default |
+| `JWT_SECRET` | Token signing key, 256 bits or more (32 characters or more) | a dev-only value | Yes, outside `dev` and `test`: the boot stops on the committed default |
 | `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes; outside `dev` and `test` the boot stops on the committed default password |
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service; must be an `https://` URL, or the boot stops | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
 `wsep`, `platform.admin`, `platform.time-zone`, `seed`, `market`, `analytics`, `sweeper`,
-`event-completion`, `notifications`, `identity`, `catalog.venue-limits` and `database` groups bind to validated records.
-A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, an unknown
+`event-completion`, `notifications`, `identity`, `jwt`, `catalog.venue-limits` and `database` groups bind to validated records.
+A value out of bounds, such as a zero hold, a negative TTL, a blank admin password, a blank JWT secret, an unknown
 time zone, a malformed WSEP URL or a zero sweep delay, stops the boot with a report naming the
-property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). Outside `dev` and
+property ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). A JWT secret
+under 32 characters stops the boot too, when `JwtSessionManager` is created: that report names
+`jwt.secret` but, unlike a binding report, never prints the value. Outside `dev` and
 `test`, a `JWT_SECRET` or `PLATFORM_ADMIN_PASSWORD` left at the default committed in
 `application.yml` stops the boot too, naming the variable to set
 ([#34](https://github.com/NaimElijah/Ticketeer/issues/34)). A default admin already stored with the
@@ -256,10 +258,10 @@ overrides them. Set each value in one place.
 | `IDENTITY_RESERVED_USERNAMES` | Comma-separated usernames no member may register, ignoring case; `PLATFORM_ADMIN_USERNAME` is always reserved too | `admin,platform.admin` |
 | `TICKET_RESERVATION_DURATION` | Ticket hold, in minutes | `10` |
 | `ORDER_EXPIRATION_DURATION` | Read by no code yet (#166); the hold time is `TICKET_RESERVATION_DURATION` | `60` |
-| `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window · dashboard refresh (`0` stops it) | `5` · `5000` |
+| `ANALYTICS_RATE_WINDOW_MINUTES` · `ANALYTICS_REFRESH_INTERVAL_MS` | Analytics window, at most `120` (`ISystemMetrics.MAX_WINDOW_MINUTES`, the longest window the metrics answer; a longer one stops the boot) · dashboard refresh (`0` stops it) | `5` · `5000` |
 | `WSEP_REQUEST_TIMEOUT_SECONDS` | Timeout of each WSEP request | `20` (`8` under `dev`) |
 | `WSEP_HANDSHAKE_ATTEMPTS` · `WSEP_HANDSHAKE_BACKOFF_MS` | Retries for the reachability handshake only | `3` · `1000` |
-| `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening | `30000` |
+| `MARKET_SELF_HEAL_DELAY_MS` | How often a closed-by-outage market retries opening, and WSEP reachability is re-checked for the admin dashboard | `30000` |
 | `SWEEPER_FIXED_DELAY_MS` | Pause between sweeps that release expired sessions and carts | `60000` |
 | `EVENT_COMPLETION_FIXED_DELAY_MS` | Pause between sweeps that mark finished events completed | `60000` |
 | `NOTIFICATIONS_POLL_DELAY_MS` | Pause between pushes of new notifications to connected users | `60000` |

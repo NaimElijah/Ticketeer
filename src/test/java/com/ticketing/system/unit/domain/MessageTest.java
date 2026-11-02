@@ -25,14 +25,11 @@ class MessageTest {
         return new Message("m1", 10, ParticipantType.MEMBER, "hello", LocalDateTime.now());
     }
 
+    // Marking read is Conversation.markReadBy's job, and markRead is package-private (#187); its flip
+    // and idempotence are tested through the conversation in ConversationTest.
     @Test
-    void markRead_flipsAndIsIdempotent() {
-        Message m = sample();
-        assertFalse(m.isRead());
-        m.markRead();
-        assertTrue(m.isRead());
-        m.markRead();
-        assertTrue(m.isRead());
+    void GivenANewMessage_WhenBuilt_ThenItIsUnread() {
+        assertFalse(sample().isRead());
     }
 
     @Test

@@ -4,7 +4,8 @@
 #  This file boots the system to a known state by running ONE operation per
 #  line through the real application services. Blank lines and lines starting
 #  with '#' are ignored, so this header is just documentation. Edit any value
-#  and reboot (or boot with --seed.mode=wipe) to re-run the edited scenario.
+#  and reboot (or boot with --seed.mode=reset --seed.assume-yes=true) to
+#  re-run the edited scenario.
 #
 #  ALIASES: refer to users / companies / events by short names (u1, p1, e1).
 #  The engine maps each alias to the real id the service mints, so you never
@@ -18,7 +19,8 @@
 #   register <alias> <password> <email> <age>     register a member
 #                                                 e.g. register u1 password123 u1@x.com 30
 #   login <alias>                                 log a registered member in
-#   login-admin <alias> <username> <password>     sign in to the admin pool (default admin/admin)
+#   login-admin <alias>                           sign in the configured default admin (platform.admin.*)
+#   login-admin <alias> <username> <password>     sign in the admin named here
 #   logout <alias>                                log one user out
 #   logout-all                                    log every logged-in user out
 #   guest <alias>                                 open an anonymous guest session (for guest buys)
@@ -42,7 +44,9 @@
 #   announce <adminAlias> title="..." body="..." [audience=BROADCAST_MEMBERS|BROADCAST_PRODUCERS]
 #   assert-status <event> <STATUS> by=<owner>     fail unless the event is in <STATUS>
 #                                                 (DRAFT/SCHEDULED/ON_SALE/SOLD_OUT/CANCELED/COMPLETED)
-#   expect-error <op> <args...>                   PASS only if the wrapped op throws (negative test)
+#   expect-error <op> <args...> error=<Type>      PASS only if the wrapped op throws exactly <Type>,
+#                                                 an exception's simple class name (negative test)
+#                                                 e.g. expect-error reserve u2 e1 standing qty=1 error=IllegalStateException
 #   add-coupon ...                                SKIPPED — coupons are out of scope in this system
 # ============================================================================
 

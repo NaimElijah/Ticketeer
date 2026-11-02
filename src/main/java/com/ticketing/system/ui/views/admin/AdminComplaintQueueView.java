@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.MessageDTO;
+import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -14,6 +15,7 @@ import com.ticketing.system.ui.components.messaging.MdConvRow;
 import com.ticketing.system.ui.components.messaging.MdThread;
 import com.ticketing.system.ui.layouts.PlatformAdminLayout;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
+import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
@@ -60,6 +62,8 @@ public class AdminComplaintQueueView extends LkPage {
     private List<ConversationDTO> complaints = List.of();
     private final List<MdConvRow> convRows = new ArrayList<>();
     private String selectedId;
+    // The threads this view opened; the presenter reads it to keep a cleared badge cleared (#187).
+    private final OpenedThreads opened = new OpenedThreads();
     private String statusFilter = ALL;   // status group (All/Open/Resolved); re-queried on change
     private LkCard detailCard;
 
@@ -127,9 +131,9 @@ public class AdminComplaintQueueView extends LkPage {
         convRows.clear();
         for (ConversationDTO c : complaints) {
             MdConvRow row = new MdConvRow("warning", c.subject(), c.initiatorDisplayName(),
-                displayTime.ageShort(c.lastMessageAt()), unreadBadge(c.unreadCountForViewer()));
+                displayTime.ageShort(c.lastMessageAt()), presenter.badge(c, opened).orElse(null));
             if (c.conversationId().equals(selectedId)) row.active();
-            row.onSelect(() -> selectById(c.conversationId()));
+            row.onSelect(() -> openById(c.conversationId()));
             convRows.add(row);
             card.add(row);
         }
@@ -177,6 +181,32 @@ public class AdminComplaintQueueView extends LkPage {
         }
     }
 
+    /** A row click: the reader opens the thread, so it is shown and marked read. */
+    private void openById(String conversationId) {
+        selectById(conversationId);
+        markOpened(conversationId);
+    }
+
+    // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the
+    // row this view selects on its own is shown but not marked (#187). The presenter decides the badge.
+    // A reader whose session ended is told so, as a response from the respond page tells them. A failed
+    // open leaves the badge and tells the reader nothing, since they can do nothing about it: the
+    // presenter's markRead logs an internal failure at ERROR through ServiceErrors, and LoggingAspect
+    // logs a refused one (a DomainException) at WARN.
+    private void markOpened(String conversationId) {
+        int idx = indexOf(conversationId);
+        if (idx < 0) return;
+        ConversationDTO conv = byId(conversationId);
+        switch (presenter.open(AuthSession.token(), conv, opened)) {
+            case AdminComplaintQueuePresenter.ActionOutcome.Success ignored -> {
+                if (presenter.badge(conv, opened).isEmpty()) convRows.get(idx).clearUnread();
+            }
+            case AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated ignored ->
+                Toasts.failure("Your session has expired — please sign in again.");
+            case AdminComplaintQueuePresenter.ActionOutcome.Failure ignored -> { }
+        }
+    }
+
     private void navigateToRespond() {
         if (selectedId == null) return;
         UI.getCurrent().navigate(AdminComplaintRespondView.class,
@@ -219,10 +249,6 @@ public class AdminComplaintQueueView extends LkPage {
             out.add(new MdThread.Message(from, displayTime.ageShort(m.sentAt()), me, m.body()));
         }
         return out;
-    }
-
-    private static String unreadBadge(int unreadCount) {
-        return unreadCount > 0 ? String.valueOf(unreadCount) : null;
     }
 
     private static boolean isTerminal(String status) {

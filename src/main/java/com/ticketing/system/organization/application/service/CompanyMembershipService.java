@@ -3,7 +3,6 @@ package com.ticketing.system.organization.application.service;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -173,7 +172,7 @@ public class CompanyMembershipService {
         if (appointment.getRole() != CompanyRole.Manager) {
             throw new BusinessRuleViolationException("Can only modify permissions for manager appointments");
         }
-        appointment.setPermissions(EnumSet.copyOf(newPermissions)); // replace the permission set (validated inside)
+        appointment.updatePermissions(newPermissions); // replace the permission set (validated inside)
         appointmentRepository.save(appointment); // persist the updated permissions
     }
 

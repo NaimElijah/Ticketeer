@@ -69,6 +69,13 @@ public class SystemAdminService {
     private volatile PlatformStatus status = PlatformStatus.UNINITIALIZED;
     private volatile LocalDateTime lastInitializedAt;
     private volatile LocalDateTime lastOpenedAt;
+    // The last WSEP probe (init, open, every self-heal tick). The market view reports it instead of
+    // probing: against a hanging WSEP a probe takes about two minutes (two handshakes of up to three
+    // 20-second attempts each), and the dashboard polls every 5 s.
+    // One immutable snapshot, so a reader never pairs one probe's flags with another's time.
+    private record Reachability(boolean payment, boolean issuer, LocalDateTime probedAt) { }
+    private static final Reachability NOT_CHECKED = new Reachability(false, false, null);
+    private volatile Reachability lastProbe = NOT_CHECKED;
     // Stamps the lifecycle transitions above: UTC wall time (ADR-008).
     private final Clock clock;
 
@@ -136,7 +143,13 @@ public class SystemAdminService {
         log.info("Platform initialized — status READY.");
     }
 
-    // UC-1 / I.1.4 — auto-create the default admin if none exists.
+    /**
+     * UC-1 / I.1.4: creates the default System Admin if no admin exists. A save that loses to another
+     * instance creating it first is not a failure (ADR-003).
+     *
+     * @throws MissingDefaultAdminException if the admin cannot be created and none exists. Its cause is the
+     *         save failure; a failure of the re-check that follows it is attached as suppressed
+     */
     public void createDefaultAdminIfMissing() {
         if (adminRepository.existsAny()) {
             log.info("A System Admin already exists; no default needed.");
@@ -154,14 +167,23 @@ public class SystemAdminService {
                     true);
             defaultAdmin.checkInvariants();
             adminRepository.save(defaultAdmin);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException saveFailure) {
+            MissingDefaultAdminException failure =
+                    new MissingDefaultAdminException(saveFailure.getMessage(), saveFailure);
             // Another instance booting against the same database may have inserted it first. An admin
             // then exists, so the lost insert is not an init failure and must not stop this boot (ADR-003).
-            if (adminRepository.existsAny()) {
+            boolean createdConcurrently;
+            try {
+                createdConcurrently = adminRepository.existsAny();
+            } catch (RuntimeException reCheckFailure) {
+                failure.addSuppressed(reCheckFailure);
+                throw failure;
+            }
+            if (createdConcurrently) {
                 log.info("The default System Admin was created concurrently; continuing.");
                 return;
             }
-            throw new MissingDefaultAdminException(e.getMessage());
+            throw failure;
         }
 
         // Confirm the write actually took — a silent persistence failure must fail init.
@@ -208,15 +230,25 @@ public class SystemAdminService {
         return buildMarketState();
     }
 
-    // System-internal, idempotent recovery hook (#455): bring the market to OPEN if it safely can.
-    // Used by the dev auto-opener and the self-heal scheduler so a transient external-service blip at
-    // boot (e.g. a cold-starting WSEP endpoint) doesn't leave the market closed with no recovery
-    // (V3 Req 6). NOT admin-gated — the platform acts on itself, not on a user request. Respects an
-    // admin's deliberate close: never auto-reopens a CLOSED market. Never throws.
-    public synchronized void ensureMarketOpen() {
+    /**
+     * System-internal, idempotent recovery hook (#455): brings the market to OPEN if it safely can.
+     * Used by the auto-opener and the self-heal scheduler so a transient external-service blip at boot
+     * (e.g. a cold-starting WSEP endpoint) doesn't leave the market closed with no recovery (V3 Req 6).
+     * Not admin-gated: the platform acts on itself, not on a user request. Respects an admin's
+     * deliberate close: never auto-reopens a CLOSED market.
+     *
+     * <p>Never throws; the caller retries on its own schedule. A WSEP outage, the one failure ADR-003
+     * expects to self-heal, is logged at WARN. Any other failure (an integrity violation, a missing
+     * admin, a database outage, a bug) is logged at ERROR with its exception.
+     *
+     * @return {@code true} if this call probed WSEP (an initialization or open got as far as its
+     *         reachability check), so a caller that keeps the market view current need not probe again
+     */
+    public synchronized boolean ensureMarketOpen() {
         if (status == PlatformStatus.OPEN || status == PlatformStatus.CLOSED) {
-            return; // already open, or deliberately closed by an admin — leave it alone
+            return false; // already open, or deliberately closed by an admin — leave it alone
         }
+        Reachability probeBefore = lastProbe;
         try {
             if (status == PlatformStatus.UNINITIALIZED) {
                 initializePlatform();   // UNINITIALIZED -> READY (the WSEP handshake now retries internally)
@@ -224,9 +256,26 @@ public class SystemAdminService {
             if (status == PlatformStatus.READY) {
                 doOpenMarket();         // READY -> OPEN
             }
+        } catch (ExternalServiceUnavailableException e) {
+            log.warn("Market auto-open is waiting for WSEP (will retry): {}", e.getMessage());
         } catch (RuntimeException e) {
-            log.warn("Market auto-open attempt did not succeed (will retry): {}", e.getMessage());
+            log.error("Market auto-open failed (will retry).", e);
         }
+        return lastProbe != probeBefore;
+    }
+
+    /**
+     * Probes the payment and ticket-issuing services and records both results, with the time, for the
+     * market view. Called by the self-heal scheduler on every tick in which {@link #ensureMarketOpen()}
+     * did not probe, so the view stays current while the market is OPEN or CLOSED.
+     *
+     * <p>Deliberately not synchronized: against a hanging WSEP a probe takes about two minutes (two
+     * handshakes of up to three 20-second attempts each), and neither a close nor a view may wait for
+     * it. Two probes that race both record a fresh result. Never throws: an unreachable service is
+     * recorded as such.
+     */
+    public void refreshServiceReachability() {
+        probeServices();
     }
 
     // UC-32 — close the trading market (admin/ops incident control; no dedicated
@@ -248,9 +297,23 @@ public class SystemAdminService {
         return buildMarketState();
     }
 
-    // Read-only market/health snapshot for admin dashboards. No token — the admin
-    // route is already access-gated and this exposes no sensitive data.
-    public MarketStateDTO viewMarketState() {
+    /**
+     * The market/health snapshot for the admin dashboard. The services' reachability and its time are
+     * those of the last probe: initialization, open, or a self-heal tick
+     * ({@link #refreshServiceReachability()}). Before any probe the time is {@code null} and both flags
+     * are {@code false}. This call never probes WSEP. Gated like {@link #openMarket}: the UI's route
+     * guard only steers navigation.
+     *
+     * @param adminToken the caller's admin session token
+     * @return the current market state
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged
+     */
+    public MarketStateDTO viewMarketState(String adminToken) {
+        requireSystemAdmin(adminToken);
         return buildMarketState();
     }
 
@@ -261,17 +324,17 @@ public class SystemAdminService {
         return status == PlatformStatus.OPEN;
     }
 
-    // *HELPER* — single builder for the market snapshot so health probing lives in one place.
+    // *HELPER* — single builder for the market snapshot. It never probes WSEP: it reports the last probe.
     private MarketStateDTO buildMarketState() {
-        boolean paymentHealthy = paymentGateways.stream().anyMatch(this::isReachable);
-        boolean issuerHealthy = ticketIssuers.stream().anyMatch(this::isReachable);
         boolean adminPresent = adminRepository.existsAny();
+        Reachability probe = lastProbe;
         return new MarketStateDTO(
                 status.name(),
                 lastInitializedAt,
                 lastOpenedAt,
-                paymentHealthy,
-                issuerHealthy,
+                probe.payment(),
+                probe.issuer(),
+                probe.probedAt(),
                 adminPresent);
     }
 
@@ -292,14 +355,25 @@ public class SystemAdminService {
 
     // *HELPER* — I.1.2/I.1.3 & I.2.2 external-service quorum: at least one payment
     // gateway and one ticket issuer must be reachable. Shared by initialize and
-    // openMarket so the "service down" failure is identical in both paths.
+    // openMarket so the "service down" failure is identical in both paths. Both kinds are probed
+    // before either failure is thrown, so the market view never shows a stale result for one of them.
     private void requireExternalServicesReachable() {
-        if (paymentGateways.stream().noneMatch(this::isReachable)) {
+        Reachability probe = probeServices();
+        if (!probe.payment()) {
             throw new ExternalServiceUnavailableException("no reachable payment service");
         }
-        if (ticketIssuers.stream().noneMatch(this::isReachable)) {
+        if (!probe.issuer()) {
             throw new ExternalServiceUnavailableException("no reachable ticket issuance service");
         }
+    }
+
+    // Probes both service kinds and records the result with the time it finished.
+    private Reachability probeServices() {
+        boolean payment = paymentGateways.stream().anyMatch(this::isReachable);
+        boolean issuer = ticketIssuers.stream().anyMatch(this::isReachable);
+        Reachability probe = new Reachability(payment, issuer, LocalDateTime.now(clock));
+        lastProbe = probe;
+        return probe;
     }
 
     // *HELPER* — UC-1 step 4 / I.1.1: re-assert that a System Admin exists. The external-service
@@ -346,8 +420,9 @@ public class SystemAdminService {
     // this function filters by buyer, production company, or specific event, and by date range. All filters are optional and can be combined.
     @Transactional(readOnly = true)
     public List<PurchaseHistoryDTO> viewGlobalHistory(String token, GlobalHistoryFiltersDTO filters) {
-        log.info("Admin request to view global purchase history with filters: {}", filters);
         requireSystemAdmin(token);
+        // Logged only after the check: the filters can name a buyer.
+        log.info("Admin request to view global purchase history with filters: {}", filters);
 
         // If companyId is provided, we ensure that the eventIds filter (if provided) is a subset of the events for that company, in the normalizeGlobalHistoryFilters() method.
         GlobalHistoryFiltersDTO effectiveFilters = normalizeGlobalHistoryFilters(filters);

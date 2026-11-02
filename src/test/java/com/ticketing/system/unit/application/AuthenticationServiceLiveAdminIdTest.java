@@ -21,12 +21,14 @@ import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.config.IdentityProperties;
+import com.ticketing.system.identity.config.JwtProperties;
 import com.ticketing.system.identity.config.LockoutProperties;
 import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.testutil.AdjustableClock;
+import com.ticketing.system.testutil.TestTransactions;
 
 /**
  * {@link AuthenticationService#liveAdminId(String)} answers "is this stored admin token still live,
@@ -57,7 +59,7 @@ class AuthenticationServiceLiveAdminIdTest {
         clock = new AdjustableClock(T0);
         SessionProperties sessionProperties = new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES);
         MemorySessionRepository sessions = new MemorySessionRepository(clock);
-        sessionManager = new JwtSessionManager(JWT_TEST_SECRET, sessionProperties, sessions, clock);
+        sessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET), sessionProperties, sessions, clock);
         AdminRepository admins = mock(AdminRepository.class);
         when(admins.findById(ADMIN_ID)).thenReturn(new Admin(ADMIN_ID, "admin", "hash", true));
         service = new AuthenticationService(
@@ -65,7 +67,8 @@ class AuthenticationServiceLiveAdminIdTest {
                 mock(CartRestorationPort.class), mock(NotificationDispatchService.class),
                 sessions, mock(ISystemMetrics.class), clock, admins,
                 sessionProperties, new LockoutProperties(5, 15L),
-                new IdentityProperties(List.of(), "admin"));
+                new IdentityProperties(List.of(), "admin"),
+                TestTransactions.noOpManager());
     }
 
     @Test

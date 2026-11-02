@@ -1,6 +1,8 @@
 package com.ticketing.system.organization.domain;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -176,23 +178,6 @@ public class CompanyAppointment implements InvariantChecked {
                 createdAt);
     }
 
-    public void setPermissions(EnumSet<Permission> newPermissions) {
-        // Validate-before-commit: roll back to the previous permission set if the new
-        // one
-        // would violate an invariant (e.g. emptying a Manager's permissions), so a
-        // rejected
-        // call never leaves the appointment corrupted. checkInvariants stays the sole
-        // validator.
-        Set<Permission> previous = this.permissions;
-        this.permissions = newPermissions;
-        try {
-            checkInvariants();
-        } catch (RuntimeException ex) {
-            this.permissions = previous;
-            throw ex;
-        }
-    }
-
     // ---------------------------------------------------------------------------
     // Skeleton additions — AppointmentStatus lifecycle + accessors.
     // ---------------------------------------------------------------------------
@@ -236,9 +221,15 @@ public class CompanyAppointment implements InvariantChecked {
         checkInvariants();
     }
 
-    // UC-24 — replace permission set with validation (existing setPermissions does
-    // raw set).
-    public void updatePermissions(EnumSet<Permission> newPermissions) {
+    /**
+     * UC-24 — replaces an active manager appointment's permission set.
+     *
+     * @param newPermissions the new set; copied, so the caller keeps no handle on it
+     * @throws InvalidPermissionException if this is not a manager appointment
+     * @throws IllegalStateException      if the appointment is not active
+     * @throws IllegalArgumentException   if {@code newPermissions} is null or empty
+     */
+    public void updatePermissions(Collection<Permission> newPermissions) {
         if (this.role != CompanyRole.Manager) {
             throw new InvalidPermissionException("Only manager appointments can have permissions.");
         }
@@ -262,8 +253,8 @@ public class CompanyAppointment implements InvariantChecked {
         return this.permissions.contains(permission);
     }
 
-    /// Getters for all fields (no setters except for permissions, as role/status
-    /// changes are handled by specific methods above to enforce lifecycle rules).
+    /// Getters only: permissions change through updatePermissions, and role and status through the
+    /// lifecycle methods above, which enforce their rules.
 
     public int getCompanyId() {
         return this.companyId;
@@ -285,8 +276,9 @@ public class CompanyAppointment implements InvariantChecked {
         return inviterId;
     }
 
+    /** A read-only view: the set changes only through {@link #updatePermissions}. */
     public Set<Permission> getPermissions() {
-        return permissions;
+        return Collections.unmodifiableSet(permissions);
     }
 
     public int getAppointmentId() {

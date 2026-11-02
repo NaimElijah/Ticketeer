@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
 import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.event.PurchaseCompletedNotice;
 import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
@@ -23,6 +24,7 @@ import com.ticketing.system.catalog.domain.*;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -114,7 +116,7 @@ public class CheckoutServiceAcceptanceTest {
         AtomicInteger ticketIds = new AtomicInteger(1);
         when(ticketRepository.nextId()).thenAnswer(invocation -> ticketIds.getAndIncrement());
         userRepository = mock(UserRepository.class);
-        companyRepository = mock(ProductionCompanyRepository.class);
+        companyRepository = CompanyRepositories.everyCompanyWithoutAPolicy();
 
         orderReceiptRepository = mock(OrderReceiptRepository.class);
         AtomicInteger receiptIds = new AtomicInteger(1);
@@ -135,7 +137,7 @@ public class CheckoutServiceAcceptanceTest {
         checkoutService = new CheckoutService(
                 activeOrderRepository,
                 eventRepository,
-                new InventoryService(eventRepository, companyRepository),
+                new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager()),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
@@ -502,7 +504,7 @@ public class CheckoutServiceAcceptanceTest {
         validSession();
         ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(eventRepository.findById(EVENT_ID_1)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID_1)).thenThrow(new EventNotFoundException(EVENT_ID_1));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
@@ -520,7 +522,7 @@ public class CheckoutServiceAcceptanceTest {
         ), true);
 
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(eventRepository.findById(EVENT_ID_2)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID_2)).thenThrow(new EventNotFoundException(EVENT_ID_2));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
@@ -921,7 +923,7 @@ public class CheckoutServiceAcceptanceTest {
         return new CheckoutService(
                 realRepo,
                 eventRepository,
-                new InventoryService(eventRepository, companyRepository),
+                new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager()),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
@@ -1018,6 +1020,4 @@ public class CheckoutServiceAcceptanceTest {
     void GivenSeatedCheckoutPaymentSucceedsButIssuanceFails_WhenCheckout_ThenSeatsReturnToAvailable() {
         
     }
-
-    
 }

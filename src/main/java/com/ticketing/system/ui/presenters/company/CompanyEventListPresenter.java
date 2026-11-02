@@ -12,6 +12,8 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
@@ -72,45 +74,62 @@ public class CompanyEventListPresenter {
         return eventService.listEventsForCompany(token, resolved, CatalogSearchFiltersDTO.empty());
     }
 
-    /** Distinct countries this company has events in, sorted; empty list on any failure. */
-    public List<String> countries(String token, Integer companyId) {
+    /**
+     * Distinct countries this company has events in, sorted; none without a token or a company, and a
+     * {@link ListOutcome.Failure} with {@code ServiceErrors}' text when the read fails.
+     */
+    public ListOutcome<String> countries(String token, Integer companyId) {
         try {
-            return companyEvents(token, companyId).stream()
+            return new ListOutcome.Loaded<>(companyEvents(token, companyId).stream()
                     .map(ev -> ev.location() == null ? null : ev.location().country())
                     .filter(c -> c != null && !c.isBlank())
                     .distinct()
                     .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .toList();
+                    .toList());
         } catch (RuntimeException e) {
-            return List.of();
+            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
         }
     }
 
-    /** Distinct cities this company has events in for {@code country}, sorted; empty list on any failure. */
-    public List<String> cities(String token, Integer companyId, String country) {
-        if (country == null) return List.of();
+    /**
+     * Distinct cities this company has events in for {@code country}, sorted; none for a {@code null}
+     * country, and a {@link ListOutcome.Failure} with {@code ServiceErrors}' text when the read fails.
+     */
+    public ListOutcome<String> cities(String token, Integer companyId, String country) {
+        if (country == null) return new ListOutcome.Loaded<>(List.of());
         try {
-            return companyEvents(token, companyId).stream()
+            return new ListOutcome.Loaded<>(companyEvents(token, companyId).stream()
                     .filter(ev -> ev.location() != null && country.equalsIgnoreCase(ev.location().country()))
                     .map(ev -> ev.location().city())
                     .filter(c -> c != null && !c.isBlank())
                     .distinct()
                     .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .toList();
+                    .toList());
         } catch (RuntimeException e) {
-            return List.of();
+            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
         }
     }
 
-    public ActionOutcome cancelEvent(String token, int eventId) {
-        if (token == null) return new ActionOutcome.NotAuthenticated();
+    /**
+     * Cancels the event and refunds its buyers.
+     *
+     * @param token   the caller's member token, or {@code null}
+     * @param eventId the event to cancel
+     * @return {@link CancelOutcome.RefundFailed} when the event is cancelled but some refunds failed, or
+     *     {@link CancelOutcome.Failure} with {@code ServiceErrors}' text for any other failure
+     */
+    public CancelOutcome cancelEvent(String token, int eventId) {
+        if (token == null) return new CancelOutcome.NotAuthenticated();
         try {
             eventService.cancelEventAndRefund(token, eventId);
-            return new ActionOutcome.Success();
+            return new CancelOutcome.Success();
         } catch (InvalidTokenException e) {
-            return new ActionOutcome.NotAuthenticated();
+            return new CancelOutcome.NotAuthenticated();
+        } catch (RefundFailedException e) {
+            return new CancelOutcome.RefundFailed(CancelRefundFailure.reason(e),
+                    CancelRefundFailure.cancelAgainRetries(e));
         } catch (RuntimeException e) {
-            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
+            return new CancelOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -149,5 +168,28 @@ public class CompanyEventListPresenter {
         record Success() implements ActionOutcome {}
         record NotAuthenticated() implements ActionOutcome {}
         record Failure(String reason) implements ActionOutcome {}
+    }
+
+    /** What {@link #cancelEvent} did. */
+    public sealed interface CancelOutcome {
+        record Success() implements CancelOutcome {}
+        record NotAuthenticated() implements CancelOutcome {}
+        /**
+         * The event is cancelled, but some of its refunds failed: the cancel commits before its refunds run.
+         *
+         * @param reason             why, for the owner: fixed text for a failure the payment gateway raised,
+         *                           else the refund service's summary naming the orders it could not refund
+         * @param cancelAgainRetries {@code true} only when the payment gateway could not be reached
+         *                           ({@code RefundGatewayUnreachableException}): no money moved and
+         *                           {@code EventCancellationRefundService} released the claim, so
+         *                           cancelling again retries the refund. {@code false} when the outcome
+         *                           is unknown ({@code RefundOutcomeUnknownException}): the service leaves
+         *                           the lines PENDING for manual recovery and a re-cancel skips them. Also
+         *                           {@code false} for a plain {@code RefundFailedException}, which can mix
+         *                           declined receipts, retried by a re-cancel, with pending ones, which
+         *                           are not; its own message says which (ADR-001)
+         */
+        record RefundFailed(String reason, boolean cancelAgainRetries) implements CancelOutcome {}
+        record Failure(String reason) implements CancelOutcome {}
     }
 }

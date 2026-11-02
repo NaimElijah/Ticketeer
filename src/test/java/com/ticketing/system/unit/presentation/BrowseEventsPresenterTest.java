@@ -1,11 +1,14 @@
 package com.ticketing.system.unit.presentation;
 
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import ch.qos.logback.classic.Level;
 
 import java.time.ZoneId;
 import java.util.List;
@@ -16,7 +19,10 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
+import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class BrowseEventsPresenterTest {
 
@@ -42,15 +48,37 @@ class BrowseEventsPresenterTest {
         List<EventSummaryDTO> events = List.of(summary());
         when(catalogService.searchGlobal(eq(CRED), eq(filters))).thenReturn(events);
 
-        List<EventSummaryDTO> result = presenter.search(CRED, filters);
+        ListOutcome<EventSummaryDTO> result = presenter.search(CRED, filters);
 
-        assertSame(events, result);
+        assertEquals(new ListOutcome.Loaded<>(events), result);
     }
 
+    // A failed search is a failure, never an empty catalog (UI-B3, #187).
     @Test
-    void search_onServiceFailure_returnsEmpty() {
+    void GivenTheSearchFails_WhenSearch_ThenFailureCarriesTheGenericMessage() {
         when(catalogService.searchGlobal(eq(CRED), any())).thenThrow(new RuntimeException("boom"));
 
-        assertTrue(presenter.search(CRED, CatalogSearchFiltersDTO.empty()).isEmpty());
+        ListOutcome.Failure<?> failure = assertInstanceOf(ListOutcome.Failure.class,
+                presenter.search(CRED, CatalogSearchFiltersDTO.empty()));
+        assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.reason());
+    }
+
+    // A buyer can type anything into the search box, an email address included, so a failed search is
+    // logged without its filters (SLR.2, #185).
+    @Test
+    void GivenSearchFails_WhenSearch_ThenNoLogEventCarriesTheSearchText() {
+        String text = "dana.levi@example.com";
+        CatalogSearchFiltersDTO filters = new CatalogSearchFiltersDTO(text, null, null, text,
+                null, null, null, null, null, null, null, null, null);
+        when(catalogService.searchGlobal(eq(CRED), eq(filters))).thenThrow(new RuntimeException("boom"));
+
+        try (LogCapture presenterLogs = LogCapture.of(BrowseEventsPresenter.class);
+                LogCapture failureLogs = LogCapture.of(ServiceErrors.class)) {
+            presenter.search(CRED, filters);
+
+            assertFalse(failureLogs.messagesAt(Level.ERROR).isEmpty(), "the failure itself is logged");
+            assertEquals(List.of(), presenterLogs.eventsContaining(text), "the search text must not be logged");
+            assertEquals(List.of(), failureLogs.eventsContaining(text), "the search text must not be logged");
+        }
     }
 }

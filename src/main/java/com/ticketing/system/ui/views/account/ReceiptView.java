@@ -23,6 +23,9 @@ import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.support.EventCategoryLabels;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -35,6 +38,7 @@ import jakarta.annotation.security.PermitAll;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Full-page receipt for one member-owned order (#276). Reached by clicking
@@ -50,6 +54,7 @@ import java.util.Locale;
 @Route(value = "receipt/:receiptId", layout = MainLayout.class)
 @PageTitle("Receipt · TicketHub")
 @PermitAll
+@RequireCapability(Capability.MEMBER_ACCOUNT)
 public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
@@ -98,25 +103,25 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         }
 
         switch (presenter.load(sessionIdentity.memberToken(), receiptId)) {
-            case ReceiptPresenter.Outcome.Success s -> renderReceipt(s.receipt());
+            case ReceiptPresenter.Outcome.Success s -> renderReceipt(s.receipt(), s.refunds());
             case ReceiptPresenter.Outcome.NotFound nf -> bodyHolder.add(infoBanner(nf.message()));
             case ReceiptPresenter.Outcome.Failure f -> bodyHolder.add(infoBanner(f.message()));
         }
     }
 
-    private void renderReceipt(PurchaseRecordDTO receipt) {
+    private void renderReceipt(PurchaseRecordDTO receipt, Optional<ReceiptPresenter.Refunds> refunds) {
         title("Receipt #" + receipt.orderReceiptId());
         subtitle(headerSubtitle(receipt));
         actions(buildHeaderActions(receipt));
 
         bodyHolder.add(buildStatusCard(receipt));
         if (receipt.refundStatus() != RefundStatus.NONE) {
-            bodyHolder.add(buildRefundTimeline(receipt));
+            bodyHolder.add(buildRefundTimeline(refunds));
         }
         bodyHolder.add(Lk.h2("Items"));
         bodyHolder.add(buildItemsCard(receipt));
         bodyHolder.add(Lk.h2("Payment"));
-        bodyHolder.add(buildPaymentCard(receipt));
+        bodyHolder.add(buildPaymentCard(receipt, refunds));
         bodyHolder.add(Lk.h2("Tickets"));
         bodyHolder.add(buildTicketsCard(receipt));
     }
@@ -172,7 +177,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         }
     }
 
-    private Component buildRefundTimeline(PurchaseRecordDTO receipt) {
+    private Component buildRefundTimeline(Optional<ReceiptPresenter.Refunds> refunds) {
         LkCard card = new LkCard().pad(18);
         LkCol col = new LkCol().gap(10);
         Span heading = new Span("Refund status");
@@ -186,13 +191,12 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
                 new LkBadge("✓ Refunded", LkBadge.Tone.success).small());
         col.add(steps);
 
-        TransactionRecordDTO refundTx = refundTransaction(receipt);
-        if (refundTx != null) {
-            Span note = Lk.muted("Refunded " + money(refundTx.amount())
-                    + (refundTx.timestamp() == null ? "" : " on " + displayTime.format(refundTx.timestamp(), DATE_FMT)));
+        refunds.ifPresent(r -> {
+            Span note = Lk.muted("Refunded " + money(r.total())
+                    + (r.lastRefundedAt() == null ? "" : " on " + displayTime.format(r.lastRefundedAt(), DATE_FMT)));
             note.getStyle().set("font-size", "12.5px").set("display", "block");
             col.add(note);
-        }
+        });
         card.add(col);
         return card;
     }
@@ -271,7 +275,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
     // ---- payment ----
 
-    private Component buildPaymentCard(PurchaseRecordDTO receipt) {
+    private Component buildPaymentCard(PurchaseRecordDTO receipt, Optional<ReceiptPresenter.Refunds> refunds) {
         LkCard card = new LkCard().pad(18);
         LkCol col = new LkCol().gap(8);
 
@@ -294,11 +298,10 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
             col.add(method);
         }
 
-        TransactionRecordDTO refundTx = refundTransaction(receipt);
-        if (refundTx != null) {
+        refunds.ifPresent(r -> {
             col.add(Lk.divider());
-            col.add(paymentRow("Refund issued", "-" + money(refundTx.amount()), false));
-        }
+            col.add(paymentRow("Refund issued", "-" + money(r.total()), false));
+        });
         card.add(col);
         return card;
     }
@@ -385,7 +388,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     private static BzTicketDialog.TicketInfo toTicketInfo(TicketRecordDTO t) {
         return new BzTicketDialog.TicketInfo(
                 orElse(t.eventName(), "Event #" + t.eventId()),
-                orElse(t.category(), "—"),
+                categoryLabel(t.category()),
                 t.eventStartsAt() == null ? "—" : t.eventStartsAt().format(EVENT_FMT),
                 orElse(t.venue(), "—"),
                 orElse(t.zoneName(), "Zone #" + t.zoneId()),
@@ -400,13 +403,6 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     private static TransactionRecordDTO paymentCharge(PurchaseRecordDTO receipt) {
         return receipt.transactions().stream()
                 .filter(tx -> "PAYMENT_CHARGE".equals(tx.type()))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private static TransactionRecordDTO refundTransaction(PurchaseRecordDTO receipt) {
-        return receipt.transactions().stream()
-                .filter(tx -> "REFUND".equals(tx.type()))
                 .findFirst()
                 .orElse(null);
     }
@@ -431,6 +427,11 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
     private static String money(double amount) {
         return String.format("$%,.2f", amount);
+    }
+
+    // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).
+    private static String categoryLabel(String categoryName) {
+        return categoryName == null || categoryName.isBlank() ? "—" : EventCategoryLabels.labelOf(categoryName);
     }
 
     private static String orElse(String value, String fallback) {

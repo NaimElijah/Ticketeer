@@ -16,6 +16,11 @@ import lombok.extern.slf4j.Slf4j;
  * <p>{@link SystemAdminService#ensureMarketOpen()} is idempotent and respects an admin's deliberate
  * close, so this is a no-op once the market is open (or was closed on purpose). Runs in every profile
  * except {@code test} (tests drive the market state themselves); an admin can still open/close via UC-32.
+ *
+ * <p>Each tick also leaves a fresh WSEP reachability result for the admin dashboard: when
+ * {@code ensureMarketOpen()} did not probe (the market is OPEN or CLOSED, or an initialization or open
+ * failed before its probe), it calls {@link SystemAdminService#refreshServiceReachability()}, so one
+ * tick never probes twice.
  */
 @Component
 @Profile("!test")
@@ -28,8 +33,17 @@ public class MarketSelfHealScheduler {
         this.systemAdminService = systemAdminService;
     }
 
-    @Scheduled(fixedDelayString = "${market.self-heal-delay-ms:30000}")
+    /**
+     * One self-heal tick: tries to open the market, then refreshes the WSEP reachability unless that
+     * probed. Runs on its own scheduler, since a probe takes about two minutes while WSEP hangs (two
+     * handshakes of up to three 20-second attempts each).
+     */
+    @Scheduled(fixedDelayString = "${market.self-heal-delay-ms:30000}",
+            scheduler = SchedulingConfig.MARKET_SELF_HEAL_TASK_SCHEDULER)
     public void reopenMarketIfNeeded() {
-        systemAdminService.ensureMarketOpen();
+        boolean probed = systemAdminService.ensureMarketOpen();
+        if (!probed) {
+            systemAdminService.refreshServiceReachability();
+        }
     }
 }

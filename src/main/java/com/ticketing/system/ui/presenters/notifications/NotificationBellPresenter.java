@@ -7,10 +7,11 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * Presenter for the top-bar notification bell's mark-read action. A Vaadin-free
- * POJO wrapping the one fire-and-forget {@link INotificationService} call, so the
+ * POJO wrapping the one {@link INotificationService} call, so the
  * three layout shells ({@code MainLayout}, {@code WorkspaceLayout},
  * {@code PlatformAdminLayout}) don't reach into the application layer directly.
  *
@@ -34,11 +35,35 @@ public class NotificationBellPresenter {
         return displayTime.ageForNotification(createdAt);
     }
 
-    /** Mark one notification read for the signed-in member; no-op when signed out. */
-    public void markRead(String notificationId) {
+    /**
+     * Mark one notification read for the signed-in member. An admin session marks nothing.
+     *
+     * @param notificationId the notification the member clicked
+     * @return {@link MarkReadOutcome.Success} once the read is stored;
+     *         {@link MarkReadOutcome.NotAuthenticated} when no member is signed in, an admin session
+     *         included; {@link MarkReadOutcome.Failure} with the reason to show when the store refused it.
+     *         Only on success does the bell show the item read, so it agrees with what the next login
+     *         delivers
+     */
+    public MarkReadOutcome markRead(String notificationId) {
         Integer userId = AuthSession.userId();
-        if (userId != null) {
-            notificationService.markRead(userId, notificationId);
+        // Admin and member ids share one id space (ADR-012): an admin's id would name a member's
+        // notifications, so an admin session marks nothing, as the poller and session listener skip it.
+        if (userId == null || AuthSession.isAdmin()) {
+            return new MarkReadOutcome.NotAuthenticated();
         }
+        try {
+            notificationService.markRead(userId, notificationId);
+            return new MarkReadOutcome.Success();
+        } catch (RuntimeException e) {
+            return new MarkReadOutcome.Failure(ServiceErrors.userMessage(e));
+        }
+    }
+
+    /** What became of one mark-read: stored, nobody signed in, or refused with a reason to show. */
+    public sealed interface MarkReadOutcome {
+        record Success() implements MarkReadOutcome { }
+        record NotAuthenticated() implements MarkReadOutcome { }
+        record Failure(String reason) implements MarkReadOutcome { }
     }
 }

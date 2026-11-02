@@ -127,9 +127,9 @@ public class StandingZone extends InventoryZone {
 
             int currentlyReserved = reservedByOrderKey.getOrDefault(key, 0);
             if (currentlyReserved < quantity) {
-                throw new IllegalStateException(
-                        "Cannot release " + quantity + " tickets for order '" + key
-                                + "'; only " + currentlyReserved + " reserved by that order");
+                // A member can read this refusal, so it names no order key (an internal handle).
+                throw new IllegalStateException("Cannot release " + quantity
+                        + " tickets: this order holds only " + currentlyReserved + " in this zone.");
             }
 
             if (currentlyReserved == quantity) {
@@ -155,9 +155,9 @@ public class StandingZone extends InventoryZone {
 
             int currentlyReserved = reservedByOrderKey.getOrDefault(key, 0);
             if (currentlyReserved < quantity) {
-                throw new IllegalStateException(
-                        "Cannot confirm sale of " + quantity + " tickets for order '" + key
-                                + "'; only " + currentlyReserved + " reserved by that order");
+                // A member can read this refusal, so it names no order key (an internal handle).
+                throw new IllegalStateException("Cannot confirm the sale of " + quantity
+                        + " tickets: this order holds only " + currentlyReserved + " in this zone.");
             }
 
             if (currentlyReserved == quantity) {

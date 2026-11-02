@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,8 +41,9 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li><b>§1 #6 active company has ≥1 Owner — VERIFIED.</b></li>
  *   <li><b>§1 #4 producer (owner/manager) is a registered user — VERIFIED.</b></li>
- *   <li><b>§1 #1 unique username, #8 ≤1 active order/buyer/event, #12 sellable ≤ inventory —
- *       VERIFIED.</b></li>
+ *   <li><b>§1 #1 unique username, #8 ≤1 active order/member/event, #12 sellable ≤ inventory —
+ *       VERIFIED.</b> Guest carts are left out of #8: a race can leave two on one session id, an
+ *       accepted state until NaimElijah/Ticketeer#224, and this scan's failure stops the boot.</li>
  *   <li>The II.4.8.3 appointment tree (single appointer, no ownership cycles) is structural but
  *       not scanned, and owner revocation can currently break it (#126).</li>
  * </ul>
@@ -105,17 +107,20 @@ public class SystemIntegrityVerifier {
         verifyProducersAreUsers();             // constraint #4
         revalidateLoadedAggregates();          // #372 — re-run each loaded aggregate's own invariants
         verifyUniqueUsernames();               // constraint #1
-        verifyOneActiveOrderPerBuyerEvent();   // constraint #8
+        verifyOneActiveOrderPerMemberEvent();  // constraint #8, members only
         verifyInventoryWithinCapacity();       // constraint #12
         log.info("System integrity verified.");
     }
+
+    // Every message below names its records by id, never by a company name or a username: the self-heal
+    // logs a violation at ERROR on every tick while it lasts.
 
     // #6 — every active production company has at least one Owner.
     private void verifyActiveCompaniesHaveOwner() {
         for (ProductionCompany company : companyRepository.findActive()) {
             if (company.getOwnerIds().isEmpty()) {
                 throw new SystemIntegrityViolationException(
-                        "active company '" + company.getName() + "' has no owner");
+                        "active company " + company.getCompanyId() + " has no owner");
             }
         }
     }
@@ -130,8 +135,8 @@ public class SystemIntegrityVerifier {
                     userRepository.getUserById(userId);
                 } catch (UserNotFoundException e) {
                     throw new SystemIntegrityViolationException(
-                            "company '" + company.getName() + "' has producer " + userId
-                                    + " that is not a registered user");
+                            "company " + company.getCompanyId() + " has producer " + userId
+                                    + " that is not a registered user", e);
                 }
             }
         }
@@ -142,21 +147,25 @@ public class SystemIntegrityVerifier {
     // Re-run every loaded aggregate's own invariant. A row persisted (or hand-edited) into a state
     // that breaks its aggregate invariant blocks the market from opening.
     private void revalidateLoadedAggregates() {
-        revalidateEach(userRepository.findAll(), "user");
-        revalidateEach(companyRepository.findAll(), "company");
-        revalidateEach(eventRepository.findAll(), "event");
-        revalidateEach(activeOrderRepository.findAll(), "active order");
+        revalidateEach(userRepository.findAll(), "user", User::getUserId);
+        revalidateEach(companyRepository.findAll(), "company", ProductionCompany::getCompanyId);
+        revalidateEach(eventRepository.findAll(), "event", Event::getId);
+        revalidateEach(activeOrderRepository.findAll(), "active order", ActiveOrder::getOrderKey);
     }
 
-    private void revalidateEach(List<? extends InvariantChecked> aggregates, String type) {
-        for (InvariantChecked aggregate : aggregates) {
+    // The id names the row to repair; the cause keeps the invariant's own stack trace.
+    private <T extends InvariantChecked> void revalidateEach(List<T> aggregates, String type,
+                                                             Function<? super T, ?> idOf) {
+        for (T aggregate : aggregates) {
             try {
                 aggregate.checkInvariants();
             } catch (RuntimeException e) {
-                // checkInvariants throws a plain IllegalStateException; wrap it as a DomainException so
-                // PlatformInitializationRunner's catch leaves the platform uninitialized gracefully.
+                // checkInvariants throws a plain IllegalStateException: the wrap gives the failure
+                // a domain type and keeps it as the cause. At boot it stops the application; before
+                // a later open it keeps the market closed (ADR-003).
                 throw new SystemIntegrityViolationException(
-                        "loaded " + type + " violates its invariant: " + e.getMessage());
+                        "loaded " + type + " " + idOf.apply(aggregate) + " violates its invariant: "
+                                + e.getMessage(), e);
             }
         }
     }
@@ -165,26 +174,32 @@ public class SystemIntegrityVerifier {
     // forbids a duplicate; this scan still covers the Memory adapter and any row written around the
     // adapters.
     private void verifyUniqueUsernames() {
-        Set<String> seen = new HashSet<>();
+        Map<String, Integer> userIdByUsername = new HashMap<>();
         for (User user : userRepository.findAll()) {
             String username = user.getUsername();
-            if (username != null && !seen.add(username)) {
+            if (username == null) {
+                continue;
+            }
+            Integer firstUserId = userIdByUsername.putIfAbsent(username, user.getUserId());
+            if (firstUserId != null) {
                 throw new SystemIntegrityViolationException(
-                        "duplicate username '" + username + "' in the member pool");
+                        "users " + firstUserId + " and " + user.getUserId() + " share one username");
             }
         }
     }
 
-    // #8 — at most one active order per buyer per event. A buyer is keyed by userId (member) or
-    // sessionId (guest); flag a buyer whose two distinct orders both hold the same event.
-    private void verifyOneActiveOrderPerBuyerEvent() {
-        Map<String, Map<Integer, String>> orderByBuyerEvent = new HashMap<>();
+    // #8 — at most one active order per member per event; flag a member whose two distinct orders
+    // both hold the same event. Guest carts are skipped: two on one session id are a known race
+    // (NaimElijah/Ticketeer#224, requirements.md §1 #8) that the sweeper clears, and failing here
+    // would stop the boot (ADR-003) and block reopening the market.
+    private void verifyOneActiveOrderPerMemberEvent() {
+        Map<Integer, Map<Integer, String>> orderByMemberEvent = new HashMap<>();
         for (ActiveOrder order : activeOrderRepository.findAll()) {
-            String buyer = buyerKey(order);
-            if (buyer == null) {
-                continue; // an order with no identity is caught by the aggregate's own checkInvariants
+            Integer memberId = order.userIdOrNull();
+            if (memberId == null) {
+                continue;
             }
-            Map<Integer, String> byEvent = orderByBuyerEvent.computeIfAbsent(buyer, b -> new HashMap<>());
+            Map<Integer, String> byEvent = orderByMemberEvent.computeIfAbsent(memberId, m -> new HashMap<>());
             Set<Integer> eventIds = new HashSet<>();
             for (CartLineItem item : order.getItems()) {
                 eventIds.add(item.geteventId());
@@ -192,20 +207,14 @@ public class SystemIntegrityVerifier {
             for (Integer eventId : eventIds) {
                 String previous = byEvent.put(eventId, order.getOrderKey());
                 if (previous != null && !previous.equals(order.getOrderKey())) {
+                    // Name the carts by order key, never by session id: a session id is a credential,
+                    // and LoggingAspect logs this message at WARN.
                     throw new SystemIntegrityViolationException(
-                            "buyer " + buyer + " has more than one active order for event " + eventId);
+                            "member " + memberId + " has more than one active order for event " + eventId
+                                    + ": orders " + previous + " and " + order.getOrderKey());
                 }
             }
         }
-    }
-
-    private static String buyerKey(ActiveOrder order) {
-        Integer userId = order.userIdOrNull();
-        if (userId != null) {
-            return "user:" + userId;
-        }
-        String sessionId = order.getSessionId();
-        return sessionId == null ? null : "sess:" + sessionId;
     }
 
     // #12 — a zone's committed tickets (sold + reserved) must not exceed its physical capacity.

@@ -1,6 +1,6 @@
 # ADR-008: Event times carry their venue's time zone; every "now" comes from one UTC clock
 
-- **Status:** Accepted
+- **Status:** Accepted. The last bullet of point 6 (`System.currentTimeMillis()` is not banned) is superseded by [ADR-022](ADR-022-system-current-time-millis-is-a-system-clock-read.md).
 - **Date:** 2026-10-22
 - **Issue:** #74 (explicit time zone for event times; inject the Clock everywhere)
 

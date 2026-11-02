@@ -88,20 +88,23 @@ public class StubPaymentGateway implements PaymentGateway {
     @Override
     public RefundResultDTO refund(int paymentTransactionId, double amount) {
         if (paymentTransactionId <= 0) {
-            throw new RefundFailedException(paymentTransactionId, "paymentTransactionId must be positive");
+            throw RefundFailedException.forPaymentTransaction(paymentTransactionId,
+                    "paymentTransactionId must be positive");
         }
 
         if (amount <= 0) {
-            throw new RefundFailedException(paymentTransactionId, "refund amount must be positive");
+            throw RefundFailedException.forPaymentTransaction(paymentTransactionId, "refund amount must be positive");
         }
 
         PaymentResultDTO originalCharge = chargesByTransactionId.get(paymentTransactionId);
         if (originalCharge == null) {
-            throw new RefundFailedException(paymentTransactionId, "original payment transaction not found");
+            throw RefundFailedException.forPaymentTransaction(paymentTransactionId,
+                    "original payment transaction not found");
         }
 
         if (amount > originalCharge.chargedAmount()) {
-            throw new RefundFailedException(paymentTransactionId, "cannot refund more than original charge");
+            throw RefundFailedException.forPaymentTransaction(paymentTransactionId,
+                    "cannot refund more than original charge");
         }
 
         return new RefundResultDTO(

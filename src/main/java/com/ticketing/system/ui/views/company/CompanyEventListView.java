@@ -4,7 +4,9 @@ import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.company.EventCancelConfirm;
 import com.ticketing.system.ui.components.kit.Lk;
+import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkDateRangeField;
@@ -16,6 +18,7 @@ import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkSelect;
 import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
@@ -66,6 +69,7 @@ public class CompanyEventListView extends LkPage {
     private final CompanyEventListPresenter presenter;
     private final DisplayTime displayTime;
     private final LkCard eventsCard = new LkCard().pad(0);
+    private final Div filterErrorSlot = new Div();
 
     // ---- filter state (mirrors /browse, minus company-rating; status is owner-only & client-side) ----
     private String filterCategory  = CatalogFilterSupport.CAT_ALL;
@@ -111,6 +115,7 @@ public class CompanyEventListView extends LkPage {
                 .onClick(e -> UI.getCurrent().navigate("owner/events/new")));
         }
         add(buildFilters());
+        add(filterErrorSlot);
         add(eventsCard);
         Span hint = Lk.muted("Row actions → Edit metadata · Venue map · Policies · Sales · Status · Cancel.");
         hint.getStyle().set("font-size", "12.5px");
@@ -191,16 +196,19 @@ public class CompanyEventListView extends LkPage {
         eventRatingMax = ratingField("Max", v -> { filterMaxEventRating = v; reload(); });
 
         countrySelect = new LkSelect(CatalogFilterSupport.COUNTRY_ALL,
-                CatalogFilterSupport.countryOptions(
-                        presenter.countries(AuthSession.token(), CurrentCompanies.currentCompanyId()))).label("Country");
+                CatalogFilterSupport.countryOptions(filterOptions(
+                        presenter.countries(AuthSession.token(), CurrentCompanies.currentCompanyId()),
+                        "Could not load the countries"))).label("Country");
         countrySelect.onChange(v -> {
             if (Objects.equals(filterCountry, v)) return;
             filterCountry = v;
             filterCity = CatalogFilterSupport.CITY_ALL;
+            filterErrorSlot.removeAll();
             citySelect.setOptions(CatalogFilterSupport.COUNTRY_ALL.equals(v)
                     ? List.of(CatalogFilterSupport.CITY_ALL)
-                    : CatalogFilterSupport.cityOptions(
-                            presenter.cities(AuthSession.token(), CurrentCompanies.currentCompanyId(), v)));
+                    : CatalogFilterSupport.cityOptions(filterOptions(
+                            presenter.cities(AuthSession.token(), CurrentCompanies.currentCompanyId(), v),
+                            "Could not load the cities")));
             citySelect.enabled(!CatalogFilterSupport.COUNTRY_ALL.equals(v));
             reload();
         });
@@ -228,6 +236,19 @@ public class CompanyEventListView extends LkPage {
             countrySelect, citySelect, statusSelect,
             clear);
         return bar;
+    }
+
+    // A failed options read leaves only the "All" choice, and says why under the filter bar.
+    private List<String> filterOptions(ListOutcome<String> outcome, String failureContext) {
+        return switch (outcome) {
+            case ListOutcome.Loaded<String> loaded -> loaded.items();
+            case ListOutcome.Failure<String> failure -> {
+                // An alert: a filter choice inserts it, so a screen reader must announce it.
+                filterErrorSlot.add(Lk.asAlert(new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16),
+                        Lk.withReason(failureContext, failure.reason()))));
+                yield List.of();
+            }
+        };
     }
 
     private void clearFilters() {
@@ -412,27 +433,29 @@ public class CompanyEventListView extends LkPage {
     }
 
     private void openCancelDialog(EventDetailDTO ev) {
-        ConfirmDialog dialog = new ConfirmDialog();
-        dialog.setHeader("Cancel \"" + ev.name() + "\"?");
-        dialog.setText("This will refund all ticket holders and permanently cancel the event. This cannot be undone.");
-        dialog.setCancelable(true);
-        dialog.setCancelText("Keep event");
-        dialog.setConfirmText("Cancel event");
-        dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(ignored -> {
+        EventCancelConfirm.open(ev.name(), () -> {
             int eventId = Integer.parseInt(ev.eventId());
+            // A cancel commits the event's CANCELED state before its refunds run, so a failure after it
+            // may leave the event cancelled: each failure reloads the list to show its actual state.
             switch (presenter.cancelEvent(AuthSession.token(), eventId)) {
-                case CompanyEventListPresenter.ActionOutcome.Success ignored2 -> {
+                case CompanyEventListPresenter.CancelOutcome.Success ignored -> {
                     Toasts.success("Event canceled and refunds issued.");
                     reload();
                 }
-                case CompanyEventListPresenter.ActionOutcome.NotAuthenticated ignored2 ->
+                case CompanyEventListPresenter.CancelOutcome.NotAuthenticated ignored ->
                     Toasts.warn("Your session has expired — please sign in again.");
-                case CompanyEventListPresenter.ActionOutcome.Failure fail ->
-                    Toasts.failure("Could not cancel the event — please try again.");
+                case CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed -> {
+                    Toasts.warnUntilDismissed(Lk.withReason(refundFailed.cancelAgainRetries()
+                        ? "The event is cancelled, but some refunds failed; cancel it again from its page to retry them"
+                        : "The event is cancelled, but some refunds failed", refundFailed.reason()));
+                    reload();
+                }
+                case CompanyEventListPresenter.CancelOutcome.Failure fail -> {
+                    Toasts.failure(Lk.withReason("Could not cancel the event", fail.reason()));
+                    reload();
+                }
             }
         });
-        dialog.open();
     }
 
     private void openDeleteDialog(EventDetailDTO ev) {

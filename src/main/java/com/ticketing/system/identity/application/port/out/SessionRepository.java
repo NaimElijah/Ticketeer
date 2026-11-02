@@ -35,6 +35,16 @@ public interface SessionRepository extends IRepository<Session, String> {
     void delete(String sessionId);
 
     /**
+     * Deletes every {@link com.ticketing.system.identity.domain.SessionKind#ADMIN ADMIN} session of
+     * {@code adminId}, expired or not, so no token issued for them validates any more. A Member row
+     * with the same numeric id belongs to a different principal and stays (ADR-012), as do other
+     * admins' rows and guest rows. A no-op when the admin has no session.
+     *
+     * @param adminId the admin whose sessions end
+     */
+    void deleteAdminSessions(int adminId);
+
+    /**
      * Sweep query for UC-2. Returns every session whose {@code expiresAt}
      * is at or before {@code cutoff}.
      */

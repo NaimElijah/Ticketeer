@@ -52,18 +52,38 @@ public class VenueMap implements InvariantChecked {
         this.inventoryZones = new ArrayList<>();
     }
 
+    /**
+     * A map on the default grid; see {@link #VenueMap(int, Location, List, int, int)}.
+     */
     public VenueMap(int id, Location location, List<InventoryZone> inventoryZones) {
         this(id, location, inventoryZones, DEFAULT_GRID_ROWS, DEFAULT_GRID_COLS);
     }
 
+    /**
+     * @param id             the map's id
+     * @param location       the venue's location
+     * @param inventoryZones the zones, copied
+     * @param gridRows       the canvas grid's rows, at least 1
+     * @param gridCols       the canvas grid's columns, at least 1
+     * @throws IllegalArgumentException if {@code location} or {@code inventoryZones} is null, the grid is
+     *                                  smaller than 1x1, a zone is null or has an id below 1, or two zones
+     *                                  share an id or a name ignoring case
+     */
     public VenueMap(int id, Location location, List<InventoryZone> inventoryZones, int gridRows, int gridCols) {
         // Null-guarded here because the list is copied before checkInvariants() runs;
         // a null input would otherwise NPE in the copy rather than fail cleanly.
         if (inventoryZones == null) {
             throw new IllegalArgumentException("Inventory zones cannot be null");
         }
+        requireLocation(location);
         if (gridRows < 1 || gridCols < 1) {
             throw new IllegalArgumentException("Venue grid must be at least 1x1");
+        }
+        // A whole map arrives here on reconfiguration, so it must refuse what addZone refuses one at a time.
+        List<InventoryZone> accepted = new ArrayList<>();
+        for (InventoryZone zone : inventoryZones) {
+            validateZoneAmong(accepted, zone);
+            accepted.add(zone);
         }
 
         this.id = id;
@@ -110,6 +130,7 @@ public class VenueMap implements InvariantChecked {
     }
 
     public void setLocation(Location location) {
+        requireLocation(location);
         this.location = location;
         checkInvariants();
     }
@@ -214,7 +235,7 @@ public class VenueMap implements InvariantChecked {
     public void addZone(InventoryZone zone) {
         // zone id already given in calling method with the nextZoneId, but we validate here just in case to ensure no duplicate 
         // zone ids or names are added to the venue map, which could cause issues when trying to retrieve zones by id or name later on.
-        validateNewZone(zone);
+        validateZoneAmong(inventoryZones, zone);
 
         inventoryZones.add(zone);
 
@@ -238,7 +259,9 @@ public class VenueMap implements InvariantChecked {
     }
 
 
-    private void validateNewZone(InventoryZone zone) {
+    // What a zone must be to join a map, whether one at a time (addZone) or with the whole map (the
+    // constructor, on reconfiguration).
+    private static void validateZoneAmong(List<InventoryZone> existingZones, InventoryZone zone) {
         if (zone == null) {
             throw new IllegalArgumentException("Zone cannot be null");
         }
@@ -247,7 +270,25 @@ public class VenueMap implements InvariantChecked {
             throw new IllegalArgumentException("Zone id must be positive");
         }
 
-        for (InventoryZone existingZone : inventoryZones) {
+        requireUniqueAmong(existingZones, zone);
+
+        zone.checkInvariants();
+    }
+
+    // Checked where a location comes in, not in checkInvariants, because the schema still allows a map stored
+    // without one (V1). Event.checkInvariants does not run the map's own check yet; once it does,
+    // SystemIntegrityVerifier runs it on every stored event when the market opens, and an old row must not
+    // keep the market closed.
+    private static void requireLocation(Location location) {
+        if (location == null) {
+            throw new IllegalArgumentException("A venue needs a location");
+        }
+    }
+
+    // A zone is looked up by id, and shown by name, so neither may repeat within a map; names compare
+    // ignoring case.
+    private static void requireUniqueAmong(List<InventoryZone> existingZones, InventoryZone zone) {
+        for (InventoryZone existingZone : existingZones) {
             if (existingZone.getId() == zone.getId()) {
                 throw new IllegalArgumentException("Zone id already exists: " + zone.getId());
             }
@@ -256,8 +297,6 @@ public class VenueMap implements InvariantChecked {
                 throw new IllegalArgumentException("Zone name already exists: " + zone.getName());
             }
         }
-
-        zone.checkInvariants();
     }
 
 

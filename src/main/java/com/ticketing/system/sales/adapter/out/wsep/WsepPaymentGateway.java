@@ -122,7 +122,8 @@ public class WsepPaymentGateway implements PaymentGateway {
     @Override
     public RefundResultDTO refund(int paymentTransactionId, double amount) {
         if (paymentTransactionId <= 0) {
-            throw new RefundFailedException(paymentTransactionId, "paymentTransactionId must be positive");
+            throw RefundFailedException.forPaymentTransaction(paymentTransactionId,
+                    "paymentTransactionId must be positive");
         }
 
         long start = System.nanoTime();
@@ -133,17 +134,17 @@ public class WsepPaymentGateway implements PaymentGateway {
             body = http.post(WsepHttpClient.action("refund").add("transaction_id", paymentTransactionId));
         } catch (WsepCommunicationException e) {
             if (neverReachedGateway(e)) {
-                throw new RefundGatewayUnreachableException(paymentTransactionId,
+                throw RefundGatewayUnreachableException.forPaymentTransaction(paymentTransactionId,
                         "refund gateway unreachable: " + e.getMessage(), e);
             }
-            throw new RefundOutcomeUnknownException(paymentTransactionId,
+            throw RefundOutcomeUnknownException.forPaymentTransaction(paymentTransactionId,
                     "no answer from the refund gateway: " + e.getMessage(), e);
         }
 
         // WSEP refund reverses the whole charge by id and returns 1/-1 — there is no partial-refund amount.
         if (!"1".equals(body)) {
             log.debug("wsep refund failed: body={} ({} ms)", body, msSince(start));
-            throw new RefundFailedException(paymentTransactionId, "refund rejected by gateway");
+            throw RefundFailedException.forPaymentTransaction(paymentTransactionId, "refund rejected by gateway");
         }
 
         log.debug("wsep refund ok: txnId={} ({} ms)", paymentTransactionId, msSince(start));

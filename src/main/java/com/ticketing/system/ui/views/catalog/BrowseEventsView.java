@@ -3,19 +3,23 @@ package com.ticketing.system.ui.views.catalog;
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.ui.components.kit.Lk;
+import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkDateRangeField;
 import com.ticketing.system.ui.components.kit.LkGrid;
+import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkSelect;
 import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.MainLayout;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.datepicker.DatePicker;
@@ -109,6 +113,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private NumberField companyRatingMin;
     private NumberField companyRatingMax;
     private Div gridSlot;
+    private final Div filterErrorSlot = new Div();
     private Span resultsCountSpan;
 
     public BrowseEventsView(BrowseEventsPresenter presenter, SessionIdentity identity, DisplayTime displayTime) {
@@ -116,13 +121,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         this.identity = identity;
         this.displayTime = displayTime;
 
-        List<EventRow> allEvents = presenter.search(identity.credential(), CatalogSearchFiltersDTO.empty())
-                .stream().map(BrowseEventsView::toRow).toList();
-
         add(buildHero());
         add(buildAllEventsHeader());
         add(buildBrowseSplit());
-        renderGrid(allEvents.stream().sorted(comparatorFor(filterSort)).toList());
+        showSearch(presenter.search(identity.credential(), CatalogSearchFiltersDTO.empty()));
     }
 
     @Override
@@ -144,7 +146,8 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         title.setText("Find your next experience");
         Div sub = new Div();
         sub.addClassName("bz-hero-sub");
-        sub.setText("Concerts, matches, theatre and conferences — across Israel.");
+        // Names only categories that exist (EventCategoryLabels), as the landing hero does.
+        sub.setText("Concerts, sports, theatre, comedy — across Israel.");
         hero.add(title, sub);
         return hero;
     }
@@ -266,15 +269,16 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         customRangeRow.setVisible(false);
 
         // Country → City (dependent selects), both populated from events that actually exist.
-        countrySelect = new LkSelect(COUNTRY_ALL,
-                CatalogFilterSupport.countryOptions(presenter.countries())).label("Country");
+        countrySelect = new LkSelect(COUNTRY_ALL, CatalogFilterSupport.countryOptions(
+                filterOptions(presenter.countries(), "Could not load the countries"))).label("Country");
         countrySelect.onChange(v -> {
             if (Objects.equals(filterCountry, v)) return;
             filterCountry = v;
             filterCity = CITY_ALL;
+            filterErrorSlot.removeAll();
             citySelect.setOptions(COUNTRY_ALL.equals(v)
                     ? List.of(CITY_ALL)
-                    : CatalogFilterSupport.cityOptions(presenter.cities(v)));
+                    : CatalogFilterSupport.cityOptions(filterOptions(presenter.cities(v), "Could not load the cities")));
             citySelect.enabled(!COUNTRY_ALL.equals(v));
             runSearch();
         });
@@ -298,9 +302,25 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         LkCol col = new LkCol().gap(16);
         col.add(sortSelect, categorySelect, eventNameWrap, keywordsWrap, artistWrap, dateRangeField, customRangeRow,
                 buildPriceRange(), buildEventRatingRange(), buildCompanyRatingRange(),
-                countrySelect, citySelect);
+                countrySelect, citySelect, filterErrorSlot);
         card.add(col);
         return card;
+    }
+
+    // A failed options read leaves only the "All" choice, and says why beside the filters.
+    private List<String> filterOptions(ListOutcome<String> outcome, String failureContext) {
+        return switch (outcome) {
+            case ListOutcome.Loaded<String> loaded -> loaded.items();
+            case ListOutcome.Failure<String> failure -> {
+                filterErrorSlot.add(loadFailureBanner(failureContext, failure.reason()));
+                yield List.of();
+            }
+        };
+    }
+
+    // An alert: a search or a filter choice inserts it, so a screen reader must announce it.
+    private static LkBanner loadFailureBanner(String context, String reason) {
+        return Lk.asAlert(new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16), Lk.withReason(context, reason)));
     }
 
     private Component buildPriceRange() {
@@ -445,11 +465,21 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     // ---- server-side search + render ----
 
     private void runSearch() {
-        List<EventRow> rows = presenter.search(identity.credential(), currentFilters()).stream()
-                .map(BrowseEventsView::toRow)
-                .sorted(comparatorFor(filterSort))
-                .toList();
-        renderGrid(rows);
+        showSearch(presenter.search(identity.credential(), currentFilters()));
+    }
+
+    private void showSearch(ListOutcome<EventSummaryDTO> outcome) {
+        switch (outcome) {
+            case ListOutcome.Loaded<EventSummaryDTO> loaded -> renderGrid(loaded.items().stream()
+                    .map(BrowseEventsView::toRow)
+                    .sorted(comparatorFor(filterSort))
+                    .toList());
+            case ListOutcome.Failure<EventSummaryDTO> failure -> {
+                gridSlot.removeAll();
+                resultsCountSpan.setText("");
+                gridSlot.add(loadFailureBanner("Could not load events", failure.reason()));
+            }
+        }
     }
 
     /**
@@ -597,7 +627,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         int priceCents = (int) Math.round(dto.minPrice() * 100);
         LkStatusDot.Tone tone = dto.soldOut() ? LkStatusDot.Tone.muted : LkStatusDot.Tone.ok;
         String status = dto.soldOut() ? "Sold out" : "On sale";
-        return new EventRow(dto.name(), prettyCategory(dto.category()), dto.location(),
+        return new EventRow(dto.name(), EventCategoryLabels.labelOf(dto.category()), dto.location(),
                 date, startsAt, priceCents, tone, status, String.valueOf(dto.eventId()),
                 dto.rating(), dto.artistsNames());
     }
@@ -613,18 +643,6 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             case "Rating · low to high" -> Comparator.comparing(EventRow::rating,
                     Comparator.nullsLast(Comparator.naturalOrder()));
             default                     -> bySoonest;
-        };
-    }
-
-    private static String prettyCategory(String enumName) {
-        if (enumName == null) return "Other";
-        return switch (enumName.toUpperCase()) {
-            case "CONCERT", "MUSIC" -> "Concerts";
-            case "SPORTS"           -> "Sports";
-            case "THEATER"          -> "Theatre";
-            case "FESTIVAL"         -> "Festivals";
-            case "COMEDY"           -> "Comedy";
-            default                 -> "Other";
         };
     }
 

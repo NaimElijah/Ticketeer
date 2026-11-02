@@ -1,21 +1,29 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -27,6 +35,8 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -37,9 +47,10 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.domain.TextLimits;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
 
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
@@ -322,7 +333,7 @@ class CatalogServiceTest {
     @Test
     void givenValidTokenAndNonExistentEvent_whenGetEventVenueMap_thenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class,
                 () -> catalogService.getEventVenueMap(VALID_TOKEN, EVENT_ID));
@@ -567,25 +578,30 @@ class CatalogServiceTest {
     @Test
     void givenNonExistentEvent_whenGetEventDetail_thenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class,
                 () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID));
     }
 
-    // Events of a closed/inactive company are hidden.
+    // Events of a closed/inactive company are hidden, and refused exactly like a missing event (#187).
     @Test
-    void givenInactiveCompany_whenGetEventDetail_thenThrowsCompanyClosedException() {
+    void GivenInactiveCompany_WhenGetEventDetail_ThenThrowsEventNotFoundLikeAMissingEvent() {
         Event event = detailEvent(EVENT_ID, 10, EventStatus.ON_SALE);
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getStatus()).thenReturn(CompanyStatus.INACTIVE);
 
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
-        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event);
+        // First read finds the closed company's event; the second finds no event under the same id.
+        when(mockEventRepository.findById(EVENT_ID)).thenReturn(event).thenThrow(new EventNotFoundException(EVENT_ID));
         when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
 
-        assertThrows(CompanyClosedException.class,
-                () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID));
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a closed company's event must be refused like a missing event");
     }
 
     // DRAFT / SCHEDULED events are not yet public — treated as not found.
@@ -958,5 +974,208 @@ class CatalogServiceTest {
         when(mockEvent.getShowDates()).thenReturn(List.of(new ShowDate(start, start.plusHours(2))));
         when(mockEvent.getTimeZone()).thenReturn(timeZone);
         return mockEvent;
+    }
+
+    // -------------------------------------------------------------------------
+    // #187 / UC-8: a hidden (DRAFT / SCHEDULED) event is refused exactly like a missing one, so a
+    // caller cannot tell the two apart, and ServiceErrors.userMessage shows the message as is.
+    // The missing event goes through the real in-memory adapter, whose findById throws.
+    // -------------------------------------------------------------------------
+
+    private static final int OWNER_COMPANY_ID = 10;
+    private static final LocalDateTime HIDDEN_SHOW_START = LocalDateTime.of(2030, 6, 1, 20, 0);
+    private static final String DOUBLED_NOT_FOUND = "not found:  not found";
+
+    @Test
+    void GivenScheduledEventAndMissingEvent_WhenGetEventDetail_ThenBothRefusalsCarryTheSameMessage() {
+        CatalogService overHiddenEvent = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.ACTIVE);
+        CatalogService overNoEvent = catalogOver(new MemoryEventRepository(), CompanyStatus.ACTIVE);
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overHiddenEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a hidden event's refusal must read exactly like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenScheduledEventAndMissingEvent_WhenGetEventVenueMap_ThenBothRefusalsCarryTheSameMessage() {
+        CatalogService overHiddenEvent = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.ACTIVE);
+        CatalogService overNoEvent = catalogOver(new MemoryEventRepository(), CompanyStatus.ACTIVE);
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overHiddenEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a hidden event's map refusal must read exactly like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    // Only a closed company's owners and the system admins may see its information, so on the public
+    // reads its event is refused exactly like a missing one, whatever the event's own status.
+
+    @Test
+    void GivenEventOfInactiveCompany_WhenGetEventDetail_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a closed company's event must be refused like a missing event");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenEventOfInactiveCompany_WhenGetEventVenueMap_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.ON_SALE), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a closed company's event map must be refused like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenScheduledEventOfInactiveCompany_WhenGetEventDetail_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventDetail(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden, "a closed company's scheduled event must be refused like a missing event");
+        assertWellFormedNotFound(hidden);
+    }
+
+    @Test
+    void GivenScheduledEventOfInactiveCompany_WhenGetEventVenueMap_ThenRefusedLikeAMissingEvent() {
+        CatalogService overClosedCompany = catalogOver(repositoryHolding(EventStatus.SCHEDULED), CompanyStatus.INACTIVE);
+        CatalogService overNoEvent = overNoEvent();
+
+        String hidden = assertThrows(EventNotFoundException.class,
+                () -> overClosedCompany.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+        String missing = assertThrows(EventNotFoundException.class,
+                () -> overNoEvent.getEventVenueMap(VALID_TOKEN, EVENT_ID)).getMessage();
+
+        assertEquals(missing, hidden,
+                "a closed company's scheduled event map must be refused like a missing event's");
+        assertWellFormedNotFound(hidden);
+    }
+
+    // A catalog holding no event, on the credential and company stubs already set, so it leaves the
+    // owner's stubbed status as the test set it.
+    private CatalogService overNoEvent() {
+        return new CatalogService(mockSessionManager, new MemoryEventRepository(), mockCompanyRepository);
+    }
+
+    private CatalogService catalogOver(EventRepository events, CompanyStatus ownerStatus) {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        when(mockCompanyRepository.getCompanyById(OWNER_COMPANY_ID)).thenReturn(new ProductionCompany(
+                OWNER_COMPANY_ID, 1, "Acme Live", ownerStatus, "A production company", 4.5));
+        return new CatalogService(mockSessionManager, events, mockCompanyRepository);
+    }
+
+    private static MemoryEventRepository repositoryHolding(EventStatus status) {
+        MemoryEventRepository events = new MemoryEventRepository();
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
+        events.save(new Event(EVENT_ID, "Concert", 4.5, List.of("Artist"), EventCategory.CONCERT,
+                OWNER_COMPANY_ID, status, venueMap,
+                List.of(new ShowDate(HIDDEN_SHOW_START, HIDDEN_SHOW_START.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), null, new DiscountPolicy(0)));
+        return events;
+    }
+
+    private static void assertWellFormedNotFound(String message) {
+        assertFalse(message.contains(DOUBLED_NOT_FOUND), "garbled not-found message: " + message);
+        assertFalse(message.toLowerCase(Locale.ROOT).contains("while"),
+                "the message must not name the operation that was refused: " + message);
+    }
+
+    // A search term is bound as a LIKE parameter. One longer than any stored text can match nothing, so it is
+    // refused before the query, rather than sent in whatever size a caller chooses (#187). Every text filter,
+    // on both entry points.
+    @ParameterizedTest(name = "{0} through {1}")
+    @MethodSource("textFiltersAndSearchEntryPoints")
+    void GivenASearchTermLongerThanAnyStoredText_WhenSearching_ThenItIsRefusedBeforeTheQuery(
+            String filter, String entryPoint) {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        ProductionCompany company = createMockCompany("Live Nation", 4.5);
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
+        CatalogSearchFiltersDTO filters = filtersWithOnly(filter, "a".repeat(TextLimits.MAX_TEXT_LENGTH + 1));
+
+        assertThrows(BusinessRuleViolationException.class, () -> {
+            if (entryPoint.equals("searchGlobal")) {
+                catalogService.searchGlobal(VALID_TOKEN, filters);
+            } else {
+                catalogService.searchByCompany(VALID_TOKEN, 10, filters);
+            }
+        });
+
+        verify(mockEventRepository, never()).searchONSALE(any());
+    }
+
+    static Stream<Arguments> textFiltersAndSearchEntryPoints() {
+        return Stream.of("eventName", "artistName", "category", "keywords", "location")
+                .flatMap(filter -> Stream.of(Arguments.of(filter, "searchGlobal"), Arguments.of(filter, "searchByCompany")));
+    }
+
+    private static CatalogSearchFiltersDTO filtersWithOnly(String filter, String term) {
+        return new CatalogSearchFiltersDTO(
+                filter.equals("eventName") ? term : null,
+                filter.equals("artistName") ? term : null,
+                filter.equals("category") ? term : null,
+                filter.equals("keywords") ? term : null,
+                null, null, null, null,
+                filter.equals("location") ? term : null,
+                null, null, null, null);
+    }
+
+    // ---- case-insensitive matching ignores the JVM's locale (#187) ----
+    // Under a Turkish default locale, "TITLE".toLowerCase() has a dotless i and matches nothing. Browse
+    // lower-cases with Locale.ROOT, so the top bar and the company picker must too.
+
+    @Test
+    void GivenATurkishDefaultLocale_WhenTheTopBarSearchesForAnUppercaseTerm_ThenTheEventMatches() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        Event e = searchEvent(1, 10, "Title Night", List.of("Artist A"));
+        ProductionCompany company = createMockCompany("Live Nation", 4.5);
+        when(mockEventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
+        when(mockCompanyRepository.getCompanyById(10)).thenReturn(company);
+
+        List<SearchResultDTO> results = underTurkishLocale(() -> catalogService.search(VALID_TOKEN, "TITLE", 8));
+
+        assertEquals(List.of("Title Night"), results.stream().map(SearchResultDTO::title).toList());
+    }
+
+    @Test
+    void GivenATurkishDefaultLocale_WhenCompaniesAreSearchedForAnUppercaseTerm_ThenTheCompanyMatches() {
+        ProductionCompany company = createMockCompany("Indie Live", 4.5);
+        when(mockCompanyRepository.findActive()).thenReturn(List.of(company));
+
+        var found = underTurkishLocale(() -> catalogService.searchCompaniesByName("INDIE"));
+
+        assertEquals(1, found.size());
+    }
+
+    private static <T> T underTurkishLocale(java.util.function.Supplier<T> call) {
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            return call.get();
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 }

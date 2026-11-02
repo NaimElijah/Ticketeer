@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.presenters.messaging;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -70,9 +71,20 @@ public class CompanyInquiryInboxPresenter {
         }
     }
 
-    /** Loads a single inquiry thread for the dedicated respond page. */
+    /**
+     * Opens a single inquiry thread for the dedicated respond page, marking it read for the caller
+     * first, so the thread it returns already counts nothing unread. A failed mark still shows the
+     * thread; only an invalid or expired session stops the page.
+     */
     public SingleOutcome loadOne(String token, String conversationId) {
         if (token == null) {
+            return new SingleOutcome.NotAuthenticated();
+        }
+        // Any other failed mark still shows the thread: marking read is a side effect of opening it, and the
+        // reader can do nothing about its failure. markRead passes the failure to ServiceErrors, which logs
+        // an internal one at ERROR. A failure that also stops the thread loading surfaces from
+        // viewConversation below.
+        if (markRead(token, conversationId) instanceof ActionOutcome.NotAuthenticated) {
             return new SingleOutcome.NotAuthenticated();
         }
         try {
@@ -121,6 +133,54 @@ public class CompanyInquiryInboxPresenter {
         }
     }
 
+    // Marks the thread read for the caller's side; open and loadOne call it.
+    private ActionOutcome markRead(String token, String conversationId) {
+        if (token == null) {
+            return new ActionOutcome.NotAuthenticated();
+        }
+        try {
+            messagingService.markConversationRead(token, conversationId);
+            return new ActionOutcome.Success();
+        } catch (InvalidTokenException e) {
+            return new ActionOutcome.NotAuthenticated();
+        } catch (RuntimeException e) {
+            return new ActionOutcome.Failure(ServiceErrors.userMessage(e));
+        }
+    }
+
+    /**
+     * Opens {@code conversation} at the reader's request (a row click or a deep link): marks it read
+     * for the signed-in company's side and, on success, records it in {@code opened}, so {@link #badge}
+     * shows no badge for it until a newer message arrives. A failed mark records nothing, so the badge
+     * stays. A thread the view selects on its own is shown, not opened: a mark reads it for the
+     * reader's whole side, so the view must not call this for it (#187).
+     *
+     * @param token        the signed-in caller's token; {@code null} when signed out
+     * @param conversation the thread the reader opened
+     * @param opened       the view's own record of the threads it opened
+     * @return the outcome of marking the thread read
+     */
+    public ActionOutcome open(String token, ConversationDTO conversation, OpenedThreads opened) {
+        ActionOutcome outcome = markRead(token, conversation.conversationId());
+        if (outcome instanceof ActionOutcome.Success) {
+            opened.record(conversation);
+        }
+        return outcome;
+    }
+
+    /**
+     * The unread badge for {@code conversation}'s row: none once this view has opened it and no newer
+     * message has arrived since, so a re-render from the same list keeps a cleared badge cleared;
+     * otherwise the unread count, and none when that is 0.
+     *
+     * @param conversation the row's thread, as last loaded
+     * @param opened       the view's own record of the threads it opened
+     * @return the badge text, or empty for no badge
+     */
+    public Optional<String> badge(ConversationDTO conversation, OpenedThreads opened) {
+        return opened.badgeFor(conversation);
+    }
+
     /** Sealed outcome the view switches on to render the inbox or an empty/error state. */
     public sealed interface Outcome {
         record Success(List<MyCompanyDTO> companies, MyCompanyDTO selected,
@@ -137,7 +197,7 @@ public class CompanyInquiryInboxPresenter {
         record Failure(String reason) implements SingleOutcome { }
     }
 
-    /** Result of a reply / close the view reacts to. */
+    /** Result of a reply / close / open the view reacts to. */
     public sealed interface ActionOutcome {
         record Success() implements ActionOutcome { }
         record NotAuthenticated() implements ActionOutcome { }

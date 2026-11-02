@@ -15,6 +15,8 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.views.account.SupportInboxView;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -30,6 +32,7 @@ import java.util.List;
 @Route(value = "support/new", layout = MainLayout.class)
 @PageTitle("Submit Complaint · TicketHub")
 @PermitAll
+@RequireCapability(Capability.SUBMIT_COMPLAINT)
 public class SubmitComplaintView extends LkPage {
 
     private final SubmitComplaintPresenter presenter;

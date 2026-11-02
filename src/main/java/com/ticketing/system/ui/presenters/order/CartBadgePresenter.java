@@ -7,8 +7,6 @@ import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 
-import lombok.extern.slf4j.Slf4j;
-
 /**
  * Read-only presenter for the buyer top-bar cart-count badge. A Vaadin-free POJO
  * that owns the {@link ReservationService} call and the error handling and returns
@@ -20,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
  * and degrades to {@link Outcome.Failure} so a backend hiccup can't break the
  * top-bar render.
  */
-@Slf4j
 @Component
 public class CartBadgePresenter {
 
@@ -45,8 +42,7 @@ public class CartBadgePresenter {
             }
             return new Outcome.Cart(order.lines().size(), order.remainingSecondsBeforeExpiry());
         } catch (RuntimeException e) {
-            log.warn("Failed to load cart badge: {}", e.getMessage());
-            return new Outcome.Failure(ServiceErrors.userMessage(e));
+            return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load cart badge"));
         }
     }
 

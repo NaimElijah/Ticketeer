@@ -16,13 +16,14 @@ import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * MVP presenter for the purchase-policy editor.
  *
- * <p>Owns ALL policy logic and the editable model ({@link Node}/{@link Group}/{@link Rule}):
+ * <p>Owns ALL policy logic and the editable model ({@link Node}/{@link Group}/{@link Rule}/{@link KeptRule}):
  * identity, context resolution (which companies/events the owner can edit), load/save,
  * DTO&lt;-&gt;model conversion, structural mutations, the D3 tree JSON, the plain-English
  * description, and validation. Stays stateless (like CheckoutPresenter) — the view holds a
@@ -70,13 +71,16 @@ public class PurchasePolicyEditorPresenter {
         }
     }
 
-    /** Events belonging to a company; empty (never null) if the call fails. */
-    public List<EventDetailDTO> listEvents(String token, int companyId) {
-        if (token == null || companyId <= 0) return List.of();
+    /**
+     * Events belonging to a company; none without a token or a company, and a
+     * {@link ListOutcome.Failure} with {@code ServiceErrors}' text when the read fails.
+     */
+    public ListOutcome<EventDetailDTO> listEvents(String token, int companyId) {
+        if (token == null || companyId <= 0) return new ListOutcome.Loaded<>(List.of());
         try {
-            return eventManagementService.listEventsForCompany(token, companyId);
+            return new ListOutcome.Loaded<>(eventManagementService.listEventsForCompany(token, companyId));
         } catch (RuntimeException e) {
-            return List.of();
+            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
         }
     }
 
@@ -108,7 +112,7 @@ public class PurchasePolicyEditorPresenter {
         }
     }
 
-    public sealed interface Node permits Group, Rule {
+    public sealed interface Node permits Group, Rule, KeptRule {
         String id();
     }
 
@@ -130,6 +134,20 @@ public class PurchasePolicyEditorPresenter {
         public String id() { return id; }
         public RuleType type() { return type; }
         public String value() { return value; }
+    }
+
+    /**
+     * A stored rule the editor cannot represent, such as a kind the backend gained after the editor was
+     * written, or a {@code NONE} nested in a group. It cannot be edited, and it is saved back exactly as
+     * it was loaded: reading it as one of the editor's own rule types would change the policy on save.
+     */
+    public static final class KeptRule implements Node {
+        private final String id = newId();
+        private final PurchasePolicyDTO stored;
+        private KeptRule(PurchasePolicyDTO stored) { this.stored = stored; }
+        public String id() { return id; }
+        /** The rule's kind as stored, for display. */
+        public String kind() { return stored.type(); }
     }
 
     private static String newId() {
@@ -212,6 +230,9 @@ public class PurchasePolicyEditorPresenter {
             return "{\"id\":\"" + r.id() + "\",\"kind\":\"rule\",\"label\":\""
                  + escapeJson(r.type.prettyEnglish(r.value == null ? "" : r.value)) + "\"}";
         }
+        if (n instanceof KeptRule k) {
+            return "{\"id\":\"" + k.id() + "\",\"kind\":\"rule\",\"label\":\"" + escapeJson(keptLabel(k)) + "\"}";
+        }
         Group g = (Group) n;
         StringBuilder children = new StringBuilder();
         for (int i = 0; i < g.children.size(); i++) {
@@ -234,6 +255,9 @@ public class PurchasePolicyEditorPresenter {
     private String renderEnglish(Node node) {
         if (node instanceof Rule r) {
             return "<b>" + escape(r.type.prettyEnglish(r.value)) + "</b>";
+        }
+        if (node instanceof KeptRule k) {
+            return "<b>" + escape(keptLabel(k)) + "</b>";
         }
         Group g = (Group) node;
         if (g.children.isEmpty()) {
@@ -269,6 +293,9 @@ public class PurchasePolicyEditorPresenter {
             } catch (NumberFormatException e) {
                 return Validity.invalid("Rule value must be a whole number.");
             }
+            return Validity.OK;
+        }
+        if (node instanceof KeptRule) {
             return Validity.OK;
         }
         Group g = (Group) node;
@@ -327,7 +354,7 @@ public class PurchasePolicyEditorPresenter {
                 }
                 yield g;
             }
-            default -> new Rule(RuleType.AgeAtLeast, "0");
+            default -> new KeptRule(dto);
         };
     }
 
@@ -362,6 +389,9 @@ public class PurchasePolicyEditorPresenter {
                 case QuantityAtMost  -> new PurchasePolicyDTO("MAX_TICKETS", null, null, val,  null);
             };
         }
+        if (node instanceof KeptRule k) {
+            return k.stored;
+        }
         Group g = (Group) node;
         // An empty group is "no restrictions" — serialize to NONE rather than an invalid
         // 0-child AND/OR (the backend rejects composites with < 2 children).
@@ -378,6 +408,10 @@ public class PurchasePolicyEditorPresenter {
         return new PurchasePolicyDTO(type, null, null, null, children);
     }
 
+
+    private static String keptLabel(KeptRule k) {
+        return "Unsupported rule (" + k.kind() + "), kept as it is";
+    }
 
     private static String escape(String s) {
         return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");

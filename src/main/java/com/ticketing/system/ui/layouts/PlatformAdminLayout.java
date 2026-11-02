@@ -15,7 +15,7 @@ import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.admin.GlobalHistoryView;
 import com.ticketing.system.ui.views.admin.OrganizationalTreeView;
 import com.ticketing.system.ui.views.admin.SystemAnalyticsView;
-import com.ticketing.system.ui.views.auth.LoginView;
+import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.landing.LandingView;
 import com.vaadin.flow.component.HasElement;
 import com.vaadin.flow.component.UI;
@@ -30,11 +30,11 @@ import java.util.Map;
 /**
  * Platform-admin shell — orange "Event Ticket Platform · Admin" top bar
  * with a single-section drawer of admin-only items. Reached after
- * signing in at {@link com.ticketing.system.ui.views.auth.AdminLoginView}
- * against the persisted admin pool, which issues an admin token.
+ * signing in at {@link AdminLoginView} against the persisted admin pool,
+ * which issues an admin token; signing out lands there again.
  * Every view inside is gated by an admin {@link
  * com.ticketing.system.ui.security.Capability}, so members
- * who somehow type the URL bounce back to the sign-in form.
+ * who somehow type the URL bounce to the admin sign-in form.
  */
 public class PlatformAdminLayout extends AppLayout implements AfterNavigationObserver {
 
@@ -94,7 +94,6 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
 
     private LkAccountMenu buildAdminMenu(String name) {
         LkMenu menu = new LkMenu(
-            new LkMenu.Item("gear",      "Admin Settings"),
             new LkMenu.Item("chart",     "System Analytics").onClick(() -> UI.getCurrent().navigate(SystemAnalyticsView.class)),
             new LkMenu.Item("comment",   "Admin Inbox").onClick(() -> UI.getCurrent().navigate(AdminInboxView.class)),
             new LkMenu.Divider(),
@@ -102,7 +101,7 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
             new LkMenu.Divider(),
             new LkMenu.Item("logout",    "Sign Out").danger().onClick(() -> {
                 signOutFlow.execute();
-                UI.getCurrent().navigate(LoginView.class);
+                UI.getCurrent().navigate(AdminLoginView.class);
             })
         );
         return new LkAccountMenu(initials(name), name, "System administrator", menu, "#fff", "#c2410c");

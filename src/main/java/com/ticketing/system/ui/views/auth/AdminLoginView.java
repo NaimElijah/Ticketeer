@@ -1,10 +1,10 @@
 package com.ticketing.system.ui.views.auth;
 
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
-import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.vaadin.flow.component.Key;
@@ -62,18 +62,18 @@ public class AdminLoginView extends LkAuthCard {
 
         switch (outcome) {
             case AdminLoginPresenter.Outcome.Success ok -> {
-                AuthSession.storeAuth(ok.authToken());
+                presenter.signIn(ok.authToken());
                 Toasts.success("Signed in as admin · " + ok.authToken().username());
                 UI.getCurrent().navigate(AdminDashboardView.class);
             }
             case AdminLoginPresenter.Outcome.InvalidCredentials ignored ->
                 Toasts.failure("Invalid admin username or password.");
             case AdminLoginPresenter.Outcome.Locked locked ->
-                Toasts.failure("Your account is temporarily locked after too many failed attempts. Please try again later.");
+                Toasts.failure(Lk.withReason("Your account is temporarily locked", locked.reason()));
             case AdminLoginPresenter.Outcome.ServiceUnavailable ignored ->
                 Toasts.failure(ServiceErrors.DB_UNAVAILABLE_MESSAGE);
             case AdminLoginPresenter.Outcome.Failure fail ->
-                Toasts.failure("Sign-in failed — please try again.");
+                Toasts.failure(Lk.withReason("Sign-in failed", fail.reason()));
         }
     }
 }

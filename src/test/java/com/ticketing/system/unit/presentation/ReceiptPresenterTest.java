@@ -3,9 +3,11 @@ package com.ticketing.system.unit.presentation;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -13,11 +15,16 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TransactionRecordDTO;
 import com.ticketing.system.reporting.application.service.MemberAccountService;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
+import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.ui.support.ServiceErrors;
+import ch.qos.logback.classic.Level;
+import jakarta.persistence.PersistenceException;
 
 class ReceiptPresenterTest {
 
@@ -49,6 +56,41 @@ class ReceiptPresenterTest {
         ReceiptPresenter.Outcome.Success ok =
                 assertInstanceOf(ReceiptPresenter.Outcome.Success.class, outcome);
         assertSame(record, ok.receipt());
+    }
+
+    // ---- UI-A5 (#187): every refund of a receipt counts, not only the first ----
+
+    @Test
+    void GivenAReceiptRefundedTwice_WhenLoad_ThenTheRefundsAreSummedAndDatedByTheLatest() {
+        LocalDateTime paidAt = LocalDateTime.of(2026, 6, 1, 12, 0);
+        when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenReturn(recordWith(List.of(
+                new TransactionRecordDTO("PAYMENT_CHARGE", "WSEP", "TX-1", 100.00, "USD", paidAt),
+                new TransactionRecordDTO("REFUND", "WSEP", "RF-2", 30.00, "USD", paidAt.plusDays(2)),
+                new TransactionRecordDTO("REFUND", "WSEP", "RF-1", 20.00, "USD", paidAt.plusDays(1)))));
+
+        ReceiptPresenter.Outcome.Success ok = assertInstanceOf(ReceiptPresenter.Outcome.Success.class,
+                presenter.load(TOKEN, RECEIPT_ID));
+
+        ReceiptPresenter.Refunds refunds = ok.refunds().orElseThrow();
+        assertEquals(50.00, refunds.total(), 1e-9);
+        assertEquals(paidAt.plusDays(2), refunds.lastRefundedAt());
+    }
+
+    @Test
+    void GivenAReceiptWithoutRefunds_WhenLoad_ThenItHasNoRefunds() {
+        when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenReturn(recordWith(List.of(
+                new TransactionRecordDTO("PAYMENT_CHARGE", "WSEP", "TX-1", 100.00, "USD",
+                        LocalDateTime.of(2026, 6, 1, 12, 0)))));
+
+        ReceiptPresenter.Outcome.Success ok = assertInstanceOf(ReceiptPresenter.Outcome.Success.class,
+                presenter.load(TOKEN, RECEIPT_ID));
+
+        assertTrue(ok.refunds().isEmpty());
+    }
+
+    private static PurchaseRecordDTO recordWith(List<TransactionRecordDTO> transactions) {
+        return new PurchaseRecordDTO(RECEIPT_ID, 42, null, LocalDateTime.of(2026, 6, 1, 12, 0), 100.00,
+                PurchaseHistoryDTO.RefundStatus.PARTIAL, transactions, List.of(), "member42");
     }
 
     @Test
@@ -96,5 +138,23 @@ class ReceiptPresenterTest {
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
 
         assertInstanceOf(ReceiptPresenter.Outcome.Failure.class, outcome);
+    }
+
+    // ---- UI-B5: an internal failure goes through ServiceErrors (#187) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenLoad_ThenFailureCarriesTheGenericMessageAndServiceErrorsLogsIt() {
+        when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
+                .thenThrow(new PersistenceException("could not prepare statement; table [order_receipts]"));
+
+        try (LogCapture serviceErrorsLog = LogCapture.of(ServiceErrors.class)) {
+            ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
+
+            ReceiptPresenter.Outcome.Failure failure = assertInstanceOf(ReceiptPresenter.Outcome.Failure.class, outcome);
+            assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.message());
+            assertEquals(List.of(PersistenceException.class.getName()),
+                    serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                    "the internal failure must be logged at ERROR with its exception by ServiceErrors");
+        }
     }
 }

@@ -38,6 +38,8 @@ class SystemAnalyticsPresenterTest {
     private static final int RATE_WINDOW_MINUTES = 5;
     private static final int REFRESH_INTERVAL_MS = 5000;
     private static final int ADMIN_ID = 1;
+    // A fixed instant for the market state's recorded times (ADR-008): no test here reads them.
+    private static final LocalDateTime MARKET_STATE_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private SystemAdminService adminService;
     private SystemAnalyticsService analyticsService;
@@ -62,7 +64,7 @@ class SystemAnalyticsPresenterTest {
     void load_returnsSuccess_withMarketAndAnalytics() {
         MarketStateDTO market = marketState("OPEN");
         SystemAnalyticsDTO analytics = zeroAnalytics();
-        when(adminService.viewMarketState()).thenReturn(market);
+        when(adminService.viewMarketState(TOKEN)).thenReturn(market);
         when(analyticsService.computeAnalytics(TOKEN)).thenReturn(analytics);
 
         SystemAnalyticsPresenter.Outcome outcome = presenter.load();
@@ -75,7 +77,7 @@ class SystemAnalyticsPresenterTest {
 
     @Test
     void load_returnsFailure_whenAServiceThrows() {
-        when(adminService.viewMarketState()).thenThrow(new RuntimeException("boom"));
+        when(adminService.viewMarketState(TOKEN)).thenThrow(new RuntimeException("boom"));
 
         assertInstanceOf(SystemAnalyticsPresenter.Outcome.Failure.class, presenter.load());
     }
@@ -134,7 +136,8 @@ class SystemAnalyticsPresenterTest {
     }
 
     private static MarketStateDTO marketState(String status) {
-        return new MarketStateDTO(status, LocalDateTime.now(), LocalDateTime.now(), true, true, true);
+        return new MarketStateDTO(status, MARKET_STATE_AT, MARKET_STATE_AT, true, true, MARKET_STATE_AT,
+                true);
     }
 
     private static SystemAnalyticsDTO zeroAnalytics() {

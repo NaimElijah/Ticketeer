@@ -32,9 +32,16 @@ public class OrPurchasePolicy implements PurchasePolicy, InvariantChecked {
 
     @Override
     public String getFailureMessage() {
-        String left = leftPolicy.getFailureMessage();
-        String right = rightPolicy.getFailureMessage();
+        return join(leftPolicy.getFailureMessage(), rightPolicy.getFailureMessage());
+    }
 
+    // An OR fails only when both children fail, so both are named.
+    @Override
+    public String getFailureMessage(PurchaseContext context) {
+        return join(leftPolicy.getFailureMessage(context), rightPolicy.getFailureMessage(context));
+    }
+
+    private static String join(String left, String right) {
         if (left == null || left.isBlank()) {
             return right == null ? "" : right;
         }
@@ -44,6 +51,7 @@ public class OrPurchasePolicy implements PurchasePolicy, InvariantChecked {
 
         return left + " OR " + right;
     }
+
     public PurchasePolicy getLeftPolicy()  { return leftPolicy; }
     public PurchasePolicy getRightPolicy() { return rightPolicy; }
 

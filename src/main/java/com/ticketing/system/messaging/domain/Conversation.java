@@ -9,7 +9,6 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
-import com.ticketing.system.shared.exception.MessageNotFoundException;
 import com.ticketing.system.shared.InvariantChecked;
 import com.ticketing.system.shared.domain.TextLimits;
 
@@ -40,8 +39,8 @@ import jakarta.persistence.Version;
 // types are stored by name. The polymorphic participants stay as plain (id, type) by-id column pairs
 // — never @ManyToOne. @Version drives optimistic locking. messages are owned children
 // (@OneToMany cascade-all + orphan-removal) kept in send order via @OrderColumn, loaded eagerly so a
-// detached Conversation is fully usable. A protected no-arg ctor lets Hibernate hydrate; the public
-// ctor still enforces the invariants.
+// detached Conversation is fully usable. A protected no-arg ctor lets Hibernate hydrate; start is the
+// only other way in, and enforces the invariants.
 @Entity
 @Table(name = "conversations")
 public class Conversation implements InvariantChecked {
@@ -90,11 +89,13 @@ public class Conversation implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected Conversation() { }
 
-    public Conversation(String conversationId, ConversationType type,
-                        int initiatorId, ParticipantType initiatorType,
-                        int counterpartyId, ParticipantType counterpartyType,
-                        String subject, LocalDateTime createdAt,
-                        List<Message> messages) {
+    // Private: start is the only caller, and always passes the initiator's opening message, so every
+    // conversation begins in a shape addMessage can extend (#187).
+    private Conversation(String conversationId, ConversationType type,
+                         int initiatorId, ParticipantType initiatorType,
+                         int counterpartyId, ParticipantType counterpartyType,
+                         String subject, LocalDateTime createdAt,
+                         Message first) {
         TextLimits.requireFits("Subject", subject);
         this.conversationId = conversationId;
         this.type = type;
@@ -106,7 +107,8 @@ public class Conversation implements InvariantChecked {
         this.subject = subject;
         this.createdAt = createdAt;
         this.lastMessageAt = createdAt;
-        this.messages = messages;
+        this.messages = new ArrayList<>();
+        append(first);
         checkInvariants();
     }
 
@@ -119,11 +121,9 @@ public class Conversation implements InvariantChecked {
                                      String subject, String firstMessageBody, LocalDateTime now) {
         Message first = new Message(UUID.randomUUID().toString(),
                 initiatorId, initiatorType, firstMessageBody, now);
-        List<Message> messages = new ArrayList<>();
-        messages.add(first);
         return new Conversation(UUID.randomUUID().toString(), type,
                 initiatorId, initiatorType, counterpartyId, counterpartyType,
-                subject, now, messages);
+                subject, now, first);
     }
 
     public String getConversationId() { return conversationId; }
@@ -145,6 +145,28 @@ public class Conversation implements InvariantChecked {
         if (isClosed()) {
             throw new ConversationClosedException(conversationId);
         }
+        requireMayReply(senderId, senderType);
+        append(new Message(UUID.randomUUID().toString(), senderId, senderType, body, now));
+        checkInvariants();
+    }
+
+    // Adds an accepted message and applies its effect: the one path for the opening message and for
+    // addMessage.
+    private void append(Message message) {
+        messages.add(message);
+        this.lastMessageAt = message.getSentAt();
+        // Auto status flip between the two sides: the initiator re-opens; the other side responds.
+        if (isInitiatorSide(message.getSenderId(), message.getSenderType())) {
+            if (status == ConversationStatus.RESPONDED) {
+                status = ConversationStatus.OPEN;
+            }
+        } else if (status == ConversationStatus.OPEN) {
+            status = ConversationStatus.RESPONDED;
+        }
+    }
+
+    // The rules addMessage applies to every message after the first, against the messages so far.
+    private void requireMayReply(int senderId, ParticipantType senderType) {
         // One-shot complaint: a COMPLAINT carries the member's single opening message and accepts
         // exactly one admin reply (which resolves it). The member can never reply, and a second
         // admin reply is rejected — enforced here so no service path can bypass it.
@@ -163,30 +185,26 @@ public class Conversation implements InvariantChecked {
         if (!involvesParticipant(senderId, senderType)) {
             throw new InvalidParticipantException(senderId, conversationId);
         }
-        messages.add(new Message(UUID.randomUUID().toString(), senderId, senderType, body, now));
-        this.lastMessageAt = now;
-        // Auto status flip between the two sides: the initiator re-opens; the other side responds.
-        if (isInitiatorSide(senderId, senderType)) {
-            if (status == ConversationStatus.RESPONDED) {
-                status = ConversationStatus.OPEN;
-            }
-        } else if (status == ConversationStatus.OPEN) {
-            status = ConversationStatus.RESPONDED;
-        }
-        checkInvariants();
     }
 
-    // Mark a single message read by the given participant (the non-sender).
-    public void markMessageRead(String messageId, int readerId, ParticipantType readerType) {
+    /**
+     * Marks read every message the reader's side did not send, as when the reader opens the thread.
+     * Idempotent, and valid on a closed thread, which stays readable.
+     *
+     * @param readerId the reader's id, read together with {@code readerType}
+     * @param readerType the side the reader acts as; for {@link ParticipantType#ADMIN}, a message from
+     *        any admin is the reader's own (see {@link #unreadCountFor})
+     * @throws InvalidParticipantException if the reader is not a participant of this conversation
+     */
+    public void markReadBy(int readerId, ParticipantType readerType) {
+        if (!involvesParticipant(readerId, readerType)) {
+            throw new InvalidParticipantException(readerId, conversationId);
+        }
         for (Message m : messages) {
-            if (m.getMessageId().equals(messageId)) {
-                if (!sentBy(m, readerId, readerType)) {
-                    m.markRead();
-                }
-                return;
+            if (!fromReadersSide(m, readerId, readerType)) {
+                m.markRead();
             }
         }
-        throw new MessageNotFoundException(messageId);
     }
 
     // Status transitions.
@@ -241,11 +259,20 @@ public class Conversation implements InvariantChecked {
         return false;
     }
 
-    // Unread = messages addressed to (i.e. not sent by) the reader and not yet read.
+    /**
+     * Counts the messages from the other side that are not yet read.
+     *
+     * <p>Admins answer the complaint queue as one team, so for an {@link ParticipantType#ADMIN} reader
+     * a message from any admin is the reader's own: admin B never counts admin A's reply as unread.
+     *
+     * @param readerId the reader's id, read together with {@code readerType}
+     * @param readerType the side the reader acts as
+     * @return the number of unread messages the reader's side did not send
+     */
     public int unreadCountFor(int readerId, ParticipantType readerType) {
         int count = 0;
         for (Message m : messages) {
-            if (!sentBy(m, readerId, readerType) && !m.isRead()) {
+            if (!fromReadersSide(m, readerId, readerType) && !m.isRead()) {
                 count++;
             }
         }
@@ -254,7 +281,11 @@ public class Conversation implements InvariantChecked {
 
     // Member, company and admin ids come from separate sequences that each start at 1, so an id alone
     // does not tell whose a message is: a company often shares its id with the member it writes to.
-    private static boolean sentBy(Message message, int readerId, ParticipantType readerType) {
+    // Admins are the exception: they act as one side, whichever admin wrote.
+    private static boolean fromReadersSide(Message message, int readerId, ParticipantType readerType) {
+        if (readerType == ParticipantType.ADMIN && message.getSenderType() == ParticipantType.ADMIN) {
+            return true;
+        }
         return message.getSenderId() == readerId && message.getSenderType() == readerType;
     }
 

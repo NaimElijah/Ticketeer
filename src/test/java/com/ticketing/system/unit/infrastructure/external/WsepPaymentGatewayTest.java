@@ -201,4 +201,55 @@ class WsepPaymentGatewayTest {
             logger.detachAppender(appender);
         }
     }
+
+    // ---- Defect 7: a failed refund names the payment transaction, not an order (#187) ----
+    // The gateway refunds by payment transaction id. The event-cancellation path shows the message to the
+    // company's owners, so "order 54321" would send them looking for an order that does not exist.
+
+    private static final int PAYMENT_TRANSACTION_ID = 54321;
+
+    @Test
+    void GivenWsepRejectsTheRefund_WhenRefund_ThenTheFailureNamesThePaymentTransactionNotAnOrder() {
+        when(http.post(any())).thenReturn("-1");
+
+        RefundFailedException failure = assertThrows(RefundFailedException.class,
+                () -> gateway.refund(PAYMENT_TRANSACTION_ID, 100.0));
+
+        assertNamesThePaymentTransaction(failure);
+    }
+
+    @Test
+    void GivenConnectionRefused_WhenRefund_ThenTheFailureNamesThePaymentTransactionNotAnOrder() {
+        when(http.post(any())).thenThrow(new WsepCommunicationException("refused", new ConnectException("refused")));
+
+        RefundGatewayUnreachableException failure = assertThrows(RefundGatewayUnreachableException.class,
+                () -> gateway.refund(PAYMENT_TRANSACTION_ID, 100.0));
+
+        assertNamesThePaymentTransaction(failure);
+    }
+
+    // Through the real client and real HTTP, as the other non-2xx test does.
+    @Test
+    void GivenWsepAnswersHttp500_WhenRefund_ThenTheFailureNamesThePaymentTransactionNotAnOrder() {
+        try (LoopbackHttpServer server = LoopbackHttpServer.start()) {
+            server.respondWith(500, "Internal Server Error");
+            WsepPaymentGateway realGateway = new WsepPaymentGateway(
+                    new WsepHttpClient(new WsepProperties(
+                            server.baseUrl(), REQUEST_TIMEOUT_SECONDS, SINGLE_ATTEMPT, NO_BACKOFF_MS)),
+                    Clock.fixed(T0, ZoneOffset.UTC));
+
+            RefundOutcomeUnknownException failure = assertThrows(RefundOutcomeUnknownException.class,
+                    () -> realGateway.refund(PAYMENT_TRANSACTION_ID, 100.0));
+
+            assertNamesThePaymentTransaction(failure);
+        }
+    }
+
+    private static void assertNamesThePaymentTransaction(RefundFailedException failure) {
+        String message = failure.getMessage();
+        assertFalse(message.contains("order " + PAYMENT_TRANSACTION_ID),
+                "a payment transaction id is no order id, but the message was: " + message);
+        assertTrue(message.contains("payment transaction " + PAYMENT_TRANSACTION_ID),
+                "the message must name the payment transaction it failed to refund, but was: " + message);
+    }
 }

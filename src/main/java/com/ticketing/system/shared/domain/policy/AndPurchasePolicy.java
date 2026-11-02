@@ -7,7 +7,8 @@ import com.ticketing.system.shared.InvariantChecked;
 /**
  * Composite purchase policy satisfied only when BOTH child policies are satisfied (logical AND).
  *
- * <p>Combines its failure messages so the buyer sees every unmet rule.
+ * <p>Its refusal for a context names every unmet rule and none of the met ones
+ * ({@link #getFailureMessage(PurchaseContext)}); {@link #getFailureMessage()} names every rule.
  */
 public class AndPurchasePolicy implements PurchasePolicy, InvariantChecked {
 
@@ -34,9 +35,18 @@ public class AndPurchasePolicy implements PurchasePolicy, InvariantChecked {
 
     @Override
     public String getFailureMessage() {
-        String left = leftPolicy.getFailureMessage();
-        String right = rightPolicy.getFailureMessage();
+        return join(leftPolicy.getFailureMessage(), rightPolicy.getFailureMessage());
+    }
 
+    // A child the context satisfies is left out, so the buyer reads only the rules they broke.
+    @Override
+    public String getFailureMessage(PurchaseContext context) {
+        String left = leftPolicy.isSatisfiedBy(context) ? null : leftPolicy.getFailureMessage(context);
+        String right = rightPolicy.isSatisfiedBy(context) ? null : rightPolicy.getFailureMessage(context);
+        return join(left, right);
+    }
+
+    private static String join(String left, String right) {
         if (left == null || left.isBlank()) {
             return right == null ? "" : right;
         }
@@ -46,6 +56,7 @@ public class AndPurchasePolicy implements PurchasePolicy, InvariantChecked {
 
         return left + " AND " + right;
     }
+
     public PurchasePolicy getLeftPolicy()  { return leftPolicy; }
     public PurchasePolicy getRightPolicy() { return rightPolicy; }
 

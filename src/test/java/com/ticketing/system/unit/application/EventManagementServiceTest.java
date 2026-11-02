@@ -25,10 +25,13 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import org.springframework.context.ApplicationEventPublisher;
@@ -45,6 +48,8 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventoryZone;
@@ -69,6 +74,16 @@ import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
+import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
+import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 
 class EventManagementServiceTest {
 
@@ -548,6 +563,26 @@ class EventManagementServiceTest {
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "MUSIC", null, null, null));
+
+                assertEquals(EventCategory.MUSIC, event.getCategory());
+        }
+
+        // Under a Turkish default locale "music".toUpperCase() is "MUS\u0130C", with a dotted capital I,
+        // which names no category (#187).
+        @Test
+        void GivenATurkishDefaultLocale_WhenEditEventDetailsWithALowercaseCategory_ThenCategoryIsUpdated() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                java.util.Locale defaultLocale = java.util.Locale.getDefault();
+                java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+                try {
+                        eventService.editEventDetails(OWNER_TOKEN,
+                                        new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "music", null, null, null));
+                } finally {
+                        java.util.Locale.setDefault(defaultLocale);
+                }
 
                 assertEquals(EventCategory.MUSIC, event.getCategory());
         }
@@ -1176,10 +1211,10 @@ class EventManagementServiceTest {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(new CompanyNotFoundException(COMPANY_ID));
                 when(mockEventRepo.findByCompanyId(COMPANY_ID)).thenReturn(List.of(event));
 
-                assertThrows(RuntimeException.class,
+                assertThrows(CompanyNotFoundException.class,
                                 () -> eventService.listEventsForCompany(OWNER_TOKEN, COMPANY_ID));
         }
 
@@ -1189,9 +1224,9 @@ class EventManagementServiceTest {
                 when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
                 when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
-                when(mockEventRepo.findById(EVENT_ID)).thenReturn(null);
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class,
+                assertThrows(EventNotFoundException.class,
                                 () -> eventService.getEventZones(MANAGER_TOKEN, EVENT_ID));
         }
 
@@ -1343,6 +1378,33 @@ class EventManagementServiceTest {
 
                 assertThrows(IllegalStateException.class,
                                 () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
+        }
+
+        // A stored map can predate the rule that a venue has a location (V1 allows none). The new map keeps
+        // the stored location, so saving the layout must say what to do first, not just refuse (#187).
+        @Test
+        void GivenAStoredMapWithoutALocation_WhenConfigureVenueMap_ThenRefusedWithWhatToDoFirst() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                VenueMap storedWithoutLocation = mock(VenueMap.class);
+                when(storedWithoutLocation.getLocation()).thenReturn(null);
+                Event stored = mock(Event.class);
+                when(stored.getCompanyId()).thenReturn(COMPANY_ID);
+                when(stored.getVenueMap()).thenReturn(storedWithoutLocation);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(stored);
+
+                VenueMapConfigDTO config = new VenueMapConfigDTO(
+                                String.valueOf(EVENT_ID), "Test Venue", 3, 3,
+                                List.of(new VenueMapConfigDTO.ZoneConfigDTO(
+                                                "Zone A", false, 100, null, 50.0, new GridPlacementDTO(1, 1, 1, 1))));
+
+                IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                                () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
+                assertTrue(refusal.getMessage().contains("Edit details"),
+                                "the refusal should say to set the location in Edit details, but was: "
+                                                + refusal.getMessage());
         }
 
         // -------------------------------------------------------------------------
@@ -1616,5 +1678,66 @@ class EventManagementServiceTest {
                 IntStream.rangeClosed(1, seatCount).forEach(number ->
                                 seats.add(new VenueMapConfigDTO.SeatConfigDTO(row + number, number * 10.0, 0)));
                 return new VenueMapConfigDTO.ZoneConfigDTO(name, true, null, seats, 50.0, null);
+        }
+
+        // ---- the event purchase policy survives a read and a save back (#187) ------------------
+        // The policy editor reads the policy as a DTO and saves that DTO back, so a policy the read
+        // cannot express must be refused, never read as NONE, or saving it back erases it.
+
+        private static Stream<PurchasePolicy> everyPurchasePolicyShape() {
+                return Stream.of(
+                                new NoPurchasePolicy(),
+                                new AgePurchasePolicy(18),
+                                new MinTicketsPurchasePolicy(2),
+                                new MaxTicketsPurchasePolicy(6),
+                                new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(6)),
+                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2), new MaxTicketsPurchasePolicy(6)),
+                                new AndPurchasePolicy(new AgePurchasePolicy(21),
+                                                new OrPurchasePolicy(new MinTicketsPurchasePolicy(2),
+                                                                new MaxTicketsPurchasePolicy(4))),
+                                new OrPurchasePolicy(new AndPurchasePolicy(new AgePurchasePolicy(16),
+                                                new MinTicketsPurchasePolicy(3)), new MaxTicketsPurchasePolicy(8)));
+        }
+
+        // A policy type the DTO mapping has never heard of.
+        private static final class UnmappedPurchasePolicy implements PurchasePolicy {
+                @Override
+                public boolean isSatisfiedBy(PurchaseContext context) {
+                        return true;
+                }
+
+                @Override
+                public String getFailureMessage() {
+                        return "";
+                }
+        }
+
+        private void ownerCanEditTheEventPolicy(PurchasePolicy policy) {
+                event.setPurchasePolicy(policy);
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+        }
+
+        @ParameterizedTest
+        @MethodSource("everyPurchasePolicyShape")
+        void GivenEventPurchasePolicy_WhenReadAndSavedBack_ThenThePolicyIsUnchanged(PurchasePolicy stored) {
+                ownerCanEditTheEventPolicy(stored);
+
+                PurchasePolicyDTO read = eventService.getEventPurchasePolicy(OWNER_TOKEN, COMPANY_ID, EVENT_ID);
+                eventService.setEventPolicies(OWNER_TOKEN, new EventPolicyConfigDTO(COMPANY_ID, EVENT_ID, read));
+
+                assertEquals(stored, event.getPurchasePolicy(), "read as " + read);
+        }
+
+        @Test
+        void GivenEventPurchasePolicyOfAnUnmappedType_WhenReadEventPolicy_ThenRefusedInsteadOfReadAsNone() {
+                ownerCanEditTheEventPolicy(new UnmappedPurchasePolicy());
+
+                assertThrows(UnsupportedOperationException.class,
+                                () -> eventService.getEventPurchasePolicy(OWNER_TOKEN, COMPANY_ID, EVENT_ID),
+                                "a policy the mapping does not know must be refused, not read as NONE");
         }
 }

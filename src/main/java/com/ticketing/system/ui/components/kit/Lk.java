@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.components.kit;
 
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.H2;
@@ -58,6 +59,19 @@ public final class Lk {
         Div d = new Div();
         d.addClassName("bz-divider");
         return d;
+    }
+
+    /**
+     * Marks {@code component} as an alert, so a screen reader announces it when it is inserted into the page.
+     * For a message added after the page has loaded, such as an error a search or a filter choice brings
+     * up; a message present from the start needs no role (#187).
+     *
+     * @param component the component that carries the message
+     * @return {@code component}, for chaining
+     */
+    public static <T extends Component> T asAlert(T component) {
+        component.getElement().setAttribute("role", "alert");
+        return component;
     }
 
     public static String withReason(String base, String reason) {

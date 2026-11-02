@@ -19,9 +19,9 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * Presenter for {@code MyCompaniesView} and {@code OwnerAppointmentView}: the live member's companies,
  * the one in focus, and co-owner appointment.
  *
- * <p>The member is resolved through {@link SessionIdentity}: an admin's session stores the admin's id,
- * and admin and member ids share one id space (ADR-012), so the stored id alone would show an admin the
- * companies of the member with that id. An admin, like a guest, has no companies here.
+ * <p>The member is resolved through {@link SessionIdentity}, whose member token the service reads the
+ * memberships for. A guest has no member token, and neither has an admin: an admin token is no member
+ * credential (ADR-012). An admin, like a guest, has no companies here, and the service is not asked.
  */
 @Component
 public class MyCompaniesPresenter {
@@ -36,10 +36,10 @@ public class MyCompaniesPresenter {
 
     /** The live member's companies; NotAuthenticated for a guest or an admin, Failure on error. */
     public Outcome load() {
-        int userId = identity.memberUserId();
-        if (userId == SessionIdentity.NO_MEMBER_USER_ID) return new Outcome.NotAuthenticated();
+        String memberToken = identity.memberToken();
+        if (memberToken == null) return new Outcome.NotAuthenticated();
         try {
-            return new Outcome.Success(companyManagementService.listForUser(userId));
+            return new Outcome.Success(companyManagementService.listForUser(memberToken));
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessage(e));
         }
@@ -61,16 +61,16 @@ public class MyCompaniesPresenter {
 
     /** The live member's memberships; none for a guest or an admin. */
     private List<UserCompanyDTO> memberships() {
-        int userId = identity.memberUserId();
-        if (userId == SessionIdentity.NO_MEMBER_USER_ID) return List.of();
-        return companyManagementService.listForUser(userId);
+        String memberToken = identity.memberToken();
+        if (memberToken == null) return List.of();
+        return companyManagementService.listForUser(memberToken);
     }
 
     /** Whether the live member owns {@code companyId}; {@code false} for a guest or an admin. */
     public boolean isOwnerOf(int companyId) {
-        int userId = identity.memberUserId();
-        if (userId == SessionIdentity.NO_MEMBER_USER_ID) return false;
-        return companyManagementService.isOwnerOf(userId, companyId);
+        String memberToken = identity.memberToken();
+        if (memberToken == null) return false;
+        return companyManagementService.isOwnerOf(memberToken, companyId);
     }
 
     public void selectCompany(int companyId) {
@@ -86,7 +86,7 @@ public class MyCompaniesPresenter {
             if (memberships.isEmpty()) return new AppointOutcome.NoCompany();
             Optional<UserCompanyDTO> company = SelectedCompany.among(memberships, UserCompanyDTO::companyId);
             if (company.isEmpty()) return new AppointOutcome.ChooseCompany();
-            int targetUserId = companyManagementService.resolveUserId(inviteeIdentifier);
+            int targetUserId = companyManagementService.resolveUserId(token, inviteeIdentifier);
             companyManagementService.appointOwner(token,
                     new OwnerAppointmentRequestDTO(company.get().companyId(), targetUserId));
             return new AppointOutcome.Success();

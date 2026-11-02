@@ -9,6 +9,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.company.EventCancelConfirm;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -45,6 +46,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 @Route(value = "owner/events/:eventId", layout = WorkspaceLayout.class)
 @PageTitle("Edit Event · TicketHub")
@@ -53,6 +55,10 @@ import java.util.List;
 public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
     private static final String VENUE_TIME_HINT = "Local time at the venue";
+    private static final String EDIT_TITLE = "Edit Event";
+    private static final String EDIT_SUBTITLE = "Configure event details.";
+    private static final String SAVE_LABEL = "Save Changes";
+    private static final String EVENT_NOT_FOUND = "Event not found.";
 
     private final TextField title = new TextField("Title");
     private final Select<String> category = new Select<>();
@@ -75,14 +81,21 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     /** Linked editors / status / danger zone — hidden in create mode (they need a saved event). */
     private Component sideCol;
     private String eventId = null;   // "new"/null = create flow
+    /**
+     * The id of the event being edited, parsed from the route; {@code null} in create mode and when the
+     * route's id is no number, so no action reaches the service with an id that names no event.
+     */
+    private Integer editedEventId;
     /** The event's full schedule as loaded — kept so an edit to the first show preserves the rest. */
     private List<ShowDate> loadedShowDates = List.of();
+    /** The event's name as loaded, for the cancel confirmation; the title field may hold an unsaved edit. */
+    private String loadedEventName = "";
 
     public EventManagementView(EventManagementPresenter presenter) {
         this.presenter = presenter;
-        title("Edit Event");
-        subtitle("Configure event details.");
-        saveBtn = new LkBtn("Save Changes").variant(LkBtn.Variant.primary)
+        title(EDIT_TITLE);
+        subtitle(EDIT_SUBTITLE);
+        saveBtn = new LkBtn(SAVE_LABEL).variant(LkBtn.Variant.primary)
             .onClick(e -> saveEvent());
         actions(
             new LkBtn("Discard").variant(LkBtn.Variant.tertiary)
@@ -96,6 +109,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     public void beforeEnter(BeforeEnterEvent event) {
         eventId = event.getRouteParameters().get("eventId").orElse(null);
         boolean createMode = eventId == null || "new".equals(eventId);
+        editedEventId = createMode ? null : parseEventId(eventId).orElse(null);
+        saveBtn.setEnabled(true);
         if (createMode) {
             title("Create Event");
             subtitle("Create the event as a draft, then configure its venue and publish it.");
@@ -105,26 +120,49 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             // Linked editors, status and the danger zone all act on a persisted event.
             sideCol.setVisible(false);
         } else {
+            // After a create the router enters this same instance again for the new event, so the
+            // edit page undoes what the create page set (#187, UI-A10).
+            title(EDIT_TITLE);
+            subtitle(EDIT_SUBTITLE);
+            saveBtn.label(SAVE_LABEL);
             artists.readOnly(true);
-            loadEvent(eventId);
+            if (editedEventId == null) {
+                // The id is typed by the visitor: one that is no number names no event (#187, UI-A15).
+                // Nothing is loaded, and the actions that need an event are not offered.
+                Toasts.failure(EVENT_NOT_FOUND);
+                saveBtn.setEnabled(false);
+                sideCol.setVisible(false);
+                return;
+            }
+            sideCol.setVisible(true);
+            loadEvent(editedEventId);
         }
     }
 
-    private void loadEvent(String id) {
-        switch (presenter.load(AuthSession.token(), Integer.parseInt(id))) {
+    private static Optional<Integer> parseEventId(String routeValue) {
+        try {
+            return Optional.of(Integer.parseInt(routeValue));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+    }
+
+    private void loadEvent(int id) {
+        switch (presenter.load(AuthSession.token(), id)) {
             case EventManagementPresenter.LoadOutcome.Success ok -> applyEvent(ok.event());
             case EventManagementPresenter.LoadOutcome.NotFound ignored ->
-                Toasts.failure("Event not found.");
+                Toasts.failure(EVENT_NOT_FOUND);
             case EventManagementPresenter.LoadOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case EventManagementPresenter.LoadOutcome.Failure fail ->
-                Toasts.failure("Could not load the event — please try again.");
+                Toasts.failure(Lk.withReason("Could not load the event", fail.reason()));
         }
     }
 
     /** Populates every control from the loaded event — no hardcoded values anywhere. */
     private void applyEvent(EventDetailDTO ev) {
-        title.setValue(ev.name() != null ? ev.name() : "");
+        loadedEventName = ev.name() != null ? ev.name() : "";
+        title.setValue(loadedEventName);
         category.setValue(ev.category() != null ? ev.category().name() : null);
         artists.setValues(ev.artistsNames());
         if (ev.location() != null) {
@@ -164,6 +202,10 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     private void saveEvent() {
         if ("new".equals(eventId) || eventId == null) {
             createEvent();
+            return;
+        }
+        if (editedEventId == null) {
+            Toasts.failure(EVENT_NOT_FOUND);
             return;
         }
         switch (presenter.save(AuthSession.token(),
@@ -347,8 +389,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     }
 
     private void openVenueEditor() {
-        if (eventId != null && !"new".equals(eventId)) {
-            UI.getCurrent().navigate("owner/venue/" + eventId);
+        if (editedEventId != null) {
+            UI.getCurrent().navigate("owner/venue/" + editedEventId);
         }
     }
 
@@ -377,23 +419,38 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
         card.add(warn);
         card.add(new LkBtn("Cancel This Event").variant(LkBtn.Variant.error).full()
                 .icon(new LkIcon("warning", 16))
-                .onClick(e -> cancelEvent()));
+                .onClick(e -> confirmCancel()));
         return card;
     }
 
-    private void cancelEvent() {
-        if (eventId == null || "new".equals(eventId)) {
+    private void confirmCancel() {
+        if (editedEventId == null) {
             return;
         }
-        switch (presenter.cancel(AuthSession.token(), Integer.parseInt(eventId))) {
+        EventCancelConfirm.open(loadedEventName, this::cancelEvent);
+    }
+
+    private void cancelEvent() {
+        // A cancel commits the event's CANCELED state before its refunds run, so a failure after it may
+        // leave the event cancelled: each failure reloads the event to show its actual state.
+        int cancelledEventId = editedEventId;
+        switch (presenter.cancel(AuthSession.token(), cancelledEventId)) {
             case EventManagementPresenter.CancelOutcome.Success ignored -> {
                 Toasts.success("Event cancelled — all holders refunded.");
                 UI.getCurrent().navigate(CompanyEventListView.class);
             }
             case EventManagementPresenter.CancelOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
-            case EventManagementPresenter.CancelOutcome.Failure fail ->
-                Toasts.failure("Could not cancel the event — please try again.");
+            case EventManagementPresenter.CancelOutcome.RefundFailed refundFailed -> {
+                Toasts.warnUntilDismissed(Lk.withReason(refundFailed.cancelAgainRetries()
+                    ? "The event is cancelled, but some refunds failed; cancel it again to retry them"
+                    : "The event is cancelled, but some refunds failed", refundFailed.reason()));
+                loadEvent(cancelledEventId);
+            }
+            case EventManagementPresenter.CancelOutcome.Failure fail -> {
+                Toasts.failure(Lk.withReason("Could not cancel the event", fail.reason()));
+                loadEvent(cancelledEventId);
+            }
         }
     }
 }

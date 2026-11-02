@@ -43,8 +43,8 @@ public class MarketOpener implements ApplicationRunner {
         if (systemAdminService.isMarketOpen()) {
             log.info("Trading market auto-opened on boot.");
         } else {
-            log.warn("Market not open yet (platform or external services not ready); "
-                    + "the self-heal scheduler will keep retrying.");
+            // ensureMarketOpen has logged the cause just before; any failure, not only WSEP, ends here.
+            log.warn("Market not open yet; see the preceding log line. The self-heal scheduler will keep retrying.");
         }
     }
 }

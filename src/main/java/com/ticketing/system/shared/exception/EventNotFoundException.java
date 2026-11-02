@@ -10,7 +10,9 @@ public class EventNotFoundException extends EntityNotFoundException {
         super("Event not found");
     }
 
-    public EventNotFoundException(Object eventId) {
-        super("Event not found: ", eventId);
+    // "Event not found: <id>". A hidden (DRAFT / SCHEDULED) event is refused with this same message,
+    // so a caller cannot tell it from one that does not exist.
+    public EventNotFoundException(int eventId) {
+        super("Event", eventId);
     }
 }

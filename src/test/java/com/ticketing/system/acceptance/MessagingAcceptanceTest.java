@@ -121,8 +121,8 @@ class MessagingAcceptanceTest {
     void GivenEmptyBody_WhenSubmitComplaint_ThenRejected() {
         AuthTokenDTO member = registerMember("cmp.member.empty");
 
-        // A blank body fails the Message construction invariant in the domain.
-        assertThrows(IllegalStateException.class,
+        // Blank details are an invalid argument, refused before the complaint is built (#187).
+        assertThrows(IllegalArgumentException.class,
                 () -> messagingService.submitComplaint(member.token(),
                         new SubmitComplaintRequestDTO(member.userId(), "No body", "   ", null)));
     }

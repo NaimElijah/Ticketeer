@@ -1,6 +1,6 @@
 # ADR-015: Sales hold a shared lock on their events, and Phase 3 runs again after a lost race
 
-- **Status:** Accepted
+- **Status:** Accepted. Extended by [ADR-017](ADR-017-inventory-cleanup-steps-retry-each-event-in-its-own-transaction.md): the same retry runs inventory's clean-up steps, one event at a time.
 - **Date:** 2026-10-30
 - **Issue:** #186 (persistence scan); related #171, #227, #108
 

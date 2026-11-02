@@ -9,6 +9,11 @@ import com.ticketing.system.shared.IRepository;
 // Aggregate-root entry point for the ProductionCompany aggregate.
 public interface ProductionCompanyRepository extends IRepository<ProductionCompany, Integer> {
 
+    /**
+     * @param companyId the company's id
+     * @return the company; never {@code null}
+     * @throws com.ticketing.system.shared.exception.CompanyNotFoundException if there is no such company
+     */
     ProductionCompany getCompanyById(int companyId);
 
     void updateCompany(ProductionCompany company);

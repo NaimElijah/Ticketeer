@@ -400,9 +400,9 @@ class SessionAndOrderSweeperTest {
 
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
 
-        int scanned = sweeper.sweepExpiredOrders(T0);
+        int cleaned = sweeper.sweepExpiredOrders(T0);
 
-        assertEquals(1, scanned);
+        assertEquals(0, cleaned, "an order skipped because its checkout is in progress is not counted");
         verify(orderRepo).lockForUpdate("user:5");
         verify(orderRepo).unlock("user:5");
         verify(orderRepo, never()).delete(any());
@@ -428,9 +428,9 @@ class SessionAndOrderSweeperTest {
         healthyAgain.addStandingReservation(1, 10, 1, 30.0, NOW); // fresh, not expired
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(healthyAgain));
 
-        int scanned = sweeper.sweepExpiredOrders(T0);
+        int cleaned = sweeper.sweepExpiredOrders(T0);
 
-        assertEquals(1, scanned);
+        assertEquals(0, cleaned, "an order skipped because it is no longer expired is not counted");
         verify(orderRepo).lockForUpdate("user:5");
         verify(orderRepo).unlock("user:5");
         verify(orderRepo, never()).delete(any());
@@ -502,5 +502,44 @@ class SessionAndOrderSweeperTest {
         );
     }
 
+    // ---- Defect 8: only the orders released count as cleaned (#187) ----
+    // sweepExpiredOrders returns the orders it deleted; an order it skips under the lock stays.
 
+    @Test
+    void GivenOneExpiredOrderInCheckoutAndOneReleased_WhenSweepExpiredOrders_ThenItReportsOne() {
+        ActiveOrder inCheckout = ActiveOrder.forMember(5, "sid-checkout", NOW);
+        inCheckout.addStandingReservation(1, 10, 1, 50.0, NOW.minusMinutes(30));
+        inCheckout.markCheckoutInProgress();
+        ActiveOrder released = expiredOrderHoldingOneStandingTicket(6, "sid-released", 2, 20);
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(inCheckout, released));
+
+        int cleaned = sweeper.sweepExpiredOrders(T0);
+
+        assertEquals(1, cleaned, "the order in checkout was skipped; only the released one counts");
+        verify(orderRepo).delete(released);
+        verify(orderRepo, never()).delete(inCheckout);
+    }
+
+    @Test
+    void GivenOneOrderNoLongerExpiredUnderTheLockAndOneReleased_WhenSweepExpiredOrders_ThenItReportsOne() {
+        ActiveOrder renewed = ActiveOrder.forMember(5, "sid-renewed", NOW);
+        renewed.addStandingReservation(1, 10, 1, 30.0, NOW);
+        ActiveOrder released = expiredOrderHoldingOneStandingTicket(6, "sid-released", 2, 20);
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(renewed, released));
+
+        int cleaned = sweeper.sweepExpiredOrders(T0);
+
+        assertEquals(1, cleaned, "the renewed order was skipped; only the released one counts");
+        verify(orderRepo).delete(released);
+        verify(orderRepo, never()).delete(renewed);
+    }
+
+    private ActiveOrder expiredOrderHoldingOneStandingTicket(int userId, String sessionId, int eventId, int zoneId) {
+        ActiveOrder order = ActiveOrder.forMember(userId, sessionId, NOW);
+        StandingZone zone = new StandingZone(zoneId, "General Admission", 5, 30.0);
+        zone.reserve(InventorySelection.standing(1, order.getOrderKey()));
+        order.addStandingReservation(eventId, zoneId, 1, 30.0, NOW.minusMinutes(30));
+        when(eventRepo.findById(eventId)).thenReturn(createEventWithZones(eventId, List.of(zone)));
+        return order;
+    }
 }

@@ -1,12 +1,18 @@
 package com.ticketing.system.unit.application;
 
+import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.ReservationResultDTO;
 import org.springframework.context.ApplicationEventPublisher;
+import com.ticketing.system.shared.event.ReservationRemovalFailedNotice;
+import com.ticketing.system.shared.event.TicketReservationFailedNotice;
 import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.UserFacingErrors;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.sales.domain.ActiveOrder;
@@ -31,6 +37,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+
+import jakarta.persistence.PersistenceException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -51,10 +60,12 @@ import org.mockito.ArgumentCaptor;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.BuyerContextDTO;
 import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.UserRepositories;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
-import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -91,6 +102,8 @@ public class ReservationServiceTest {
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
     // Every guest session id these tests use starts with this and names a live guest session.
     private static final String LIVE_GUEST_SESSION_PREFIX = "guest-session";
+    // The age of every member these tests reserve for; no event here has an age policy.
+    private static final int MEMBER_AGE = 30;
 
     @BeforeEach
     void setUp() {
@@ -114,13 +127,13 @@ public class ReservationServiceTest {
         // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
         // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, mock(ProductionCompanyRepository.class));
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,
                 sessionManager,
                 eventPublisher,
-                mock(UserRepository.class),
+                UserRepositories.everyMemberExistsAged(MEMBER_AGE),
                 marketGate,
                 mock(ISystemMetrics.class),
                 Clock.fixed(T0, ZoneOffset.UTC)
@@ -183,9 +196,11 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenremoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        // The member's cart holds the line, so the removal reaches the event lookup.
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
@@ -346,9 +361,9 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenreserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
@@ -462,9 +477,9 @@ public class ReservationServiceTest {
     void GivenEventDoesNotExist_WhenreserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
+        assertThrows(EventNotFoundException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 
@@ -1295,6 +1310,168 @@ public class ReservationServiceTest {
                 "renewing a guest's holds must not log the guest's session id");
     }
 
+    // --- #187: a reserve that fails after the hold rolls back best-effort and rethrows its own failure.
+    // A rollback step that fails too is swallowed, so it must leave a WARN carrying its exception, or
+    // the seats or cart line it left behind have no trace in production. ---
+
+    private static final String RESERVE_FAILURE = "reserve-failed-after-the-hold-under-test";
+    private static final String RELEASE_FAILURE = "release-of-the-hold-failed-under-test";
+    private static final String CART_ROLLBACK_FAILURE = "cart-line-rollback-failed-under-test";
+    private static final String ORDER_KEY = "order-key-under-test";
+
+    @Test
+    void GivenReleaseFailsWhileRollingBackAFailedReserve_WhenReserveForMember_ThenAWarnCarriesTheReleaseFailure() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        ReservationService service = reservationServiceOver(inventory);
+        memberWithCart();
+        doThrow(new IllegalStateException(RESERVE_FAILURE)).when(activeOrder)
+                .addStandingReservation(anyInt(), anyInt(), anyInt(), anyDouble(), any());
+        when(inventory.release(anyInt(), anyInt(), any(), any())).thenThrow(new IllegalStateException(RELEASE_FAILURE));
+        logs = LogCapture.of(ReservationService.class);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> service.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(RESERVE_FAILURE, thrown.getMessage(), "the reserve's own failure must propagate, not the release's");
+        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(ORDER_KEY));
+        assertWarnCarrying(RELEASE_FAILURE);
+    }
+
+    @Test
+    void GivenCartRollbackFailsAfterAFailedReserve_WhenReserveForMember_ThenAWarnCarriesTheCartRollbackFailure() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        ReservationService service = reservationServiceOver(inventory);
+        memberWithCart();
+        doThrow(new IllegalStateException(RESERVE_FAILURE)).when(activeOrderRepository).save(activeOrder);
+        doThrow(new IllegalStateException(CART_ROLLBACK_FAILURE)).when(activeOrder)
+                .removeStandingSpots(EVENT_ID, ZONE_ID, QUANTITY);
+        logs = LogCapture.of(ReservationService.class);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> service.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(RESERVE_FAILURE, thrown.getMessage(),
+                "the reserve's own failure must propagate, not the cart rollback's");
+        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(ORDER_KEY));
+        assertWarnCarrying(CART_ROLLBACK_FAILURE);
+    }
+
+    // --- #187: a failed reservation's notice reaches the member's notification, so its reason carries a
+    // refusal's own message, and only a generic reason for any other failure (the rule ServiceErrors
+    // applies in the UI). ---
+
+    private static final String REFUSAL = "refusal-reason-under-test";
+    private static final String INTERNAL_FAILURE_TEXT = "internal-failure-text-under-test";
+    private static final String GENERIC_REASON = UserFacingErrors.GENERIC_MESSAGE;
+
+    @Test
+    void GivenTheInventoryRefusesTheReservation_WhenReserveForMember_ThenTheFailureNoticeCarriesTheRefusalsReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithoutCart();
+        BusinessRuleViolationException refusal = new BusinessRuleViolationException(REFUSAL);
+        whenReserving(inventory).thenThrow(refusal);
+
+        assertSame(refusal, assertThrows(BusinessRuleViolationException.class,
+                () -> reservationServiceOver(inventory).reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        assertEquals(REFUSAL, publishedNotice(TicketReservationFailedNotice.class).reason());
+    }
+
+    @Test
+    void GivenAnInternalFailureWhileReserving_WhenReserveForMember_ThenTheFailureNoticeCarriesOnlyTheGenericReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithoutCart();
+        PersistenceException internal = new PersistenceException(INTERNAL_FAILURE_TEXT);
+        whenReserving(inventory).thenThrow(internal);
+
+        assertSame(internal, assertThrows(PersistenceException.class,
+                () -> reservationServiceOver(inventory).reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        String reason = publishedNotice(TicketReservationFailedNotice.class).reason();
+        assertEquals(GENERIC_REASON, reason, "an internal failure's text must not reach the member's notification");
+        assertFalse(reason.contains(INTERNAL_FAILURE_TEXT));
+    }
+
+    @Test
+    void GivenTheInventoryRefusesTheRemoval_WhenRemoveForMember_ThenTheFailureNoticeCarriesTheRefusalsReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithReservedStandingTickets();
+        BusinessRuleViolationException refusal = new BusinessRuleViolationException(REFUSAL);
+        when(inventory.release(anyInt(), anyInt(), any(), any())).thenThrow(refusal);
+
+        assertSame(refusal, assertThrows(BusinessRuleViolationException.class,
+                () -> reservationServiceOver(inventory).removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        assertEquals(REFUSAL, publishedNotice(ReservationRemovalFailedNotice.class).reason());
+    }
+
+    @Test
+    void GivenAnInternalFailureWhileRemoving_WhenRemoveForMember_ThenTheFailureNoticeCarriesOnlyTheGenericReason() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithReservedStandingTickets();
+        DataAccessResourceFailureException internal = new DataAccessResourceFailureException(INTERNAL_FAILURE_TEXT);
+        when(inventory.release(anyInt(), anyInt(), any(), any())).thenThrow(internal);
+
+        assertSame(internal, assertThrows(DataAccessResourceFailureException.class,
+                () -> reservationServiceOver(inventory).removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        String reason = publishedNotice(ReservationRemovalFailedNotice.class).reason();
+        assertEquals(GENERIC_REASON, reason, "an internal failure's text must not reach the member's notification");
+        assertFalse(reason.contains(INTERNAL_FAILURE_TEXT));
+    }
+
+    private org.mockito.stubbing.OngoingStubbing<Double> whenReserving(InventoryCommandPort inventory) {
+        return when(inventory.reserve(anyInt(), anyInt(), any(), any(), any(), anyInt(), any(), anyInt()));
+    }
+
+    // A member with no cart yet: the service creates a real ActiveOrder for them.
+    private void memberWithoutCart() {
+        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
+    }
+
+    private void memberWithReservedStandingTickets() {
+        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        cart.addStandingReservation(EVENT_ID, ZONE_ID, QUANTITY, 50.0, NOW);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
+    }
+
+    private <T> T publishedNotice(Class<T> type) {
+        ArgumentCaptor<Object> published = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(published.capture());
+        List<T> notices = published.getAllValues().stream().filter(type::isInstance).map(type::cast).toList();
+        assertEquals(1, notices.size(), "expected one " + type.getSimpleName() + ", published: "
+                + published.getAllValues());
+        return notices.get(0);
+    }
+
+    // The same service as setUp's, with the inventory port as a mock so a test can make it fail.
+    private ReservationService reservationServiceOver(InventoryCommandPort inventory) {
+        return new ReservationService(inventory, activeOrderRepository, sessionManager, eventPublisher,
+                UserRepositories.everyMemberExistsAged(MEMBER_AGE), marketGate, mock(ISystemMetrics.class),
+                Clock.fixed(T0, ZoneOffset.UTC));
+    }
+
+    private void memberWithCart() {
+        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
+        when(activeOrder.getOrderKey()).thenReturn(ORDER_KEY);
+    }
+
+    private void assertWarnCarrying(String failure) {
+        List<String> carrying = logs.eventsContaining(failure);
+        assertTrue(carrying.stream().anyMatch(line -> line.startsWith("WARN ")),
+                "expected a WARN from ReservationService carrying '" + failure + "'; events carrying it: " + carrying);
+    }
+
     // helper test methods:
 
     private PurchasePolicy acceptingPurchasePolicy() {
@@ -1331,5 +1508,4 @@ public class ReservationServiceTest {
                 acceptingPurchasePolicy(),
                 noDiscountPolicy());
     }
-
 }

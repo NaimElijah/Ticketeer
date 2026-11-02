@@ -4,6 +4,7 @@ import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkNotifPanel;
 import com.ticketing.system.ui.components.kit.LkPopover;
+import com.ticketing.system.ui.presenters.notifications.NotificationBellPresenter.MarkReadOutcome;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.NotificationSession;
 import com.vaadin.flow.component.html.NativeButton;
@@ -12,7 +13,7 @@ import com.vaadin.flow.component.popover.PopoverPosition;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -22,18 +23,22 @@ import java.util.function.Function;
  */
 public class NotificationBellComponent extends Span {
 
-    private final Consumer<String> onRead;
+    private final Function<String, MarkReadOutcome> markRead;
     private final Function<LocalDateTime, String> age;
+    private List<NotificationDTO> renderedInbox = List.of();
 
     /**
-     * @param onRead called with a notification id when the user marks it read
-     * @param age    renders a notification's creation time as a short age ("5m", "Yesterday")
+     * @param markRead stores the read of the notification id it is given and answers how that went;
+     *                 the bell shows the item read only on success, so the badge and the store agree,
+     *                 and shows a failure's reason as a toast
+     * @param age      renders a notification's creation time as a short age ("5m", "Yesterday")
+     * @throws NullPointerException if either argument is null
      */
-    public NotificationBellComponent(Consumer<String> onRead, Function<LocalDateTime, String> age) {
-        this.onRead = onRead;
-        this.age = age;
-        addAttachListener(e -> NotificationSession.setBell(this));
-        addDetachListener(e -> NotificationSession.setBell(null));
+    public NotificationBellComponent(Function<String, MarkReadOutcome> markRead, Function<LocalDateTime, String> age) {
+        this.markRead = Objects.requireNonNull(markRead, "markRead");
+        this.age = Objects.requireNonNull(age, "age");
+        addAttachListener(e -> NotificationSession.setBell(e.getUI(), this));
+        addDetachListener(e -> NotificationSession.removeBell(e.getUI(), this));
         build();
     }
 
@@ -43,13 +48,29 @@ public class NotificationBellComponent extends Span {
         build();
     }
 
+    /**
+     * Rebuilds only when the inbox differs from the one the bell last showed: another tab may have
+     * filled it or marked an item read, and the poller asks every tab's bell to catch up on each tick
+     * without repainting a bell that shows the inbox already.
+     */
+    public void refreshIfChanged() {
+        if (!shownInbox().equals(renderedInbox)) {
+            refresh();
+        }
+    }
+
+    // The inbox as the bell shows it: nobody's while signed out. NotificationDTO is a record, so two
+    // inboxes are equal when they hold the same notifications in the same states.
+    private static List<NotificationDTO> shownInbox() {
+        return AuthSession.isSignedIn() ? NotificationSession.getAll() : List.of();
+    }
+
     private void build() {
-        List<NotificationDTO> notifs = AuthSession.isSignedIn()
-                ? NotificationSession.getAll().stream()
-                        .sorted(java.util.Comparator.comparing(NotificationDTO::createdAt,
-                                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())).reversed())
-                        .toList()
-                : List.of();
+        renderedInbox = shownInbox();
+        List<NotificationDTO> notifs = renderedInbox.stream()
+                .sorted(java.util.Comparator.comparing(NotificationDTO::createdAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())).reversed())
+                .toList();
 
         int unread = (int) notifs.stream().filter(n -> !"READ".equals(n.status())).count();
 
@@ -64,25 +85,44 @@ public class NotificationBellComponent extends Span {
             bell.add(badge);
         }
 
+        // Stops at the first read that is not stored: with the store down, every later call would wait
+        // out its own connection timeout, holding the session, and fail the same way.
         Runnable onMarkAll = () -> {
-            if (onRead != null) {
-                NotificationSession.getAll().stream()
-                        .filter(n -> !"READ".equals(n.status()))
-                        .map(NotificationDTO::notificationId)
-                        .filter(id -> id != null && !id.isEmpty())
-                        .forEach(onRead);
+            List<String> unreadIds = NotificationSession.getAll().stream()
+                    .filter(n -> !"READ".equals(n.status()))
+                    .map(NotificationDTO::notificationId)
+                    .filter(id -> id != null && !id.isEmpty())
+                    .toList();
+            for (String id : unreadIds) {
+                if (!showReadOnceStored(id)) {
+                    break;
+                }
             }
-            NotificationSession.markAllRead();
             refresh();
         };
 
         java.util.function.Consumer<String> onMarkOne = notifId -> {
-            NotificationSession.markRead(notifId);
-            if (onRead != null) onRead.accept(notifId);
+            showReadOnceStored(notifId);
             refresh();
         };
 
         add(new LkPopover(bell, LkNotifPanel.fromDTOs(notifs, onMarkAll, onMarkOne, age))
                 .position(PopoverPosition.BOTTOM_END));
+    }
+
+    // Shows the item read only once the store has it read, and a refusal's reason as a toast. Returns
+    // whether the read was stored.
+    private boolean showReadOnceStored(String notificationId) {
+        return switch (markRead.apply(notificationId)) {
+            case MarkReadOutcome.Success success -> {
+                NotificationSession.markRead(notificationId);
+                yield true;
+            }
+            case MarkReadOutcome.Failure failure -> {
+                Toasts.failure(failure.reason());
+                yield false;
+            }
+            case MarkReadOutcome.NotAuthenticated notAuthenticated -> false;
+        };
     }
 }

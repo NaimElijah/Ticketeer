@@ -59,7 +59,7 @@ public class DevUserSeeder implements ApplicationRunner {
         } catch (DuplicateUsernameException | DuplicateEmailException existing) {
             log.debug("dev user already present username={}", username);
         } catch (RuntimeException e) {
-            log.warn("dev user seed failed username={} reason={}", username, e.getMessage());
+            log.warn("dev user seed failed username={}", username, e);
         }
     }
 }

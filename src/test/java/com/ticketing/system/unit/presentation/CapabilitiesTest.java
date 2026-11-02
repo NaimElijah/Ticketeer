@@ -1,26 +1,50 @@
 package com.ticketing.system.unit.presentation;
 
+import com.ticketing.system.organization.application.dto.MembershipRole;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CompanyManagementBridge;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+
+import com.vaadin.flow.internal.CurrentInstance;
+import com.vaadin.flow.server.VaadinRequest;
 
 import java.lang.reflect.Method;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Sanity checks for the capability resolver. We can't easily fake a
- * VaadinSession inside a unit test, so the assertions here cover the
- * static structure (bundle sets, helper booleans) — the per-role bundle
- * compositions and the marker / annotation wiring are exercised by
- * VaadinSmokeTest's view-construction pass.
+ * Checks for the capability resolver. The guest checks run with no VaadinSession at all; the
+ * signed-in checks install a map-backed session ({@link MapBackedVaadinSession}) and a mocked
+ * {@link CompanyManagementService} behind {@link CompanyManagementBridge}. The marker / annotation
+ * wiring is exercised by VaadinSmokeTest's view-construction pass.
  */
 class CapabilitiesTest {
 
@@ -105,6 +129,122 @@ class CapabilitiesTest {
             "a manager holding both permissions gets the union of their capabilities");
     }
 
+    // ---- resolution for a signed-in session: memberships are read with the member's own token ----
+
+    private static final String MEMBER_TOKEN = "member-jwt";
+    private static final String ADMIN_TOKEN = "admin-jwt";
+    private static final int USER_ID = 42;
+    private static final int COMPANY_ID = 7;
+    private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
+
+    private CompanyManagementService service;
+    // The bridge is static and a Spring context in the same JVM may have set it, so it is restored after.
+    private CompanyManagementService bridgedBefore;
+
+    @AfterEach
+    void restoreSessionAndBridge() {
+        if (service != null) {
+            new CompanyManagementBridge(bridgedBefore);
+            MapBackedVaadinSession.uninstall();
+        }
+    }
+
+    @Test
+    void GivenAdminSession_WhenForCurrentUser_ThenAdminBundleAndNoMembershipLookup() {
+        installSessionAndService();
+        AuthSession.storeAuth(new AuthTokenDTO(ADMIN_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID, "admin", true));
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.ADMIN_WORKSPACE));
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE), "an admin holds no company memberships");
+        verify(service, never()).listForUser(any());
+    }
+
+    @Test
+    void GivenMemberOfNoCompany_WhenForCurrentUser_ThenMemberBaseAskedWithTheMembersToken() {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of());
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.CHECKOUT));
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE));
+        verify(service).listForUser(MEMBER_TOKEN);
+    }
+
+    @Test
+    void GivenMemberWhoseTokenDied_WhenForCurrentUser_ThenMemberBaseWithoutCompanyCapabilities() {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenThrow(new InvalidTokenException("Invalid token"));
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.CHECKOUT));
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE), "a dead token holds no memberships");
+    }
+
+    // ---- the capability set each membership role grants for the current company ----
+
+    private static final Set<Capability> OWNER_CAPABILITIES = EnumSet.of(
+        Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES,
+        Capability.EDIT_PURCHASE_POLICIES, Capability.RESPOND_INQUIRIES, Capability.MANAGE_VENUE_MAPS,
+        Capability.APPOINT_MANAGER, Capability.APPOINT_CO_OWNER, Capability.EDIT_MANAGER_PERMISSIONS,
+        Capability.REVOKE_MANAGER, Capability.CANCEL_EVENT, Capability.VIEW_COMPANY_ORG_TREE);
+    private static final Set<Capability> FOUNDER_ONLY_CAPABILITIES =
+        EnumSet.of(Capability.DISSOLVE_COMPANY, Capability.TRANSFER_FOUNDERSHIP);
+
+    @Test
+    void GivenFounderOfTheCurrentCompany_WhenForCurrentUser_ThenOwnerAndFounderCapabilities() {
+        Set<Capability> caps = capabilitiesOfAMemberWhoIs(MembershipRole.FOUNDER, List.of());
+
+        assertTrue(caps.contains(Capability.OWNER_WORKSPACE));
+        assertTrue(caps.containsAll(OWNER_CAPABILITIES), "a founder holds every owner capability");
+        assertTrue(caps.containsAll(FOUNDER_ONLY_CAPABILITIES), "a founder holds the founder-only capabilities");
+    }
+
+    @Test
+    void GivenCoOwnerOfTheCurrentCompany_WhenForCurrentUser_ThenOwnerCapabilitiesButNoFounderOnes() {
+        Set<Capability> caps = capabilitiesOfAMemberWhoIs(MembershipRole.CO_OWNER, List.of());
+
+        assertTrue(caps.contains(Capability.OWNER_WORKSPACE));
+        assertTrue(caps.containsAll(OWNER_CAPABILITIES), "a co-owner holds every owner capability");
+        assertTrue(FOUNDER_ONLY_CAPABILITIES.stream().noneMatch(caps::contains),
+            "a co-owner must not hold the founder-only capabilities");
+    }
+
+    @Test
+    void GivenManagerOfTheCurrentCompany_WhenForCurrentUser_ThenOnlyTheirPermissionsCapabilities() {
+        Set<Capability> caps = capabilitiesOfAMemberWhoIs(MembershipRole.MANAGER, List.of(Permission.VIEW_SALES));
+
+        assertTrue(caps.contains(Capability.OWNER_WORKSPACE));
+        assertTrue(caps.containsAll(capsFor(Permission.VIEW_SALES)));
+        Set<Capability> beyondTheirPermissions = EnumSet.copyOf(OWNER_CAPABILITIES);
+        beyondTheirPermissions.removeAll(capsFor(Permission.VIEW_SALES));
+        beyondTheirPermissions.addAll(FOUNDER_ONLY_CAPABILITIES);
+        assertTrue(beyondTheirPermissions.stream().noneMatch(caps::contains),
+            "a manager holds only what their permissions grant; got " + caps);
+    }
+
+    private Set<Capability> capabilitiesOfAMemberWhoIs(MembershipRole role, List<Permission> managerPermissions) {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of(new UserCompanyDTO(COMPANY_ID, "Acme", "desc",
+            "", role, "ACTIVE", 1, 0, managerPermissions)));
+        return Capabilities.forCurrentUser();
+    }
+
+    private void installSessionAndService() {
+        MapBackedVaadinSession.install();
+        bridgedBefore = CompanyManagementBridge.service();
+        service = mock(CompanyManagementService.class);
+        new CompanyManagementBridge(service);
+    }
+
+    private void signInAsMember() {
+        installSessionAndService();
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID, "member"));
+    }
+
     @SuppressWarnings("unchecked")
     private static Set<Capability> capsFor(Permission... permissions) {
         try {
@@ -114,5 +254,97 @@ class CapabilitiesTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("could not invoke Capabilities.capabilitiesFromPermissions", e);
         }
+    }
+
+    // ---- an expired member token gets the dead-token fallback (#187) ----
+
+    @Test
+    void GivenMemberWhoseTokenExpired_WhenForCurrentUser_ThenMemberBaseWithoutCompanyCapabilities() {
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN)).thenThrow(new SessionExpiredException());
+
+        Set<Capability> caps = Capabilities.forCurrentUser();
+
+        assertTrue(caps.contains(Capability.CHECKOUT), "an expired member keeps the member base; got " + caps);
+        assertFalse(caps.contains(Capability.OWNER_WORKSPACE), "an expired token holds no memberships; got " + caps);
+    }
+
+    @Test
+    void GivenMembershipStoreOutage_WhenForCurrentUser_ThenTheFailurePropagates() {
+        signInAsMember();
+        DataAccessResourceFailureException outage = new DataAccessResourceFailureException("store down");
+        when(service.listForUser(MEMBER_TOKEN)).thenThrow(outage);
+
+        DataAccessResourceFailureException thrown =
+            assertThrows(DataAccessResourceFailureException.class, Capabilities::forCurrentUser,
+                "an infrastructure failure is not a dead token and must not be hidden as one");
+        assertSame(outage, thrown);
+    }
+
+    // ---- UI-B4: the companies read once per request never answer for another sign-in (#187) ----
+    // AuthBootstrapTest proves the read happens once per navigation; these prove what the per-request
+    // read must never do: answer after the visitor signed out, answer for a member who signed in later
+    // in the same request, or keep a failure.
+
+    private static final String OTHER_MEMBER_TOKEN = "other-member-jwt";
+
+    // Vaadin holds the current request through a weak reference, so the test keeps it reachable.
+    private VaadinRequest currentRequest;
+
+    @AfterEach
+    void dropTheCurrentRequest() {
+        CurrentInstance.set(VaadinRequest.class, null);
+        currentRequest = null;
+    }
+
+    @Test
+    void GivenAFounderWhoSignsOutLaterInTheRequest_WhenCapabilitiesAreCheckedAgain_ThenNoCompanyCapabilityRemains() {
+        onOneRequest();
+        Set<Capability> founder = capabilitiesOfAMemberWhoIs(MembershipRole.FOUNDER, List.of());
+        assertTrue(founder.contains(Capability.OWNER_WORKSPACE), "precondition: the founder holds the workspace");
+
+        AuthSession.signOut();
+
+        assertFalse(Capabilities.has(Capability.OWNER_WORKSPACE), "a signed-out visitor holds no company capability");
+    }
+
+    @Test
+    void GivenAnotherMemberSignsInLaterInTheRequest_WhenCapabilitiesAreChecked_ThenThatMembersOwnCompaniesAreRead() {
+        onOneRequest();
+        Set<Capability> founder = capabilitiesOfAMemberWhoIs(MembershipRole.FOUNDER, List.of());
+        assertTrue(founder.contains(Capability.OWNER_WORKSPACE), "precondition: the founder holds the workspace");
+        when(service.listForUser(OTHER_MEMBER_TOKEN)).thenReturn(List.of());
+
+        AuthSession.storeAuth(new AuthTokenDTO(OTHER_MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID + 1, "other"));
+
+        assertFalse(Capabilities.has(Capability.OWNER_WORKSPACE),
+                "the second member belongs to no company, whatever the first member's read held");
+        verify(service).listForUser(OTHER_MEMBER_TOKEN);
+    }
+
+    @Test
+    void GivenTheMembershipReadFailsOnce_WhenCapabilitiesAreCheckedAgainInTheRequest_ThenTheCompaniesAreReadAgain() {
+        onOneRequest();
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("store down"))
+                .thenReturn(List.of(new UserCompanyDTO(COMPANY_ID, "Acme", "desc", "", MembershipRole.FOUNDER,
+                        "ACTIVE", 1, 0, List.of())));
+        assertThrows(DataAccessResourceFailureException.class, Capabilities::forCurrentUser,
+                "precondition: the first read fails");
+
+        assertTrue(Capabilities.has(Capability.OWNER_WORKSPACE), "a failed read must not be kept for the request");
+    }
+
+    private void onOneRequest() {
+        Map<String, Object> attributes = new HashMap<>();
+        VaadinRequest request = mock(VaadinRequest.class);
+        when(request.getAttribute(anyString())).thenAnswer(call -> attributes.get(call.getArgument(0, String.class)));
+        doAnswer(call -> attributes.put(call.getArgument(0), call.getArgument(1)))
+                .when(request).setAttribute(anyString(), any());
+        doAnswer(call -> attributes.remove(call.getArgument(0, String.class)))
+                .when(request).removeAttribute(anyString());
+        currentRequest = request;
+        CurrentInstance.set(VaadinRequest.class, request);
     }
 }

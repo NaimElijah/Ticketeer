@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ import com.ticketing.system.shared.dto.SubmitComplaintRequestDTO;
 import com.ticketing.system.messaging.application.dtoMappers.ConversationMapper;
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.shared.event.NewMessageNotice;
+import com.ticketing.system.shared.event.OutreachSentNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -29,6 +31,7 @@ import com.ticketing.system.organization.application.service.CompanyMembershipSe
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.ConversationNotFoundException;
 import com.ticketing.system.shared.exception.InvalidParticipantException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -73,8 +76,9 @@ public class MessagingService {
     // Company-membership/authorization checks (moved off the User aggregate, task #20) used to decide
     // whether a caller may act for a company; messaging already depends on organization.
     private final CompanyMembershipService companyMembershipService;
-    // Publisher for cross-context integration events (NewMessageNotice); the notifications
-    // context listens for these instead of messaging calling it directly.
+    // Publisher for cross-context integration events (NewMessageNotice per message, OutreachSentNotice
+    // per outreach send); the notifications context listens for these instead of messaging calling it
+    // directly.
     private final ApplicationEventPublisher eventPublisher;
     // Stamps messages and conversations: UTC wall time (ADR-008).
     private final Clock clock;
@@ -160,11 +164,30 @@ public class MessagingService {
 
 
 
-    // II.3.3 — Member submits a COMPLAINT (counterparty = ADMIN_GROUP).
+    /**
+     * II.3.3: the member files a COMPLAINT with the admins (counterparty ADMIN_GROUP). A related-entity
+     * reference, when given, is appended to the details in the stored body.
+     *
+     * @param token   the member's token
+     * @param request the subject, the details the member typed, and an optional related-entity reference
+     * @return the new complaint, seen by the member
+     * @throws IllegalArgumentException if the details are null or blank. Checked before the reference is
+     *         appended, so that a reference alone never passes for details (#187). Also if the reference
+     *         leaves no room for details (see {@link #complaintDetailsLimit})
+     * @throws BusinessRuleViolationException if the details are longer than {@link #complaintDetailsLimit}
+     *         allows, or the subject is longer than {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     */
     @Transactional
     public ConversationDTO submitComplaint(String token, SubmitComplaintRequestDTO request) {
         int memberId = authenticate(token);
         String body = request.body();
+        if (body == null || body.isBlank()) {
+            throw new IllegalArgumentException("Complaint details must not be blank");
+        }
         if (hasRelatedRef(request.relatedEntityRef())) {
             // Checked here rather than left to Message, whose refusal would name the whole body's
             // limit: the member types only the details, and the reference shares their column (#186).
@@ -242,9 +265,26 @@ public class MessagingService {
         log.info("Admin {} resolved complaint {}", adminId, conversationId);
     }
 
-    // II.6.3.2 — admin proactive messaging. Resolves the recipient set (explicit members, and/or
-    // all members, and/or all producers' owner accounts), then opens one two-way DIRECT
-    // conversation per recipient so each lands in that member's Support Inbox as a chat.
+    /**
+     * II.6.3.2: an admin messages members proactively. Resolves the recipients (every member, and/or
+     * every active company's owners, or else the explicit member list), then opens one two-way DIRECT
+     * conversation per recipient, so each lands in that member's Support Inbox as a chat.
+     *
+     * <p>The send is all or nothing: an explicit recipient that names no member refuses it before any
+     * conversation is stored, since a partial send would leave the admin unable to tell who got it
+     * (#187). The whole send publishes one {@link OutreachSentNotice}, not one notice per recipient:
+     * the notify- queue is bounded and drops what does not fit (ADR-004, #187).
+     *
+     * @param token   a live admin token whose admin still exists
+     * @param request the subject, the body, and who receives it
+     * @return how many recipients the send reached, and the first conversation opened
+     * @throws UserNotFoundException if an explicit recipient id names no member, 0 and negative ids
+     *         included; nothing is stored or published
+     * @throws BusinessRuleViolationException if the send matches no recipient
+     * @throws UnauthorizedActionException if the token is a member's, or its admin no longer exists
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked
+     */
     @Transactional
     public OutreachResultDTO sendOutreach(String token, OutreachRequestDTO request) {
         int adminId = requireSystemAdmin(token);
@@ -264,7 +304,10 @@ public class MessagingService {
         }
         if (!request.allMembers() && !request.allProducers()) {
             for (Integer memberId : safeList(request.recipientMemberIds())) {
-                if (memberId != null) recipientIds.add(memberId);
+                if (memberId != null) {
+                    requireMember(memberId);
+                    recipientIds.add(memberId);
+                }
             }
         }
 
@@ -273,6 +316,7 @@ public class MessagingService {
         }
 
         List<Conversation> created = new ArrayList<>();
+        List<OutreachSentNotice.Recipient> notified = new ArrayList<>();
         for (Integer memberId : recipientIds) {
             Conversation conversation = Conversation.start(
                     ConversationType.DIRECT,
@@ -280,10 +324,11 @@ public class MessagingService {
                     memberId, ParticipantType.MEMBER,
                     request.subject(), request.body(), LocalDateTime.now(clock));
             conversationRepository.save(conversation);
-            publishNewMessage(memberId, conversation.getConversationId(),
-                    senderLabel(ParticipantType.ADMIN), request.subject(), request.body());
             created.add(conversation);
+            notified.add(new OutreachSentNotice.Recipient(memberId, conversation.getConversationId()));
         }
+        eventPublisher.publishEvent(new OutreachSentNotice(notified,
+                senderLabel(ParticipantType.ADMIN), request.subject(), snippet(request.body())));
 
         log.info("Admin {} sent outreach to {} recipient(s)", adminId, created.size());
         return new OutreachResultDTO(created.size(), created.get(0).getConversationId());
@@ -291,15 +336,29 @@ public class MessagingService {
 
 
 
-    // UI action — mark a single message as read by the viewer.
+    /**
+     * Marks the thread read for the caller's side: every message the other side sent becomes read, so
+     * the caller's unread count for it drops to 0. The UI calls it when the caller opens the thread.
+     * The other side's count is unchanged. An admin reads for all admins: opening a complaint marks the
+     * member's message read for the whole queue, and never marks an admin's reply read for the member.
+     *
+     * @param token the caller's member or admin token
+     * @param conversationId the thread to mark read
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     * @throws ConversationNotFoundException if no conversation has that id
+     * @throws InvalidParticipantException if the caller is not a participant of the conversation
+     */
     @Transactional
-    public void markMessageAsRead(String token, String conversationId, String messageId) {
+    public void markConversationRead(String token, String conversationId) {
         Caller caller = authenticateCaller(token);
         conversationRepository.lockForUpdate(conversationId);
         try {
             Conversation conversation = loadConversation(conversationId);
             CallerSide reader = resolveCallerSide(caller, conversation);
-            conversation.markMessageRead(messageId, reader.id(), reader.type());
+            conversation.markReadBy(reader.id(), reader.type());
             conversationRepository.save(conversation);
         } finally {
             conversationRepository.unlock(conversationId);
@@ -360,7 +419,20 @@ public class MessagingService {
                 .toList();
     }
 
-    // II.6.3.1 — admin queue of complaints with filters.
+    /**
+     * II.6.3.1: the admin complaint queue, newest first, narrowed by whichever filters are set.
+     *
+     * @param token   a live admin token whose admin still exists
+     * @param filters status, member and creation-date filters, each optional; {@code null} for none. A
+     *                null or blank status means every status; any other must name a
+     *                {@link ConversationStatus}, case aside
+     * @return the matching complaints, seen by the calling admin
+     * @throws IllegalArgumentException if the status names no {@link ConversationStatus} (#187): an
+     *         unknown status is refused rather than read as "every status"
+     * @throws UnauthorizedActionException if the token is a member's, or its admin no longer exists
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked
+     */
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewAllComplaints(String token, ComplaintFilterDTO filters) {
         int adminId = requireSystemAdmin(token);
@@ -522,12 +594,8 @@ public class MessagingService {
         switch (otherType) {
             case MEMBER -> publishNewMessage(otherId, conversation.getConversationId(), label,
                     conversation.getSubject(), body);
-            case COMPANY -> {
-                ProductionCompany company = tryGetCompany(otherId);
-                if (company != null) {
-                    notifyCompanyOwners(company, conversation, label, body);
-                }
-            }
+            case COMPANY -> tryGetCompany(otherId)
+                    .ifPresent(company -> notifyCompanyOwners(company, conversation, label, body));
             // Admins are never notified (see class comment); the reply shows in their inbox or queue.
             case ADMIN, ADMIN_GROUP -> { }
             default -> { /* SYSTEM — no single recipient to notify */ }
@@ -572,16 +640,18 @@ public class MessagingService {
     }
 
     // Human-readable label for a conversation party: member username, company name, or a fixed
-    // label for the admin side / system. Falls back to "<Kind> #id" if the entity can't be loaded.
+    // label for the admin side / system. Falls back to "<Kind> #id" only when the member or company no
+    // longer exists. A store failure propagates: under JPA it has already marked the transaction
+    // rollback-only, so swallowing it would surface as an UnexpectedRollbackException without its cause.
     private String resolveDisplayName(int id, ParticipantType type) {
         return switch (type) {
             case MEMBER -> {
                 try { yield userRepository.getUserById(id).getUsername(); }
-                catch (RuntimeException e) { yield "Member #" + id; }
+                catch (UserNotFoundException e) { yield "Member #" + id; }
             }
             case COMPANY -> {
                 try { yield companyRepository.getCompanyById(id).getName(); }
-                catch (RuntimeException e) { yield "Company #" + id; }
+                catch (CompanyNotFoundException e) { yield "Company #" + id; }
             }
             case ADMIN, ADMIN_GROUP -> "TicketHub Support";
             case SYSTEM -> "TicketHub";
@@ -592,18 +662,24 @@ public class MessagingService {
     // Misc helpers
     // ---------------------------------------------------------------------------
 
+    // Throws UserNotFoundException for an id that names no member; 0 and negative ids never do.
+    private void requireMember(int memberId) {
+        userRepository.getUserById(memberId);
+    }
+
     private Conversation loadConversation(String conversationId) {
         return conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ConversationNotFoundException(conversationId));
     }
 
-    // Best-effort company lookup — returns null instead of throwing so a missing company
-    // never aborts a notification fan-out (the repository throws when the id is unknown).
-    private ProductionCompany tryGetCompany(int companyId) {
+    // Company lookup for a notification fan-out: empty when the company no longer exists, so a reply to
+    // a deleted company's inquiry is still stored, with no one to notify. A store failure propagates,
+    // as in resolveDisplayName.
+    private Optional<ProductionCompany> tryGetCompany(int companyId) {
         try {
-            return companyRepository.getCompanyById(companyId);
-        } catch (RuntimeException e) {
-            return null;
+            return Optional.of(companyRepository.getCompanyById(companyId));
+        } catch (CompanyNotFoundException e) {
+            return Optional.empty();
         }
     }
 
@@ -623,6 +699,8 @@ public class MessagingService {
         return true;
     }
 
+    // Null means no status filter: only a null or blank status asks for that. An unknown one is refused,
+    // never read as "every status" (#187).
     private ConversationStatus parseStatusOrNull(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -630,7 +708,7 @@ public class MessagingService {
         try {
             return ConversationStatus.valueOf(raw.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            return null;
+            throw new IllegalArgumentException("Unknown complaint status: " + raw.trim(), e);
         }
     }
 

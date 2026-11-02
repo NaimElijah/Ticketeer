@@ -1,5 +1,6 @@
 package com.ticketing.system.bootstrap.dev.seed.scenario;
 
+import com.ticketing.system.bootstrap.DatasourceUrls;
 import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
@@ -28,6 +29,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
@@ -39,6 +41,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Boots the system from an editable scenario file (#366). Reads {@code seed.scenario}, parses it, and
@@ -52,10 +56,15 @@ import java.util.Locale;
  * <p>{@code seed.mode}:
  * <ul>
  *   <li>{@code off} (default) — do nothing.</li>
- *   <li>{@code reseed} — run the scenario (creates what's missing); opens the market first so the
- *       scenario's purchases can run.</li>
+ *   <li>{@code reseed} — run the scenario, opening the market first so its purchases can run. Before any
+ *       step, it looks up the users the scenario registers (by username, honouring a line's
+ *       {@code username=}); if one already exists, the scenario has run against this database before, so
+ *       no step runs, a WARN points at {@code reset}, and the boot goes on. Users the scenario does not
+ *       register, such as {@code DevUserSeeder}'s, do not count.</li>
  *   <li>{@code wipe} — delete all business data, then stop.</li>
- *   <li>{@code reset} — {@code wipe} then reseed.</li>
+ *   <li>{@code reset} — read the scenario, {@code wipe}, then run it. A scenario that cannot be read or
+ *       parsed stops the boot before anything is deleted, and the scenario runs even if its users
+ *       existed, since the wipe removed them.</li>
  *   <li>{@code ask} — interactive startup menu: choose the mode <em>and</em> the scenario on the
  *       console at boot, then run that choice.</li>
  * </ul>
@@ -64,7 +73,9 @@ import java.util.Locale;
  * would be deleted plus the command to enable it, and refuse. This holds whether the mode came from
  * {@code SEED_MODE} directly or was chosen in the {@code ask} menu — picking a destructive mode is not by
  * itself sufficient. The wipe keeps the bootstrap admin (see {@code JpaRepoCleaner}). The {@code ask} menu
- * reads stdin only to choose mode/scenario; with no terminal it falls back to {@code off} (safe).
+ * reads stdin only to choose mode/scenario; with no terminal it falls back to {@code off} (safe). A
+ * scenario answer that names no committed scenario is asked again; if the console ends after one, the
+ * boot stops with the valid choices named.
  * {@code seed.fail-fast=true} (the default outside {@code dev}) stops the scenario at the first unexpected
  * error and fails startup, as does a missing or unreadable scenario file (V3 2.a.ii, ADR-003).
  */
@@ -78,6 +89,10 @@ public class ScenarioRunner implements ApplicationRunner {
     private static final int DEFAULT_ADMIN_ID = 1;
     private static final List<String> MODES = List.of("off", "reseed", "wipe", "reset");
     private static final List<String> SCENARIOS = List.of("demo", "review");
+    private static final String DEFAULT_SCENARIO = "demo";
+    private static final String SCENARIO_QUESTION = "Scenario";
+    private static final String COMMITTED_SCENARIO_PREFIX = "classpath:scenarios/";
+    private static final Profiles DEV_PROFILE = Profiles.of("dev");
 
     private final AuthenticationService authenticationService;
     private final CompanyManagementService companyManagementService;
@@ -98,8 +113,9 @@ public class ScenarioRunner implements ApplicationRunner {
     private final boolean failFast;
     private final boolean assumeYes;
     private final String scenarioLocation;
-    private final String adminUsername;
+    private final PlatformAdminProperties platformAdmin;
     private final ZoneId timeZone;
+    // Logged and shown on the console, so it is held without its query string, which can carry credentials.
     private final String datasourceUrl;
 
     // One reader for the whole interactive session: a fresh BufferedReader per prompt would
@@ -145,9 +161,9 @@ public class ScenarioRunner implements ApplicationRunner {
         this.failFast = seed.failFast();
         this.assumeYes = seed.assumeYes();
         this.scenarioLocation = seed.scenario();
-        this.adminUsername = platformAdmin.username();
+        this.platformAdmin = platformAdmin;
         this.timeZone = platformTime.timeZone();
-        this.datasourceUrl = datasourceUrl;
+        this.datasourceUrl = DatasourceUrls.withoutQuery(datasourceUrl);
     }
 
     @Override
@@ -160,9 +176,16 @@ public class ScenarioRunner implements ApplicationRunner {
         switch (mode) {
             case OFF -> log.info("seed.mode=off — no seeding");
             case RESEED -> {
-                log.info("seed.mode=reseed — seeding (idempotent)");
-                ensureMarketOpen();
-                runScenario(scenario);
+                List<ScenarioCommand> commands = readScenario(scenario);
+                if (registersAnExistingUser(commands)) {
+                    log.warn("seed.mode=reseed — skipping scenario '{}': a user it registers already exists in "
+                            + "this database, so it has run here before. To replay it, wipe and reseed with "
+                            + "seed.mode=reset and seed.assume-yes=true.", scenario);
+                } else {
+                    log.info("seed.mode=reseed — seeding");
+                    ensureMarketOpen();
+                    runScenario(scenario, commands);
+                }
             }
             case WIPE -> {
                 if (destructiveAllowed("wipe")) {
@@ -172,10 +195,13 @@ public class ScenarioRunner implements ApplicationRunner {
             }
             case RESET -> {
                 if (destructiveAllowed("reset")) {
+                    // Read before the wipe: a missing file, or one the parser refuses, then stops the boot
+                    // with the data still there. The reseed's skip does not apply: the wipe removes its users.
+                    List<ScenarioCommand> commands = readScenario(scenario);
                     repoCleaner.clearAll();
                     ensureMarketOpen();
                     devUserSeeder.ifAvailable(seeder -> seeder.run(null));
-                    runScenario(scenario);
+                    runScenario(scenario, commands);
                     log.info("seed.mode=reset — done; database wiped and reseeded");
                 }
             }
@@ -196,33 +222,78 @@ public class ScenarioRunner implements ApplicationRunner {
         }
         String scenario = scenarioLocation;
         if (mode.equals("reseed") || mode.equals("reset")) {
-            scenario = "classpath:scenarios/" + askChoice("Scenario", SCENARIOS, "demo") + ".scenario";
+            scenario = "classpath:scenarios/" + askScenario() + ".scenario";
         }
         executeMode(SeedProperties.Mode.valueOf(mode.toUpperCase(Locale.ROOT)), scenario);
     }
 
-    /** Prompts with a list of options and a default; returns the lowercased answer, or the default on empty/EOF. */
+    /**
+     * Asks which committed scenario to run. An answer that names none would name a missing file and stop
+     * the boot, so it is refused, the valid names are shown, and the question is asked again. With no
+     * console at the first answer the default is taken, as for every question.
+     *
+     * @throws IllegalStateException when the console ends, or cannot be read, after an unknown answer; the
+     *         message names the valid choices
+     */
+    private String askScenario() {
+        String answer = askChoice(SCENARIO_QUESTION, SCENARIOS, DEFAULT_SCENARIO);
+        while (!SCENARIOS.contains(answer)) {
+            System.out.println("  '" + answer + "' is not a scenario; choose one of " + SCENARIOS + ".");
+            String unknown = answer;
+            try {
+                answer = promptForAnswer(SCENARIO_QUESTION, SCENARIOS, DEFAULT_SCENARIO)
+                        .orElseThrow(() -> consoleEndedAfter(unknown, null));
+            } catch (IOException e) {
+                throw consoleEndedAfter(unknown, e);
+            }
+        }
+        return answer;
+    }
+
+    private static IllegalStateException consoleEndedAfter(String unknownAnswer, IOException cause) {
+        return new IllegalStateException("seed.mode=ask: '" + unknownAnswer + "' is not a scenario, and the"
+                + " console ended or could not be read before a valid one was chosen. Choose one of " + SCENARIOS
+                + ".", cause);
+    }
+
+    /**
+     * Prompts with a list of options and a default; returns the answer, or the default on empty input,
+     * EOF or a read error.
+     */
     private String askChoice(String label, List<String> options, String dflt) {
+        try {
+            return promptForAnswer(label, options, dflt).orElse(dflt);
+        } catch (IOException e) {
+            // No usable console is the no-terminal case: take the default, as for EOF. Logged at WARN, since
+            // the operator asked for a menu and did not get one.
+            log.warn("seed.mode=ask: could not read the console; taking the default '{}'", dflt, e);
+            return dflt;
+        }
+    }
+
+    /**
+     * Prompts once and reads one line.
+     *
+     * @return the trimmed, lowercased answer, the default for an empty line, or empty when the console has ended
+     * @throws IOException when the console cannot be read
+     */
+    private Optional<String> promptForAnswer(String label, List<String> options, String dflt) throws IOException {
         System.out.println();
         System.out.println("  " + label + "? " + options + "  [default: " + dflt + "]");
         System.out.print("  > ");
         System.out.flush();
-        try {
-            String line = readConsoleLine();
-            if (line == null) {
-                return dflt;
-            }
-            String value = line.trim().toLowerCase();
-            return value.isEmpty() ? dflt : value;
-        } catch (IOException e) {
-            return dflt;
+        String line = readConsoleLine();
+        if (line == null) {
+            return Optional.empty();
         }
+        String value = line.trim().toLowerCase(Locale.ROOT);
+        return Optional.of(value.isEmpty() ? dflt : value);
     }
 
     /** Opens the trading market via the real admin path so the scenario's reserve/checkout steps work. */
     private void ensureMarketOpen() {
         try {
-            String adminToken = sessionManager.generateAdminToken(DEFAULT_ADMIN_ID, adminUsername);
+            String adminToken = sessionManager.generateAdminToken(DEFAULT_ADMIN_ID, platformAdmin.username());
             systemAdminService.openMarket(new MarketControlRequestDTO("OPEN", "seed auto-open", adminToken));
             log.info("seed: market opened so seeded purchases can run");
         } catch (RuntimeException e) {
@@ -259,9 +330,18 @@ public class ScenarioRunner implements ApplicationRunner {
         return consoleReader.readLine();
     }
 
+    // Only the scenario's own users count: DevUserSeeder may have registered others earlier in this boot.
+    private boolean registersAnExistingUser(List<ScenarioCommand> commands) {
+        return commands.stream()
+                .filter(cmd -> cmd.op().equals(ScenarioOps.REGISTER_OP))
+                .map(ScenarioOps::registeredUsername)
+                .filter(Objects::nonNull)
+                .anyMatch(userRepository::existsByUsername);
+    }
+
     // V3 2.a.ii / ADR-003: a requested initial-state file is part of initialization, so a missing or
-    // unreadable file, or a failed step under fail-fast, propagates and stops the boot.
-    private void runScenario(String scenario) {
+    // unreadable file propagates and stops the boot.
+    private List<ScenarioCommand> readScenario(String scenario) {
         Resource resource = resourceLoader.getResource(scenario);
         if (!resource.exists()) {
             throw new IllegalStateException("Initial-state file not found: " + scenario + " (seed.scenario)");
@@ -272,17 +352,30 @@ public class ScenarioRunner implements ApplicationRunner {
         } catch (IOException e) {
             throw new IllegalStateException("Could not read initial-state file " + scenario, e);
         }
+        return new ScenarioParser().parse(text);
+    }
 
-        List<ScenarioCommand> commands = new ScenarioParser().parse(text);
+    // A committed scenario's accounts have passwords anyone can read in the repository. Under dev the
+    // database is in memory; elsewhere it may be reachable, so say so. Refusing is #78's decision.
+    private void warnIfCommittedScenarioOutsideDev(String scenario) {
+        if (scenario.startsWith(COMMITTED_SCENARIO_PREFIX) && !environment.acceptsProfiles(DEV_PROFILE)) {
+            log.warn("seed: scenario '{}' is a committed one, and the accounts it registers have passwords "
+                    + "published in the repository; run it only against a database others cannot reach.", scenario);
+        }
+    }
+
+    // A failed step under fail-fast propagates and stops the boot (V3 2.a.ii, ADR-003).
+    private void runScenario(String scenario, List<ScenarioCommand> commands) {
         SeedReport report = new SeedReport();
         SeedHarness harness = new SeedHarness(report, failFast);
         ScenarioContext ctx = new ScenarioContext();
         ScenarioOps ops = new ScenarioOps(
             authenticationService, companyManagementService, eventManagementService,
             reservationService, checkoutService, catalogService, messagingService,
-            userRepository, new DemoClock(clock), timeZone);
+            userRepository, new DemoClock(clock), timeZone, platformAdmin);
 
         log.info("running scenario '{}' ({} operations)", scenario, commands.size());
+        warnIfCommittedScenarioOutsideDev(scenario);
         try {
             for (ScenarioCommand cmd : commands) {
                 ops.execute(cmd, ctx, harness);

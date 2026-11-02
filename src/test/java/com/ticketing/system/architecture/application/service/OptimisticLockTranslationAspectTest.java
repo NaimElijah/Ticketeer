@@ -1,8 +1,12 @@
 package com.ticketing.system.architecture.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
@@ -53,6 +57,28 @@ class OptimisticLockTranslationAspectTest {
 
         ConcurrentReservationException thrown =
                 assertThrows(ConcurrentReservationException.class, proxy::run);
+        assertSame(conflict, thrown.getCause(), "the original failure must be preserved as the cause");
+    }
+
+    // #187: ServiceErrors.userMessage shows a DomainException's message to the user as is, so the
+    // translated conflict must not name the advised class or method.
+    @Test
+    void GivenOptimisticLockFailure_WhenTranslated_ThenMessageAsksForRetryWithoutNamingTheMethod() {
+        FakeService target = new FakeService();
+        OptimisticLockingFailureException conflict = new OptimisticLockingFailureException("version mismatch");
+        target.toThrow = conflict;
+
+        FakeService proxy = advised(target);
+
+        ConcurrentReservationException thrown =
+                assertThrows(ConcurrentReservationException.class, proxy::run);
+        String message = thrown.getMessage();
+        assertFalse(message.contains(FakeService.class.getSimpleName()),
+                "the message names the advised class: " + message);
+        assertFalse(message.contains("run("), "the message names the advised method: " + message);
+        assertFalse(message.contains("(..)"), "the message carries a method signature: " + message);
+        assertTrue(message.toLowerCase(Locale.ROOT).contains("retry"),
+                "the message must still ask the user to retry: " + message);
         assertSame(conflict, thrown.getCause(), "the original failure must be preserved as the cause");
     }
 

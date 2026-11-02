@@ -44,6 +44,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.EventNotOnSaleException;
 import com.ticketing.system.shared.exception.InsufficientInventoryException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
+import com.ticketing.system.testutil.TestTransactions;
 
 /**
  * Direct unit coverage of {@link InventoryService} — the catalog inbound port implementation that took
@@ -72,7 +73,7 @@ class InventoryServiceTest {
         // A sale loads its events through findForSale; each test stubs the events once, on findById.
         when(eventRepository.findForSale(anyInt())).thenAnswer(call -> eventRepository.findById(call.<Integer>getArgument(0)));
         companyRepository = mock(ProductionCompanyRepository.class);
-        service = new InventoryService(eventRepository, companyRepository);
+        service = new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager());
     }
 
     // ---- reserve --------------------------------------------------------
@@ -114,6 +115,7 @@ class InventoryServiceTest {
         InventoryZone zone = mock(InventoryZone.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.getVenueMap().getZone(STANDING_ZONE)).thenReturn(zone);
+        when(companyRepository.getCompanyById(anyInt())).thenReturn(activeCompany());
         doThrow(new PolicyViolationException("max 1 ticket"))
                 .when(event).validateEffectivePolicy(any(), any(PurchaseContext.class));
 
@@ -129,11 +131,11 @@ class InventoryServiceTest {
     /** A missing event fails fast (and, being pre-mutation, releases the lock it took). */
     @Test
     void reserve_eventNotFound_throwsAndUnlocks() {
-        when(eventRepository.findById(EVENT_ID)).thenReturn(null);
+        when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThatThrownBy(() -> service.reserve(EVENT_ID, SEATED_ZONE,
                 InventorySelectionDTO.standing(1), ORDER_KEY, HOLD_UNTIL, -1, null, 1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(EventNotFoundException.class);
 
         verify(eventRepository).unlockBuyerOperation(EVENT_ID);
     }
@@ -226,7 +228,7 @@ class InventoryServiceTest {
 
         assertThat(service.priceTicket(EVENT_ID, 2, 40.0, now)).isEqualTo(36.0);
 
-        when(eventRepository.findById(999)).thenReturn(null);
+        when(eventRepository.findById(999)).thenThrow(new EventNotFoundException(999));
         assertThatThrownBy(() -> service.priceTicket(999, 1, 10.0, now))
                 .isInstanceOf(EventNotFoundException.class);
     }
@@ -239,7 +241,7 @@ class InventoryServiceTest {
         when(event.getName()).thenReturn("Rock Night");
         assertThat(service.eventName(EVENT_ID)).isEqualTo("Rock Night");
 
-        when(eventRepository.findById(999)).thenReturn(null);
+        when(eventRepository.findById(999)).thenThrow(new EventNotFoundException(999));
         assertThatThrownBy(() -> service.eventName(999)).isInstanceOf(EventNotFoundException.class);
     }
 
@@ -270,7 +272,7 @@ class InventoryServiceTest {
         when(eventRepository.findById(1)).thenReturn(onSale);
         when(eventRepository.findById(2)).thenReturn(soldOut);
         when(eventRepository.findById(3)).thenReturn(draft);
-        when(eventRepository.findById(4)).thenReturn(null);
+        when(eventRepository.findById(4)).thenThrow(new EventNotFoundException(4));
 
         service.validateEventsOnSale(List.of(1, 2)); // ON_SALE + SOLD_OUT are both allowed
 
