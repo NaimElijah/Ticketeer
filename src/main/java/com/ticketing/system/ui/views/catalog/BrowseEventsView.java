@@ -354,15 +354,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             runSearch();
         });
 
-        Div wrap = new Div();
-        Span label = new Span("Price range");
-        label.addClassName("lk-label");
-        label.getStyle().set("display", "block").set("margin-bottom", "6px");
-        wrap.add(label);
-        LkRow row = new LkRow().gap(8);
-        row.add(priceMin, priceMax);
-        wrap.add(row);
-        return wrap;
+        return rangeWrap("Price range", priceMin, priceMax);
     }
 
     private Component buildEventRatingRange() {
@@ -376,7 +368,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             filterMaxEventRating = v;
             runSearch();
         });
-        return ratingRangeWrap("Event rating", eventRatingMin, eventRatingMax);
+        return rangeWrap("Event rating", eventRatingMin, eventRatingMax);
     }
 
     private Component buildCompanyRatingRange() {
@@ -390,7 +382,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             filterMaxCompanyRating = v;
             runSearch();
         });
-        return ratingRangeWrap("Organizer rating", companyRatingMin, companyRatingMax);
+        return rangeWrap("Organizer rating", companyRatingMin, companyRatingMax);
     }
 
     /** A 0–5 rating bound input (NumberField, half-star step) wired to {@code onChange}. */
@@ -406,7 +398,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         return f;
     }
 
-    private static Component ratingRangeWrap(String labelText, NumberField min, NumberField max) {
+    private static Component rangeWrap(String labelText, Component min, Component max) {
         Div wrap = new Div();
         Span label = new Span(labelText);
         label.addClassName("lk-label");
