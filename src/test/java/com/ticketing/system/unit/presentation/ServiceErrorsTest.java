@@ -215,8 +215,10 @@ class ServiceErrorsTest {
         assertEquals(1, serviceErrorsLog.eventsContaining(ACTION).size(), "the log line must name the action");
     }
 
+    // A refusal is the user's to read, not an operator's to act on, and LoggingAspect already logs the refused
+    // service call at WARN, so this line is DEBUG.
     @Test
-    void GivenABusinessRefusal_WhenUserMessageLogged_ThenItsOwnTextAndOneWarningWithTheException() {
+    void GivenABusinessRefusal_WhenUserMessageLogged_ThenItsOwnTextAndOneDebugLineWithTheException() {
         serviceErrorsLog = LogCapture.of(ServiceErrors.class);
 
         String message = ServiceErrors.userMessageLogged(
@@ -225,6 +227,7 @@ class ServiceErrorsTest {
         assertEquals("This event is no longer on sale.", message);
         assertEquals(1, serviceErrorsLog.eventCount(), "the failure must be logged once");
         assertEquals(List.of(BusinessRuleViolationException.class.getName()),
-            serviceErrorsLog.throwableClassNamesAt(Level.WARN));
+            serviceErrorsLog.throwableClassNamesAt(Level.DEBUG));
+        assertEquals(1, serviceErrorsLog.eventsContaining(ACTION).size(), "the log line must name the action");
     }
 }

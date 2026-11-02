@@ -80,8 +80,13 @@ public final class ServiceErrors {
     /**
      * The text {@link #userMessage} gives, for a caller that wants the failure in the log whatever it
      * is: logs it once, with its exception and the caller's {@code action}, so the caller logs nothing
-     * itself. An internal failure is logged at ERROR, as {@link #userMessage} logs it; a database outage
-     * or a business refusal, which {@link #userMessage} leaves unlogged, at WARN.
+     * itself. The level says who must act (#187):
+     * <ul>
+     *   <li>an internal failure at ERROR, as {@link #userMessage} logs it;</li>
+     *   <li>a database outage at WARN: the service is degraded;</li>
+     *   <li>a refusal the user may read ({@link UserFacingErrors#isUserFacing}) at DEBUG: nobody needs to act,
+     *       and {@code LoggingAspect} already logs the refused service call at WARN.</li>
+     * </ul>
      *
      * @param error  the exception the service call threw; not {@code null}
      * @param action what failed and the ids that locate it, in key=value form (for example
@@ -89,8 +94,12 @@ public final class ServiceErrors {
      * @return the text to show the user, never {@code null}
      */
     public static String userMessageLogged(RuntimeException error, String action) {
-        if (isDatabaseUnavailable(error) || UserFacingErrors.isUserFacing(error)) {
+        if (isDatabaseUnavailable(error)) {
             log.warn("Service call failed action=\"{}\"", action, error);
+            return userMessage(error);
+        }
+        if (UserFacingErrors.isUserFacing(error)) {
+            log.debug("Service call refused action=\"{}\"", action, error);
             return userMessage(error);
         }
         log.error("Service call failed with an internal error action=\"{}\"; the user sees the generic message",
