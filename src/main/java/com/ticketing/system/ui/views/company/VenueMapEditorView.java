@@ -58,6 +58,11 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private final VenueMapPresenter presenter;
     private final VenueLimitsProperties venueLimits;
     private final LkBtn saveMapBtn;
+    /**
+     * Whether the event's map loaded. Until it does the editor holds only its placeholder zone, and saving
+     * that would replace the event's real map (#187, UI-A16).
+     */
+    private boolean mapLoaded;
     private String eventId = "0";
 
     private record ZoneState(String name, boolean seated, int rows, int seatsPerRow,
@@ -110,6 +115,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     }
 
     private void loadZonesFromBackend() {
+        setMapLoaded(false);
         if ("0".equals(eventId)) return;
         Optional<Integer> id = parseEventId(eventId);
         if (id.isEmpty()) {
@@ -136,6 +142,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                     loadZoneIntoEditor(0);
                 }
                 refreshAll();
+                setMapLoaded(true);
             }
             case VenueMapPresenter.LoadOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
@@ -458,7 +465,15 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     // ── Persist ───────────────────────────────────────────────────────────────
 
+    private void setMapLoaded(boolean loaded) {
+        mapLoaded = loaded;
+        saveMapBtn.setEnabled(loaded);
+    }
+
     private void saveMap() {
+        if (!mapLoaded) {
+            return;
+        }
         List<VenueMapConfigDTO.ZoneConfigDTO> zoneDTOs = new ArrayList<>();
         for (ZoneState z : zoneStates) {
             if (z.seated()) {
