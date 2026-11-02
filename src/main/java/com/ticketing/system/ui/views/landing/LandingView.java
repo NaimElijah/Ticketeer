@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.landing;
 
+import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.ui.components.buyer.BzPoster;
@@ -8,6 +9,7 @@ import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -156,15 +158,17 @@ public class LandingView extends LkPage {
             .set("grid-template-columns", "repeat(auto-fit, minmax(min(100%, 220px), 1fr))")
             .set("gap", "16px");
         grid.add(
-            categoryCard("Concerts",     "music",   "42 events",  "#8b5cf6", "#ec4899"),
-            categoryCard("Sports",       "trophy",  "28 events",  "#0ea5e9", "#10b981"),
-            categoryCard("Theatre",      "theater", "14 events",  "#dc2626", "#f59e0b"),
-            categoryCard("Conferences",  "mic",     "9 events",   "#0d9488", "#1d4ed8")
+            categoryCard(EventCategory.CONCERT, "music",   "42 events",  "#8b5cf6", "#ec4899"),
+            categoryCard(EventCategory.SPORTS,  "trophy",  "28 events",  "#0ea5e9", "#10b981"),
+            categoryCard(EventCategory.THEATER, "theater", "14 events",  "#dc2626", "#f59e0b"),
+            categoryCard(EventCategory.COMEDY,  "mic",     "9 events",   "#0d9488", "#1d4ed8")
         );
         return grid;
     }
 
-    private Div categoryCard(String name, String iconName, String count, String g1, String g2) {
+    // Each card is a category that exists, under the label that filters Browse to it (#187, UI-A6).
+    private Div categoryCard(EventCategory category, String iconName, String count, String g1, String g2) {
+        String name = EventCategoryLabels.label(category);
         Div card = new Div();
         card.getStyle()
             .set("background", "linear-gradient(135deg, " + g1 + ", " + g2 + ")")

@@ -19,6 +19,7 @@ import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.datepicker.DatePicker;
@@ -624,7 +625,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         int priceCents = (int) Math.round(dto.minPrice() * 100);
         LkStatusDot.Tone tone = dto.soldOut() ? LkStatusDot.Tone.muted : LkStatusDot.Tone.ok;
         String status = dto.soldOut() ? "Sold out" : "On sale";
-        return new EventRow(dto.name(), prettyCategory(dto.category()), dto.location(),
+        return new EventRow(dto.name(), EventCategoryLabels.labelOf(dto.category()), dto.location(),
                 date, startsAt, priceCents, tone, status, String.valueOf(dto.eventId()),
                 dto.rating(), dto.artistsNames());
     }
@@ -640,18 +641,6 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             case "Rating · low to high" -> Comparator.comparing(EventRow::rating,
                     Comparator.nullsLast(Comparator.naturalOrder()));
             default                     -> bySoonest;
-        };
-    }
-
-    private static String prettyCategory(String enumName) {
-        if (enumName == null) return "Other";
-        return switch (enumName.toUpperCase()) {
-            case "CONCERT", "MUSIC" -> "Concerts";
-            case "SPORTS"           -> "Sports";
-            case "THEATER"          -> "Theatre";
-            case "FESTIVAL"         -> "Festivals";
-            case "COMEDY"           -> "Comedy";
-            default                 -> "Other";
         };
     }
 
