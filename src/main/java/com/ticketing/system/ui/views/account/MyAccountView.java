@@ -28,7 +28,7 @@ import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
@@ -106,7 +106,8 @@ public class MyAccountView extends LkPage {
         avatar.addClassName("acct-hero-av");
 
         Div meta = new Div();
-        H2 welcome = new H2("Welcome back, " + first);
+        // The page's one h1, above the "My Orders" and "My Tickets" h2s (#188).
+        H1 welcome = new H1("Welcome back, " + first);
         welcome.getStyle().set("margin", "0").set("color", "#fff");
         Span sub = new Span("Track your orders, view tickets, and request refunds.");
         sub.getStyle().set("color", "rgba(255,255,255,0.9)").set("font-size", "14.5px");

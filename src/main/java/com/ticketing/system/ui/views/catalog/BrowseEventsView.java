@@ -24,6 +24,7 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.textfield.IntegerField;
@@ -141,7 +142,8 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Component buildHero() {
         Div hero = new Div();
         hero.addClassName("bz-hero");
-        Div title = new Div();
+        // The page's one h1 (#188).
+        H1 title = new H1();
         title.addClassName("bz-hero-title");
         title.setText("Find your next experience");
         Div sub = new Div();

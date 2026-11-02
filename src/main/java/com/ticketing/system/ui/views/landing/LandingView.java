@@ -13,6 +13,7 @@ import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
@@ -59,7 +60,8 @@ public class LandingView extends LkPage {
     private Component buildHero() {
         Div hero = new Div();
         hero.addClassName("bz-hero");
-        Div title = new Div();
+        // The page's one h1 (#188).
+        H1 title = new H1();
         title.addClassName("bz-hero-title");
         title.setText("Find your next unforgettable experience.");
         Div sub = new Div();

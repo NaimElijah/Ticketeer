@@ -24,8 +24,10 @@ import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
 import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.views.order.CartView;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Text;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
@@ -305,8 +307,12 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         Span back = new Span("← Back to areas");
         back.addClassName("bz-link");
         back.getElement().addEventListener("click", e -> UI.getCurrent().navigate("events/" + eventId));
-        Span trail = Lk.muted(" / " + trailText + " · " + money(zonePrice));
-        trail.getStyle().set("font-size", "13px");
+        // The zone is what the page is about, so its name is the page's one h1 (#188), drawn as the
+        // muted trail it sits in.
+        H1 zoneTitle = new H1(trailText);
+        zoneTitle.addClassName("vz-crumb-title");
+        Div trail = new Div(new Text(" / "), zoneTitle, new Text(" · " + money(zonePrice)));
+        trail.addClassName("vz-crumb-trail");
         crumb.add(back, trail);
         return crumb;
     }

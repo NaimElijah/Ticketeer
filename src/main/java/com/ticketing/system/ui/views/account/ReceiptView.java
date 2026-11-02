@@ -29,6 +29,7 @@ import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
@@ -180,8 +181,11 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     private Component buildRefundTimeline(Optional<ReceiptPresenter.Refunds> refunds) {
         LkCard card = new LkCard().pad(18);
         LkCol col = new LkCol().gap(10);
-        Span heading = new Span("Refund status");
-        heading.getStyle().set("font-weight", "700").set("color", "#0f172a");
+        // A section heading under the receipt's h1, beside "Items", "Payment" and "Tickets" (#188),
+        // drawn at the card's text size as a bold label.
+        H2 heading = new H2("Refund status");
+        heading.getStyle().set("font-weight", "700").set("color", "#0f172a")
+            .set("font-size", "inherit").set("margin", "0");
         col.add(heading);
 
         LkRow steps = new LkRow().gap(8);

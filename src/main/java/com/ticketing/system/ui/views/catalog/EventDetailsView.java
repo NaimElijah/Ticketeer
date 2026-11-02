@@ -25,6 +25,7 @@ import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
@@ -133,7 +134,8 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             badges.add(new LkBadge("★ " + ratingText(detail.rating()), LkBadge.Tone.muted).small());
         }
 
-        Div title = new Div();
+        // The event's name is the page's one h1 (#188).
+        H1 title = new H1();
         title.addClassName("bz-evt-title");
         title.addClassName("lk-clamp-2");
         title.setText(detail.name());

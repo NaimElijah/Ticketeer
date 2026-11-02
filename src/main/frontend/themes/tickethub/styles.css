@@ -164,7 +164,7 @@
   .lk-card-flush{overflow:visible}
   .lk-card-danger{border-color:#fbb9b9}
   .lk-card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #f1f5f9;background:#fcfdfe}
-  .lk-card-title{font-size:.82rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary)}
+  .lk-card-title{margin:0;font-size:.82rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary)}
   .lk-card-sub{font-size:.78rem;color:var(--muted);margin-top:2px;text-transform:none;letter-spacing:0;font-weight:400}
   .lk-card-body{min-width:0}
   .lk-card-f{padding:12px 18px;border-top:1px solid #f1f5f9;background:#fcfdfe}
@@ -207,7 +207,7 @@
 
   /* ============ BUYER SCREENS ============ */
   .bz-hero{background:linear-gradient(135deg,#1a5490,#2c7bb6 55%,#f47920 200%);border-radius:16px;padding:22px clamp(20px,3.5vw,40px);color:#fff;box-shadow:0 10px 28px -14px rgba(26,84,144,.5)}
-  .bz-hero-title{font-size:clamp(1.25rem,2.4vw,1.7rem);font-weight:800;letter-spacing:-.02em}
+  .bz-hero-title{margin:0;font-size:clamp(1.25rem,2.4vw,1.7rem);font-weight:800;letter-spacing:-.02em}
   .bz-hero-sub{opacity:.9;margin-top:6px;font-size:.92rem}
   .bz-hero-search{background:#fff;color:#94a3b8;border-radius:12px;padding:14px 18px;margin-top:24px;max-width:560px;display:flex;gap:10px;box-shadow:0 6px 16px rgba(0,0,0,.15)}
   .bz-poster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
@@ -228,7 +228,7 @@
   .bz-evt-hero{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
   .bz-evt-hero-poster{width:150px;height:150px;border-radius:14px;flex:none;display:flex;align-items:flex-end;padding:12px;color:rgba(255,255,255,.85);font-size:.65rem;font-weight:800;letter-spacing:.1em}
   .bz-evt-hero-meta{flex:1;min-width:240px;display:flex;flex-direction:column;gap:7px}
-  .bz-evt-title{font-size:clamp(1.4rem,2.6vw,1.9rem);font-weight:800;letter-spacing:-.02em;color:#0f172a}
+  .bz-evt-title{margin:0;font-size:clamp(1.4rem,2.6vw,1.9rem);font-weight:800;letter-spacing:-.02em;color:#0f172a}
   .bz-evt-split{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start}
   .bz-showtime{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:8px;padding:10px 14px}
   .bz-showtime.on{border-color:var(--primary);background:#f3f8fd}
@@ -251,6 +251,8 @@
   .bz-order-line{display:flex;justify-content:space-between;padding:11px 20px;border-bottom:1px solid #f1f5f9;font-size:.9rem}
   .bz-order-foot{padding:16px 20px;background:#fcfdfe;border-top:1px solid #f1f5f9}
   .bz-confirm-hero{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,#15803d,#16a34a);border-radius:16px;padding:26px 28px;box-shadow:0 10px 28px -14px rgba(22,163,74,.5)}
+  /* These heroes' titles are their pages' h1s (#188), drawn at the browser's h2 size to fit the hero. */
+  .bz-confirm-hero h1,.acct-hero h1{font-size:1.5em}
   .bz-confirm-check{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.25);color:#fff;font-size:1.8rem;display:flex;align-items:center;justify-content:center;flex:none}
   .bz-barcode{letter-spacing:.05em;color:#475569}
 
@@ -513,6 +515,9 @@
 
   /* ============ VENUE SCREEN ============ */
   .vz-crumb{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .vz-crumb-trail{color:var(--muted);font-size:13px}
+  /* The seat picker's h1 (#188), drawn as plain trail text. */
+  .vz-crumb-title{display:inline;margin:0;font:inherit;color:inherit}
   .vz-split{display:grid;grid-template-columns:1.7fr 1fr;gap:18px;align-items:start}
   .vz-split>*{min-width:0}
   .vz-canvas-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #f1f5f9;background:#fcfdfe}

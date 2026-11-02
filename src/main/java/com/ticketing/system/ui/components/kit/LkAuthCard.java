@@ -2,7 +2,7 @@ package com.ticketing.system.ui.components.kit;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.RouterLink;
@@ -34,8 +34,8 @@ public class LkAuthCard extends Div {
         brand.add(name);
         card.add(brand);
 
-        // Title + subtitle
-        H2 t = new H2(title);
+        // Title + subtitle. The title is the page's h1: the card is the whole page (#188).
+        H1 t = new H1(title);
         t.addClassName("auth-title");
         card.add(t);
         if (subtitle != null && !subtitle.isEmpty()) {
