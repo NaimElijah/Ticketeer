@@ -5,6 +5,7 @@ import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.SeatLabels;
+import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
@@ -34,6 +35,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -240,7 +242,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
             zones.add(new VkVenueMap.Zone(
                     "z" + i,
                     z.name(),
-                    "$" + (int) z.price(),
+                    Money.format(Money.toCents(z.price())),
                     i == selectedZoneIdx ? "sel" : "ok",
                     null,
                     pct((p.row() - 1) * 100.0 / gridRows),
@@ -355,7 +357,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         if (idx < 0 || idx >= zoneStates.size()) return;
         ZoneState z = zoneStates.get(idx);
         zoneNameField.setValue(z.name());
-        priceField.setValue(String.valueOf((int) z.price()));
+        priceField.setValue(priceText(z.price()));
         zoneTypeGroup.setValue(z.seated() ? "Seated" : "Standing");
         rowsField.setValue(z.rows() == 0 ? 1 : z.rows());
         seatsPerRowField.setValue(z.seatsPerRow() == 0 ? 1 : z.seatsPerRow());
@@ -486,6 +488,12 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         int row = (idx / gridCols) + 1;
         int col = (idx % gridCols) + 1;
         return new GridPlacementDTO(Math.min(row, gridRows), col, 1, 1);
+    }
+
+    // The field's text is parsed back on Apply Zone, so it must hold the exact price: a rounded one
+    // would be saved over the stored price even when the owner changed nothing.
+    private static String priceText(double price) {
+        return BigDecimal.valueOf(price).stripTrailingZeros().toPlainString();
     }
 
     private static int orDefault(Integer value, int fallback) {

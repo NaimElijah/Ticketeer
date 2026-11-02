@@ -4,6 +4,7 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.GridPlacementDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBanner;
@@ -213,7 +214,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             vk.add(new VkVenueMap.Zone(
                 String.valueOf(z.getId()),
                 z.getName(),
-                "$" + (int) z.getPrice(),
+                Money.format(Money.toCents(z.getPrice())),
                 toneFor(z),
                 noteFor(z),
                 pct((p.row() - 1) * 100.0 / gridRows),
@@ -284,7 +285,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             boolean soldOut = z.getAvailableAmount() == 0;
             String type = "STANDING".equals(z.getZoneType()) ? "standing" : "seated";
             col.add(zoneRow(z.getName() + " · " + type + (soldOut ? " · sold out" : ""),
-                    "$" + (int) z.getPrice(), soldOut));
+                    Money.format(Money.toCents(z.getPrice())), soldOut));
         }
         zonesCardHolder.add(col);
     }
