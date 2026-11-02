@@ -57,6 +57,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     private static final String EDIT_TITLE = "Edit Event";
     private static final String EDIT_SUBTITLE = "Configure event details.";
     private static final String SAVE_LABEL = "Save Changes";
+    private static final String EVENT_NOT_FOUND = "Event not found.";
 
     private final TextField title = new TextField("Title");
     private final Select<String> category = new Select<>();
@@ -126,7 +127,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
         switch (presenter.load(AuthSession.token(), Integer.parseInt(id))) {
             case EventManagementPresenter.LoadOutcome.Success ok -> applyEvent(ok.event());
             case EventManagementPresenter.LoadOutcome.NotFound ignored ->
-                Toasts.failure("Event not found.");
+                Toasts.failure(EVENT_NOT_FOUND);
             case EventManagementPresenter.LoadOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case EventManagementPresenter.LoadOutcome.Failure fail ->
