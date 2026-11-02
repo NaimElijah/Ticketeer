@@ -243,8 +243,9 @@ public class CompanyEventListView extends LkPage {
         return switch (outcome) {
             case ListOutcome.Loaded<String> loaded -> loaded.items();
             case ListOutcome.Failure<String> failure -> {
-                filterErrorSlot.add(new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16),
-                        Lk.withReason(failureContext, failure.reason())));
+                // An alert: a filter choice inserts it, so a screen reader must announce it.
+                filterErrorSlot.add(Lk.asAlert(new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16),
+                        Lk.withReason(failureContext, failure.reason()))));
                 yield List.of();
             }
         };

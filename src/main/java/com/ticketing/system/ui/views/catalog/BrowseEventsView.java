@@ -317,8 +317,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         };
     }
 
+    // An alert: a search or a filter choice inserts it, so a screen reader must announce it.
     private static LkBanner loadFailureBanner(String context, String reason) {
-        return new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16), Lk.withReason(context, reason));
+        return Lk.asAlert(new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16), Lk.withReason(context, reason)));
     }
 
     private Component buildPriceRange() {
