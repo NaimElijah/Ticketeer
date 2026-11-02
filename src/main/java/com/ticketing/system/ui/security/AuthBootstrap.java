@@ -101,6 +101,9 @@ public class AuthBootstrap implements VaadinServiceInitListener {
     }
 
     private void guard(BeforeEnterEvent event) {
+        // Each navigation reads the member's companies afresh: the request may already hold a read that an
+        // action before the navigation (a company registered, an invitation accepted) made stale.
+        Capabilities.forgetMembershipsOfThisRequest();
         signOutIfTheStoredTokenIsDead();
         Class<?> target = event.getNavigationTarget();
         RequireCapability cap = target.getAnnotation(RequireCapability.class);

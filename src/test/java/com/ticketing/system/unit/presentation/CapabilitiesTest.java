@@ -16,9 +16,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
+import com.vaadin.flow.internal.CurrentInstance;
+import com.vaadin.flow.server.VaadinRequest;
+
 import java.lang.reflect.Method;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -272,5 +279,72 @@ class CapabilitiesTest {
             assertThrows(DataAccessResourceFailureException.class, Capabilities::forCurrentUser,
                 "an infrastructure failure is not a dead token and must not be hidden as one");
         assertSame(outage, thrown);
+    }
+
+    // ---- UI-B4: the companies read once per request never answer for another sign-in (#187) ----
+    // AuthBootstrapTest proves the read happens once per navigation; these prove what the per-request
+    // read must never do: answer after the visitor signed out, answer for a member who signed in later
+    // in the same request, or keep a failure.
+
+    private static final String OTHER_MEMBER_TOKEN = "other-member-jwt";
+
+    // Vaadin holds the current request through a weak reference, so the test keeps it reachable.
+    private VaadinRequest currentRequest;
+
+    @AfterEach
+    void dropTheCurrentRequest() {
+        CurrentInstance.set(VaadinRequest.class, null);
+        currentRequest = null;
+    }
+
+    @Test
+    void GivenAFounderWhoSignsOutLaterInTheRequest_WhenCapabilitiesAreCheckedAgain_ThenNoCompanyCapabilityRemains() {
+        onOneRequest();
+        Set<Capability> founder = capabilitiesOfAMemberWhoIs(MembershipRole.FOUNDER, List.of());
+        assertTrue(founder.contains(Capability.OWNER_WORKSPACE), "precondition: the founder holds the workspace");
+
+        AuthSession.signOut();
+
+        assertFalse(Capabilities.has(Capability.OWNER_WORKSPACE), "a signed-out visitor holds no company capability");
+    }
+
+    @Test
+    void GivenAnotherMemberSignsInLaterInTheRequest_WhenCapabilitiesAreChecked_ThenThatMembersOwnCompaniesAreRead() {
+        onOneRequest();
+        Set<Capability> founder = capabilitiesOfAMemberWhoIs(MembershipRole.FOUNDER, List.of());
+        assertTrue(founder.contains(Capability.OWNER_WORKSPACE), "precondition: the founder holds the workspace");
+        when(service.listForUser(OTHER_MEMBER_TOKEN)).thenReturn(List.of());
+
+        AuthSession.storeAuth(new AuthTokenDTO(OTHER_MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID + 1, "other"));
+
+        assertFalse(Capabilities.has(Capability.OWNER_WORKSPACE),
+                "the second member belongs to no company, whatever the first member's read held");
+        verify(service).listForUser(OTHER_MEMBER_TOKEN);
+    }
+
+    @Test
+    void GivenTheMembershipReadFailsOnce_WhenCapabilitiesAreCheckedAgainInTheRequest_ThenTheCompaniesAreReadAgain() {
+        onOneRequest();
+        signInAsMember();
+        when(service.listForUser(MEMBER_TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("store down"))
+                .thenReturn(List.of(new UserCompanyDTO(COMPANY_ID, "Acme", "desc", "", MembershipRole.FOUNDER,
+                        "ACTIVE", 1, 0, List.of())));
+        assertThrows(DataAccessResourceFailureException.class, Capabilities::forCurrentUser,
+                "precondition: the first read fails");
+
+        assertTrue(Capabilities.has(Capability.OWNER_WORKSPACE), "a failed read must not be kept for the request");
+    }
+
+    private void onOneRequest() {
+        Map<String, Object> attributes = new HashMap<>();
+        VaadinRequest request = mock(VaadinRequest.class);
+        when(request.getAttribute(anyString())).thenAnswer(call -> attributes.get(call.getArgument(0, String.class)));
+        doAnswer(call -> attributes.put(call.getArgument(0), call.getArgument(1)))
+                .when(request).setAttribute(anyString(), any());
+        doAnswer(call -> attributes.remove(call.getArgument(0, String.class)))
+                .when(request).removeAttribute(anyString());
+        currentRequest = request;
+        CurrentInstance.set(VaadinRequest.class, request);
     }
 }

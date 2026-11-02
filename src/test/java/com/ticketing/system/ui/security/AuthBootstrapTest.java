@@ -249,6 +249,65 @@ class AuthBootstrapTest {
         verify(navigation).forwardTo(AdminLoginView.class);
     }
 
+    // ---- UI-B4: capabilities are resolved once per navigation (#187) ----
+    // One navigation is one request and one pass of the guard; the view it lands on then asks for
+    // several capabilities, as "My Events" asks per row.
+
+    @Test
+    void GivenAFounderOnOneNavigation_WhenSeveralCapabilitiesAreChecked_ThenTheMembershipsAreReadOnce() {
+        signInAsLiveFounder();
+
+        navigateAndRenderMyEvents();
+
+        verify(companyManagementService, times(1)).listForUser(MEMBER_TOKEN);
+    }
+
+    @Test
+    void GivenAFounder_WhenASecondNavigationChecksCapabilities_ThenTheMembershipsAreReadAgain() {
+        signInAsLiveFounder();
+        navigateAndRenderMyEvents();
+
+        navigateAndRenderMyEvents();
+
+        verify(companyManagementService, times(2)).listForUser(MEMBER_TOKEN);
+    }
+
+    // A click that registers a company and then navigates to the workspace is one request: the read
+    // made before the registration must not decide the navigation.
+    @Test
+    void GivenAMemberWhoRegistersACompanyAndNavigatesInOneRequest_WhenTheGuardRuns_ThenTheNewCompanyAdmitsThem() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+        bridgeMemberships(List.of());
+        currentRequest = mapBackedRequest();
+        CurrentInstance.set(VaadinRequest.class, currentRequest);
+        assertFalse(Capabilities.has(Capability.VIEW_COMPANY_EVENTS), "precondition: no company yet");
+        bridgeMemberships(List.of(membership(MembershipRole.FOUNDER, List.of())));
+        BeforeEnterEvent navigation = navigationTo(ViewCompanyEventsRoute.class);
+
+        guard.beforeEnter(navigation);
+
+        verify(navigation, never()).forwardTo(any(Class.class));
+    }
+
+    private void signInAsLiveFounder() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+        bridgeMemberships(List.of(membership(MembershipRole.FOUNDER, List.of())));
+    }
+
+    private void navigateAndRenderMyEvents() {
+        currentRequest = mapBackedRequest();
+        CurrentInstance.set(VaadinRequest.class, currentRequest);
+        BeforeEnterEvent navigation = navigationTo(ViewCompanyEventsRoute.class);
+
+        guard.beforeEnter(navigation);
+        verify(navigation, never()).forwardTo(any(Class.class));
+        Capabilities.has(Capability.EDIT_COMPANY_EVENTS);
+        Capabilities.has(Capability.CANCEL_EVENT);
+        Capabilities.hasAny(Capability.VIEW_COMPANY_SALES, Capability.EDIT_PURCHASE_POLICIES);
+    }
+
     // ---- UI-B7: every workspace capability gets the workspace fallback (#187) ----
     // A company member who lacks a workspace capability lands on the workspace home with a toast, not
     // on "My companies". The workspace capabilities are derived from Capabilities itself: what a founder
