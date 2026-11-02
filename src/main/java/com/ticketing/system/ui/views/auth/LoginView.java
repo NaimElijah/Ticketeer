@@ -17,6 +17,7 @@ import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.textfield.Autocomplete;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
@@ -39,13 +40,16 @@ public class LoginView extends LkAuthCard {
         this.presenter = presenter;
         this.sessionIdentity = sessionIdentity;
 
+        // The autocomplete tokens let a browser or password manager fill the fields (#188, WCAG 1.3.5).
         TextField username = new TextField("Username");
         username.setRequired(true);
         username.setAutofocus(true);
+        username.setAutocomplete(Autocomplete.USERNAME);
         username.setWidthFull();
 
         PasswordField password = new PasswordField("Password");
         password.setRequired(true);
+        password.setAutocomplete(Autocomplete.CURRENT_PASSWORD);
         password.setWidthFull();
 
         Button signIn = new Button("Sign in", e -> attemptSignIn(username, password));

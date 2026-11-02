@@ -14,6 +14,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.textfield.Autocomplete;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.PasswordField;
@@ -45,10 +46,12 @@ public class RegisterView extends LkAuthCard {
         this.usernameAvailability = usernameAvailability;
         this.sessionIdentity = sessionIdentity;
 
+        // The autocomplete tokens let a browser or password manager fill the fields (#188, WCAG 1.3.5).
         TextField username = new TextField("Username");
         username.setPlaceholder("3–32 characters, letters and digits");
         username.setHelperText(USERNAME_HELP_DEFAULT);
         username.setRequired(true);
+        username.setAutocomplete(Autocomplete.USERNAME);
         username.setWidthFull();
         username.setAutofocus(true);
         // Debounced live availability check — 300 ms after the last keystroke
@@ -62,6 +65,7 @@ public class RegisterView extends LkAuthCard {
         EmailField email = new EmailField("Email");
         email.setPlaceholder("you@email.com");
         email.setRequired(true);
+        email.setAutocomplete(Autocomplete.EMAIL);
         email.setMaxLength(RegisterPresenter.MAX_EMAIL_LENGTH);
         email.setWidthFull();
 
@@ -75,6 +79,8 @@ public class RegisterView extends LkAuthCard {
         PasswordField password = new PasswordField("Password");
         password.setPlaceholder("At least 8 characters");
         password.setRequired(true);
+        // new-password, on both fields, so a password manager offers to generate one and doesn't fill a stored one.
+        password.setAutocomplete(Autocomplete.NEW_PASSWORD);
         password.setWidthFull();
         // Live strength feedback. EAGER mode fires on every keystroke so the
         // bar and rule chips track the user's input directly.
@@ -85,6 +91,7 @@ public class RegisterView extends LkAuthCard {
         PasswordField confirm = new PasswordField("Confirm password");
         confirm.setPlaceholder("Re-enter your password");
         confirm.setRequired(true);
+        confirm.setAutocomplete(Autocomplete.NEW_PASSWORD);
         confirm.setWidthFull();
 
         Button create = new Button("Create account",

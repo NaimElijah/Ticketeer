@@ -28,6 +28,7 @@ import com.vaadin.flow.component.Shortcuts;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.textfield.Autocomplete;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
@@ -339,19 +340,24 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         LkCard card = new LkCard("Payment").pad(20);
         LkCol col = new LkCol().gap(14);
 
+        // The cc-* tokens let a browser fill the card from its saved details (#188, WCAG 1.3.5).
         cardholder.setPlaceholder("Name on card");
         cardholder.setRequired(true);
+        cardholder.setAutocomplete(Autocomplete.CC_NAME);
         cardholder.setWidthFull();
 
         cardNumber.setPlaceholder("1234 5678 9012 3456");
         cardNumber.setSuffixComponent(new LkIcon("card", 16));
         cardNumber.setRequired(true);
+        cardNumber.setAutocomplete(Autocomplete.CC_NUMBER);
         cardNumber.setWidthFull();
 
         expiry.setPlaceholder("MM / YY");
         expiry.setRequired(true);
+        expiry.setAutocomplete(Autocomplete.CC_EXP);
         cvc.setPlaceholder("123");
         cvc.setRequired(true);
+        cvc.setAutocomplete(Autocomplete.CC_CSC);
 
         LkRow expiryCvc = new LkRow().gap(12);
         expiry.getStyle().set("flex", "1 1 0");
@@ -363,6 +369,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         if (!isMember) {
             guestEmail.setPlaceholder("you@example.com");
             guestEmail.setRequired(true);
+            guestEmail.setAutocomplete(Autocomplete.EMAIL);
             guestEmail.setWidthFull();
             // The platform sends no email yet (#102), so the field promises none.
             guestEmail.setHelperText("Kept with your order record; no email is sent.");
