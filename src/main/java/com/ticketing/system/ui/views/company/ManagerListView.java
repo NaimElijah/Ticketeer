@@ -25,11 +25,13 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,6 +50,10 @@ public class ManagerListView extends LkPage {
     /** Roster content lives in its own container so an action can rebuild it
      *  in place ({@link #reload()}) without disturbing the page header/actions. */
     private final LkCol content = new LkCol().gap(0);
+    /** Each active manager's Revoke button, in roster order, as the last reload made them. */
+    private final List<LkIconBtn> revokeButtons = new ArrayList<>();
+    /** The "Active Managers" heading, while the roster shows. */
+    private H2 activeHeading;
 
     public ManagerListView(ManagerListPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
@@ -67,6 +73,8 @@ public class ManagerListView extends LkPage {
     /** (Re)loads the roster into {@link #content}; called on open and after each mutation. */
     private void reload() {
         content.removeAll();
+        revokeButtons.clear();
+        activeHeading = null;
         switch (presenter.loadRoster(AuthSession.token())) {
             case ManagerListPresenter.Outcome.Success ok -> renderRosters(ok);
             case ManagerListPresenter.Outcome.NoCompany ignored -> content.add(banner(
@@ -83,7 +91,8 @@ public class ManagerListView extends LkPage {
 
     private void renderRosters(ManagerListPresenter.Outcome.Success ok) {
         subtitle("Roster and permissions for " + ok.companyName() + ".");
-        content.add(Lk.h2("Active Managers"));
+        activeHeading = Lk.h2("Active Managers");
+        content.add(activeHeading);
         content.add(buildActiveCard(ok.activeManagers()));
         content.add(Lk.h2("Pending Invitations"));
         content.add(buildPendingCard(ok.pendingInvitations()));
@@ -102,15 +111,15 @@ public class ManagerListView extends LkPage {
             .col("Status",      "status")
             .col("",            "act", LkGrid.Align.RIGHT);
 
-        for (AppointmentInfoDTO m : managers) {
-            activeRow(grid, m);
+        for (int i = 0; i < managers.size(); i++) {
+            activeRow(grid, managers.get(i), i);
         }
         grid.build();
         card.add(grid);
         return card;
     }
 
-    private void activeRow(LkGrid grid, AppointmentInfoDTO m) {
+    private void activeRow(LkGrid grid, AppointmentInfoDTO m, int position) {
         Map<String, Object> row = new LinkedHashMap<>();
         // Username is user-controlled — render as text (not innerHTML) so it can't
         // inject markup. Bold via CSS instead of a <b> tag.
@@ -138,7 +147,8 @@ public class ManagerListView extends LkPage {
                 LkConfirm.Severity.danger)
                 .confirmText("Revoke")
                 .prompt()
-                .thenAccept(ok -> { if (Boolean.TRUE.equals(ok)) handleRevoke(m); }));
+                .thenAccept(ok -> { if (Boolean.TRUE.equals(ok)) handleRevoke(m, position); }));
+            revokeButtons.add(revoke);
             actions.add(revoke);
         }
         row.put("act", actions);
@@ -159,16 +169,27 @@ public class ManagerListView extends LkPage {
         }
     }
 
-    private void handleRevoke(AppointmentInfoDTO m) {
+    private void handleRevoke(AppointmentInfoDTO m, int position) {
         switch (presenter.revoke(AuthSession.token(), m.companyId(), m.targetUserId())) {
             case ManagerListPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success(m.targetUsername() + " was revoked.");
                 reload();
+                focusAfterRevoke(position);
             }
             case ManagerListPresenter.ActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case ManagerListPresenter.ActionOutcome.Failure fail ->
                 Toasts.failure(Lk.withReason("Could not revoke the manager", fail.reason()));
+        }
+    }
+
+    // The reload removed the Revoke button that had focus: focus the one now at its place, the next manager's,
+    // or the last one's when the last row went; with no manager left, the roster's heading (#188, WCAG 2.4.3).
+    private void focusAfterRevoke(int position) {
+        if (!revokeButtons.isEmpty()) {
+            revokeButtons.get(Math.min(position, revokeButtons.size() - 1)).focus();
+        } else if (activeHeading != null) {
+            Lk.focusFromScript(activeHeading);
         }
     }
 

@@ -52,6 +52,8 @@ public class AdminInboxView extends LkPage {
     // The threads this view opened; the presenter reads it to keep a cleared badge cleared (#187).
     private final OpenedThreads opened = new OpenedThreads();
     private LkCard detailCard;
+    /** The open thread's reply bar; {@code null} while the thread takes no reply. */
+    private MdReplyBar replyBar;
 
     public AdminInboxView(AdminInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
@@ -124,6 +126,7 @@ public class AdminInboxView extends LkPage {
     }
 
     private void renderDetail() {
+        replyBar = null;
         if (detailCard == null) return;
         detailCard.removeAll();
         ConversationDTO conv = byId(selectedId);
@@ -143,9 +146,9 @@ public class AdminInboxView extends LkPage {
                 .onClick(e -> handleClose()));
             detailCard.add(actionRow);
 
-            MdReplyBar reply = new MdReplyBar();
-            reply.onSend(this::handleReply);
-            detailCard.add(reply);
+            replyBar = new MdReplyBar();
+            replyBar.onSend(this::handleReply);
+            detailCard.add(replyBar);
         }
     }
 
@@ -185,6 +188,8 @@ public class AdminInboxView extends LkPage {
             case AdminInboxPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Reply sent.");
                 reload();
+                // The reload rebuilt the thread and its reply field: focus the new field (#188, WCAG 2.4.3).
+                if (replyBar != null) replyBar.focusInput();
                 yield true;
             }
             case AdminInboxPresenter.ActionOutcome.NotAuthenticated ignored -> {
@@ -203,6 +208,8 @@ public class AdminInboxView extends LkPage {
             case AdminInboxPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Conversation closed.");
                 reload();
+                // The Close button is gone with the reload; the closed thread's heading takes focus (#188).
+                if (detailCard != null) detailCard.focusTitle();
             }
             case AdminInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");

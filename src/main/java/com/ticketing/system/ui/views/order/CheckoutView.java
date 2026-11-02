@@ -49,6 +49,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
 
     private static final String IDEMPOTENCY_ATTR = "checkout.idempotencyKey";
     private static final long MILLIS_PER_SECOND = 1000L;
+    // Says the Pay button is working while the payment runs (#188, WCAG 4.1.3); see attemptPay on #252.
+    private static final String ARIA_BUSY = "aria-busy";
     private static final int CARD_NUMBER_DIGITS = 16;
     private static final String CARD_NUMBER_LENGTH = "Card number must be " + CARD_NUMBER_DIGITS + " digits.";
     private static final String EXPIRY_FORMAT = "MM / YY";
@@ -477,6 +479,9 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         // leaves no older order to reopen at order-confirmed.
         OrderSession.clear();
         payButton.getElement().setEnabled(false);
+        // Like the disable above, this reaches the browser only once the payment runs off the request thread
+        // (#252): today it is set and cleared within one round trip, which sends only the final state.
+        payButton.getElement().setAttribute(ARIA_BUSY, "true");
 
         try {
             String idempotencyKey = currentIdempotencyKey();
@@ -519,11 +524,15 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 case CheckoutPresenter.PayOutcome.Failure f ->
                     Toasts.failure(Lk.withReason("Payment could not be completed", f.reason()));
             }
+            // Pay was disabled while paying, which drops its focus; a refused payment returns it there, so the
+            // buyer can correct the card and pay again (#188, WCAG 2.4.3). A paid order has navigated away.
+            payButton.focus();
         } finally {
             // Whatever the outcome, the attempt may have changed the cart: a sale empties it, and a lost
             // race or a failed issue releases its holds.
             CartBadgeCache.invalidate();
             paymentInProgress.set(false);
+            payButton.getElement().removeAttribute(ARIA_BUSY);
             payButton.getElement().setEnabled(totalCents > 0);
         }
     }

@@ -47,6 +47,8 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
     private final Div content = new Div();
 
     private String conversationId;
+    /** The inquiry's reply bar; {@code null} while the inquiry takes no reply. */
+    private MdReplyBar replyBar;
 
     public CompanyInquiryRespondView(CompanyInquiryInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
@@ -63,6 +65,7 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
 
     private void reload() {
         content.removeAll();
+        replyBar = null;
         if (conversationId == null) {
             content.add(banner("No inquiry selected."));
             return;
@@ -86,9 +89,9 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
             card.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 17),
                 "This inquiry is closed — no further replies are accepted."));
         } else {
-            MdReplyBar reply = new MdReplyBar();
-            reply.onSend(this::handleReply);
-            card.add(reply);
+            replyBar = new MdReplyBar();
+            replyBar.onSend(this::handleReply);
+            card.add(replyBar);
 
             LkRow actions = new LkRow().gap(8).justify("flex-end");
             actions.getStyle().set("margin-top", "12px");
@@ -108,6 +111,8 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
             case CompanyInquiryInboxPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Reply sent.");
                 reload(); // refresh thread + status
+                // The reload rebuilt the thread and its reply field: focus the new field (#188, WCAG 2.4.3).
+                if (replyBar != null) replyBar.focusInput();
                 yield true;
             }
             case CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated ignored -> {

@@ -95,6 +95,14 @@ public class LkSelect extends Div {
         return this;
     }
 
+    /**
+     * Moves focus to the select's trigger: for a view that rebuilt the select in answer to its own change,
+     * so focus is not left on the removed one (#188, WCAG 2.4.3).
+     */
+    public void focus() {
+        trigger.focus();
+    }
+
     public String getValue() {
         return currentValue;
     }

@@ -69,6 +69,8 @@ public class AdminComplaintQueueView extends LkPage {
     private final OpenedThreads opened = new OpenedThreads();
     private String statusFilter = ALL;   // status group (All/Open/Resolved); re-queried on change
     private LkCard detailCard;
+    /** The status filter the last render built; {@code null} while a banner stands in for the queue. */
+    private LkSelect statusSelect;
 
     public AdminComplaintQueueView(AdminComplaintQueuePresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
@@ -88,6 +90,7 @@ public class AdminComplaintQueueView extends LkPage {
     private void reload() {
         // Only a loaded queue has a count; the banner says why the others have none.
         resultCount.setText("");
+        statusSelect = null;
         switch (presenter.load(AuthSession.token(), statusFilter)) {
             case AdminComplaintQueuePresenter.Outcome.Success ok -> renderQueue(ok.complaints());
             case AdminComplaintQueuePresenter.Outcome.NotAuthenticated ignored -> showBanner(
@@ -130,7 +133,11 @@ public class AdminComplaintQueueView extends LkPage {
             if (statusFilter.equals(v)) return;
             statusFilter = v;
             reload();
+            // The reload rebuilt the filter row: focus the new filter, so the admin stays where they were
+            // (#188, WCAG 2.4.3). A reload that ended in a banner has no filter to focus.
+            if (statusSelect != null) statusSelect.focus();
         });
+        statusSelect = status;
         row.add(status);
         return row;
     }

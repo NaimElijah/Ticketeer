@@ -39,6 +39,8 @@ public class LkTextRows extends Div implements HasValidationProperties {
     private final Div rowsHolder = new Div();
     private final LkBtn addBtn;
     private final List<TextField> rows = new ArrayList<>();
+    /** The rows' remove buttons, in row order, as the last rebuild made them. */
+    private final List<LkRemoveButton> removeButtons = new ArrayList<>();
     private String placeholder = "";
     private boolean readOnly = false;
     private Integer textLimit;
@@ -179,15 +181,20 @@ public class LkTextRows extends Div implements HasValidationProperties {
     }
 
     private void removeRow(TextField field) {
+        int position = rows.indexOf(field);
         rows.remove(field);
         if (rows.isEmpty() && !readOnly) {
             addRowField("");   // always leave somewhere to type
         }
         rebuild();
+        // The rebuild removed the button that had focus: focus the remove button now at its place, the next
+        // row's, or the last one's when the last row went (#188, WCAG 2.4.3).
+        removeButtons.get(Math.min(position, removeButtons.size() - 1)).focus();
     }
 
     private void rebuild() {
         rowsHolder.removeAll();
+        removeButtons.clear();
         for (int i = 0; i < rows.size(); i++) {
             TextField field = rows.get(i);
             // Named here, on every rebuild, so the names follow the positions after a remove (#188).
@@ -208,6 +215,7 @@ public class LkTextRows extends Div implements HasValidationProperties {
                 () -> removeRow(field));
         x.getStyle().set("color", "var(--lk-danger, #c0392b)")
                 .set("padding", "0 4px").set("flex", "0 0 auto");
+        removeButtons.add(x);
         return x;
     }
 }

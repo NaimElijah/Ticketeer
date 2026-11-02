@@ -52,6 +52,14 @@ public class MdReplyBar extends Div {
         return this;
     }
 
+    /**
+     * Moves focus to the reply field: for a view that rebuilt the thread, and this bar with it, after a
+     * reply went, so the writer can go on (#188, WCAG 2.4.3).
+     */
+    public void focusInput() {
+        input.focus();
+    }
+
     private void submit() {
         if (input.isEmpty() || onSend == null) return;
         if (!LkTextLimit.exceeds(input) && onSend.send(input.getValue())) {

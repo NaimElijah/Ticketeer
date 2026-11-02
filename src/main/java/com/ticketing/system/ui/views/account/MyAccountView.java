@@ -37,6 +37,7 @@ import jakarta.annotation.security.PermitAll;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -60,6 +61,8 @@ public class MyAccountView extends LkPage {
      * laid out as the page's own, under the page's spacing.
      */
     private final Div content = new Div();
+    /** Each order's View button, by order id, as the last render made them. */
+    private final Map<Integer, NativeButton> orderViewButtons = new HashMap<>();
 
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
                          SessionIdentity sessionIdentity, DisplayTime displayTime) {
@@ -76,6 +79,7 @@ public class MyAccountView extends LkPage {
     /** Builds the page from the member's history, replacing whatever it showed. */
     private void render() {
         content.removeAll();
+        orderViewButtons.clear();
         Div hero = buildHero();
         content.add(hero);
         switch (presenter.loadHistory()) {
@@ -180,6 +184,7 @@ public class MyAccountView extends LkPage {
         view.addClassName("bz-link");
         view.getStyle().set("background", "none").set("border", "none").set("padding", "0").set("cursor", "pointer");
         view.addClickListener(e -> UI.getCurrent().navigate("receipt/" + r.orderReceiptId()));
+        orderViewButtons.put(r.orderReceiptId(), view);
 
         if (refundEligible(r)) {
             NativeButton refund = new NativeButton("Request Refund");
@@ -211,6 +216,12 @@ public class MyAccountView extends LkPage {
                 // Rebuild in place, then tell: a browser reload would drop the toast and its reference
                 // (#187, UI-A21).
                 render();
+                // The rebuild removed the Request Refund button that had focus: focus the same order's View,
+                // which stays on its row (#188, WCAG 2.4.3).
+                NativeButton view = orderViewButtons.get(orderId);
+                if (view != null) {
+                    view.focus();
+                }
                 Toasts.success("Refund requested — reference " + s.reference()
                     + ". Processed in 3–5 business days.");
             }

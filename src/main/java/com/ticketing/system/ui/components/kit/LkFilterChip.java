@@ -4,8 +4,10 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,6 +32,8 @@ public class LkFilterChip extends Div {
     private final Set<String> selected;
     private final NativeButton chip = new NativeButton();
     private final LkMenu menu = new LkMenu();
+    /** Each option's row, by option, as the last menu rebuild made them. */
+    private final Map<String, NativeButton> optionRows = new HashMap<>();
     private LkMenu.Label headerLabel;
     private Runnable onApply = () -> { };
 
@@ -70,11 +74,14 @@ public class LkFilterChip extends Div {
 
     private void rebuildMenu() {
         menu.removeAll();
+        optionRows.clear();
         headerLabel = new LkMenu.Label(label);
         if (!selected.isEmpty()) headerLabel.action("Clear", () -> {
             selected.clear();
             rebuildChip();
             rebuildMenu();
+            // With nothing ticked the rebuilt menu has no Clear; focus its first option (#188, WCAG 2.4.3).
+            options.stream().findFirst().map(optionRows::get).ifPresent(NativeButton::focus);
         });
         menu.add(headerLabel);
 
@@ -108,7 +115,10 @@ public class LkFilterChip extends Div {
                 }
                 rebuildChip();
                 rebuildMenu();
+                // The rebuild removed the option that had focus; focus its replacement (#188, WCAG 2.4.3).
+                optionRows.get(opt).focus();
             });
+            optionRows.put(opt, row);
             menu.add(row);
         }
 

@@ -66,6 +66,8 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     private final OpenedThreads opened = new OpenedThreads();
     private String focusId;        // from ?c=, applied once on the next render
     private LkCard detailCard;
+    /** The open thread's reply bar; {@code null} while the thread takes no reply. */
+    private MdReplyBar replyBar;
 
     public SupportInboxView(SupportInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
@@ -182,6 +184,7 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     }
 
     private void renderDetail() {
+        replyBar = null;
         if (detailCard == null) return;
         detailCard.removeAll();
         ConversationDTO conv = byId(selectedId);
@@ -199,9 +202,9 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             detailCard.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 17), note));
         } else if (!isTerminal(conv.status())) {
             // Inquiries and admin outreach are two-way chats (until closed).
-            MdReplyBar reply = new MdReplyBar();
-            reply.onSend(this::handleReply);
-            detailCard.add(reply);
+            replyBar = new MdReplyBar();
+            replyBar.onSend(this::handleReply);
+            detailCard.add(replyBar);
         } else {
             // Closed inquiry / admin outreach — read-only history, no reply bar.
             detailCard.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 17),
@@ -248,6 +251,8 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             case SupportInboxPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Reply sent.");
                 reload(); // refresh thread, ordering, and unread badges; keeps selection
+                // The reload rebuilt the thread and its reply field: focus the new field (#188, WCAG 2.4.3).
+                if (replyBar != null) replyBar.focusInput();
                 yield true;
             }
             case SupportInboxPresenter.ActionOutcome.NotAuthenticated ignored -> {
