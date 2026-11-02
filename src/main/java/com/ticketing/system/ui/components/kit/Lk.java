@@ -29,6 +29,9 @@ public final class Lk {
     static final String ROLE_CHECKBOX = "checkbox";
     static final String ARIA_CURRENT = "aria-current";
     static final String CURRENT_PAGE = "page";
+    private static final String TABINDEX = "tabindex";
+    // Focusable from a script, but not a Tab stop.
+    private static final String SCRIPT_FOCUS_ONLY = "-1";
 
     private static final String NAME_SEPARATOR = ": ";
 
@@ -107,6 +110,18 @@ public final class Lk {
     public static <T extends Component> T asStatus(T component) {
         component.getElement().setAttribute(ROLE, "status");
         return component;
+    }
+
+    /**
+     * Moves focus to a component that is no Tab stop, such as a heading or a message, so a screen reader
+     * reads it: makes it focusable from a script only ({@code tabindex=-1}) and focuses it (#188, WCAG 2.4.3).
+     * For where focus goes once the content it was on has been swapped or removed.
+     *
+     * @param target the component to focus; attached, or the call is dropped
+     */
+    public static void focusFromScript(Component target) {
+        target.getElement().setAttribute(TABINDEX, SCRIPT_FOCUS_ONLY);
+        target.getElement().callJsFunction("focus");
     }
 
     /**

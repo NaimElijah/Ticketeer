@@ -17,10 +17,6 @@ import com.vaadin.flow.component.html.Section;
  */
 public class LkCard extends Section {
 
-    private static final String TABINDEX = "tabindex";
-    // Focusable from a script, but not a Tab stop.
-    private static final String SCRIPT_FOCUS_ONLY = "-1";
-
     private final Header header = new Header();
     private final Div titleWrap = new Div();
     private final H2 titleText = new H2();
@@ -65,8 +61,7 @@ public class LkCard extends Section {
         if (!titleText.isVisible()) {
             return;
         }
-        titleText.getElement().setAttribute(TABINDEX, SCRIPT_FOCUS_ONLY);
-        titleText.getElement().callJsFunction("focus");
+        Lk.focusFromScript(titleText);
     }
 
     public LkCard subtitle(String s) {
