@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
@@ -48,6 +49,7 @@ public class ManagerInvitationView extends LkPage {
 
 private final ManagerInvitationPresenter presenter;
     private final TextField invitee = new TextField("Username or email");
+    private final LkFormErrors errors = new LkFormErrors();
     // Keep references so we can read isChecked() on submit.
     private final Map<LkCheckRow, Permission> checkRows = new LinkedHashMap<>();
     public ManagerInvitationView(ManagerInvitationPresenter presenter) {
@@ -90,8 +92,9 @@ private final ManagerInvitationPresenter presenter;
     }
 
    private void sendInvitation() {
+        errors.clear();
         if (invitee.isEmpty()) {
-            Toasts.failure("Enter a username or email to invite.");
+            refuseInvitee("Enter a username or email to invite.");
             return;
         }
         List<Permission> selected = new ArrayList<>();
@@ -115,10 +118,17 @@ private final ManagerInvitationPresenter presenter;
                 Toasts.failure("Choose the company in the workspace's Company selector, "
                     + "or under My companies, then come back.");
             case ManagerInvitationPresenter.Outcome.UserNotFound u ->
-                Toasts.failure("User \"" + u.username() + "\" was not found.");
+                refuseInvitee("User \"" + u.username() + "\" was not found.");
             case ManagerInvitationPresenter.Outcome.Failure fail ->
                 Toasts.failure(Lk.withReason("Could not send the invitation", fail.reason()));
         }
+    }
+
+    // The toast stays, but the invitee field now carries the message too, and takes focus (#188).
+    private void refuseInvitee(String message) {
+        errors.reject(invitee, message);
+        Toasts.failure(message);
+        errors.focusFirst();
     }
     
 

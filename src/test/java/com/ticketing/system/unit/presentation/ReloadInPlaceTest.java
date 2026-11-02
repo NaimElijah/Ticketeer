@@ -3,6 +3,7 @@ package com.ticketing.system.unit.presentation;
 import static com.ticketing.system.unit.presentation.ViewHarness.button;
 import static com.ticketing.system.unit.presentation.ViewHarness.buttons;
 import static com.ticketing.system.unit.presentation.ViewHarness.click;
+import static com.ticketing.system.unit.presentation.ViewHarness.field;
 import static com.ticketing.system.unit.presentation.ViewHarness.find;
 import static com.ticketing.system.unit.presentation.ViewHarness.founderOf;
 import static com.ticketing.system.unit.presentation.ViewHarness.pageTitle;
@@ -37,6 +38,11 @@ import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.views.account.MyInvitationsView;
 import com.ticketing.system.ui.views.company.EventManagementView;
+import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.HasValue;
+import com.vaadin.flow.component.datetimepicker.DateTimePicker;
+import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.textfield.TextField;
 
 /**
  * A view that navigates to the route it is already on gets nothing from Vaadin: navigating to the
@@ -107,6 +113,23 @@ class ReloadInPlaceTest {
             .findFirst()
             .orElseThrow(() -> new AssertionError("the event page has no Linked Editors card"));
         assertTrue(shown(linkedEditors), "a saved event's linked editors, status and danger zone must show");
+    }
+
+    // An edit save leaves a blank field alone, so the edit page must not claim the create page's rule (#188).
+    @Test
+    void GivenTheCreatePage_WhenTheSameViewIsEnteredForTheCreatedEvent_ThenTheCreateOnlyFieldsShowNoRequiredIndicator() {
+        EventManagementView view = enteredForCreateThenForTheNewEvent();
+
+        List<HasValue<?, ?>> createOnly = List.of(
+            field(view, Select.class, "Category"),
+            field(view, TextField.class, "Country"),
+            field(view, TextField.class, "City"),
+            field(view, DateTimePicker.class, "Starts"),
+            field(view, DateTimePicker.class, "Ends"));
+        for (HasValue<?, ?> f : createOnly) {
+            assertFalse(f.isRequiredIndicatorVisible(), "an edit save treats a blank field as \"leave alone\", so "
+                + "it must show no required indicator: " + ((Component) f).getElement().getProperty("label"));
+        }
     }
 
     // ---- arrangement ----

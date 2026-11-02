@@ -12,6 +12,7 @@ import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -82,6 +83,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private final TextField zoneNameField = new TextField("Zone name");
     private final TextField priceField = new TextField("Price");
+    private final LkFormErrors zoneErrors = new LkFormErrors();
     private final RadioButtonGroup<String> zoneTypeGroup = new RadioButtonGroup<>();
     private final IntegerField rowsField = new IntegerField("Rows");
     private final IntegerField seatsPerRowField = new IntegerField("Seats / row");
@@ -304,9 +306,11 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private Component buildZoneEditorCard() {
         LkCard card = new LkCard("Edit Zone").pad(20);
 
+        zoneNameField.setRequired(true);
         zoneNameField.setWidthFull();
         LkTextLimit.apply(zoneNameField);
         priceField.setPrefixComponent(new Span("$"));
+        priceField.setRequired(true);
         priceField.setWidthFull();
 
         Div formGrid = new Div();
@@ -410,6 +414,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     }
 
     private void saveZone() {
+        zoneErrors.clear();
         GridPlacementDTO placement = new GridPlacementDTO(
                 orDefault(gridRowField.getValue(), 1),
                 orDefault(gridColField.getValue(), 1),
@@ -436,11 +441,16 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                 refreshAll();
                 Toasts.success("Zone \"" + v.name() + "\" updated — click Save map to persist.");
             }
-            case VenueMapPresenter.ZoneOutcome.InvalidName ignored ->
-                Toasts.failure("Zone name is required.");
-            case VenueMapPresenter.ZoneOutcome.InvalidPrice ignored ->
-                Toasts.failure("Invalid price.");
+            case VenueMapPresenter.ZoneOutcome.InvalidName ignored -> refuseZone(zoneNameField, "Zone name is required.");
+            case VenueMapPresenter.ZoneOutcome.InvalidPrice ignored -> refuseZone(priceField, "Invalid price.");
         }
+    }
+
+    // The toast stays, but the refused field now carries the message too, and takes focus (#188).
+    private void refuseZone(TextField field, String message) {
+        zoneErrors.reject(field, message);
+        Toasts.failure(message);
+        zoneErrors.focusFirst();
     }
 
     private void addZone(boolean seated) {

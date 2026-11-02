@@ -15,6 +15,7 @@ import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkTextLimit;
@@ -27,6 +28,7 @@ import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Focusable;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.datetimepicker.DateTimePicker;
@@ -34,6 +36,7 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.NumberField;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
@@ -60,6 +63,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     private static final String EDIT_SUBTITLE = "Configure event details.";
     private static final String SAVE_LABEL = "Save Changes";
     private static final String EVENT_NOT_FOUND = "Event not found.";
+    private static final String NO_ARTIST = "Please list at least one artist.";
 
     private final TextField title = new TextField("Title");
     private final Select<String> category = new Select<>();
@@ -77,6 +81,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     private final Div statusSlot = new Div();
 
     private final EventManagementPresenter presenter;
+    private final LkFormErrors errors = new LkFormErrors();
     /** The primary action button — relabelled "Create Event" in create mode. */
     private LkBtn saveBtn;
     /** Linked editors / status / danger zone — hidden in create mode (they need a saved event). */
@@ -117,6 +122,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             subtitle("Create the event as a draft, then configure its venue and publish it.");
             saveBtn.label("Create Event");
             artists.readOnly(false);
+            markCreateRequirements(true);
             timeZone.setValue(presenter.defaultTimeZone());
             // Linked editors, status and the danger zone all act on a persisted event.
             sideCol.setVisible(false);
@@ -127,6 +133,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             subtitle(EDIT_SUBTITLE);
             saveBtn.label(SAVE_LABEL);
             artists.readOnly(true);
+            markCreateRequirements(false);
             if (editedEventId == null) {
                 // The id is typed by the visitor: one that is no number names no event (#187, UI-A15).
                 // Nothing is loaded, and the actions that need an event are not offered.
@@ -230,30 +237,36 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
     /** Create flow (eventId == "new"): validate locally, then hand off to the presenter. */
     private void createEvent() {
+        errors.clear();
         String name = blankToNull(title.getValue());
-        if (name == null) { Toasts.failure("Please enter a title."); return; }
-        if (category.getValue() == null) { Toasts.failure("Please choose a category."); return; }
+        if (name == null) { refuse(title, "Please enter a title."); return; }
+        if (category.getValue() == null) { refuse(category, "Please choose a category."); return; }
 
         String co = country.getValue() == null ? "" : country.getValue().trim();
         String ci = city.getValue() == null ? "" : city.getValue().trim();
-        if (co.isBlank() || ci.isBlank()) { Toasts.failure("Please enter both a country and a city."); return; }
+        if (co.isBlank()) { errors.reject(country, "Enter the country."); }
+        if (ci.isBlank()) { errors.reject(city, "Enter the city."); }
+        if (!errors.isEmpty()) { refuse("Please enter both a country and a city."); return; }
 
-        if (start.getValue() == null || end.getValue() == null) {
-            Toasts.failure("Please set both a start and an end time.");
-            return;
-        }
+        if (start.getValue() == null) { errors.reject(start, "Set the start time."); }
+        if (end.getValue() == null) { errors.reject(end, "Set the end time."); }
+        if (!errors.isEmpty()) { refuse("Please set both a start and an end time."); return; }
         if (!end.getValue().isAfter(start.getValue())) {
-            Toasts.failure("The end time must be after the start time.");
+            refuse(end, "The end time must be after the start time.");
             return;
         }
         // Whether the start is still ahead depends on the venue's zone, so the service judges it
         // against the injected clock and the presenter surfaces its reason.
-        if (timeZone.getValue() == null) { Toasts.failure("Please choose the venue's time zone."); return; }
+        if (timeZone.getValue() == null) { refuse(timeZone, "Please choose the venue's time zone."); return; }
 
         List<String> artistList = artists.getValues();
-        if (artistList.isEmpty()) { Toasts.failure("Please list at least one artist."); return; }
+        if (artistList.isEmpty()) {
+            errors.reject(artists, NO_ARTIST);
+            refuse(NO_ARTIST);
+            return;
+        }
 
-        if (rating.getValue() == null) { Toasts.failure("Please set a rating (0–5)."); return; }
+        if (rating.getValue() == null) { refuse(rating, "Please set a rating (0–5)."); return; }
 
         switch (presenter.create(AuthSession.token(), CurrentCompanies.currentCompanyId(),
                 name, blankToNull(description.getValue()), category.getValue(),
@@ -275,6 +288,27 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             case EventManagementPresenter.CreateOutcome.Failure fail ->
                 Toasts.failure(Lk.withReason("Could not create the event", fail.reason()));
         }
+    }
+
+    // Create refuses these when empty; an edit save treats a blank one as "leave alone", so on the edit page
+    // a required indicator would claim a rule the form doesn't enforce (#188, WCAG 3.3.2).
+    private void markCreateRequirements(boolean create) {
+        category.setRequiredIndicatorVisible(create);
+        country.setRequiredIndicatorVisible(create);
+        city.setRequiredIndicatorVisible(create);
+        start.setRequiredIndicatorVisible(create);
+        end.setRequiredIndicatorVisible(create);
+    }
+
+    // The toast stays, but the refused fields now carry the message too, and the first takes focus (#188).
+    private void refuse(String toast) {
+        Toasts.failure(toast);
+        errors.focusFirst();
+    }
+
+    private <F extends Component & HasValidationProperties & Focusable<?>> void refuse(F field, String message) {
+        errors.reject(field, message);
+        refuse(message);
     }
 
     /** Location is country+city in the domain; both are required, so only send it when both are present. */
