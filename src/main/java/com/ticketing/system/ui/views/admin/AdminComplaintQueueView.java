@@ -23,6 +23,7 @@ import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteParameters;
@@ -58,6 +59,8 @@ public class AdminComplaintQueueView extends LkPage {
     /** Holds the filter row + master/detail split, or an empty/error banner, so it can be
      *  rebuilt in place without disturbing the page header. */
     private final Div content = new Div();
+    /** How many complaints the status filter leaves, said to a screen reader after each reload (#188). */
+    private final Span resultCount = Lk.asStatus(new Span());
 
     private List<ConversationDTO> complaints = List.of();
     private final List<MdConvRow> convRows = new ArrayList<>();
@@ -73,13 +76,18 @@ public class AdminComplaintQueueView extends LkPage {
 
         title("Complaint Queue");
         subtitle("Member complaints opened via Conversation type=COMPLAINT.");
-        add(content);
+        // Outside content, which each reload rebuilds: a replaced live region is not announced.
+        // Heard, not shown: a sighted user sees the list change.
+        resultCount.addClassName(Lk.VISUALLY_HIDDEN);
+        add(resultCount, content);
         reload();
     }
 
     // -- Loading / rendering --------------------------------------------------
 
     private void reload() {
+        // Only a loaded queue has a count; the banner says why the others have none.
+        resultCount.setText("");
         switch (presenter.load(AuthSession.token(), statusFilter)) {
             case AdminComplaintQueuePresenter.Outcome.Success ok -> renderQueue(ok.complaints());
             case AdminComplaintQueuePresenter.Outcome.NotAuthenticated ignored -> showBanner(
@@ -91,6 +99,7 @@ public class AdminComplaintQueueView extends LkPage {
 
     private void renderQueue(List<ConversationDTO> list) {
         this.complaints = list;
+        resultCount.setText(list.size() + (list.size() == 1 ? " complaint" : " complaints"));
         content.removeAll();
         content.add(buildFilters());
 

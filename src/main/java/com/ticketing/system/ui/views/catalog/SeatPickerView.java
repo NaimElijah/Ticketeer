@@ -67,6 +67,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
 
     private VkSeatedZonePicker seatPicker;
     private LkCol selectionListCol;
+    /** What the rail holds, said to a screen reader on each pick (#188). */
+    private final Span selectionSummary = Lk.asStatus(new Span());
     private VkQuantitySelector qtySelector;
     private LkBtn holdButton;
     private final Div bodyHolder = new Div();
@@ -170,7 +172,10 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         LkCol rail = new LkCol().gap(14);
         LkCard selection = new LkCard("Your Selection").pad(16);
         selectionListCol = new LkCol().gap(10);
-        selection.add(selectionListCol);
+        // The rail is rebuilt on every pick, so its summary is said by a status that outlives it; heard, not
+        // shown, since the rail already shows it (#188, WCAG 4.1.3).
+        selectionSummary.addClassName(Lk.VISUALLY_HIDDEN);
+        selection.add(selectionListCol, selectionSummary);
         rail.add(selection);
         updateSelectionRail();
         return rail;
@@ -183,6 +188,10 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         selectionListCol.removeAll();
         List<String> labels = seatPicker.hasSelection()
                 ? seatPicker.getSelection().getSeatNumbers() : List.of();
+        String seatCount = labels.size() + " seat" + (labels.size() == 1 ? "" : "s");
+        double total = labels.size() * zonePrice;
+        selectionSummary.setText(labels.isEmpty() ? "No seats selected"
+            : seatCount + " selected, " + money(total) + " in total");
         if (labels.isEmpty()) {
             Span hint = Lk.muted("Click a green seat above to select.");
             hint.getStyle().set("text-align", "center").set("display", "block").set("padding", "8px 0");
@@ -197,9 +206,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         selectionListCol.add(list);
         selectionListCol.add(Lk.divider());
 
-        double total = labels.size() * zonePrice;
         LkRow totalRow = new LkRow().justify("space-between");
-        totalRow.add(Lk.muted(labels.size() + " seat" + (labels.size() == 1 ? "" : "s")));
+        totalRow.add(Lk.muted(seatCount));
         Span totalDisplay = new Span();
         totalDisplay.getElement().setProperty("innerHTML", "<b style='font-size:16px'>" + money(total) + "</b>");
         totalRow.add(totalDisplay);

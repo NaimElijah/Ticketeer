@@ -64,6 +64,8 @@ public class AdminSendMessagesView extends LkPage {
     private final TextField recipientSearch = new TextField("Recipients");
     private final Div searchResults = new Div();
     private final Div recipientChips = new Div();
+    /** Says how many members a search found and which recipient was added or removed (#188). */
+    private final Span recipientStatus = Lk.asStatus(new Span());
     private final LkCheckRow allMembers = new LkCheckRow("All members", false);
     private final LkCheckRow allProducers = new LkCheckRow("All producers", false);
 
@@ -118,8 +120,12 @@ public class AdminSendMessagesView extends LkPage {
         allMembers.onToggle(on -> { if (on) allProducers.setChecked(false); updateRecipientMode(); });
         allProducers.onToggle(on -> { if (on) allMembers.setChecked(false); updateRecipientMode(); });
 
+        // Results and chips are rebuilt as the admin types and picks, so a status that outlives them says what
+        // changed; heard, not shown, since both lists show it (#188, WCAG 4.1.3).
+        recipientStatus.addClassName(Lk.VISUALLY_HIDDEN);
+
         LkCol col = new LkCol().gap(14);
-        col.add(subject, body, recipientSearch, searchResults, recipientChips,
+        col.add(subject, body, recipientSearch, recipientStatus, searchResults, recipientChips,
                 new LkRow(allMembers, allProducers).gap(16));
         card.add(col);
 
@@ -159,6 +165,7 @@ public class AdminSendMessagesView extends LkPage {
 
     private void renderResults(List<MemberSearchResultDTO> results) {
         searchResults.removeAll();
+        int shown = 0;
         for (MemberSearchResultDTO r : results) {
             if (recipients.containsKey(r.memberId())) continue;
             NativeButton row = new NativeButton(r.username());
@@ -168,19 +175,25 @@ public class AdminSendMessagesView extends LkPage {
                 recipientSearch.clear();
                 searchResults.removeAll();
                 renderChips();
+                recipientStatus.setText(r.username() + " added as a recipient");
             });
             searchResults.add(row);
+            shown++;
         }
+        recipientStatus.setText(shown == 0 ? "No members found"
+            : shown + (shown == 1 ? " member found" : " members found"));
     }
 
     private void renderChips() {
         recipientChips.removeAll();
         for (Map.Entry<Integer, String> entry : recipients.entrySet()) {
             int id = entry.getKey();
-            LkChip chip = new LkChip(entry.getValue());
-            LkRemoveButton remove = new LkRemoveButton(entry.getValue(), () -> {
+            String username = entry.getValue();
+            LkChip chip = new LkChip(username);
+            LkRemoveButton remove = new LkRemoveButton(username, () -> {
                 recipients.remove(id);
                 renderChips();
+                recipientStatus.setText(username + " removed from the recipients");
             });
             remove.getStyle().set("margin-left", "6px").set("font-weight", "700");
             chip.add(remove);

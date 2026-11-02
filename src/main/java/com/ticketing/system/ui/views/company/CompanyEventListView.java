@@ -71,6 +71,8 @@ public class CompanyEventListView extends LkPage {
     private final DisplayTime displayTime;
     private final LkCard eventsCard = new LkCard().pad(0);
     private final Div filterErrorSlot = new Div();
+    /** How many events the filters leave, said to a screen reader after each reload (#188, WCAG 4.1.3). */
+    private final Span resultCount = Lk.asStatus(new Span());
 
     // ---- filter state (mirrors /browse, minus company-rating; status is owner-only & client-side) ----
     private String filterCategory  = CatalogFilterSupport.CAT_ALL;
@@ -117,6 +119,9 @@ public class CompanyEventListView extends LkPage {
         }
         add(buildFilters());
         add(filterErrorSlot);
+        // Heard, not shown: a filter rebuilds the list in place, and a sighted user sees its rows change.
+        resultCount.addClassName(Lk.VISUALLY_HIDDEN);
+        add(resultCount);
         add(eventsCard);
         Span hint = Lk.muted("Row actions → Edit metadata · Venue map · Policies · Sales · Status · Cancel.");
         hint.getStyle().set("font-size", "12.5px");
@@ -126,6 +131,8 @@ public class CompanyEventListView extends LkPage {
 
     private void reload() {
         eventsCard.removeAll();
+        // Only a loaded list has a count; the card says why the others have none.
+        resultCount.setText("");
         LkGrid grid = new LkGrid()
             .col("Event",   "name")
             .col("Date",    "date")
@@ -141,6 +148,7 @@ public class CompanyEventListView extends LkPage {
                 List<EventDetailDTO> events = ok.events().stream()
                     .filter(ev -> wanted == null || ev.status() == wanted)
                     .toList();
+                resultCount.setText(events.size() + (events.size() == 1 ? " event" : " events"));
                 if (events.isEmpty()) {
                     eventsCard.add(Lk.muted("No events match your filters."));
                 } else {

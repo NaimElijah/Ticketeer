@@ -94,6 +94,22 @@ public final class Lk {
     }
 
     /**
+     * Marks {@code component} as a status, a polite live region: a screen reader announces each change of its
+     * text when the user is idle, without moving focus. For text a page rewrites in place, such as a result
+     * count or a selection summary (#188, WCAG 4.1.3).
+     *
+     * <p>Mark the component once, before its first text, and change only its text afterwards: a region
+     * inserted together with its text, or replaced, is not announced.
+     *
+     * @param component the component whose text changes
+     * @return {@code component}, for chaining
+     */
+    public static <T extends Component> T asStatus(T component) {
+        component.getElement().setAttribute(ROLE, "status");
+        return component;
+    }
+
+    /**
      * Marks {@code component} as a named group, so a screen reader says what a set of
      * related controls, such as a list of checkboxes, decides when focus enters it (#188).
      *

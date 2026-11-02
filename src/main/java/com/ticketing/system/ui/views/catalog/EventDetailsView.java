@@ -313,7 +313,8 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private Component buildReserveCard() {
         LkCard card = new LkCard().pad(16).accent();
-        selectedLine = new Span();
+        // A status before its first text, so picking another zone on the map is announced (#188, WCAG 4.1.3).
+        selectedLine = Lk.asStatus(new Span());
         updateSelectedLine();
 
         chooseBtn = new LkBtn("Choose Tickets →")

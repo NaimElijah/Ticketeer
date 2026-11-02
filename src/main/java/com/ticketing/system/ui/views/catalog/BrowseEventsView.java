@@ -169,7 +169,8 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Component buildAllEventsHeader() {
         LkRow row = new LkRow().align("baseline").gap(10);
         row.add(Lk.h2("All Events"));
-        resultsCountSpan = Lk.muted("");
+        // A status from the start, so a filter's new count is announced without moving focus (#188).
+        resultsCountSpan = Lk.asStatus(Lk.muted(""));
         resultsCountSpan.getStyle().set("font-size", "13.5px");
         row.add(resultsCountSpan);
         return row;

@@ -274,6 +274,8 @@
   /* ============ VENUE / SEAT (centerpiece) ============ */
   .vk-seat{width:var(--vk-seat-size);height:var(--vk-seat-size);border-radius:6px;border:1.5px solid;font-size:.62rem;font-weight:700;display:inline-flex;
     align-items:center;justify-content:center;flex:none;font-family:var(--mono);white-space:nowrap;overflow:hidden;padding:0 1px;line-height:1}
+  /* A quantity step at its limit stays focusable (aria-disabled, not disabled), so it is dimmed here (#188). */
+  .vk-qty-btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
   .vk-seat-free{background:#ecfdf3;border-color:#34d399;color:#047857}
   .vk-seat-free:hover{background:#d1fae5}
   .vk-seat-mine{background:var(--warn);border-color:#d97706;color:#fff}

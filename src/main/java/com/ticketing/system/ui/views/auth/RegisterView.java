@@ -16,6 +16,7 @@ import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.shared.HasValidationProperties;
@@ -38,6 +39,8 @@ public class RegisterView extends LkAuthCard {
     private static final String USERNAME_TAKEN = "Username taken — please choose another.";
     private static final String USERNAME_RESERVED = "That username is reserved — please choose another.";
     private static final String PASSWORDS_DIFFER = "Passwords don't match.";
+    private static final String USERNAME_FORMAT = "3–32 characters · letters, digits, . _ -";
+    private static final String AVAILABILITY_UNKNOWN = "Couldn't verify availability right now.";
 
     private final RegisterPresenter presenter;
     private final UsernameAvailabilityPresenter usernameAvailability;
@@ -45,6 +48,8 @@ public class RegisterView extends LkAuthCard {
     // starts, and SessionIdentity replaces a dead one before registration is given it.
     private final SessionIdentity sessionIdentity;
     private final LkFormErrors errors = new LkFormErrors();
+    /** Says the username check's result as it arrives (#188, WCAG 4.1.3). */
+    private final Span availabilityStatus = Lk.asStatus(new Span());
 
     public RegisterView(RegisterPresenter presenter,
                         UsernameAvailabilityPresenter usernameAvailability,
@@ -110,12 +115,23 @@ public class RegisterView extends LkAuthCard {
         // Enter in a field registers; on the page it would also take over Enter on the link below (#188).
         create.addClickShortcut(Key.ENTER).listenOn(username, email, age, password, confirm);
 
-        col(14, username, email, age, password, strengthMeter, confirm, create);
+        // The check's result lands in the field's helper text, which a screen reader reads only on reaching the
+        // field; this status says it as it arrives. Heard, not shown, since the helper text shows it (#188).
+        availabilityStatus.addClassName(Lk.VISUALLY_HIDDEN);
+
+        col(14, username, availabilityStatus, email, age, password, strengthMeter, confirm, create);
         foot("Already have an account?", "Sign in →", LoginView.class);
     }
 
     private void applyUsernameFeedback(TextField field, String value) {
         UsernameAvailabilityPresenter.Outcome outcome = usernameAvailability.check(value);
+        // Taken and reserved show as the field's error message, which the field announces itself.
+        availabilityStatus.setText(switch (outcome) {
+            case UsernameAvailabilityPresenter.Outcome.Available ignored -> "Username " + value + " is available";
+            case UsernameAvailabilityPresenter.Outcome.InvalidFormat ignored -> USERNAME_FORMAT;
+            case UsernameAvailabilityPresenter.Outcome.Failure ignored -> AVAILABILITY_UNKNOWN;
+            default -> "";
+        });
         switch (outcome) {
             case UsernameAvailabilityPresenter.Outcome.Empty ignored -> {
                 field.setSuffixComponent(null);
@@ -124,7 +140,7 @@ public class RegisterView extends LkAuthCard {
             }
             case UsernameAvailabilityPresenter.Outcome.InvalidFormat ignored -> {
                 field.setSuffixComponent(statusIcon(VaadinIcon.CLOSE_CIRCLE, "var(--lumo-error-color)"));
-                field.setHelperText("3–32 characters · letters, digits, . _ -");
+                field.setHelperText(USERNAME_FORMAT);
                 field.setErrorMessage(null);
                 field.setInvalid(true);
             }
@@ -148,7 +164,7 @@ public class RegisterView extends LkAuthCard {
             }
             case UsernameAvailabilityPresenter.Outcome.Failure fail -> {
                 field.setSuffixComponent(statusIcon(VaadinIcon.WARNING, "var(--lumo-warning-color)"));
-                field.setHelperText("Couldn't verify availability right now.");
+                field.setHelperText(AVAILABILITY_UNKNOWN);
                 field.setInvalid(false);
             }
         }
