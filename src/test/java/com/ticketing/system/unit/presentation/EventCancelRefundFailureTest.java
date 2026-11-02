@@ -2,8 +2,10 @@ package com.ticketing.system.unit.presentation;
 
 import static com.ticketing.system.unit.presentation.ViewHarness.button;
 import static com.ticketing.system.unit.presentation.ViewHarness.click;
+import static com.ticketing.system.unit.presentation.ViewHarness.find;
 import static com.ticketing.system.unit.presentation.ViewHarness.founderOf;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -37,6 +39,8 @@ import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.views.company.CompanyEventListView;
 import com.ticketing.system.ui.views.company.EventManagementView;
+import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.notification.Notification;
 
 /**
  * Cancelling an event whose refunds partly fail leaves the event cancelled, so the owner is told the
@@ -167,6 +171,22 @@ class EventCancelRefundFailureTest {
         assertNoGatewayTextInToasts();
     }
 
+    // The owner must have time to read which refunds failed and what to do, so the message stays until it is
+    // dismissed (#187).
+    @Test
+    void GivenTheCancelsRefundsFail_WhenTheOwnerCancelsFromMyEvents_ThenTheMessageStaysUntilDismissed() {
+        cancelFromMyEvents(realEventListPresenter(eventServiceWhoseRefundsFail(gatewayUnreachable())));
+
+        assertEquals(0, cancelledToast().getDuration(), "the refund-failure message must not close by itself");
+    }
+
+    @Test
+    void GivenTheCancelsRefundsFail_WhenTheOwnerCancelsFromTheEventPage_ThenTheMessageStaysUntilDismissed() {
+        cancelFromTheEventPage(realEventPagePresenter(eventServiceWhoseRefundsFail(outcomeUnknown())));
+
+        assertEquals(0, cancelledToast().getDuration(), "the refund-failure message must not close by itself");
+    }
+
     // ---- arrangement ----
 
     private static EventDetailDTO onSaleEvent() {
@@ -227,6 +247,14 @@ class EventCancelRefundFailureTest {
         return mockingDetails(eventService).getInvocations().stream()
             .filter(invocation -> "listEventsForCompany".equals(invocation.getMethod().getName()))
             .count();
+    }
+
+    private Notification cancelledToast() {
+        harness.toasts();
+        return find(UI.getCurrent(), Notification.class).stream()
+            .filter(toast -> toast.getElement().getTextRecursively().contains(CANCELLED))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no toast says the event is cancelled"));
     }
 
     private void assertNoGatewayTextInToasts() {

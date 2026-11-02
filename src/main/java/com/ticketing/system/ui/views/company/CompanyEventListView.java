@@ -445,7 +445,7 @@ public class CompanyEventListView extends LkPage {
                 case CompanyEventListPresenter.CancelOutcome.NotAuthenticated ignored ->
                     Toasts.warn("Your session has expired — please sign in again.");
                 case CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed -> {
-                    Toasts.warn(Lk.withReason(refundFailed.cancelAgainRetries()
+                    Toasts.warnUntilDismissed(Lk.withReason(refundFailed.cancelAgainRetries()
                         ? "The event is cancelled, but some refunds failed; cancel it again from its page to retry them"
                         : "The event is cancelled, but some refunds failed", refundFailed.reason()));
                     reload();

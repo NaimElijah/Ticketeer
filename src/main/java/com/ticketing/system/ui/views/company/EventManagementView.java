@@ -442,7 +442,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             case EventManagementPresenter.CancelOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case EventManagementPresenter.CancelOutcome.RefundFailed refundFailed -> {
-                Toasts.warn(Lk.withReason(refundFailed.cancelAgainRetries()
+                Toasts.warnUntilDismissed(Lk.withReason(refundFailed.cancelAgainRetries()
                     ? "The event is cancelled, but some refunds failed; cancel it again to retry them"
                     : "The event is cancelled, but some refunds failed", refundFailed.reason()));
                 loadEvent(cancelledEventId);
