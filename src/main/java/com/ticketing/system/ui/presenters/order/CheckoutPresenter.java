@@ -33,6 +33,10 @@ public class CheckoutPresenter {
 
     private static final String CURRENCY = "USD";
 
+    // ActiveOrder.validateCanCheckout refuses an empty cart and a cart whose hold ran out with the same
+    // InvalidStateTransitionException type, so its text is all that tells the empty cart from an expiry.
+    private static final String EMPTY_ORDER_MESSAGE = "Cannot checkout an empty order";
+
     private final ReservationService reservationService;
     private final CheckoutService    checkoutService;
     private final SessionIdentity    identity;
@@ -127,7 +131,12 @@ public class CheckoutPresenter {
             }
             if (cause instanceof PaymentGatewayException)        return new PayOutcome.PaymentDeclined(cause.getMessage());
             if (cause instanceof InsufficientInventoryException) return new PayOutcome.SoldOut(cause.getMessage());
-            if (cause instanceof InvalidStateTransitionException) return new PayOutcome.OrderExpired("Order expired during checkout");
+            // Every other refusal of this type is an expiry, before checkout or during it; an empty cart
+            // falls through to the DomainException arm with its own reason.
+            if (cause instanceof InvalidStateTransitionException
+                    && !EMPTY_ORDER_MESSAGE.equals(cause.getMessage())) {
+                return new PayOutcome.OrderExpired("Order expired during checkout");
+            }
             if (cause instanceof IdempotencyConflictException)   return new PayOutcome.DuplicateSubmission();
             // Surface the reason only for domain (business) exceptions — their messages are safe to show.
             // Anything else is an unexpected/internal error: log it server-side, show only the generic message.

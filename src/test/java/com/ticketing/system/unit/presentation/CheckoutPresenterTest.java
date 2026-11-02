@@ -1,13 +1,37 @@
 package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.OptionalInt;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
+
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
+import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.testutil.LogCapture;
+import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.FreshGuestSession;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
+import com.ticketing.system.ui.support.ServiceErrors;
+
+import ch.qos.logback.classic.Level;
+import jakarta.persistence.PersistenceException;
 
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
@@ -116,5 +140,68 @@ class CheckoutPresenterTest {
         CheckoutPresenter.PayOutcome.Failure failure = assertInstanceOf(CheckoutPresenter.PayOutcome.Failure.class,
                 outcome, "a lost race must read as a failure with its own reason, but was: " + outcome);
         assertEquals(cartChanged, failure.reason());
+    }
+
+    // ---- UI-C1: an empty cart at Pay reads as empty, not as expired (#187) ----
+    // Each refusal is the one the domain itself throws (ActiveOrder.validateCanCheckout), wrapped as
+    // CheckoutService wraps a checkout failure.
+
+    private static final LocalDateTime CART_CREATED_AT = LocalDateTime.of(2027, 3, 1, 12, 0);
+    private static final int CART_OWNER_ID = 42;
+
+    @Test
+    void GivenCheckoutRefusesAnEmptyCart_WhenPay_ThenItDoesNotReadAsAnExpiredOrder() {
+        ActiveOrder emptyCart = ActiveOrder.forMember(CART_OWNER_ID, "member-sid", CART_CREATED_AT);
+        RuntimeException refusal = assertThrows(RuntimeException.class,
+                () -> emptyCart.validateCanCheckout(CART_CREATED_AT), "precondition: the domain refuses an empty cart");
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock", refusal));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertFalse(outcome instanceof CheckoutPresenter.PayOutcome.OrderExpired,
+                "an empty cart must not read as an expired order, but was: " + outcome);
+    }
+
+    @Test
+    void GivenCheckoutRefusesACartWhoseHoldRanOut_WhenPay_ThenOrderExpired() {
+        ActiveOrder expiredCart = ActiveOrder.forMember(CART_OWNER_ID, "member-sid", CART_CREATED_AT);
+        expiredCart.addStandingReservation(1, 1, 1, 50.0, CART_CREATED_AT);
+        RuntimeException refusal = assertThrows(RuntimeException.class,
+                () -> expiredCart.validateCanCheckout(CART_CREATED_AT.plusDays(7)),
+                "precondition: the domain refuses a cart whose hold ran out");
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock", refusal));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertInstanceOf(CheckoutPresenter.PayOutcome.OrderExpired.class, outcome,
+                "a cart whose hold ran out must still read as an expired order, but was: " + outcome);
+    }
+
+    // ---- fixture shared by the UI-B10 and UI-C2 blocks: the visitor resolved by a real SessionIdentity ----
+
+    private static final int BUYER_ID = 42;
+    private static final String BUYER_TOKEN = "member-jwt";
+
+    @AfterEach
+    void uninstallTheVaadinSession() {
+        MapBackedVaadinSession.uninstall();
+    }
+
+    private static AuthenticationService signedInLiveMember() {
+        MapBackedVaadinSession.install();
+        AuthSession.storeAuth(new AuthTokenDTO(BUYER_TOKEN, 0L, BUYER_ID, "member"));
+        AuthenticationService authenticationService = mock(AuthenticationService.class);
+        when(authenticationService.liveMemberId(BUYER_TOKEN)).thenReturn(OptionalInt.of(BUYER_ID));
+        return authenticationService;
+    }
+
+    private CheckoutPresenter presenterResolvingTheVisitorThrough(AuthenticationService authenticationService,
+                                                                 ReservationService reservations) {
+        FreshGuestSession freshGuestSession = new FreshGuestSession(authenticationService,
+                new UnreadAlertsSendBack(mock(INotificationService.class)));
+        return new CheckoutPresenter(reservations, checkoutService,
+                new SessionIdentity(authenticationService, freshGuestSession));
     }
 }
