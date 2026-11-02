@@ -279,9 +279,8 @@ class VaadinSmokeTest {
 
     @Test
     void platformAdminViewsInstantiate() {
-        // No-arg PlatformAdminLayout views. Sign-in is now the unified LoginView
-        // (which is exercised by the buyer-side construction path). AdminDashboardView
-        // now takes a presenter, so it has its own test below.
+        // No-arg PlatformAdminLayout views. AdminDashboardView takes a presenter, so it has
+        // its own test below.
         OrgTreePresenter orgTreePresenter = mock(OrgTreePresenter.class);
         when(orgTreePresenter.load(any(), any(), anyBoolean())).thenReturn(new OrgTreePresenter.Outcome.NotAuthenticated());
         assertDoesNotThrow(() -> new OrganizationalTreeView(orgTreePresenter),

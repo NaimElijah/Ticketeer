@@ -6,6 +6,7 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
+import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.MyCompaniesView;
@@ -32,16 +33,18 @@ import java.util.Set;
  * <p>Then a two-step check on every navigation:
  * <ol>
  *   <li><b>Auth gate</b> — targets not annotated {@link AnonymousAllowed}
- *       require a signed-in user. Signed-out users are forwarded to
- *       the unified {@link LoginView}, which decides admin vs member by
- *       username after auth.</li>
+ *       require a signed-in user. A signed-out user is forwarded to the
+ *       sign-in for the target: {@link AdminLoginView} for a target that
+ *       needs an admin capability, {@link LoginView} for any other. The
+ *       two are separate: the member sign-in signs in members only and
+ *       counts its attempts against the member lockout.</li>
  *   <li><b>Capability gate</b> — targets annotated
  *       {@link RequireCapability} require the user to hold the named
  *       capability. The {@code fallbackFor} table picks the right
  *       "you can't go here, try this instead" destination based on the
  *       missing capability:
  *       <ul>
- *         <li>admin capabilities → {@link LoginView}</li>
+ *         <li>admin capabilities → {@link AdminLoginView}</li>
  *         <li>any other capability, for an admin → {@link AdminDashboardView}</li>
  *         <li>owner workspace caps when the user has no company →
  *             {@link CompanyRegistrationView} (so they can become one)</li>
@@ -119,12 +122,11 @@ public class AuthBootstrap implements VaadinServiceInitListener {
         Class<?> target = event.getNavigationTarget();
         RequireCapability cap = target.getAnnotation(RequireCapability.class);
 
-        // 1. Auth gate — every non-anonymous view needs a session. The unified
-        // LoginView is the single sign-in surface; if the user types an admin
-        // username, it auto-routes them to AdminDashboardView after auth.
+        // 1. Auth gate — every non-anonymous view needs a session, and a signed-out visitor signs in
+        // where the target's sign-in is: an admin view's at the admin sign-in.
         if (!target.isAnnotationPresent(AnonymousAllowed.class)) {
             if (!AuthSession.isSignedIn()) {
-                event.forwardTo(LoginView.class);
+                event.forwardTo(needsAnAdminCapability(cap) ? AdminLoginView.class : LoginView.class);
                 return;
             }
         }
@@ -179,13 +181,17 @@ public class AuthBootstrap implements VaadinServiceInitListener {
         }
     }
 
+    private static boolean needsAnAdminCapability(RequireCapability cap) {
+        return cap != null && ADMIN_CAPS.contains(cap.value());
+    }
+
     /** Where to send a user who lacks the named capability. */
     private static Class<? extends com.vaadin.flow.component.Component> fallbackFor(Capability c) {
         if (ADMIN_CAPS.contains(c)) {
-            // Signed-in member trying to reach the admin shell — bounce to
-            // the unified sign-in. Re-authentication as an admin will land
-            // them on the platform shell.
-            return LoginView.class;
+            // A signed-in member reaching for the admin shell: only the admin sign-in issues the admin
+            // token it needs. The member sign-in signs in members only, and its failed attempts would
+            // count against the member lockout.
+            return AdminLoginView.class;
         }
         if (AuthSession.isAdmin()) {
             // An admin holds no member capability, so every member page, the fallback below

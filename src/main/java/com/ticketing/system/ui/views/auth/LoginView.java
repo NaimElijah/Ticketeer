@@ -70,6 +70,8 @@ public class LoginView extends LkAuthCard {
         add(social);
 
         foot("Don't have an account?", "Create one →", RegisterView.class);
+        // This form signs in members only; an administrator signs in at AdminLoginView.
+        foot("Platform administrator?", "Admin sign in →", AdminLoginView.class);
     }
 
     private Anchor forgotPasswordLink() {

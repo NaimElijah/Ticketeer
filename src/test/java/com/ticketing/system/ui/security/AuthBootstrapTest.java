@@ -40,6 +40,28 @@ import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.UIInitEvent;
 import com.vaadin.flow.server.UIInitListener;
 import com.vaadin.flow.server.VaadinService;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mockingDetails;
+import static org.mockito.Mockito.times;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import com.ticketing.system.organization.application.dto.MembershipRole;
+import com.ticketing.system.organization.application.dto.UserCompanyDTO;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.ui.session.CompanyManagementBridge;
+import com.ticketing.system.ui.views.auth.AdminLoginView;
+import com.ticketing.system.ui.views.company.OwnerDashboardView;
+import com.vaadin.flow.internal.CurrentInstance;
+import com.vaadin.flow.server.VaadinRequest;
 
 /**
  * {@link AuthBootstrap}'s navigation guard admits a visitor by the session's stored flags, so it must
@@ -86,15 +108,16 @@ class AuthBootstrapTest {
 
     // ---- an admin --------------------------------------------------------------------------
 
+    // Signed out, the visitor is sent to sign in where an admin can: the admin sign-in (UI-B2).
     @Test
-    void GivenAdminWithADeadToken_WhenNavigatingToAnAdminView_ThenSignedOutAndForwardedToLogin() {
+    void GivenAdminWithADeadToken_WhenNavigatingToAnAdminView_ThenSignedOutAndForwardedToTheAdminLogin() {
         storeSignedInAdmin();
         when(authenticationService.liveAdminId(ADMIN_TOKEN)).thenReturn(OptionalInt.empty());
         BeforeEnterEvent navigation = navigationTo(AdminDashboardView.class);
 
         guard.beforeEnter(navigation);
 
-        verify(navigation).forwardTo(LoginView.class);
+        verify(navigation).forwardTo(AdminLoginView.class);
         assertFalse(AuthSession.isSignedIn(), "an admin whose token died must be signed out");
         assertFalse(AuthSession.isAdmin(), "an admin whose token died must keep no admin capabilities");
         assertNull(AuthSession.token(), "the dead admin token must be dropped");
@@ -197,5 +220,76 @@ class AuthBootstrapTest {
 
     private static void storeSignedInMember() {
         AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "member"));
+    }
+
+    // ---- UI-B2: an admin route sends the visitor to the admin sign-in (#187) ----
+    // A member route still sends a signed-out visitor to the member sign-in:
+    // GivenGuest_WhenNavigatingToAMemberView_ThenForwardedToLogin above.
+
+    @Test
+    void GivenSignedOutVisitor_WhenNavigatingToAnAdminView_ThenForwardedToTheAdminLogin() {
+        BeforeEnterEvent navigation = navigationTo(AdminDashboardView.class);
+
+        guard.beforeEnter(navigation);
+
+        verify(navigation).forwardTo(AdminLoginView.class);
+    }
+
+    // The member sign-in counts its attempts against the member lockout pool, so an admin route must
+    // never send anyone there.
+    @Test
+    void GivenSignedInMember_WhenNavigatingToAnAdminView_ThenForwardedToTheAdminLogin() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+        bridgeMemberships(List.of());
+        BeforeEnterEvent navigation = navigationTo(AdminDashboardView.class);
+
+        guard.beforeEnter(navigation);
+
+        verify(navigation).forwardTo(AdminLoginView.class);
+    }
+
+    // ---- fixture shared by the UI-B2, UI-B4 and UI-B7 blocks: the member's companies, read through ----
+    // ---- CompanyManagementBridge, and the current request                                          ----
+
+    private static final int COMPANY_ID = 7;
+
+    private CompanyManagementService companyManagementService;
+    // The bridge is static and a Spring context in the same JVM may have set it, so it is restored after.
+    private CompanyManagementService bridgedBefore;
+    // Vaadin holds the current request through a weak reference, so the test keeps it reachable.
+    private VaadinRequest currentRequest;
+
+    @AfterEach
+    void restoreTheBridgeAndTheRequest() {
+        if (companyManagementService != null) {
+            new CompanyManagementBridge(bridgedBefore);
+        }
+        CurrentInstance.set(VaadinRequest.class, null);
+        currentRequest = null;
+    }
+
+    private void bridgeMemberships(List<UserCompanyDTO> memberships) {
+        if (companyManagementService == null) {
+            bridgedBefore = CompanyManagementBridge.service();
+            companyManagementService = mock(CompanyManagementService.class);
+            new CompanyManagementBridge(companyManagementService);
+        }
+        when(companyManagementService.listForUser(MEMBER_TOKEN)).thenReturn(memberships);
+    }
+
+    private static UserCompanyDTO membership(MembershipRole role, List<Permission> managerPermissions) {
+        return new UserCompanyDTO(COMPANY_ID, "Acme", "desc", "", role, "ACTIVE", 1, 0, managerPermissions);
+    }
+
+    private static VaadinRequest mapBackedRequest() {
+        Map<String, Object> attributes = new HashMap<>();
+        VaadinRequest request = mock(VaadinRequest.class);
+        when(request.getAttribute(anyString())).thenAnswer(call -> attributes.get(call.getArgument(0, String.class)));
+        doAnswer(call -> attributes.put(call.getArgument(0), call.getArgument(1)))
+                .when(request).setAttribute(anyString(), any());
+        doAnswer(call -> attributes.remove(call.getArgument(0, String.class)))
+                .when(request).removeAttribute(anyString());
+        return request;
     }
 }
