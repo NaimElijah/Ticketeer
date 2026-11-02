@@ -32,7 +32,6 @@ public class LkSideNav extends Aside {
 
     public LkSideNav items(List<Item> items, String activeLabel) {
         this.itemDefs = items;
-        this.activeLabel = activeLabel;
         for (Div el : itemEls)
             remove(el);
         itemEls.clear();
@@ -48,12 +47,10 @@ public class LkSideNav extends Aside {
                 buildItemContent(anchor, it);
             }
             anchor.addClassName("lk-sidenav-item");
-            if (it.label.equals(activeLabel))
-                anchor.addClassName("on");
             add(anchor);
             itemEls.add(anchor);
         }
-        return this;
+        return setActive(activeLabel);
     }
 
     private Div wrapRouterLink(RouterLink link, Item it) {
