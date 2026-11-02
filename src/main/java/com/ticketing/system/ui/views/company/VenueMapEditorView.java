@@ -57,6 +57,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private final VenueMapPresenter presenter;
     private final VenueLimitsProperties venueLimits;
+    private final LkBtn saveMapBtn;
     private String eventId = "0";
 
     private record ZoneState(String name, boolean seated, int rows, int seatsPerRow,
@@ -88,13 +89,14 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         this.presenter = presenter;
         this.venueLimits = venueLimits;
         zoneStates.add(new ZoneState("Zone 1", true, 10, 20, 0, 100.0, defaultPlacement(0)));
+        saveMapBtn = new LkBtn("Save Map").variant(LkBtn.Variant.primary)
+            .onClick(e -> saveMap());
         title("Venue Map Editor");
         subtitle("Place zones on the " + gridRows + "×" + gridCols + " venue grid, then define seats.");
         actions(
             new LkBtn("Cancel").variant(LkBtn.Variant.tertiary)
                 .onClick(e -> UI.getCurrent().navigate(CompanyEventListView.class)),
-            new LkBtn("Save Map").variant(LkBtn.Variant.primary)
-                .onClick(e -> saveMap())
+            saveMapBtn
         );
         add(buildSplit());
         loadZoneIntoEditor(0);
