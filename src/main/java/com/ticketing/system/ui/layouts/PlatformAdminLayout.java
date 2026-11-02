@@ -58,8 +58,10 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
     public PlatformAdminLayout(SignOutFlow signOutFlow, NotificationBellPresenter bellPresenter) {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
+        // First, so it is the first Tab stop; the top bar is re-added after it on every navigation.
+        addToNavbar(PageFocus.skipLink());
         // Opens the drawer once a narrow window or zoom collapses it (#188); added before the top bar,
-        // which is re-added on every navigation, so it stays first.
+        // which is re-added on every navigation, so it stays ahead of it.
         DrawerToggle drawerToggle = new DrawerToggle();
         drawerToggle.setAriaLabel(OPEN_NAVIGATION);
         addToNavbar(drawerToggle);
@@ -71,6 +73,7 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
     public void afterNavigation(AfterNavigationEvent event) {
         rebuildTopBar();
         adminNav.setActive(findLabel(event));
+        PageFocus.afterNavigation(getContent());
     }
 
     private void rebuildTopBar() {

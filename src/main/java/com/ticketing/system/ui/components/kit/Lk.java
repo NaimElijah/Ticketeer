@@ -27,6 +27,8 @@ public final class Lk {
     static final String ARIA_HIDDEN = "aria-hidden";
     static final String ROLE_RADIO = "radio";
     static final String ROLE_CHECKBOX = "checkbox";
+    static final String ARIA_CURRENT = "aria-current";
+    static final String CURRENT_PAGE = "page";
 
     private static final String NAME_SEPARATOR = ": ";
 

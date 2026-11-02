@@ -3,6 +3,7 @@ package com.ticketing.system.ui.components.kit;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Header;
 import com.vaadin.flow.component.html.NativeButton;
+import com.vaadin.flow.component.html.Nav;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.popover.PopoverPosition;
 import com.vaadin.flow.router.RouterLink;
@@ -29,6 +30,8 @@ public class LkTopBar extends Header {
     private static final String SEARCH_PANEL = "Search";
     private static final String NOTIFICATIONS = "Notifications";
     private static final String ACCOUNT_PANEL = "Account menu";
+    // Names the main navigation landmark, to tell it from a shell's side navigation (#188).
+    private static final String MAIN_NAV = "Main";
 
     private final Variant variant;
     private final Span rightSlot = new Span();
@@ -76,14 +79,26 @@ public class LkTopBar extends Header {
         return this;
     }
 
+    /**
+     * Adds the main navigation links, in a {@code nav} landmark named "Main"; the link to
+     * {@code activeLabel} is highlighted and marked as the current page (#188; WCAG 1.3.1, 4.1.2).
+     *
+     * @param items       the links, in order
+     * @param activeLabel the label of the link to the page shown, or {@code null} for none
+     * @return this top bar, for chaining
+     */
     public LkTopBar nav(List<NavItem> items, String activeLabel) {
-        Span nav = new Span();
+        Nav nav = new Nav();
         nav.addClassName("lk-topnav");
+        nav.setAriaLabel(MAIN_NAV);
         for (NavItem item : items) {
             if (item.target != null) {
                 RouterLink link = new RouterLink(item.label, item.target);
                 link.addClassName("lk-topnav-link");
-                if (item.label.equals(activeLabel)) link.addClassName("on");
+                if (item.label.equals(activeLabel)) {
+                    link.addClassName("on");
+                    link.getElement().setAttribute(Lk.ARIA_CURRENT, Lk.CURRENT_PAGE);
+                }
                 nav.add(link);
             } else {
                 Span a = new Span(item.label);

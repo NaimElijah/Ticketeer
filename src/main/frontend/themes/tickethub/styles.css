@@ -14,6 +14,12 @@
   .lk-mono{font-family:var(--mono)}
   a{color:inherit}
   button{font-family:inherit;cursor:pointer}
+  /* PageFocus's skip link: out of sight until it has keyboard focus (#188). */
+  .lk-skip-link{position:fixed;top:8px;left:8px;z-index:1000;padding:8px 14px;border-radius:8px;background:#fff;
+    color:var(--primary);font-weight:700;text-decoration:none;box-shadow:0 4px 14px rgba(15,23,42,.18);transform:translateY(-200%)}
+  .lk-skip-link:focus{transform:none}
+  /* PageFocus moves focus to the page, or its h1, only so a screen reader announces it: neither is a control. */
+  #lk-content:focus,#lk-content h1:focus{outline:none}
 
   /* ============ APP LAYOUT (index + stage) ============ */
   #root{display:flex;height:100vh;overflow:hidden}
