@@ -10,27 +10,35 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.dev.DevPanel;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
+import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -53,6 +61,7 @@ class DevPanelTest {
     // Member and admin ids share one id space (ADR-012).
     private static final int ADMIN_ID = 42;
     private static final String GUEST_SESSION_ID = "guest-sid";
+    private static final String FRESH_GUEST_SESSION_ID = "fresh-guest-sid";
     private static final String DEFAULT_ADMIN_USERNAME = "admin";
     private static final String DEFAULT_ADMIN_PASSWORD = "admin";
     private static final long BADGE_READ_AT_MS = 1_000_000L;
@@ -72,8 +81,10 @@ class DevPanelTest {
         reservationService = mock(ReservationService.class);
         authenticationService = mock(AuthenticationService.class);
         DevPanel.init(reservationService);
-        DevPanel.bindBeans(authenticationService, mock(SignOutFlow.class), DEFAULT_ADMIN_USERNAME,
-                DEFAULT_ADMIN_PASSWORD);
+        DevPanel.bindBeans(authenticationService, mock(SignOutFlow.class),
+                new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService,
+                        new UnreadAlertsSendBack(mock(INotificationService.class)))),
+                DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD);
         bridgedBefore = CompanyManagementBridge.service();
         CompanyManagementService companies = mock(CompanyManagementService.class);
         when(companies.listForUser(anyString())).thenReturn(List.of());
@@ -86,7 +97,7 @@ class DevPanelTest {
         serviceErrorsLog.close();
         new CompanyManagementBridge(bridgedBefore);
         DevPanel.init(null);
-        DevPanel.bindBeans(null, null, DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD);
+        DevPanel.bindBeans(null, null, null, DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD);
         harness.close();
         MapBackedVaadinSession.uninstall();
     }
@@ -124,6 +135,23 @@ class DevPanelTest {
         clickPersona("Member");
 
         assertTrue(CartBadgeCache.fresh(BADGE_READ_AT_MS).isEmpty(), "the signed-in member's cart must be read again");
+    }
+
+    // The dev panel signs in on a live guest session id, as LoginView does: an expired one is replaced first.
+    @Test
+    void GivenTheGuestSessionExpired_WhenTheMemberPersonaSignsIn_ThenAFreshGuestSessionIdIsPassedOn() {
+        when(authenticationService.isLiveGuestSession(GUEST_SESSION_ID)).thenReturn(false);
+        when(authenticationService.isLiveGuestSession(FRESH_GUEST_SESSION_ID)).thenReturn(true);
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+        when(authenticationService.login(any())).thenReturn(
+                new LoginDTO(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "member"), null, List.of()));
+
+        clickPersona("Member");
+
+        ArgumentCaptor<LoginRequestDTO> request = ArgumentCaptor.forClass(LoginRequestDTO.class);
+        verify(authenticationService).login(request.capture());
+        assertEquals(FRESH_GUEST_SESSION_ID, request.getValue().guestSessionId());
     }
 
     // An admin token is no member credential, so signing an admin out never asks for a member's cart.

@@ -4,6 +4,7 @@ import com.ticketing.system.governance.config.PlatformAdminProperties;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.ui.security.SignOutFlow;
+import com.ticketing.system.ui.session.SessionIdentity;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinServiceInitListener;
 import org.springframework.stereotype.Component;
@@ -14,8 +15,8 @@ import org.springframework.stereotype.Component;
  * service init phase, the same way {@code AuthBootstrap} attaches its
  * navigation guard.
  *
- * <p>Also bridges the Spring-managed {@link AuthenticationService} and
- * {@link SignOutFlow} into {@link DevPanel}'s static surface so the
+ * <p>Also bridges the Spring-managed {@link AuthenticationService},
+ * {@link SignOutFlow} and {@link SessionIdentity} into {@link DevPanel}'s static surface so the
  * persona toggles can drive the real login/logout flows instead of the
  * earlier flag-toggle mocks.
  *
@@ -29,9 +30,11 @@ public class DevPanelInitializer implements VaadinServiceInitListener {
     public DevPanelInitializer(ReservationService reservationService,
                                AuthenticationService authenticationService,
                                SignOutFlow signOutFlow,
+                               SessionIdentity sessionIdentity,
                                PlatformAdminProperties platformAdmin) {
         DevPanel.init(reservationService);
-        DevPanel.bindBeans(authenticationService, signOutFlow, platformAdmin.username(), platformAdmin.password());
+        DevPanel.bindBeans(authenticationService, signOutFlow, sessionIdentity, platformAdmin.username(),
+                platformAdmin.password());
     }
 
     @Override

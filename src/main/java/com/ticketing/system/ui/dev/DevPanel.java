@@ -19,8 +19,8 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
-import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.MockPermissions;
+import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -47,6 +47,7 @@ public final class DevPanel {
 
     static AuthenticationService AUTH;
     static SignOutFlow SIGN_OUT_FLOW;
+    static SessionIdentity SESSION_IDENTITY;
 
     // The real platform-admin credentials (platform.admin.* — default admin/admin),
     // used by the "Admin" persona toggle to sign in through the dedicated admin path.
@@ -59,10 +60,11 @@ public final class DevPanel {
         reservationService = rs;
     }
 
-    public static void bindBeans(AuthenticationService auth, SignOutFlow signOutFlow,
+    public static void bindBeans(AuthenticationService auth, SignOutFlow signOutFlow, SessionIdentity sessionIdentity,
                                  String adminUsername, String adminPassword) {
         AUTH = auth;
         SIGN_OUT_FLOW = signOutFlow;
+        SESSION_IDENTITY = sessionIdentity;
         DevPanel.adminUsername = adminUsername;
         DevPanel.adminPassword = adminPassword;
     }
@@ -89,12 +91,8 @@ public final class DevPanel {
             if (AuthSession.isSignedIn()) {
                 SIGN_OUT_FLOW.execute();
             }
-            String guestSid = GuestSession.sessionId();
-            if (guestSid == null) {
-                guestSid = AUTH.startGuestSession().sessionId();
-                GuestSession.setSessionId(guestSid);
-            }
-            var dto = AUTH.login(new LoginRequestDTO(username, password, guestSid));
+            // As LoginView does: SessionIdentity replaces a missing or expired guest session first.
+            var dto = AUTH.login(new LoginRequestDTO(username, password, SESSION_IDENTITY.guestSessionId()));
             AuthSession.storeAuth(dto.authToken());
             CartBadgeCache.invalidate(); // login swaps the cart, as LoginView's does
         } catch (RuntimeException e) {
