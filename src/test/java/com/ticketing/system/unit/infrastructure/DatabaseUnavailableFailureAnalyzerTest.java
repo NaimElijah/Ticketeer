@@ -2,6 +2,9 @@ package com.ticketing.system.unit.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
@@ -166,5 +169,69 @@ class DatabaseUnavailableFailureAnalyzerTest {
     private static DatabaseUnavailableFailureAnalyzer analyzerFor(String url) {
         return new DatabaseUnavailableFailureAnalyzer(
                 new MockEnvironment().withProperty("spring.datasource.url", url));
+    }
+
+    // ---- Defect 11: a statement that exceeded the socket timeout is not "cannot connect" (#187) ----
+    // The PostgreSQL driver reports a read that timed out mid-statement as SQLState 08006 (connection
+    // failure) caused by a SocketTimeoutException; the database was reachable, the statement was slow.
+
+    private static final String SOCKET_TIMEOUT_PROPERTY = "database.socket-timeout";
+    private static final String CANNOT_CONNECT = "could not connect";
+
+    @Test
+    void GivenConnectionFailureCausedByASocketTimeout_WhenAnalyzed_ThenItSaysAStatementExceededTheSocketTimeout() {
+        SQLException readTimedOut = new SQLException("An I/O error occurred while sending to the backend.", "08006",
+                new SocketTimeoutException("Read timed out"));
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Migration failed", readTimedOut));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription() + " " + analysis.getAction()).contains(SOCKET_TIMEOUT_PROPERTY);
+        assertThat(analysis.getDescription()).doesNotContain(CANNOT_CONNECT);
+    }
+
+    @Test
+    void GivenConnectionRefused_WhenAnalyzed_ThenItStillSaysTheDatabaseCannotBeReached() {
+        SQLException refused = new SQLException("Connection to 127.0.0.1:1 refused.", "08001",
+                new ConnectException("Connection refused"));
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Unable to obtain connection from database", refused));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(CANNOT_CONNECT).contains(UNREACHABLE_URL);
+        assertThat(analysis.getDescription() + " " + analysis.getAction()).doesNotContain(SOCKET_TIMEOUT_PROPERTY);
+    }
+
+    // pgjdbc reports a connect that timed out as 08001 caused by a SocketTimeoutException: the database
+    // was never reached, so no statement ran and the socket timeout is not the setting to change.
+    @Test
+    void GivenConnectTimeout_WhenAnalyzed_ThenItStillSaysTheDatabaseCannotBeReached() {
+        SQLException connectTimedOut = new SQLException("The connection attempt failed.", "08001",
+                new SocketTimeoutException("Connect timed out"));
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Unable to obtain connection from database", connectTimedOut));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(CANNOT_CONNECT).contains(UNREACHABLE_URL);
+        assertThat(analysis.getDescription() + " " + analysis.getAction()).doesNotContain(SOCKET_TIMEOUT_PROPERTY);
+    }
+
+    // ---- F6: only a socket timeout under 08006 is a statement timeout (#187) ----
+    // A connection the server or network reset is 08006 too, caused by a SocketException: nothing timed out.
+
+    @Test
+    void GivenConnectionFailureCausedByAConnectionReset_WhenAnalyzed_ThenItStillSaysTheDatabaseCannotBeReached() {
+        SQLException reset = new SQLException("An I/O error occurred while sending to the backend.", "08006",
+                new SocketException("Connection reset"));
+
+        FailureAnalysis analysis = analyzerFor(UNREACHABLE_URL)
+                .analyze(new IllegalStateException("Migration failed", reset));
+
+        assertThat(analysis).isNotNull();
+        assertThat(analysis.getDescription()).contains(CANNOT_CONNECT).contains(UNREACHABLE_URL);
+        assertThat(analysis.getDescription() + " " + analysis.getAction()).doesNotContain(SOCKET_TIMEOUT_PROPERTY);
     }
 }

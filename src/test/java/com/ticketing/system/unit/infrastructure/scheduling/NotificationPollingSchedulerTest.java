@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
@@ -22,14 +23,19 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.bootstrap.scheduling.ActiveUiRegistry;
 import com.ticketing.system.bootstrap.scheduling.NotificationPollingScheduler;
+import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.ui.components.NotificationBellComponent;
 import com.ticketing.system.ui.presenters.notifications.NotificationBellPresenter.MarkReadOutcome;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.FreshGuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.session.NotificationSession;
+import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasStyle;
 import com.vaadin.flow.component.UI;
@@ -44,6 +50,7 @@ class NotificationPollingSchedulerTest {
 
     private static final int SHARED_ID = 1;
     private static final long TOKEN_EXPIRY_EPOCH_MILLIS = 0L;
+    private static final String MEMBER_TOKEN = "member-jwt";
 
     private ActiveUiRegistry uiRegistry;
     private NotificationDispatchService dispatchService;
@@ -55,7 +62,13 @@ class NotificationPollingSchedulerTest {
         uiRegistry = mock(ActiveUiRegistry.class);
         dispatchService = mock(NotificationDispatchService.class);
         when(dispatchService.deliverPending(anyInt())).thenReturn(List.of());
-        scheduler = new NotificationPollingScheduler(uiRegistry, dispatchService);
+        // The member's token is live; an admin token never reaches the liveness check (SessionIdentity).
+        AuthenticationService authenticationService = mock(AuthenticationService.class);
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(SHARED_ID));
+        SessionIdentity sessionIdentity =
+                new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService,
+                        new UnreadAlertsSendBack(mock(INotificationService.class))));
+        scheduler = new NotificationPollingScheduler(uiRegistry, dispatchService, sessionIdentity);
     }
 
     @AfterEach
@@ -76,7 +89,7 @@ class NotificationPollingSchedulerTest {
 
     @Test
     void GivenMemberUi_WhenPoll_ThenTheMembersPendingNotificationsAreDelivered() {
-        AuthSession.storeAuth(new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
         registerOneUiRunningAccessInline();
 
         scheduler.poll();
@@ -90,7 +103,6 @@ class NotificationPollingSchedulerTest {
     // nothing. The second tab's bell must still show it. The tabs are real, headless UIs with real bells;
     // the registry hands the poller a stand-in per tab whose access runs inline with that tab current.
 
-    private static final int MEMBER_ID = 42;
     private static final String BADGE_CLASS = "lk-bell-badge";
     private static final NotificationDTO PURCHASE_CONFIRMED = new NotificationDTO("n-1", "PURCHASE_CONFIRMED",
             "SENT", "Your seats are confirmed", LocalDateTime.of(2027, 7, 15, 17, 0));
@@ -100,10 +112,10 @@ class NotificationPollingSchedulerTest {
 
     @Test
     void GivenTwoTabsAndTheFirstTabsPollDrainsTheInbox_WhenTheSecondTabPollsAndGetsNothing_ThenItsBellShowsTheNotification() {
-        AuthSession.storeAuth(new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_ID, "member"));
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
         NotificationBellComponent firstBell = attachBellTo(firstTab);
         NotificationBellComponent secondBell = attachBellTo(secondTab);
-        when(dispatchService.deliverPending(MEMBER_ID)).thenReturn(List.of(PURCHASE_CONFIRMED), List.of());
+        when(dispatchService.deliverPending(SHARED_ID)).thenReturn(List.of(PURCHASE_CONFIRMED), List.of());
         registerTabsInPollOrder(firstTab, secondTab);
 
         scheduler.poll();
@@ -115,12 +127,12 @@ class NotificationPollingSchedulerTest {
 
     @Test
     void GivenAnInboxThePollLeavesUnchanged_WhenPoll_ThenTheBellIsNotRendered() {
-        AuthSession.storeAuth(new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_ID, "member"));
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
         NotificationSession.store(List.of(PURCHASE_CONFIRMED));
         NotificationBellComponent bell = attachBellTo(firstTab);
         Component renderedBefore = bell.getChildren().findFirst().orElseThrow();
         // Delivered again although the inbox holds it: the merge drops the duplicate, so nothing changes.
-        when(dispatchService.deliverPending(MEMBER_ID)).thenReturn(List.of(PURCHASE_CONFIRMED));
+        when(dispatchService.deliverPending(SHARED_ID)).thenReturn(List.of(PURCHASE_CONFIRMED));
         registerTabsInPollOrder(firstTab);
 
         scheduler.poll();

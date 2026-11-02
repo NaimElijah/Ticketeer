@@ -203,4 +203,38 @@ abstract class ISessionRepositoryContractTest {
         assertEquals(SessionKind.ADMIN, repo.findById("sid").orElseThrow().getKind(),
                 "overwriting a session must overwrite its kind, as it overwrites its user id");
     }
+
+    // ---- Defect 3: delete one admin's admin sessions (#187) ----
+    // Admin and member ids share one id space (ADR-012), so a member row with the admin's id must stay.
+
+    @Test
+    void GivenSessionsOfSeveralKinds_WhenDeleteAdminSessions_ThenOnlyThatAdminsAdminRowsAreGone() {
+        repo.save(Session.admin("sid-admin-1-a", 1, T0, T_FAR_FUTURE));
+        repo.save(Session.admin("sid-admin-1-b", 1, T0, T_FAR_FUTURE));
+        // Expired before the adapter's clock (T0): the port deletes the admin's rows expired or not.
+        repo.save(Session.admin("sid-admin-1-expired", 1, T_PAST, T_PAST_PLUS_ONE));
+        repo.save(new Session("sid-member-1", 1, T0, T_FAR_FUTURE));
+        repo.save(Session.admin("sid-admin-2", 2, T0, T_FAR_FUTURE));
+        repo.save(new Session("sid-guest", null, T0, T_FAR_FUTURE));
+
+        repo.deleteAdminSessions(1);
+
+        assertFalse(repo.findById("sid-admin-1-a").isPresent(), "admin 1's first session must be deleted");
+        assertFalse(repo.findById("sid-admin-1-b").isPresent(), "admin 1's second session must be deleted");
+        assertFalse(repo.findById("sid-admin-1-expired").isPresent(), "admin 1's expired session must be deleted too");
+        assertTrue(repo.findById("sid-member-1").isPresent(), "member 1 shares admin 1's id but is not that admin");
+        assertTrue(repo.findById("sid-admin-2").isPresent(), "another admin's session must stay");
+        assertTrue(repo.findById("sid-guest").isPresent(), "a guest session must stay");
+    }
+
+    @Test
+    void GivenNoSessionOfThatAdmin_WhenDeleteAdminSessions_ThenNothingIsDeleted() {
+        repo.save(new Session("sid-member-1", 1, T0, T_FAR_FUTURE));
+        repo.save(Session.admin("sid-admin-2", 2, T0, T_FAR_FUTURE));
+
+        assertDoesNotThrow(() -> repo.deleteAdminSessions(1), "deleting an admin's sessions when there are none is a no-op");
+
+        assertTrue(repo.findById("sid-member-1").isPresent(), "member 1 shares admin 1's id but is not that admin");
+        assertTrue(repo.findById("sid-admin-2").isPresent(), "another admin's session must stay");
+    }
 }

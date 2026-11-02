@@ -105,6 +105,12 @@ public class JpaSessionRepository implements SessionRepository {
     }
 
     @Override
+    @Transactional
+    public void deleteAdminSessions(int adminId) {
+        data.deleteByUserIdAndKind(adminId, SessionKind.ADMIN);
+    }
+
+    @Override
     public List<Session> findExpiredBefore(Instant cutoff) {
         return data.findByExpiresAtLessThanEqual(cutoff);
     }

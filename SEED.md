@@ -34,14 +34,21 @@ Because every line is a real service call, each is classified in the end-of-run 
 |---|---|
 | **PASS** | The service call succeeded. |
 | **SKIPPED** | The call threw `UnsupportedOperationException` — a known, not-yet-built feature stub (e.g. `add-coupon`). |
-| **FAIL** | Any other exception — a real bug worth surfacing. |
-| **BLOCKED** | A dependent step skipped because a prerequisite failed (recorded to avoid cascade noise). |
+| **FAIL** | Any other exception — a real bug worth surfacing — or an `expect-error` step whose operation threw nothing or another exception type. |
+| **BLOCKED** | Reserved for a step skipped because a prerequisite failed. The scenario engine records none today (#50). |
 
 With `seed.fail-fast=true` the run aborts at the first unexpected failure (a partial report is still
 logged) and startup fails. That is the default outside `dev`; `dev` sets it to `false` so a broken demo
-line doesn't block local work. A missing or unreadable scenario file stops startup in every profile
-([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against whatever database
+line doesn't block local work. A missing or unreadable scenario file, or one the parser refuses (such as a
+bare `expect-error`), stops startup in every profile, before any step runs
+([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md), [ADR-021](docs/ADRs/ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against whatever database
 the run is configured with, not just H2 — but stays gated behind `seed.mode` so it is opt-in there.
+
+> **Warning:** the committed scenarios (`classpath:scenarios/…`) register accounts whose passwords are
+> published in this repository (see [Credentials](#credentials)). Seeding one into a database others can
+> reach creates logins anyone can use. Outside `dev` the runner logs a WARN before the first step; it does
+> not refuse (#78). On a shared or reachable database, use a scenario file of your own with passwords
+> nobody else knows.
 
 ## What gets seeded (`demo.scenario`)
 
@@ -67,8 +74,8 @@ The default dataset boots a small but complete marketplace:
 | Beyonce | Live Nation Israel | CONCERT | 2 standing | On sale |
 | Othello | Habima Theatre | THEATER | 2 seated | On sale |
 | Indie Night | Live Nation Israel | CONCERT | 1 standing (cap 6) | **SOLD_OUT** (bought out) |
-| Postponed Gala | Habima Theatre | OTHER | 1 standing (cap 50) | **CANCELED** (+ refunded) |
-| Not On Sale Yet | Live Nation Israel | CONCERT (the `add-event` default when `category` is omitted) | 1 standing | **SCHEDULED** (unpublished; a negative `expect-error` check reserves against it and must fail) |
+| Postponed Gala | Habima Theatre | OTHER | 1 standing (cap 50) | **CANCELED** (+ refunded; a negative `expect-error` check then reserves against it, and the reservation guard refuses it as not on sale) |
+| Not On Sale Yet | Live Nation Israel | CONCERT (the `add-event` default when `category` is omitted) | 1 standing | **SCHEDULED** (unpublished, so buyers do not see it) |
 
 Event dates are relative to boot (`days=` offsets), so they are always in the future.
 
@@ -97,10 +104,10 @@ stops the boot with a bind error naming `seed.mode` (ADR-003).
 | Mode | What it does |
 |---|---|
 | `off` (default outside dev) | Do nothing. |
-| `reseed` | Open the market and run the scenario (creates what's missing). **dev's default.** |
+| `reseed` | Open the market and run the scenario. If a user the scenario registers already exists (by username, honouring a line's `username=`), the scenario has run against this database before: no step runs, a WARN points at `seed.mode=reset`, and the boot goes on. Users the scenario does not register, such as `dev.member`, do not count. **dev's default.** |
 | `wipe` | Delete **all business data** (keeping the platform admin), then stop. *Destructive.* |
-| `reset` | `wipe`, then reseed (`DevUserSeeder` + scenario). *Destructive.* |
-| `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. If stdin yields EOF/empty input (or an `IOException`), each prompt falls back to its default (`off` for the mode). An unrecognised answer is skipped with a warning. |
+| `reset` | Read the scenario, `wipe`, then reseed (`DevUserSeeder` + scenario). A scenario that is missing, unreadable or refused by the parser stops the boot before anything is deleted. The scenario runs even if its users existed, since the wipe removed them. *Destructive.* |
+| `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. If stdin yields EOF/empty input, or an `IOException` (logged at WARN), a prompt falls back to its default (`off` for the mode, `demo` for the scenario). An unrecognised mode is skipped with a warning. An unrecognised scenario is refused, the valid names are shown, and the question is asked again; if the console then ends, or cannot be read, the boot stops with a message naming the valid choices instead of taking the default. |
 
 **Destructive modes are gated by an explicit opt-in**, not a console prompt: `wipe`/`reset` only proceed
 when `seed.assume-yes=true` (env: `SEED_ASSUME_YES=true`). Without it they log exactly what *would* be
@@ -145,7 +152,8 @@ service call).
 |---|---|
 | `register <alias> <password> <email> <age>` | `AuthenticationService.register` |
 | `login <alias>` | `AuthenticationService.login` |
-| `login-admin <alias> <username> <password>` | `AuthenticationService.signInAsAdmin` |
+| `login-admin <alias>` | `AuthenticationService.signInAsAdmin` with the configured default admin's `platform.admin.username` and `platform.admin.password`, so the file holds no password |
+| `login-admin <alias> <username> <password>` | `AuthenticationService.signInAsAdmin` with the credentials the file names |
 | `logout <alias>` / `logout-all` | `AuthenticationService.logout` |
 | `guest <alias>` | `AuthenticationService.startGuestSession` |
 | `open-company <owner> <companyAlias> "<name>" ["<desc>"]` | `CompanyManagementService.registerCompany` |
@@ -161,7 +169,7 @@ service call).
 | `submit-complaint <from> subject= body=` | `MessagingService.submitComplaint` |
 | `announce <admin> title= body= [audience=BROADCAST_MEMBERS\|BROADCAST_PRODUCERS]` | `MessagingService.sendOutreach` |
 | `assert-status <event> <STATUS> by=<owner>` | Read-only assertion via `EventManagementService.getEventDetail` |
-| `expect-error <op> <args…>` | Negative test: passes only if the wrapped operation throws |
+| `expect-error <op> <args…> error=<ExceptionSimpleName>` | Negative test: passes only if the wrapped operation throws an exception whose simple class name is exactly `<ExceptionSimpleName>` (a subclass does not count); another exception fails the step, naming both types. A line without `error=` is refused when the file is parsed |
 | `add-coupon …` | Not built: always throws `UnsupportedOperationException`, so the step is SKIPPED |
 
 Manager permissions (`perms=`) are any of `CONFIGURE_VENUE`, `MANAGE_INVENTORY`, `EDIT_POLICIES`,
@@ -188,9 +196,10 @@ add-coupon u2 p1 code=sale123 percent=20
 logout-all
 ```
 
-Each line ends up PASS, SKIPPED, FAIL or BLOCKED in the end-of-run `SeedReport` (see
-[How dev seeding works](#how-dev-seeding-works)). With `seed.fail-fast=true` (the default outside
-`dev`) the run stops at the first unexpected failure, and startup fails with it.
+Each line ends up PASS, SKIPPED or FAIL in the end-of-run `SeedReport` (see
+[How dev seeding works](#how-dev-seeding-works)); the scenario engine records no BLOCKED step. With
+`seed.fail-fast=true` (the default outside `dev`) the run stops at the first unexpected failure, and
+startup fails with it.
 
 ## Date relativity
 

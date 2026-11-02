@@ -1,6 +1,6 @@
 # ADR-014: Committed default secrets are fatal outside dev and test
 
-- **Status:** Accepted
+- **Status:** Accepted; extended by [ADR-021](ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)
 - **Date:** 2026-10-30
 - **Issue:** #185 (security scan), #34; related #77; extends [ADR-003](ADR-003-fatal-and-self-healing-init-failures.md)
 

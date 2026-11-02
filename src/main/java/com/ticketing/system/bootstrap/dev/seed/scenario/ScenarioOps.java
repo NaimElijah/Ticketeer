@@ -42,12 +42,14 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.bootstrap.dev.seed.DemoClock;
 import com.ticketing.system.bootstrap.dev.seed.SeedHarness;
+import com.ticketing.system.governance.config.PlatformAdminProperties;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -55,13 +57,16 @@ import java.util.Map;
  * to a real application service and updating the {@link ScenarioContext}. The
  * runner calls {@link #execute} per parsed line; this class owns the
  * {@link SeedHarness} interaction so each line is classified PASS / SKIPPED /
- * FAIL (and {@code expect-error} flips a throw into a PASS).
+ * FAIL (and {@code expect-error} flips the exception it names into a PASS).
  *
  * <p>
  * Plain class (not a bean) — instantiated per run by {@code ScenarioRunner}
  * with the services and a fresh {@link DemoClock}.
  */
 public final class ScenarioOps {
+
+    /** The operation that registers a member; its users are what an idempotent reseed looks for. */
+    static final String REGISTER_OP = "register";
 
     @FunctionalInterface
     interface OpHandler {
@@ -78,10 +83,18 @@ public final class ScenarioOps {
     private final UserRepository userRepository;
     private final DemoClock clock;
     private final ZoneId timeZone;
+    private final PlatformAdminProperties defaultAdmin;
 
     private final Map<String, OpHandler> registry = new LinkedHashMap<>();
     private int seq = 0;
 
+    /**
+     * Builds the operation registry over the application services a scenario calls.
+     *
+     * @param timeZone     the zone seeded show dates are written in
+     * @param defaultAdmin the configured default-admin credentials ({@code platform.admin.*}), which
+     *                     {@code login-admin <alias>} signs in with
+     */
     public ScenarioOps(AuthenticationService auth,
             CompanyManagementService companyService,
             EventManagementService eventService,
@@ -91,7 +104,8 @@ public final class ScenarioOps {
             MessagingService messaging,
             UserRepository userRepository,
             DemoClock clock,
-            ZoneId timeZone) {
+            ZoneId timeZone,
+            PlatformAdminProperties defaultAdmin) {
         this.auth = auth;
         this.companyService = companyService;
         this.eventService = eventService;
@@ -102,11 +116,12 @@ public final class ScenarioOps {
         this.userRepository = userRepository;
         this.clock = clock;
         this.timeZone = timeZone;
+        this.defaultAdmin = defaultAdmin;
         buildRegistry();
     }
 
     private void buildRegistry() {
-        registry.put("register", this::register);
+        registry.put(REGISTER_OP, this::register);
         registry.put("login", this::login);
         registry.put("login-admin", this::loginAdmin);
         registry.put("logout", this::logout);
@@ -130,7 +145,7 @@ public final class ScenarioOps {
 
     /** Dispatch one command, recording its outcome through the harness. */
     public void execute(ScenarioCommand cmd, ScenarioContext ctx, SeedHarness harness) {
-        if (cmd.op().equals("expect-error")) {
+        if (cmd.op().equals(ScenarioParser.EXPECT_ERROR_OP)) {
             executeExpectError(cmd, ctx, harness);
             return;
         }
@@ -146,13 +161,15 @@ public final class ScenarioOps {
     }
 
     /**
-     * {@code expect-error <op> <args…>} — the wrapped op must throw; if it doesn't,
-     * that's a FAIL.
+     * {@code expect-error <op> <args…> error=<ExceptionSimpleName>} — the wrapped op must throw exactly
+     * that exception type; nothing thrown, or another type, is a FAIL. The parser has already refused a
+     * line without {@code error=}. The {@code error=} argument is not passed on to the wrapped op.
      */
     private void executeExpectError(ScenarioCommand cmd, ScenarioContext ctx, SeedHarness harness) {
         String innerOp = cmd.requirePos(0, "operation to expect-error");
+        String expectedError = cmd.named(ScenarioParser.EXPECTED_ERROR_ARG);
         OpHandler handler = registry.get(innerOp);
-        String label = "expect-error " + innerOp;
+        String label = label(cmd);
         if (handler == null) {
             harness.step("scenario", label, () -> {
                 throw new IllegalArgumentException("unknown operation '" + innerOp + "' at line " + cmd.line());
@@ -160,18 +177,28 @@ public final class ScenarioOps {
             return;
         }
         List<String> innerPos = new ArrayList<>(cmd.positional().subList(1, cmd.positional().size()));
-        ScenarioCommand inner = new ScenarioCommand(cmd.line(), innerOp, innerPos, cmd.named());
-        harness.expectFailure("scenario", label, RuntimeException.class, () -> handler.run(inner, ctx));
+        Map<String, String> innerNamed = new LinkedHashMap<>(cmd.named());
+        innerNamed.remove(ScenarioParser.EXPECTED_ERROR_ARG);
+        ScenarioCommand inner = new ScenarioCommand(cmd.line(), innerOp, innerPos, innerNamed);
+        harness.expectFailure("scenario", label, expectedError, () -> handler.run(inner, ctx));
     }
 
     // -- identity --------------------------------------------------------
+
+    /**
+     * The username a {@code register} line creates: its {@code username=} when given, else its alias;
+     * {@code null} when the line has neither.
+     */
+    static String registeredUsername(ScenarioCommand register) {
+        return register.named("username", register.pos(0));
+    }
 
     private void register(ScenarioCommand cmd, ScenarioContext ctx) {
         String alias = cmd.requirePos(0, "user alias");
         String password = cmd.requirePos(1, "password");
         String email = cmd.requirePos(2, "email");
         int age = Integer.parseInt(cmd.requirePos(3, "age"));
-        String username = cmd.named("username", alias);
+        String username = registeredUsername(cmd);
         GuestSessionDTO guest = auth.startGuestSession();
         auth.register(new RegisterRequestDTO(username, email, password, guest.sessionId(), age));
         User user = userRepository.findByUsername(username)
@@ -187,10 +214,16 @@ public final class ScenarioOps {
         p.token = out.authToken().token();
     }
 
+    /**
+     * {@code login-admin <alias>} signs in the configured default admin, so a committed scenario runs
+     * under whatever password the deployment sets; {@code login-admin <alias> <username> <password>}
+     * signs in the admin the file names.
+     */
     private void loginAdmin(ScenarioCommand cmd, ScenarioContext ctx) {
         String alias = cmd.requirePos(0, "admin alias");
-        String username = cmd.requirePos(1, "admin username");
-        String password = cmd.requirePos(2, "admin password");
+        boolean defaultAdminForm = cmd.positional().size() == 1;
+        String username = defaultAdminForm ? defaultAdmin.username() : cmd.requirePos(1, "admin username");
+        String password = defaultAdminForm ? defaultAdmin.password() : cmd.requirePos(2, "admin password");
         AuthTokenDTO tok = auth.signInAsAdmin(username, password);
         ScenarioContext.Principal p = ctx.registerPrincipal(alias, username, password, tok.userId());
         p.token = tok.token();
@@ -270,7 +303,7 @@ public final class ScenarioOps {
         String token = ctx.token(by);
         int companyId = ctx.companyId(company);
         String name = cmd.named("name", eventAlias);
-        EventCategory category = EventCategory.valueOf(cmd.named("category", "CONCERT").toUpperCase());
+        EventCategory category = EventCategory.valueOf(cmd.named("category", "CONCERT").toUpperCase(Locale.ROOT));
         int days = cmd.intNamed("days", 30);
         String city = cmd.named("city", "Tel Aviv");
         LocalDateTime start = LocalDateTime.ofInstant(clock.plusDays(days), timeZone);
@@ -361,9 +394,9 @@ public final class ScenarioOps {
     private void announce(ScenarioCommand cmd, ScenarioContext ctx) {
         ScenarioContext.Principal admin = ctx.principal(cmd.requirePos(0, "admin alias"));
         if (admin.token == null) {
-            throw new IllegalStateException("announce needs an admin logged in via 'login-admin'");
+            throw new IllegalArgumentException("announce needs an admin logged in via 'login-admin'");
         }
-        boolean allProducers = cmd.named("audience", "BROADCAST_MEMBERS").toUpperCase().contains("PRODUCER");
+        boolean allProducers = cmd.named("audience", "BROADCAST_MEMBERS").toUpperCase(Locale.ROOT).contains("PRODUCER");
         messaging.sendOutreach(admin.token, new OutreachRequestDTO(
                 cmd.named("title", "Message"),
                 cmd.named("body", "Platform message."),
@@ -374,7 +407,7 @@ public final class ScenarioOps {
 
     private void assertStatus(ScenarioCommand cmd, ScenarioContext ctx) {
         String eventAlias = cmd.requirePos(0, "event alias");
-        EventStatus expected = EventStatus.valueOf(cmd.requirePos(1, "expected status").toUpperCase());
+        EventStatus expected = EventStatus.valueOf(cmd.requirePos(1, "expected status").toUpperCase(Locale.ROOT));
         String by = cmd.named("by");
         if (by == null) {
             throw new IllegalArgumentException(
@@ -397,10 +430,13 @@ public final class ScenarioOps {
 
     // -- helpers ---------------------------------------------------------
 
+    // A lookup that fails because of the scenario itself throws IllegalArgumentException, as ScenarioContext
+    // does, never the IllegalStateException the services' guards throw: an expect-error naming a guard's type
+    // must not pass on the scenario's own failure before the service is called.
     private InventoryZoneDTO resolveZone(String credential, int eventId, String zoneRef) {
         VenueMapDTO map = catalogService.getEventVenueMap(credential, eventId);
         if (map == null) {
-            throw new IllegalStateException("no venue map for event " + eventId);
+            throw new IllegalArgumentException("no venue map for event " + eventId);
         }
         Integer index = tryParseInt(zoneRef);
         if (index != null) {
@@ -408,13 +444,13 @@ public final class ScenarioOps {
                     .filter(z -> z.getId() == index)
                     .findFirst()
                     .orElseThrow(
-                            () -> new IllegalStateException("no zone with id " + zoneRef + " on event " + eventId));
+                            () -> new IllegalArgumentException("no zone with id " + zoneRef + " on event " + eventId));
         }
         String type = zoneRef.equalsIgnoreCase("seated") ? "SEATED" : "STANDING";
         return map.inventoryZones().stream()
                 .filter(z -> type.equals(z.getZoneType()) && z.getAvailableAmount() > 0)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("no available " + type + " zone on event " + eventId));
+                .orElseThrow(() -> new IllegalArgumentException("no available " + type + " zone on event " + eventId));
     }
 
     private static List<String> pickAvailableSeats(InventoryZoneDTO zone, int n) {
@@ -430,7 +466,7 @@ public final class ScenarioOps {
             }
         }
         if (labels.size() < n) {
-            throw new IllegalStateException(
+            throw new IllegalArgumentException(
                     "not enough available seats in zone " + zone.getName() + " (" + labels.size() + "/" + n + ")");
         }
         return labels;
@@ -449,13 +485,13 @@ public final class ScenarioOps {
         if (typeSize.length != 2) {
             throw new IllegalArgumentException("bad zone spec '" + spec + "' (expected type:size@price)");
         }
-        String type = typeSize[0].toLowerCase();
+        String type = typeSize[0].toLowerCase(Locale.ROOT);
         String size = typeSize[1];
         if (type.equals("standing")) {
             return new ZoneConfigDTO("Standing " + index, false, Integer.parseInt(size), null, price, null);
         }
         if (type.equals("seated")) {
-            String[] rc = size.toLowerCase().split("x");
+            String[] rc = size.toLowerCase(Locale.ROOT).split("x");
             if (rc.length != 2) {
                 throw new IllegalArgumentException("bad seated spec '" + spec + "' (expected seated:RxC@price)");
             }
@@ -508,7 +544,7 @@ public final class ScenarioOps {
         }
         for (String p : csv.split(",")) {
             if (!p.isBlank()) {
-                perms.add(Permission.valueOf(p.trim().toUpperCase()));
+                perms.add(Permission.valueOf(p.trim().toUpperCase(Locale.ROOT)));
             }
         }
         return perms;
@@ -532,10 +568,13 @@ public final class ScenarioOps {
         }
     }
 
-    /** Short, stable label for harness output: line number, op, and up to 3 args. */
+    /**
+     * The step's name in the harness log, the report and a fail-fast abort: {@code L<n> <op> <first argument>}.
+     * Later arguments are left out because they can be credentials or personal data, such as a
+     * {@code register} line's password and email (SLR.2).
+     */
     private static String label(ScenarioCommand cmd) {
-        int take = Math.min(3, cmd.positional().size());
-        String args = String.join(" ", cmd.positional().subList(0, take));
-        return ("L" + cmd.line() + " " + cmd.op() + (args.isBlank() ? "" : " " + args)).trim();
+        String first = cmd.pos(0);
+        return "L" + cmd.line() + " " + cmd.op() + (first == null || first.isBlank() ? "" : " " + first);
     }
 }
