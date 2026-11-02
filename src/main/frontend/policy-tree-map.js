@@ -9,6 +9,10 @@
 // where action is "click" (opened the edit dialog), "addRule", or
 // "addGroup". The Vaadin side resolves the id to a Java Node and
 // mutates / opens dialogs as appropriate.
+//
+// Every node body and pill is a keyboard button (asKeyboardButton): Tab reaches it, a screen
+// reader names it, and Enter or Space runs the same action as a click. A re-render puts focus
+// back on the control that had it (#188; WCAG 2.1.1, 2.4.3, 4.1.2; PolicyEditorA11yTest).
 
 const D3_URL = 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 
@@ -20,10 +24,43 @@ function getD3() {
     return d3Promise;
 }
 
+// Names the control a re-render must give focus back to.
+const FOCUS_KEY = 'data-focus-key';
+
+function runNodeAction(container, nodeId, action) {
+    if (container.$server) {
+        container.$server.onNodeAction(nodeId, action);
+    }
+}
+
+// Makes an svg group a keyboard button that runs `action` on node `nodeId`, as a click does.
+function asKeyboardButton(sel, container, nodeId, action, name) {
+    sel.attr('role', 'button')
+        .attr('tabindex', 0)
+        .attr('aria-label', name)
+        .attr(FOCUS_KEY, `${nodeId}:${action}`)
+        .on('click', (ev) => {
+            ev.stopPropagation();
+            runNodeAction(container, nodeId, action);
+        })
+        .on('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                // Space would otherwise scroll the page.
+                ev.preventDefault();
+                ev.stopPropagation();
+                runNodeAction(container, nodeId, action);
+            }
+        });
+}
+
 window.renderPolicyTree = async function(container, treeJson) {
     try {
         const d3 = await getD3();
         const data = JSON.parse(treeJson);
+
+        // The tree is redrawn from scratch, so remember which control had focus.
+        const focused = container.contains(document.activeElement)
+            ? document.activeElement.getAttribute(FOCUS_KEY) : null;
 
         container.innerHTML = '';
 
@@ -35,6 +72,8 @@ window.renderPolicyTree = async function(container, treeJson) {
             .attr('width',  '100%')
             .attr('height', '100%')
             .attr('viewBox', `0 0 ${width} ${height}`)
+            .attr('role', 'group')
+            .attr('aria-label', 'Purchase policy tree')
             .style('display', 'block')
             .style('user-select', 'none');
 
@@ -99,13 +138,8 @@ window.renderPolicyTree = async function(container, treeJson) {
             // add-buttons on composites don't inherit the body's click handler.
             const body = sel.append('g')
                 .attr('class', 'node-body')
-                .style('cursor', 'pointer')
-                .on('click', (ev) => {
-                    ev.stopPropagation();
-                    if (container.$server) {
-                        container.$server.onNodeAction(d.data.id, 'click');
-                    }
-                });
+                .style('cursor', 'pointer');
+            asKeyboardButton(body, container, d.data.id, 'click', `Edit ${label}`);
 
             body.append('rect')
                 .attr('x', -labelW / 2)
@@ -128,9 +162,9 @@ window.renderPolicyTree = async function(container, treeJson) {
 
             // Composite nodes get inline +Rule / +Group pills to the right.
             if (!isRule) {
-                addPill(sel, container, d.data.id, 'addRule', '+ R', 'Add rule',
+                addPill(sel, container, d.data.id, label, 'addRule', '+ R', 'Add rule',
                     labelW / 2 + 22, -14, '#dcfce7', '#15803d', '#14532d');
-                addPill(sel, container, d.data.id, 'addGroup', '+ G', 'Add group',
+                addPill(sel, container, d.data.id, label, 'addGroup', '+ G', 'Add group',
                     labelW / 2 + 22, 14, '#fef3c7', '#d97706', '#92400e');
             }
         });
@@ -150,6 +184,13 @@ window.renderPolicyTree = async function(container, treeJson) {
             .style('font-weight', '600')
             .style('fill', '#fff')
             .text('Drag to pan · scroll to zoom');
+
+        if (focused) {
+            const again = container.querySelector(`[${FOCUS_KEY}="${CSS.escape(focused)}"]`);
+            if (again) {
+                again.focus();
+            }
+        }
     } catch (e) {
         console.error('PolicyTreeMap failed:', e);
         container.innerHTML =
@@ -160,20 +201,16 @@ window.renderPolicyTree = async function(container, treeJson) {
 };
 
 // Pill button (rounded rect + label) used for the inline +Rule / +Group
-// affordances on composite nodes.
-function addPill(sel, container, nodeId, action, label, title,
+// affordances on composite nodes. Its name says which node it adds to, as every
+// composite has a pair.
+function addPill(sel, container, nodeId, nodeLabel, action, label, title,
                  dx, dy, fill, stroke, fg) {
     const w = 38, h = 22;
     const btn = sel.append('g')
         .attr('class', 'add-pill')
         .attr('transform', `translate(${dx}, ${dy})`)
-        .style('cursor', 'pointer')
-        .on('click', (ev) => {
-            ev.stopPropagation();
-            if (container.$server) {
-                container.$server.onNodeAction(nodeId, action);
-            }
-        });
+        .style('cursor', 'pointer');
+    asKeyboardButton(btn, container, nodeId, action, `${title} to ${nodeLabel}`);
     btn.append('title').text(title);
     btn.append('rect')
         .attr('x', -w / 2).attr('y', -h / 2)
