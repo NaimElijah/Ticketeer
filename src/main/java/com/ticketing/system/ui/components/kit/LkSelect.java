@@ -25,13 +25,12 @@ public class LkSelect extends NativeLabel {
     private List<String> options;
 
     public LkSelect(String value, List<String> options) {
-        this.currentValue = value;
         this.options = options;
         addClassName("lk-field");
         labelSpan.addClassName("lk-label");
         req.addClassName("lk-req");
         valueSpan.addClassName("lk-input-val");
-        valueSpan.setText(value);
+        show(value);
 
         trigger.addClassName("lk-input");
         trigger.addClassName("lk-select");
@@ -46,8 +45,7 @@ public class LkSelect extends NativeLabel {
     /** Programmatically set the value (e.g. when an external control syncs). Fires onChange. */
     public LkSelect setValue(String value) {
         if (value == null || value.equals(currentValue)) return this;
-        currentValue = value;
-        valueSpan.setText(value);
+        show(value);
         rebuildOptions(options);
         if (onChange != null) onChange.accept(value);
         return this;
@@ -88,8 +86,7 @@ public class LkSelect extends NativeLabel {
      */
     public LkSelect setOptions(List<String> newOptions) {
         this.options = newOptions;
-        this.currentValue = newOptions.isEmpty() ? "" : newOptions.get(0);
-        valueSpan.setText(currentValue);
+        show(newOptions.isEmpty() ? "" : newOptions.get(0));
         rebuildOptions(this.options);
         return this;
     }
@@ -111,6 +108,11 @@ public class LkSelect extends NativeLabel {
         return this;
     }
 
+    private void show(String value) {
+        currentValue = value;
+        valueSpan.setText(value);
+    }
+
     private void rebuildOptions(List<String> options) {
         menu.removeAll();
         for (String opt : options) {
@@ -118,8 +120,7 @@ public class LkSelect extends NativeLabel {
             if (opt.equals(currentValue))
                 item.active();
             item.onClick(() -> {
-                currentValue = opt;
-                valueSpan.setText(opt);
+                show(opt);
                 if (onChange != null)
                     onChange.accept(opt);
                 rebuildOptions(options);

@@ -23,6 +23,8 @@ import java.util.function.Function;
  */
 public class NotificationBellComponent extends Span {
 
+    private static final String NOTIFICATIONS = "Notifications";
+
     private final Function<String, MarkReadOutcome> markRead;
     private final Function<LocalDateTime, String> age;
     private List<NotificationDTO> renderedInbox = List.of();
@@ -76,7 +78,7 @@ public class NotificationBellComponent extends Span {
 
         NativeButton bell = new NativeButton();
         bell.addClassName("lk-bell");
-        bell.getElement().setAttribute("aria-label", "Notifications");
+        bell.getElement().setAttribute("aria-label", NOTIFICATIONS);
         bell.add(new LkIcon("bell", 18));
 
         if (unread > 0) {

@@ -28,11 +28,10 @@ public class LkDateRangeField extends NativeLabel {
     public LkDateRangeField() { this("Any time"); }
 
     public LkDateRangeField(String initial) {
-        this.currentValue = initial;
         addClassName("lk-field");
         labelSpan.addClassName("lk-label");
         valueSpan.addClassName("lk-input-val");
-        valueSpan.setText(initial);
+        show(initial);
 
         Span trigger = new Span();
         trigger.addClassName("lk-input");
@@ -68,11 +67,15 @@ public class LkDateRangeField extends NativeLabel {
     /** Programmatically set the value (e.g. from a "Clear all" reset). Fires onChange. */
     public LkDateRangeField setValue(String value) {
         if (value == null || value.equals(currentValue)) return this;
-        currentValue = value;
-        valueSpan.setText(value);
+        show(value);
         rebuild();
         if (onChange != null) onChange.accept(value);
         return this;
+    }
+
+    private void show(String value) {
+        currentValue = value;
+        valueSpan.setText(value);
     }
 
     private void rebuild() {
@@ -82,8 +85,7 @@ public class LkDateRangeField extends NativeLabel {
             if (preset.equals(currentValue)) item.active();
             item.onClick(() -> {
                 if (preset.equals(currentValue)) return;
-                currentValue = preset;
-                valueSpan.setText(preset);
+                show(preset);
                 rebuild();
                 if (onChange != null) onChange.accept(preset);
             });

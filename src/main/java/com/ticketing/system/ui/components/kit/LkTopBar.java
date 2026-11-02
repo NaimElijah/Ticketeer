@@ -25,6 +25,8 @@ public class LkTopBar extends Header {
     public enum Variant { MAIN, ADMIN, PLATFORM }
     public record NavItem(String label, Class<? extends Component> target) { }
 
+    private static final String NOTIFICATIONS = "Notifications";
+
     private final Variant variant;
     private final Span rightSlot = new Span();
     private boolean rightAttached;
@@ -165,7 +167,7 @@ public class LkTopBar extends Header {
         ensureRightSlot();
         NativeButton bell = new NativeButton();
         bell.addClassName("lk-bell");
-        bell.getElement().setAttribute("aria-label", ariaLabel == null ? "Notifications" : ariaLabel);
+        bell.getElement().setAttribute("aria-label", ariaLabel == null ? NOTIFICATIONS : ariaLabel);
         bell.add(new LkIcon("bell", 18));
         if (badgeCount != null && !badgeCount.isEmpty()) {
             Span badge = new Span(badgeCount);
@@ -187,7 +189,7 @@ public class LkTopBar extends Header {
     public LkTopBar bellDefault(boolean adminVariant) {
         return bell(adminVariant ? LkNotifPanel.admin() : LkNotifPanel.buyer(),
                     adminVariant ? "5" : "3",
-                    adminVariant ? "Admin alerts" : "Notifications");
+                    adminVariant ? "Admin alerts" : NOTIFICATIONS);
     }
 
     /**
