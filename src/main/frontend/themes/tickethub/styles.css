@@ -633,9 +633,6 @@
   .lk-notif-d{font-size:.8rem;color:var(--muted);line-height:1.35}
   .lk-notif-time{font-size:.72rem;color:var(--faint);margin-top:2px}
   .lk-notif-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:6px}
-  .lk-notif-foot{margin-top:4px;padding:10px;border-radius:9px;border:none;background:none;color:var(--primary);
-    font-size:.84rem;font-weight:700;cursor:pointer;border-top:1px solid var(--border);border-radius:0}
-  .lk-notif-foot:hover{background:#f1f5f9}
 
   /* account menu */
   .lk-acct{min-width:248px}
