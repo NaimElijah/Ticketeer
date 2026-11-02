@@ -54,6 +54,8 @@
   .lk-topbar{display:flex;align-items:center;gap:18px;background:var(--primary);color:#fff;padding:0 20px;height:56px}
   .lk-brand{font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap}
   .lk-brand b{font-weight:800}
+  /* The brand is a link home (#188), drawn as the plain brand line. */
+  a.lk-brand{color:inherit;text-decoration:none}
   .lk-brand-crumb{opacity:.7;font-weight:500;font-size:.95rem}
   .lk-topnav{display:flex;gap:18px}
   .lk-topnav-link{font-size:.88rem;color:rgba(255,255,255,.78);text-decoration:none;cursor:pointer;white-space:nowrap}

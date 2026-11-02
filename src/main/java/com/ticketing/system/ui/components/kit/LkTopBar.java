@@ -30,6 +30,7 @@ public class LkTopBar extends Header {
     private static final String SEARCH_PANEL = "Search";
     private static final String NOTIFICATIONS = "Notifications";
     private static final String ACCOUNT_PANEL = "Account menu";
+    private static final String ACCOUNT_NAME_SEPARATOR = ", ";
     // Names the main navigation landmark, to tell it from a shell's side navigation (#188).
     private static final String MAIN_NAV = "Main";
 
@@ -58,22 +59,25 @@ public class LkTopBar extends Header {
         return brand(text, null, target);
     }
 
+    /**
+     * Adds the brand line. With a {@code target} it is a link there, reachable and announced
+     * as one (#188; WCAG 2.1.1, 4.1.2; {@code TopBarA11yTest}); without one it is inert text.
+     *
+     * @param text   the brand name
+     * @param crumb  text after the name, such as " › Workspace", or {@code null}
+     * @param target the view the brand links to, or {@code null} for none
+     * @return this top bar, for chaining
+     */
     public LkTopBar brand(String text, String crumb, Class<? extends Component> target) {
-        Span brand = new Span();
-        brand.addClassName("lk-brand");
-        brand.add(new LkIcon("ticket", 20));
+        Component brand = target == null ? new Span() : new RouterLink("", target);
+        brand.getElement().getClassList().add("lk-brand");
         Span name = new Span();
         name.getElement().setProperty("innerHTML", "<b>" + escape(text) + "</b>");
-        brand.add(name);
+        brand.getElement().appendChild(new LkIcon("ticket", 20).getElement(), name.getElement());
         if (crumb != null) {
             Span c = new Span(crumb);
             c.addClassName("lk-brand-crumb");
-            brand.add(c);
-        }
-        if (target != null) {
-            brand.getStyle().set("cursor", "pointer");
-            brand.getElement().addEventListener("click", e ->
-                com.vaadin.flow.component.UI.getCurrent().navigate(target));
+            brand.getElement().appendChild(c.getElement());
         }
         add(brand);
         return this;
@@ -258,8 +262,14 @@ public class LkTopBar extends Header {
 
     public LkTopBar account(String initials, String tooltip, Component menu, String bg, String fg) {
         ensureRightSlot();
-        NativeButton avatar = new NativeButton(initials);
+        NativeButton avatar = new NativeButton();
         avatar.addClassName("lk-avatar");
+        // The initials say nothing to a screen reader; the name says what the button opens and whose it is.
+        Span shownInitials = new Span(initials);
+        shownInitials.getElement().setAttribute(Lk.ARIA_HIDDEN, "true");
+        avatar.add(shownInitials);
+        avatar.getElement().setAttribute(Lk.ARIA_LABEL,
+            tooltip == null ? ACCOUNT_PANEL : ACCOUNT_PANEL + ACCOUNT_NAME_SEPARATOR + tooltip);
         if (bg != null) avatar.getStyle().set("background", bg);
         if (fg != null) avatar.getStyle().set("color", fg);
         if (tooltip != null) avatar.getElement().setAttribute("title", tooltip);
