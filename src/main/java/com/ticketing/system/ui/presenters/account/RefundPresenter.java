@@ -7,6 +7,7 @@ import com.ticketing.system.sales.application.service.RefundService;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
@@ -22,6 +23,8 @@ import com.ticketing.system.ui.support.ServiceErrors;
 public class RefundPresenter {
 
     private static final String ORDER_NOT_FOUND_MESSAGE = "We couldn't find that order.";
+    private static final String REFUND_FAILED_MESSAGE =
+        "The refund could not be completed. If it does not appear on your account soon, contact support.";
 
     private final RefundService refundService;
 
@@ -39,6 +42,11 @@ public class RefundPresenter {
             return new Outcome.NotFound(ORDER_NOT_FOUND_MESSAGE);
         } catch (InvalidTokenException e) {
             return new Outcome.Failure("Please sign in to request a refund.");
+        } catch (RefundFailedException e) {
+            // A refund failure carries the payment gateway's operator wording and the charge it names, so the
+            // member reads fixed text; the failure itself still goes to the log (#187).
+            ServiceErrors.userMessageLogged(e, "request refund orderId=" + orderId);
+            return new Outcome.Failure(REFUND_FAILED_MESSAGE);
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "request refund orderId=" + orderId));
         }

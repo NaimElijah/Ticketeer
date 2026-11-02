@@ -212,7 +212,8 @@ class CompanyEventListPresenterTest {
     // which it does not; its own message says which, so the outcome promises no retry.
     @Test
     void GivenARefundOfTheCancelFails_WhenCancelEvent_ThenRefundFailedCarriesTheRefundFailure() {
-        RefundFailedException refundFailure = new RefundFailedException(12, "the payment gateway timed out");
+        RefundFailedException refundFailure = new RefundFailedException(List.of(12), "not refunded for cancelled event 9 (declined: [12], "
+                + "still pending: []); the other receipts were refunded, and cancelling again retries the declined ones");
         doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
@@ -226,28 +227,30 @@ class CompanyEventListPresenterTest {
     // No money moved and the claim is released, so cancelling again retries the refund.
     @Test
     void GivenTheGatewayIsUnreachableForARefundOfTheCancel_WhenCancelEvent_ThenRefundFailedSaysCancellingAgainRetriesIt() {
-        RefundFailedException refundFailure = new RefundGatewayUnreachableException(12, "connection refused", new RuntimeException("refused"));
+        RefundFailedException refundFailure = RefundGatewayUnreachableException.forPaymentTransaction(9001,
+                "refund gateway unreachable: Connection refused", new RuntimeException("refused"));
         doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
                 assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
                         presenter.cancelEvent(TOKEN, EVENT_ID));
 
-        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertCarriesNoGatewayText(refundFailed.reason());
         assertTrue(refundFailed.cancelAgainRetries());
     }
 
     // The refund may have been made and stays pending for manual recovery; cancelling again skips it.
     @Test
     void GivenARefundOfTheCancelHasAnUnknownOutcome_WhenCancelEvent_ThenRefundFailedSaysCancellingAgainDoesNotRetryIt() {
-        RefundFailedException refundFailure = new RefundOutcomeUnknownException(12, "read timed out", new RuntimeException("timeout"));
+        RefundFailedException refundFailure = RefundOutcomeUnknownException.forPaymentTransaction(9001,
+                "no answer from the refund gateway: Read timed out", new RuntimeException("timeout"));
         doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
                 assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
                         presenter.cancelEvent(TOKEN, EVENT_ID));
 
-        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertCarriesNoGatewayText(refundFailed.reason());
         assertFalse(refundFailed.cancelAgainRetries());
     }
 
@@ -416,5 +419,14 @@ class CompanyEventListPresenterTest {
         return new EventDetailDTO(String.valueOf(id), name, null, null, null, null,
                 String.valueOf(COMPANY_ID), "Company " + COMPANY_ID, EventStatus.SCHEDULED,
                 new ArrayList<>(), ZoneId.of("Asia/Jerusalem"), new ArrayList<>(), 0.0);
+    }
+
+    // The payment gateway's own wording, and the charge it names, are operator text: the owner reads a
+    // fixed reason instead (#187).
+    private static void assertCarriesNoGatewayText(String reason) {
+        assertFalse(reason.isBlank(), "the owner must be told why");
+        for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
+            assertFalse(reason.contains(operatorText), "the reason shows operator text '" + operatorText + "': " + reason);
+        }
     }
 }

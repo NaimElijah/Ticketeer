@@ -1,21 +1,28 @@
 package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.sales.application.service.RefundService;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.testutil.LogCapture;
@@ -35,6 +42,32 @@ class RefundPresenterTest {
     void setUp() {
         refundService = mock(RefundService.class);
         presenter = new RefundPresenter(refundService);
+    }
+
+    // ---- a refund failure never shows the payment gateway's operator text (#187) ----
+
+    static Stream<RefundFailedException> gatewayRefundFailures() {
+        return Stream.of(
+            RefundFailedException.forPaymentTransaction(9001, "refund rejected by gateway"),
+            RefundGatewayUnreachableException.forPaymentTransaction(9001,
+                "refund gateway unreachable: Connection refused", new RuntimeException("refused")),
+            RefundOutcomeUnknownException.forPaymentTransaction(9001,
+                "no answer from the refund gateway: Read timed out", new RuntimeException("timeout")));
+    }
+
+    @ParameterizedTest
+    @MethodSource("gatewayRefundFailures")
+    void GivenTheRefundFailsWithGatewayWording_WhenRequestRefund_ThenTheFailureShowsAFixedText(RefundFailedException failure) {
+        when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenThrow(failure);
+
+        RefundPresenter.Outcome.Failure shown = assertInstanceOf(RefundPresenter.Outcome.Failure.class,
+            presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
+
+        assertFalse(shown.message().isBlank(), "the member must be told the refund did not go through");
+        for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
+            assertFalse(shown.message().contains(operatorText),
+                "the message shows operator text '" + operatorText + "': " + shown.message());
+        }
     }
 
     @Test

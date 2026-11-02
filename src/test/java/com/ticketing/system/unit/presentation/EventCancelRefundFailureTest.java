@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,7 +25,13 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.application.service.EventManagementService;
+import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.shared.config.PlatformTimeProperties;
+import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
@@ -47,6 +55,8 @@ class EventCancelRefundFailureTest {
     private static final String CANCELLED = "event is cancelled";
     // The views' hint that cancelling again retries the failed refunds.
     private static final String RETRY_HINT = "cancel it again";
+    // The charge a payment-gateway refund failure names in its own wording.
+    private static final int GATEWAY_CHARGE_ID = 9001;
 
     private ViewHarness harness;
 
@@ -104,55 +114,57 @@ class EventCancelRefundFailureTest {
 
     // ---- the presenters' distinct outcome: the event is cancelled, some refunds failed ----
 
+    // These go through the real presenters, so the toast is what the owner reads for a refund failure the
+    // payment gateway words: the event is cancelled, never the gateway's operator text (#187).
     @Test
-    void GivenTheCancelledEventsRefundsFail_WhenTheOwnerCancelsFromMyEvents_ThenTheToastSaysItIsCancelledAndWhy() {
-        CompanyEventListPresenter presenter = eventListPresenter();
-        when(presenter.cancelEvent(any(), anyInt()))
-            .thenReturn(new CompanyEventListPresenter.CancelOutcome.RefundFailed(REFUND_FAILURE, true));
+    void GivenTheGatewayCannotBeReachedForTheCancelsRefunds_WhenTheOwnerCancelsFromMyEvents_ThenTheToastSaysItIsCancelledInItsOwnWords() {
+        EventManagementService eventService = eventServiceWhoseRefundsFail(gatewayUnreachable());
+        CompanyEventListView view = new CompanyEventListView(realEventListPresenter(eventService),
+            InboxViewHarness.displayTime());
+        long readsBeforeTheCancel = eventListReads(eventService);
 
-        cancelFromMyEvents(presenter);
+        click(button(view, "Cancel event"));
+        assertTrue(harness.confirmOpenDialog(), "cancelling from My Events asks for confirmation");
 
         assertToastShows(CANCELLED);
-        assertToastShows(REFUND_FAILURE);
-        verify(presenter, times(2)).load(any(), any(), any());
+        assertToastShows(RETRY_HINT);
+        assertNoGatewayTextInToasts();
+        assertTrue(eventListReads(eventService) > readsBeforeTheCancel, "the list must reload after the cancel");
     }
 
     @Test
-    void GivenTheCancelledEventsRefundsFail_WhenTheOwnerCancelsFromTheEventPage_ThenTheToastSaysItIsCancelledAndWhy() {
-        EventManagementPresenter presenter = eventPagePresenter();
-        when(presenter.cancel(any(), anyInt()))
-            .thenReturn(new EventManagementPresenter.CancelOutcome.RefundFailed(REFUND_FAILURE, true));
+    void GivenTheGatewayCannotBeReachedForTheCancelsRefunds_WhenTheOwnerCancelsFromTheEventPage_ThenTheToastSaysItIsCancelledInItsOwnWords() {
+        EventManagementService eventService = eventServiceWhoseRefundsFail(gatewayUnreachable());
 
-        cancelFromTheEventPage(presenter);
+        cancelFromTheEventPage(realEventPagePresenter(eventService));
 
         assertToastShows(CANCELLED);
-        assertToastShows(REFUND_FAILURE);
-        verify(presenter, times(2)).load(any(), eq(EVENT_ID));
+        assertToastShows(RETRY_HINT);
+        assertNoGatewayTextInToasts();
+        verify(eventService, times(2)).getEventDetail(any(), eq(EVENT_ID));
     }
 
     // A refund whose outcome is unknown stays pending, and cancelling again skips it, so no hint says it retries.
     @Test
-    void GivenACancelRefundThatCancellingAgainDoesNotRetry_WhenTheOwnerCancelsFromMyEvents_ThenTheToastHasNoRetryHint() {
-        CompanyEventListPresenter presenter = eventListPresenter();
-        when(presenter.cancelEvent(any(), anyInt()))
-            .thenReturn(new CompanyEventListPresenter.CancelOutcome.RefundFailed(REFUND_FAILURE, false));
+    void GivenACancelRefundWithAnUnknownOutcome_WhenTheOwnerCancelsFromMyEvents_ThenTheToastHasNoRetryHint() {
+        EventManagementService eventService = eventServiceWhoseRefundsFail(outcomeUnknown());
 
-        cancelFromMyEvents(presenter);
+        cancelFromMyEvents(realEventListPresenter(eventService));
 
         assertToastShows(CANCELLED);
         assertNoToastShows(RETRY_HINT);
+        assertNoGatewayTextInToasts();
     }
 
     @Test
-    void GivenACancelRefundThatCancellingAgainDoesNotRetry_WhenTheOwnerCancelsFromTheEventPage_ThenTheToastHasNoRetryHint() {
-        EventManagementPresenter presenter = eventPagePresenter();
-        when(presenter.cancel(any(), anyInt()))
-            .thenReturn(new EventManagementPresenter.CancelOutcome.RefundFailed(REFUND_FAILURE, false));
+    void GivenACancelRefundWithAnUnknownOutcome_WhenTheOwnerCancelsFromTheEventPage_ThenTheToastHasNoRetryHint() {
+        EventManagementService eventService = eventServiceWhoseRefundsFail(outcomeUnknown());
 
-        cancelFromTheEventPage(presenter);
+        cancelFromTheEventPage(realEventPagePresenter(eventService));
 
         assertToastShows(CANCELLED);
         assertNoToastShows(RETRY_HINT);
+        assertNoGatewayTextInToasts();
     }
 
     // ---- arrangement ----
@@ -179,6 +191,49 @@ class EventCancelRefundFailureTest {
         when(presenter.cancel(any(), anyInt()))
             .thenReturn(new EventManagementPresenter.CancelOutcome.Failure(REFUND_FAILURE));
         return presenter;
+    }
+
+    private static RefundFailedException gatewayUnreachable() {
+        return RefundGatewayUnreachableException.forPaymentTransaction(GATEWAY_CHARGE_ID,
+            "refund gateway unreachable: Connection refused", new RuntimeException("refused"));
+    }
+
+    private static RefundFailedException outcomeUnknown() {
+        return RefundOutcomeUnknownException.forPaymentTransaction(GATEWAY_CHARGE_ID,
+            "no answer from the refund gateway: Read timed out", new RuntimeException("timeout"));
+    }
+
+    private static EventManagementService eventServiceWhoseRefundsFail(RefundFailedException failure) {
+        EventManagementService eventService = mock(EventManagementService.class);
+        when(eventService.listEventsForCompany(any(), anyInt(), any())).thenReturn(List.of(onSaleEvent()));
+        when(eventService.getEventDetail(any(), eq(EVENT_ID))).thenReturn(onSaleEvent());
+        doThrow(failure).when(eventService).cancelEventAndRefund(any(), eq(EVENT_ID));
+        return eventService;
+    }
+
+    private static CompanyEventListPresenter realEventListPresenter(EventManagementService eventService) {
+        CompanyManagementService companies = mock(CompanyManagementService.class);
+        when(companies.findMyCompanies(any())).thenReturn(List.of(new MyCompanyDTO(3, "Acme", "Founder")));
+        return new CompanyEventListPresenter(eventService, companies);
+    }
+
+    private static EventManagementPresenter realEventPagePresenter(EventManagementService eventService) {
+        return new EventManagementPresenter(eventService, mock(CompanyManagementService.class),
+            new PlatformTimeProperties(ZoneOffset.UTC));
+    }
+
+    // The list reads the company's events for its rows and for its filter options, so count the reads.
+    private static long eventListReads(EventManagementService eventService) {
+        return mockingDetails(eventService).getInvocations().stream()
+            .filter(invocation -> "listEventsForCompany".equals(invocation.getMethod().getName()))
+            .count();
+    }
+
+    private void assertNoGatewayTextInToasts() {
+        for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction",
+                String.valueOf(GATEWAY_CHARGE_ID))) {
+            assertNoToastShows(operatorText);
+        }
     }
 
     private void cancelFromMyEvents(CompanyEventListPresenter presenter) {

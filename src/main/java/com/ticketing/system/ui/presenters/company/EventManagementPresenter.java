@@ -190,7 +190,8 @@ public class EventManagementPresenter {
         /**
          * The event is cancelled, but some of its refunds failed: the cancel commits before its refunds run.
          *
-         * @param reason             the refund failure's text, naming the orders it failed for
+         * @param reason             why, for the owner: fixed text for a failure the payment gateway raised,
+         *                           else the refund service's summary naming the orders it could not refund
          * @param cancelAgainRetries {@code true} only when the payment gateway could not be reached
          *                           ({@code RefundGatewayUnreachableException}): no money moved and
          *                           {@code EventCancellationRefundService} released the claim, so
