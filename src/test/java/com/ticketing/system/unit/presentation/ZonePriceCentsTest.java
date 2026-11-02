@@ -31,6 +31,7 @@ import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.shared.dto.GridPlacementDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.dto.VenueLayoutDTO;
@@ -127,7 +128,7 @@ class ZonePriceCentsTest {
             new EventDetailsPresenter.Outcome.Success(eventOfCompany(), List.of(zone), 3, 3, null));
         SessionIdentity identity = mock(SessionIdentity.class);
         when(identity.credential()).thenReturn(MEMBER_TOKEN);
-        EventDetailsView view = new EventDetailsView(presenter, identity);
+        EventDetailsView view = new EventDetailsView(presenter, identity, new ReservationHoldProperties(10));
 
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID)));
 

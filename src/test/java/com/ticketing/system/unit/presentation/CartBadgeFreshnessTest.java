@@ -31,6 +31,7 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.sales.application.service.ReservationService;
+import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
@@ -179,7 +180,8 @@ class CartBadgeFreshnessTest {
         InventoryZoneDTO zone = new InventoryZoneDTO(ZONE_ID, "Floor", "STANDING", 100, 50, 0, 50, 10.0, null, null);
         when(catalogService.getEventVenueMap(anyString(), anyInt()))
             .thenReturn(new VenueMapDTO(1, null, 3, 3, List.of(zone)));
-        SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity));
+        SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity),
+            new ReservationHoldProperties(10));
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
         return view;
     }

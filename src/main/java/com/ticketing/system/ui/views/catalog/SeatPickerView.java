@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.catalog;
 
 import java.util.List;
 
+import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.domain.ZoneType;
 import com.ticketing.system.ui.components.Toasts;
@@ -46,6 +47,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private static final int SEAT_STEP = VkSeatedZonePicker.TILE_PX + 6;
 
     private final SeatPickerPresenter presenter;
+    /** The configured hold, so the page says how long seats stay locked (#187, UI-A18). */
+    private final ReservationHoldProperties hold;
 
     private int eventId;
     private int zoneId;
@@ -58,8 +61,9 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private LkBtn holdButton;
     private final Div bodyHolder = new Div();
 
-    public SeatPickerView(SeatPickerPresenter presenter) {
+    public SeatPickerView(SeatPickerPresenter presenter, ReservationHoldProperties hold) {
         this.presenter = presenter;
+        this.hold = hold;
         add(bodyHolder);
     }
 
@@ -316,7 +320,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private Component buildLockingExplainerCard() {
         LkCard card = new LkCard("How Locking Works").pad(16);
         LkCol col = new LkCol().gap(9);
-        col.add(lockLegendRow("mine", "<b>In your order</b> — held for you for 10 minutes."));
+        col.add(lockLegendRow("mine", "<b>In your order</b> — held for you for "
+            + hold.ticketReservationDuration() + " min."));
         col.add(lockLegendRow("held", "<b>Locked by others</b> — another buyer is mid-purchase."));
         col.add(lockLegendRow("sold", "<b>Sold</b> — already purchased."));
         Span fine = Lk.muted("Two buyers can never hold the same seat — first tap wins.");
@@ -346,7 +351,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         Div grid = new Div();
         grid.addClassName("vz-state-grid");
         grid.add(stateCell(VkSeat.State.free, "", "Available", "Tap to hold"));
-        grid.add(stateCell(VkSeat.State.mine, "12", "In your order", "Locked 10 min"));
+        grid.add(stateCell(VkSeat.State.mine, "12", "In your order",
+            "Locked " + hold.ticketReservationDuration() + " min"));
         grid.add(stateCell(VkSeat.State.held, "12", "Locked by others", "Live update"));
         grid.add(stateCell(VkSeat.State.sold, "12", "Sold", "Unavailable"));
         card.add(grid);

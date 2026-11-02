@@ -4,6 +4,7 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.GridPlacementDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
@@ -46,6 +47,8 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private final EventDetailsPresenter presenter;
     private final SessionIdentity sessionIdentity;
+    /** The configured hold, so the page says how long seats stay locked (#187, UI-A18). */
+    private final ReservationHoldProperties hold;
 
     private int eventId;
     private EventDetailDTO detail;
@@ -61,9 +64,11 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
     private Span selectedLine;
     private LkBtn chooseBtn;
 
-    public EventDetailsView(EventDetailsPresenter presenter, SessionIdentity sessionIdentity) {
+    public EventDetailsView(EventDetailsPresenter presenter, SessionIdentity sessionIdentity,
+                            ReservationHoldProperties hold) {
         this.presenter = presenter;
         this.sessionIdentity = sessionIdentity;
+        this.hold = hold;
         add(bodyHolder);
     }
 
@@ -314,7 +319,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             .full()
             .onClick(e -> openPicker());
         chooseBtn.getStyle().set("margin-top", "10px");
-        Span hint = Lk.muted("Seats lock for 10 min once selected");
+        Span hint = Lk.muted("Seats lock for " + hold.ticketReservationDuration() + " min once selected");
         hint.getStyle()
             .set("display", "block").set("margin-top", "8px")
             .set("text-align", "center").set("font-size", "12.5px");

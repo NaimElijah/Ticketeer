@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.presentation;
 
+import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.ui.components.company.EditPermissionsDialog;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -224,7 +225,8 @@ class VaadinSmokeTest {
         // the construction path (a canary for kit-API breakage at wiring time).
         EventDetailsPresenter presenter = mock(EventDetailsPresenter.class);
         SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new EventDetailsView(presenter, sessionIdentity),
+        assertDoesNotThrow(() -> new EventDetailsView(presenter, sessionIdentity,
+                context.getBean(ReservationHoldProperties.class)),
             "EventDetailsView failed to construct");
     }
 
