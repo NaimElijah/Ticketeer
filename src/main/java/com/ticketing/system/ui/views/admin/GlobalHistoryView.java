@@ -6,13 +6,16 @@ import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
+import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkFilterChip;
 import com.ticketing.system.ui.components.kit.LkGrid;
+import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkStat;
 import com.ticketing.system.ui.layouts.PlatformAdminLayout;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.admin.GlobalHistoryPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
@@ -59,10 +62,17 @@ public class GlobalHistoryView extends LkPage {
     public GlobalHistoryView(GlobalHistoryPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;
-        this.records = presenter.loadAllRecords();
+        ListOutcome<PurchaseRecordDTO> loaded = presenter.loadAllRecords();
+        this.records = loaded instanceof ListOutcome.Loaded<PurchaseRecordDTO> ok ? ok.items() : List.of();
 
         title("Global Purchase History");
         subtitle("Every order across the platform — filter by date, company, event, or status.");
+
+        if (loaded instanceof ListOutcome.Failure<PurchaseRecordDTO> failure) {
+            add(new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16),
+                    Lk.withReason("Could not load the purchase history", failure.reason())));
+            return;
+        }
 
         add(buildFilters());
         statsSlot = new Div();

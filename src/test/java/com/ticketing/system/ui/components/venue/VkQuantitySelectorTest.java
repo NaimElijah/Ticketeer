@@ -2,6 +2,10 @@ package com.ticketing.system.ui.components.venue;
 
 import org.junit.jupiter.api.Test;
 
+import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.html.Span;
+
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -165,5 +169,26 @@ class VkQuantitySelectorTest {
         var sel = new VkQuantitySelector(5, 9000, null);
         sel.increment();
         assertDoesNotThrow(sel::decrement);
+    }
+
+    // ---- UI-B16: the price preview's total does not overflow (#187) ----
+
+    // 500 tickets at $50,000.00 is 2,500,000,000 cents, past the largest int.
+    @Test
+    void GivenALargeQuantityTimesPrice_WhenThePreviewIsShown_ThenTheTotalIsExact() {
+        var sel = new VkQuantitySelector(1_000, 5_000_000, null);
+        while (sel.getQuantity() < 500) {
+            sel.increment();
+        }
+
+        assertEquals("500 tickets at $50000.00 each = $25000000.00", pricePreviewOf(sel));
+    }
+
+    private static String pricePreviewOf(Component root) {
+        if (root instanceof Span span && span.hasClassName("vk-qty-price")) {
+            return span.getText();
+        }
+        return root.getChildren().map(VkQuantitySelectorTest::pricePreviewOf)
+                .filter(Objects::nonNull).findFirst().orElse(null);
     }
 }

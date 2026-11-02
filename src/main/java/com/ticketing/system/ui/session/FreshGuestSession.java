@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
  * failure this prevents.
  *
  * <p>{@link #renewGuest()} is the narrower step for a guest session id that expired on its own: it
- * replaces only that id and signs nobody out.
+ * replaces that id, drops the kept order confirmation, and signs nobody out.
  */
 @Component
 @Slf4j
@@ -39,8 +39,9 @@ public class FreshGuestSession {
 
     /**
      * Sends the member's shown-but-unread alerts back to pending, so their next login shows them
-     * ({@link UnreadAlertsSendBack}), then clears the member's auth, current company, notification inbox
-     * and recent searches, and pins a new guest session.
+     * ({@link UnreadAlertsSendBack}), then clears the member's auth, current company, notification inbox,
+     * recent searches, kept order confirmation ({@link OrderSession}) and cached cart badge
+     * ({@link CartBadgeCache}), since the new guest session has a cart of its own, and pins a new guest session.
      *
      * <p>Never throws: if no guest session can be started, the stale id is cleared instead, so the dead
      * member session is never left pinned and the view that triggered this still renders.
@@ -53,11 +54,14 @@ public class FreshGuestSession {
         CurrentCompanies.clearCurrentCompany();
         NotificationSession.clear();
         RecentSearches.clear();
+        OrderSession.clear();
+        CartBadgeCache.invalidate();
         pinNewGuestSession();
     }
 
     /**
-     * Replaces only the guest session id with a newly minted one. The stored token, the admin flag,
+     * Replaces the guest session id with a newly minted one, and drops the kept order confirmation
+     * ({@link OrderSession}), which belonged to the previous visit. The stored token, the admin flag,
      * the current company and the recent searches stay, so a signed-in admin on the storefront stays
      * signed in.
      *
@@ -65,6 +69,8 @@ public class FreshGuestSession {
      * {@link #restore()}.
      */
     public void renewGuest() {
+        // A new guest session is another visit; the kept order confirmation belonged to the last one.
+        OrderSession.clear();
         pinNewGuestSession();
     }
 
@@ -73,7 +79,7 @@ public class FreshGuestSession {
             GuestSessionDTO fresh = authenticationService.startGuestSession();
             GuestSession.setSessionId(fresh.sessionId());
         } catch (RuntimeException e) {
-            log.warn("failed to start a fresh guest session: {}", e.getMessage());
+            log.warn("failed to start a fresh guest session", e);
             GuestSession.clear();
         }
     }

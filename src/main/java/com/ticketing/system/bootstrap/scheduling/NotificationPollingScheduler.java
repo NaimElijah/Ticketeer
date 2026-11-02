@@ -1,6 +1,5 @@
 package com.ticketing.system.bootstrap.scheduling;
 
-import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.ui.components.NotificationBellComponent;
 import com.ticketing.system.ui.session.NotificationSession;
@@ -11,13 +10,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-
 /**
  * Polls for new notifications for every connected user on a fixed interval.
  * For each live UI, acquires the Vaadin session lock via ui.access(), fetches
  * any newly generated PENDING notifications, merges them into NotificationSession,
- * and refreshes the bell component — triggering a long-poll push to the browser.
+ * and brings that UI's bell up to date with the session's inbox, which another tab's
+ * poll may have filled — re-rendering it, and so pushing to the browser, only when
+ * the inbox changed.
  *
  * <p>Only a member whose token is still live gets anything, checked through {@link SessionIdentity} as
  * {@code AuthBootstrap} checks it: a dead token signs that visitor out and delivers nothing, and an
@@ -73,14 +72,12 @@ public class NotificationPollingScheduler {
                 return;
             }
             userId = String.valueOf(memberId);
-            List<NotificationDTO> fresh = dispatchService.deliverPending(memberId);
-            if (fresh.isEmpty()) {
-                return;
-            }
-            NotificationSession.merge(fresh);
+            NotificationSession.merge(dispatchService.deliverPending(memberId));
+            // Even with nothing fresh: another tab of this session may have drained the pending
+            // notifications into the shared inbox, or marked some read, since this bell last rendered.
             NotificationBellComponent bell = NotificationSession.getBell();
             if (bell != null) {
-                bell.refresh();
+                bell.refreshIfChanged();
             }
         } catch (RuntimeException e) {
             log.warn("notification poll failed: uiId={} userId={}; the UI is polled again on the next tick",

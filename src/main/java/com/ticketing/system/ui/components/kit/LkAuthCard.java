@@ -15,8 +15,7 @@ import com.vaadin.flow.router.RouterLink;
  * <p>Root element is the {@code .auth-wrap} centering container; the
  * inner {@code .auth-card} holds the brand line + title + subtitle and
  * receives anything subsequently added via {@link #add(Component...)}
- * or the convenience helpers {@link #col}, {@link #divider},
- * {@link #foot}.
+ * or the convenience helpers {@link #col} and {@link #foot}.
  */
 public class LkAuthCard extends Div {
 
@@ -63,15 +62,6 @@ public class LkAuthCard extends Div {
             .set("gap", gap + "px");
         if (cs != null) col.add(cs);
         card.add(col);
-        return this;
-    }
-
-    /** "or continue with"-style divider with horizontal rule pseudo-elements. */
-    public LkAuthCard divider(String label) {
-        Div d = new Div();
-        d.addClassName("auth-divider");
-        d.add(new Span(label));
-        card.add(d);
         return this;
     }
 

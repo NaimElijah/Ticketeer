@@ -12,6 +12,10 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import org.junit.jupiter.api.BeforeEach;
@@ -158,8 +162,8 @@ class CompanyEventListPresenterTest {
         doThrow(new NullPointerException("Cannot invoke \"Event.getVenueMap()\" because \"event\" is null"))
                 .when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        CompanyEventListPresenter.ActionOutcome.Failure fail =
-                assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Failure.class,
+        CompanyEventListPresenter.CancelOutcome.Failure fail =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Failure.class,
                         presenter.cancelEvent(TOKEN, EVENT_ID));
 
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
@@ -169,7 +173,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void cancelEvent_nullToken_returnsNotAuthenticated() {
-        assertInstanceOf(CompanyEventListPresenter.ActionOutcome.NotAuthenticated.class,
+        assertInstanceOf(CompanyEventListPresenter.CancelOutcome.NotAuthenticated.class,
                 presenter.cancelEvent(null, EVENT_ID));
         verifyNoInteractions(eventService);
     }
@@ -178,7 +182,7 @@ class CompanyEventListPresenterTest {
     void cancelEvent_invalidToken_returnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        assertInstanceOf(CompanyEventListPresenter.ActionOutcome.NotAuthenticated.class,
+        assertInstanceOf(CompanyEventListPresenter.CancelOutcome.NotAuthenticated.class,
                 presenter.cancelEvent(TOKEN, EVENT_ID));
     }
 
@@ -186,7 +190,7 @@ class CompanyEventListPresenterTest {
     void cancelEvent_success_callsServiceAndReturnsSuccess() {
         doNothing().when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Success.class,
+        assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Success.class,
                 presenter.cancelEvent(TOKEN, EVENT_ID));
 
         verify(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
@@ -196,11 +200,58 @@ class CompanyEventListPresenterTest {
     void cancelEvent_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("refund failed")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        CompanyEventListPresenter.ActionOutcome.Failure fail =
-                assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Failure.class,
+        CompanyEventListPresenter.CancelOutcome.Failure fail =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Failure.class,
                         presenter.cancelEvent(TOKEN, EVENT_ID));
 
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    // UI-A3 (#187): the event is cancelled before its refunds run, so a refund failure is not a failed cancel.
+    // A plain refund failure can mix declined receipts, which cancelling again retries, with pending ones,
+    // which it does not; its own message says which, so the outcome promises no retry.
+    @Test
+    void GivenARefundOfTheCancelFails_WhenCancelEvent_ThenRefundFailedCarriesTheRefundFailure() {
+        RefundFailedException refundFailure = new RefundFailedException(List.of(12), "not refunded for cancelled event 9 (declined: [12], "
+                + "still pending: []); the other receipts were refunded, and cancelling again retries the declined ones");
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancelEvent(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
+    }
+
+    // No money moved and the claim is released, so cancelling again retries the refund.
+    @Test
+    void GivenTheGatewayIsUnreachableForARefundOfTheCancel_WhenCancelEvent_ThenRefundFailedSaysCancellingAgainRetriesIt() {
+        RefundFailedException refundFailure = RefundGatewayUnreachableException.forPaymentTransaction(9001,
+                "refund gateway unreachable: Connection refused", new RuntimeException("refused"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancelEvent(TOKEN, EVENT_ID));
+
+        assertCarriesNoGatewayText(refundFailed.reason());
+        assertTrue(refundFailed.cancelAgainRetries());
+    }
+
+    // The refund may have been made and stays pending for manual recovery; cancelling again skips it.
+    @Test
+    void GivenARefundOfTheCancelHasAnUnknownOutcome_WhenCancelEvent_ThenRefundFailedSaysCancellingAgainDoesNotRetryIt() {
+        RefundFailedException refundFailure = RefundOutcomeUnknownException.forPaymentTransaction(9001,
+                "no answer from the refund gateway: Read timed out", new RuntimeException("timeout"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancelEvent(TOKEN, EVENT_ID));
+
+        assertCarriesNoGatewayText(refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
     }
 
     // ── deleteEvent ───────────────────────────────────────────────────────────
@@ -308,7 +359,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void countries_nullToken_isEmpty() {
-        assertTrue(presenter.countries(null, null).isEmpty());
+        assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.countries(null, null));
         verifyNoInteractions(eventService, companyService);
     }
 
@@ -316,7 +367,7 @@ class CompanyEventListPresenterTest {
     void countries_noCompany_isEmpty() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of());
 
-        assertTrue(presenter.countries(TOKEN, null).isEmpty());
+        assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.countries(TOKEN, null));
         verifyNoInteractions(eventService);
     }
 
@@ -328,7 +379,7 @@ class CompanyEventListPresenterTest {
                 eventAt(2, "USA", "New York"),
                 eventAt(3, "Israel", "Haifa")));
 
-        assertEquals(List.of("Israel", "USA"), presenter.countries(TOKEN, null));
+        assertEquals(new ListOutcome.Loaded<>(List.of("Israel", "USA")), presenter.countries(TOKEN, null));
     }
 
     @Test
@@ -340,12 +391,12 @@ class CompanyEventListPresenterTest {
                 eventAt(4, "Israel", "Tel Aviv"),   // duplicate city
                 eventAt(3, "USA", "New York")));
 
-        assertEquals(List.of("Haifa", "Tel Aviv"), presenter.cities(TOKEN, null, "Israel"));
+        assertEquals(new ListOutcome.Loaded<>(List.of("Haifa", "Tel Aviv")), presenter.cities(TOKEN, null, "Israel"));
     }
 
     @Test
     void cities_nullCountry_isEmpty() {
-        assertTrue(presenter.cities(TOKEN, null, null).isEmpty());
+        assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.cities(TOKEN, null, null));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -368,5 +419,14 @@ class CompanyEventListPresenterTest {
         return new EventDetailDTO(String.valueOf(id), name, null, null, null, null,
                 String.valueOf(COMPANY_ID), "Company " + COMPANY_ID, EventStatus.SCHEDULED,
                 new ArrayList<>(), ZoneId.of("Asia/Jerusalem"), new ArrayList<>(), 0.0);
+    }
+
+    // The payment gateway's own wording, and the charge it names, are operator text: the owner reads a
+    // fixed reason instead (#187).
+    private static void assertCarriesNoGatewayText(String reason) {
+        assertFalse(reason.isBlank(), "the owner must be told why");
+        for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
+            assertFalse(reason.contains(operatorText), "the reason shows operator text '" + operatorText + "': " + reason);
+        }
     }
 }

@@ -58,6 +58,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 public class CompanyManagementService {
+    /**
+     * The message of the {@link IllegalStateException} {@link #registerCompany} throws for a company name
+     * already in use. Callers tell that refusal apart by this text until #219 gives it its own exception type.
+     */
+    public static final String COMPANY_NAME_TAKEN_MESSAGE = "A company with this name already exists";
     private static final String ADMIN_REQUIRED = "Admin privileges required";
     // Every email holds it and no username registered under AuthenticationService.USERNAME_CHARACTERS does.
     private static final String EMAIL_MARKER = "@";
@@ -494,7 +499,7 @@ public class CompanyManagementService {
         // Call on the injected instance, not the interface.
         if (companyRepository.existsByName(request.getName().trim())) {
             log.warn("Company registration failed: Company name '{}' already exists", request.getName());
-            throw new IllegalStateException("A company with this name already exists");
+            throw new IllegalStateException(COMPANY_NAME_TAKEN_MESSAGE);
         }
 
         int companyId = companyRepository.nextId();

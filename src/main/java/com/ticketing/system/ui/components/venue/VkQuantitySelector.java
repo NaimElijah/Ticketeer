@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.components.venue;
 
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
+import com.ticketing.system.ui.components.Money;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
@@ -106,17 +107,14 @@ public class VkQuantitySelector extends Div {
         if (maxQuantity == 0) {
             pricePreview.setText("Sold out");
         } else {
-            int totalCents = quantity * priceCentsEach;
+            // In long: a large zone at a high price passes Integer.MAX_VALUE cents.
+            long totalCents = (long) quantity * priceCentsEach;
             pricePreview.setText(quantity + " ticket" + (quantity == 1 ? "" : "s")
-                + " at " + formatPrice(priceCentsEach) + " each = " + formatPrice(totalCents));
+                + " at " + Money.format(priceCentsEach) + " each = " + Money.format(totalCents));
         }
     }
 
     private void notifyChange() {
         if (onSelectionChange != null) onSelectionChange.run();
-    }
-
-    private static String formatPrice(int cents) {
-        return "$" + (cents / 100) + "." + String.format("%02d", cents % 100);
     }
 }

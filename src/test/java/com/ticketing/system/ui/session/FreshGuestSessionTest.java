@@ -23,8 +23,11 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
+import com.ticketing.system.testutil.LogCapture;
+import ch.qos.logback.classic.Level;
 
 /**
  * {@link FreshGuestSession#restore()} restores "every Vaadin session has a fresh guest session id"
@@ -40,6 +43,9 @@ class FreshGuestSessionTest {
     private static final String FRESH_GUEST_SESSION_ID = "fresh-guest-sid";
     private static final int COMPANY_ID = 7;
     private static final LocalDateTime NOTIFIED_AT = LocalDateTime.of(2027, 1, 1, 12, 0);
+    private static final CheckoutResultDTO KEPT_CONFIRMATION = new CheckoutResultDTO(75.0, 42, 9001,
+            List.of(new CheckoutResultDTO.IssuedTicketDTO(1, "TIX-0001-A1")));
+    private static final Instant KEPT_AT = Instant.parse("2027-01-01T12:00:00Z");
 
     private AuthenticationService authenticationService;
     private INotificationService notificationService;
@@ -74,6 +80,30 @@ class FreshGuestSessionTest {
         assertFalse(AuthSession.isSignedIn(), "the visitor is no longer signed in");
         assertNull(CurrentCompanies.currentCompanyId(), "the member's current company is dropped");
         assertEquals(List.of(), NotificationSession.getAll(), "the member's notification inbox is dropped");
+    }
+
+    // UI-A7 (#187): the confirmation is kept for the session, so the next visitor must not inherit it.
+    @Test
+    void GivenAKeptCheckoutConfirmation_WhenRestored_ThenItIsDropped() {
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+        OrderSession.setResult(KEPT_CONFIRMATION, KEPT_AT);
+
+        freshGuestSession.restore();
+
+        assertTrue(OrderSession.result(KEPT_AT).isEmpty(), "the signed-out visitor's order confirmation is dropped");
+    }
+
+    // The confirmation belongs to one visitor and one visit (#187): a new guest session is another visit.
+    @Test
+    void GivenAKeptCheckoutConfirmation_WhenTheGuestSessionIsRenewed_ThenItIsDropped() {
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+        OrderSession.setResult(KEPT_CONFIRMATION, KEPT_AT);
+
+        freshGuestSession.renewGuest();
+
+        assertTrue(OrderSession.result(KEPT_AT).isEmpty(), "the previous visit's order confirmation is dropped");
     }
 
     @Test
@@ -172,5 +202,20 @@ class FreshGuestSessionTest {
         assertTrue(AuthSession.isAdmin(), "the admin stays signed in as an admin");
         assertEquals(COMPANY_ID, CurrentCompanies.currentCompanyId(), "the current company stays");
         assertEquals(List.of("jazz night"), RecentSearches.get(), "the recent searches stay");
+    }
+
+    // ---- UI-B6: a failed guest-session start is logged with its exception (#187) ----
+
+    @Test
+    void GivenTheGuestSessionCannotBeStarted_WhenRestored_ThenTheWarningCarriesTheException() {
+        when(authenticationService.startGuestSession())
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        try (LogCapture log = LogCapture.of(FreshGuestSession.class)) {
+            freshGuestSession.restore();
+
+            assertEquals(List.of(DataAccessResourceFailureException.class.getName()),
+                    log.throwableClassNamesAt(Level.WARN), "the warning must carry the exception, not only its message");
+        }
     }
 }

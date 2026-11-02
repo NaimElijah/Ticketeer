@@ -147,7 +147,7 @@ public class AdminSendMessagesView extends LkPage {
             case AdminSendMessagesPresenter.SearchOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case AdminSendMessagesPresenter.SearchOutcome.Failure fail ->
-                Toasts.failure("Could not search members — please try again.");
+                Toasts.failure(Lk.withReason("Could not search members", fail.reason()));
         }
     }
 

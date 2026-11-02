@@ -2,12 +2,12 @@ package com.ticketing.system.ui.views.auth;
 
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.auth.PasswordStrengthMeter;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
-import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
-import com.ticketing.system.ui.session.GuestSession;
+import com.ticketing.system.ui.session.SessionIdentity;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -32,13 +32,18 @@ public class RegisterView extends LkAuthCard {
 
     private final RegisterPresenter presenter;
     private final UsernameAvailabilityPresenter usernameAvailability;
+    // The guest id comes from here, not GuestSession: a guest session expires a fixed time after it
+    // starts, and SessionIdentity replaces a dead one before registration is given it.
+    private final SessionIdentity sessionIdentity;
 
     public RegisterView(RegisterPresenter presenter,
-                        UsernameAvailabilityPresenter usernameAvailability) {
+                        UsernameAvailabilityPresenter usernameAvailability,
+                        SessionIdentity sessionIdentity) {
         super("Create your account",
               "Join TicketHub to discover events and book in seconds.");
         this.presenter = presenter;
         this.usernameAvailability = usernameAvailability;
+        this.sessionIdentity = sessionIdentity;
 
         TextField username = new TextField("Username");
         username.setPlaceholder("3–32 characters, letters and digits");
@@ -82,16 +87,13 @@ public class RegisterView extends LkAuthCard {
         confirm.setRequired(true);
         confirm.setWidthFull();
 
-        LkCheckRow terms = new LkCheckRow("I agree to the Terms and Privacy Policy", false)
-            .wrapperClass("auth-remember");
-
         Button create = new Button("Create account",
             e -> attemptRegister(username, email, age, password, confirm));
         create.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
         create.setWidthFull();
         create.addClickShortcut(Key.ENTER);
 
-        col(14, username, email, age, password, strengthMeter, confirm, terms, create);
+        col(14, username, email, age, password, strengthMeter, confirm, create);
         foot("Already have an account?", "Sign in →", LoginView.class);
     }
 
@@ -163,7 +165,7 @@ public class RegisterView extends LkAuthCard {
             email.getValue(),
             password.getValue(),
             age.getValue(),
-            GuestSession.sessionId()
+            sessionIdentity.guestSessionId()
         );
 
         switch (outcome) {
@@ -176,7 +178,7 @@ public class RegisterView extends LkAuthCard {
             case RegisterPresenter.Outcome.EmailTaken ignored ->
                 Toasts.failure("That email is already registered.");
             case RegisterPresenter.Outcome.WeakPassword weak ->
-                Toasts.failure("That password is too weak — please choose a stronger one.");
+                Toasts.failure(Lk.withReason("That password is too weak", weak.reason()));
             case RegisterPresenter.Outcome.InvalidEmail ignored ->
                 Toasts.failure("That email address looks invalid.");
             case RegisterPresenter.Outcome.GuestSessionMissing miss -> {
@@ -184,9 +186,9 @@ public class RegisterView extends LkAuthCard {
                 UI.getCurrent().getPage().reload();
             }
             case RegisterPresenter.Outcome.InvalidInput bad ->
-                Toasts.failure("Please check your details and try again.");
+                Toasts.failure(Lk.withReason("Please check your details", bad.reason()));
             case RegisterPresenter.Outcome.Failure fail ->
-                Toasts.failure("Registration failed — please try again.");
+                Toasts.failure(Lk.withReason("Registration failed", fail.reason()));
         }
     }
 }

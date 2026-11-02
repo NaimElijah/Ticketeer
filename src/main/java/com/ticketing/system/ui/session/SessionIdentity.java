@@ -13,7 +13,8 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
  * <p>A member is a visitor whose stored token is still live; everyone else is a guest using the
  * {@link GuestSession} id. Each method resolves the visitor afresh, with at most one
  * {@link AuthenticationService#liveMemberId} call, plus one
- * {@link AuthenticationService#isLiveGuestSession} call when it answers with a guest's session id.
+ * {@link AuthenticationService#isLiveGuestSession} call when it answers with a guest's session id. An
+ * action that needs several of these facts asks {@link #visitor()} once instead.
  *
  * <p>A signed-in admin is never a member, whatever the admin's id: admin and member ids share one id
  * space, and member paths reject admin tokens. On member and buyer paths the admin is a guest on the
@@ -53,7 +54,7 @@ public class SessionIdentity {
 
     /** @return the live member's token, or {@code null} for a guest */
     public String memberToken() {
-        return liveMember().map(LiveMember::token).orElse(null);
+        return liveMember().map(Visitor.Member::token).orElse(null);
     }
 
     /**
@@ -67,12 +68,54 @@ public class SessionIdentity {
 
     /** @return the live member's user id, or {@link #NO_MEMBER_USER_ID} for a guest */
     public int memberUserId() {
-        return liveMember().map(LiveMember::userId).orElse(NO_MEMBER_USER_ID);
+        return liveMember().map(Visitor.Member::userId).orElse(NO_MEMBER_USER_ID);
     }
 
     /** @return the credential the backend expects: the live member's token, else a live guest session id */
     public String credential() {
-        return liveMember().map(LiveMember::token).orElseGet(this::liveGuestSessionId);
+        return liveMember().map(Visitor.Member::token).orElseGet(this::liveGuestSessionId);
+    }
+
+    /**
+     * The visitor, resolved once. An action that needs more than one fact about the visitor (member or
+     * guest, then the token or the session id) asks this once, so it costs one liveness check and acts
+     * on one answer; asking {@link #isMember()} and then {@link #memberToken()} resolves twice.
+     *
+     * @return the live member, or else a guest on a live guest session id; the side effects are those
+     *     of the other methods (class Javadoc)
+     */
+    public Visitor visitor() {
+        Optional<Visitor.Member> member = liveMember();
+        return member.isPresent() ? member.get() : new Visitor.Guest(liveGuestSessionId());
+    }
+
+    /** Who the visitor is, as {@link #visitor()} resolved it. Neither record shows its credential. */
+    public sealed interface Visitor {
+
+        /**
+         * A member whose stored token is live.
+         *
+         * @param token  the member token, a credential
+         * @param userId the member's user id
+         */
+        record Member(String token, int userId) implements Visitor {
+            @Override
+            public String toString() {
+                return "Member[userId=" + userId + "]";
+            }
+        }
+
+        /**
+         * Anyone who is not a live member, a signed-in admin included.
+         *
+         * @param sessionId a live guest session id, a credential
+         */
+        record Guest(String sessionId) implements Visitor {
+            @Override
+            public String toString() {
+                return "Guest[]";
+            }
+        }
     }
 
     // A live member's id is the session their login promoted, no longer a guest row, so this is only
@@ -84,7 +127,7 @@ public class SessionIdentity {
         return GuestSession.sessionId();
     }
 
-    private Optional<LiveMember> liveMember() {
+    private Optional<Visitor.Member> liveMember() {
         String token = AuthSession.token();
         // An admin token is checked first: liveMemberId answers "no member" for it, and taking that as a
         // dead member token would restore a fresh guest session and sign the admin out.
@@ -96,9 +139,6 @@ public class SessionIdentity {
             freshGuestSession.restore();
             return Optional.empty();
         }
-        return Optional.of(new LiveMember(token, memberId.getAsInt()));
-    }
-
-    private record LiveMember(String token, int userId) {
+        return Optional.of(new Visitor.Member(token, memberId.getAsInt()));
     }
 }

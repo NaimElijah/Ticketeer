@@ -2,6 +2,8 @@ package com.ticketing.system.ui.session;
 
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.ui.components.NotificationBellComponent;
+import com.vaadin.flow.component.ComponentUtil;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.server.VaadinSession;
 
 import java.util.ArrayList;
@@ -14,11 +16,13 @@ import java.util.stream.Collectors;
  * Session-scoped holder for the notification inbox delivered on login (UC-37).
  * Populated by LoginPresenter immediately after a successful login, read by
  * MainLayout to build the bell panel and badge count.
+ *
+ * <p>The inbox belongs to the Vaadin session, but each bell to its {@link UI}: every browser tab of
+ * one session is its own UI with its own bell, so a bell is kept on its UI, never on the session.
  */
 public final class NotificationSession {
 
     private static final String NOTIFICATIONS_KEY = "notificationSession.notifications";
-    private static final String BELL_KEY           = "notificationSession.bell";
 
     private NotificationSession() {}
 
@@ -80,25 +84,43 @@ public final class NotificationSession {
         s.setAttribute(NOTIFICATIONS_KEY, List.copyOf(combined));
     }
 
-    /** Register the current bell component so the scheduler can call refresh() on it. */
-    public static void setBell(NotificationBellComponent bell) {
-        VaadinSession s = VaadinSession.getCurrent();
-        if (s == null) return;
-        s.setAttribute(BELL_KEY, bell);
+    /**
+     * Registers {@code bell} as {@code ui}'s bell, so the polling scheduler, running in that UI, can
+     * refresh it. Replaces any bell the UI had; other UIs' bells are untouched.
+     *
+     * @param ui   the UI the bell is attached to; not {@code null}
+     * @param bell the bell; not {@code null}
+     */
+    public static void setBell(UI ui, NotificationBellComponent bell) {
+        ComponentUtil.setData(ui, NotificationBellComponent.class, bell);
     }
 
-    /** Returns the bell registered for this session, or null if none is attached. */
+    /**
+     * Unregisters {@code bell} from {@code ui}, if it is still that UI's bell. A bell attached to the UI
+     * in the meantime, as a new layout's bell can be before the old layout's detaches, stays.
+     *
+     * @param ui   the UI the bell detached from; not {@code null}
+     * @param bell the detached bell
+     */
+    public static void removeBell(UI ui, NotificationBellComponent bell) {
+        if (ComponentUtil.getData(ui, NotificationBellComponent.class) == bell) {
+            ComponentUtil.setData(ui, NotificationBellComponent.class, null);
+        }
+    }
+
+    /** Returns the current UI's bell, or null when there is no current UI or it has no bell attached. */
     public static NotificationBellComponent getBell() {
-        VaadinSession s = VaadinSession.getCurrent();
-        if (s == null) return null;
-        return (NotificationBellComponent) s.getAttribute(BELL_KEY);
+        UI ui = UI.getCurrent();
+        return ui == null ? null : ComponentUtil.getData(ui, NotificationBellComponent.class);
     }
 
-    /** Clear the inbox — call this on sign-out. */
+    /**
+     * Clear the inbox — call this on sign-out. The bells stay registered while attached: each rebuilds
+     * from the cleared inbox on its next refresh.
+     */
     public static void clear() {
         VaadinSession s = VaadinSession.getCurrent();
         if (s == null) return;
         s.setAttribute(NOTIFICATIONS_KEY, null);
-        s.setAttribute(BELL_KEY, null);
     }
 }

@@ -10,15 +10,18 @@ import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
-import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.MockPermissions;
+import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.ServiceErrors;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -44,6 +47,7 @@ public final class DevPanel {
 
     static AuthenticationService AUTH;
     static SignOutFlow SIGN_OUT_FLOW;
+    static SessionIdentity SESSION_IDENTITY;
 
     // The real platform-admin credentials (platform.admin.* — default admin/admin),
     // used by the "Admin" persona toggle to sign in through the dedicated admin path.
@@ -56,10 +60,11 @@ public final class DevPanel {
         reservationService = rs;
     }
 
-    public static void bindBeans(AuthenticationService auth, SignOutFlow signOutFlow,
+    public static void bindBeans(AuthenticationService auth, SignOutFlow signOutFlow, SessionIdentity sessionIdentity,
                                  String adminUsername, String adminPassword) {
         AUTH = auth;
         SIGN_OUT_FLOW = signOutFlow;
+        SESSION_IDENTITY = sessionIdentity;
         DevPanel.adminUsername = adminUsername;
         DevPanel.adminPassword = adminPassword;
     }
@@ -68,13 +73,17 @@ public final class DevPanel {
         if (reservationService == null) return;
         try {
             String token = AuthSession.token();
-            if (token != null) {
+            // An admin token is no member credential (ADR-012) and an admin holds no cart, so never ask.
+            if (token != null && !AuthSession.isAdmin()) {
                 ActiveOrderDTO order = reservationService.viewMyActiveOrder(token);
                 if (order != null && order.userId() != null) {
                     reservationService.abandonActiveOrder(BuyerContextDTO.member(order.userId()));
                 }
             }
-        } catch (Exception ignored) { }
+        } catch (RuntimeException e) {
+            // The persona switch still signs out; the cart stays held until it expires.
+            Toasts.failure(ServiceErrors.userMessage(e));
+        }
     }
 
     private static void signInAs(String username, String password) {
@@ -82,14 +91,12 @@ public final class DevPanel {
             if (AuthSession.isSignedIn()) {
                 SIGN_OUT_FLOW.execute();
             }
-            String guestSid = GuestSession.sessionId();
-            if (guestSid == null) {
-                guestSid = AUTH.startGuestSession().sessionId();
-                GuestSession.setSessionId(guestSid);
-            }
-            var dto = AUTH.login(new LoginRequestDTO(username, password, guestSid));
+            // As LoginView does: SessionIdentity replaces a missing or expired guest session first.
+            var dto = AUTH.login(new LoginRequestDTO(username, password, SESSION_IDENTITY.guestSessionId()));
             AuthSession.storeAuth(dto.authToken());
-        } catch (RuntimeException ignored) {
+            CartBadgeCache.invalidate(); // login swaps the cart, as LoginView's does
+        } catch (RuntimeException e) {
+            Toasts.failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -104,7 +111,8 @@ public final class DevPanel {
                 SIGN_OUT_FLOW.execute();
             }
             AuthSession.storeAuth(AUTH.signInAsAdmin(adminUsername, adminPassword));
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException e) {
+            Toasts.failure(ServiceErrors.userMessage(e));
         }
     }
 

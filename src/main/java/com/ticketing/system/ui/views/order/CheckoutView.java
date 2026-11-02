@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.order;
 
+import java.time.Clock;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -11,11 +12,13 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkCountdown;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.OrderSession;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
@@ -43,8 +46,10 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNavigationObserver {
 
     private static final String IDEMPOTENCY_ATTR = "checkout.idempotencyKey";
+    private static final long MILLIS_PER_SECOND = 1000L;
 
     private final CheckoutPresenter presenter;
+    private final Clock clock;
     private final Object uiLock = new Object();
 
     private String  memberToken;
@@ -58,6 +63,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
     private ActiveOrderDTO activeOrder;
     private long subtotalCents;
     private long totalCents;
+    /** When the loaded order's hold ends, in epoch ms on the application clock; never sent to the browser. */
+    private long holdEndsAtMs;
 
     private final AtomicBoolean paymentInProgress = new AtomicBoolean(false);
 
@@ -100,8 +107,12 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             }
         };
 
-    public CheckoutView(CheckoutPresenter presenter) {
+    /**
+     * @param clock the application clock (ADR-008), for the seconds the hold countdown has left
+     */
+    public CheckoutView(CheckoutPresenter presenter, Clock clock) {
         this.presenter = presenter;
+        this.clock = clock;
         this.sessionId = "";
         this.linesContainer = new Div();
     }
@@ -146,8 +157,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         // beforeEnter paints the page while activeOrder is still null; the order loads here, so
         // re-render the lines / subtotal / total / timer now that it is available.
         syncDynamicUI();
-        if (outcome instanceof CheckoutPresenter.LoadOutcome.Failure) {
-            Toasts.warn("Could not load your cart — please try again.");
+        if (outcome instanceof CheckoutPresenter.LoadOutcome.Failure fail) {
+            Toasts.warn(Lk.withReason("Could not load your cart", fail.reason()));
         }
     }
 
@@ -160,15 +171,15 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
     }
 
     private CheckoutPresenter.LoadOutcome reload() {
-        CheckoutPresenter.LoadOutcome outcome = presenter.loadOrder(resolvedUserId, memberToken, sessionId);
+        CheckoutPresenter.LoadOutcome outcome = presenter.loadOrder();
         switch (outcome) {
             case CheckoutPresenter.LoadOutcome.Loaded l -> {
                 this.activeOrder   = l.order();
                 this.subtotalCents = l.pricing().subtotalCents();
                 this.totalCents    = l.pricing().totalCents();
+                this.holdEndsAtMs  = clock.millis() + l.order().remainingSecondsBeforeExpiry() * MILLIS_PER_SECOND;
             }
             case CheckoutPresenter.LoadOutcome.Empty e -> clearOrder();
-            case CheckoutPresenter.LoadOutcome.NotAuthenticated na -> clearOrder();
             case CheckoutPresenter.LoadOutcome.Failure f -> clearOrder();
         }
         return outcome;
@@ -228,19 +239,10 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
 
         if (timerSpan != null && activeOrder != null
                 && activeOrder.remainingSecondsBeforeExpiry() > 0) {
-            double endMs = System.currentTimeMillis()
-                    + activeOrder.remainingSecondsBeforeExpiry() * 1000.0;
-            timerSpan.getElement().executeJs(
-                    "const t = this;" +
-                    "const end = $0;" +
-                    "function pad(n){return String(n).padStart(2,'0');}" +
-                    "function tick(){" +
-                    "  const s=Math.max(0,Math.floor((end-Date.now())/1000));" +
-                    "  t.textContent=pad(Math.floor(s/60))+':'+pad(s%60);" +
-                    "  if(s>0) setTimeout(tick,1000);" +
-                    "}" +
-                    "tick();",
-                    endMs);
+            // The page may be shown again without a reload (beforeEnter on a built page), so the seconds
+            // left come from the hold's end on the server's clock, not from the order as first loaded.
+            long secondsLeft = Math.max(0, (holdEndsAtMs - clock.millis()) / MILLIS_PER_SECOND);
+            LkCountdown.start(timerSpan.getElement(), secondsLeft, "");
         }
     }
 
@@ -362,7 +364,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             guestEmail.setPlaceholder("you@example.com");
             guestEmail.setRequired(true);
             guestEmail.setWidthFull();
-            guestEmail.setHelperText("We'll send your ticket confirmation here.");
+            // The platform sends no email yet (#102), so the field promises none.
+            guestEmail.setHelperText("Kept with your order record; no email is sent.");
 
             guestAge.setPlaceholder("e.g. 25");
             guestAge.setMin(1);
@@ -431,14 +434,10 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         switch (reloaded) {
             case CheckoutPresenter.LoadOutcome.Loaded l -> { /* still valid — continue */ }
             case CheckoutPresenter.LoadOutcome.Failure f -> {
-                Toasts.failure("Couldn't reach the server. Please try again.");
+                Toasts.failure(Lk.withReason("Could not check your cart before paying", f.reason()));
                 return;
             }
             case CheckoutPresenter.LoadOutcome.Empty e -> {
-                Toasts.failure("Your reservation has expired. Please add tickets again.");
-                return;
-            }
-            case CheckoutPresenter.LoadOutcome.NotAuthenticated na -> {
                 Toasts.failure("Your reservation has expired. Please add tickets again.");
                 return;
             }
@@ -447,6 +446,9 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         if (!paymentInProgress.compareAndSet(false, true)) {
             return;
         }
+        // A kept confirmation is the last order's: drop it before this one, so a failed attempt
+        // leaves no older order to reopen at order-confirmed.
+        OrderSession.clear();
         payButton.getElement().setEnabled(false);
 
         try {
@@ -459,8 +461,11 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
 
             switch (outcome) {
                 case CheckoutPresenter.PayOutcome.Success ok -> {
-                    OrderSession.setResult(ok.result());
+                    OrderSession.setResult(ok.result(), clock.instant());
                     clearIdempotencyKey();
+                    // The router rebuilds the top bar inside navigate(), before the finally below runs, so the
+                    // sold cart's badge is dropped first.
+                    CartBadgeCache.invalidate();
                     Toasts.success("Payment successful — "
                             + formatCents(Money.toCents(ok.result().totalCharged()))
                             + " charged.");
@@ -485,10 +490,12 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 case CheckoutPresenter.PayOutcome.DuplicateSubmission dup ->
                     Toasts.warn("This order was already submitted.");
                 case CheckoutPresenter.PayOutcome.Failure f ->
-                    Toasts.failure("Payment could not be completed. Please try again or contact support."
-                            + (f.reason() != null && !f.reason().isBlank() ? " (" + f.reason() + ")" : ""));
+                    Toasts.failure(Lk.withReason("Payment could not be completed", f.reason()));
             }
         } finally {
+            // Whatever the outcome, the attempt may have changed the cart: a sale empties it, and a lost
+            // race or a failed issue releases its holds.
+            CartBadgeCache.invalidate();
             paymentInProgress.set(false);
             payButton.getElement().setEnabled(totalCents > 0);
         }

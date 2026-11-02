@@ -236,6 +236,56 @@ class SessionIdentityTest {
         verify(authenticationService, never()).startGuestSession();
     }
 
+    // ---- UI-B10: the visitor resolved once, for an action that needs several of its facts (#187) ----
+
+    @Test
+    void GivenALiveStoredToken_WhenVisitor_ThenTheMemberFromOneLiveMemberIdCall() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_USER_ID));
+
+        SessionIdentity.Visitor visitor = identity().visitor();
+
+        assertEquals(new SessionIdentity.Visitor.Member(MEMBER_TOKEN, MEMBER_USER_ID), visitor);
+        verify(authenticationService, times(1)).liveMemberId(MEMBER_TOKEN);
+        verify(authenticationService, never()).isLiveGuestSession(anyString());
+    }
+
+    @Test
+    void GivenNoStoredToken_WhenVisitor_ThenAGuestOnItsLiveSession() {
+        GuestSession.setSessionId(GUEST_SESSION_ID);
+        givenLiveGuestSession(GUEST_SESSION_ID);
+
+        assertEquals(new SessionIdentity.Visitor.Guest(GUEST_SESSION_ID), identity().visitor());
+    }
+
+    @Test
+    void GivenARejectedStoredToken_WhenVisitor_ThenAGuestOnAFreshSessionAfterOneRestore() {
+        SessionIdentity identity = identityForAMemberWhoseTokenIsRejected();
+
+        assertEquals(new SessionIdentity.Visitor.Guest(FRESH_GUEST_SESSION_ID), identity.visitor());
+        verify(freshGuestSession, times(1)).restore();
+    }
+
+    @Test
+    void GivenAStoredAdminToken_WhenVisitor_ThenAGuestAndTheAdminStaysSignedIn() {
+        storeSignedInAdmin();
+        givenLiveGuestSession(GUEST_SESSION_ID);
+
+        assertEquals(new SessionIdentity.Visitor.Guest(GUEST_SESSION_ID), identity().visitor());
+        verify(freshGuestSession, never()).restore();
+        assertEquals(ADMIN_TOKEN, AuthSession.token(), "the admin's sign-in must survive the resolution");
+    }
+
+    // A member token and a guest session id are both credentials, so neither may reach a log line.
+    @Test
+    void GivenAResolvedVisitor_WhenToString_ThenNoCredentialIsShown() {
+        String member = new SessionIdentity.Visitor.Member(MEMBER_TOKEN, MEMBER_USER_ID).toString();
+        String guest = new SessionIdentity.Visitor.Guest(GUEST_SESSION_ID).toString();
+
+        assertFalse(member.contains(MEMBER_TOKEN), "the member token must not be shown: " + member);
+        assertFalse(guest.contains(GUEST_SESSION_ID), "the guest session id must not be shown: " + guest);
+    }
+
     // ---- arrangement --------------------------------------------------------------------------
 
     private void givenLiveGuestSession(String sessionId) {

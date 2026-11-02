@@ -21,10 +21,16 @@ import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.ui.components.venue.VkSeat;
 import com.ticketing.system.ui.components.venue.VkSeatedZonePicker;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
 @Slf4j
 public class SeatPickerPresenter {
+
+    // Row labels are bijective base-26 (SeatLabels.rowLabel: A..Z, then AA, AB, ...), so a shorter label
+    // is always an earlier row; plain string order would draw AA between A and B.
+    private static final Comparator<String> ROW_ORDER =
+            Comparator.comparingInt(String::length).thenComparing(Comparator.naturalOrder());
 
     private final CatalogService catalogService;
     private final ReservationService reservationService;
@@ -55,57 +61,62 @@ public class SeatPickerPresenter {
             ZoneType zoneType = ZoneType.valueOf(zone.getZoneType());
             return new LoadOutcome.Loaded(zone, zoneType);
         } catch (RuntimeException e) {
-            return new LoadOutcome.Failure("Could not load this zone — please refresh and try again");
+            return new LoadOutcome.Failure(ServiceErrors.userMessageLogged(e,
+                    "load zone eventId=" + eventId + " zoneId=" + zoneId));
         }
     }
 
     public ReserveOutcome reserveSeated(InventorySelectionDTO selection, int eventId, int zoneId) {
         try {
-            if (identity.isMember()) {
-                reservationService.reserveForMember(identity.memberToken(), eventId, zoneId, selection);
-            } else {
-                reservationService.reserveForGuest(identity.guestSessionId(), eventId, zoneId, selection);
-            }
+            reserveForVisitor(eventId, zoneId, selection);
             return new ReserveOutcome.Success(selection.getSeatNumbers().size());
         } catch (DomainException e) {
-            // Domain rejections (sold out, not on sale, market closed, …) carry buyer-facing messages.
-            log.warn("seated reserve rejected (eventId={}, zoneId={}, seats={}): {}",
+            // Domain rejections (sold out, not on sale, market closed, …) carry buyer-facing messages. A
+            // refusal is not a degraded state, and LoggingAspect already logs it at WARN, so DEBUG here.
+            log.debug("seated reserve rejected (eventId={}, zoneId={}, seats={}): {}",
                     eventId, zoneId, selection.getSeatNumbers(), e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            // Infrastructure errors (e.g. optimistic-lock contention) have technical messages — log the
-            // full trace but hand the view a null so it shows its friendly fallback, never the raw text.
-            log.warn("seated reserve errored (eventId={}, zoneId={}, seats={})",
-                    eventId, zoneId, selection.getSeatNumbers(), e);
-            return new ReserveOutcome.Failure(null);
+            return new ReserveOutcome.Failure(ServiceErrors.userMessageLogged(e, "seated reserve eventId=" + eventId
+                    + " zoneId=" + zoneId + " seats=" + selection.getSeatNumbers()));
         }
     }
 
     public ReserveOutcome reserveStanding(int quantity, int eventId, int zoneId) {
         try {
-            InventorySelectionDTO selection = InventorySelectionDTO.standing(quantity);
-            if (identity.isMember()) {
-                reservationService.reserveForMember(identity.memberToken(), eventId, zoneId, selection);
-            } else {
-                reservationService.reserveForGuest(identity.guestSessionId(), eventId, zoneId, selection);
-            }
+            reserveForVisitor(eventId, zoneId, InventorySelectionDTO.standing(quantity));
             return new ReserveOutcome.Success(quantity);
         } catch (DomainException e) {
-            // Domain rejections (sold out, not on sale, market closed, …) carry buyer-facing messages.
-            log.warn("standing reserve rejected (eventId={}, zoneId={}, qty={}): {}",
+            // Domain rejections carry buyer-facing messages; DEBUG for the same reason as reserveSeated.
+            log.debug("standing reserve rejected (eventId={}, zoneId={}, qty={}): {}",
                     eventId, zoneId, quantity, e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
-            // Infrastructure errors (e.g. optimistic-lock contention) have technical messages — log the
-            // full trace but hand the view a null so it shows its friendly fallback, never the raw text.
-            log.warn("standing reserve errored (eventId={}, zoneId={}, qty={})",
-                    eventId, zoneId, quantity, e);
-            return new ReserveOutcome.Failure(null);
+            return new ReserveOutcome.Failure(ServiceErrors.userMessageLogged(e, "standing reserve eventId=" + eventId
+                    + " zoneId=" + zoneId + " qty=" + quantity));
         }
     }
 
+    // One resolution per reservation: asking isMember() and then memberToken() would check the token twice.
+    private void reserveForVisitor(int eventId, int zoneId, InventorySelectionDTO selection) {
+        switch (identity.visitor()) {
+            case SessionIdentity.Visitor.Member member ->
+                    reservationService.reserveForMember(member.token(), eventId, zoneId, selection);
+            case SessionIdentity.Visitor.Guest guest ->
+                    reservationService.reserveForGuest(guest.sessionId(), eventId, zoneId, selection);
+        }
+    }
+
+    /**
+     * Lays a seated zone's seats out as a grid: one row per row label, top to bottom, and the seats of
+     * a row left to right by seat number. The seats' own coordinates are ignored.
+     *
+     * @param zone           the zone whose seats to lay out
+     * @param seatStepPixels the distance between two neighbouring seats, across and down
+     * @return one model per seat, in row order
+     */
     public static List<VkSeatedZonePicker.SeatModel> buildSeatModels(InventoryZoneDTO zone, int seatStepPixels) {
-        TreeMap<String, List<SeatDTO>> byRow = new TreeMap<>();
+        TreeMap<String, List<SeatDTO>> byRow = new TreeMap<>(ROW_ORDER);
         for (SeatDTO s : zone.getSeats()) {
             byRow.computeIfAbsent(rowOf(s.label()), k -> new ArrayList<>()).add(s);
         }

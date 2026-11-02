@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.landing;
 
+import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.shared.dto.ShowDateDTO;
 import com.ticketing.system.ui.components.buyer.BzPoster;
@@ -8,6 +9,7 @@ import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -36,6 +38,9 @@ public class LandingView extends LkPage {
     private static final DateTimeFormatter DATE_FMT =
         DateTimeFormatter.ofPattern("d MMM · HH:mm zzz", Locale.ENGLISH);
 
+    // A colour family BzPoster does not know, so it draws its neutral gradient.
+    private static final String NEUTRAL_POSTER_GRADIENT = "";
+
     private final LandingPresenter presenter;
 
     public LandingView(LandingPresenter presenter) {
@@ -59,7 +64,8 @@ public class LandingView extends LkPage {
         title.setText("Find your next unforgettable experience.");
         Div sub = new Div();
         sub.addClassName("bz-hero-sub");
-        sub.setText("Concerts, sports, theatre, conferences — across Israel, all in one place.");
+        // Names only categories that exist (EventCategoryLabels).
+        sub.setText("Concerts, sports, theatre, comedy — across Israel, all in one place.");
         hero.add(title, sub);
         return hero;
     }
@@ -94,7 +100,8 @@ public class LandingView extends LkPage {
     }
 
     private BzPoster poster(EventSummaryDTO e) {
-        return new BzPoster(posterCategory(e.category()), e.name(), meta(e), priceLabel(e))
+        return new BzPoster(posterGradient(e.category()), EventCategoryLabels.labelOf(e.category()),
+                e.name(), meta(e), priceLabel(e))
             .onClick(() -> UI.getCurrent().navigate("events/" + e.eventId()));
     }
 
@@ -109,23 +116,15 @@ public class LandingView extends LkPage {
 
     // ---- poster field mapping ----
 
-    /** Map the domain {@link com.ticketing.system.catalog.domain.EventCategory} name to a
-     *  BzPoster category key (drives its gradient + chip label). */
-    private static String posterCategory(String category) {
+    /** Map the domain {@link EventCategory} name to a BzPoster colour family; its chip shows the
+     *  category's own label ({@link EventCategoryLabels}). Any other category gets the neutral gradient. */
+    private static String posterGradient(String category) {
         return switch (category == null ? "" : category.toUpperCase(Locale.ROOT)) {
             case "MUSIC", "CONCERT", "FESTIVAL" -> "Concert";
             case "SPORTS" -> "Sport";
             case "THEATER", "COMEDY" -> "Theatre";
-            default -> humanize(category);
+            default -> NEUTRAL_POSTER_GRADIENT;
         };
-    }
-
-    private static String humanize(String name) {
-        if (name == null || name.isBlank()) {
-            return "Event";
-        }
-        String lower = name.toLowerCase(Locale.ROOT);
-        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
     /** "Location · 26 Jun · 20:00" — location plus the earliest show date when present. */
@@ -156,15 +155,17 @@ public class LandingView extends LkPage {
             .set("grid-template-columns", "repeat(auto-fit, minmax(min(100%, 220px), 1fr))")
             .set("gap", "16px");
         grid.add(
-            categoryCard("Concerts",     "music",   "42 events",  "#8b5cf6", "#ec4899"),
-            categoryCard("Sports",       "trophy",  "28 events",  "#0ea5e9", "#10b981"),
-            categoryCard("Theatre",      "theater", "14 events",  "#dc2626", "#f59e0b"),
-            categoryCard("Conferences",  "mic",     "9 events",   "#0d9488", "#1d4ed8")
+            categoryCard(EventCategory.CONCERT, "music",   "#8b5cf6", "#ec4899"),
+            categoryCard(EventCategory.SPORTS,  "trophy",  "#0ea5e9", "#10b981"),
+            categoryCard(EventCategory.THEATER, "theater", "#dc2626", "#f59e0b"),
+            categoryCard(EventCategory.COMEDY,  "mic",     "#0d9488", "#1d4ed8")
         );
         return grid;
     }
 
-    private Div categoryCard(String name, String iconName, String count, String g1, String g2) {
+    // Each card is a category that exists, under the label that filters Browse to it (#187, UI-A6).
+    private Div categoryCard(EventCategory category, String iconName, String g1, String g2) {
+        String name = EventCategoryLabels.label(category);
         Div card = new Div();
         card.getStyle()
             .set("background", "linear-gradient(135deg, " + g1 + ", " + g2 + ")")
@@ -184,10 +185,7 @@ public class LandingView extends LkPage {
         Span title = new Span(name);
         title.getStyle().set("font-size", "1.1rem").set("font-weight", "800");
 
-        Span sub = new Span(count);
-        sub.getStyle().set("font-size", "0.82rem").set("opacity", "0.9");
-
-        card.add(iconWrap, title, sub);
+        card.add(iconWrap, title);
         // Pre-select the category in Browse's filter via query parameter.
         card.getElement().addEventListener("click", e ->
             UI.getCurrent().navigate("browse?category=" + name));

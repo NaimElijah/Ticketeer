@@ -12,6 +12,8 @@ import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -23,13 +25,15 @@ import jakarta.annotation.security.PermitAll;
 
 /**
  * Register-a-company form — the entry point for a registered member to
- * become an organizer. Deliberately <i>not</i> gated by
- * {@link com.ticketing.system.ui.security.RequireCapability}
- * so non-owners can reach it as the workspace fallback destination.
+ * become an organizer. It is the workspace fallback destination for a member
+ * with no company, so its capability, {@link Capability#REGISTER_COMPANY}, is
+ * one every member holds, owner or not; a signed-in admin, who is no member,
+ * is turned away (#187, UI-A8).
  */
 @Route(value = "register-company", layout = MainLayout.class)
 @PageTitle("Register a Company · TicketHub")
 @PermitAll
+@RequireCapability(Capability.REGISTER_COMPANY)
 public class CompanyRegistrationView extends LkPage {
 
     private final CompanyRegistrationPresenter presenter;

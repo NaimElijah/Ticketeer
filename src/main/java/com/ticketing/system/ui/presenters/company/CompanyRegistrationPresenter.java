@@ -33,7 +33,11 @@ public class CompanyRegistrationPresenter {
         } catch (IllegalArgumentException e) {
             return new Outcome.InvalidInput(ServiceErrors.userMessage(e));
         } catch (IllegalStateException e) {
-            return new Outcome.NameTaken(e.getMessage());
+            // A taken name comes as a plain IllegalStateException, told apart only by its text (until #219).
+            if (CompanyManagementService.COMPANY_NAME_TAKEN_MESSAGE.equals(e.getMessage())) {
+                return new Outcome.NameTaken(e.getMessage());
+            }
+            return new Outcome.Failure(ServiceErrors.userMessage(e));
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessage(e));
         }

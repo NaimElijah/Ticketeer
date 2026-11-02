@@ -112,9 +112,9 @@ public class SystemAnalyticsView extends LkPage {
             case SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case SystemAnalyticsPresenter.MarketActionOutcome.Rejected r ->
-                Toasts.failure("Couldn't " + (open ? "open" : "close") + " the market — please try again.");
+                Toasts.failure(Lk.withReason("Couldn't " + (open ? "open" : "close") + " the market", r.reason()));
             case SystemAnalyticsPresenter.MarketActionOutcome.Failure f ->
-                Toasts.failure("Market action failed — please try again.");
+                Toasts.failure(Lk.withReason("Market action failed", f.reason()));
         }
     }
 

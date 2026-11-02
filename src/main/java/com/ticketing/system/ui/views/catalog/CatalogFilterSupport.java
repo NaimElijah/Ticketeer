@@ -5,6 +5,9 @@ import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
+
+import com.ticketing.system.ui.support.EventCategoryLabels;
 
 /**
  * Shared, layout-independent options and pure helpers for the catalogue event filters — the single
@@ -21,23 +24,16 @@ public final class CatalogFilterSupport {
     public static final String CITY_ALL    = "All cities";
     public static final String DATE_ANY    = "Any time";
 
-    public static final List<String> CATEGORIES = List.of(
-            CAT_ALL, "Concerts", "Sports", "Theatre", "Festivals", "Comedy");
+    /** The category filter's options: {@link #CAT_ALL}, then every category's label ({@link EventCategoryLabels}). */
+    public static final List<String> CATEGORIES =
+            Stream.concat(Stream.of(CAT_ALL), EventCategoryLabels.labels().stream()).toList();
 
     /** A resolved from/to date range for a date-range preset; either bound may be null (unbounded). */
     public record DateWindow(LocalDate from, LocalDate to) { }
 
-    /** UI category label → EventCategory enum name (null = no filter). */
+    /** UI category label → EventCategory enum name (null = no filter, for {@link #CAT_ALL} or any other text). */
     public static String categoryFilterValue(String label) {
-        if (label == null) return null;
-        return switch (label) {
-            case "Concerts"  -> "CONCERT";
-            case "Sports"    -> "SPORTS";
-            case "Theatre"   -> "THEATER";
-            case "Festivals" -> "FESTIVAL";
-            case "Comedy"    -> "COMEDY";
-            default          -> null;
-        };
+        return EventCategoryLabels.categoryFor(label).map(Enum::name).orElse(null);
     }
 
     /** Date-range preset → concrete [from, to] window relative to {@code today} (null bounds = open). */

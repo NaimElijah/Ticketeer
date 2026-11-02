@@ -4,8 +4,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,6 +33,10 @@ public class CheckoutPresenter {
 
     private static final String CURRENCY = "USD";
 
+    // ActiveOrder.validateCanCheckout refuses an empty cart and a cart whose hold ran out with the same
+    // InvalidStateTransitionException type, so its text is all that tells the empty cart from an expiry.
+    private static final String EMPTY_ORDER_MESSAGE = "Cannot checkout an empty order";
+
     private final ReservationService reservationService;
     private final CheckoutService    checkoutService;
     private final SessionIdentity    identity;
@@ -50,22 +54,43 @@ public class CheckoutPresenter {
 
     // ---- identity -------------------------------------------------------
 
+    /** The visitor, resolved once: a live member's token and id, or a guest's live session id. */
     public Identity resolveIdentity() {
-        if (identity.isMember()) {
-            return new Identity(true, identity.memberToken(), null, identity.memberUserId());
-        }
-        return new Identity(false, null, identity.guestSessionId(), 0);
+        return switch (identity.visitor()) {
+            case SessionIdentity.Visitor.Member member -> new Identity(true, member.token(), null, member.userId());
+            case SessionIdentity.Visitor.Guest guest ->
+                    new Identity(false, null, guest.sessionId(), SessionIdentity.NO_MEMBER_USER_ID);
+        };
     }
 
-    public record Identity(boolean member, String memberToken, String guestSessionId, int userId) { }
+    /**
+     * The visitor as {@link #resolveIdentity()} resolved it. Its {@code toString} shows neither credential.
+     *
+     * @param member         whether the visitor is a live member
+     * @param memberToken    the member token, a credential; {@code null} for a guest
+     * @param guestSessionId the guest session id, a credential; {@code null} for a member
+     * @param userId         the member's user id, or {@link SessionIdentity#NO_MEMBER_USER_ID} for a guest
+     */
+    public record Identity(boolean member, String memberToken, String guestSessionId, int userId) {
+        @Override
+        public String toString() {
+            return "Identity[member=" + member + ", userId=" + userId + "]";
+        }
+    }
 
     // ---- load -----------------------------------------------------------
 
-    public LoadOutcome loadOrder(int userId, String memberToken, String guestSessionId) {
+    /**
+     * The visitor's active order, priced. A guest may check out, so there is no signed-out outcome: a
+     * visitor without a live member token is looked up as a guest.
+     *
+     * @return the order, {@link LoadOutcome.Empty} when there is none or it has no lines, or a failure
+     *     with {@code ServiceErrors}' text
+     */
+    public LoadOutcome loadOrder() {
         try {
-            // Use the cart's exact lookup: viewMyActiveOrder tries the member key (token -> userId) and
-            // FALLS BACK to the guest key, so a cart stored under userId (with sessionId null) is still
-            // found. The old two-branch version committed to one key with no fallback -> empty checkout.
+            // The cart's own lookup: viewMyActiveOrder tries the member key (token -> userId) and falls
+            // back to the guest key, so a cart stored under the user id with no session id is still found.
             return classify(reservationService.viewMyActiveOrder(identity.credential()));
         } catch (RuntimeException e) {
             return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
@@ -127,13 +152,17 @@ public class CheckoutPresenter {
             }
             if (cause instanceof PaymentGatewayException)        return new PayOutcome.PaymentDeclined(cause.getMessage());
             if (cause instanceof InsufficientInventoryException) return new PayOutcome.SoldOut(cause.getMessage());
-            if (cause instanceof InvalidStateTransitionException) return new PayOutcome.OrderExpired("Order expired during checkout");
+            // Every other refusal of this type is an expiry, before checkout or during it; an empty cart
+            // falls through to the DomainException arm with its own reason.
+            if (cause instanceof InvalidStateTransitionException
+                    && !EMPTY_ORDER_MESSAGE.equals(cause.getMessage())) {
+                return new PayOutcome.OrderExpired("Order expired during checkout");
+            }
             if (cause instanceof IdempotencyConflictException)   return new PayOutcome.DuplicateSubmission();
-            // Surface the reason only for domain (business) exceptions — their messages are safe to show.
-            // Anything else is an unexpected/internal error: log it server-side, show only the generic message.
             if (cause instanceof DomainException)                return new PayOutcome.Failure(cause.getMessage());
-            log.error("Checkout failed unexpectedly", e);
-            return new PayOutcome.Failure(null);
+            // ServiceErrors decides what the buyer may read and logs an internal failure. It gets the
+            // cause, as every arm above does: CheckoutService wraps a failure in a RuntimeException of its own.
+            return new PayOutcome.Failure(ServiceErrors.userMessage(cause instanceof RuntimeException rc ? rc : e));
         }
     }
 
@@ -181,11 +210,23 @@ public class CheckoutPresenter {
         expiryListeners.remove(listener);
     }
 
-    @EventListener
+    /**
+     * Tells each open checkout view whose order the sweeper expired. Runs once the sweep's transaction
+     * has committed, so a sweep that rolls back tells no one; an expiry published outside a transaction
+     * is passed on at once. A view that fails to take the news is logged at WARN with its exception and
+     * the others are still told: the sweep has already committed, so the failure must not reach it.
+     *
+     * @param event the expired order's owner, a member's user id or a guest's session id
+     */
+    @TransactionalEventListener(fallbackExecution = true)
     public void onOrderExpired(OrderExpiredEvent event) {
         for (ExpiryListener listener : expiryListeners) {
-            if (listener.matches(event.userId(), event.sessionId())) {
-                listener.onExpired();
+            try {
+                if (listener.matches(event.userId(), event.sessionId())) {
+                    listener.onExpired();
+                }
+            } catch (RuntimeException e) {
+                log.warn("checkout view failed to take an order expiry userId={}", event.userId(), e);
             }
         }
     }
@@ -195,7 +236,6 @@ public class CheckoutPresenter {
     public sealed interface LoadOutcome {
         record Loaded(ActiveOrderDTO order, Pricing pricing) implements LoadOutcome { }
         record Empty()                implements LoadOutcome { }
-        record NotAuthenticated()     implements LoadOutcome { }
         record Failure(String reason) implements LoadOutcome { }
     }
 

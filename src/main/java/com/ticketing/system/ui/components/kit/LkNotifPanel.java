@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Notification dropdown panel — header + scrollable list + footer link.
+ * Notification dropdown panel — header + scrollable list.
  * Ports the React {@code NotifPanel}. Static factory methods
  * {@link #buyer()} and {@link #admin()} produce the two reference
  * variants populated with the mock data from {@code lumo-kit.jsx}.
@@ -23,11 +23,11 @@ public class LkNotifPanel extends Div {
 
     private final NativeButton markAll;
 
-    public LkNotifPanel(String headerTitle, List<Item> items, String footerLabel) {
-        this(headerTitle, items, footerLabel, null);
+    public LkNotifPanel(String headerTitle, List<Item> items) {
+        this(headerTitle, items, null);
     }
 
-    public LkNotifPanel(String headerTitle, List<Item> items, String footerLabel, Consumer<String> onRowClick) {
+    public LkNotifPanel(String headerTitle, List<Item> items, Consumer<String> onRowClick) {
         addClassName("lk-notif");
 
         Div head = new Div();
@@ -73,10 +73,6 @@ public class LkNotifPanel extends Div {
             list.add(row);
         }
         add(list);
-
-        NativeButton foot = new NativeButton(footerLabel);
-        foot.addClassName("lk-notif-foot");
-        add(foot);
     }
 
     public LkNotifPanel onMarkAllRead(Runnable handler) {
@@ -97,7 +93,7 @@ public class LkNotifPanel extends Div {
             new Item("", "star",   "Price drop on a watched event",     "Mashina · 35-Year Tour — now from $150", "1h", true, null),
             new Item("", "card",   "Refund processed",                  "Othello at Habima · $120.00 returned", "Yesterday", false, null),
             new Item("", "bell",   "New from Live Nation Israel",       "Eden Hason · Live — on sale now", "2d", false, null)
-        ), "View all notifications");
+        ));
     }
 
     public static LkNotifPanel admin() {
@@ -107,7 +103,7 @@ public class LkNotifPanel extends Div {
             new Item("", "building", "New company registration",   "BlueWave Productions awaiting review",           "8h", true,  null),
             new Item("", "policy",   "Policy flagged for review",  "Coldplay · MOTS age-gate needs a check",         "1d", true,  null),
             new Item("", "warning",  "Refund spike detected",      "Othello at Habima — 14 refunds in 1h",           "1d", true,  null)
-        ), "View admin activity feed");
+        ));
     }
 
     private static final Map<String, String> TYPE_ICON = Map.ofEntries(
@@ -160,7 +156,7 @@ public class LkNotifPanel extends Div {
         if (notifications == null || notifications.isEmpty()) {
             return new LkNotifPanel("Notifications", List.of(
                 new Item("", "bell", "You're all caught up", "No new notifications", "", false, null)
-            ), "View all notifications").hideMarkAll();
+            )).hideMarkAll();
         }
         List<Item> items = notifications.stream()
             .map(n -> new Item(
@@ -173,7 +169,7 @@ public class LkNotifPanel extends Div {
                 null
             ))
             .toList();
-        LkNotifPanel panel = new LkNotifPanel("Notifications", items, "View all notifications", onRowClick);
+        LkNotifPanel panel = new LkNotifPanel("Notifications", items, onRowClick);
         if (onMarkAllRead != null) panel.onMarkAllRead(onMarkAllRead);
         return panel;
     }

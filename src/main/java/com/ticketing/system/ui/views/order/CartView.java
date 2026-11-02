@@ -7,11 +7,13 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkCountdown;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.order.CartPresenter;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -45,8 +47,7 @@ public class CartView extends LkPage {
             case CartPresenter.LoadOutcome.NotAuthenticated na -> clearCart();
             case CartPresenter.LoadOutcome.Failure f -> {
                 clearCart();
-                Toasts.failure("Could not load your cart — please try again."
-                        + (f.reason() != null && !f.reason().isBlank() ? " (" + f.reason() + ")" : ""));
+                Toasts.failure(Lk.withReason("Could not load your cart", f.reason()));
             }
         }
 
@@ -106,6 +107,7 @@ public class CartView extends LkPage {
             .onClick(e -> {
                 switch (presenter.removeLine(line)) {
                     case CartPresenter.RemoveOutcome.Removed r -> {
+                        CartBadgeCache.invalidate();
                         this.activeOrder   = r.cart();
                         this.subtotalCents = r.subtotalCents();
                         populateLines();
@@ -114,8 +116,7 @@ public class CartView extends LkPage {
                         Toasts.success("Removed from cart.");
                     }
                     case CartPresenter.RemoveOutcome.Failure f ->
-                        Toasts.failure("Could not remove the item — please try again."
-                                + (f.reason() != null && !f.reason().isBlank() ? " (" + f.reason() + ")" : ""));
+                        Toasts.failure(Lk.withReason("Could not remove the item", f.reason()));
                 }
             });
 
@@ -137,20 +138,7 @@ public class CartView extends LkPage {
         Span timer = new Span();
         timer.getStyle().set("font-size", "16px").set("font-weight", "700");
 
-        timer.getElement().executeJs(
-            "if (window.cartTimerId) { clearTimeout(window.cartTimerId); }" +
-            "const t=this; let s=$0;" +
-            "function tick(){" +
-            "  if(s<=0) return;" +
-            "  const m=Math.floor(s/60); const sec=s%60;" +
-            "  t.textContent='Time left: '+m+':' + (sec<10?'0'+sec:sec);" +
-            "  s--; " +
-            "  window.cartTimerId = setTimeout(tick,1000);" +
-            "}" +
-            "tick();", (int) remainingSeconds);   // Vaadin's JsonCodec can't encode Long — pass an int (a hold timer never overflows)
-
-        timer.addDetachListener(ev ->
-            timer.getElement().executeJs("if(window.cartTimerId) { clearTimeout(window.cartTimerId); }"));
+        LkCountdown.start(timer.getElement(), remainingSeconds, "Time left: ");
 
         LkBanner heldBanner = new LkBanner(LkBanner.Tone.info, new LkIcon("lock", 17),
             "Tickets are held just for you. They release automatically when the timer runs out.");

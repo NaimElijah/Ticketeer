@@ -9,9 +9,9 @@ import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRec
 import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
 import com.ticketing.system.reporting.application.service.SalesSummaryCalculator;
 import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.session.AuthSession;
-
-import lombok.extern.slf4j.Slf4j;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * Read-only presenter for {@code GlobalHistoryView}. Loads every purchase
@@ -20,9 +20,9 @@ import lombok.extern.slf4j.Slf4j;
  * names by {@code OrderReceiptMapper}, so the view filters them client-side.
  *
  * <p>Passes an all-null {@link GlobalHistoryFiltersDTO} (every field nullable =
- * no server filter). Degrades to an empty list when the caller is not an admin.
+ * no server filter). A caller without a token gets no records; a failed read is a
+ * {@link ListOutcome.Failure}, never an empty history.
  */
-@Slf4j
 @Component
 public class GlobalHistoryPresenter {
 
@@ -40,20 +40,24 @@ public class GlobalHistoryPresenter {
         return salesSummaryCalculator.summarize(records);
     }
 
-    /** Every purchase record across the platform; empty when not an admin / on failure. */
-    public List<PurchaseRecordDTO> loadAllRecords() {
+    /**
+     * Every purchase record across the platform.
+     *
+     * @return the records, none without a token; a {@link ListOutcome.Failure} with
+     *         {@code ServiceErrors}' text when the read fails, an admin refusal included
+     */
+    public ListOutcome<PurchaseRecordDTO> loadAllRecords() {
         String token = AuthSession.token();
         if (token == null) {
-            return List.of();
+            return new ListOutcome.Loaded<>(List.of());
         }
         try {
             GlobalHistoryFiltersDTO noFilter = new GlobalHistoryFiltersDTO(null, null, null, null, null);
-            return systemAdminService.viewGlobalHistory(token, noFilter).stream()
+            return new ListOutcome.Loaded<>(systemAdminService.viewGlobalHistory(token, noFilter).stream()
                     .flatMap(h -> h.records().stream())
-                    .toList();
+                    .toList());
         } catch (RuntimeException e) {
-            log.warn("Failed to load global purchase history: {}", e.getMessage());
-            return List.of();
+            return new ListOutcome.Failure<>(ServiceErrors.userMessageLogged(e, "load global purchase history"));
         }
     }
 }

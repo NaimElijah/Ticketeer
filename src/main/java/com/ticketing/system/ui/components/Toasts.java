@@ -24,6 +24,9 @@ import com.vaadin.flow.component.notification.NotificationVariant;
  */
 public final class Toasts {
 
+    /** Vaadin's notification duration for "never close by itself". */
+    private static final int UNTIL_DISMISSED = 0;
+
     private Toasts() { }
 
     /** Success toast — green theme, 4s, top-end. */
@@ -39,6 +42,17 @@ public final class Toasts {
     /** Warning toast — amber theme, 5s, top-end. Use for near-expiry or "be careful" hints. */
     public static void warn(String msg) {
         toast(msg, NotificationVariant.LUMO_WARNING, 5000);
+    }
+
+    /**
+     * Warning toast that stays until the user dismisses it with its close button. For a message the user must
+     * have time to read and act on, such as which refunds failed and whether cancelling again retries them
+     * (#187).
+     *
+     * @param msg the message
+     */
+    public static void warnUntilDismissed(String msg) {
+        toast(msg, NotificationVariant.LUMO_WARNING, UNTIL_DISMISSED);
     }
 
     private static void toast(String msg, NotificationVariant variant, int durationMs) {

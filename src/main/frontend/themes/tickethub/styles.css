@@ -87,6 +87,7 @@
   .lk-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:var(--radius-s);
     font-weight:600;border:1px solid transparent;white-space:nowrap;transition:.12s;font-size:.88rem;line-height:1}
   .lk-btn-icon{font-size:1em}
+  .lk-btn:disabled{opacity:.5;cursor:not-allowed}
   .lk-btn-s{padding:6px 12px;font-size:.8rem}
   .lk-btn-m{padding:9px 16px}
   .lk-btn-l{padding:12px 20px;font-size:.95rem}
@@ -633,9 +634,6 @@
   .lk-notif-d{font-size:.8rem;color:var(--muted);line-height:1.35}
   .lk-notif-time{font-size:.72rem;color:var(--faint);margin-top:2px}
   .lk-notif-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:6px}
-  .lk-notif-foot{margin-top:4px;padding:10px;border-radius:9px;border:none;background:none;color:var(--primary);
-    font-size:.84rem;font-weight:700;cursor:pointer;border-top:1px solid var(--border);border-radius:0}
-  .lk-notif-foot:hover{background:#f1f5f9}
 
   /* account menu */
   .lk-acct{min-width:248px}
@@ -668,9 +666,6 @@
   .auth-brand{display:flex;align-items:center;gap:8px;justify-content:center;color:var(--primary);font-size:1.15rem;font-weight:800;margin-bottom:20px}
   .auth-title{font-size:1.5rem;font-weight:800;color:#0f172a;margin:0 0 4px;text-align:center}
   .auth-sub{font-size:.88rem;color:var(--muted);margin:0 0 22px;text-align:center;line-height:1.5}
-  .auth-remember{display:flex;align-items:center;gap:9px;font-size:.84rem;color:#475569;cursor:pointer}
-  .auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--faint);font-size:.76rem}
-  .auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--border)}
   .auth-foot{text-align:center;font-size:.86rem;color:var(--muted);margin:20px 0 0}
 
   /* ============ ACCOUNT ============ */

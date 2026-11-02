@@ -8,6 +8,7 @@ import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.vaadin.flow.server.VaadinRequest;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -24,8 +25,17 @@ import java.util.Set;
  * itself reads the existing session-scoped state ({@link AuthSession},
  * {@link CurrentCompanies}) so this layer doesn't introduce new data;
  * it only synthesises a derived view of it.
+ *
+ * <p>A member's companies are read once per request, not once per check: a page asks for several
+ * capabilities (My Events, once per row), and each read loads every company with its active-event
+ * count. The read is kept as a {@link VaadinRequest} attribute for the token it was made with, so a
+ * sign-in or sign-out in the same request is never answered from it, and {@link AuthBootstrap} drops it
+ * at the start of each navigation, so a navigation sees the companies as they are then. Without a
+ * current request (a background thread) every check reads afresh.
  */
 public final class Capabilities {
+
+    private static final String MEMBERSHIPS_ATTRIBUTE = Capabilities.class.getName() + ".memberships";
 
     private Capabilities() {
     }
@@ -65,14 +75,20 @@ public final class Capabilities {
             Capability.DISSOLVE_COMPANY,
             Capability.TRANSFER_FOUNDERSHIP));
 
-    /** Platform-admin capability bundle. */
-    private static final Set<Capability> ADMIN_BUNDLE = unmodifiable(EnumSet.of(
+    /**
+     * Every capability that comes with company membership: the workspace itself and all a founder holds
+     * in it, which covers what any co-owner or manager can hold. {@link AuthBootstrap} reads it to pick
+     * the workspace fallback, so a capability added to a bundle above is a workspace capability there too.
+     */
+    static final Set<Capability> WORKSPACE_CAPABILITIES = unmodifiable(workspaceCapabilities());
+
+    /** Platform-admin capability bundle. {@link AuthBootstrap} reads it to pick the admin sign-in. */
+    static final Set<Capability> ADMIN_BUNDLE = unmodifiable(EnumSet.of(
             Capability.ADMIN_WORKSPACE,
             Capability.VIEW_GLOBAL_HISTORY,
             Capability.BROADCAST_ANNOUNCEMENT,
             Capability.MANAGE_COMPLAINTS,
-            Capability.VIEW_ORG_TREES,
-            Capability.ADMIN_SETTINGS));
+            Capability.VIEW_ORG_TREES));
 
     public static boolean has(Capability c) {
         return forCurrentUser().contains(c);
@@ -120,15 +136,7 @@ public final class Capabilities {
             return caps;
         }
 
-        List<UserCompanyDTO> memberships;
-        try {
-            memberships = service.listForUser(token);
-        } catch (InvalidTokenException | SessionExpiredException e) {
-            // The token died after sign-in: revoked (InvalidTokenException) or expired (SessionExpiredException).
-            // A dead token holds no memberships, so it gets no company capabilities; AuthBootstrap signs the
-            // visitor out on their next navigation. Any other failure is not a dead token and propagates.
-            return caps;
-        }
+        List<UserCompanyDTO> memberships = membershipsOnThisRequest(token, service);
         if (memberships.isEmpty()) {
             return caps;
         }
@@ -163,6 +171,50 @@ public final class Capabilities {
         return caps;
     }
 
+    /**
+     * Forgets the companies read on the current request, so the next check reads them again.
+     * {@link AuthBootstrap} calls it as each navigation starts: an action earlier in the request (a
+     * company registered, an invitation accepted) may have changed them.
+     */
+    static void forgetMembershipsOfThisRequest() {
+        VaadinRequest request = VaadinRequest.getCurrent();
+        if (request != null) {
+            request.removeAttribute(MEMBERSHIPS_ATTRIBUTE);
+        }
+    }
+
+    private static List<UserCompanyDTO> membershipsOnThisRequest(String token, CompanyManagementService service) {
+        VaadinRequest request = VaadinRequest.getCurrent();
+        if (request != null && request.getAttribute(MEMBERSHIPS_ATTRIBUTE) instanceof MembershipsRead read
+                && read.token().equals(token)) {
+            return read.memberships();
+        }
+        List<UserCompanyDTO> memberships = readMemberships(token, service);
+        if (request != null) {
+            request.setAttribute(MEMBERSHIPS_ATTRIBUTE, new MembershipsRead(token, memberships));
+        }
+        return memberships;
+    }
+
+    private static List<UserCompanyDTO> readMemberships(String token, CompanyManagementService service) {
+        try {
+            return List.copyOf(service.listForUser(token));
+        } catch (InvalidTokenException | SessionExpiredException e) {
+            // The token died after sign-in: revoked (InvalidTokenException) or expired (SessionExpiredException).
+            // A dead token holds no memberships, so it gets no company capabilities; AuthBootstrap signs the
+            // visitor out on their next navigation. Any other failure is not a dead token and propagates.
+            return List.of();
+        }
+    }
+
+    // The token is a credential, so it stays out of toString.
+    private record MembershipsRead(String token, List<UserCompanyDTO> memberships) {
+        @Override
+        public String toString() {
+            return "MembershipsRead[memberships=" + memberships.size() + "]";
+        }
+    }
+
     private static Set<Capability> capabilitiesFromPermissions(List<Permission> permissions) {
         Set<Capability> caps = EnumSet.noneOf(Capability.class);
         if (permissions == null) {
@@ -187,6 +239,13 @@ public final class Capabilities {
             }
         }
         return caps;
+    }
+
+    private static Set<Capability> workspaceCapabilities() {
+        Set<Capability> workspace = EnumSet.of(Capability.OWNER_WORKSPACE);
+        workspace.addAll(OWNER_BUNDLE);
+        workspace.addAll(FOUNDER_EXTRA);
+        return workspace;
     }
 
     private static Set<Capability> unmodifiable(Set<Capability> src) {

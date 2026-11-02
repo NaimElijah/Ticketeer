@@ -10,6 +10,7 @@ import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.account.MyAccountView;
@@ -33,9 +34,11 @@ import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
 import com.vaadin.flow.server.VaadinSession;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Buyer-facing shell — composes {@link LkTopBar} with the tickethub
@@ -60,22 +63,35 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
             CheckoutView.class, "My Tickets",
             OrderConfirmationView.class, "My Tickets");
 
+    private static final long MILLIS_PER_SECOND = 1000L;
+
     private final CartBadgePresenter cartBadgePresenter;
     private LkTopBar topBar;
     private final SignOutFlow signOutFlow;
     private final NotificationBellPresenter bellPresenter;
+    private final Clock clock;
 
+    /**
+     * @param clock the application clock (ADR-008), for the cart badge's cache age and the seconds its
+     *              countdown has left
+     */
     public MainLayout(CartBadgePresenter cartBadgePresenter, SignOutFlow signOutFlow,
-            NotificationBellPresenter bellPresenter) {
+            NotificationBellPresenter bellPresenter, Clock clock) {
         this.cartBadgePresenter = cartBadgePresenter;
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
+        this.clock = clock;
         rebuildTopBar(null);
     }
 
     @Override
     public void afterNavigation(AfterNavigationEvent event) {
         rebuildTopBar(findActiveLabel(event));
+    }
+
+    // The cached hold end is on the server's clock; the browser gets only the seconds left (ADR-008).
+    private static Long secondsLeft(Long deadlineMs, long nowMs) {
+        return deadlineMs == null ? null : Math.max(0, (deadlineMs - nowMs) / MILLIS_PER_SECOND);
     }
 
     private void rebuildTopBar(String activeLabel) {
@@ -87,19 +103,16 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
 
         int cartSize = 0;
         Long cartDeadlineMs = null;
+        long now = clock.millis();
 
         VaadinSession session = VaadinSession.getCurrent();
         if (session != null) {
             session.lock();
             try {
-                long now = System.currentTimeMillis();
-                Long lastFetchMs = (Long) session.getAttribute("cart.fetch.time");
-                Integer cachedSize = (Integer) session.getAttribute("cart.size");
-                Long cachedDeadlineMs = (Long) session.getAttribute("cart.deadline");
-
-                if (lastFetchMs != null && (now - lastFetchMs) < 10_000 && cachedSize != null) {
-                    cartSize = cachedSize;
-                    cartDeadlineMs = cachedDeadlineMs;
+                Optional<CartBadgeCache.Badge> cached = CartBadgeCache.fresh(now);
+                if (cached.isPresent()) {
+                    cartSize = cached.get().size();
+                    cartDeadlineMs = cached.get().deadlineMs();
                 } else {
                     // The presenter owns the service call + error handling; the shell only
                     // reads the typed Outcome and keeps caching the result in the Vaadin session.
@@ -107,15 +120,13 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
                         case CartBadgePresenter.Outcome.Cart c -> {
                             cartSize = c.count();
                             if (c.remainingSeconds() > 0) {
-                                cartDeadlineMs = now + c.remainingSeconds() * 1000L;
+                                cartDeadlineMs = now + c.remainingSeconds() * MILLIS_PER_SECOND;
                             }
                         }
                         case CartBadgePresenter.Outcome.Empty ignored -> { /* no cart — leave 0 */ }
                         case CartBadgePresenter.Outcome.Failure ignored -> { /* don't fail topbar render */ }
                     }
-                    session.setAttribute("cart.size", cartSize);
-                    session.setAttribute("cart.deadline", cartDeadlineMs);
-                    session.setAttribute("cart.fetch.time", now);
+                    CartBadgeCache.store(new CartBadgeCache.Badge(cartSize, cartDeadlineMs), now);
                 }
             } finally {
                 session.unlock();
@@ -133,7 +144,7 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
         LkTopBar bar = new LkTopBar(LkTopBar.Variant.MAIN)
                 .brand("TicketHub", LandingView.class)
                 .nav(nav, activeLabel)
-                .cart(CartView.class, cartSize, cartDeadlineMs)
+                .cart(CartView.class, cartSize, secondsLeft(cartDeadlineMs, now))
                 .bell(new NotificationBellComponent(bellPresenter::markRead, bellPresenter::relativeTime));
 
         if (signedIn) {

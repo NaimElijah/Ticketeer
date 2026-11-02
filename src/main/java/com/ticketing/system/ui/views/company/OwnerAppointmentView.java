@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.company;
 
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
@@ -96,7 +97,7 @@ public class OwnerAppointmentView extends LkPage {
             case MyCompaniesPresenter.AppointOutcome.UserNotFound u ->
                 Toasts.failure("User \"" + u.username() + "\" was not found.");
             case MyCompaniesPresenter.AppointOutcome.Failure fail ->
-                Toasts.failure("Could not complete the appointment — please try again.");
+                Toasts.failure(Lk.withReason("Could not complete the appointment", fail.reason()));
         }
     }
 }

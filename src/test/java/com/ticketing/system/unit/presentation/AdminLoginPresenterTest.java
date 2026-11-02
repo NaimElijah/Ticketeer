@@ -14,10 +14,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
@@ -27,6 +29,7 @@ import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.session.NotificationSession;
+import com.ticketing.system.ui.session.OrderSession;
 import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.vaadin.flow.server.VaadinSession;
 
@@ -76,10 +79,23 @@ class AdminLoginPresenterTest {
         assertEquals(List.of(), NotificationSession.getAll(), "the member's alerts must leave the bell");
         assertTrue(AuthSession.isAdmin());
         assertEquals(ADMIN_AUTH.token(), AuthSession.token());
-        // The bell is emptied (its two attributes set to null) before the admin's token is stored.
+        // The bell is emptied (the inbox attribute set to null) before the admin's token is stored. The
+        // bell itself lives on its UI, not on the session (UI-B8), so it is not a session write.
         InOrder order = inOrder(session);
-        order.verify(session, times(2)).setAttribute(anyString(), isNull());
+        order.verify(session, times(1)).setAttribute(anyString(), isNull());
         order.verify(session).setAttribute(anyString(), eq(ADMIN_AUTH.token()));
+    }
+
+    // The kept order confirmation belongs to one visitor and one visit (#187): a sign-in starts another.
+    @Test
+    void GivenAKeptCheckoutConfirmation_WhenAnAdminSignsIn_ThenItIsDropped() {
+        Instant keptAt = Instant.parse("2027-07-15T17:00:00Z");
+        OrderSession.setResult(new CheckoutResultDTO(75.0, 42, 9001,
+            List.of(new CheckoutResultDTO.IssuedTicketDTO(1, "TIX-0001-A1"))), keptAt);
+
+        presenter.signIn(ADMIN_AUTH);
+
+        assertTrue(OrderSession.result(keptAt).isEmpty(), "the previous visit's order confirmation is dropped");
     }
 
     @Test

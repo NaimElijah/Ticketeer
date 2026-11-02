@@ -22,6 +22,9 @@ import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.support.EventCategoryLabels;
+import com.ticketing.system.ui.security.Capability;
+import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -42,34 +45,50 @@ import java.util.Map;
 @Route(value = "my-account", layout = MainLayout.class)
 @PageTitle("My Account · TicketHub")
 @PermitAll
+@RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyAccountView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
 
+    private final MyAccountPresenter presenter;
     private final RefundPresenter refundPresenter;
     private final SessionIdentity sessionIdentity;
     private final DisplayTime displayTime;
+    /**
+     * Holds the page's content so it can be rebuilt in place. {@code display: contents} keeps its children
+     * laid out as the page's own, under the page's spacing.
+     */
+    private final Div content = new Div();
 
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
                          SessionIdentity sessionIdentity, DisplayTime displayTime) {
         this.displayTime = displayTime;   // the rows below are rendered during construction
+        this.presenter = presenter;
         this.refundPresenter = refundPresenter;
         this.sessionIdentity = sessionIdentity;
 
+        content.getStyle().set("display", "contents");
+        add(content);
+        render();
+    }
+
+    /** Builds the page from the member's history, replacing whatever it showed. */
+    private void render() {
+        content.removeAll();
         Div hero = buildHero();
-        add(hero);
+        content.add(hero);
         switch (presenter.loadHistory()) {
             case MyAccountPresenter.Outcome.Success success -> {
                 PurchaseHistoryDTO history = success.history();
                 hero.add(buildStats(history));
-                add(Lk.h2("My Orders"));
-                add(buildOrdersCard(history));
-                add(Lk.h2("My Tickets"));
-                add(buildTicketsCard(history));
+                content.add(Lk.h2("My Orders"));
+                content.add(buildOrdersCard(history));
+                content.add(Lk.h2("My Tickets"));
+                content.add(buildTicketsCard(history));
             }
             // No counts and no empty cards: "0 orders" would tell the member they bought nothing (#192).
-            case MyAccountPresenter.Outcome.Failure failure -> add(new LkBanner(LkBanner.Tone.error,
+            case MyAccountPresenter.Outcome.Failure failure -> content.add(new LkBanner(LkBanner.Tone.error,
                     new LkIcon("warning", 16),
                     Lk.withReason("Could not load your orders and tickets", failure.reason())));
         }
@@ -188,9 +207,11 @@ public class MyAccountView extends LkPage {
     private void handleRefund(int orderId, String reason) {
         switch (refundPresenter.requestRefund(sessionIdentity.memberToken(), orderId, reason)) {
             case RefundPresenter.Outcome.Success s -> {
+                // Rebuild in place, then tell: a browser reload would drop the toast and its reference
+                // (#187, UI-A21).
+                render();
                 Toasts.success("Refund requested — reference " + s.reference()
                     + ". Processed in 3–5 business days.");
-                UI.getCurrent().getPage().reload();   // refresh orders + tickets
             }
             case RefundPresenter.Outcome.NotEligible n -> Toasts.warn(n.message());
             case RefundPresenter.Outcome.NotFound n    -> Toasts.failure(n.message());
@@ -244,7 +265,7 @@ public class MyAccountView extends LkPage {
     private static BzTicketDialog.TicketInfo toTicketInfo(TicketRecordDTO t) {
         return new BzTicketDialog.TicketInfo(
             orElse(t.eventName(), "Event #" + t.eventId()),
-            orElse(t.category(), "—"),
+            categoryLabel(t.category()),
             t.eventStartsAt() == null ? "—" : t.eventStartsAt().format(DATETIME_FMT),
             orElse(t.venue(), "—"),
             orElse(t.zoneName(), "Zone #" + t.zoneId()),
@@ -267,6 +288,11 @@ public class MyAccountView extends LkPage {
 
     private static String money(double amount) {
         return String.format("$%,.2f", amount);
+    }
+
+    // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).
+    private static String categoryLabel(String categoryName) {
+        return categoryName == null || categoryName.isBlank() ? "—" : EventCategoryLabels.labelOf(categoryName);
     }
 
     private static String orElse(String value, String fallback) {

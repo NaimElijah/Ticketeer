@@ -60,7 +60,7 @@ course provides, until a Stripe test-mode adapter replaces it ([#98](https://git
   zones with a capacity, a venue map that shows free and taken places live, and purchase policies.
 - **Browse and search as a guest or a member.** Search by name, artist, category or keyword, and
   filter by price, date, location and rating.
-- **Hold, then buy.** Reserved tickets are locked for 10 minutes. Checkout charges, issues and
+- **Hold, then buy.** Reserved tickets are locked for 10 minutes by default (`TICKET_RESERVATION_DURATION`). Checkout charges, issues and
   confirms everything or nothing; a failure releases the tickets and refunds the charge.
 - **Keep your cart across logins.** A member who logs back in before the hold expires gets the
   cart back with its remaining time.

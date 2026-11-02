@@ -87,4 +87,31 @@ class CompanyRegistrationPresenterTest {
                 assertInstanceOf(CompanyRegistrationPresenter.Outcome.InvalidInput.class, outcome);
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, invalid.reason());
     }
+
+    // ---- UI-B18: only a taken name reads as "name taken" (#187) ----
+
+    @Test
+    void GivenAnIllegalStateUnrelatedToTheName_WhenRegister_ThenItDoesNotReadAsNameTaken() {
+        String reason = "Cannot register a company while your account is suspended";
+        when(companyManagementService.registerCompany(eq(TOKEN), any()))
+                .thenThrow(new IllegalStateException(reason));
+
+        CompanyRegistrationPresenter.Outcome outcome = presenter.register(NAME, DESCRIPTION);
+
+        CompanyRegistrationPresenter.Outcome.Failure failure = assertInstanceOf(
+                CompanyRegistrationPresenter.Outcome.Failure.class, outcome,
+                "an unrelated refusal must not read as a taken name, but was: " + outcome);
+        assertEquals(reason, failure.reason());
+    }
+
+    // CompanyManagementService.registerCompany's own words for a taken name (CompanyManagementServiceTest).
+    @Test
+    void GivenTheServiceRefusesATakenName_WhenRegister_ThenItReadsAsNameTaken() {
+        when(companyManagementService.registerCompany(eq(TOKEN), any()))
+                .thenThrow(new IllegalStateException(CompanyManagementService.COMPANY_NAME_TAKEN_MESSAGE));
+
+        CompanyRegistrationPresenter.Outcome outcome = presenter.register(NAME, DESCRIPTION);
+
+        assertInstanceOf(CompanyRegistrationPresenter.Outcome.NameTaken.class, outcome);
+    }
 }
