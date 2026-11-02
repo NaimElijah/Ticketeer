@@ -249,6 +249,81 @@ class AuthBootstrapTest {
         verify(navigation).forwardTo(AdminLoginView.class);
     }
 
+    // ---- UI-B7: every workspace capability gets the workspace fallback (#187) ----
+    // A company member who lacks a workspace capability lands on the workspace home with a toast, not
+    // on "My companies". The workspace capabilities are derived from Capabilities itself: what a founder
+    // holds beyond a member of no company.
+
+    @Test
+    void GivenAManagerWithoutPermissions_WhenNavigatingToAnyWorkspaceRoute_ThenForwardedToTheOwnerDashboard() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+        Set<Capability> workspaceCapabilities = capabilitiesAFounderHoldsBeyondAMemberOfNoCompany();
+        bridgeMemberships(List.of(membership(MembershipRole.MANAGER, List.of())));
+        workspaceCapabilities.removeAll(Capabilities.forCurrentUser());
+        assertFalse(workspaceCapabilities.isEmpty(), "precondition: a manager without permissions lacks them");
+
+        Map<Capability, String> wrongFallbacks = new EnumMap<>(Capability.class);
+        for (Capability capability : workspaceCapabilities) {
+            Class<?> route = WORKSPACE_ROUTES.get(capability);
+            assertNotNull(route, "add a fixture route requiring " + capability + " to WORKSPACE_ROUTES");
+            BeforeEnterEvent navigation = navigationTo(route);
+
+            guard.beforeEnter(navigation);
+
+            Class<?> forwardedTo = forwardedTo(navigation);
+            if (forwardedTo != OwnerDashboardView.class) {
+                wrongFallbacks.put(capability, forwardedTo == null ? "admitted" : forwardedTo.getSimpleName());
+            }
+        }
+        assertEquals(Map.of(), wrongFallbacks,
+                "each workspace capability must forward a member who lacks it to OwnerDashboardView");
+    }
+
+    private Set<Capability> capabilitiesAFounderHoldsBeyondAMemberOfNoCompany() {
+        bridgeMemberships(List.of());
+        Set<Capability> memberOfNoCompany = Capabilities.forCurrentUser();
+        bridgeMemberships(List.of(membership(MembershipRole.FOUNDER, List.of())));
+        Set<Capability> founder = EnumSet.copyOf(Capabilities.forCurrentUser());
+        founder.removeAll(memberOfNoCompany);
+        return founder;
+    }
+
+    private static Class<?> forwardedTo(BeforeEnterEvent navigation) {
+        return mockingDetails(navigation).getInvocations().stream()
+                .filter(invocation -> invocation.getMethod().getName().equals("forwardTo"))
+                .map(invocation -> invocation.getArgument(0))
+                .filter(Class.class::isInstance)
+                .map(argument -> (Class<?>) argument)
+                .findFirst()
+                .orElse(null);
+    }
+
+    // One route per workspace capability, as a view would declare it.
+    @RequireCapability(Capability.VIEW_COMPANY_EVENTS) private static final class ViewCompanyEventsRoute { }
+    @RequireCapability(Capability.EDIT_COMPANY_EVENTS) private static final class EditCompanyEventsRoute { }
+    @RequireCapability(Capability.VIEW_COMPANY_SALES) private static final class ViewCompanySalesRoute { }
+    @RequireCapability(Capability.EDIT_PURCHASE_POLICIES) private static final class EditPurchasePoliciesRoute { }
+    @RequireCapability(Capability.RESPOND_INQUIRIES) private static final class RespondInquiriesRoute { }
+    @RequireCapability(Capability.MANAGE_VENUE_MAPS) private static final class ManageVenueMapsRoute { }
+    @RequireCapability(Capability.CANCEL_EVENT) private static final class CancelEventRoute { }
+    @RequireCapability(Capability.APPOINT_MANAGER) private static final class AppointManagerRoute { }
+    @RequireCapability(Capability.APPOINT_CO_OWNER) private static final class AppointCoOwnerRoute { }
+    @RequireCapability(Capability.EDIT_MANAGER_PERMISSIONS) private static final class EditManagerPermissionsRoute { }
+    @RequireCapability(Capability.REVOKE_MANAGER) private static final class RevokeManagerRoute { }
+    @RequireCapability(Capability.VIEW_COMPANY_ORG_TREE) private static final class ViewCompanyOrgTreeRoute { }
+    @RequireCapability(Capability.DISSOLVE_COMPANY) private static final class DissolveCompanyRoute { }
+    @RequireCapability(Capability.TRANSFER_FOUNDERSHIP) private static final class TransferFoundershipRoute { }
+    @RequireCapability(Capability.OWNER_WORKSPACE) private static final class OwnerWorkspaceRoute { }
+
+    private static final Map<Capability, Class<?>> WORKSPACE_ROUTES = Stream.of(
+            ViewCompanyEventsRoute.class, EditCompanyEventsRoute.class, ViewCompanySalesRoute.class,
+            EditPurchasePoliciesRoute.class, RespondInquiriesRoute.class, ManageVenueMapsRoute.class,
+            CancelEventRoute.class, AppointManagerRoute.class, AppointCoOwnerRoute.class,
+            EditManagerPermissionsRoute.class, RevokeManagerRoute.class, ViewCompanyOrgTreeRoute.class,
+            DissolveCompanyRoute.class, TransferFoundershipRoute.class, OwnerWorkspaceRoute.class)
+        .collect(Collectors.toMap(route -> route.getAnnotation(RequireCapability.class).value(), route -> route));
+
     // ---- fixture shared by the UI-B2, UI-B4 and UI-B7 blocks: the member's companies, read through ----
     // ---- CompanyManagementBridge, and the current request                                          ----
 

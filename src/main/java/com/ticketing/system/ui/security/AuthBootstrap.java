@@ -71,23 +71,11 @@ public class AuthBootstrap implements VaadinServiceInitListener {
         Capability.ADMIN_SETTINGS
     );
 
-    /** Capabilities that imply company membership ("owner workspace"). */
-    private static final Set<Capability> WORKSPACE_CAPS = EnumSet.of(
-        Capability.OWNER_WORKSPACE,
-        Capability.VIEW_COMPANY_EVENTS,
-        Capability.EDIT_COMPANY_EVENTS,
-        Capability.VIEW_COMPANY_SALES,
-        Capability.EDIT_PURCHASE_POLICIES,
-        Capability.RESPOND_INQUIRIES,
-        Capability.MANAGE_VENUE_MAPS,
-        Capability.APPOINT_MANAGER,
-        Capability.APPOINT_CO_OWNER,
-        Capability.EDIT_MANAGER_PERMISSIONS,
-        Capability.REVOKE_MANAGER,
-        Capability.CANCEL_EVENT,
-        Capability.DISSOLVE_COMPANY,
-        Capability.TRANSFER_FOUNDERSHIP
-    );
+    /**
+     * Capabilities that imply company membership ("owner workspace"), taken from {@link Capabilities}'
+     * own bundles so a capability added there gets the workspace fallback here without a second list.
+     */
+    private static final Set<Capability> WORKSPACE_CAPS = Capabilities.WORKSPACE_CAPABILITIES;
 
     /** Session attribute holding a permission-denied message to flash after the redirect lands. */
     private static final String PENDING_DENIAL_KEY = "authBootstrap.pendingDenialToast";

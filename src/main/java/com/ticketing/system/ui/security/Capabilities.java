@@ -65,6 +65,13 @@ public final class Capabilities {
             Capability.DISSOLVE_COMPANY,
             Capability.TRANSFER_FOUNDERSHIP));
 
+    /**
+     * Every capability that comes with company membership: the workspace itself and all a founder holds
+     * in it, which covers what any co-owner or manager can hold. {@link AuthBootstrap} reads it to pick
+     * the workspace fallback, so a capability added to a bundle above is a workspace capability there too.
+     */
+    static final Set<Capability> WORKSPACE_CAPABILITIES = unmodifiable(workspaceCapabilities());
+
     /** Platform-admin capability bundle. */
     private static final Set<Capability> ADMIN_BUNDLE = unmodifiable(EnumSet.of(
             Capability.ADMIN_WORKSPACE,
@@ -187,6 +194,13 @@ public final class Capabilities {
             }
         }
         return caps;
+    }
+
+    private static Set<Capability> workspaceCapabilities() {
+        Set<Capability> workspace = EnumSet.of(Capability.OWNER_WORKSPACE);
+        workspace.addAll(OWNER_BUNDLE);
+        workspace.addAll(FOUNDER_EXTRA);
+        return workspace;
     }
 
     private static Set<Capability> unmodifiable(Set<Capability> src) {
