@@ -15,6 +15,7 @@ import com.ticketing.system.ui.layouts.WorkspaceLayout;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.ContextOutcome;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.Group;
+import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.KeptRule;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.LoadOutcome;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.Node;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.Op;
@@ -356,6 +357,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
             case "click" -> {
                 if (n instanceof Rule r) openRuleDialog(r);
                 else if (n instanceof Group g) openGroupDialog(g);
+                else if (n instanceof KeptRule) Toasts.warn("The editor can't change this rule; saving keeps it as it is.");
             }
             case "addRule" -> {
                 presenter.addRule(root, nodeId);
