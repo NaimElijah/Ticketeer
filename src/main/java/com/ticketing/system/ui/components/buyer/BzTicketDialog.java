@@ -16,6 +16,11 @@ import com.vaadin.flow.component.html.Span;
  */
 public final class BzTicketDialog {
 
+    /**
+     * One ticket's display text, every field already formatted for the stub.
+     *
+     * @param orderReference the order as the stub shows it after "Order ", "#" included (e.g. {@code "#42"})
+     */
     public record TicketInfo(
         String event,
         String category,
@@ -25,7 +30,7 @@ public final class BzTicketDialog {
         String seat,
         String price,
         String barcode,
-        String orderId
+        String orderReference
     ) { }
 
     private BzTicketDialog() { }
@@ -150,7 +155,7 @@ public final class BzTicketDialog {
             .set("letter-spacing", "0.18em").set("color", "#0f172a")
             .set("display", "block").set("margin-top", "12px");
 
-        Span order = new Span("Order #" + t.orderId);
+        Span order = new Span("Order " + t.orderReference);
         order.getStyle()
             .set("font-family", "var(--mono)")
             .set("font-size", "0.78rem").set("color", "var(--muted)")
