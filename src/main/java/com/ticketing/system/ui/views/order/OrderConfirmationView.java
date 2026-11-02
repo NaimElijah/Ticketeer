@@ -36,10 +36,9 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
 
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
-        // Read-once: grab the result handed over by CheckoutView, then clear it so a
-        // refresh / re-navigation reroutes to Browse instead of re-showing the receipt.
+        // The result stays for the session, so a guest, who has no account page, still sees their
+        // tickets after a refresh (#187, UI-A7). OrderSession says what drops it.
         result = OrderSession.result();
-        OrderSession.clear();
         if (result == null) {
             event.rerouteTo(BrowseEventsView.class);
             return;
@@ -82,7 +81,7 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
             : "—";
 
         Span sub = new Span(receiptDisplay + " · Transaction " + transactionDisplay
-            + " · " + totalDisplay + " paid · emailed to you");
+            + " · " + totalDisplay + " paid");
         sub.getStyle().set("color", "rgba(255,255,255,0.9)").set("font-size", "14.5px");
         text.add(title, sub);
 

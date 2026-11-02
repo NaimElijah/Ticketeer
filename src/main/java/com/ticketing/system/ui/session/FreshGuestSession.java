@@ -39,8 +39,8 @@ public class FreshGuestSession {
 
     /**
      * Sends the member's shown-but-unread alerts back to pending, so their next login shows them
-     * ({@link UnreadAlertsSendBack}), then clears the member's auth, current company, notification inbox
-     * and recent searches, and pins a new guest session.
+     * ({@link UnreadAlertsSendBack}), then clears the member's auth, current company, notification inbox,
+     * recent searches and kept order confirmation ({@link OrderSession}), and pins a new guest session.
      *
      * <p>Never throws: if no guest session can be started, the stale id is cleared instead, so the dead
      * member session is never left pinned and the view that triggered this still renders.
@@ -53,6 +53,7 @@ public class FreshGuestSession {
         CurrentCompanies.clearCurrentCompany();
         NotificationSession.clear();
         RecentSearches.clear();
+        OrderSession.clear();
         pinNewGuestSession();
     }
 

@@ -367,7 +367,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             guestEmail.setPlaceholder("you@example.com");
             guestEmail.setRequired(true);
             guestEmail.setWidthFull();
-            guestEmail.setHelperText("We'll send your ticket confirmation here.");
+            // The platform sends no email yet (#102), so the field promises none.
+            guestEmail.setHelperText("Kept with your order record; no email is sent.");
 
             guestAge.setPlaceholder("e.g. 25");
             guestAge.setMin(1);
@@ -448,6 +449,9 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         if (!paymentInProgress.compareAndSet(false, true)) {
             return;
         }
+        // A kept confirmation is the last order's: drop it before this one, so a failed attempt
+        // leaves no older order to reopen at order-confirmed.
+        OrderSession.clear();
         payButton.getElement().setEnabled(false);
 
         try {

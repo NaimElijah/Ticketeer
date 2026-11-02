@@ -23,6 +23,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.testutil.LogCapture;
@@ -76,6 +77,19 @@ class FreshGuestSessionTest {
         assertFalse(AuthSession.isSignedIn(), "the visitor is no longer signed in");
         assertNull(CurrentCompanies.currentCompanyId(), "the member's current company is dropped");
         assertEquals(List.of(), NotificationSession.getAll(), "the member's notification inbox is dropped");
+    }
+
+    // UI-A7 (#187): the confirmation is kept for the session, so the next visitor must not inherit it.
+    @Test
+    void GivenAKeptCheckoutConfirmation_WhenRestored_ThenItIsDropped() {
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+        OrderSession.setResult(new CheckoutResultDTO(75.0, 42, 9001,
+                List.of(new CheckoutResultDTO.IssuedTicketDTO(1, "TIX-0001-A1"))));
+
+        freshGuestSession.restore();
+
+        assertNull(OrderSession.result(), "the signed-out visitor's order confirmation is dropped");
     }
 
     @Test
