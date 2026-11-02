@@ -190,10 +190,14 @@ public class AdminComplaintQueueView extends LkPage {
         }
     }
 
-    /** A row click: the reader opens the thread, so it is shown and marked read. */
+    /**
+     * A row click: the reader opens the thread, so it is shown and marked read, and focus moves to its
+     * heading, so the swapped detail is announced (#188).
+     */
     private void openById(String conversationId) {
         selectById(conversationId);
         markOpened(conversationId);
+        detailCard.focusTitle();
     }
 
     // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the

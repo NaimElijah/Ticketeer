@@ -8,13 +8,26 @@ import java.util.List;
  * Message thread with bubble layout. Each {@link Message#me} bubble
  * floats right (primary blue), counterparty bubbles float left (slate).
  * Ports {@code .md-thread / .md-msg / .md-msg-bubble} from the kit.
+ *
+ * <p>The thread is a named log (#188, WCAG 1.3.1, 2.1.1, 4.1.2): a message appended later is read
+ * in order, and the scrolling thread is a Tab stop, so a keyboard user can scroll it.
  */
 public class MdThread extends Div {
+
+    private static final String ROLE = "role";
+    private static final String ROLE_LOG = "log";
+    private static final String TABINDEX = "tabindex";
+    private static final String TAB_STOP = "0";
+    private static final String ARIA_LABEL = "aria-label";
+    private static final String NAME = "Messages";
 
     public record Message(String from, String time, boolean me, String text) { }
 
     public MdThread(List<Message> msgs) {
         addClassName("md-thread");
+        getElement().setAttribute(ROLE, ROLE_LOG);
+        getElement().setAttribute(TABINDEX, TAB_STOP);
+        getElement().setAttribute(ARIA_LABEL, NAME);
         for (Message m : msgs) append(m);
     }
 

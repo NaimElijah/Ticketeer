@@ -17,6 +17,10 @@ import com.vaadin.flow.component.html.Section;
  */
 public class LkCard extends Section {
 
+    private static final String TABINDEX = "tabindex";
+    // Focusable from a script, but not a Tab stop.
+    private static final String SCRIPT_FOCUS_ONLY = "-1";
+
     private final Header header = new Header();
     private final Div titleWrap = new Div();
     private final H2 titleText = new H2();
@@ -50,6 +54,19 @@ public class LkCard extends Section {
         titleText.setVisible(!text.isEmpty());
         ensureHeader();
         return this;
+    }
+
+    /**
+     * Moves focus to the card's title, so a screen reader announces it: for a card whose content was
+     * just swapped for another item's, such as an inbox's open conversation (#188, WCAG 2.4.3). The
+     * title becomes focusable from a script but is no Tab stop. Does nothing while the card has no title.
+     */
+    public void focusTitle() {
+        if (!titleText.isVisible()) {
+            return;
+        }
+        titleText.getElement().setAttribute(TABINDEX, SCRIPT_FOCUS_ONLY);
+        titleText.getElement().callJsFunction("focus");
     }
 
     public LkCard subtitle(String s) {

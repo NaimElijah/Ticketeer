@@ -149,11 +149,13 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             MdConvRow row = new MdConvRow(iconFor(c.type()), c.subject(), whoFor(c),
                 displayTime.ageShort(c.lastMessageAt()), presenter.badge(c, opened).orElse(null));
             if (c.conversationId().equals(selectedId)) row.active();
-            row.onSelect(() -> openById(c.conversationId()));
+            row.onSelect(() -> chooseById(c.conversationId()));
             if (isLocked(c)) {
-                // Admin closed this outreach: still selectable/readable, just dimmed as a "closed" cue.
-                // renderDetail() hides the reply bar for terminal threads, so the member can read the
-                // history but can't reply until the admin starts a new conversation.
+                // Admin closed this outreach: still selectable/readable, dimmed and badged "Closed", since
+                // dimming alone says nothing to a screen reader (#188). renderDetail() hides the reply bar
+                // for terminal threads, so the member can read the history but can't reply until the admin
+                // starts a new conversation.
+                row.closed();
                 row.getStyle().set("opacity", "0.7");
             }
             convRows.add(row);
@@ -211,6 +213,13 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     private void openById(String conversationId) {
         selectById(conversationId);
         markOpened(conversationId);
+    }
+
+    // A row the reader chose: focus moves to the thread's heading, so the swapped detail is announced (#188).
+    // Not for a deep link, where the shell focuses the page's h1 after the navigation.
+    private void chooseById(String conversationId) {
+        openById(conversationId);
+        detailCard.focusTitle();
     }
 
     // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the
