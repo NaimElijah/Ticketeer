@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkChip;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -46,7 +47,10 @@ import java.util.List;
 @RequireCapability(Capability.MEMBER_ACCOUNT)
 public class NewInquiryView extends LkPage implements BeforeEnterObserver {
 
+    private static final String CHOOSE_COMPANY = "Please choose a production company.";
+
     private final NewInquiryPresenter presenter;
+    private final LkFormErrors errors = new LkFormErrors();
 
     private final TextField companySearch = new TextField("Production company");
     private final Div companyResults = new Div();
@@ -83,6 +87,10 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
         LkCard card = new LkCard("New Inquiry").pad(20);
 
         companySearch.setPlaceholder("Search production companies…");
+        companySearch.setRequiredIndicatorVisible(true);
+        // The box holds a search, not the answer: the chosen company is held apart and the box is cleared
+        // once one is picked, so its own required check would flag a valid form. This view checks it.
+        companySearch.setManualValidation(true);
         companySearch.setWidthFull();
         companySearch.setClearButtonVisible(true);
         companySearch.setValueChangeMode(ValueChangeMode.LAZY);
@@ -157,6 +165,7 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
         this.selectedCompanyId = id;
         this.selectedCompanyName = name;
         companySearch.clear();
+        companySearch.setInvalid(false);
         companyResults.removeAll();
         renderSelected();
     }
@@ -169,12 +178,20 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
     }
 
     private void submit() {
+        errors.clear();
         if (selectedCompanyId == null) {
-            Toasts.failure("Please choose a production company.");
+            errors.reject(companySearch, CHOOSE_COMPANY);
+            refuse(CHOOSE_COMPANY);
             return;
         }
-        if (subject.isEmpty() || details.isEmpty()) {
-            Toasts.failure("Please fill in a title and description.");
+        if (subject.isEmpty()) {
+            errors.reject(subject, "Enter a title.");
+        }
+        if (details.isEmpty()) {
+            errors.reject(details, "Enter a description.");
+        }
+        if (!errors.isEmpty()) {
+            refuse("Please fill in a title and description.");
             return;
         }
         switch (presenter.submit(AuthSession.token(), selectedCompanyId,
@@ -189,5 +206,11 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
             case NewInquiryPresenter.ActionOutcome.Failure fail ->
                 Toasts.failure(Lk.withReason("Could not submit the inquiry", fail.reason()));
         }
+    }
+
+    // The toast stays, but the refused fields now carry the message too, and the first takes focus (#188).
+    private void refuse(String toast) {
+        Toasts.failure(toast);
+        errors.focusFirst();
     }
 }

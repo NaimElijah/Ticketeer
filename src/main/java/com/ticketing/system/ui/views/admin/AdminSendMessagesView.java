@@ -9,6 +9,7 @@ import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.components.kit.LkChip;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkGrid;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -52,8 +53,10 @@ import java.util.Map;
 public class AdminSendMessagesView extends LkPage {
 
     private static final DateTimeFormatter SENT_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
+    private static final String NO_RECIPIENT = "Add at least one recipient, or pick all members / all producers.";
 
     private final AdminSendMessagesPresenter presenter;
+    private final LkFormErrors errors = new LkFormErrors();
     private final DisplayTime displayTime;
 
     private final TextField subject = new TextField("Subject");
@@ -89,9 +92,11 @@ public class AdminSendMessagesView extends LkPage {
         LkCard card = new LkCard("New Message").pad(20);
 
         subject.setPlaceholder("Short, clear headline");
+        subject.setRequired(true);
         subject.setWidthFull();
         LkTextLimit.apply(subject);
         body.setPlaceholder("Body of the message…");
+        body.setRequired(true);
         body.setHeight("160px");
         body.setWidthFull();
         LkTextLimit.apply(body);
@@ -184,13 +189,21 @@ public class AdminSendMessagesView extends LkPage {
     }
 
     private void send() {
-        if (subject.isEmpty() || body.isEmpty()) {
-            Toasts.failure("Subject and body are required.");
+        errors.clear();
+        if (subject.isEmpty()) {
+            errors.reject(subject, "Enter a subject.");
+        }
+        if (body.isEmpty()) {
+            errors.reject(body, "Write the message.");
+        }
+        if (!errors.isEmpty()) {
+            refuse("Subject and body are required.");
             return;
         }
         boolean bulk = allMembers.isChecked() || allProducers.isChecked();
         if (!bulk && recipients.isEmpty()) {
-            Toasts.failure("Add at least one recipient, or pick all members / all producers.");
+            errors.reject(recipientSearch, NO_RECIPIENT);
+            refuse(NO_RECIPIENT);
             return;
         }
         List<Integer> ids = new ArrayList<>(recipients.keySet());
@@ -208,9 +221,18 @@ public class AdminSendMessagesView extends LkPage {
         }
     }
 
+    // The toast stays, but the refused fields now carry the message too, and the first takes focus (#188).
+    private void refuse(String toast) {
+        Toasts.failure(toast);
+        errors.focusFirst();
+    }
+
     private void clearComposer() {
         subject.clear();
         body.clear();
+        // A required field's own check marks it when code empties it; after a send there is nothing to correct.
+        subject.setInvalid(false);
+        body.setInvalid(false);
         recipientSearch.clear();
         searchResults.removeAll();
         recipients.clear();
