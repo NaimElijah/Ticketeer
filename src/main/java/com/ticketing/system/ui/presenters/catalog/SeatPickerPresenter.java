@@ -75,8 +75,9 @@ public class SeatPickerPresenter {
             }
             return new ReserveOutcome.Success(selection.getSeatNumbers().size());
         } catch (DomainException e) {
-            // Domain rejections (sold out, not on sale, market closed, …) carry buyer-facing messages.
-            log.warn("seated reserve rejected (eventId={}, zoneId={}, seats={}): {}",
+            // Domain rejections (sold out, not on sale, market closed, …) carry buyer-facing messages. A
+            // refusal is not a degraded state, and LoggingAspect already logs it at WARN, so DEBUG here.
+            log.debug("seated reserve rejected (eventId={}, zoneId={}, seats={}): {}",
                     eventId, zoneId, selection.getSeatNumbers(), e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
@@ -95,8 +96,8 @@ public class SeatPickerPresenter {
             }
             return new ReserveOutcome.Success(quantity);
         } catch (DomainException e) {
-            // Domain rejections (sold out, not on sale, market closed, …) carry buyer-facing messages.
-            log.warn("standing reserve rejected (eventId={}, zoneId={}, qty={}): {}",
+            // Domain rejections carry buyer-facing messages; DEBUG for the same reason as reserveSeated.
+            log.debug("standing reserve rejected (eventId={}, zoneId={}, qty={}): {}",
                     eventId, zoneId, quantity, e.getMessage());
             return new ReserveOutcome.Failure(e.getMessage());
         } catch (RuntimeException e) {
