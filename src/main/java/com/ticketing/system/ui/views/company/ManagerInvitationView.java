@@ -33,6 +33,9 @@ import java.util.Map;
 @RequireCapability(Capability.APPOINT_MANAGER)
 public class ManagerInvitationView extends LkPage {
 
+    // Titles the permissions card and names the group of its checkboxes.
+    private static final String PERMISSIONS = "Permissions";
+
         // Map each display label to its domain Permission value (same order as PERMS list).
     private static final Map<String, Permission> PERM_MAP = new LinkedHashMap<>();
     static {
@@ -63,8 +66,8 @@ private final ManagerInvitationPresenter presenter;
         invitee.setWidthFull();
         inviteeCard.add(invitee);
 
-        LkCard permsCard = new LkCard("Permissions").pad(20);
-        LkCol col = new LkCol().gap(4);
+        LkCard permsCard = new LkCard(PERMISSIONS).pad(20);
+        LkCol col = Lk.asGroup(new LkCol().gap(4), PERMISSIONS);
         int i = 0;
         for (Map.Entry<String, Permission> entry : PERM_MAP.entrySet()) {
             LkCheckRow row = new LkCheckRow(entry.getKey(), i < 2);

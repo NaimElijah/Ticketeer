@@ -128,10 +128,15 @@
   .lk-radio.on{color:var(--primary);font-weight:700}
   .lk-radio-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border-strong);flex:none;display:inline-block}
   .lk-radio.on .lk-radio-dot,.lk-radio-dot.on{border-color:var(--primary);background:radial-gradient(circle,var(--primary) 0 5px,#fff 6px)}
-  .lk-checkrow{display:flex;align-items:center;gap:10px;font-size:.9rem;color:#334155;cursor:pointer}
+  .lk-checkrow{position:relative;display:flex;align-items:center;gap:10px;font-size:.9rem;color:#334155;cursor:pointer}
   .lk-checkbox{width:18px;height:18px;border-radius:5px;border:2px solid var(--border-strong);flex:none;display:inline-flex;
     align-items:center;justify-content:center;font-size:.7rem;color:#fff;font-style:normal}
   .lk-checkbox.on{background:var(--primary);border-color:var(--primary)}
+  /* LkCheckRow's native checkbox is hidden, so its drawn box shows the keyboard focus (#188). */
+  .lk-checkrow input:focus-visible + .lk-checkbox{outline:2px solid var(--primary);outline-offset:2px}
+  /* Lk.VISUALLY_HIDDEN: out of sight, still read by screen readers and reached by the keyboard (#188). */
+  .lk-visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
+    clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
   .lk-formgrid{display:grid;grid-template-columns:repeat(var(--cols,2),1fr);gap:16px}
 
   /* ============ CHIPS / BADGES ============ */

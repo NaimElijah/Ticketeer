@@ -13,7 +13,15 @@ import com.vaadin.flow.component.html.Span;
  * ({@code H1, H2, H3, Txt}).
  */
 public final class Lk {
+
+    /**
+     * The theme class that hides an element from sight but leaves it to screen readers
+     * and the keyboard, such as a native control the kit draws itself (#188).
+     */
+    public static final String VISUALLY_HIDDEN = "lk-visually-hidden";
+
     private static final String ROLE = "role";
+    private static final String ARIA_LABEL = "aria-label";
 
     private Lk() { }
 
@@ -73,6 +81,20 @@ public final class Lk {
      */
     public static <T extends Component> T asAlert(T component) {
         component.getElement().setAttribute(ROLE, "alert");
+        return component;
+    }
+
+    /**
+     * Marks {@code component} as a named group, so a screen reader says what a set of
+     * related controls, such as a list of checkboxes, decides when focus enters it (#188).
+     *
+     * @param component the container that holds the controls
+     * @param name      the group's accessible name
+     * @return {@code component}, for chaining
+     */
+    public static <T extends Component> T asGroup(T component, String name) {
+        component.getElement().setAttribute(ROLE, "group");
+        component.getElement().setAttribute(ARIA_LABEL, name);
         return component;
     }
 
