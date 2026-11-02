@@ -26,7 +26,7 @@ which reads were zone-free, so the exemption had no edge to stop the next use.
 - `HexagonalRulesTest`'s ADR-008 clock rule also fails on a call to, or a method reference of,
   `System.currentTimeMillis()` in production code. Self-tests prove it fails on both.
 - The three uses read the `Clock` bean. `MainLayout` and `CheckoutView` take the `Clock` and call
-  `clock.millis()`. `LkTopBar.cart` reads no clock; its caller passes "now", as domain methods take `now`.
+  `clock.millis()`. `LkTopBar.cart` reads no clock; its caller passes the seconds left, computed from the bean.
 - `System.nanoTime()` stays allowed. It measures a duration and means nothing as a wall-clock instant;
   `LoggingAspect` times calls with it. A self-test proves the rule lets it through.
 
@@ -45,8 +45,9 @@ which reads were zone-free, so the exemption had no edge to stop the next use.
   10-second cache expire early or late once. That is harmless for a cart badge. A cache whose age must
   survive clock jumps measures it with `System.nanoTime()`.
 
-The countdown deadlines are still epoch milliseconds that the browser compares with its own `Date.now()`,
-so a skewed browser clock still skews them. That is a separate defect, UI-A13 in the same scan.
+The browser never sees a deadline: the cart, checkout and top-bar countdowns count down the seconds left
+that the server computes from the bean (`LkCountdown`, UI-A13 in the same scan), so the browser's own
+clock plays no part.
 
 ## Alternatives considered
 
