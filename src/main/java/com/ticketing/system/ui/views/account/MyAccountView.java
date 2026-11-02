@@ -22,6 +22,7 @@ import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
@@ -264,7 +265,7 @@ public class MyAccountView extends LkPage {
     private static BzTicketDialog.TicketInfo toTicketInfo(TicketRecordDTO t) {
         return new BzTicketDialog.TicketInfo(
             orElse(t.eventName(), "Event #" + t.eventId()),
-            orElse(t.category(), "—"),
+            categoryLabel(t.category()),
             t.eventStartsAt() == null ? "—" : t.eventStartsAt().format(DATETIME_FMT),
             orElse(t.venue(), "—"),
             orElse(t.zoneName(), "Zone #" + t.zoneId()),
@@ -287,6 +288,11 @@ public class MyAccountView extends LkPage {
 
     private static String money(double amount) {
         return String.format("$%,.2f", amount);
+    }
+
+    // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).
+    private static String categoryLabel(String categoryName) {
+        return categoryName == null || categoryName.isBlank() ? "—" : EventCategoryLabels.labelOf(categoryName);
     }
 
     private static String orElse(String value, String fallback) {

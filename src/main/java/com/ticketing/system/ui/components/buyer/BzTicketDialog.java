@@ -1,5 +1,7 @@
 package com.ticketing.system.ui.components.buyer;
 
+import java.util.Locale;
+
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -179,11 +181,13 @@ public final class BzTicketDialog {
         return block;
     }
 
+    // The views pass the category's label (EventCategoryLabels), so its colour families are keyed on the
+    // labels as well as the older keys (#187).
     private static String[] gradientFor(String category) {
-        return switch (category == null ? "" : category.toLowerCase()) {
-            case "concert"    -> new String[]{"#8b5cf6", "#ec4899"};
-            case "sport"      -> new String[]{"#0ea5e9", "#10b981"};
-            case "theatre"    -> new String[]{"#dc2626", "#f59e0b"};
+        return switch (category == null ? "" : category.toLowerCase(Locale.ROOT)) {
+            case "concert", "concerts", "music", "festivals" -> new String[]{"#8b5cf6", "#ec4899"};
+            case "sport", "sports"     -> new String[]{"#0ea5e9", "#10b981"};
+            case "theatre", "comedy"   -> new String[]{"#dc2626", "#f59e0b"};
             case "conference" -> new String[]{"#0d9488", "#1d4ed8"};
             default           -> new String[]{"#475569", "#1a5490"};
         };

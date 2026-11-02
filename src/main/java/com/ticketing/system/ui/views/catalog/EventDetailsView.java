@@ -20,6 +20,7 @@ import com.ticketing.system.ui.components.venue.VkVenueMap;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -126,7 +127,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         LkRow badges = new LkRow().gap(8);
         badges.add(statusBadge(detail.status()));
         if (detail.category() != null) {
-            badges.add(new LkBadge(prettify(detail.category().toString()), LkBadge.Tone.muted).small());
+            badges.add(new LkBadge(EventCategoryLabels.label(detail.category()), LkBadge.Tone.muted).small());
         }
         if (detail.rating() != null) {
             badges.add(new LkBadge("★ " + ratingText(detail.rating()), LkBadge.Tone.muted).small());
