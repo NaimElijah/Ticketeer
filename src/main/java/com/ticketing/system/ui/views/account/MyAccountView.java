@@ -206,9 +206,11 @@ public class MyAccountView extends LkPage {
     private void handleRefund(int orderId, String reason) {
         switch (refundPresenter.requestRefund(sessionIdentity.memberToken(), orderId, reason)) {
             case RefundPresenter.Outcome.Success s -> {
+                // Rebuild in place, then tell: a browser reload would drop the toast and its reference
+                // (#187, UI-A21).
+                render();
                 Toasts.success("Refund requested — reference " + s.reference()
                     + ". Processed in 3–5 business days.");
-                UI.getCurrent().getPage().reload();   // refresh orders + tickets
             }
             case RefundPresenter.Outcome.NotEligible n -> Toasts.warn(n.message());
             case RefundPresenter.Outcome.NotFound n    -> Toasts.failure(n.message());
