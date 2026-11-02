@@ -18,7 +18,6 @@ import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 import org.springframework.stereotype.Component;
 
-import java.util.EnumSet;
 import java.util.Set;
 
 /**
@@ -61,15 +60,11 @@ import java.util.Set;
 @Component
 public class AuthBootstrap implements VaadinServiceInitListener {
 
-    /** Capabilities that belong to the system-admin pool. */
-    private static final Set<Capability> ADMIN_CAPS = EnumSet.of(
-        Capability.ADMIN_WORKSPACE,
-        Capability.VIEW_GLOBAL_HISTORY,
-        Capability.BROADCAST_ANNOUNCEMENT,
-        Capability.MANAGE_COMPLAINTS,
-        Capability.VIEW_ORG_TREES,
-        Capability.ADMIN_SETTINGS
-    );
+    /**
+     * Capabilities that belong to the system-admin pool: {@link Capabilities}' admin bundle itself, so the
+     * two can't drift apart as the workspace list once did.
+     */
+    private static final Set<Capability> ADMIN_CAPS = Capabilities.ADMIN_BUNDLE;
 
     /**
      * Capabilities that imply company membership ("owner workspace"), taken from {@link Capabilities}'

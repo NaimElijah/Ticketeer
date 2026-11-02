@@ -72,8 +72,8 @@ public final class Capabilities {
      */
     static final Set<Capability> WORKSPACE_CAPABILITIES = unmodifiable(workspaceCapabilities());
 
-    /** Platform-admin capability bundle. */
-    private static final Set<Capability> ADMIN_BUNDLE = unmodifiable(EnumSet.of(
+    /** Platform-admin capability bundle. {@link AuthBootstrap} reads it to pick the admin sign-in. */
+    static final Set<Capability> ADMIN_BUNDLE = unmodifiable(EnumSet.of(
             Capability.ADMIN_WORKSPACE,
             Capability.VIEW_GLOBAL_HISTORY,
             Capability.BROADCAST_ANNOUNCEMENT,
