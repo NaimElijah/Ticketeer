@@ -39,6 +39,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Route(value = "owner/venue/:eventId", layout = WorkspaceLayout.class)
 @PageTitle("Venue Map · TicketHub")
@@ -52,6 +53,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     // zone into rows of seats, so it caps each dimension. 99 x 500 is the default seat limit.
     private static final int MAX_ROWS_PER_ZONE = 99;
     private static final int MAX_SEATS_PER_ROW = 500;
+    private static final String EVENT_NOT_FOUND = "Event not found.";
 
     private final VenueMapPresenter presenter;
     private final VenueLimitsProperties venueLimits;
@@ -107,7 +109,13 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private void loadZonesFromBackend() {
         if ("0".equals(eventId)) return;
-        switch (presenter.loadZones(AuthSession.token(), Integer.parseInt(eventId))) {
+        Optional<Integer> id = parseEventId(eventId);
+        if (id.isEmpty()) {
+            // The id is typed by the visitor: one that is no number names no event (#187, UI-A15).
+            Toasts.failure(EVENT_NOT_FOUND);
+            return;
+        }
+        switch (presenter.loadZones(AuthSession.token(), id.get())) {
             case VenueMapPresenter.LoadOutcome.Success ok -> {
                 gridRows = ok.layout().gridRows();
                 gridCols = ok.layout().gridCols();
@@ -494,6 +502,14 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     // would be saved over the stored price even when the owner changed nothing.
     private static String priceText(double price) {
         return BigDecimal.valueOf(price).stripTrailingZeros().toPlainString();
+    }
+
+    private static Optional<Integer> parseEventId(String routeValue) {
+        try {
+            return Optional.of(Integer.parseInt(routeValue));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
     }
 
     private static int orDefault(Integer value, int fallback) {
