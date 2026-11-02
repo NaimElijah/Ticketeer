@@ -39,6 +39,8 @@ public class OwnerDashboardView extends LkPage {
 
     /** Stat tiles live in their own slot so the company selector can rebuild them in place. */
     private final Div statsSlot = new Div();
+    /** The "Manage" tiles, in a slot of their own like the stats. */
+    private final Div tilesSlot = new Div();
 
     public OwnerDashboardView(OwnerDashboardPresenter presenter) {
         this.presenter = presenter;
@@ -46,7 +48,8 @@ public class OwnerDashboardView extends LkPage {
         title("Workspace");
         add(statsSlot);
         add(Lk.h2("Manage"));
-        add(buildTiles());
+        add(tilesSlot);
+        tilesSlot.add(buildTiles());
         reload(CurrentCompanies.currentCompanyId());
     }
 
