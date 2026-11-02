@@ -187,12 +187,12 @@ class EventCancelRefundFailureTest {
         assertTrue(harness.confirmOpenDialog(), "cancelling from My Events asks for confirmation");
     }
 
-    // The event page asks for confirmation once UI-A4 is fixed; confirm it when it does.
+    // The event page asks for confirmation first, as My Events does (UI-A4).
     private void cancelFromTheEventPage(EventManagementPresenter presenter) {
         EventManagementView view = new EventManagementView(presenter);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID)));
         click(button(view, "Cancel This Event"));
-        harness.confirmOpenDialog();
+        assertTrue(harness.confirmOpenDialog(), "cancelling from the event page asks for confirmation");
     }
 
     private void assertNoToastShows(String text) {

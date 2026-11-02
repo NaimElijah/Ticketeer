@@ -300,7 +300,9 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   retries a refund only when the payment service could not be reached; a refund whose outcome is
   unknown stays pending for manual recovery, and cancelling again does not retry it
   (`CompanyEventListPresenter`, `EventManagementPresenter` · `EventCancelRefundFailureTest`,
-  `CompanyEventListPresenterTest`, `EventManagementPresenterTest`).
+  `CompanyEventListPresenterTest`, `EventManagementPresenterTest`). Since #187 both ways to cancel,
+  My Events and the event's own page, ask the owner to confirm first (`EventCancelConfirm` ·
+  `EventPageCancelConfirmationTest`, `EventCancelRefundFailureTest`).
 - A member's whole-order refund is refused once any line of the order has been refunded or is
   being refunded by an event cancellation (`RefundService` · `RefundServiceTest`). **Not upheld**
   when the payment service's answer is lost: the refund rolls back to unrefunded and the member can

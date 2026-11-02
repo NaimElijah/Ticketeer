@@ -9,6 +9,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.domain.TextLimits;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.company.EventCancelConfirm;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -77,6 +78,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     private String eventId = null;   // "new"/null = create flow
     /** The event's full schedule as loaded — kept so an edit to the first show preserves the rest. */
     private List<ShowDate> loadedShowDates = List.of();
+    /** The event's name as loaded, for the cancel confirmation; the title field may hold an unsaved edit. */
+    private String loadedEventName = "";
 
     public EventManagementView(EventManagementPresenter presenter) {
         this.presenter = presenter;
@@ -124,7 +127,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
     /** Populates every control from the loaded event — no hardcoded values anywhere. */
     private void applyEvent(EventDetailDTO ev) {
-        title.setValue(ev.name() != null ? ev.name() : "");
+        loadedEventName = ev.name() != null ? ev.name() : "";
+        title.setValue(loadedEventName);
         category.setValue(ev.category() != null ? ev.category().name() : null);
         artists.setValues(ev.artistsNames());
         if (ev.location() != null) {
@@ -377,14 +381,18 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
         card.add(warn);
         card.add(new LkBtn("Cancel This Event").variant(LkBtn.Variant.error).full()
                 .icon(new LkIcon("warning", 16))
-                .onClick(e -> cancelEvent()));
+                .onClick(e -> confirmCancel()));
         return card;
     }
 
-    private void cancelEvent() {
+    private void confirmCancel() {
         if (eventId == null || "new".equals(eventId)) {
             return;
         }
+        EventCancelConfirm.open(loadedEventName, this::cancelEvent);
+    }
+
+    private void cancelEvent() {
         // A cancel commits the event's CANCELED state before its refunds run, so a failure after it may
         // leave the event cancelled: each failure reloads the event to show its actual state.
         switch (presenter.cancel(AuthSession.token(), Integer.parseInt(eventId))) {
