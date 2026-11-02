@@ -54,6 +54,9 @@ import java.util.List;
 public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
     private static final String VENUE_TIME_HINT = "Local time at the venue";
+    private static final String EDIT_TITLE = "Edit Event";
+    private static final String EDIT_SUBTITLE = "Configure event details.";
+    private static final String SAVE_LABEL = "Save Changes";
 
     private final TextField title = new TextField("Title");
     private final Select<String> category = new Select<>();
@@ -83,9 +86,9 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
 
     public EventManagementView(EventManagementPresenter presenter) {
         this.presenter = presenter;
-        title("Edit Event");
-        subtitle("Configure event details.");
-        saveBtn = new LkBtn("Save Changes").variant(LkBtn.Variant.primary)
+        title(EDIT_TITLE);
+        subtitle(EDIT_SUBTITLE);
+        saveBtn = new LkBtn(SAVE_LABEL).variant(LkBtn.Variant.primary)
             .onClick(e -> saveEvent());
         actions(
             new LkBtn("Discard").variant(LkBtn.Variant.tertiary)
