@@ -12,7 +12,6 @@ import com.ticketing.system.ui.session.NotificationSession;
 import com.ticketing.system.ui.session.OrderSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
-import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
@@ -98,13 +97,8 @@ public class LoginView extends LkAuthCard {
         // A sign-in starts another visit; the kept order confirmation belonged to the last one.
         OrderSession.clear();
         NotificationSession.store(dto.notifications());
-        String name = dto.authToken().username();
-        if (AuthSession.isAdmin()) {
-            Toasts.success("Signed in as admin · " + name);
-            UI.getCurrent().navigate(AdminDashboardView.class);
-        } else {
-            Toasts.success("Signed in as " + name);
-            UI.getCurrent().navigate(BrowseEventsView.class);
-        }
+        // Member sign-in only: an administrator signs in at AdminLoginView.
+        Toasts.success("Signed in as " + dto.authToken().username());
+        UI.getCurrent().navigate(BrowseEventsView.class);
     }
 }
