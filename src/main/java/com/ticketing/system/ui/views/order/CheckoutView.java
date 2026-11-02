@@ -152,8 +152,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         // beforeEnter paints the page while activeOrder is still null; the order loads here, so
         // re-render the lines / subtotal / total / timer now that it is available.
         syncDynamicUI();
-        if (outcome instanceof CheckoutPresenter.LoadOutcome.Failure) {
-            Toasts.warn("Could not load your cart — please try again.");
+        if (outcome instanceof CheckoutPresenter.LoadOutcome.Failure fail) {
+            Toasts.warn(Lk.withReason("Could not load your cart", fail.reason()));
         }
     }
 
@@ -436,7 +436,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         switch (reloaded) {
             case CheckoutPresenter.LoadOutcome.Loaded l -> { /* still valid — continue */ }
             case CheckoutPresenter.LoadOutcome.Failure f -> {
-                Toasts.failure("Couldn't reach the server. Please try again.");
+                Toasts.failure(Lk.withReason("Could not check your cart before paying", f.reason()));
                 return;
             }
             case CheckoutPresenter.LoadOutcome.Empty e -> {
