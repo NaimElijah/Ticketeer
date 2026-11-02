@@ -31,6 +31,7 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.NumberField;
@@ -394,13 +395,15 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
         }
     }
 
-    private Div linkRow(String iconName, String label, Runnable r) {
-        Div row = new Div();
+    // A button, so a keyboard reaches it and a screen reader names it by its label (#188).
+    private NativeButton linkRow(String iconName, String label, Runnable r) {
+        NativeButton row = new NativeButton();
         row.addClassName("ow-link-row");
         row.add(new LkIcon(iconName, 17));
         Span lbl = new Span(label);
         lbl.getStyle().set("flex", "1");
         Span arrow = new Span("→");
+        arrow.getElement().setAttribute("aria-hidden", "true");
         row.add(lbl, arrow);
         row.getElement().addEventListener("click", e -> r.run());
         return row;

@@ -152,6 +152,9 @@
     padding:7px 14px;border-radius:999px;font-size:.83rem;font-weight:600;cursor:pointer;white-space:nowrap}
   .lk-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
   .lk-chip-caret{opacity:.5;font-size:.7rem}
+  /* LkRemoveButton: a native button drawn as its glyph, with a target of at least 24 by 24 px (#188, WCAG 2.5.8). */
+  .lk-remove{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;padding:0;
+    border:none;border-radius:6px;background:none;color:inherit;font:inherit;cursor:pointer}
   .lk-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:800;
     letter-spacing:.04em;text-transform:uppercase}
   .lk-badge.sm{font-size:.65rem;padding:2px 8px}
@@ -186,6 +189,8 @@
   .lk-tile-title{font-weight:800;font-size:.98rem;color:#0f172a}
   .lk-tile-desc{font-size:.82rem;color:var(--muted);line-height:1.45}
   .lk-tile-go{font-size:.78rem;font-weight:700;color:var(--primary);margin-top:6px}
+  /* LkTile is a link (#188), drawn as the card. */
+  a.lk-tile{color:inherit;text-decoration:none}
   .lk-stat{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
   .lk-stat-label{font-size:.78rem;color:var(--muted);font-weight:600}
   .lk-stat-value{font-size:1.65rem;font-weight:800;letter-spacing:-.02em;margin-top:3px;color:#0f172a}
@@ -221,6 +226,8 @@
   .bz-poster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
   .bz-poster{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.05),0 8px 18px -12px rgba(15,23,42,.2);cursor:pointer;transition:.12s}
   .bz-poster:hover{transform:translateY(-2px);box-shadow:0 12px 24px -12px rgba(15,23,42,.3)}
+  /* BzPoster is a link to its event (#188), drawn as the card. */
+  a.bz-poster{display:block;color:inherit;text-decoration:none}
   .bz-poster-img{display:flex;align-items:flex-end;padding:13px}
   .bz-poster-cat{background:rgba(0,0,0,.32);color:#fff;font-size:.62rem;font-weight:800;letter-spacing:.1em;padding:4px 10px;border-radius:999px;backdrop-filter:blur(4px)}
   .bz-poster-body{padding:13px 15px 16px}
@@ -569,6 +576,8 @@
   .ow-edit-split>*{min-width:0}
   .ow-link-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;cursor:pointer;text-decoration:none;color:#334155}
   .ow-link-row:hover{background:#f8fafc;border-color:var(--primary-light)}
+  /* The linked-editor rows are buttons (#188), drawn as the rows. */
+  button.ow-link-row{width:100%;background:none;font:inherit;text-align:left}
   .ow-venue-split{display:grid;grid-template-columns:1fr 1.2fr;gap:18px;align-items:start}
   .ow-card-actions{display:flex;gap:8px;padding:12px 16px;border-top:1px solid #f1f5f9}
   .ow-seated-editor{margin-top:14px;border-top:1px solid #f1f5f9;padding-top:14px}

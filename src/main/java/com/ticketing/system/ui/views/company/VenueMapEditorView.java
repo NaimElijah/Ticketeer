@@ -13,6 +13,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkPage;
+import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.components.venue.VkSeatBlock;
@@ -226,18 +227,16 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                     ? z.rows() * z.seatsPerRow() + " seats"
                     : z.capacity() + " cap");
             cap.getStyle().set("color", "var(--lk-muted, #888)").set("font-size", "13px");
-            row.add(name, type, cap, removeButton(idx));
+            row.add(name, type, cap, removeButton(idx, z.name()));
             row.getElement().addEventListener("click", e -> selectZone(idx));
             zonesTableHolder.add(row);
         }
     }
 
-    private Component removeButton(int idx) {
-        Span x = new Span("✕");
-        x.getStyle().set("cursor", "pointer").set("color", "var(--lk-danger, #c0392b)")
-                .set("padding", "0 4px");
-        x.getElement().addEventListener("click", e -> removeZone(idx))
-                .addEventData("event.stopPropagation()");
+    // LkRemoveButton stops the click there, so removing a zone does not also select it.
+    private Component removeButton(int idx, String zoneName) {
+        LkRemoveButton x = new LkRemoveButton(zoneName, () -> removeZone(idx));
+        x.getStyle().set("color", "var(--lk-danger, #c0392b)").set("padding", "0 4px");
         return x;
     }
 

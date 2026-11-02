@@ -16,6 +16,7 @@ import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
@@ -28,6 +29,9 @@ import java.util.List;
 @PermitAll
 @RequireCapability(Capability.VIEW_ORG_TREES)
 public class OrganizationalTreeView extends LkPage {
+
+    private static final String ARIA_CURRENT = "aria-current";
+    private static final String CURRENT_ITEM = "true";
 
     private final OrgTreePresenter presenter;
     private final Div body = new Div();
@@ -95,13 +99,18 @@ public class OrganizationalTreeView extends LkPage {
         return card;
     }
 
+    // A button, so a keyboard reaches each company; the one shown is marked current, not only dark (#188).
     private Component companyItem(ProductionCompanyDTO c, boolean active) {
-        Div item = new Div();
+        NativeButton item = new NativeButton();
         item.getStyle()
             .set("display", "flex").set("flex-direction", "column").set("gap", "2px")
             .set("padding", "10px 12px").set("border-radius", "8px").set("cursor", "pointer")
             .set("border", "1px solid " + (active ? "#0f172a" : "#e2e8f0"))
-            .set("background", active ? "#0f172a" : "#fff");
+            .set("background", active ? "#0f172a" : "#fff")
+            .set("font", "inherit").set("text-align", "left").set("width", "100%");
+        if (active) {
+            item.getElement().setAttribute(ARIA_CURRENT, CURRENT_ITEM);
+        }
 
         Span name = new Span(c.name());
         name.getStyle().set("font-weight", "700").set("font-size", "13.5px")

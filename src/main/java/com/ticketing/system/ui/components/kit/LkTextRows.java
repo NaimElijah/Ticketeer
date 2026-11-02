@@ -2,26 +2,30 @@ package com.ticketing.system.ui.components.kit;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeLabel;
-import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.textfield.TextField;
 
 /**
  * A labeled, repeatable single-line text input: a vertical stack of rows, each a
- * {@link TextField} plus a "✕" remove control, with a "+ Add" button that appends a new
+ * {@link TextField} plus a "✕" {@link LkRemoveButton}, with a "+ Add" button that appends a new
  * empty row. Lets a user enter a list of short free-text values (e.g. an event's artists)
  * one-per-row instead of as a single comma-separated field.
  *
  * <p>House-style kit component — reuses {@link LkBtn} and mirrors the add/remove-row idiom
- * from {@code VenueMapEditorView} (keep a state list, {@code removeAll()} then rebuild; a
- * "✕" {@link Span} with {@code event.stopPropagation()}). The backend contract is
+ * from {@code VenueMapEditorView} (keep a state list, {@code removeAll()} then rebuild; an
+ * {@link LkRemoveButton} per row, named by the row's position, since its text changes as the
+ * user types). The backend contract is
  * unchanged: {@link #getValues()} returns a trimmed, blank-free {@code List<String>} in row
  * order (the same shape the old comma-split parser produced).
  */
 public class LkTextRows extends Div {
+
+    // Names a row's remove button: "Artists row 2".
+    private static final String ROW_NAME = "%s row %d";
 
     private final NativeLabel label = new NativeLabel();
     private final Div rowsHolder = new Div();
@@ -140,24 +144,24 @@ public class LkTextRows extends Div {
 
     private void rebuild() {
         rowsHolder.removeAll();
-        for (TextField field : rows) {
+        for (int i = 0; i < rows.size(); i++) {
+            TextField field = rows.get(i);
             Div row = new Div();
             row.getStyle().set("display", "flex").set("align-items", "center").set("gap", "8px");
             field.getStyle().set("flex", "1");
             row.add(field);
             if (!readOnly) {
-                row.add(removeControl(field));
+                row.add(removeControl(field, i + 1));
             }
             rowsHolder.add(row);
         }
     }
 
-    private Component removeControl(TextField field) {
-        Span x = new Span("✕");
-        x.getStyle().set("cursor", "pointer").set("color", "var(--lk-danger, #c0392b)")
+    private Component removeControl(TextField field, int position) {
+        LkRemoveButton x = new LkRemoveButton(String.format(Locale.ROOT, ROW_NAME, label.getText(), position),
+                () -> removeRow(field));
+        x.getStyle().set("color", "var(--lk-danger, #c0392b)")
                 .set("padding", "0 4px").set("flex", "0 0 auto");
-        x.getElement().addEventListener("click", e -> removeRow(field))
-                .addEventData("event.stopPropagation()");
         return x;
     }
 }

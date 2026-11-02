@@ -12,6 +12,7 @@ import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkGrid;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
+import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.layouts.PlatformAdminLayout;
@@ -172,12 +173,11 @@ public class AdminSendMessagesView extends LkPage {
         for (Map.Entry<Integer, String> entry : recipients.entrySet()) {
             int id = entry.getKey();
             LkChip chip = new LkChip(entry.getValue());
-            Span remove = new Span("✕");
-            remove.getStyle().set("cursor", "pointer").set("margin-left", "6px").set("font-weight", "700");
-            remove.getElement().addEventListener("click", e -> {
+            LkRemoveButton remove = new LkRemoveButton(entry.getValue(), () -> {
                 recipients.remove(id);
                 renderChips();
             });
+            remove.getStyle().set("margin-left", "6px").set("font-weight", "700");
             chip.add(remove);
             recipientChips.add(chip);
         }

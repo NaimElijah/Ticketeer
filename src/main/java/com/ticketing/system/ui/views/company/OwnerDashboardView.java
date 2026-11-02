@@ -220,8 +220,6 @@ public class OwnerDashboardView extends LkPage {
     }
 
     private LkTile tile(String iconName, String title, String desc, Class<? extends Component> target) {
-        LkTile t = new LkTile(new LkIcon(iconName, 26), title, desc);
-        t.addClickListener(e -> UI.getCurrent().navigate(target));
-        return t;
+        return new LkTile(new LkIcon(iconName, 26), title, desc, target);
     }
 }

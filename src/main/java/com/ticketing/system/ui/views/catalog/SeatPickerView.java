@@ -7,6 +7,7 @@ import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.domain.ZoneType;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
+import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
@@ -31,6 +32,8 @@ import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
+import com.vaadin.flow.router.RouteParameters;
+import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
@@ -48,6 +51,10 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     // Derived from the tile size so seats never overlap or drift — one source of truth.
     private static final int SEAT_STEP = VkSeatedZonePicker.TILE_PX + 6;
     private static final String RESERVE_FAILED = "Couldn't reserve those tickets";
+    private static final String SEAT = "seat ";
+    private static final String BACK_ARROW = "← ";
+    private static final String BACK_TO_AREAS = "Back to areas";
+    private static final String EVENT_ID = "eventId";
 
     private final SeatPickerPresenter presenter;
     /** The configured hold, so the page says how long seats stay locked (#187, UI-A18). */
@@ -213,14 +220,12 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         subline.getStyle().set("font-size", "12.5px").set("display", "block");
         info.add(name, subline);
 
-        Span remove = new Span();
-        remove.addClassName("vz-selseat-x");
-        remove.add(new LkIcon("close", 15));
-        remove.getElement().addEventListener("click", e -> {
+        LkRemoveButton remove = new LkRemoveButton(SEAT + label, new LkIcon("close", 15), () -> {
             if (seatPicker != null) {
                 seatPicker.deselect(label);
             }
         });
+        remove.addClassName("vz-selseat-x");
         row.add(info, remove);
         return row;
     }
@@ -304,9 +309,13 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private Component buildBreadcrumb(String trailText) {
         Div crumb = new Div();
         crumb.addClassName("vz-crumb");
-        Span back = new Span("← Back to areas");
+        RouterLink back = new RouterLink();
+        back.setRoute(EventDetailsView.class, new RouteParameters(EVENT_ID, String.valueOf(eventId)));
         back.addClassName("bz-link");
-        back.getElement().addEventListener("click", e -> UI.getCurrent().navigate("events/" + eventId));
+        // The arrow is decoration; the link is named "Back to areas".
+        Span arrow = new Span(BACK_ARROW);
+        arrow.getElement().setAttribute("aria-hidden", "true");
+        back.add(arrow, new Text(BACK_TO_AREAS));
         // The zone is what the page is about, so its name is the page's one h1 (#188), drawn as the
         // muted trail it sits in.
         H1 zoneTitle = new H1(trailText);
