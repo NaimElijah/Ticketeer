@@ -94,7 +94,6 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
 
     private LkAccountMenu buildAdminMenu(String name) {
         LkMenu menu = new LkMenu(
-            new LkMenu.Item("gear",      "Admin Settings"),
             new LkMenu.Item("chart",     "System Analytics").onClick(() -> UI.getCurrent().navigate(SystemAnalyticsView.class)),
             new LkMenu.Item("comment",   "Admin Inbox").onClick(() -> UI.getCurrent().navigate(AdminInboxView.class)),
             new LkMenu.Divider(),

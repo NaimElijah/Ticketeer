@@ -6,9 +6,7 @@ import java.util.function.Consumer;
 
 /**
  * Checkbox + label row — ports {@code .lk-checkrow}. Click-to-toggle is
- * wired by default; pass {@link #onToggle(Consumer)} for a callback. Use
- * {@link #wrapperClass(String)} to swap the default {@code .lk-checkrow}
- * wrapper for a different theme class (e.g. {@code auth-remember}).
+ * wired by default; pass {@link #onToggle(Consumer)} for a callback.
  */
 public class LkCheckRow extends Span {
 
@@ -42,17 +40,6 @@ public class LkCheckRow extends Span {
     /** Callback invoked after each toggle with the new state. */
     public LkCheckRow onToggle(Consumer<Boolean> handler) {
         this.onToggle = handler;
-        return this;
-    }
-
-    /**
-     * Override the default {@code .lk-checkrow} wrapper class — used by
-     * the auth screens to apply {@code .auth-remember} instead, which
-     * shares the {@code .lk-checkbox} visual but has its own font / gap.
-     */
-    public LkCheckRow wrapperClass(String className) {
-        removeClassName("lk-checkrow");
-        addClassName(className);
         return this;
     }
 

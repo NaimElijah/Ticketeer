@@ -88,8 +88,7 @@ public final class Capabilities {
             Capability.VIEW_GLOBAL_HISTORY,
             Capability.BROADCAST_ANNOUNCEMENT,
             Capability.MANAGE_COMPLAINTS,
-            Capability.VIEW_ORG_TREES,
-            Capability.ADMIN_SETTINGS));
+            Capability.VIEW_ORG_TREES));
 
     public static boolean has(Capability c) {
         return forCurrentUser().contains(c);

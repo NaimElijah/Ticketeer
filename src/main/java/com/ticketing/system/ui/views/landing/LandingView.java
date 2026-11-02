@@ -154,16 +154,17 @@ public class LandingView extends LkPage {
             .set("grid-template-columns", "repeat(auto-fit, minmax(min(100%, 220px), 1fr))")
             .set("gap", "16px");
         grid.add(
-            categoryCard(EventCategory.CONCERT, "music",   "42 events",  "#8b5cf6", "#ec4899"),
-            categoryCard(EventCategory.SPORTS,  "trophy",  "28 events",  "#0ea5e9", "#10b981"),
-            categoryCard(EventCategory.THEATER, "theater", "14 events",  "#dc2626", "#f59e0b"),
-            categoryCard(EventCategory.COMEDY,  "mic",     "9 events",   "#0d9488", "#1d4ed8")
+            categoryCard(EventCategory.CONCERT, "music",   "#8b5cf6", "#ec4899"),
+            categoryCard(EventCategory.SPORTS,  "trophy",  "#0ea5e9", "#10b981"),
+            categoryCard(EventCategory.THEATER, "theater", "#dc2626", "#f59e0b"),
+            categoryCard(EventCategory.COMEDY,  "mic",     "#0d9488", "#1d4ed8")
         );
         return grid;
     }
 
-    // Each card is a category that exists, under the label that filters Browse to it (#187, UI-A6).
-    private Div categoryCard(EventCategory category, String iconName, String count, String g1, String g2) {
+    // Each card is a category that exists, under the label that filters Browse to it (#187, UI-A6). It
+    // shows no event count: the counts were made up (#187, UI-A19).
+    private Div categoryCard(EventCategory category, String iconName, String g1, String g2) {
         String name = EventCategoryLabels.label(category);
         Div card = new Div();
         card.getStyle()
@@ -184,10 +185,7 @@ public class LandingView extends LkPage {
         Span title = new Span(name);
         title.getStyle().set("font-size", "1.1rem").set("font-weight", "800");
 
-        Span sub = new Span(count);
-        sub.getStyle().set("font-size", "0.82rem").set("opacity", "0.9");
-
-        card.add(iconWrap, title, sub);
+        card.add(iconWrap, title);
         // Pre-select the category in Browse's filter via query parameter.
         card.getElement().addEventListener("click", e ->
             UI.getCurrent().navigate("browse?category=" + name));

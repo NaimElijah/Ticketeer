@@ -1,7 +1,6 @@
 package com.ticketing.system.ui.views.account;
 
 import com.ticketing.system.ui.components.kit.Lk;
-import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
@@ -71,7 +70,8 @@ public class MyProfileView extends LkPage {
         Div nameDiv = new Div();
         nameDiv.addClassName("prof-name");
         nameDiv.setText(name);
-        info.add(nameDiv, new LkBadge("Verified", LkBadge.Tone.success).small());
+        // No "Verified" badge: nothing verifies an account (#103, #187 UI-A19).
+        info.add(nameDiv);
         idRow.add(avatar, info);
 
         LkCol fields = new LkCol().gap(14);

@@ -4,7 +4,6 @@ import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.auth.PasswordStrengthMeter;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
-import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
@@ -88,16 +87,14 @@ public class RegisterView extends LkAuthCard {
         confirm.setRequired(true);
         confirm.setWidthFull();
 
-        LkCheckRow terms = new LkCheckRow("I agree to the Terms and Privacy Policy", false)
-            .wrapperClass("auth-remember");
-
         Button create = new Button("Create account",
             e -> attemptRegister(username, email, age, password, confirm));
         create.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
         create.setWidthFull();
         create.addClickShortcut(Key.ENTER);
 
-        col(14, username, email, age, password, strengthMeter, confirm, terms, create);
+        // No terms checkbox: there are no terms to agree to, and nothing checked it (#187, UI-A19).
+        col(14, username, email, age, password, strengthMeter, confirm, create);
         foot("Already have an account?", "Sign in →", LoginView.class);
     }
 

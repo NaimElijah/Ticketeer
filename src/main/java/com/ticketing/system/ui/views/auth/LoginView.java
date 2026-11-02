@@ -4,7 +4,6 @@ import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
-import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.session.AuthSession;
@@ -18,9 +17,6 @@ import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.html.Anchor;
-import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
@@ -52,47 +48,17 @@ public class LoginView extends LkAuthCard {
         password.setRequired(true);
         password.setWidthFull();
 
-        LkCheckRow remember = new LkCheckRow("Remember me", false)
-            .wrapperClass("auth-remember");
-
-        Div rememberRow = new Div();
-        rememberRow.getStyle()
-            .set("display", "flex")
-            .set("justify-content", "space-between")
-            .set("align-items", "center");
-        rememberRow.add(remember, forgotPasswordLink());
-
         Button signIn = new Button("Sign in", e -> attemptSignIn(username, password));
         signIn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
         signIn.setWidthFull();
         signIn.addClickShortcut(Key.ENTER);
 
-        col(14, username, password, rememberRow, signIn);
-        divider("or continue with");
-
-        Div social = new Div();
-        social.getStyle().set("display", "flex").set("gap", "10px");
-        social.add(socialBtn("Google"), socialBtn("Apple"));
-        add(social);
+        // No remember-me, password reset (#104) or social sign-in: nothing behind them exists (#187, UI-A19).
+        col(14, username, password, signIn);
 
         foot("Don't have an account?", "Create one →", RegisterView.class);
         // This form signs in members only; an administrator signs in at AdminLoginView.
         foot("Platform administrator?", "Admin sign in →", AdminLoginView.class);
-    }
-
-    private Anchor forgotPasswordLink() {
-        Anchor a = new Anchor("javascript:void(0)", "Forgot password?");
-        a.addClassName("bz-link");
-        return a;
-    }
-
-    private NativeButton socialBtn(String label) {
-        NativeButton b = new NativeButton(label);
-        b.addClassName("lk-btn");
-        b.addClassName("lk-btn-secondary");
-        b.addClassName("lk-btn-m");
-        b.getStyle().set("flex", "1");
-        return b;
     }
 
     private void attemptSignIn(TextField username, PasswordField password) {
