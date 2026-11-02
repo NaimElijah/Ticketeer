@@ -198,6 +198,23 @@ class CheckoutPresenterTest {
                 "a cart whose hold ran out must still read as an expired order, but was: " + outcome);
     }
 
+    // ---- UI-C2: a store failure from viewMyActiveOrder reads as the outage, not an expired session (#187) ----
+
+    @Test
+    void GivenTheStoreIsDown_WhenLoadOrder_ThenFailureCarriesTheOutageMessage() {
+        AuthenticationService authenticationService = signedInLiveMember();
+        ReservationService reservations = mock(ReservationService.class);
+        when(reservations.viewMyActiveOrder(BUYER_TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+        CheckoutPresenter withRealIdentity = presenterResolvingTheVisitorThrough(authenticationService, reservations);
+
+        CheckoutPresenter.LoadOutcome outcome = withRealIdentity.loadOrder(BUYER_ID, BUYER_TOKEN, null);
+
+        CheckoutPresenter.LoadOutcome.Failure failure =
+                assertInstanceOf(CheckoutPresenter.LoadOutcome.Failure.class, outcome);
+        assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, failure.reason());
+    }
+
     // ---- fixture shared by the UI-B10 and UI-C2 blocks: the visitor resolved by a real SessionIdentity ----
 
     private static final int BUYER_ID = 42;

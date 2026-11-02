@@ -10,6 +10,7 @@ import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
@@ -19,6 +20,7 @@ import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.MockPermissions;
+import com.ticketing.system.ui.support.ServiceErrors;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -74,7 +76,10 @@ public final class DevPanel {
                     reservationService.abandonActiveOrder(BuyerContextDTO.member(order.userId()));
                 }
             }
-        } catch (Exception ignored) { }
+        } catch (RuntimeException e) {
+            // The persona switch still signs out; the cart stays held until it expires.
+            Toasts.failure(ServiceErrors.userMessage(e));
+        }
     }
 
     private static void signInAs(String username, String password) {
