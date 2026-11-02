@@ -7,19 +7,28 @@ import com.vaadin.flow.component.html.Span;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Filter chip with a check-row popover and Apply button. Ports the
  * React {@code FilterChip}. Multi-select by default; pass
  * {@code single} for single-select.
+ *
+ * <p>The chip is a native button named "label: choices" that says it opens a popup,
+ * and each option says whether it is ticked: a checkbox, or a radio when
+ * {@code single} (#188; WCAG 2.1.1, 4.1.2; {@code PopoverTriggerA11yTest}).
  */
 public class LkFilterChip extends Div {
+
+    // The chip's name while nothing is ticked, which filters nothing out.
+    private static final String NOTHING_TICKED = "any";
+    private static final String CHOICE_SEPARATOR = ", ";
 
     private final String label;
     private final List<String> options;
     private final boolean single;
     private final Set<String> selected;
-    private final Span chip = new Span();
+    private final NativeButton chip = new NativeButton();
     private final LkMenu menu = new LkMenu();
     private LkMenu.Label headerLabel;
     private Runnable onApply = () -> { };
@@ -36,12 +45,11 @@ public class LkFilterChip extends Div {
 
         getStyle().set("display", "inline-flex");
         chip.addClassName("lk-chip");
-        chip.getElement().setAttribute("tabindex", "0");
         rebuildChip();
 
         rebuildMenu();
 
-        add(new LkPopover(chip, menu));
+        add(new LkPopover(label, chip, menu));
     }
 
     private void rebuildChip() {
@@ -52,6 +60,12 @@ public class LkFilterChip extends Div {
         chip.add(caret);
         if (selected.isEmpty()) chip.removeClassName("on");
         else chip.addClassName("on");
+        // The chip shows how many options are ticked; its name says which.
+        String ticked = options.stream()
+            .filter(selected::contains)
+            .collect(Collectors.joining(CHOICE_SEPARATOR));
+        chip.getElement().setAttribute(Lk.ARIA_LABEL,
+            Lk.labelAndValue(label, ticked.isEmpty() ? NOTHING_TICKED : ticked));
     }
 
     private void rebuildMenu() {
@@ -68,8 +82,11 @@ public class LkFilterChip extends Div {
             boolean on = selected.contains(opt);
             NativeButton row = new NativeButton();
             row.addClassName("lk-check-row");
+            row.getElement().setAttribute(Lk.ROLE, single ? Lk.ROLE_RADIO : Lk.ROLE_CHECKBOX);
+            row.getElement().setAttribute(Lk.ARIA_CHECKED, String.valueOf(on));
             Span box = new Span();
             box.addClassName("lk-checkbox");
+            box.getElement().setAttribute(Lk.ARIA_HIDDEN, "true");
             if (!single) {
                 // square checkbox
             } else {

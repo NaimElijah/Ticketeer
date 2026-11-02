@@ -611,6 +611,9 @@
   .lk-mini{min-height:34px;font-size:.8rem;color:var(--faint);flex:1;padding:7px 10px}
   .lk-daterow-sep{color:var(--faint)}
   .lk-select{cursor:pointer}
+  /* The popover fields' triggers are native buttons (#188): undo the browser's button look so they keep the field's. */
+  button.lk-input{width:100%;margin:0;color:inherit;text-align:left}
+  button.lk-chip{margin:0}
   .lk-select:hover{border-color:var(--border-strong)}
   .lk-caret-ic{color:var(--faint);margin-left:auto}
   .lk-pop-wrap [data-open] .lk-caret-ic{transform:rotate(180deg)}

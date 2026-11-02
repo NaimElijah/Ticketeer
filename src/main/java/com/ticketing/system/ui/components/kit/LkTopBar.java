@@ -25,7 +25,10 @@ public class LkTopBar extends Header {
     public enum Variant { MAIN, ADMIN, PLATFORM }
     public record NavItem(String label, Class<? extends Component> target) { }
 
+    // Accessible names of the popover panels (#188).
+    private static final String SEARCH_PANEL = "Search";
     private static final String NOTIFICATIONS = "Notifications";
+    private static final String ACCOUNT_PANEL = "Account menu";
 
     private final Variant variant;
     private final Span rightSlot = new Span();
@@ -100,7 +103,7 @@ public class LkTopBar extends Header {
         Span txt = new Span("Search events, artists, venues…");
         txt.addClassName("lk-search-txt");
         trigger.add(txt);
-        LkPopover pop = new LkPopover(trigger, panel)
+        LkPopover pop = new LkPopover(SEARCH_PANEL, trigger, panel)
             .position(PopoverPosition.BOTTOM_END).width("392px");
         pop.addClassName("lk-search-wrap");
         add(pop);
@@ -167,14 +170,15 @@ public class LkTopBar extends Header {
         ensureRightSlot();
         NativeButton bell = new NativeButton();
         bell.addClassName("lk-bell");
-        bell.getElement().setAttribute("aria-label", ariaLabel == null ? NOTIFICATIONS : ariaLabel);
+        String name = ariaLabel == null ? NOTIFICATIONS : ariaLabel;
+        bell.getElement().setAttribute("aria-label", name);
         bell.add(new LkIcon("bell", 18));
         if (badgeCount != null && !badgeCount.isEmpty()) {
             Span badge = new Span(badgeCount);
             badge.addClassName("lk-bell-badge");
             bell.add(badge);
         }
-        LkPopover pop = new LkPopover(bell, panel).position(PopoverPosition.BOTTOM_END);
+        LkPopover pop = new LkPopover(name, bell, panel).position(PopoverPosition.BOTTOM_END);
         rightSlot.add(pop);
         return this;
     }
@@ -244,7 +248,7 @@ public class LkTopBar extends Header {
         if (bg != null) avatar.getStyle().set("background", bg);
         if (fg != null) avatar.getStyle().set("color", fg);
         if (tooltip != null) avatar.getElement().setAttribute("title", tooltip);
-        LkPopover pop = new LkPopover(avatar, menu).position(PopoverPosition.BOTTOM_END);
+        LkPopover pop = new LkPopover(ACCOUNT_PANEL, avatar, menu).position(PopoverPosition.BOTTOM_END);
         rightSlot.add(pop);
         return this;
     }

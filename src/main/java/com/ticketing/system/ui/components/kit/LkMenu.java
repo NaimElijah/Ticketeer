@@ -77,6 +77,21 @@ public class LkMenu extends Div {
             return this;
         }
 
+        /**
+         * Makes this item one option of a single choice, such as a select's: a radio that
+         * tells a screen reader whether it is the chosen one, rather than leaving that to
+         * colour and the check mark (#188; WCAG 1.3.1, 4.1.2). The chosen one is also
+         * marked {@link #active()}.
+         *
+         * @param chosen whether this option is the current choice
+         * @return this item, for chaining
+         */
+        public Item choice(boolean chosen) {
+            getElement().setAttribute(Lk.ROLE, Lk.ROLE_RADIO);
+            getElement().setAttribute(Lk.ARIA_CHECKED, String.valueOf(chosen));
+            return chosen ? active() : this;
+        }
+
         public Item onClick(Runnable r) {
             addClickListener(e -> r.run());
             return this;

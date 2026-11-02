@@ -20,8 +20,15 @@ public final class Lk {
      */
     public static final String VISUALLY_HIDDEN = "lk-visually-hidden";
 
-    private static final String ROLE = "role";
-    private static final String ARIA_LABEL = "aria-label";
+    // The ARIA vocabulary the kit's components share (#188).
+    static final String ROLE = "role";
+    static final String ARIA_LABEL = "aria-label";
+    static final String ARIA_CHECKED = "aria-checked";
+    static final String ARIA_HIDDEN = "aria-hidden";
+    static final String ROLE_RADIO = "radio";
+    static final String ROLE_CHECKBOX = "checkbox";
+
+    private static final String NAME_SEPARATOR = ": ";
 
     private Lk() { }
 
@@ -100,5 +107,14 @@ public final class Lk {
 
     public static String withReason(String base, String reason) {
         return (reason != null && !reason.isBlank()) ? base + ": " + reason : base + ".";
+    }
+
+    /**
+     * The accessible name of a control that shows its value but not its label, such as a
+     * popover field's trigger: "Country: Israel", or the value alone while it has no label (#188).
+     */
+    static String labelAndValue(String label, String value) {
+        String shown = value == null ? "" : value;
+        return label == null || label.isBlank() ? shown : label + NAME_SEPARATOR + shown;
     }
 }

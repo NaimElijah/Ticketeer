@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.components.kit;
 
-import com.vaadin.flow.component.html.NativeLabel;
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 
 import java.util.List;
@@ -9,15 +10,25 @@ import java.util.function.Consumer;
 /**
  * Popover-backed select. Trigger looks like {@link LkField}; panel is an
  * {@link LkMenu} of options. Ports the React {@code Select} component.
+ *
+ * <p>The trigger is a native button named "label: value" that says it opens a
+ * popup, and each option is a radio that says whether it is chosen (#188; WCAG
+ * 2.1.1, 4.1.2; {@code PopoverTriggerA11yTest}). The field is a {@code div}, not a
+ * {@code label}: a label would hand every click inside the popover to the trigger,
+ * which toggles the popover.
  */
-public class LkSelect extends NativeLabel {
+public class LkSelect extends Div {
+
+    // Names the popover until label() names the field.
+    private static final String UNLABELLED = "Options";
 
     private final Span labelSpan = new Span();
     private final Span req = new Span(" *");
     private final Span valueSpan = new Span();
     private final LkMenu menu = new LkMenu();
-    private final Span trigger = new Span();
+    private final NativeButton trigger = new NativeButton();
     private final LkPopover popover;
+    private String label = "";
     private String currentValue;
     private Consumer<String> onChange;
     private boolean hasLabel;
@@ -30,14 +41,13 @@ public class LkSelect extends NativeLabel {
         labelSpan.addClassName("lk-label");
         req.addClassName("lk-req");
         valueSpan.addClassName("lk-input-val");
-        show(value);
 
         trigger.addClassName("lk-input");
         trigger.addClassName("lk-select");
         trigger.add(valueSpan, new LkIcon("caret", 13));
-        trigger.getElement().setAttribute("tabindex", "0");
 
-        popover = new LkPopover(trigger, menu).block();
+        popover = new LkPopover(UNLABELLED, trigger, menu).block();
+        show(value);
         rebuildOptions(options);
         add(popover);
     }
@@ -51,12 +61,21 @@ public class LkSelect extends NativeLabel {
         return this;
     }
 
+    /**
+     * Sets the label shown above the field, which also names its trigger and its popover.
+     *
+     * @param t the label
+     * @return this select, for chaining
+     */
     public LkSelect label(String t) {
+        label = t;
         labelSpan.setText(t);
         if (!hasLabel) {
             getElement().insertChild(0, labelSpan.getElement());
             hasLabel = true;
         }
+        popover.name(t);
+        nameTrigger();
         return this;
     }
 
@@ -92,33 +111,31 @@ public class LkSelect extends NativeLabel {
     }
 
     /**
-     * Toggle interactive state. A disabled select is visually muted, non-clickable, removed from the
-     * tab order, and exposes {@code aria-disabled} so assistive tech reports it.
+     * Toggle interactive state. A disabled select is visually muted, and its trigger is a
+     * disabled button: out of the tab order, and reported unavailable to assistive tech.
      */
     public LkSelect enabled(boolean enabled) {
         trigger.getStyle().set("pointer-events", enabled ? "auto" : "none");
         trigger.getStyle().set("opacity",         enabled ? "1"    : "0.45");
-        if (enabled) {
-            trigger.getElement().setAttribute("tabindex", "0");
-            trigger.getElement().removeAttribute("aria-disabled");
-        } else {
-            trigger.getElement().removeAttribute("tabindex");
-            trigger.getElement().setAttribute("aria-disabled", "true");
-        }
+        trigger.setEnabled(enabled);
         return this;
     }
 
     private void show(String value) {
         currentValue = value;
         valueSpan.setText(value);
+        nameTrigger();
+    }
+
+    // The trigger shows the value only, so its name carries the label too.
+    private void nameTrigger() {
+        trigger.getElement().setAttribute(Lk.ARIA_LABEL, Lk.labelAndValue(label, currentValue));
     }
 
     private void rebuildOptions(List<String> options) {
         menu.removeAll();
         for (String opt : options) {
-            LkMenu.Item item = new LkMenu.Item(opt);
-            if (opt.equals(currentValue))
-                item.active();
+            LkMenu.Item item = new LkMenu.Item(opt).choice(opt.equals(currentValue));
             item.onClick(() -> {
                 show(opt);
                 if (onChange != null)

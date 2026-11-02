@@ -23,6 +23,7 @@ import java.util.function.Function;
  */
 public class NotificationBellComponent extends Span {
 
+    // Names the bell and the panel it opens.
     private static final String NOTIFICATIONS = "Notifications";
 
     private final Function<String, MarkReadOutcome> markRead;
@@ -108,7 +109,7 @@ public class NotificationBellComponent extends Span {
             refresh();
         };
 
-        add(new LkPopover(bell, LkNotifPanel.fromDTOs(notifs, onMarkAll, onMarkOne, age))
+        add(new LkPopover(NOTIFICATIONS, bell, LkNotifPanel.fromDTOs(notifs, onMarkAll, onMarkOne, age))
                 .position(PopoverPosition.BOTTOM_END));
     }
 
