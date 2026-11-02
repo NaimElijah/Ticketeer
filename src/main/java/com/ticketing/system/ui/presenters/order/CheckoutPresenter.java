@@ -54,11 +54,13 @@ public class CheckoutPresenter {
 
     // ---- identity -------------------------------------------------------
 
+    /** The visitor, resolved once: a live member's token and id, or a guest's live session id. */
     public Identity resolveIdentity() {
-        if (identity.isMember()) {
-            return new Identity(true, identity.memberToken(), null, identity.memberUserId());
-        }
-        return new Identity(false, null, identity.guestSessionId(), 0);
+        return switch (identity.visitor()) {
+            case SessionIdentity.Visitor.Member member -> new Identity(true, member.token(), null, member.userId());
+            case SessionIdentity.Visitor.Guest guest ->
+                    new Identity(false, null, guest.sessionId(), SessionIdentity.NO_MEMBER_USER_ID);
+        };
     }
 
     public record Identity(boolean member, String memberToken, String guestSessionId, int userId) { }

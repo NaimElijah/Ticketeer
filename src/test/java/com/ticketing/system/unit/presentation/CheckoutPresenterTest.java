@@ -198,6 +198,20 @@ class CheckoutPresenterTest {
                 "a cart whose hold ran out must still read as an expired order, but was: " + outcome);
     }
 
+    // ---- UI-B10: resolving the visitor is one action, so the token's liveness is looked up once (#187) ----
+
+    @Test
+    void GivenASignedInMember_WhenResolveIdentity_ThenTheTokenIsCheckedForLivenessOnce() {
+        AuthenticationService authenticationService = signedInLiveMember();
+        CheckoutPresenter withRealIdentity = presenterResolvingTheVisitorThrough(authenticationService,
+                mock(ReservationService.class));
+
+        CheckoutPresenter.Identity identity = withRealIdentity.resolveIdentity();
+
+        assertEquals(new CheckoutPresenter.Identity(true, BUYER_TOKEN, null, BUYER_ID), identity);
+        verify(authenticationService, times(1)).liveMemberId(BUYER_TOKEN);
+    }
+
     // ---- UI-C2: a store failure from viewMyActiveOrder reads as the outage, not an expired session (#187) ----
 
     @Test

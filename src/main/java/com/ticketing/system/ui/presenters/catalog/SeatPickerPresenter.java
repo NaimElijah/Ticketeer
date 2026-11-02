@@ -68,11 +68,7 @@ public class SeatPickerPresenter {
 
     public ReserveOutcome reserveSeated(InventorySelectionDTO selection, int eventId, int zoneId) {
         try {
-            if (identity.isMember()) {
-                reservationService.reserveForMember(identity.memberToken(), eventId, zoneId, selection);
-            } else {
-                reservationService.reserveForGuest(identity.guestSessionId(), eventId, zoneId, selection);
-            }
+            reserveForVisitor(eventId, zoneId, selection);
             return new ReserveOutcome.Success(selection.getSeatNumbers().size());
         } catch (DomainException e) {
             // Domain rejections (sold out, not on sale, market closed, …) carry buyer-facing messages. A
@@ -88,12 +84,7 @@ public class SeatPickerPresenter {
 
     public ReserveOutcome reserveStanding(int quantity, int eventId, int zoneId) {
         try {
-            InventorySelectionDTO selection = InventorySelectionDTO.standing(quantity);
-            if (identity.isMember()) {
-                reservationService.reserveForMember(identity.memberToken(), eventId, zoneId, selection);
-            } else {
-                reservationService.reserveForGuest(identity.guestSessionId(), eventId, zoneId, selection);
-            }
+            reserveForVisitor(eventId, zoneId, InventorySelectionDTO.standing(quantity));
             return new ReserveOutcome.Success(quantity);
         } catch (DomainException e) {
             // Domain rejections carry buyer-facing messages; DEBUG for the same reason as reserveSeated.
@@ -103,6 +94,16 @@ public class SeatPickerPresenter {
         } catch (RuntimeException e) {
             return new ReserveOutcome.Failure(ServiceErrors.userMessageLogged(e, "standing reserve eventId=" + eventId
                     + " zoneId=" + zoneId + " qty=" + quantity));
+        }
+    }
+
+    // One resolution per reservation: asking isMember() and then memberToken() would check the token twice.
+    private void reserveForVisitor(int eventId, int zoneId, InventorySelectionDTO selection) {
+        switch (identity.visitor()) {
+            case SessionIdentity.Visitor.Member member ->
+                    reservationService.reserveForMember(member.token(), eventId, zoneId, selection);
+            case SessionIdentity.Visitor.Guest guest ->
+                    reservationService.reserveForGuest(guest.sessionId(), eventId, zoneId, selection);
         }
     }
 

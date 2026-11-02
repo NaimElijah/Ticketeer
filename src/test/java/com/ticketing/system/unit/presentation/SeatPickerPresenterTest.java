@@ -205,4 +205,30 @@ class SeatPickerPresenterTest {
                 "the one log line must carry the exception");
     }
 
+    // ---- UI-B10: a seat action resolves the visitor once (#187) ----
+
+    @Test
+    void GivenASignedInMember_WhenReserveSeated_ThenTheTokenIsCheckedForLivenessOnce() {
+        signInAsLiveMember();
+
+        presenter.reserveSeated(InventorySelectionDTO.seated(List.of("A1")), EVENT_ID, ZONE_ID);
+
+        verify(reservationService).reserveForMember(eq(MEMBER_TOKEN), eq(EVENT_ID), eq(ZONE_ID), any());
+        verify(authenticationService, times(1)).liveMemberId(MEMBER_TOKEN);
+    }
+
+    @Test
+    void GivenASignedInMember_WhenReserveStanding_ThenTheTokenIsCheckedForLivenessOnce() {
+        signInAsLiveMember();
+
+        presenter.reserveStanding(2, EVENT_ID, ZONE_ID);
+
+        verify(reservationService).reserveForMember(eq(MEMBER_TOKEN), eq(EVENT_ID), eq(ZONE_ID), any());
+        verify(authenticationService, times(1)).liveMemberId(MEMBER_TOKEN);
+    }
+
+    private void signInAsLiveMember() {
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "member"));
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+    }
 }
