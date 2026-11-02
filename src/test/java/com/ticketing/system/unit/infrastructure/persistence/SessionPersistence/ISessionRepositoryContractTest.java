@@ -211,6 +211,8 @@ abstract class ISessionRepositoryContractTest {
     void GivenSessionsOfSeveralKinds_WhenDeleteAdminSessions_ThenOnlyThatAdminsAdminRowsAreGone() {
         repo.save(Session.admin("sid-admin-1-a", 1, T0, T_FAR_FUTURE));
         repo.save(Session.admin("sid-admin-1-b", 1, T0, T_FAR_FUTURE));
+        // Expired before the adapter's clock (T0): the port deletes the admin's rows expired or not.
+        repo.save(Session.admin("sid-admin-1-expired", 1, T_PAST, T_PAST_PLUS_ONE));
         repo.save(new Session("sid-member-1", 1, T0, T_FAR_FUTURE));
         repo.save(Session.admin("sid-admin-2", 2, T0, T_FAR_FUTURE));
         repo.save(new Session("sid-guest", null, T0, T_FAR_FUTURE));
@@ -219,6 +221,7 @@ abstract class ISessionRepositoryContractTest {
 
         assertFalse(repo.findById("sid-admin-1-a").isPresent(), "admin 1's first session must be deleted");
         assertFalse(repo.findById("sid-admin-1-b").isPresent(), "admin 1's second session must be deleted");
+        assertFalse(repo.findById("sid-admin-1-expired").isPresent(), "admin 1's expired session must be deleted too");
         assertTrue(repo.findById("sid-member-1").isPresent(), "member 1 shares admin 1's id but is not that admin");
         assertTrue(repo.findById("sid-admin-2").isPresent(), "another admin's session must stay");
         assertTrue(repo.findById("sid-guest").isPresent(), "a guest session must stay");
