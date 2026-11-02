@@ -64,7 +64,8 @@ public class LandingView extends LkPage {
         title.setText("Find your next unforgettable experience.");
         Div sub = new Div();
         sub.addClassName("bz-hero-sub");
-        sub.setText("Concerts, sports, theatre, conferences — across Israel, all in one place.");
+        // Names only categories that exist (EventCategoryLabels); there is no conference category (#187, UI-A19b).
+        sub.setText("Concerts, sports, theatre, comedy — across Israel, all in one place.");
         hero.add(title, sub);
         return hero;
     }
