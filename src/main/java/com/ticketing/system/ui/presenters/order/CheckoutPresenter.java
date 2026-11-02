@@ -4,8 +4,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -210,11 +210,23 @@ public class CheckoutPresenter {
         expiryListeners.remove(listener);
     }
 
-    @EventListener
+    /**
+     * Tells each open checkout view whose order the sweeper expired. Runs once the sweep's transaction
+     * has committed, so a sweep that rolls back tells no one; an expiry published outside a transaction
+     * is passed on at once. A view that fails to take the news is logged at WARN with its exception and
+     * the others are still told: the sweep has already committed, so the failure must not reach it.
+     *
+     * @param event the expired order's owner, a member's user id or a guest's session id
+     */
+    @TransactionalEventListener(fallbackExecution = true)
     public void onOrderExpired(OrderExpiredEvent event) {
         for (ExpiryListener listener : expiryListeners) {
-            if (listener.matches(event.userId(), event.sessionId())) {
-                listener.onExpired();
+            try {
+                if (listener.matches(event.userId(), event.sessionId())) {
+                    listener.onExpired();
+                }
+            } catch (RuntimeException e) {
+                log.warn("checkout view failed to take an order expiry userId={}", event.userId(), e);
             }
         }
     }
