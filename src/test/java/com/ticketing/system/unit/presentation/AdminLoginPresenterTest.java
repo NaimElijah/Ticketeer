@@ -76,9 +76,10 @@ class AdminLoginPresenterTest {
         assertEquals(List.of(), NotificationSession.getAll(), "the member's alerts must leave the bell");
         assertTrue(AuthSession.isAdmin());
         assertEquals(ADMIN_AUTH.token(), AuthSession.token());
-        // The bell is emptied (its two attributes set to null) before the admin's token is stored.
+        // The bell is emptied (the inbox attribute set to null) before the admin's token is stored. The
+        // bell itself lives on its UI, not on the session (UI-B8), so it is not a session write.
         InOrder order = inOrder(session);
-        order.verify(session, times(2)).setAttribute(anyString(), isNull());
+        order.verify(session, times(1)).setAttribute(anyString(), isNull());
         order.verify(session).setAttribute(anyString(), eq(ADMIN_AUTH.token()));
     }
 

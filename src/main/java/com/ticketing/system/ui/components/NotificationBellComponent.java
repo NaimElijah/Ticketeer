@@ -36,8 +36,8 @@ public class NotificationBellComponent extends Span {
     public NotificationBellComponent(Function<String, MarkReadOutcome> markRead, Function<LocalDateTime, String> age) {
         this.markRead = Objects.requireNonNull(markRead, "markRead");
         this.age = Objects.requireNonNull(age, "age");
-        addAttachListener(e -> NotificationSession.setBell(this));
-        addDetachListener(e -> NotificationSession.setBell(null));
+        addAttachListener(e -> NotificationSession.setBell(e.getUI(), this));
+        addDetachListener(e -> NotificationSession.removeBell(e.getUI(), this));
         build();
     }
 
