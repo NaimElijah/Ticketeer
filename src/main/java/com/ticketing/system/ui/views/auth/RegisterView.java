@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.auth;
 
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.auth.PasswordStrengthMeter;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
@@ -181,7 +182,7 @@ public class RegisterView extends LkAuthCard {
             case RegisterPresenter.Outcome.EmailTaken ignored ->
                 Toasts.failure("That email is already registered.");
             case RegisterPresenter.Outcome.WeakPassword weak ->
-                Toasts.failure("That password is too weak — please choose a stronger one.");
+                Toasts.failure(Lk.withReason("That password is too weak", weak.reason()));
             case RegisterPresenter.Outcome.InvalidEmail ignored ->
                 Toasts.failure("That email address looks invalid.");
             case RegisterPresenter.Outcome.GuestSessionMissing miss -> {
@@ -189,9 +190,9 @@ public class RegisterView extends LkAuthCard {
                 UI.getCurrent().getPage().reload();
             }
             case RegisterPresenter.Outcome.InvalidInput bad ->
-                Toasts.failure("Please check your details and try again.");
+                Toasts.failure(Lk.withReason("Please check your details", bad.reason()));
             case RegisterPresenter.Outcome.Failure fail ->
-                Toasts.failure("Registration failed — please try again.");
+                Toasts.failure(Lk.withReason("Registration failed", fail.reason()));
         }
     }
 }

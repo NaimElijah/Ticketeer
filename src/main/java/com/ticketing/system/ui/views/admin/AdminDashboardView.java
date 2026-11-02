@@ -1,6 +1,8 @@
 package com.ticketing.system.ui.views.admin;
 
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
+import com.ticketing.system.ui.components.kit.Lk;
+import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -52,12 +54,16 @@ public class AdminDashboardView extends LkPage {
                     new LkStat("Platform revenue · 30d",  "$" + String.format("%,.0f", o.revenue30d()))
                 );
             }
-            case AdminDashboardPresenter.Outcome.Failure ignored -> row.add(
-                new LkStat("Active companies",        "—"),
-                new LkStat("Live events",             "—"),
-                new LkStat("Open complaints",         "—"),
-                new LkStat("Platform revenue · 30d",  "—")
-            );
+            case AdminDashboardPresenter.Outcome.Failure fail -> {
+                row.add(
+                    new LkStat("Active companies",        "—"),
+                    new LkStat("Live events",             "—"),
+                    new LkStat("Open complaints",         "—"),
+                    new LkStat("Platform revenue · 30d",  "—")
+                );
+                return new Div(new LkBanner(LkBanner.Tone.warn, new LkIcon("warning", 18),
+                    Lk.withReason("Could not load the platform overview", fail.reason())), row);
+            }
         }
         return row;
     }

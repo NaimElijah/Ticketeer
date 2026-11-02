@@ -520,7 +520,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
             case SaveOutcome.Success s           -> Toasts.success("Policy saved.");
             case SaveOutcome.NotAuthenticated na  -> Toasts.failure("Your session has expired — please sign in again.");
             case SaveOutcome.Invalid inv         -> Toasts.warn(inv.reason());
-            case SaveOutcome.Failure f           -> Toasts.failure("Couldn't save the policy — please try again.");
+            case SaveOutcome.Failure f           -> Toasts.failure(Lk.withReason("Couldn't save the policy", f.reason()));
         }
     }
 

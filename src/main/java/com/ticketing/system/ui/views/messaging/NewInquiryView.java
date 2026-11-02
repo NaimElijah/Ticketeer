@@ -124,7 +124,7 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
         switch (presenter.searchCompanies(query)) {
             case NewInquiryPresenter.SearchOutcome.Success ok -> renderResults(ok.companies());
             case NewInquiryPresenter.SearchOutcome.Failure fail ->
-                Toasts.failure("Could not search companies — please try again.");
+                Toasts.failure(Lk.withReason("Could not search companies", fail.reason()));
         }
     }
 

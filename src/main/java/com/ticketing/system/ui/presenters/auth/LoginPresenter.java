@@ -3,6 +3,7 @@ package com.ticketing.system.ui.presenters.auth;
 import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -39,6 +40,8 @@ public class LoginPresenter {
                 new LoginRequestDTO(username, rawPassword, guestSessionId)
             );
             return new Outcome.Success(result);
+        } catch (AccountLockedException e) {
+            return new Outcome.Locked(e.getMessage());
         } catch (AuthenticationFailedException e) {
             return new Outcome.InvalidCredentials();
         } catch (GuestSessionRequiredException e) {
@@ -57,6 +60,12 @@ public class LoginPresenter {
     public sealed interface Outcome {
         record Success(LoginDTO loginDTO) implements Outcome { }
         record InvalidCredentials() implements Outcome { }
+        /**
+         * Too many failed attempts on this username; the password was not checked.
+         *
+         * @param reason the lockout's own text, which says when to try again
+         */
+        record Locked(String reason) implements Outcome { }
         record GuestSessionMissing(String reason) implements Outcome { }
         record ServiceUnavailable() implements Outcome { }
         record Failure(String reason) implements Outcome { }

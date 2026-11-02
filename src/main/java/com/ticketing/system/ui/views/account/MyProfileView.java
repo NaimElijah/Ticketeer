@@ -2,9 +2,11 @@ package com.ticketing.system.ui.views.account;
 
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
+import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkField;
+import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.MyProfilePresenter;
@@ -39,9 +41,11 @@ public class MyProfileView extends LkPage {
         if (name == null || name.isBlank()) name = "Guest";
 
         // Username + email come from the User aggregate via the presenter. When signed out or on a load
-        // error we show a neutral placeholder rather than fabricating a plausible-looking address.
+        // error we show a neutral placeholder rather than fabricating a plausible-looking address, and a
+        // load error also says why.
         String username = "—";
         String email = "—";
+        LkBanner loadFailure = null;
         switch (presenter.load()) {
             case MyProfilePresenter.Outcome.Success ok -> {
                 username = ok.member().username();
@@ -50,10 +54,14 @@ public class MyProfileView extends LkPage {
                 }
             }
             case MyProfilePresenter.Outcome.NotAuthenticated ignored -> { /* keep placeholder */ }
-            case MyProfilePresenter.Outcome.Failure ignored -> { /* keep placeholder */ }
+            case MyProfilePresenter.Outcome.Failure fail -> loadFailure = new LkBanner(LkBanner.Tone.warn,
+                new LkIcon("warning", 18), Lk.withReason("Could not load your profile", fail.reason()));
         }
 
         LkCard card = new LkCard("Profile").pad(20);
+        if (loadFailure != null) {
+            card.add(loadFailure);
+        }
 
         Div idRow = new Div();
         idRow.addClassName("prof-id");

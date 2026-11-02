@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.auth;
 
 import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.layouts.MainLayout;
@@ -109,6 +110,8 @@ public class LoginView extends LkAuthCard {
             case LoginPresenter.Outcome.Success ok -> onSuccess(ok.loginDTO());
             case LoginPresenter.Outcome.InvalidCredentials ignored ->
                 Toasts.failure("Invalid username or password.");
+            case LoginPresenter.Outcome.Locked locked ->
+                Toasts.failure(Lk.withReason("Your account is temporarily locked", locked.reason()));
             case LoginPresenter.Outcome.GuestSessionMissing miss -> {
                 Toasts.warn("Your session timed out — reloading…");
                 UI.getCurrent().getPage().reload();
@@ -116,7 +119,7 @@ public class LoginView extends LkAuthCard {
             case LoginPresenter.Outcome.ServiceUnavailable ignored ->
                 Toasts.failure(ServiceErrors.DB_UNAVAILABLE_MESSAGE);
             case LoginPresenter.Outcome.Failure fail ->
-                Toasts.failure("Sign-in failed — please try again.");
+                Toasts.failure(Lk.withReason("Sign-in failed", fail.reason()));
         }
     }
 

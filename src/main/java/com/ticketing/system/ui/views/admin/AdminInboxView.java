@@ -203,7 +203,7 @@ public class AdminInboxView extends LkPage {
             case AdminInboxPresenter.ActionOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case AdminInboxPresenter.ActionOutcome.Failure fail ->
-                Toasts.failure("Could not close the conversation — please try again.");
+                Toasts.failure(Lk.withReason("Could not close the conversation", fail.reason()));
         }
     }
 

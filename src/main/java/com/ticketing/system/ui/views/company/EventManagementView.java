@@ -118,7 +118,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             case EventManagementPresenter.LoadOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
             case EventManagementPresenter.LoadOutcome.Failure fail ->
-                Toasts.failure("Could not load the event — please try again.");
+                Toasts.failure(Lk.withReason("Could not load the event", fail.reason()));
         }
     }
 

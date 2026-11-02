@@ -2,6 +2,7 @@ package com.ticketing.system.ui.views.company;
 
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
@@ -113,7 +114,7 @@ private final ManagerInvitationPresenter presenter;
             case ManagerInvitationPresenter.Outcome.UserNotFound u ->
                 Toasts.failure("User \"" + u.username() + "\" was not found.");
             case ManagerInvitationPresenter.Outcome.Failure fail ->
-                Toasts.failure("Could not send the invitation — please try again.");
+                Toasts.failure(Lk.withReason("Could not send the invitation", fail.reason()));
         }
     }
     
