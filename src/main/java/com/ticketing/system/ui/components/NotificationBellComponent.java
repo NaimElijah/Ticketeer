@@ -13,21 +13,31 @@ import com.vaadin.flow.component.popover.PopoverPosition;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Function;
 
 /**
  * Self-contained bell icon + unread badge + notification dropdown.
- * Reads NotificationSession on construction; call refresh() to rebuild
+ * Reads NotificationSession on construction; call refresh() to update it
  * from the current session state (hook for future real-time delivery, #225).
+ *
+ * <p>The bell's name carries the unread count ("Notifications, 3 unread"), which the badge
+ * only shows, and a refresh updates the bell in place: the poller refreshes it on every tick,
+ * and rebuilding the button would take a keyboard user's focus with it (#188; WCAG 1.3.1,
+ * 2.4.3, 4.1.2; {@code NotificationBellA11yTest}).
  */
 public class NotificationBellComponent extends Span {
 
     // Names the bell and the panel it opens.
     private static final String NOTIFICATIONS = "Notifications";
+    private static final String NOTIFICATIONS_UNREAD = NOTIFICATIONS + ", %d unread";
 
     private final Function<String, MarkReadOutcome> markRead;
     private final Function<LocalDateTime, String> age;
+    private final NativeButton bell = new NativeButton();
+    private final Span badge = new Span();
+    private final LkPopover popover;
     private List<NotificationDTO> renderedInbox = List.of();
 
     /**
@@ -42,13 +52,20 @@ public class NotificationBellComponent extends Span {
         this.age = Objects.requireNonNull(age, "age");
         addAttachListener(e -> NotificationSession.setBell(e.getUI(), this));
         addDetachListener(e -> NotificationSession.removeBell(e.getUI(), this));
-        build();
+        bell.addClassName("lk-bell");
+        bell.add(new LkIcon("bell", 18));
+        badge.addClassName("lk-bell-badge");
+        popover = new LkPopover(NOTIFICATIONS, bell).position(PopoverPosition.BOTTOM_END);
+        add(popover);
+        render();
     }
 
-    /** Rebuild from current NotificationSession — safe to call after store(). */
+    /**
+     * Updates the bell's name, badge and panel from the current NotificationSession, keeping
+     * the bell's button — safe to call after store().
+     */
     public void refresh() {
-        removeAll();
-        build();
+        render();
     }
 
     /**
@@ -68,7 +85,7 @@ public class NotificationBellComponent extends Span {
         return AuthSession.isSignedIn() ? NotificationSession.getAll() : List.of();
     }
 
-    private void build() {
+    private void render() {
         renderedInbox = shownInbox();
         List<NotificationDTO> notifs = renderedInbox.stream()
                 .sorted(java.util.Comparator.comparing(NotificationDTO::createdAt,
@@ -77,15 +94,14 @@ public class NotificationBellComponent extends Span {
 
         int unread = (int) notifs.stream().filter(n -> !"READ".equals(n.status())).count();
 
-        NativeButton bell = new NativeButton();
-        bell.addClassName("lk-bell");
-        bell.getElement().setAttribute("aria-label", NOTIFICATIONS);
-        bell.add(new LkIcon("bell", 18));
-
+        bell.getElement().setAttribute("aria-label",
+                unread > 0 ? String.format(Locale.ROOT, NOTIFICATIONS_UNREAD, unread) : NOTIFICATIONS);
+        // The badge is in the bell only while something is unread, as a "0" badge would mislead.
         if (unread > 0) {
-            Span badge = new Span(String.valueOf(unread));
-            badge.addClassName("lk-bell-badge");
-            bell.add(badge);
+            badge.setText(String.valueOf(unread));
+            if (badge.getParent().isEmpty()) bell.add(badge);
+        } else if (badge.getParent().isPresent()) {
+            bell.remove(badge);
         }
 
         // Stops at the first read that is not stored: with the store down, every later call would wait
@@ -109,8 +125,7 @@ public class NotificationBellComponent extends Span {
             refresh();
         };
 
-        add(new LkPopover(NOTIFICATIONS, bell, LkNotifPanel.fromDTOs(notifs, onMarkAll, onMarkOne, age))
-                .position(PopoverPosition.BOTTOM_END));
+        popover.content(LkNotifPanel.fromDTOs(notifs, onMarkAll, onMarkOne, age));
     }
 
     // Shows the item read only once the store has it read, and a refusal's reason as a toast. Returns

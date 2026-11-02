@@ -640,13 +640,16 @@
   /* notifications panel */
   .lk-notif{width:374px;display:flex;flex-direction:column}
   .lk-notif-h{display:flex;align-items:center;justify-content:space-between;padding:6px 8px 9px}
-  .lk-notif-h b{font-size:.98rem}
+  .lk-notif-title{margin:0;font-size:.98rem;font-weight:700}
   .lk-notif-list{display:flex;flex-direction:column;max-height:340px;overflow-y:auto}
   .lk-notif-item{display:flex;gap:12px;align-items:flex-start;padding:11px 10px;border-radius:10px;border:none;background:none;
     cursor:pointer;text-align:left;width:100%;position:relative}
   .lk-notif-item:hover{background:#f6f8fb}
   .lk-notif-item.unread{background:#f3f8fd}
   .lk-notif-item.unread:hover{background:#eaf2fb}
+  /* An empty inbox's message: laid out as a row, but nothing to click. */
+  .lk-notif-empty{cursor:default}
+  .lk-notif-empty:hover{background:none}
   .lk-notif-ic{flex:none;width:34px;height:34px;border-radius:9px;background:#eef4fb;color:var(--primary);display:inline-flex;align-items:center;justify-content:center}
   .lk-notif-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
   .lk-notif-t{font-size:.86rem;font-weight:700;color:#0f172a;line-height:1.3}
