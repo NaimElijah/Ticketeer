@@ -49,16 +49,12 @@ class PurchasePolicyEditorPresenterUnknownKindTest {
                 List.of(new PurchasePolicyDTO("AGE", 18, null, null, null), unknownRule));
         when(companyManagementService.getCompanyPurchasePolicy(TOKEN, COMPANY_ID)).thenReturn(stored);
 
-        PurchasePolicyEditorPresenter.LoadOutcome loaded = presenter.load(TOKEN, COMPANY_ID, NO_EVENT, COMPANY_LEVEL);
-        if (loaded instanceof PurchasePolicyEditorPresenter.LoadOutcome.Success success) {
-            presenter.save(TOKEN, COMPANY_ID, NO_EVENT, COMPANY_LEVEL, success.root());
-        }
+        PurchasePolicyEditorPresenter.LoadOutcome.Success loaded = assertInstanceOf(
+                PurchasePolicyEditorPresenter.LoadOutcome.Success.class,
+                presenter.load(TOKEN, COMPANY_ID, NO_EVENT, COMPANY_LEVEL));
+        presenter.save(TOKEN, COMPANY_ID, NO_EVENT, COMPANY_LEVEL, loaded.root());
 
-        // Refusing the unknown kind, on load or on save, saves nothing; keeping it saves it unchanged.
-        List<PurchasePolicyDTO> saved = savedCompanyPolicies();
-        if (!saved.isEmpty()) {
-            assertEquals(List.of(stored), saved, "a rule kind the editor does not know must be saved as it was");
-        }
+        assertEquals(List.of(stored), savedCompanyPolicies(), "a rule kind the editor does not know must be saved as it was");
     }
 
     // The editor keeps an unknown kind: a policy that is nothing else is wrapped in a root group on load
@@ -74,6 +70,21 @@ class PurchasePolicyEditorPresenterUnknownKindTest {
         presenter.save(TOKEN, COMPANY_ID, NO_EVENT, COMPANY_LEVEL, loaded.root());
 
         assertEquals(List.of(stored), savedCompanyPolicies(), "a rule kind the editor does not know must be saved as it was");
+    }
+
+    @Test
+    void GivenAGroupWithANestedNone_WhenLoadedAndSavedBack_ThenTheSavedPolicyIsTheLoadedOne() {
+        PurchasePolicyDTO stored = new PurchasePolicyDTO("AND", null, null, null,
+                List.of(new PurchasePolicyDTO("AGE", 18, null, null, null),
+                        new PurchasePolicyDTO("NONE", null, null, null, null)));
+        when(companyManagementService.getCompanyPurchasePolicy(TOKEN, COMPANY_ID)).thenReturn(stored);
+
+        PurchasePolicyEditorPresenter.LoadOutcome.Success loaded = assertInstanceOf(
+                PurchasePolicyEditorPresenter.LoadOutcome.Success.class,
+                presenter.load(TOKEN, COMPANY_ID, NO_EVENT, COMPANY_LEVEL));
+        presenter.save(TOKEN, COMPANY_ID, NO_EVENT, COMPANY_LEVEL, loaded.root());
+
+        assertEquals(List.of(stored), savedCompanyPolicies(), "a nested NONE must be saved as it was");
     }
 
     private List<PurchasePolicyDTO> savedCompanyPolicies() {
