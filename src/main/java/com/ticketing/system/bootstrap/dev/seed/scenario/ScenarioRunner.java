@@ -230,9 +230,10 @@ public class ScenarioRunner implements ApplicationRunner {
     /**
      * Asks which committed scenario to run. An answer that names none would name a missing file and stop
      * the boot, so it is refused, the valid names are shown, and the question is asked again. With no
-     * console the default is taken, as for every question.
+     * console at the first answer the default is taken, as for every question.
      *
-     * @throws IllegalStateException when the console ends after an unknown answer, naming the valid choices
+     * @throws IllegalStateException when the console ends, or cannot be read, after an unknown answer; the
+     *         message names the valid choices
      */
     private String askScenario() {
         String answer = askChoice(SCENARIO_QUESTION, SCENARIOS, DEFAULT_SCENARIO);
@@ -251,7 +252,8 @@ public class ScenarioRunner implements ApplicationRunner {
 
     private static IllegalStateException consoleEndedAfter(String unknownAnswer, IOException cause) {
         return new IllegalStateException("seed.mode=ask: '" + unknownAnswer + "' is not a scenario, and the"
-                + " console ended before a valid one was chosen. Choose one of " + SCENARIOS + ".", cause);
+                + " console ended or could not be read before a valid one was chosen. Choose one of " + SCENARIOS
+                + ".", cause);
     }
 
     /**
