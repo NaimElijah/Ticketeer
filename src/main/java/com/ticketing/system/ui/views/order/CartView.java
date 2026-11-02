@@ -47,8 +47,7 @@ public class CartView extends LkPage {
             case CartPresenter.LoadOutcome.NotAuthenticated na -> clearCart();
             case CartPresenter.LoadOutcome.Failure f -> {
                 clearCart();
-                Toasts.failure("Could not load your cart — please try again."
-                        + (f.reason() != null && !f.reason().isBlank() ? " (" + f.reason() + ")" : ""));
+                Toasts.failure(Lk.withReason("Could not load your cart", f.reason()));
             }
         }
 
@@ -117,8 +116,7 @@ public class CartView extends LkPage {
                         Toasts.success("Removed from cart.");
                     }
                     case CartPresenter.RemoveOutcome.Failure f ->
-                        Toasts.failure("Could not remove the item — please try again."
-                                + (f.reason() != null && !f.reason().isBlank() ? " (" + f.reason() + ")" : ""));
+                        Toasts.failure(Lk.withReason("Could not remove the item", f.reason()));
                 }
             });
 

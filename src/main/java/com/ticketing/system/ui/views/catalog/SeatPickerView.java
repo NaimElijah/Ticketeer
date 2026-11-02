@@ -45,6 +45,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
 
     // Derived from the tile size so seats never overlap or drift — one source of truth.
     private static final int SEAT_STEP = VkSeatedZonePicker.TILE_PX + 6;
+    private static final String RESERVE_FAILED = "Couldn't reserve those tickets";
 
     private final SeatPickerPresenter presenter;
     /** The configured hold, so the page says how long seats stay locked (#187, UI-A18). */
@@ -238,7 +239,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
                 UI.getCurrent().navigate(CartView.class);
             }
             case SeatPickerPresenter.ReserveOutcome.Failure f ->
-                Toasts.failure(reserveFailureMessage(f.message()));
+                Toasts.failure(Lk.withReason(RESERVE_FAILED, f.message()));
         }
     }
 
@@ -294,15 +295,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
                 UI.getCurrent().navigate(CartView.class);
             }
             case SeatPickerPresenter.ReserveOutcome.Failure f ->
-                Toasts.failure(reserveFailureMessage(f.message()));
+                Toasts.failure(Lk.withReason(RESERVE_FAILED, f.message()));
         }
-    }
-
-    /** Surface the real reserve-failure reason when present, else a friendly fallback. */
-    private static String reserveFailureMessage(String raw) {
-        return (raw == null || raw.isBlank())
-            ? "Couldn't reserve those tickets — please try again."
-            : raw;
     }
 
     private Component buildBreadcrumb(String trailText) {
