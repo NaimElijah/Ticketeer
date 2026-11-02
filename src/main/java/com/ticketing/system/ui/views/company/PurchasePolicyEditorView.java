@@ -12,6 +12,7 @@ import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.policy.PolicyTreeMap;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.ContextOutcome;
 import com.ticketing.system.ui.presenters.company.PurchasePolicyEditorPresenter.Group;
@@ -65,6 +66,8 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
     private Span                          validityBadge;
     private Span                          scopeContextLabel;
     private final Div                     loadErrorSlot = new Div();
+    // Apart from loadErrorSlot, which every policy load clears: the event list loads once per company.
+    private final Div                     eventsErrorSlot = new Div();
     private Select<MyCompanyDTO>          companySelect;
     private Select<EventDetailDTO>        eventSelect;
     private NativeButton                  companyBtn;
@@ -79,6 +82,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         subtitle("Pick a company (and optionally an event), then build the rules · click a node to edit · drag to pan · scroll to zoom.");
 
         add(buildScopeToolbar());
+        add(eventsErrorSlot);
         add(loadErrorSlot);
         add(buildPlainEnglishBanner());
         add(buildCanvas());
@@ -104,6 +108,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
 
     private void initContext() {
         loadErrorSlot.removeAll();
+        eventsErrorSlot.removeAll();
         switch (presenter.resolveContext(memberToken)) {
             case ContextOutcome.NotAuthenticated na ->
                 disableEditing("Please sign in again to edit policies.");
@@ -133,7 +138,15 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         if (c == null) return;
         this.companyId = c.companyId();
 
-        List<EventDetailDTO> events = presenter.listEvents(memberToken, companyId);
+        eventsErrorSlot.removeAll();
+        List<EventDetailDTO> events = switch (presenter.listEvents(memberToken, companyId)) {
+            case ListOutcome.Loaded<EventDetailDTO> loaded -> loaded.items();
+            case ListOutcome.Failure<EventDetailDTO> failure -> {
+                eventsErrorSlot.add(new LkBanner(LkBanner.Tone.error, new LkIcon("alert-circle", 16),
+                        Lk.withReason("Could not load this company's events", failure.reason())));
+                yield List.of();
+            }
+        };
         eventSelect.setItems(events);
 
         EventDetailDTO preselect = null;

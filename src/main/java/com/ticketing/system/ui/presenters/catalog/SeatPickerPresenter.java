@@ -61,7 +61,7 @@ public class SeatPickerPresenter {
             ZoneType zoneType = ZoneType.valueOf(zone.getZoneType());
             return new LoadOutcome.Loaded(zone, zoneType);
         } catch (RuntimeException e) {
-            return new LoadOutcome.Failure("Could not load this zone — please refresh and try again");
+            return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
         }
     }
 

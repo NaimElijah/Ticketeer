@@ -112,6 +112,35 @@ class EventDetailsPresenterTest {
         assertEquals(3, ok.gridCols());
     }
 
+    // ---- UI-B3: a failed load reads as a failure, not as an event without a map (#187) ----
+    // A missing map (NullVenueMapException) still shows the detail with no zones:
+    // load_venueMapMissing_stillSuccessWithEmptyZones above.
+
+    @Test
+    void GivenTheStoreIsDown_WhenLoad_ThenFailureCarriesTheOutageMessage() {
+        when(catalogService.getEventDetail(CRED, EVENT_ID))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
+
+        EventDetailsPresenter.Outcome.Failure failure =
+                assertInstanceOf(EventDetailsPresenter.Outcome.Failure.class, outcome);
+        assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, failure.message());
+    }
+
+    @Test
+    void GivenTheStoreFailsWhileLoadingTheVenueMap_WhenLoad_ThenFailureNotAnEventWithoutAMap() {
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenReturn(detail());
+        when(catalogService.getEventVenueMap(CRED, EVENT_ID))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
+
+        EventDetailsPresenter.Outcome.Failure failure = assertInstanceOf(EventDetailsPresenter.Outcome.Failure.class,
+                outcome, "a store failure must not read as an event with no venue map, but was: " + outcome);
+        assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, failure.message());
+    }
+
     // ---- UI-B5: an internal failure goes through ServiceErrors (#187) ----
 
     @Test

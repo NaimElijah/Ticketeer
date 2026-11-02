@@ -16,6 +16,7 @@ import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 
@@ -70,13 +71,16 @@ public class PurchasePolicyEditorPresenter {
         }
     }
 
-    /** Events belonging to a company; empty (never null) if the call fails. */
-    public List<EventDetailDTO> listEvents(String token, int companyId) {
-        if (token == null || companyId <= 0) return List.of();
+    /**
+     * Events belonging to a company; none without a token or a company, and a
+     * {@link ListOutcome.Failure} with {@code ServiceErrors}' text when the read fails.
+     */
+    public ListOutcome<EventDetailDTO> listEvents(String token, int companyId) {
+        if (token == null || companyId <= 0) return new ListOutcome.Loaded<>(List.of());
         try {
-            return eventManagementService.listEventsForCompany(token, companyId);
+            return new ListOutcome.Loaded<>(eventManagementService.listEventsForCompany(token, companyId));
         } catch (RuntimeException e) {
-            return List.of();
+            return new ListOutcome.Failure<>(ServiceErrors.userMessage(e));
         }
     }
 

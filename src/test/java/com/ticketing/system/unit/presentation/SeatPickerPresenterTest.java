@@ -119,6 +119,21 @@ class SeatPickerPresenterTest {
                 "each row must be drawn at its own height");
     }
 
+    // ---- UI-B3: a failed zone load reads as the store's failure (#187) ----
+
+    @Test
+    void GivenTheStoreIsDown_WhenLoadZone_ThenFailureCarriesTheOutageMessage() {
+        when(catalogService.getEventVenueMap(any(), eq(EVENT_ID)))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        SeatPickerPresenter.LoadOutcome outcome = presenter.loadZone(EVENT_ID, ZONE_ID);
+
+        SeatPickerPresenter.LoadOutcome.Failure failure =
+                assertInstanceOf(SeatPickerPresenter.LoadOutcome.Failure.class, outcome);
+        assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE, failure.message(),
+                "a store outage must read as ServiceErrors' outage text");
+    }
+
     // ---- UI-B5: a reservation's internal failure goes through ServiceErrors (#187) ----
 
     @Test

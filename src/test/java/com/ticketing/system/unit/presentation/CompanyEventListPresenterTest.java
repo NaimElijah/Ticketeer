@@ -12,6 +12,7 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import org.junit.jupiter.api.BeforeEach;
@@ -308,7 +309,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void countries_nullToken_isEmpty() {
-        assertTrue(presenter.countries(null, null).isEmpty());
+        assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.countries(null, null));
         verifyNoInteractions(eventService, companyService);
     }
 
@@ -316,7 +317,7 @@ class CompanyEventListPresenterTest {
     void countries_noCompany_isEmpty() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of());
 
-        assertTrue(presenter.countries(TOKEN, null).isEmpty());
+        assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.countries(TOKEN, null));
         verifyNoInteractions(eventService);
     }
 
@@ -328,7 +329,7 @@ class CompanyEventListPresenterTest {
                 eventAt(2, "USA", "New York"),
                 eventAt(3, "Israel", "Haifa")));
 
-        assertEquals(List.of("Israel", "USA"), presenter.countries(TOKEN, null));
+        assertEquals(new ListOutcome.Loaded<>(List.of("Israel", "USA")), presenter.countries(TOKEN, null));
     }
 
     @Test
@@ -340,12 +341,12 @@ class CompanyEventListPresenterTest {
                 eventAt(4, "Israel", "Tel Aviv"),   // duplicate city
                 eventAt(3, "USA", "New York")));
 
-        assertEquals(List.of("Haifa", "Tel Aviv"), presenter.cities(TOKEN, null, "Israel"));
+        assertEquals(new ListOutcome.Loaded<>(List.of("Haifa", "Tel Aviv")), presenter.cities(TOKEN, null, "Israel"));
     }
 
     @Test
     void cities_nullCountry_isEmpty() {
-        assertTrue(presenter.cities(TOKEN, null, null).isEmpty());
+        assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.cities(TOKEN, null, null));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

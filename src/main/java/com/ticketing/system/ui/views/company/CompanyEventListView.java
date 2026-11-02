@@ -5,6 +5,7 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
+import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkDateRangeField;
@@ -16,6 +17,7 @@ import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkSelect;
 import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.WorkspaceLayout;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
@@ -66,6 +68,7 @@ public class CompanyEventListView extends LkPage {
     private final CompanyEventListPresenter presenter;
     private final DisplayTime displayTime;
     private final LkCard eventsCard = new LkCard().pad(0);
+    private final Div filterErrorSlot = new Div();
 
     // ---- filter state (mirrors /browse, minus company-rating; status is owner-only & client-side) ----
     private String filterCategory  = CatalogFilterSupport.CAT_ALL;
@@ -111,6 +114,7 @@ public class CompanyEventListView extends LkPage {
                 .onClick(e -> UI.getCurrent().navigate("owner/events/new")));
         }
         add(buildFilters());
+        add(filterErrorSlot);
         add(eventsCard);
         Span hint = Lk.muted("Row actions → Edit metadata · Venue map · Policies · Sales · Status · Cancel.");
         hint.getStyle().set("font-size", "12.5px");
@@ -191,16 +195,19 @@ public class CompanyEventListView extends LkPage {
         eventRatingMax = ratingField("Max", v -> { filterMaxEventRating = v; reload(); });
 
         countrySelect = new LkSelect(CatalogFilterSupport.COUNTRY_ALL,
-                CatalogFilterSupport.countryOptions(
-                        presenter.countries(AuthSession.token(), CurrentCompanies.currentCompanyId()))).label("Country");
+                CatalogFilterSupport.countryOptions(filterOptions(
+                        presenter.countries(AuthSession.token(), CurrentCompanies.currentCompanyId()),
+                        "Could not load the countries"))).label("Country");
         countrySelect.onChange(v -> {
             if (Objects.equals(filterCountry, v)) return;
             filterCountry = v;
             filterCity = CatalogFilterSupport.CITY_ALL;
+            filterErrorSlot.removeAll();
             citySelect.setOptions(CatalogFilterSupport.COUNTRY_ALL.equals(v)
                     ? List.of(CatalogFilterSupport.CITY_ALL)
-                    : CatalogFilterSupport.cityOptions(
-                            presenter.cities(AuthSession.token(), CurrentCompanies.currentCompanyId(), v)));
+                    : CatalogFilterSupport.cityOptions(filterOptions(
+                            presenter.cities(AuthSession.token(), CurrentCompanies.currentCompanyId(), v),
+                            "Could not load the cities")));
             citySelect.enabled(!CatalogFilterSupport.COUNTRY_ALL.equals(v));
             reload();
         });
@@ -228,6 +235,18 @@ public class CompanyEventListView extends LkPage {
             countrySelect, citySelect, statusSelect,
             clear);
         return bar;
+    }
+
+    // A failed options read leaves only the "All" choice, and says why under the filter bar.
+    private List<String> filterOptions(ListOutcome<String> outcome, String failureContext) {
+        return switch (outcome) {
+            case ListOutcome.Loaded<String> loaded -> loaded.items();
+            case ListOutcome.Failure<String> failure -> {
+                filterErrorSlot.add(new LkBanner(LkBanner.Tone.error, new LkIcon("warning", 16),
+                        Lk.withReason(failureContext, failure.reason())));
+                yield List.of();
+            }
+        };
     }
 
     private void clearFilters() {
