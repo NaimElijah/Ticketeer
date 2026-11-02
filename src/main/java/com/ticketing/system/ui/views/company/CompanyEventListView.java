@@ -4,6 +4,7 @@ import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.company.EventCancelConfirm;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
@@ -431,23 +432,16 @@ public class CompanyEventListView extends LkPage {
     }
 
     private void openCancelDialog(EventDetailDTO ev) {
-        ConfirmDialog dialog = new ConfirmDialog();
-        dialog.setHeader("Cancel \"" + ev.name() + "\"?");
-        dialog.setText("This will refund all ticket holders and permanently cancel the event. This cannot be undone.");
-        dialog.setCancelable(true);
-        dialog.setCancelText("Keep event");
-        dialog.setConfirmText("Cancel event");
-        dialog.setConfirmButtonTheme("error primary");
-        dialog.addConfirmListener(ignored -> {
+        EventCancelConfirm.open(ev.name(), () -> {
             int eventId = Integer.parseInt(ev.eventId());
             // A cancel commits the event's CANCELED state before its refunds run, so a failure after it
             // may leave the event cancelled: each failure reloads the list to show its actual state.
             switch (presenter.cancelEvent(AuthSession.token(), eventId)) {
-                case CompanyEventListPresenter.CancelOutcome.Success ignored2 -> {
+                case CompanyEventListPresenter.CancelOutcome.Success ignored -> {
                     Toasts.success("Event canceled and refunds issued.");
                     reload();
                 }
-                case CompanyEventListPresenter.CancelOutcome.NotAuthenticated ignored2 ->
+                case CompanyEventListPresenter.CancelOutcome.NotAuthenticated ignored ->
                     Toasts.warn("Your session has expired — please sign in again.");
                 case CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed -> {
                     Toasts.warn(Lk.withReason(refundFailed.cancelAgainRetries()
@@ -461,7 +455,6 @@ public class CompanyEventListView extends LkPage {
                 }
             }
         });
-        dialog.open();
     }
 
     private void openDeleteDialog(EventDetailDTO ev) {
