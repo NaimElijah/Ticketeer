@@ -28,6 +28,9 @@ import java.util.concurrent.CompletableFuture;
  * {@code danger}=red) and a matching leading icon; {@code danger} also reddens the
  * confirm button.
  *
+ * <p>The dialog's accessible name is its title, so a screen reader announces what is
+ * being confirmed when it opens (WCAG 4.1.2; {@code ConfirmDialogNameTest}).
+ *
  * <p>The dialog is built in the constructor (no UI context needed); only
  * {@link #prompt()} requires a live UI, so it can be constructed in tests. The body
  * accepts plain text plus any extra components ({@link LkBanner}, inline icons)
@@ -77,6 +80,9 @@ public class LkConfirm extends Dialog {
         header.getStyle().set("display", "flex").set("align-items", "center").set("gap", "10px");
         titleText.getElement().setProperty("innerHTML", "<b>" + escape(title) + "</b>");
         titleText.getStyle().set("font-size", "1.05rem").set("color", "var(--ink, #0f172a)");
+        // The title is drawn inside the severity-bordered card, not in the dialog's header, so the
+        // dialog would open unnamed; a header title would draw it a second time above the card (#188).
+        setAriaLabel(title);
 
         bodySlot.getStyle().set("color", "var(--muted)").set("line-height", "1.5");
         if (body != null && !body.isEmpty()) {
