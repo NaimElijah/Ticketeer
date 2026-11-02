@@ -39,7 +39,7 @@ public class OwnerDashboardView extends LkPage {
 
     /** Stat tiles live in their own slot so the company selector can rebuild them in place. */
     private final Div statsSlot = new Div();
-    /** The "Manage" tiles, in a slot of their own like the stats. */
+    /** The "Manage" tiles: each reload rebuilds them for the selected company's role. */
     private final Div tilesSlot = new Div();
 
     public OwnerDashboardView(OwnerDashboardPresenter presenter) {
@@ -49,13 +49,16 @@ public class OwnerDashboardView extends LkPage {
         add(statsSlot);
         add(Lk.h2("Manage"));
         add(tilesSlot);
-        tilesSlot.add(buildTiles());
         reload(CurrentCompanies.currentCompanyId());
     }
 
     /** (Re)loads the dashboard for the given company (null or not theirs → the member's first company). */
     private void reload(Integer companyId) {
-        switch (presenter.loadFor(AuthSession.token(), companyId)) {
+        OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(AuthSession.token(), companyId);
+        // The tiles follow the company's role, which the company selector changes (#187, UI-A17).
+        tilesSlot.removeAll();
+        tilesSlot.add(buildTiles());
+        switch (outcome) {
             case OwnerDashboardPresenter.Outcome.Success ok -> applySuccess(ok);
             case OwnerDashboardPresenter.Outcome.NoCompany ignored -> showBanner(
                 "You don't belong to a production company yet. Register one to open its workspace.");
@@ -81,17 +84,25 @@ public class OwnerDashboardView extends LkPage {
         statsSlot.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 18), message));
     }
 
-    /** Topbar actions: a company selector (only when the member has >1) plus "New event". */
+    /**
+     * Topbar actions: a company selector (only when the member has >1) plus "New Event", which, as on
+     * {@link CompanyEventListView}, shows only to a member who may edit events and opens a new event.
+     */
     private Component[] buildActions(List<MyCompanyDTO> companies, MyCompanyDTO selected) {
-        LkBtn newEvent = new LkBtn("New Event")
-            .variant(LkBtn.Variant.primary)
-            .icon(new LkIcon("plus", 15))
-            .onClick(e -> UI.getCurrent().navigate(CompanyEventListView.class));
-
-        if (companies.size() <= 1) {
-            return new Component[] { newEvent };
+        List<Component> actions = new ArrayList<>();
+        if (companies.size() > 1) {
+            actions.add(companySelector(companies, selected));
         }
+        if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
+            actions.add(new LkBtn("New Event")
+                .variant(LkBtn.Variant.primary)
+                .icon(new LkIcon("plus", 15))
+                .onClick(e -> UI.getCurrent().navigate("owner/events/new")));
+        }
+        return actions.toArray(Component[]::new);
+    }
 
+    private LkSelect companySelector(List<MyCompanyDTO> companies, MyCompanyDTO selected) {
         // Two companies can share a display name, so key the selector on a label
         // that maps unambiguously back to a single companyId (disambiguating
         // collisions with the id) — otherwise switching could reload the wrong stats.
@@ -114,7 +125,7 @@ public class OwnerDashboardView extends LkPage {
                 reload(companyId);
             }
         });
-        return new Component[] { selector, newEvent };
+        return selector;
     }
 
     private Component buildStats(CompanyDashboardDTO stats) {
