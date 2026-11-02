@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.components.kit;
 
 import com.ticketing.system.shared.dto.NotificationDTO;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
@@ -46,21 +47,10 @@ public class LkNotifPanel extends Div {
             row.addClassName("lk-notif-item");
             if (it.unread) row.addClassName("unread");
 
-            Span icoSlot = new Span();
-            icoSlot.addClassName("lk-notif-ic");
-            icoSlot.add(new LkIcon(it.iconName, 17));
-
-            Span body = new Span();
-            body.addClassName("lk-notif-body");
-            Span t = new Span(it.title); t.addClassName("lk-notif-t");
-            Span d = new Span(it.body);  d.addClassName("lk-notif-d");
-            Span tm = new Span(it.time); tm.addClassName("lk-notif-time");
-            body.add(t, d, tm);
-
             if (it.onClick != null) {
                 row.addClickListener(e -> it.onClick().run());
             }
-            row.add(icoSlot, body);
+            addRowContent(row, it);
             if (it.unread) {
                 Span dot = new Span();
                 dot.addClassName("lk-notif-dot");
@@ -73,6 +63,21 @@ public class LkNotifPanel extends Div {
             list.add(row);
         }
         add(list);
+    }
+
+    private static void addRowContent(Component row, Item it) {
+        Span icoSlot = new Span();
+        icoSlot.addClassName("lk-notif-ic");
+        icoSlot.add(new LkIcon(it.iconName, 17));
+
+        Span body = new Span();
+        body.addClassName("lk-notif-body");
+        Span t = new Span(it.title); t.addClassName("lk-notif-t");
+        Span d = new Span(it.body);  d.addClassName("lk-notif-d");
+        Span tm = new Span(it.time); tm.addClassName("lk-notif-time");
+        body.add(t, d, tm);
+
+        row.getElement().appendChild(icoSlot.getElement(), body.getElement());
     }
 
     public LkNotifPanel onMarkAllRead(Runnable handler) {
