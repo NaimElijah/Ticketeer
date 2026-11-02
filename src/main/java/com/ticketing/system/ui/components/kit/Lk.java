@@ -13,6 +13,8 @@ import com.vaadin.flow.component.html.Span;
  * ({@code H1, H2, H3, Txt}).
  */
 public final class Lk {
+    private static final String ROLE = "role";
+
     private Lk() { }
 
     public static H1 h1(String text) {
@@ -70,7 +72,7 @@ public final class Lk {
      * @return {@code component}, for chaining
      */
     public static <T extends Component> T asAlert(T component) {
-        component.getElement().setAttribute("role", "alert");
+        component.getElement().setAttribute(ROLE, "alert");
         return component;
     }
 
