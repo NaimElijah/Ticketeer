@@ -138,6 +138,14 @@ final class ViewHarness implements AutoCloseable {
         return event;
     }
 
+    /**
+     * Runs {@code action} each time a view navigates, at the moment it asks, as the router builds the target
+     * and runs its layout's {@code afterNavigation} before the navigating code goes on.
+     */
+    void onNavigation(Runnable action) {
+        ui.onNavigation.add(action);
+    }
+
     /** Every navigation the views asked for, in order, as a target class name or a location string. */
     List<String> navigations() {
         return List.copyOf(ui.navigations);
@@ -389,6 +397,14 @@ final class ViewHarness implements AutoCloseable {
 
         private final List<SerializableConsumer<ExecutionContext>> recorded = new ArrayList<>();
         private final List<String> navigations = new ArrayList<>();
+        private final List<Runnable> onNavigation = new ArrayList<>();
+
+        // The router builds the target, and runs its layout's afterNavigation, inside navigate(), before the
+        // navigating code goes on; a listener stands in for that.
+        private void record(String navigation) {
+            navigations.add(navigation);
+            onNavigation.forEach(Runnable::run);
+        }
 
         @Override
         public StateTree.ExecutionRegistration beforeClientResponse(Component component,
@@ -407,37 +423,37 @@ final class ViewHarness implements AutoCloseable {
 
         @Override
         public <T extends Component> Optional<T> navigate(Class<T> target) {
-            navigations.add(target.getSimpleName());
+            record(target.getSimpleName());
             return Optional.empty();
         }
 
         @Override
         public <T extends Component> Optional<T> navigate(Class<T> target, RouteParameters parameters) {
-            navigations.add(target.getSimpleName() + parameters);
+            record(target.getSimpleName() + parameters);
             return Optional.empty();
         }
 
         @Override
         public <T extends Component> Optional<T> navigate(Class<? extends T> target, QueryParameters query) {
-            navigations.add(target.getSimpleName() + "?" + query.getQueryString());
+            record(target.getSimpleName() + "?" + query.getQueryString());
             return Optional.empty();
         }
 
         @Override
         public <C extends Component> Optional<C> navigate(Class<? extends C> target, RouteParameters parameters,
                                                           QueryParameters query) {
-            navigations.add(target.getSimpleName() + parameters + "?" + query.getQueryString());
+            record(target.getSimpleName() + parameters + "?" + query.getQueryString());
             return Optional.empty();
         }
 
         @Override
         public void navigate(String location) {
-            navigations.add(location);
+            record(location);
         }
 
         @Override
         public void navigate(String location, QueryParameters query) {
-            navigations.add(location + "?" + query.getQueryString());
+            record(location + "?" + query.getQueryString());
         }
     }
 }

@@ -8,6 +8,8 @@ import static com.ticketing.system.unit.presentation.ViewHarness.field;
 import static com.ticketing.system.unit.presentation.ViewHarness.find;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -33,6 +35,8 @@ import com.ticketing.system.notifications.application.port.in.INotificationServi
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.SeatDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
@@ -45,6 +49,7 @@ import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
 import com.ticketing.system.ui.presenters.notifications.NotificationBellPresenter;
 import com.ticketing.system.ui.presenters.order.CartBadgePresenter;
 import com.ticketing.system.ui.presenters.order.CartPresenter;
+import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
@@ -53,6 +58,8 @@ import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.catalog.SeatPickerView;
 import com.ticketing.system.ui.views.order.CartView;
+import com.ticketing.system.ui.views.order.CheckoutView;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
@@ -75,6 +82,7 @@ class CartBadgeFreshnessTest {
     private static final int EVENT_ID = 5;
     private static final int ZONE_ID = 8;
     private static final long HOLD_SECONDS = 300;
+    private static final String SEAT_LABEL = "A2";
 
     private ViewHarness harness;
     private CartBadgePresenter badge;
@@ -123,6 +131,37 @@ class CartBadgeFreshnessTest {
         layout.afterNavigation(mock(AfterNavigationEvent.class));
 
         assertEquals("1", badgeText(layout), "the badge must show the cart as it is after the removal");
+    }
+
+    @Test
+    void GivenTheBadgeShowsOneSeat_WhenTheMemberReservesASecondSeatAndMovesOn_ThenTheBadgeShowsTwoAtOnce() {
+        when(badge.loadBadge()).thenReturn(cart(1), cart(2));
+        MainLayout layout = mainLayout();
+        SeatPickerView seatPicker = seatedSeatPicker();
+
+        click(button(seatPicker, SEAT_LABEL));
+        click(button(seatPicker, "Add to Cart \u2192"));
+        layout.afterNavigation(mock(AfterNavigationEvent.class));
+
+        assertEquals("2", badgeText(layout), "the badge must show the cart as it is after the reservation");
+    }
+
+    // The checkout navigates to the confirmation, and the router rebuilds the top bar, before the pay
+    // handler returns, so the badge's cache must already be cleared when it navigates.
+    @Test
+    void GivenTheBadgeShowsTwoTickets_WhenTheMemberPaysAndTheConfirmationOpens_ThenTheBadgeNoLongerShowsTwo() {
+        when(badge.loadBadge()).thenReturn(cart(2), new CartBadgePresenter.Outcome.Empty());
+        MainLayout layout = mainLayout();
+        harness.onNavigation(() -> layout.afterNavigation(mock(AfterNavigationEvent.class)));
+        CheckoutView checkout = checkoutThatPays();
+
+        click(find(checkout, NativeButton.class).stream()
+            .filter(b -> b.getElement().getTextRecursively().trim().startsWith("Pay "))
+            .findFirst()
+            .orElseThrow());
+
+        assertTrue(harness.navigations().contains("order-confirmed"), "the checkout opens the confirmation");
+        assertFalse("2".equals(badgeText(layout)), "the badge must not show the paid cart after the checkout");
     }
 
     // Kept: without a cart change the badge is read from the cache, not from the server on every page.
@@ -183,6 +222,36 @@ class CartBadgeFreshnessTest {
         SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity),
             new ReservationHoldProperties(10));
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
+        return view;
+    }
+
+    private SeatPickerView seatedSeatPicker() {
+        CatalogService catalogService = mock(CatalogService.class);
+        InventoryZoneDTO zone = new InventoryZoneDTO(ZONE_ID, "Stalls", "SEATED", 100, 50, 0, 50, 10.0,
+            List.of(new SeatDTO(SEAT_LABEL, 1, 0, "AVAILABLE")), null);
+        when(catalogService.getEventVenueMap(anyString(), anyInt()))
+            .thenReturn(new VenueMapDTO(1, null, 3, 3, List.of(zone)));
+        SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity),
+            new ReservationHoldProperties(10));
+        view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
+        return view;
+    }
+
+    private CheckoutView checkoutThatPays() {
+        CheckoutPresenter presenter = mock(CheckoutPresenter.class);
+        when(presenter.resolveIdentity()).thenReturn(new CheckoutPresenter.Identity(true, MEMBER_TOKEN, null, MEMBER_ID));
+        when(presenter.loadOrder()).thenReturn(new CheckoutPresenter.LoadOutcome.Loaded(order(2),
+            new CheckoutPresenter.Pricing(2000, 2000)));
+        when(presenter.payAsMember(any(), any(), any(), any(), any(), any())).thenReturn(
+            new CheckoutPresenter.PayOutcome.Success(new CheckoutResultDTO(20.0, 42, 9001, List.of())));
+        CheckoutView view = new CheckoutView(presenter, CLOCK);
+        harness.attach(view);
+        view.beforeEnter(routeTo());
+        view.afterNavigation(mock(AfterNavigationEvent.class));
+        field(view, TextField.class, "Cardholder name").setValue("Alice Example");
+        field(view, TextField.class, "Card number").setValue("4111 1111 1111 1111");
+        field(view, TextField.class, "Expiry").setValue("12/30");
+        field(view, TextField.class, "CVC").setValue("123");
         return view;
     }
 

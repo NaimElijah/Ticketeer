@@ -463,6 +463,9 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 case CheckoutPresenter.PayOutcome.Success ok -> {
                     OrderSession.setResult(ok.result(), clock.instant());
                     clearIdempotencyKey();
+                    // The router rebuilds the top bar inside navigate(), before the finally below runs, so the
+                    // sold cart's badge is dropped first.
+                    CartBadgeCache.invalidate();
                     Toasts.success("Payment successful — "
                             + formatCents(Money.toCents(ok.result().totalCharged()))
                             + " charged.");

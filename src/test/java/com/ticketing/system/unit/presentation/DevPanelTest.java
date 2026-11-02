@@ -22,10 +22,12 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.dev.DevPanel;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.GuestSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
@@ -53,6 +55,7 @@ class DevPanelTest {
     private static final String GUEST_SESSION_ID = "guest-sid";
     private static final String DEFAULT_ADMIN_USERNAME = "admin";
     private static final String DEFAULT_ADMIN_PASSWORD = "admin";
+    private static final long BADGE_READ_AT_MS = 1_000_000L;
 
     private InboxViewHarness harness;
     private ReservationService reservationService;
@@ -109,6 +112,18 @@ class DevPanelTest {
 
         assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                 "a failed admin sign-in must not be swallowed; ServiceErrors must log it with its exception");
+    }
+
+    // A member sign-in swaps the cart, as LoginView's does, so the badge's cache is dropped (#187).
+    @Test
+    void GivenACachedCartBadge_WhenTheMemberPersonaSignsIn_ThenTheBadgeIsReadAgain() {
+        CartBadgeCache.store(new CartBadgeCache.Badge(2, null), BADGE_READ_AT_MS);
+        when(authenticationService.login(any())).thenReturn(
+            new LoginDTO(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "member"), null, List.of()));
+
+        clickPersona("Member");
+
+        assertTrue(CartBadgeCache.fresh(BADGE_READ_AT_MS).isEmpty(), "the signed-in member's cart must be read again");
     }
 
     // An admin token is no member credential, so signing an admin out never asks for a member's cart.
