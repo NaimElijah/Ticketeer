@@ -1,8 +1,15 @@
 package com.ticketing.system.ui.presenters.account;
 
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
 import org.springframework.stereotype.Component;
 
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TransactionRecordDTO;
 import com.ticketing.system.reporting.application.service.MemberAccountService;
 import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
@@ -23,6 +30,7 @@ import com.ticketing.system.ui.support.ServiceErrors;
 public class ReceiptPresenter {
 
     private static final String RECEIPT_NOT_FOUND_MESSAGE = "We couldn't find that receipt.";
+    private static final String REFUND_TRANSACTION_TYPE = "REFUND";
 
     private final MemberAccountService memberAccountService;
 
@@ -32,7 +40,8 @@ public class ReceiptPresenter {
 
     public Outcome load(String token, int receiptId) {
         try {
-            return new Outcome.Success(memberAccountService.viewMyReceipt(token, receiptId));
+            PurchaseRecordDTO receipt = memberAccountService.viewMyReceipt(token, receiptId);
+            return new Outcome.Success(receipt, refundsOf(receipt));
         } catch (EntityNotFoundException | UnauthorizedActionException e) {
             return new Outcome.NotFound(RECEIPT_NOT_FOUND_MESSAGE);
         } catch (InvalidTokenException e) {
@@ -42,9 +51,39 @@ public class ReceiptPresenter {
         }
     }
 
+    // An order can be refunded more than once, for example by two cancelled events, so every refund
+    // transaction counts (#187, UI-A5).
+    private static Optional<Refunds> refundsOf(PurchaseRecordDTO receipt) {
+        List<TransactionRecordDTO> refunds = receipt.transactions().stream()
+                .filter(tx -> REFUND_TRANSACTION_TYPE.equals(tx.type()))
+                .toList();
+        if (refunds.isEmpty()) {
+            return Optional.empty();
+        }
+        double total = refunds.stream().mapToDouble(TransactionRecordDTO::amount).sum();
+        LocalDateTime lastRefundedAt = refunds.stream()
+                .map(TransactionRecordDTO::timestamp)
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+        return Optional.of(new Refunds(total, lastRefundedAt));
+    }
+
+    /**
+     * Every refund of one receipt, taken together.
+     *
+     * @param total          the sum of the receipt's refund transactions
+     * @param lastRefundedAt when the latest of them was made, or {@code null} when none carries a time
+     */
+    public record Refunds(double total, LocalDateTime lastRefundedAt) { }
+
     /** Sealed outcome the view switches on to render the receipt or an error banner. */
     public sealed interface Outcome {
-        record Success(PurchaseRecordDTO receipt) implements Outcome { }
+        /**
+         * @param receipt the member's receipt
+         * @param refunds its refunds summed, or empty when it has none
+         */
+        record Success(PurchaseRecordDTO receipt, Optional<Refunds> refunds) implements Outcome { }
         record NotFound(String message)  implements Outcome { }
         record Failure(String message)   implements Outcome { }
     }
