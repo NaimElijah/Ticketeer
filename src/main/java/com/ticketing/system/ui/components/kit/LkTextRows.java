@@ -3,10 +3,12 @@ package com.ticketing.system.ui.components.kit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeLabel;
+import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.TextField;
 
 /**
@@ -22,8 +24,11 @@ import com.vaadin.flow.component.textfield.TextField;
  * after a remove. The backend contract is
  * unchanged: {@link #getValues()} returns a trimmed, blank-free {@code List<String>} in row
  * order (the same shape the old comma-split parser produced).
+ *
+ * <p>A form refuses it as it refuses a Vaadin field ({@link LkFormErrors}): its invalid state and
+ * error message are its first row's, and {@link #focus()} focuses that row (#188, WCAG 3.3.1).
  */
-public class LkTextRows extends Div {
+public class LkTextRows extends Div implements HasValidationProperties {
 
     // Names a row's remove button: "Artists row 2".
     private static final String ROW_NAME = "%s row %d";
@@ -116,6 +121,42 @@ public class LkTextRows extends Div {
         rows.forEach(f -> f.setReadOnly(ro));
         rebuild();
         return this;
+    }
+
+    /**
+     * Marks the first row invalid, or valid again. Does nothing while there is no row, as in a
+     * read-only instance with no values, since there is then nothing to correct.
+     */
+    @Override
+    public void setInvalid(boolean invalid) {
+        firstRow().ifPresent(f -> f.setInvalid(invalid));
+    }
+
+    /** {@code true} while the first row is marked invalid. */
+    @Override
+    public boolean isInvalid() {
+        return firstRow().map(TextField::isInvalid).orElse(false);
+    }
+
+    /** Sets the message the first row shows while it is invalid; does nothing while there is no row. */
+    @Override
+    public void setErrorMessage(String errorMessage) {
+        firstRow().ifPresent(f -> f.setErrorMessage(errorMessage));
+    }
+
+    /** The first row's error message; {@code null} while there is no row. */
+    @Override
+    public String getErrorMessage() {
+        return firstRow().map(TextField::getErrorMessage).orElse(null);
+    }
+
+    /** Moves focus to the first row; does nothing while there is no row. */
+    public void focus() {
+        firstRow().ifPresent(TextField::focus);
+    }
+
+    private Optional<TextField> firstRow() {
+        return rows.stream().findFirst();
     }
 
     private void addAndFocusRow() {
