@@ -70,7 +70,8 @@ public final class DevPanel {
         if (reservationService == null) return;
         try {
             String token = AuthSession.token();
-            if (token != null) {
+            // An admin token is no member credential (ADR-012) and an admin holds no cart, so never ask.
+            if (token != null && !AuthSession.isAdmin()) {
                 ActiveOrderDTO order = reservationService.viewMyActiveOrder(token);
                 if (order != null && order.userId() != null) {
                     reservationService.abandonActiveOrder(BuyerContextDTO.member(order.userId()));
@@ -94,7 +95,8 @@ public final class DevPanel {
             }
             var dto = AUTH.login(new LoginRequestDTO(username, password, guestSid));
             AuthSession.storeAuth(dto.authToken());
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException e) {
+            Toasts.failure(ServiceErrors.userMessage(e));
         }
     }
 
@@ -109,7 +111,8 @@ public final class DevPanel {
                 SIGN_OUT_FLOW.execute();
             }
             AuthSession.storeAuth(AUTH.signInAsAdmin(adminUsername, adminPassword));
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException e) {
+            Toasts.failure(ServiceErrors.userMessage(e));
         }
     }
 

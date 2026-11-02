@@ -88,6 +88,40 @@ class DevPanelTest {
         MapBackedVaadinSession.uninstall();
     }
 
+    // ---- UI-B14: the dev panel's failures go through ServiceErrors, and an admin is no member (#187) ----
+
+    @Test
+    void GivenSignInFailsInternally_WhenTheMemberPersonaIsClicked_ThenServiceErrorsLogsTheFailure() {
+        when(authenticationService.login(any())).thenThrow(new PersistenceException("relation \"users\" missing"));
+
+        clickPersona("Member");
+
+        assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                "a failed sign-in must not be swallowed; ServiceErrors must log it with its exception");
+    }
+
+    @Test
+    void GivenAdminSignInFailsInternally_WhenTheAdminPersonaIsClicked_ThenServiceErrorsLogsTheFailure() {
+        when(authenticationService.signInAsAdmin(anyString(), anyString()))
+                .thenThrow(new PersistenceException("relation \"admins\" missing"));
+
+        clickPersona("Admin");
+
+        assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
+                "a failed admin sign-in must not be swallowed; ServiceErrors must log it with its exception");
+    }
+
+    // An admin token is no member credential, so signing an admin out never asks for a member's cart.
+    @Test
+    void GivenASignedInAdmin_WhenTheGuestPersonaIsClicked_ThenNoMemberCartIsAskedForOrAbandoned() {
+        AuthSession.storeAuth(new AuthTokenDTO(ADMIN_TOKEN, 0L, ADMIN_ID, "admin", true));
+
+        clickPersona("Guest");
+
+        verify(reservationService, never()).viewMyActiveOrder(ADMIN_TOKEN);
+        verify(reservationService, never()).abandonActiveOrder(any());
+    }
+
     // ---- UI-C2: a store failure from viewMyActiveOrder is shown through ServiceErrors (#187) ----
 
     @Test
