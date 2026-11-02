@@ -20,6 +20,7 @@ import com.ticketing.system.ui.views.landing.LandingView;
 import com.vaadin.flow.component.HasElement;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.applayout.AppLayout;
+import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
@@ -38,6 +39,8 @@ import java.util.Map;
  */
 public class PlatformAdminLayout extends AppLayout implements AfterNavigationObserver {
 
+    private static final String OPEN_NAVIGATION = "Open navigation";
+
     private static final Map<Class<?>, String> ADMIN_LABELS = Map.of(
         AdminDashboardView.class,      "Admin Workspace",
         SystemAnalyticsView.class,     "System Analytics",
@@ -55,6 +58,11 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
     public PlatformAdminLayout(SignOutFlow signOutFlow, NotificationBellPresenter bellPresenter) {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
+        // Opens the drawer once a narrow window or zoom collapses it (#188); added before the top bar,
+        // which is re-added on every navigation, so it stays first.
+        DrawerToggle drawerToggle = new DrawerToggle();
+        drawerToggle.setAriaLabel(OPEN_NAVIGATION);
+        addToNavbar(drawerToggle);
         rebuildTopBar();
         buildDrawerOnce();
     }

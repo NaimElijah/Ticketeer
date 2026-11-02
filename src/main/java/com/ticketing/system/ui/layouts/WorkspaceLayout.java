@@ -28,6 +28,7 @@ import com.ticketing.system.ui.views.landing.LandingView;
 import com.vaadin.flow.component.HasElement;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.applayout.AppLayout;
+import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
@@ -50,6 +51,8 @@ import java.util.Map;
  * (the workspace home and "My Companies") are always shown.
  */
 public class WorkspaceLayout extends AppLayout implements AfterNavigationObserver {
+
+    private static final String OPEN_NAVIGATION = "Open navigation";
 
     /** A drawer entry paired with the capability that gates it ({@code null} = always shown). */
     private record DrawerEntry(LkSideNav.Item item, Capability cap) { }
@@ -87,6 +90,11 @@ public class WorkspaceLayout extends AppLayout implements AfterNavigationObserve
     public WorkspaceLayout(SignOutFlow signOutFlow, NotificationBellPresenter bellPresenter) {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
+        // Opens the drawer once a narrow window or zoom collapses it (#188); added before the top bar,
+        // which is re-added on every navigation, so it stays first.
+        DrawerToggle drawerToggle = new DrawerToggle();
+        drawerToggle.setAriaLabel(OPEN_NAVIGATION);
+        addToNavbar(drawerToggle);
         rebuildTopBar();
         addToDrawer(drawerWrap);
         rebuildDrawer(null);
