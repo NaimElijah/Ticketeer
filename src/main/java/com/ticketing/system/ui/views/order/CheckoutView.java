@@ -160,7 +160,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
     }
 
     private CheckoutPresenter.LoadOutcome reload() {
-        CheckoutPresenter.LoadOutcome outcome = presenter.loadOrder(resolvedUserId, memberToken, sessionId);
+        CheckoutPresenter.LoadOutcome outcome = presenter.loadOrder();
         switch (outcome) {
             case CheckoutPresenter.LoadOutcome.Loaded l -> {
                 this.activeOrder   = l.order();
@@ -168,7 +168,6 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 this.totalCents    = l.pricing().totalCents();
             }
             case CheckoutPresenter.LoadOutcome.Empty e -> clearOrder();
-            case CheckoutPresenter.LoadOutcome.NotAuthenticated na -> clearOrder();
             case CheckoutPresenter.LoadOutcome.Failure f -> clearOrder();
         }
         return outcome;
@@ -435,10 +434,6 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 return;
             }
             case CheckoutPresenter.LoadOutcome.Empty e -> {
-                Toasts.failure("Your reservation has expired. Please add tickets again.");
-                return;
-            }
-            case CheckoutPresenter.LoadOutcome.NotAuthenticated na -> {
                 Toasts.failure("Your reservation has expired. Please add tickets again.");
                 return;
             }

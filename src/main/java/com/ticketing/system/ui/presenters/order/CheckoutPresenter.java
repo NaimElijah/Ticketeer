@@ -67,11 +67,17 @@ public class CheckoutPresenter {
 
     // ---- load -----------------------------------------------------------
 
-    public LoadOutcome loadOrder(int userId, String memberToken, String guestSessionId) {
+    /**
+     * The visitor's active order, priced. A guest may check out, so there is no signed-out outcome: a
+     * visitor without a live member token is looked up as a guest.
+     *
+     * @return the order, {@link LoadOutcome.Empty} when there is none or it has no lines, or a failure
+     *     with {@code ServiceErrors}' text
+     */
+    public LoadOutcome loadOrder() {
         try {
-            // Use the cart's exact lookup: viewMyActiveOrder tries the member key (token -> userId) and
-            // FALLS BACK to the guest key, so a cart stored under userId (with sessionId null) is still
-            // found. The old two-branch version committed to one key with no fallback -> empty checkout.
+            // The cart's own lookup: viewMyActiveOrder tries the member key (token -> userId) and falls
+            // back to the guest key, so a cart stored under the user id with no session id is still found.
             return classify(reservationService.viewMyActiveOrder(identity.credential()));
         } catch (RuntimeException e) {
             return new LoadOutcome.Failure(ServiceErrors.userMessage(e));
@@ -205,7 +211,6 @@ public class CheckoutPresenter {
     public sealed interface LoadOutcome {
         record Loaded(ActiveOrderDTO order, Pricing pricing) implements LoadOutcome { }
         record Empty()                implements LoadOutcome { }
-        record NotAuthenticated()     implements LoadOutcome { }
         record Failure(String reason) implements LoadOutcome { }
     }
 

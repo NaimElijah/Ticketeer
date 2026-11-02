@@ -106,7 +106,6 @@ public class VenueMapPresenter {
     public sealed interface SaveOutcome {
         record Success() implements SaveOutcome {}
         record NotAuthenticated() implements SaveOutcome {}
-        record NoCompany() implements SaveOutcome {}
         record Failure(String reason) implements SaveOutcome {}
     }
 }

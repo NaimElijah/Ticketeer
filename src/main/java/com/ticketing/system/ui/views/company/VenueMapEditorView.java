@@ -466,8 +466,6 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
             }
             case VenueMapPresenter.SaveOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
-            case VenueMapPresenter.SaveOutcome.NoCompany ignored ->
-                Toasts.failure("You don't own a company — register one first.");
             case VenueMapPresenter.SaveOutcome.Failure fail ->
                 Toasts.failure(Lk.withReason("Could not save the venue map", fail.reason()));
         }

@@ -222,7 +222,7 @@ class CheckoutPresenterTest {
                 .thenThrow(new DataAccessResourceFailureException("connection refused"));
         CheckoutPresenter withRealIdentity = presenterResolvingTheVisitorThrough(authenticationService, reservations);
 
-        CheckoutPresenter.LoadOutcome outcome = withRealIdentity.loadOrder(BUYER_ID, BUYER_TOKEN, null);
+        CheckoutPresenter.LoadOutcome outcome = withRealIdentity.loadOrder();
 
         CheckoutPresenter.LoadOutcome.Failure failure =
                 assertInstanceOf(CheckoutPresenter.LoadOutcome.Failure.class, outcome);
