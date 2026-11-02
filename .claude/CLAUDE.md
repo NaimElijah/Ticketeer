@@ -30,11 +30,11 @@ quoted and on one line, so they work in both shells.
 
 UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
-`seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default) · `wipe` (delete, then stop) ·
+`seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default; runs no step when a user the scenario registers already exists, with a WARN pointing at `reset`) · `wipe` (delete, then stop) ·
 `reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
-on a persistent DB; dev's H2 is in memory, already empty on every boot. A missing or unreadable
-scenario file stops the boot in every profile. A failing scenario step stops it only while
-`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Full reference: `SEED.md`.
+on a persistent DB; dev's H2 is in memory, already empty on every boot. A scenario file that is missing,
+unreadable or refused by the parser (a bare `expect-error`, for one) stops the boot in every profile, before any step runs (ADR-003, [ADR-021](../docs/ADRs/ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)). A failing scenario step stops it only while
+`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Outside `dev`, running a committed scenario logs a WARN that its accounts' passwords are published; nothing refuses it (#78). Full reference: `SEED.md`.
 
 ## Tests and CI
 
@@ -87,7 +87,7 @@ including `ui`. No backend module depends on either, and nothing depends on `boo
 add it to this paragraph in the same change, since nothing checks the two agree ([ADR-011](../docs/ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md)). Known
 exception, due to move behind an inbound port (#53): `identity`'s `AuthenticationService` calls
 `notifications`' `NotificationDispatchService` directly. The map allows that one class pair, nothing
-wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstrap's edges allow.
+wider. `bootstrap`'s `NotificationPollingScheduler` calls it too, which bootstrap's edges allow; it delivers only to a live member, checked through `ui`'s `SessionIdentity`.
 
 | Module | Holds |
 |---|---|
@@ -168,6 +168,7 @@ subclasses (third test command above).
 An in-memory state machine in `SystemAdminService` (governance, not persisted):
 `UNINITIALIZED → READY → OPEN ↔ CLOSED`.
 - `PlatformInitializationRunner` (`@Order(0)`) calls `initializePlatform()`. It needs a reachable WSEP `PaymentGateway` *and* `TicketIssuer` plus a System Admin, then moves to READY. Only a WSEP outage (`ExternalServiceUnavailableException`) is logged and left to self-heal; every other init failure propagates and stops the boot (ADR-003).
+- Outside `dev` and `test`, `bootstrap/CommittedAdminPasswordRotation` runs before it, while the context starts (`SmartInitializingSingleton`, before any runner and before the web server takes requests): a default admin still on the committed password gets the configured one, and its admin sessions are deleted (`SessionRepository.deleteAdminSessions`), never a member session with the same id. Another admin still on the committed password has its admin sessions deleted too, and the boot stops naming it (ADR-014, [ADR-021](../docs/ADRs/ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)).
 - `bootstrap/scheduling/MarketOpener` opens the market on **every** non-test boot, and `MarketSelfHealScheduler` keeps retrying (it never reopens a market an admin closed). Each tick also re-probes WSEP for the admin dashboard (`SystemAdminService.refreshServiceReachability`, unsynchronized) unless that tick's `ensureMarketOpen` already probed, and it runs on its own single-thread scheduler (`SchedulingConfig.MARKET_SELF_HEAL_TASK_SCHEDULER`, [ADR-020](../docs/ADRs/ADR-020-market-self-heal-scheduler-and-reported-reachability.md)), since a probe takes about two minutes while WSEP hangs (two handshakes of up to three 20-second attempts each). Every other `@Scheduled` job runs on the `@Primary` `taskScheduler`, which `SchedulingConfig` declares because Boot's own backs off once any `TaskScheduler` bean exists. While CLOSED, `ReservationService`/`CheckoutService` refuse via `MarketGate`.
 - Under `test`, none of these runners, schedulers or real WSEP clients exist (`@Profile("!test")`); tests drive init themselves against `Stub*` gateways. The `bootstrap/scheduling` sweepers and the notification poller are still beans under `test`, but nothing schedules them, because `SchedulingConfig`'s `@EnableScheduling` is `!test`; a test calls them directly.
 

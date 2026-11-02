@@ -104,14 +104,14 @@ class SchemaMigrationIT {
     // The selective columns the Spring Data repositories filter on that no primary key, unique constraint
     // or foreign-key index already covers. The list is kept by hand, so a newly filtered column must be
     // added here. Left out on purpose, with no index: conversation type and status and company status,
-    // which have a handful of values (V5), and companies.founder_id (findByFounderId) and sessions.user_id
-    // (existsByUserIdAndKindAndExpiresAtAfter, behind SessionManager.isOnline), which no production code
-    // queries yet. The first caller of either adds its index and its entry here.
+    // which have a handful of values (V5), and companies.founder_id (findByFounderId), which no production
+    // code queries yet; its first caller adds its index and its entry here. sessions.user_id is queried by
+    // deleteByUserIdAndKind, which the boot's admin-password rotation runs (V9).
     @Test
     void GivenMigratedPostgres_WhenListingQueriedColumns_ThenEachLeadsAnIndex() {
         List<String> queried = List.of(
                 "events.company_id", "events.status",
-                "sessions.expires_at",
+                "sessions.expires_at", "sessions.user_id",
                 "companies.name",
                 "company_appointments.company_id", "company_appointments.target_id",
                 "conversations.initiator_id", "conversations.counterparty_id",

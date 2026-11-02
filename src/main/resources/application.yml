@@ -157,7 +157,8 @@ wsep:
 #  - mode: off | reseed | wipe | reset | ask. An unknown mode stops the boot.
 #  - wipe/reset also need assume-yes=true.
 #  - fail-fast: a failing step stops the boot (V3 2.a.ii, ADR-003). The dev profile turns it off so
-#    a broken demo line doesn't block local work. A missing scenario file stops the boot either way.
+#    a broken demo line doesn't block local work. A scenario file that is missing, unreadable or
+#    refused by the parser stops the boot either way.
 seed:
   mode: ${SEED_MODE:off}
   fail-fast: ${SEED_FAIL_FAST:true}

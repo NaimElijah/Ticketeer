@@ -14,6 +14,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.ticketing.system.sales.application.event.OrderExpiredEvent;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
@@ -48,7 +50,7 @@ import com.ticketing.system.identity.domain.Session;
  *     explicit logout/end-session call.</li>
  * </ol>
  *
- * <p>The sweep is exposed as a package-private method so tests can drive it
+ * <p>The sweep and each of its passes are public so tests can drive them
  * directly with a controllable {@link Clock} (no need to wait for the
  * {@code @Scheduled} cadence).
  */
@@ -95,39 +97,74 @@ public class SessionAndOrderSweeper {
     /**
      * Returns the count of sessions deleted. Public so unit tests can drive
      * each pass independently of the {@code @Scheduled} cadence.
+     *
+     * <p>Each swept-out guest session is a visitor exit (analytics, UC-46), recorded only once the
+     * surrounding transaction commits; without one, it is recorded at once.
      */
     public int sweepExpiredSessions(Instant now) {
         List<Session> expired = sessionRepository.findExpiredBefore(now);
+        int visitorExits = 0;
         for (Session session : expired) {
             cleanUpAttachedCart(session, holdTime(now));
             sessionRepository.delete(session.getSessionId());
-            // A swept-out guest session is a visitor exit (analytics, UC-46). Member
-            // sessions persist their cart by userId, so they are not counted here.
+            // Member sessions persist their cart by userId, so they are not counted as exits.
             if (session.isGuest()) {
-                systemMetrics.record(MetricType.VISITOR_EXIT);
+                visitorExits++;
             }
         }
+        recordVisitorExitsAfterCommit(visitorExits);
         return expired.size();
     }
 
+    // A tick that rolls back deleted nothing, and the next tick sweeps the same sessions again, so an
+    // exit counted before the commit would be counted twice.
+    private void recordVisitorExitsAfterCommit(int visitorExits) {
+        if (visitorExits == 0) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            recordVisitorExits(visitorExits);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                recordVisitorExits(visitorExits);
+            }
+        });
+    }
+
+    private void recordVisitorExits(int visitorExits) {
+        for (int i = 0; i < visitorExits; i++) {
+            systemMetrics.record(MetricType.VISITOR_EXIT);
+        }
+    }
+
     /**
-     * Returns the count of orders deleted. Public for the same reason. A line's hold is judged
-     * against {@code now}, both in the scan and in the re-check under the lock.
+     * Returns the count of orders released and deleted; an order skipped because its checkout is in
+     * progress or it is no longer expired is not counted. Public for the same reason. A line's hold is
+     * judged against {@code now}, both in the scan and in the re-check before the release.
      */
     public int sweepExpiredOrders(Instant now) {
         LocalDateTime holdNow = holdTime(now);
         List<ActiveOrder> expired = activeOrderRepository.findExpired(holdNow);
+        int released = 0;
         for (ActiveOrder order : expired) {
-            // requireStillExpired=true: only release/delete if the cart is still expired when we lock it
-            // (a buyer may have manually removed the expired line since findExpired() scanned). Publish the
+            // requireStillExpired=true: release/delete only a cart that is still expired at the re-check
+            // (see releaseTicketsToInventory for what that re-check can see on each adapter). Publish the
             // OrderExpired event only when we actually released, so a salvaged cart doesn't trigger a
             // spurious "your order expired" notification.
-            boolean released = releaseTicketsToInventory(order, true, holdNow);
-            if (released) {
+            if (releaseTicketsToInventory(order, true, holdNow)) {
                 eventPublisher.publishEvent(new OrderExpiredEvent(order.getUserId(), order.getSessionId()));
+                released++;
             }
         }
-        return expired.size();
+        return released;
+    }
+
+    // Cart holds are stamped in UTC wall time (ADR-008); sessions use Instant.
+    private static LocalDateTime holdTime(Instant now) {
+        return LocalDateTime.ofInstant(now, ZoneOffset.UTC);
     }
 
     /**
@@ -136,11 +173,6 @@ public class SessionAndOrderSweeper {
      * cart alone; it lives on by userId until logout-restoration or its
      * own line-item expiry sweep.
      */
-    // Cart holds are stamped in UTC wall time (ADR-008); sessions use Instant.
-    private static LocalDateTime holdTime(Instant now) {
-        return LocalDateTime.ofInstant(now, ZoneOffset.UTC);
-    }
-
     private void cleanUpAttachedCart(Session session, LocalDateTime now) {
         if (!session.isGuest())
             return;
@@ -152,8 +184,6 @@ public class SessionAndOrderSweeper {
         }
     }
 
-    
-    
     /**
      * Acquires locks in the same order as checkout/reservation
      * (active-order lock first, then events sorted by id), releases
@@ -162,7 +192,15 @@ public class SessionAndOrderSweeper {
      * <p>Lock order: {@code activeOrder → events[sorted]} prevents
      * deadlocks with {@code ReservationService} and {@code CheckoutService}
      * which follow the identical acquire sequence.
-     * Policy: 
+     *
+     * <p>The locks are real only on the in-memory adapters. On JPA, {@code lockForUpdate} and
+     * {@code unlock} are no-ops, and the order checked here is the copy the scan loaded, not a fresh
+     * read. There a buyer's concurrent change to the cart, or another write to one of its events, is
+     * caught by {@code @Version} when the order's delete is flushed or when the tick commits; either
+     * way the whole tick rolls back, and the next tick sweeps again. #209 moves this logic out of
+     * bootstrap.
+     *
+     * <p>Policy:
      * If an ActiveOrder is CHECKOUT_IN_PROGRESS, the sweeper must not release/delete it.
      * Checkout failure already resets the order back to PRE_CHECKOUT.
      * Then the sweeper can clean it later if it is still expired.
@@ -195,10 +233,13 @@ public class SessionAndOrderSweeper {
                 return false;
             }
 
-            // Order-expiry path only: re-validate expiry under the lock. A buyer may have manually removed
-            // the expired line (R1) — or renewed the timers — between findExpired() and acquiring this lock,
-            // leaving a healthy cart we must not destroy. The session-expiry path passes false (a guest's
-            // attached cart is released when the session ends, regardless of item expiry).
+            // Order-expiry path only: re-check expiry before releasing. A buyer may have manually removed the
+            // expired line (R1) — or renewed the timers — since findExpired(), leaving a healthy cart we must
+            // not destroy. On the in-memory adapters this runs under the order lock and can see that change; on
+            // JPA it re-reads the scan's copy, and @Version catches the change instead, when the order's delete
+            // is flushed or when the tick commits; either way the whole tick rolls back (#209). The
+            // session-expiry path passes false (a guest's attached cart is released when the session ends,
+            // regardless of item expiry).
             if (requireStillExpired && !order.isEmpty() && !order.hasExpiredItem(now)) {
                 log.info("Skipping active order {} — items no longer expired (raced with manual removal/renew)",
                         order.getOrderKey());
@@ -267,8 +308,8 @@ public class SessionAndOrderSweeper {
                         eventRepository.save(event);
                     }
                 }
-                // Delete the order inside the lock so no other thread can observe
-                // it after the inventory has already been released.
+                // Delete the order with its releases: inside the locks on the in-memory adapters, and in
+                // the tick's one transaction on JPA, so nothing sees the order once its inventory is back.
                 activeOrderRepository.delete(order);
                 return true;
             } finally {

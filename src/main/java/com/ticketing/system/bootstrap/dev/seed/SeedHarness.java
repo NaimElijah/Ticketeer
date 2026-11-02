@@ -19,7 +19,7 @@ import java.util.Optional;
  * <p>When {@code failFast} is true, the first FAIL (or a failed negative
  * assertion) is rethrown as a {@link SeedAbortException} so the whole seed
  * stops with a full stack trace — for debugging one bug cleanly. When false
- * (the default), every stage runs and failures are collected into the
+ * ({@code dev}'s setting), every stage runs and failures are collected into the
  * end-of-run summary.
  */
 @Slf4j
@@ -80,16 +80,18 @@ public final class SeedHarness {
     }
 
     /**
-     * Negative assertion: PASS only if {@code expected} (or a cause in its
-     * chain) is thrown. FAIL if nothing throws ("guard not enforced") or a
-     * different exception type is thrown. This is how domain guards get
-     * verified, not merely attempted.
+     * Negative assertion: PASS only if the action throws an exception whose simple class name is exactly
+     * {@code expectedSimpleName}. The type must match exactly, so a different type fails: a subclass, a
+     * superclass or a cause does not count. FAIL if nothing throws ("guard not enforced") or another type
+     * is thrown; that failure names both types.
+     *
+     * @param expectedSimpleName the expected exception's {@link Class#getSimpleName()}, e.g.
+     *                           {@code IllegalStateException}
      */
-    public void expectFailure(String stage, String name,
-                              Class<? extends Throwable> expected, ThrowingRunnable action) {
+    public void expectFailure(String stage, String name, String expectedSimpleName, ThrowingRunnable action) {
         try {
             action.run();
-            String detail = "guard NOT enforced — expected " + expected.getSimpleName() + " but nothing was thrown";
+            String detail = "guard NOT enforced — expected " + expectedSimpleName + " but nothing was thrown";
             report.record(stage, name, SeedReport.Status.FAIL, detail);
             log.error("seed: FAIL [{}] {} — {}", stage, name, detail);
             if (failFast) {
@@ -101,10 +103,10 @@ public final class SeedHarness {
             if (t instanceof Error err) {
                 throw err;
             }
-            if (isOrCauses(t, expected)) {
-                report.record(stage, name, SeedReport.Status.PASS, "correctly rejected with " + t.getClass().getSimpleName());
+            if (t.getClass().getSimpleName().equals(expectedSimpleName)) {
+                report.record(stage, name, SeedReport.Status.PASS, "correctly rejected with " + expectedSimpleName);
             } else {
-                String detail = "expected " + expected.getSimpleName() + " but got "
+                String detail = "expected " + expectedSimpleName + " but got "
                     + t.getClass().getSimpleName() + ": " + msg(t);
                 report.record(stage, name, SeedReport.Status.FAIL, detail);
                 log.error("seed: FAIL [{}] {} — {}", stage, name, detail);
@@ -119,18 +121,6 @@ public final class SeedHarness {
     public void blocked(String stage, String name, String reason) {
         report.record(stage, name, SeedReport.Status.BLOCKED, reason);
         log.warn("seed: BLOCKED [{}] {} — {}", stage, name, reason);
-    }
-
-    private static boolean isOrCauses(Throwable t, Class<? extends Throwable> expected) {
-        for (Throwable c = t; c != null; c = c.getCause()) {
-            if (expected.isInstance(c)) {
-                return true;
-            }
-            if (c.getCause() == c) {
-                break;
-            }
-        }
-        return false;
     }
 
     private static String msg(Throwable t) {

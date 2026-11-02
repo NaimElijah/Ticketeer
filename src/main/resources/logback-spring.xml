@@ -10,13 +10,22 @@
     Domain code may also use @Slf4j for WARN/ERROR; everything funnels to the same file.
 
     Every appender formats with LOG_PATTERN. The log is read one line per event, and a logged value
-    can carry text a user typed, so a CR or LF in it would start a line the application never wrote.
-    LOG_PATTERN replaces each run of CR/LF in the message with one space, here at the logging
-    boundary rather than at each call site. LogbackPatternTest holds every appender to it.
+    can carry text a user typed, so a line break in it would start a line the application never wrote,
+    and an ESC would start a terminal control sequence, as would CSI (U+009B), the one-character form
+    of ESC [. A line break is any that \R matches: CR, LF, CR LF, VT, FF, NEL (U+0085), and LINE and
+    PARAGRAPH SEPARATOR (U+2028, U+2029). LOG_PATTERN replaces each run of them in the message with one
+    space, and each ESC (\x1B) or CSI (\x9B) with the visible, inert "^[", here at the logging
+    boundary rather than at each call site. An exception's message can carry such text too, and its
+    stack trace spans several lines, so the exception (%ex) stays on the event's line: the innermost
+    %replace drops the trace's final line break, the next puts " | " before a non-empty trace and in
+    place of each run of line breaks inside it, and the outermost replaces ESC and CSI as for the
+    message. An event without an exception gets nothing. %nopex says the pattern prints the exception
+    itself, so logback never appends a copy of its own.
+    LogbackPatternTest holds every appender to it.
 -->
 <configuration>
 
-    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %replace(%msg){'[\r\n]+', ' '}%n"/>
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %replace(%replace(%msg){'\R+', ' '}){'[\x1B\x9B]', '^['}%replace(%replace(%replace(%ex){'\R+$', ''}){'^(?=.)|\R+', ' | '}){'[\x1B\x9B]', '^['}%nopex%n"/>
 
     <!-- Console appender — primary output during dev and CI. -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
