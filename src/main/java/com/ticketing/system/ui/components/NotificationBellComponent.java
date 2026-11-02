@@ -25,6 +25,7 @@ public class NotificationBellComponent extends Span {
 
     private final Function<String, MarkReadOutcome> markRead;
     private final Function<LocalDateTime, String> age;
+    private List<NotificationDTO> renderedInbox = List.of();
 
     /**
      * @param markRead stores the read of the notification id it is given and answers how that went;
@@ -47,13 +48,29 @@ public class NotificationBellComponent extends Span {
         build();
     }
 
+    /**
+     * Rebuilds only when the inbox differs from the one the bell last showed: another tab may have
+     * filled it or marked an item read, and the poller asks every tab's bell to catch up on each tick
+     * without repainting a bell that shows the inbox already.
+     */
+    public void refreshIfChanged() {
+        if (!shownInbox().equals(renderedInbox)) {
+            refresh();
+        }
+    }
+
+    // The inbox as the bell shows it: nobody's while signed out. NotificationDTO is a record, so two
+    // inboxes are equal when they hold the same notifications in the same states.
+    private static List<NotificationDTO> shownInbox() {
+        return AuthSession.isSignedIn() ? NotificationSession.getAll() : List.of();
+    }
+
     private void build() {
-        List<NotificationDTO> notifs = AuthSession.isSignedIn()
-                ? NotificationSession.getAll().stream()
-                        .sorted(java.util.Comparator.comparing(NotificationDTO::createdAt,
-                                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())).reversed())
-                        .toList()
-                : List.of();
+        renderedInbox = shownInbox();
+        List<NotificationDTO> notifs = renderedInbox.stream()
+                .sorted(java.util.Comparator.comparing(NotificationDTO::createdAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())).reversed())
+                .toList();
 
         int unread = (int) notifs.stream().filter(n -> !"READ".equals(n.status())).count();
 

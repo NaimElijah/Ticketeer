@@ -16,7 +16,9 @@ import java.util.List;
  * Polls for new notifications for every connected user on a fixed interval.
  * For each live UI, acquires the Vaadin session lock via ui.access(), fetches
  * any newly generated PENDING notifications, merges them into NotificationSession,
- * and refreshes the bell component — triggering a long-poll push to the browser.
+ * and brings that UI's bell up to date with the session's inbox, which another tab's
+ * poll may have filled — re-rendering it, and so pushing to the browser, only when
+ * the inbox changed.
  * Admin UIs are skipped: admins have no notification inbox.
  *
  * Real-time WebSocket/SSE delivery (#225) will replace this when implemented.
@@ -48,16 +50,16 @@ public class NotificationPollingScheduler {
                 List<NotificationDTO> fresh;
                 try {
                     fresh = dispatchService.deliverPending(userId);
-                } catch (Exception e) {
-                    log.warn("notification poll failed for userId={}: {}", userId, e.getMessage());
+                } catch (RuntimeException e) {
+                    log.warn("notification poll failed for userId={}", userId, e);
                     return;
                 }
 
-                if (fresh.isEmpty()) return;
-
                 NotificationSession.merge(fresh);
+                // Even with nothing fresh: another tab of this session may have drained the pending
+                // notifications into the shared inbox, or marked some read, since this bell last rendered.
                 NotificationBellComponent bell = NotificationSession.getBell();
-                if (bell != null) bell.refresh();
+                if (bell != null) bell.refreshIfChanged();
             });
         }
     }
