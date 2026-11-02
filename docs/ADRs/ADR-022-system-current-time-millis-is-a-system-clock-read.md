@@ -45,9 +45,10 @@ which reads were zone-free, so the exemption had no edge to stop the next use.
   10-second cache expire early or late once. That is harmless for a cart badge. A cache whose age must
   survive clock jumps measures it with `System.nanoTime()`.
 
-The browser never sees a deadline: the cart, checkout and top-bar countdowns count down the seconds left
-that the server computes from the bean (`LkCountdown`, UI-A13 in the same scan), so the browser's own
-clock plays no part.
+The browser never sees a server deadline: the cart, checkout and top-bar countdowns get the seconds left
+that the server computes from the bean (`LkCountdown`, UI-A13 in the same scan). The browser turns them
+into a deadline on its own clock once, at start, and reads the time left from it on every tick, so only
+the time the browser measures passing plays a part, never its clock's offset from the server's.
 
 ## Alternatives considered
 
