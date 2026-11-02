@@ -1,4 +1,4 @@
-package com.ticketing.system.unit.presentation;
+package com.ticketing.system.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
