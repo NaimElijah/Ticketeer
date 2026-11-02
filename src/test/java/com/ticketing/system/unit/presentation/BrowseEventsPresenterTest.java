@@ -55,7 +55,7 @@ class BrowseEventsPresenterTest {
 
     // A failed search is a failure, never an empty catalog (UI-B3, #187).
     @Test
-    void search_onServiceFailure_returnsFailureWithTheGenericMessage() {
+    void GivenTheSearchFails_WhenSearch_ThenFailureCarriesTheGenericMessage() {
         when(catalogService.searchGlobal(eq(CRED), any())).thenThrow(new RuntimeException("boom"));
 
         ListOutcome.Failure<?> failure = assertInstanceOf(ListOutcome.Failure.class,

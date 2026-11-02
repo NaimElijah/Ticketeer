@@ -65,8 +65,7 @@ class ReceiptRefundsTest {
         view.beforeEnter(routeTo("receiptId", String.valueOf(RECEIPT_ID)));
 
         String shown = text(view);
-        // Summed, the refunds read $50.00; listed, the second reads $30.00.
-        assertTrue(shown.contains("$50.00") || shown.contains("$30.00"),
-            "expected the $30.00 refund, or the $50.00 refunded in all, in: " + shown);
+        // ReceiptPresenter sums the refunds.
+        assertTrue(shown.contains("$50.00"), "expected the $50.00 refunded in all, in: " + shown);
     }
 }

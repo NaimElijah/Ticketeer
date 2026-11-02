@@ -79,7 +79,7 @@ class EventCancelRefundFailureTest {
     // ---- My Events ----
 
     @Test
-    void GivenRefundsPartlyFail_WhenTheOwnerCancelsFromMyEvents_ThenTheToastShowsTheRefundFailure() {
+    void GivenTheCancelFails_WhenTheOwnerCancelsFromMyEvents_ThenTheToastShowsTheReason() {
         CompanyEventListPresenter presenter = eventListPresenter();
 
         cancelFromMyEvents(presenter);
@@ -88,7 +88,7 @@ class EventCancelRefundFailureTest {
     }
 
     @Test
-    void GivenRefundsPartlyFail_WhenTheOwnerCancelsFromMyEvents_ThenTheListReloads() {
+    void GivenTheCancelFails_WhenTheOwnerCancelsFromMyEvents_ThenTheListReloads() {
         CompanyEventListPresenter presenter = eventListPresenter();
 
         cancelFromMyEvents(presenter);
@@ -99,7 +99,7 @@ class EventCancelRefundFailureTest {
     // ---- the event's management page ----
 
     @Test
-    void GivenRefundsPartlyFail_WhenTheOwnerCancelsFromTheEventPage_ThenTheToastShowsTheRefundFailure() {
+    void GivenTheCancelFails_WhenTheOwnerCancelsFromTheEventPage_ThenTheToastShowsTheReason() {
         EventManagementPresenter presenter = eventPagePresenter();
 
         cancelFromTheEventPage(presenter);
@@ -108,7 +108,7 @@ class EventCancelRefundFailureTest {
     }
 
     @Test
-    void GivenRefundsPartlyFail_WhenTheOwnerCancelsFromTheEventPage_ThenTheEventReloads() {
+    void GivenTheCancelFails_WhenTheOwnerCancelsFromTheEventPage_ThenTheEventReloads() {
         EventManagementPresenter presenter = eventPagePresenter();
 
         cancelFromTheEventPage(presenter);

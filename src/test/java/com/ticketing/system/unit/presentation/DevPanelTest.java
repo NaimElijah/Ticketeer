@@ -112,6 +112,8 @@ class DevPanelTest {
 
         assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                 "a failed sign-in must not be swallowed; ServiceErrors must log it with its exception");
+        assertTrue(shownTexts().contains(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                "the visitor must be told the sign-in failed; shown: " + shownTexts());
     }
 
     @Test
@@ -123,6 +125,8 @@ class DevPanelTest {
 
         assertEquals(List.of(PersistenceException.class.getName()), serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                 "a failed admin sign-in must not be swallowed; ServiceErrors must log it with its exception");
+        assertTrue(shownTexts().contains(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                "the visitor must be told the sign-in failed; shown: " + shownTexts());
     }
 
     // A member sign-in swaps the cart, as LoginView's does, so the badge's cache is dropped (#187).

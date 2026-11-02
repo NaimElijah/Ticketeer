@@ -37,9 +37,6 @@ import com.vaadin.flow.component.textfield.TextField;
  * Signing in and registering pass on a live guest session id: they read it through
  * {@link SessionIdentity}, which replaces a guest session that expired, instead of reading
  * {@link GuestSession} directly (#187, UI-A11).
- *
- * <p>Red by compilation: it builds the views with the {@link SessionIdentity} the fix injects, the
- * smallest seam that lets them read the id through it. Kept apart so the other tests compile today.
  */
 class SignInGuestSessionTest {
 

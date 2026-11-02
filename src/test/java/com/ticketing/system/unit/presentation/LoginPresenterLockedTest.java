@@ -26,9 +26,6 @@ import com.vaadin.flow.component.textfield.TextField;
 /**
  * A member whose account is locked is told so, with the lockout's own text (#187, UI-A2): the member
  * sign-in gets a {@code Locked} outcome, as the admin sign-in has.
- *
- * <p>Red by compilation until {@code LoginPresenter.Outcome.Locked(String reason)} exists, so it is kept
- * apart from {@code ViewFailureReasonTest}, whose tests compile today.
  */
 class LoginPresenterLockedTest {
 

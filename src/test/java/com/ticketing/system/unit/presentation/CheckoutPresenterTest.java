@@ -178,8 +178,9 @@ class CheckoutPresenterTest {
 
         CheckoutPresenter.PayOutcome outcome = pay();
 
-        assertFalse(outcome instanceof CheckoutPresenter.PayOutcome.OrderExpired,
-                "an empty cart must not read as an expired order, but was: " + outcome);
+        CheckoutPresenter.PayOutcome.Failure failure = assertInstanceOf(CheckoutPresenter.PayOutcome.Failure.class,
+                outcome, "an empty cart must not read as an expired order, but was: " + outcome);
+        assertEquals(refusal.getMessage(), failure.reason(), "the buyer must read the refusal's own words");
     }
 
     @Test

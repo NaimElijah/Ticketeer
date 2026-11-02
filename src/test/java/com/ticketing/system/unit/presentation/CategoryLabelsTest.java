@@ -112,6 +112,7 @@ class CategoryLabelsTest {
         cards.forEach(card -> domClick(card.getElement()));
 
         assertFalse(cards.isEmpty(), "the landing shows no category cards");
+        assertEquals(cards.size(), harness.navigations().size(), "every category card must open Browse");
         List<String> chosen = harness.navigations().stream().map(CategoryLabelsTest::categoryOf).toList();
         List<String> unknown = chosen.stream()
             .filter(label -> CatalogFilterSupport.categoryFilterValue(label) == null)

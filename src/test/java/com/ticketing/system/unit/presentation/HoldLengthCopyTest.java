@@ -33,10 +33,6 @@ import com.ticketing.system.ui.views.catalog.SeatPickerView;
 /**
  * The pages that tell a buyer how long their seats are held read the configured hold
  * ({@code constants.ticket-reservation-duration}), not a hard-coded ten minutes (#187, UI-A18).
- *
- * <p>Red by compilation: the views take the configured {@link ReservationHoldProperties}, the smallest
- * seam the fix implies, as {@code VenueMapEditorView} takes {@code VenueLimitsProperties}. Kept apart
- * so the other tests compile today.
  */
 class HoldLengthCopyTest {
 
