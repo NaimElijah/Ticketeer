@@ -20,6 +20,8 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 @Component
@@ -136,6 +138,14 @@ public class EventManagementPresenter {
         return s == null || s.isBlank();
     }
 
+    /**
+     * Cancels the event and refunds its buyers.
+     *
+     * @param token   the caller's member token, or {@code null}
+     * @param eventId the event to cancel
+     * @return {@link CancelOutcome.RefundFailed} when the event is cancelled but some refunds failed, or
+     *     {@link CancelOutcome.Failure} with {@code ServiceErrors}' text for any other failure
+     */
     public CancelOutcome cancel(String token, int eventId) {
         if (token == null) return new CancelOutcome.NotAuthenticated();
         try {
@@ -143,6 +153,9 @@ public class EventManagementPresenter {
             return new CancelOutcome.Success();
         } catch (InvalidTokenException e) {
             return new CancelOutcome.NotAuthenticated();
+        } catch (RefundFailedException e) {
+            return new CancelOutcome.RefundFailed(ServiceErrors.userMessage(e),
+                    e instanceof RefundGatewayUnreachableException);
         } catch (RuntimeException e) {
             return new CancelOutcome.Failure(ServiceErrors.userMessage(e));
         }
@@ -171,9 +184,25 @@ public class EventManagementPresenter {
         record Failure(String reason) implements CreateOutcome {}
     }
 
+    /** What {@link #cancel} did. */
     public sealed interface CancelOutcome {
         record Success() implements CancelOutcome {}
         record NotAuthenticated() implements CancelOutcome {}
+        /**
+         * The event is cancelled, but some of its refunds failed: the cancel commits before its refunds run.
+         *
+         * @param reason             the refund failure's text, naming the orders it failed for
+         * @param cancelAgainRetries {@code true} only when the payment gateway could not be reached
+         *                           ({@code RefundGatewayUnreachableException}): no money moved and
+         *                           {@code EventCancellationRefundService} released the claim, so
+         *                           cancelling again retries the refund. {@code false} when the outcome
+         *                           is unknown ({@code RefundOutcomeUnknownException}): the service leaves
+         *                           the lines PENDING for manual recovery and a re-cancel skips them. Also
+         *                           {@code false} for a plain {@code RefundFailedException}, which can mix
+         *                           declined receipts, retried by a re-cancel, with pending ones, which
+         *                           are not; its own message says which (ADR-001)
+         */
+        record RefundFailed(String reason, boolean cancelAgainRetries) implements CancelOutcome {}
         record Failure(String reason) implements CancelOutcome {}
     }
 }

@@ -385,6 +385,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
         if (eventId == null || "new".equals(eventId)) {
             return;
         }
+        // A cancel commits the event's CANCELED state before its refunds run, so a failure after it may
+        // leave the event cancelled: each failure reloads the event to show its actual state.
         switch (presenter.cancel(AuthSession.token(), Integer.parseInt(eventId))) {
             case EventManagementPresenter.CancelOutcome.Success ignored -> {
                 Toasts.success("Event cancelled — all holders refunded.");
@@ -392,8 +394,16 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
             }
             case EventManagementPresenter.CancelOutcome.NotAuthenticated ignored ->
                 Toasts.failure("Your session has expired — please sign in again.");
-            case EventManagementPresenter.CancelOutcome.Failure fail ->
-                Toasts.failure("Could not cancel the event — please try again.");
+            case EventManagementPresenter.CancelOutcome.RefundFailed refundFailed -> {
+                Toasts.warn(Lk.withReason(refundFailed.cancelAgainRetries()
+                    ? "The event is cancelled, but some refunds failed; cancel it again to retry them"
+                    : "The event is cancelled, but some refunds failed", refundFailed.reason()));
+                loadEvent(eventId);
+            }
+            case EventManagementPresenter.CancelOutcome.Failure fail -> {
+                Toasts.failure(Lk.withReason("Could not cancel the event", fail.reason()));
+                loadEvent(eventId);
+            }
         }
     }
 }

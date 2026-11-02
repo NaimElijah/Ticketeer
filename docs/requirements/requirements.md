@@ -294,7 +294,13 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   out without a usable answer is never retried automatically; it stays PENDING, and no screen or
   command resolves it yet (#130; [ADR-001](../ADRs/ADR-001-refund-state-per-receipt-line.md);
   `EventCancellationRefundService` · `EventCancellationRefundServiceTest`,
-  `EventCancellationRefundConcurrencyTest`, `EventCancellationAcceptanceTest`).
+  `EventCancellationRefundConcurrencyTest`, `EventCancellationAcceptanceTest`). Since #187 the owner
+  who cancels is told that the event is cancelled and which refunds failed, not that the cancel
+  failed, and the page reloads to show the event's state. The owner is told that cancelling again
+  retries a refund only when the payment service could not be reached; a refund whose outcome is
+  unknown stays pending for manual recovery, and cancelling again does not retry it
+  (`CompanyEventListPresenter`, `EventManagementPresenter` · `EventCancelRefundFailureTest`,
+  `CompanyEventListPresenterTest`, `EventManagementPresenterTest`).
 - A member's whole-order refund is refused once any line of the order has been refunded or is
   being refunded by an event cancellation (`RefundService` · `RefundServiceTest`). **Not upheld**
   when the payment service's answer is lost: the refund rolls back to unrefunded and the member can

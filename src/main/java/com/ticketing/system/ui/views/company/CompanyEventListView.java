@@ -440,15 +440,25 @@ public class CompanyEventListView extends LkPage {
         dialog.setConfirmButtonTheme("error primary");
         dialog.addConfirmListener(ignored -> {
             int eventId = Integer.parseInt(ev.eventId());
+            // A cancel commits the event's CANCELED state before its refunds run, so a failure after it
+            // may leave the event cancelled: each failure reloads the list to show its actual state.
             switch (presenter.cancelEvent(AuthSession.token(), eventId)) {
-                case CompanyEventListPresenter.ActionOutcome.Success ignored2 -> {
+                case CompanyEventListPresenter.CancelOutcome.Success ignored2 -> {
                     Toasts.success("Event canceled and refunds issued.");
                     reload();
                 }
-                case CompanyEventListPresenter.ActionOutcome.NotAuthenticated ignored2 ->
+                case CompanyEventListPresenter.CancelOutcome.NotAuthenticated ignored2 ->
                     Toasts.warn("Your session has expired — please sign in again.");
-                case CompanyEventListPresenter.ActionOutcome.Failure fail ->
-                    Toasts.failure("Could not cancel the event — please try again.");
+                case CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed -> {
+                    Toasts.warn(Lk.withReason(refundFailed.cancelAgainRetries()
+                        ? "The event is cancelled, but some refunds failed; cancel it again from its page to retry them"
+                        : "The event is cancelled, but some refunds failed", refundFailed.reason()));
+                    reload();
+                }
+                case CompanyEventListPresenter.CancelOutcome.Failure fail -> {
+                    Toasts.failure(Lk.withReason("Could not cancel the event", fail.reason()));
+                    reload();
+                }
             }
         });
         dialog.open();

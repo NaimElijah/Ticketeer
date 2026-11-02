@@ -1,9 +1,12 @@
 package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -28,6 +31,9 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 
@@ -35,11 +41,13 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * Unit tests for {@link EventManagementPresenter#create}. The create flow assembles an
  * {@link EventCreationDTO} (resolving the owning company) and delegates to
  * {@code EventManagementService.addEvent}; these tests pin the company-resolution rule and the
- * exception → {@code CreateOutcome} mapping without a UI or Spring context.
+ * exception → {@code CreateOutcome} mapping without a UI or Spring context. They also pin
+ * {@link EventManagementPresenter#cancel}'s exception → {@code CancelOutcome} mapping.
  */
 class EventManagementPresenterTest {
 
     private static final String TOKEN = "owner-token";
+    private static final int EVENT_ID = 9;
     private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
 
     private EventManagementService eventService;
@@ -259,6 +267,62 @@ class EventManagementPresenterTest {
 
         assertInstanceOf(EventManagementPresenter.CreateOutcome.Failure.class,
                 createWith(null, futureStart(), futureEnd()));
+    }
+
+    // UI-A3 (#187): the event is cancelled before its refunds run, so a refund failure is not a failed cancel.
+    // A plain refund failure can mix declined receipts, which cancelling again retries, with pending ones,
+    // which it does not; its own message says which, so the outcome promises no retry.
+    @Test
+    void GivenARefundOfTheCancelFails_WhenCancel_ThenRefundFailedCarriesTheRefundFailure() {
+        RefundFailedException refundFailure = new RefundFailedException(12, "the payment gateway timed out");
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
+    }
+
+    // No money moved and the claim is released, so cancelling again retries the refund.
+    @Test
+    void GivenTheGatewayIsUnreachableForARefundOfTheCancel_WhenCancel_ThenRefundFailedSaysCancellingAgainRetriesIt() {
+        RefundFailedException refundFailure = new RefundGatewayUnreachableException(12, "connection refused", new RuntimeException("refused"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertTrue(refundFailed.cancelAgainRetries());
+    }
+
+    // The refund may have been made and stays pending for manual recovery; cancelling again skips it.
+    @Test
+    void GivenARefundOfTheCancelHasAnUnknownOutcome_WhenCancel_ThenRefundFailedSaysCancellingAgainDoesNotRetryIt() {
+        RefundFailedException refundFailure = new RefundOutcomeUnknownException(12, "read timed out", new RuntimeException("timeout"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
+    }
+
+    @Test
+    void GivenCancellingFailsForAnotherReason_WhenCancel_ThenFailureCarriesThatReason() {
+        String reason = "You lack the permission to cancel this event.";
+        doThrow(new BusinessRuleViolationException(reason)).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        EventManagementPresenter.CancelOutcome.Failure failure =
+                assertInstanceOf(EventManagementPresenter.CancelOutcome.Failure.class,
+                        presenter.cancel(TOKEN, EVENT_ID));
+
+        assertEquals(reason, failure.reason());
     }
 
     private static EventDetailDTO detailWithId(String id) {

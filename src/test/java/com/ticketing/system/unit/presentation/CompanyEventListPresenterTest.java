@@ -12,6 +12,9 @@ import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -159,8 +162,8 @@ class CompanyEventListPresenterTest {
         doThrow(new NullPointerException("Cannot invoke \"Event.getVenueMap()\" because \"event\" is null"))
                 .when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        CompanyEventListPresenter.ActionOutcome.Failure fail =
-                assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Failure.class,
+        CompanyEventListPresenter.CancelOutcome.Failure fail =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Failure.class,
                         presenter.cancelEvent(TOKEN, EVENT_ID));
 
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
@@ -170,7 +173,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void cancelEvent_nullToken_returnsNotAuthenticated() {
-        assertInstanceOf(CompanyEventListPresenter.ActionOutcome.NotAuthenticated.class,
+        assertInstanceOf(CompanyEventListPresenter.CancelOutcome.NotAuthenticated.class,
                 presenter.cancelEvent(null, EVENT_ID));
         verifyNoInteractions(eventService);
     }
@@ -179,7 +182,7 @@ class CompanyEventListPresenterTest {
     void cancelEvent_invalidToken_returnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        assertInstanceOf(CompanyEventListPresenter.ActionOutcome.NotAuthenticated.class,
+        assertInstanceOf(CompanyEventListPresenter.CancelOutcome.NotAuthenticated.class,
                 presenter.cancelEvent(TOKEN, EVENT_ID));
     }
 
@@ -187,7 +190,7 @@ class CompanyEventListPresenterTest {
     void cancelEvent_success_callsServiceAndReturnsSuccess() {
         doNothing().when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Success.class,
+        assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Success.class,
                 presenter.cancelEvent(TOKEN, EVENT_ID));
 
         verify(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
@@ -197,11 +200,55 @@ class CompanyEventListPresenterTest {
     void cancelEvent_serviceFailsInternally_returnsGenericFailure() {
         doThrow(new RuntimeException("refund failed")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
-        CompanyEventListPresenter.ActionOutcome.Failure fail =
-                assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Failure.class,
+        CompanyEventListPresenter.CancelOutcome.Failure fail =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Failure.class,
                         presenter.cancelEvent(TOKEN, EVENT_ID));
 
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    // UI-A3 (#187): the event is cancelled before its refunds run, so a refund failure is not a failed cancel.
+    // A plain refund failure can mix declined receipts, which cancelling again retries, with pending ones,
+    // which it does not; its own message says which, so the outcome promises no retry.
+    @Test
+    void GivenARefundOfTheCancelFails_WhenCancelEvent_ThenRefundFailedCarriesTheRefundFailure() {
+        RefundFailedException refundFailure = new RefundFailedException(12, "the payment gateway timed out");
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancelEvent(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
+    }
+
+    // No money moved and the claim is released, so cancelling again retries the refund.
+    @Test
+    void GivenTheGatewayIsUnreachableForARefundOfTheCancel_WhenCancelEvent_ThenRefundFailedSaysCancellingAgainRetriesIt() {
+        RefundFailedException refundFailure = new RefundGatewayUnreachableException(12, "connection refused", new RuntimeException("refused"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancelEvent(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertTrue(refundFailed.cancelAgainRetries());
+    }
+
+    // The refund may have been made and stays pending for manual recovery; cancelling again skips it.
+    @Test
+    void GivenARefundOfTheCancelHasAnUnknownOutcome_WhenCancelEvent_ThenRefundFailedSaysCancellingAgainDoesNotRetryIt() {
+        RefundFailedException refundFailure = new RefundOutcomeUnknownException(12, "read timed out", new RuntimeException("timeout"));
+        doThrow(refundFailure).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        CompanyEventListPresenter.CancelOutcome.RefundFailed refundFailed =
+                assertInstanceOf(CompanyEventListPresenter.CancelOutcome.RefundFailed.class,
+                        presenter.cancelEvent(TOKEN, EVENT_ID));
+
+        assertEquals(refundFailure.getMessage(), refundFailed.reason());
+        assertFalse(refundFailed.cancelAgainRetries());
     }
 
     // ── deleteEvent ───────────────────────────────────────────────────────────
