@@ -70,6 +70,24 @@ class RefundPresenterTest {
         }
     }
 
+    // A refund the gateway failed leaves the member's money in an unknown or unreturned state: that is a
+    // degraded service an operator must see, not a refusal, so it is logged at WARN with its exception.
+    @ParameterizedTest
+    @MethodSource("gatewayRefundFailures")
+    void GivenTheRefundFailsAtTheGateway_WhenRequestRefund_ThenOneWarnCarriesTheException(RefundFailedException failure) {
+        when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenThrow(failure);
+
+        try (LogCapture presenterLog = LogCapture.of(RefundPresenter.class);
+             LogCapture serviceErrorsLog = LogCapture.of(ServiceErrors.class)) {
+            presenter.requestRefund(TOKEN, ORDER_ID, "reason");
+
+            List<String> warned = Stream.concat(presenterLog.throwableClassNamesAt(Level.WARN).stream(),
+                    serviceErrorsLog.throwableClassNamesAt(Level.WARN).stream()).toList();
+            assertEquals(List.of(failure.getClass().getName()), warned,
+                "the gateway's refund failure must be logged once at WARN with its exception");
+        }
+    }
+
     @Test
     void requestRefund_success_carriesReferenceAndAmount() {
         RefundResultDTO result = new RefundResultDTO(

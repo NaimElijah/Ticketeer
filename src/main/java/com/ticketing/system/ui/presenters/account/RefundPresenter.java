@@ -2,6 +2,8 @@ package com.ticketing.system.ui.presenters.account;
 
 import org.springframework.stereotype.Component;
 
+import lombok.extern.slf4j.Slf4j;
+
 import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.sales.application.service.RefundService;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
@@ -19,6 +21,7 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * {@link Outcome.NotFound} as a missing id, so a member cannot tell which order ids exist on other
  * accounts.
  */
+@Slf4j
 @Component
 public class RefundPresenter {
 
@@ -44,8 +47,10 @@ public class RefundPresenter {
             return new Outcome.Failure("Please sign in to request a refund.");
         } catch (RefundFailedException e) {
             // A refund failure carries the payment gateway's operator wording and the charge it names, so the
-            // member reads fixed text; the failure itself still goes to the log (#187).
-            ServiceErrors.userMessageLogged(e, "request refund orderId=" + orderId);
+            // member reads fixed text. It is a DomainException, but not a refusal: the member's money was
+            // not returned, or nobody knows whether it was, so it is logged at WARN as a degraded state,
+            // with its exception, rather than at ServiceErrors' DEBUG for refusals (#187).
+            log.warn("Refund failed at the payment gateway action=\"request refund orderId={}\"", orderId, e);
             return new Outcome.Failure(REFUND_FAILED_MESSAGE);
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "request refund orderId=" + orderId));
