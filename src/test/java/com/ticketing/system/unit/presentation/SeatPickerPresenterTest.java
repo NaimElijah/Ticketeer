@@ -32,6 +32,7 @@ import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.dto.SeatDTO;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.components.venue.VkSeatedZonePicker;
 import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
@@ -167,6 +168,26 @@ class SeatPickerPresenterTest {
     }
 
     // ---- UI-B6: a reservation's failure is logged once, with its exception and the ids that locate it (#187) ----
+
+    // A refusal (sold out, not on sale, market closed) is an expected outcome the buyer reads, and
+    // LoggingAspect already logs the refused service call at WARN, so the presenter logs it at DEBUG only.
+    @Test
+    void GivenADomainRefusal_WhenReserveSeated_ThenItIsLoggedAtDebugAndNothingAtWarn() {
+        doThrow(new BusinessRuleViolationException("This event is no longer on sale.")).when(reservationService)
+                .reserveForGuest(any(), anyInt(), anyInt(), any());
+
+        try (LogCapture presenterLog = LogCapture.of(SeatPickerPresenter.class)) {
+            presenter.reserveSeated(InventorySelectionDTO.seated(List.of("A1")), EVENT_ID, ZONE_ID);
+
+            assertEquals(1, presenterLog.messagesAt(Level.DEBUG).stream()
+                    .filter(line -> line.contains("eventId=" + EVENT_ID)).count(),
+                    "the refusal must be logged once at DEBUG; logged: " + presenterLog.messagesAt(Level.DEBUG));
+            for (LogCapture log : List.of(presenterLog, serviceErrorsLog)) {
+                assertTrue(log.messagesAt(Level.WARN).isEmpty(), "a refusal must not be logged at WARN here");
+                assertTrue(log.messagesAt(Level.ERROR).isEmpty(), "a refusal must not be logged at ERROR here");
+            }
+        }
+    }
 
     @Test
     void GivenAnInternalFailure_WhenReserveSeated_ThenOneLogLineCarriesTheExceptionAndTheIds() {
