@@ -146,7 +146,8 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         title.setText("Find your next experience");
         Div sub = new Div();
         sub.addClassName("bz-hero-sub");
-        sub.setText("Concerts, matches, theatre and conferences — across Israel.");
+        // Names only categories that exist (EventCategoryLabels), as the landing hero does.
+        sub.setText("Concerts, sports, theatre, comedy — across Israel.");
         hero.add(title, sub);
         return hero;
     }
