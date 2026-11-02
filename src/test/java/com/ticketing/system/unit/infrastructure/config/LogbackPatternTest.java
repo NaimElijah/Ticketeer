@@ -167,13 +167,14 @@ class LogbackPatternTest {
 
     // ---- F4: line breaks of any kind, and terminal escapes (#187) ----
     // Besides CR and LF, a line break can be NEL (U+0085), LINE or PARAGRAPH SEPARATOR (U+2028, U+2029),
-    // VT or FF, and ESC starts a terminal control sequence. None of them may reach the log line.
+    // VT or FF, and ESC starts a terminal control sequence, as does CSI (U+009B), its one-character form.
+    // None of them may reach the log line.
 
     private static final int[] LINE_BREAKS_AND_ESCAPE = {
-            '\r', '\n', 0x000B, 0x000C, 0x0085, 0x2028, 0x2029, 0x001B};
+            '\r', '\n', 0x000B, 0x000C, 0x0085, 0x2028, 0x2029, 0x001B, 0x009B};
 
     @ParameterizedTest
-    @ValueSource(ints = {0x2028, 0x2029, 0x0085, 0x000B, 0x000C, 0x001B})
+    @ValueSource(ints = {0x2028, 0x2029, 0x0085, 0x000B, 0x000C, 0x001B, 0x009B})
     void GivenMessageWithAnyLineBreakOrAnEscape_WhenFormattedWithLogPattern_ThenNoneReachesTheLine(int codePoint)
             throws Exception {
         PatternLayout layout = layoutOf(logPattern());
@@ -190,7 +191,7 @@ class LogbackPatternTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {0x2028, 0x2029, 0x0085, 0x000B, 0x000C, 0x001B})
+    @ValueSource(ints = {0x2028, 0x2029, 0x0085, 0x000B, 0x000C, 0x001B, 0x009B})
     void GivenExceptionMessageWithAnyLineBreakOrAnEscape_WhenFormattedWithLogPattern_ThenNoneReachesTheLine(
             int codePoint) throws Exception {
         PatternLayout layout = layoutOf(logPattern());
