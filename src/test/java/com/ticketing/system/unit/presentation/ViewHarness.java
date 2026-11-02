@@ -37,6 +37,7 @@ import com.vaadin.flow.component.internal.PendingJavaScriptInvocation;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.dom.DomEvent;
 import com.vaadin.flow.dom.Element;
+import com.vaadin.flow.function.DeploymentConfiguration;
 import com.vaadin.flow.function.SerializableConsumer;
 import com.vaadin.flow.internal.ExecutionContext;
 import com.vaadin.flow.internal.StateTree;
@@ -220,6 +221,26 @@ final class ViewHarness implements AutoCloseable {
         return new ArrayList<>(javaScript);
     }
 
+    /**
+     * The element of every focus call queued so far, in order: what a component's {@code focus()} or a
+     * script calling {@code .focus()} on an element parameter asked the browser to focus. A call made on a
+     * component that was detached before the response is dropped, as the browser never sees it.
+     */
+    List<Element> focusTargets() {
+        List<Element> targets = new ArrayList<>();
+        for (List<Object> call : javaScriptCalls()) {
+            if (!String.valueOf(call.get(0)).contains(".focus(")) {
+                continue;
+            }
+            call.subList(1, call.size()).stream()
+                .filter(Element.class::isInstance)
+                .map(Element.class::cast)
+                .reduce((first, last) -> last)
+                .ifPresent(targets::add);
+        }
+        return targets;
+    }
+
     /** {@code true} when something asked the browser to reload the page. */
     boolean pageReloadRequested() {
         return javaScriptCalls().stream()
@@ -388,6 +409,8 @@ final class ViewHarness implements AutoCloseable {
         when(router.getRegistry()).thenReturn(registry);
         VaadinService service = mock(VaadinService.class);
         when(service.getRouter()).thenReturn(router);
+        // A component that reads the deployment mode when attached (Flow's Label does) finds development mode.
+        when(service.getDeploymentConfiguration()).thenReturn(mock(DeploymentConfiguration.class));
         return service;
     }
 

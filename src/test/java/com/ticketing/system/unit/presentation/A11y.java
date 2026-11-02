@@ -115,8 +115,14 @@ final class A11y {
         return switch (e.getTag()) {
             case "button", "vaadin-button", "vaadin-drawer-toggle" -> "button";
             case "a" -> e.hasAttribute("href") ? "link" : "";
-            case "input" -> "checkbox".equals(e.getAttribute("type")) ? "checkbox" : "textbox";
+            case "input" -> switch (String.valueOf(e.getAttribute("type"))) {
+                case "checkbox" -> "checkbox";
+                case "radio" -> "radio";
+                default -> "textbox";
+            };
             case "vaadin-checkbox" -> "checkbox";
+            case "vaadin-radio-button" -> "radio";
+            case "vaadin-radio-group" -> "radiogroup";
             case "h1", "h2", "h3", "h4", "h5", "h6" -> "heading";
             case "nav" -> "navigation";
             case "main" -> "main";
@@ -180,6 +186,40 @@ final class A11y {
         return false;
     }
 
+    /**
+     * The polite live region {@code e} sits in, itself included: the nearest element with
+     * {@code aria-live="polite"}, or a role that is polite by default ({@code status}, {@code log}). A screen
+     * reader announces a change of its content without moving focus.
+     */
+    static Optional<Element> politeLiveRegion(Element e) {
+        for (Element a = e; a != null; a = a.getParent()) {
+            String live = a.getAttribute("aria-live");
+            if (live != null && !live.isBlank()) {
+                return "polite".equals(live.trim()) ? Optional.of(a) : Optional.empty();
+            }
+            String role = a.getAttribute("role");
+            if ("status".equals(role) || "log".equals(role)) {
+                return Optional.of(a);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** {@code true} when {@code e} is a live region of any politeness, or sits in one. */
+    static boolean inLiveRegion(Element e) {
+        for (Element a = e; a != null; a = a.getParent()) {
+            String live = a.getAttribute("aria-live");
+            if (live != null && !live.isBlank()) {
+                return !"off".equals(live.trim());
+            }
+            String role = a.getAttribute("role");
+            if ("status".equals(role) || "log".equals(role) || "alert".equals(role) || "timer".equals(role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** A focusable element with role button: a native button, a Vaadin button, or role=button + tabindex. */
     static boolean isButton(Element e) {
         return "button".equals(role(e)) && focusable(e);
@@ -199,7 +239,10 @@ final class A11y {
 
     /** The element's accessible name, whitespace collapsed; "" when it has none. */
     static String name(Element e) {
-        String labelledBy = e.getAttribute("aria-labelledby");
+        // A Vaadin field's setAriaLabelledBy and setAriaLabel set these properties, which the web component
+        // hands to its inner input as aria-labelledby and aria-label.
+        String labelledBy = e.hasAttribute("aria-labelledby")
+            ? e.getAttribute("aria-labelledby") : e.getProperty("accessibleNameRef", "");
         if (labelledBy != null && !labelledBy.isBlank()) {
             String fromIds = Arrays.stream(labelledBy.trim().split("\\s+"))
                 .map(id -> byId(e, id).map(A11y::text).orElse(""))
@@ -208,7 +251,8 @@ final class A11y {
                 return normalise(fromIds);
             }
         }
-        String ariaLabel = e.getAttribute("aria-label");
+        String ariaLabel = e.hasAttribute("aria-label")
+            ? e.getAttribute("aria-label") : e.getProperty("accessibleName", "");
         if (ariaLabel != null && !ariaLabel.isBlank()) {
             return normalise(ariaLabel);
         }
