@@ -24,17 +24,25 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.testutil.AdjustableClock;
+import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.OrderSession;
+import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.ticketing.system.ui.views.order.OrderConfirmationView;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.textfield.EmailField;
+import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.BeforeLeaveEvent;
 
 /**
  * The checkout and its confirmation promise no email, since the platform sends none (#102), and a
@@ -63,8 +71,8 @@ class OrderConfirmationTest {
 
     @Test
     void GivenACompletedCheckout_WhenTheConfirmationShows_ThenItPromisesNoEmail() {
-        OrderSession.setResult(RESULT);
-        OrderConfirmationView view = new OrderConfirmationView();
+        OrderSession.setResult(RESULT, CLOCK.instant());
+        OrderConfirmationView view = new OrderConfirmationView(CLOCK);
 
         view.beforeEnter(routeTo());
 
@@ -86,11 +94,11 @@ class OrderConfirmationTest {
 
     @Test
     void GivenAGuestSawTheirConfirmation_WhenTheyReloadIt_ThenTheTicketsStillShow() {
-        OrderSession.setResult(RESULT);
-        new OrderConfirmationView().beforeEnter(routeTo());
+        OrderSession.setResult(RESULT, CLOCK.instant());
+        new OrderConfirmationView(CLOCK).beforeEnter(routeTo());
 
         BeforeEnterEvent reload = routeTo();
-        OrderConfirmationView reloaded = new OrderConfirmationView();
+        OrderConfirmationView reloaded = new OrderConfirmationView(CLOCK);
         reloaded.beforeEnter(reload);
 
         verify(reload, never()).rerouteTo(any(Class.class));
@@ -102,7 +110,7 @@ class OrderConfirmationTest {
     // fails leaves no older order's confirmation to reopen.
     @Test
     void GivenAKeptConfirmation_WhenANewPaymentAttemptFails_ThenTheOldConfirmationIsNoLongerShown() {
-        OrderSession.setResult(RESULT);
+        OrderSession.setResult(RESULT, CLOCK.instant());
         ViewHarness.signInMember();
         CheckoutPresenter presenter = mock(CheckoutPresenter.class);
         when(presenter.resolveIdentity()).thenReturn(
@@ -127,8 +135,68 @@ class OrderConfirmationTest {
             .filter(b -> b.getElement().getTextRecursively().trim().startsWith("Pay "))
             .findFirst().orElseThrow());
         BeforeEnterEvent entry = routeTo();
-        new OrderConfirmationView().beforeEnter(entry);
+        new OrderConfirmationView(CLOCK).beforeEnter(entry);
 
+        verify(entry).rerouteTo(BrowseEventsView.class);
+    }
+
+    // The confirmation belongs to one visitor and one visit (#187): a sign-in starts another visit.
+    @Test
+    void GivenAKeptConfirmation_WhenAMemberSignsIn_ThenItIsNoLongerShown() {
+        OrderSession.setResult(RESULT, CLOCK.instant());
+        LoginPresenter login = mock(LoginPresenter.class);
+        when(login.attemptLogin(any(), any(), any())).thenReturn(new LoginPresenter.Outcome.Success(
+            new LoginDTO(new AuthTokenDTO(ViewHarness.MEMBER_TOKEN, 0L, ViewHarness.MEMBER_ID, "alice"), null,
+                List.of())));
+        LoginView loginView = new LoginView(login, mock(SessionIdentity.class));
+        field(loginView, TextField.class, "Username").setValue("alice");
+        field(loginView, PasswordField.class, "Password").setValue("secret-pw");
+
+        click(ViewHarness.button(loginView, "Sign in"));
+
+        assertSentToBrowse();
+    }
+
+    @Test
+    void GivenAShownConfirmation_WhenTheVisitorLeavesItForAnotherPage_ThenItIsNoLongerShown() {
+        OrderSession.setResult(RESULT, CLOCK.instant());
+        OrderConfirmationView view = new OrderConfirmationView(CLOCK);
+        view.beforeEnter(routeTo());
+
+        view.beforeLeave(mock(BeforeLeaveEvent.class));
+
+        assertSentToBrowse();
+    }
+
+    @Test
+    void GivenAConfirmationAsOldAsItsMaximumAge_WhenOpened_ThenTheVisitorIsSentToBrowse() {
+        AdjustableClock clock = new AdjustableClock(CLOCK.instant());
+        OrderSession.setResult(RESULT, clock.instant());
+
+        clock.advance(OrderSession.MAX_AGE);
+        BeforeEnterEvent entry = routeTo();
+        new OrderConfirmationView(clock).beforeEnter(entry);
+
+        verify(entry).rerouteTo(BrowseEventsView.class);
+    }
+
+    @Test
+    void GivenAConfirmationJustYoungerThanItsMaximumAge_WhenRefreshed_ThenTheTicketsStillShow() {
+        AdjustableClock clock = new AdjustableClock(CLOCK.instant());
+        OrderSession.setResult(RESULT, clock.instant());
+
+        clock.advance(OrderSession.MAX_AGE.minusSeconds(1));
+        BeforeEnterEvent reload = routeTo();
+        OrderConfirmationView reloaded = new OrderConfirmationView(clock);
+        reloaded.beforeEnter(reload);
+
+        verify(reload, never()).rerouteTo(any(Class.class));
+        assertTrue(text(reloaded).contains(BARCODE), "a refresh within the maximum age must show the barcode");
+    }
+
+    private static void assertSentToBrowse() {
+        BeforeEnterEvent entry = routeTo();
+        new OrderConfirmationView(CLOCK).beforeEnter(entry);
         verify(entry).rerouteTo(BrowseEventsView.class);
     }
 
@@ -137,7 +205,7 @@ class OrderConfirmationTest {
     void GivenNoCheckoutInThisSession_WhenTheConfirmationIsOpened_ThenTheVisitorIsSentToBrowse() {
         BeforeEnterEvent entry = routeTo();
 
-        new OrderConfirmationView().beforeEnter(entry);
+        new OrderConfirmationView(CLOCK).beforeEnter(entry);
 
         verify(entry).rerouteTo(BrowseEventsView.class);
     }

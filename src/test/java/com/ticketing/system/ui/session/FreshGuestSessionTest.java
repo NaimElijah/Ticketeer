@@ -43,6 +43,9 @@ class FreshGuestSessionTest {
     private static final String FRESH_GUEST_SESSION_ID = "fresh-guest-sid";
     private static final int COMPANY_ID = 7;
     private static final LocalDateTime NOTIFIED_AT = LocalDateTime.of(2027, 1, 1, 12, 0);
+    private static final CheckoutResultDTO KEPT_CONFIRMATION = new CheckoutResultDTO(75.0, 42, 9001,
+            List.of(new CheckoutResultDTO.IssuedTicketDTO(1, "TIX-0001-A1")));
+    private static final Instant KEPT_AT = Instant.parse("2027-01-01T12:00:00Z");
 
     private AuthenticationService authenticationService;
     private INotificationService notificationService;
@@ -84,12 +87,23 @@ class FreshGuestSessionTest {
     void GivenAKeptCheckoutConfirmation_WhenRestored_ThenItIsDropped() {
         when(authenticationService.startGuestSession())
                 .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
-        OrderSession.setResult(new CheckoutResultDTO(75.0, 42, 9001,
-                List.of(new CheckoutResultDTO.IssuedTicketDTO(1, "TIX-0001-A1"))));
+        OrderSession.setResult(KEPT_CONFIRMATION, KEPT_AT);
 
         freshGuestSession.restore();
 
-        assertNull(OrderSession.result(), "the signed-out visitor's order confirmation is dropped");
+        assertTrue(OrderSession.result(KEPT_AT).isEmpty(), "the signed-out visitor's order confirmation is dropped");
+    }
+
+    // The confirmation belongs to one visitor and one visit (#187): a new guest session is another visit.
+    @Test
+    void GivenAKeptCheckoutConfirmation_WhenTheGuestSessionIsRenewed_ThenItIsDropped() {
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+        OrderSession.setResult(KEPT_CONFIRMATION, KEPT_AT);
+
+        freshGuestSession.renewGuest();
+
+        assertTrue(OrderSession.result(KEPT_AT).isEmpty(), "the previous visit's order confirmation is dropped");
     }
 
     @Test

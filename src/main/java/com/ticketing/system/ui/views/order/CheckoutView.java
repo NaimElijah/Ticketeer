@@ -461,7 +461,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
 
             switch (outcome) {
                 case CheckoutPresenter.PayOutcome.Success ok -> {
-                    OrderSession.setResult(ok.result());
+                    OrderSession.setResult(ok.result(), clock.instant());
                     clearIdempotencyKey();
                     Toasts.success("Payment successful — "
                             + formatCents(Money.toCents(ok.result().totalCharged()))

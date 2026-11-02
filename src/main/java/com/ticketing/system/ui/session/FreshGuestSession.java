@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
  * failure this prevents.
  *
  * <p>{@link #renewGuest()} is the narrower step for a guest session id that expired on its own: it
- * replaces only that id and signs nobody out.
+ * replaces that id, drops the kept order confirmation, and signs nobody out.
  */
 @Component
 @Slf4j
@@ -60,7 +60,8 @@ public class FreshGuestSession {
     }
 
     /**
-     * Replaces only the guest session id with a newly minted one. The stored token, the admin flag,
+     * Replaces the guest session id with a newly minted one, and drops the kept order confirmation
+     * ({@link OrderSession}), which belonged to the previous visit. The stored token, the admin flag,
      * the current company and the recent searches stay, so a signed-in admin on the storefront stays
      * signed in.
      *
@@ -68,6 +69,8 @@ public class FreshGuestSession {
      * {@link #restore()}.
      */
     public void renewGuest() {
+        // A new guest session is another visit; the kept order confirmation belonged to the last one.
+        OrderSession.clear();
         pinNewGuestSession();
     }
 

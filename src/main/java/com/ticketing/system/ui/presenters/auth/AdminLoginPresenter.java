@@ -6,6 +6,7 @@ import com.ticketing.system.shared.exception.AccountLockedException;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.NotificationSession;
+import com.ticketing.system.ui.session.OrderSession;
 import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.ticketing.system.ui.support.ServiceErrors;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +52,8 @@ public class AdminLoginPresenter {
      * Makes this browser session the admin's, after {@link #attemptAdminLogin} succeeded. A member who
      * signed in on this session before gets their shown-but-unread alerts sent back to pending, while
      * the session still names them; then the bell is emptied, and only then is the admin's auth stored,
-     * since admin and member ids share one id space (ADR-012).
+     * since admin and member ids share one id space (ADR-012). The kept order confirmation
+     * ({@code OrderSession}) is dropped too: a sign-in starts another visit.
      *
      * @param adminAuth the token {@link Outcome.Success} carried
      */
@@ -59,6 +61,8 @@ public class AdminLoginPresenter {
         unreadAlertsSendBack.sendBackForSignedInMember();
         NotificationSession.clear();
         AuthSession.storeAuth(adminAuth);
+        // A sign-in starts another visit; the kept order confirmation belonged to the last one.
+        OrderSession.clear();
     }
 
     public sealed interface Outcome {

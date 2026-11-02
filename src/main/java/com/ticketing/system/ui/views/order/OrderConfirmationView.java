@@ -20,25 +20,29 @@ import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
+import com.vaadin.flow.router.BeforeLeaveEvent;
+import com.vaadin.flow.router.BeforeLeaveObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
+import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Route(value = "order-confirmed", layout = MainLayout.class)
 @PageTitle("Order Confirmed · TicketHub")
 @AnonymousAllowed
-public class OrderConfirmationView extends LkPage implements BeforeEnterObserver {
+public class OrderConfirmationView extends LkPage implements BeforeEnterObserver, BeforeLeaveObserver {
 
+    private final Clock clock;
     private CheckoutResultDTO result;
 
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
-        // The result stays for the session, so a guest, who has no account page, still sees their
-        // tickets after a refresh (#187, UI-A7). OrderSession says what drops it.
-        result = OrderSession.result();
+        // The result stays for a refresh, so a guest, who has no account page, still sees their tickets
+        // (#187, UI-A7). OrderSession says what drops it.
+        result = OrderSession.result(clock.instant()).orElse(null);
         if (result == null) {
             event.rerouteTo(BrowseEventsView.class);
             return;
@@ -51,8 +55,18 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
         add(buildActions());
     }
 
-    public OrderConfirmationView() {
-        // Intentionally empty — content is built in beforeEnter once `result` is set.
+    /**
+     * @param clock the application clock (ADR-008), for the confirmation's age
+     */
+    public OrderConfirmationView(Clock clock) {
+        // Content is built in beforeEnter once `result` is set.
+        this.clock = clock;
+    }
+
+    /** Leaving for another page ends the confirmation; a refresh of this page is no navigation and keeps it. */
+    @Override
+    public void beforeLeave(BeforeLeaveEvent event) {
+        OrderSession.clear();
     }
 
     private Component buildConfirmHero() {

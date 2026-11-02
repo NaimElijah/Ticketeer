@@ -9,6 +9,7 @@ import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.NotificationSession;
+import com.ticketing.system.ui.session.OrderSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
@@ -94,6 +95,8 @@ public class LoginView extends LkAuthCard {
         AuthSession.storeAuth(dto.authToken());
         // Login swaps the cart: the member's held order is restored and merged with the guest's.
         CartBadgeCache.invalidate();
+        // A sign-in starts another visit; the kept order confirmation belonged to the last one.
+        OrderSession.clear();
         NotificationSession.store(dto.notifications());
         String name = dto.authToken().username();
         if (AuthSession.isAdmin()) {
