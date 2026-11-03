@@ -20,10 +20,9 @@ import com.vaadin.flow.dom.Element;
 
 /**
  * The kit's popover fields open from a real button that says what it is and what it holds, and their
- * options say which is chosen (#188, A-B2, P-M2, U-A5, U-A6, A-m5; WCAG 2.1.1, 4.1.2, 1.3.1). Today each
- * trigger is a span with {@code tabindex=0} and no role: it takes focus, but Enter and Space do nothing,
- * a screen reader announces neither its label nor its value, and the chosen option is marked by colour
- * and a hidden icon only.
+ * options say which is chosen (#188, A-B2, P-M2, U-A5, U-A6, A-m5; WCAG 2.1.1, 4.1.2, 1.3.1): Enter and
+ * Space open a trigger, a screen reader announces its label and value, and the chosen option is said, not
+ * only shown by colour and a hidden icon.
  *
  * <p>Contract per trigger: a native button (or role=button and focusable), an accessible name holding its
  * label and its current value, and {@code aria-haspopup}. Per option: {@code aria-checked} or

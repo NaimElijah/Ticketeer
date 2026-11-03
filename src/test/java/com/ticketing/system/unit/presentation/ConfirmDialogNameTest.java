@@ -9,8 +9,8 @@ import com.vaadin.flow.dom.Element;
 
 /**
  * The kit's confirm dialog is named by its title, so a screen reader says what is being confirmed when
- * the dialog opens (#188, A-M10, P-M7, U-A17; WCAG 4.1.2, 1.3.1). Today the title is bold text in the
- * body, so the dialog opens unnamed, for revoking a manager or requesting a refund alike.
+ * the dialog opens (#188, A-M10, P-M7, U-A17; WCAG 4.1.2, 1.3.1), for revoking a manager or requesting a
+ * refund alike.
  *
  * <p>Vaadin's {@code Dialog} names its overlay from its header title ({@code setHeaderTitle}, the
  * {@code headerTitle} property) or from {@code setAriaLabel} (the {@code ariaLabel} property); either fix

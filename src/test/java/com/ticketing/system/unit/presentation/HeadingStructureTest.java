@@ -62,8 +62,8 @@ import com.vaadin.flow.dom.Element;
 /**
  * Headings give the page its structure: each page has exactly one top-level heading naming it, a card's
  * title is a heading under it, and the sign-in card's title is the page's heading (#188, A-M8, P-m2,
- * U-A16; WCAG 1.3.1, 2.4.6, 2.4.10). Screen-reader users jump by heading; today card titles are plain
- * divs and six buyer pages have no h1 at all.
+ * U-A16; WCAG 1.3.1, 2.4.6, 2.4.10). Screen-reader users jump by heading, so a card title is a heading
+ * and every buyer page has an h1.
  *
  * <p>A heading is an {@code h1}..{@code h6} element, or {@code role=heading} with {@code aria-level}.
  */

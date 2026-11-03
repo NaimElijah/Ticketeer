@@ -40,9 +40,9 @@ import com.vaadin.flow.router.AfterNavigationEvent;
 /**
  * The fields that ask for the user's own data say which data, so a browser or password manager can fill
  * them and assistive technology can tell the user what is asked (#188, U-A21; WCAG 1.3.5 Identify Input
- * Purpose). Today none of the sign-in, registration or payment fields carries an {@code autocomplete}
- * token, so a user with a motor or memory impairment types their name, card and password by hand every
- * time. Each field carries the HTML token for its purpose ({@code setAutocomplete}).
+ * Purpose). Each sign-in, registration and payment field carries the HTML token for its purpose
+ * ({@code setAutocomplete}), so a user with a motor or memory impairment need not type their name, card
+ * and password by hand every time.
  */
 class AutocompleteTest {
 

@@ -24,9 +24,9 @@ import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.Element;
 
 /**
- * The top bar's brand is a link home, and the avatar button says it opens the account menu of the member
- * signed in (#188, U-A1, U-A2, A-m4, P-M1, P-m7; WCAG 2.1.1, 2.4.4, 4.1.2). Today the brand is a span with
- * a click listener, out of reach of a keyboard, and the avatar is announced by its initials ("AL").
+ * The top bar's brand is a link home a keyboard reaches, and the avatar button says it opens the account
+ * menu of the member signed in, not only their initials ("AL") (#188, U-A1, U-A2, A-m4, P-M1, P-m7;
+ * WCAG 2.1.1, 2.4.4, 4.1.2).
  */
 class TopBarA11yTest {
 

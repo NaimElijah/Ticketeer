@@ -40,8 +40,7 @@ import com.vaadin.flow.dom.Element;
  * <ul>
  *   <li>the policy tree's node bodies and +R / +G pills are keyboard buttons: {@code tabindex=0},
  *       {@code role=button}, an {@code aria-label}, and Enter or Space doing what a click does; the
- *       {@code svg} is a named {@code role=group}. Today the tree is mouse-only, so a keyboard user cannot
- *       build a policy at all;</li>
+ *       {@code svg} is a named {@code role=group}, so a keyboard user can build a policy;</li>
  *   <li>a load-error banner is an alert, the validity badge a status, and the Company / Event scope
  *       toggle says which scope is on ({@code aria-pressed}).</li>
  * </ul>

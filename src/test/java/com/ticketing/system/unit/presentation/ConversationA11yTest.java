@@ -36,10 +36,10 @@ import com.vaadin.flow.dom.Element;
 /**
  * The inboxes say, in words a screen reader reads, which conversation is open, how many messages are
  * unread and whether a thread is closed, and they take the reader to the conversation they chose (#188,
- * A-m2, U-A19, P-m6; WCAG 1.3.1, 1.4.1, 2.4.3, 4.1.2). Today the selected row is shown by a tint, the
- * unread badge is a bare number, a closed thread is only dimmed, the thread is a plain scrolling div a
- * keyboard cannot reach, and choosing a conversation swaps the detail silently while focus stays on the
- * row.
+ * A-m2, U-A19, P-m6; WCAG 1.3.1, 1.4.1, 2.4.3, 4.1.2). The selected row is marked current, not only
+ * tinted; the unread badge reads as a count of unread messages, not a bare number; a closed thread says
+ * so rather than only being dimmed; the thread is a log a keyboard can reach and scroll; and choosing a
+ * conversation moves focus to its heading.
  */
 class ConversationA11yTest {
 

@@ -58,10 +58,10 @@ import com.vaadin.flow.dom.Element;
 
 /**
  * Every control a mouse user can click is a native button or link a keyboard user can reach and a screen
- * reader can name (#188, P-B3, P-M1, A-M2, A-M3, U-A12, A-m7, P-m5; WCAG 2.1.1, 4.1.2, 2.4.4). Today these
- * are divs and spans with click listeners: Tab skips them, so the admin cannot pick a company in the
- * organizational tree, a buyer cannot open a featured event, and nobody can remove a recipient, an artist,
- * a zone or a held seat without a mouse. Each ✕ remover is named for what it removes.
+ * reader can name (#188, P-B3, P-M1, A-M2, A-M3, U-A12, A-m7, P-m5; WCAG 2.1.1, 4.1.2, 2.4.4). Tab reaches
+ * each one, so the admin can pick a company in the organizational tree, a buyer can open a featured event,
+ * and anyone can remove a recipient, an artist, a zone or a held seat without a mouse. Each ✕ remover is
+ * named for what it removes.
  */
 class ClickOnlyControlsTest {
 

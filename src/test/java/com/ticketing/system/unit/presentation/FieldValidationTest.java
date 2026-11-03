@@ -73,11 +73,11 @@ import com.vaadin.flow.router.AfterNavigationEvent;
 
 /**
  * A refused submit tells the user which field is wrong, on the field itself (#188, U-A7, P-M5, A-m3, U-B2;
- * WCAG 3.3.1, 3.3.2, 4.1.2). Today every form carries its validation only in a toast that vanishes after a
- * few seconds and is tied to no field: a screen reader user hears a passing message, then lands nowhere.
+ * WCAG 3.3.1, 3.3.2, 4.1.2), not only in a toast that vanishes after a few seconds and is tied to no field,
+ * which a screen reader user hears pass before landing nowhere.
  * Each refused field must be marked invalid with an error message that says what is wrong, focus must move
  * to the first such field, and a field the form insists on must show a required indicator. A toast may
- * still show; it is just no longer the only carrier.
+ * still show; it is just not the only carrier.
  *
  * <p>"Invalid" is Vaadin's {@code invalid} property (what {@code setInvalid} sets, rendered as
  * {@code aria-invalid}) or an {@code aria-invalid="true"}; the message is the field's {@code errorMessage}.

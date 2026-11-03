@@ -23,7 +23,7 @@ import com.vaadin.flow.dom.Element;
  * The notification bell tells a screen reader what a sighted user sees (#188, A-M6, U-A3, U-A4, P-m7;
  * WCAG 1.1.1, 1.3.1, 1.4.1, 2.4.3, 4.1.2):
  * <ul>
- *   <li>its name carries the unread count ("Notifications, 3 unread"), which today only the badge shows;</li>
+ *   <li>its name carries the unread count ("Notifications, 3 unread"), not only its badge;</li>
  *   <li>each unread row says "unread" in text, not only by its tint and dot;</li>
  *   <li>an empty inbox is a message, not a button that does nothing;</li>
  *   <li>a refresh updates the bell in place, so the button a keyboard user is on is not destroyed under

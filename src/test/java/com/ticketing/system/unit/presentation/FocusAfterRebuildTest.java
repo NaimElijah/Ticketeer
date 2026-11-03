@@ -93,9 +93,9 @@ import com.vaadin.flow.router.AfterNavigationEvent;
 
 /**
  * After an action rebuilds part of the page, keyboard focus lands somewhere sensible on it, instead of on
- * the document (#188, A-M7, P-m9, P-M10, U-B1, U-B2, U-B6; WCAG 2.4.3 Focus Order, 4.1.3). Today each of
- * these actions removes the very control that had focus and builds a new one: the browser drops focus to
- * the body, so a keyboard user starts again from the top of the page and a screen reader says nothing.
+ * the document (#188, A-M7, P-m9, P-M10, U-B1, U-B2, U-B6; WCAG 2.4.3 Focus Order, 4.1.3). Many of these
+ * actions replace the control that had focus with a new one; left alone, the browser drops focus to the
+ * body, and a keyboard user starts again from the top of the page while a screen reader says nothing.
  *
  * <p>The server cannot see the browser's focus. A test passes when the control that was used is still on
  * the page and focusable (it was updated in place, so the browser kept focus on it), or when, after the

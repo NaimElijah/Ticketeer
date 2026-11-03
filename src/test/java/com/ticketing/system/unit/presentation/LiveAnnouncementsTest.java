@@ -62,10 +62,10 @@ import com.vaadin.flow.dom.Element;
 
 /**
  * What changes on a page without a page load is announced, without moving focus (#188, U-A15, U-A22,
- * P-M10, A-m8, U-B5; WCAG 4.1.3 Status Messages). Today a filter's new result count, the quantity and
- * price of a standing ticket, the seats in the selection rail, the zone picked on the map, the recipients
- * an admin finds and adds, and a username's "Available" all change silently: a screen reader user does
- * not hear that anything happened. Each sits in a polite live region ({@code aria-live="polite"} or
+ * P-M10, A-m8, U-B5; WCAG 4.1.3 Status Messages): a filter's new result count, the quantity and price of
+ * a standing ticket, the seats in the selection rail, the zone picked on the map, the recipients an admin
+ * finds and adds, and a username's "Available", none of which a screen reader user would otherwise hear.
+ * Each sits in a polite live region ({@code aria-live="polite"} or
  * {@code role=status}) that is on the page before the change and stays there across changes, since a
  * region added together with its text is not announced.
  */

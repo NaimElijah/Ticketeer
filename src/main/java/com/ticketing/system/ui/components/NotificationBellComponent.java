@@ -69,9 +69,9 @@ public class NotificationBellComponent extends Span {
     }
 
     /**
-     * Rebuilds only when the inbox differs from the one the bell last showed: another tab may have
-     * filled it or marked an item read, and the poller asks every tab's bell to catch up on each tick
-     * without repainting a bell that shows the inbox already.
+     * Updates the bell in place, as {@link #refresh()} does, only when the inbox differs from the one the
+     * bell last showed: another tab may have filled it or marked an item read, and the poller asks every
+     * tab's bell to catch up on each tick without repainting a bell that shows the inbox already.
      */
     public void refreshIfChanged() {
         if (!shownInbox().equals(renderedInbox)) {

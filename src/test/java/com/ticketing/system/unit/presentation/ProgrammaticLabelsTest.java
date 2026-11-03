@@ -41,9 +41,9 @@ import com.vaadin.flow.dom.Element;
 
 /**
  * Every input says what it is for, to a screen reader as well as by sight (#188, U-A22, P-M6, A-M2;
- * WCAG 1.3.1, 3.3.2, 4.1.2). Today the filters on Browse and My Events are named by a {@code span} beside
- * them that is tied to nothing, and by a placeholder that vanishes once the user types: a screen reader
- * announces "edit text" for each, and the price and rating bounds as two unnamed fields. Each field must
+ * WCAG 1.3.1, 3.3.2, 4.1.2), the filters on Browse and My Events included. A span beside a field that is
+ * tied to nothing, or a placeholder that vanishes once the user types, names nothing: a screen reader
+ * would announce "edit text", and the price and rating bounds as two unnamed fields. Each field must
  * have an accessible name (a label, an aria-label or aria-labelledby), and each min/max pair must sit in a
  * {@code role=group} named for what it bounds, so "Min" is heard as "Price range, Min".
  */

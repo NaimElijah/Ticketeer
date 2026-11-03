@@ -17,8 +17,8 @@ import com.vaadin.flow.dom.Element;
 
 /**
  * The kit's check row is a checkbox to a keyboard and a screen reader, not a clickable span (#188, A-B1,
- * P-B2; WCAG 2.1.1, 4.1.2). It decides "All members" / "All producers" in the admin's broadcast and a
- * manager's permissions, so without it a keyboard user cannot broadcast or grant a permission at all.
+ * P-B2; WCAG 2.1.1, 4.1.2). It decides a manager's permissions, so without it a keyboard user cannot grant
+ * a permission at all.
  *
  * <p>Any of the usual fixes passes: a native {@code input type=checkbox}, a Vaadin {@code Checkbox}, or an
  * element with {@code role=checkbox}, {@code tabindex=0}, {@code aria-checked} and a Space key listener.
@@ -68,7 +68,7 @@ class CheckRowA11yTest {
         assertEquals(false, row.isChecked());
     }
 
-    // The admin view unchecks "All producers" when "All members" is checked, through setChecked.
+    // A row that code sets, through setChecked, must say its new state as a toggled one does.
     @Test
     void GivenACheckedRow_WhenItIsUncheckedInCode_ThenTheCheckboxSaysUnchecked() {
         LkCheckRow row = new LkCheckRow(LABEL, true);
