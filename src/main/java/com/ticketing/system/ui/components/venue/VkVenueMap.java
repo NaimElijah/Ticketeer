@@ -4,7 +4,9 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -14,6 +16,9 @@ import java.util.function.Consumer;
 public class VkVenueMap extends Div {
 
     private static final String ARIA_PRESSED = "aria-pressed";
+
+    /** Each zone's button, by zone id, so a page that rebuilt the map can put focus back on one. */
+    private final Map<String, NativeButton> zoneButtons = new HashMap<>();
 
     public record Zone(String id, String label, String price, String tone,
                        String note, String top, String left, String width, String height) { }
@@ -53,6 +58,7 @@ public class VkVenueMap extends Div {
             if (onPick != null && !"danger".equals(z.tone)) {
                 zb.addClickListener(e -> onPick.accept(z.id));
             }
+            zoneButtons.put(z.id, zb);
             floor.add(zb);
         }
         add(floor);
@@ -63,5 +69,18 @@ public class VkVenueMap extends Div {
         Span b = new Span("Gate B ►");
         entrances.add(a, b);
         add(entrances);
+    }
+
+    /**
+     * Focuses the button of the zone with {@code id}. A page that rebuilds the map on a pick calls it, since
+     * the button the user pressed is gone with the old map (#188, WCAG 2.4.3).
+     *
+     * @param id the zone's id, as given in its {@link Zone}; an id not on this map does nothing
+     */
+    public void focusZone(String id) {
+        NativeButton button = zoneButtons.get(id);
+        if (button != null) {
+            button.focus();
+        }
     }
 }

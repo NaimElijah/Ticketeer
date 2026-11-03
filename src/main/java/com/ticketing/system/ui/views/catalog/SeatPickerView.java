@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.catalog;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.ticketing.system.sales.config.ReservationHoldProperties;
@@ -69,6 +70,9 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private LkCol selectionListCol;
     /** What the rail holds, said to a screen reader on each pick (#188). */
     private final Span selectionSummary = Lk.asStatus(new Span());
+    /** The rail's remove buttons, in seat order, and its hint while empty, as the last rebuild made them. */
+    private final List<LkRemoveButton> railRemoveButtons = new ArrayList<>();
+    private Span railHint;
     private VkQuantitySelector qtySelector;
     private LkBtn holdButton;
     private final Div bodyHolder = new Div();
@@ -188,6 +192,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
             return;
         }
         selectionListCol.removeAll();
+        railRemoveButtons.clear();
+        railHint = null;
         List<String> labels = seatPicker.hasSelection()
                 ? seatPicker.getSelection().getSeatNumbers() : List.of();
         String seatCount = labels.size() + " seat" + (labels.size() == 1 ? "" : "s");
@@ -198,6 +204,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
             Span hint = Lk.muted("Choose an available seat above to select it.");
             hint.getStyle().set("text-align", "center").set("display", "block").set("padding", "8px 0");
             selectionListCol.add(hint);
+            railHint = hint;
             return;
         }
         Div list = new Div();
@@ -231,13 +238,26 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         info.add(name, subline);
 
         LkRemoveButton remove = new LkRemoveButton(SEAT + label, new LkIcon("close", 15), () -> {
-            if (seatPicker != null) {
+            if (seatPicker != null && seatPicker.hasSelection()) {
+                int position = seatPicker.getSelection().getSeatNumbers().indexOf(label);
                 seatPicker.deselect(label);
+                focusAfterRemove(position);
             }
         });
         remove.addClassName("vz-selseat-x");
+        railRemoveButtons.add(remove);
         row.add(info, remove);
         return row;
+    }
+
+    // The rebuild removed the remove button that had focus: focus the one now at its place, the next seat's,
+    // or the last seat's when the last went; with the rail empty, its hint saying what to do (#188, WCAG 2.4.3).
+    private void focusAfterRemove(int position) {
+        if (!railRemoveButtons.isEmpty()) {
+            railRemoveButtons.get(Math.min(Math.max(position, 0), railRemoveButtons.size() - 1)).focus();
+        } else if (railHint != null) {
+            Lk.focusFromScript(railHint);
+        }
     }
 
     private void reserveSeated() {

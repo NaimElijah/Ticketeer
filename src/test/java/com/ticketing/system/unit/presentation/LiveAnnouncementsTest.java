@@ -245,6 +245,23 @@ class LiveAnnouncementsTest {
         assertAnnouncedByAnExistingRegion(view, regionsBefore, Pattern.compile("(?i)alice"), "the recipient added");
     }
 
+    // A count left from the last search would tell a screen reader user of results the page no longer shows.
+    @Test
+    void GivenSearchResults_WhenTheAdminClearsTheQuery_ThenNoLiveRegionStillSaysMembersWereFound() {
+        AdminSendMessagesView view = sendMessagesView();
+        TextField search = field(view, TextField.class, "Search members");
+        search.setValue("al");
+
+        search.setValue("");
+
+        List<String> stale = politeRegions(view).stream()
+            .map(A11y::text)
+            .filter(text -> Pattern.compile("(?i)\\bfound\\b").matcher(text).find())
+            .toList();
+        assertTrue(stale.isEmpty(), "with the query cleared no results show, so no live region may still say how "
+            + "many members were found: " + stale);
+    }
+
     // ---- RegisterView username availability ----
 
     @Test

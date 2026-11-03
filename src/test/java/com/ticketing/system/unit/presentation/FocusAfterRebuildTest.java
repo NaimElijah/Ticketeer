@@ -35,24 +35,38 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
+import com.ticketing.system.catalog.config.VenueLimitsProperties;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.catalog.domain.ZoneType;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecordDTO;
+import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.CompanyDashboardDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
+import com.ticketing.system.shared.dto.MemberSearchResultDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
+import com.ticketing.system.shared.dto.SeatDTO;
 import com.ticketing.system.ui.components.kit.LkFilterChip;
 import com.ticketing.system.ui.components.kit.LkTextRows;
 import com.ticketing.system.ui.components.messaging.MdReplyBar;
+import com.ticketing.system.ui.components.venue.VkSeat;
 import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
+import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
+import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
 import com.ticketing.system.ui.presenters.company.ManagerListPresenter;
 import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
+import com.ticketing.system.ui.presenters.company.VenueMapPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
+import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
 import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
 import com.ticketing.system.ui.presenters.order.CartPresenter;
@@ -62,9 +76,13 @@ import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.account.SupportInboxView;
 import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
 import com.ticketing.system.ui.views.admin.AdminInboxView;
+import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
+import com.ticketing.system.ui.views.catalog.EventDetailsView;
+import com.ticketing.system.ui.views.catalog.SeatPickerView;
 import com.ticketing.system.ui.views.company.CompanyInquiryRespondView;
 import com.ticketing.system.ui.views.company.ManagerListView;
 import com.ticketing.system.ui.views.company.OwnerDashboardView;
+import com.ticketing.system.ui.views.company.VenueMapEditorView;
 import com.ticketing.system.ui.views.order.CartView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
@@ -91,6 +109,7 @@ class FocusAfterRebuildTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
     private static final LocalDateTime PAID_AT = LocalDateTime.of(2027, 7, 1, 12, 0);
+    private static final String SEARCH_MEMBERS = "Search members";
     // What a status line says while the payment runs.
     private static final Predicate<String> PAYING =
         Pattern.compile("(?i)process|paying|payment in progress|busy|charging").asPredicate();
@@ -379,7 +398,125 @@ class FocusAfterRebuildTest {
                 + focused.stream().map(A11y::describe).toList());
     }
 
+    // ---- EventDetailsView zone map (review A3) ----
+
+    @Test
+    void GivenAnEventWithTwoZones_WhenTheBuyerPicksTheOtherZone_ThenFocusStaysOnThatZonePressed() {
+        EventDetailsView view = attached(eventPage());
+        Element balcony = zoneOnMap(view, "Balcony");
+
+        assertKeptOrMovesTo(view, balcony, () -> A11y.activate(balcony),
+            t -> A11y.name(t).contains("Balcony") && "true".equals(t.getAttribute("aria-pressed")),
+            "picking a zone on the map", "the Balcony zone's button, now pressed");
+    }
+
+    // ---- VenueMapEditorView zone list (review A3, C4) ----
+
+    @Test
+    void GivenTwoZones_WhenTheOwnerChoosesTheFirstInTheZoneList_ThenFocusStaysOnThatZonesControl() {
+        VenueMapEditorView view = attached(venueEditorWithTwoZones());
+        Element first = zoneInList(view, "Zone 1");
+
+        assertKeptOrMovesTo(view, first, () -> A11y.fireBubbling(first, view.getElement(), "click"),
+            t -> "Zone 1".equals(A11y.name(t)) && "true".equals(t.getAttribute("aria-pressed")),
+            "choosing a zone in the zone list", "Zone 1's control in the list, now pressed");
+    }
+
+    @Test
+    void GivenTwoZones_WhenTheOwnerRemovesTheFirst_ThenFocusMovesToTheNextZonesRemove() {
+        VenueMapEditorView view = attached(venueEditorWithTwoZones());
+        Element remove = namedStartingWith(view, "Remove Zone 1");
+
+        assertFocusMovesTo(view, () -> A11y.activate(remove), t -> "Remove Zone 2".equals(A11y.name(t)),
+            "removing a zone", "the next zone's remove button, \"Remove Zone 2\"");
+    }
+
+    @Test
+    void GivenTwoZones_WhenTheOwnerRemovesTheLast_ThenFocusMovesToTheRemainingZonesRemove() {
+        VenueMapEditorView view = attached(venueEditorWithTwoZones());
+        Element remove = namedStartingWith(view, "Remove Zone 2");
+
+        assertFocusMovesTo(view, () -> A11y.activate(remove), t -> "Remove Zone 1".equals(A11y.name(t)),
+            "removing the last zone in the list", "the remaining zone's remove button, \"Remove Zone 1\"");
+    }
+
+    // ---- SeatPickerView selection rail (review A4) ----
+
+    @Test
+    void GivenTwoSeatsInTheRail_WhenTheBuyerRemovesTheFirst_ThenFocusMovesToTheNextSeatsRemove() {
+        SeatPickerView view = attached(seatPicker());
+        click(seat(view, "A1"));
+        click(seat(view, "A2"));
+        Element remove = namedStartingWith(view, "Remove seat A1");
+
+        assertFocusMovesTo(view, () -> A11y.activate(remove), t -> A11y.name(t).startsWith("Remove seat A2"),
+            "removing a seat from the selection", "the next seat's remove button, \"Remove seat A2\"");
+    }
+
+    @Test
+    void GivenOneSeatInTheRail_WhenTheBuyerRemovesIt_ThenFocusMovesToTheRailsHint() {
+        SeatPickerView view = attached(seatPicker());
+        click(seat(view, "A1"));
+        Element remove = namedStartingWith(view, "Remove seat A1");
+
+        assertFocusMovesTo(view, () -> A11y.activate(remove),
+            t -> A11y.text(t).toLowerCase(Locale.ROOT).contains("choose an available seat"),
+            "removing the last seat from the selection", "the rail's hint saying to choose a seat");
+    }
+
+    // ---- AdminSendMessagesView recipients (review A5) ----
+
+    @Test
+    void GivenSearchResults_WhenTheAdminAddsOne_ThenFocusMovesToTheSearchField() {
+        AdminSendMessagesView view = attached(sendMessagesView());
+        TextField search = field(view, TextField.class, SEARCH_MEMBERS);
+        search.setValue("al");
+        Element alice = namedStartingWith(view, "alice");
+
+        assertFocusMovesTo(view, () -> A11y.activate(alice), t -> t.equals(search.getElement()),
+            "adding a recipient from the results", "the member search field, to search for the next one");
+    }
+
+    @Test
+    void GivenTwoRecipients_WhenTheAdminRemovesTheFirst_ThenFocusMovesToTheNextRecipientsRemove() {
+        AdminSendMessagesView view = attached(sendMessagesView());
+        addRecipient(view, "alice");
+        addRecipient(view, "alan");
+        Element remove = namedStartingWith(view, "Remove alice");
+
+        assertFocusMovesTo(view, () -> A11y.activate(remove), t -> "Remove alan".equals(A11y.name(t)),
+            "removing a recipient", "the next recipient's remove button, \"Remove alan\"");
+    }
+
+    @Test
+    void GivenOneRecipient_WhenTheAdminRemovesIt_ThenFocusMovesToTheSearchField() {
+        AdminSendMessagesView view = attached(sendMessagesView());
+        addRecipient(view, "alice");
+        Element remove = namedStartingWith(view, "Remove alice");
+        TextField search = field(view, TextField.class, SEARCH_MEMBERS);
+
+        assertFocusMovesTo(view, () -> A11y.activate(remove), t -> t.equals(search.getElement()),
+            "removing the only recipient", "the member search field");
+    }
+
     // ---- assertions ------------------------------------------------------------------------------
+
+    // The control used is still on the page, focusable and as the predicate wants it (updated in place, so
+    // the browser kept focus on it), or the page asked to focus such an element.
+    private void assertKeptOrMovesTo(Component root, Element used, Runnable action, Predicate<Element> isTarget,
+                                     String what, String target) {
+        int before = harness.focusTargets().size();
+
+        action.run();
+
+        boolean keptInPlace = A11y.within(used, root.getElement()) && A11y.inTabOrder(used, root.getElement())
+            && isTarget.test(used);
+        List<Element> focused = after(before);
+        boolean moved = focused.stream().anyMatch(t -> A11y.within(t, root.getElement()) && isTarget.test(t));
+        assertTrue(keptInPlace || moved, "after " + what + " focus must stay on " + target + ": the control used is "
+            + (A11y.within(used, root.getElement()) ? "still there as " + A11y.describe(used) : "gone")
+            + ", and the page asked to focus " + focused.stream().map(A11y::describe).toList());
+    }
 
     private void assertFocusStaysOnPage(Component root, Component used, Runnable action, String what) {
         assertFocusStaysOnPage(root, used.getElement(), action, what);
@@ -431,6 +568,77 @@ class FocusAfterRebuildTest {
     }
 
     // ---- arrangement -----------------------------------------------------------------------------
+
+    private static EventDetailsView eventPage() {
+        EventDetailsPresenter presenter = mock(EventDetailsPresenter.class);
+        when(presenter.load(any(), anyInt())).thenReturn(new EventDetailsPresenter.Outcome.Success(
+            new EventDetailDTO("5", "Coldplay", null, "Live", EventCategory.CONCERT, null, "3", "Acme",
+                EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of(), 10.0),
+            List.of(new InventoryZoneDTO(8, "Floor", "STANDING", 100, 50, 0, 50, 10.0, List.of(), null),
+                new InventoryZoneDTO(9, "Balcony", "STANDING", 100, 50, 0, 50, 20.0, List.of(), null)),
+            3, 3, null));
+        EventDetailsView view = new EventDetailsView(presenter, mock(SessionIdentity.class),
+            new ReservationHoldProperties(10));
+        view.beforeEnter(routeTo("eventId", "5"));
+        return view;
+    }
+
+    private static Element zoneOnMap(Component view, String zone) {
+        return A11y.elements(view, e -> e.getClassList().contains("vk-zone") && A11y.name(e).contains(zone))
+            .stream()
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no zone " + zone + " on the map"));
+    }
+
+    private static VenueMapEditorView venueEditorWithTwoZones() {
+        VenueMapPresenter presenter = mock(VenueMapPresenter.class);
+        when(presenter.defaultZoneName(any())).thenReturn("Zone 2");
+        VenueMapEditorView view = new VenueMapEditorView(presenter,
+            new VenueLimitsProperties(12, 49_500, 1_000_000, 100_000));
+        click(button(view, "+ Seated"));
+        return view;
+    }
+
+    // A zone's control in the editor's zone list: a toggle (aria-pressed) named by the zone.
+    private static Element zoneInList(Component view, String zone) {
+        return A11y.elements(view, e -> zone.equals(A11y.name(e)) && e.hasAttribute("aria-pressed")
+                && !e.getClassList().contains("vk-zone"))
+            .stream()
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no control for " + zone + " in the zone list"));
+    }
+
+    private static SeatPickerView seatPicker() {
+        SeatPickerPresenter presenter = mock(SeatPickerPresenter.class);
+        when(presenter.loadZone(anyInt(), anyInt())).thenReturn(new SeatPickerPresenter.LoadOutcome.Loaded(
+            new InventoryZoneDTO(8, "Floor", "SEATED", 2, 2, 0, 0, 10.0,
+                List.of(new SeatDTO("A1", 1, 0, "AVAILABLE"), new SeatDTO("A2", 2, 0, "AVAILABLE")), null),
+            ZoneType.SEATED));
+        SeatPickerView view = new SeatPickerView(presenter, new ReservationHoldProperties(10));
+        view.beforeEnter(routeTo("eventId", "5", "zoneId", "8"));
+        return view;
+    }
+
+    private static VkSeat seat(SeatPickerView view, String label) {
+        return find(view, VkSeat.class).stream()
+            .filter(s -> A11y.name(s.getElement()).startsWith("Seat " + label + ","))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no seat " + label + " on the picker"));
+    }
+
+    private static AdminSendMessagesView sendMessagesView() {
+        ViewHarness.signInAdmin();
+        AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
+        when(presenter.load(any())).thenReturn(new AdminSendMessagesPresenter.Outcome.Success(List.of()));
+        when(presenter.searchUsers(any(), any())).thenReturn(new AdminSendMessagesPresenter.SearchOutcome.Success(
+            List.of(new MemberSearchResultDTO(7, "alice"), new MemberSearchResultDTO(8, "alan"))));
+        return new AdminSendMessagesView(presenter, displayTime());
+    }
+
+    private static void addRecipient(AdminSendMessagesView view, String username) {
+        field(view, TextField.class, SEARCH_MEMBERS).setValue("al");
+        A11y.activate(namedStartingWith(view, username));
+    }
 
     private <T extends Component> T attached(T component) {
         harness.attach(component);

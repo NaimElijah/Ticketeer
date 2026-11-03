@@ -77,6 +77,8 @@ public class AdminSendMessagesView extends LkPage {
 
     /** Selected individual recipients: memberId → username (insertion-ordered). */
     private final Map<Integer, String> recipients = new LinkedHashMap<>();
+    /** The chips' remove buttons, in recipient order, as the last rebuild made them. */
+    private final List<LkRemoveButton> chipRemoveButtons = new ArrayList<>();
 
     /** History grid lives in its own slot so it can reload in place after a send. */
     private final Div historySlot = new Div();
@@ -161,6 +163,8 @@ public class AdminSendMessagesView extends LkPage {
     private void doSearch(String query) {
         searchResults.removeAll();
         if (query == null || query.isBlank() || !recipientSearch.isEnabled()) {
+            // No results show, so a count left from the last search would be false.
+            recipientStatus.setText("");
             return;
         }
         switch (presenter.searchUsers(AuthSession.token(), query)) {
@@ -185,6 +189,8 @@ public class AdminSendMessagesView extends LkPage {
                 searchResults.removeAll();
                 renderChips();
                 recipientStatus.setText(r.username() + " added as a recipient");
+                // The result pressed is gone with the results, and the next step is another search (#188).
+                recipientSearch.focus();
             });
             searchResults.add(row);
             shown++;
@@ -195,18 +201,32 @@ public class AdminSendMessagesView extends LkPage {
 
     private void renderChips() {
         recipientChips.removeAll();
+        chipRemoveButtons.clear();
         for (Map.Entry<Integer, String> entry : recipients.entrySet()) {
             int id = entry.getKey();
             String username = entry.getValue();
             LkChip chip = new LkChip(username);
             LkRemoveButton remove = new LkRemoveButton(username, () -> {
+                int position = new ArrayList<>(recipients.keySet()).indexOf(id);
                 recipients.remove(id);
                 renderChips();
                 recipientStatus.setText(username + " removed from the recipients");
+                focusAfterRemove(position);
             });
             remove.getStyle().set("margin-left", "6px").set("font-weight", "700");
             chip.add(remove);
+            chipRemoveButtons.add(remove);
             recipientChips.add(chip);
+        }
+    }
+
+    // The rebuild removed the chip whose remove button had focus: focus the one now at its place, the next
+    // recipient's, or the last one's when the last went; with none left, the search to add one (#188, WCAG 2.4.3).
+    private void focusAfterRemove(int position) {
+        if (!chipRemoveButtons.isEmpty()) {
+            chipRemoveButtons.get(Math.min(Math.max(position, 0), chipRemoveButtons.size() - 1)).focus();
+        } else {
+            recipientSearch.focus();
         }
     }
 

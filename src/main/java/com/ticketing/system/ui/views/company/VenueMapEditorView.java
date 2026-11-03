@@ -78,7 +78,12 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private int selectedZoneIdx = 0;
 
     private final Div mapHolder = new Div();
+    /** The map preview as the last rebuild made it. */
+    private VkVenueMap mapPreview;
     private final Div zonesTableHolder = new Div();
+    /** The zone list's name buttons and remove buttons, in zone order, as the last rebuild made them. */
+    private final List<NativeButton> zoneNameButtons = new ArrayList<>();
+    private final List<LkRemoveButton> zoneRemoveButtons = new ArrayList<>();
     private final Div seatPreview = new Div();
 
     private final TextField zoneNameField = new TextField("Zone name");
@@ -217,6 +222,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private void refreshZonesTable() {
         zonesTableHolder.removeAll();
+        zoneNameButtons.clear();
+        zoneRemoveButtons.clear();
         for (int i = 0; i < zoneStates.size(); i++) {
             final int idx = i;
             ZoneState z = zoneStates.get(i);
@@ -238,14 +245,21 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                     ? z.rows() * z.seatsPerRow() + " seats"
                     : z.capacity() + " cap");
             cap.getStyle().set("color", "var(--lk-muted, #888)").set("font-size", "13px");
-            row.add(name, type, cap, removeButton(idx, z.name()));
-            row.getElement().addEventListener("click", e -> selectZone(idx));
+            LkRemoveButton remove = removeButton(idx, z.name());
+            row.add(name, type, cap, remove);
+            // The rebuild drops the name button the user pressed, so focus goes to the zone's new one (#188).
+            row.getElement().addEventListener("click", e -> {
+                selectZone(idx);
+                zoneNameButtons.get(idx).focus();
+            });
+            zoneNameButtons.add(name);
+            zoneRemoveButtons.add(remove);
             zonesTableHolder.add(row);
         }
     }
 
     // LkRemoveButton stops the click there, so removing a zone does not also select it.
-    private Component removeButton(int idx, String zoneName) {
+    private LkRemoveButton removeButton(int idx, String zoneName) {
         LkRemoveButton x = new LkRemoveButton(zoneName, () -> removeZone(idx));
         x.getStyle().set("color", "var(--lk-danger, #c0392b)").set("padding", "0 4px");
         return x;
@@ -277,7 +291,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                     pct(p.colSpan() * 100.0 / gridCols),
                     pct(p.rowSpan() * 100.0 / gridRows)));
         }
-        mapHolder.add(new VkVenueMap(zones, "z" + selectedZoneIdx, true, this::selectZoneByVisualId));
+        mapPreview = new VkVenueMap(zones, "z" + selectedZoneIdx, true, this::selectZoneByVisualId);
+        mapHolder.add(mapPreview);
     }
 
     private static String pct(double v) {
@@ -288,6 +303,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         if (visualId != null && visualId.startsWith("z")) {
             try {
                 selectZone(Integer.parseInt(visualId.substring(1)));
+                // As in the zone list: the rebuilt preview has dropped the zone the user pressed.
+                mapPreview.focusZone(visualId);
             } catch (NumberFormatException ignored) {
             }
         }
@@ -475,6 +492,10 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         selectedZoneIdx = Math.min(selectedZoneIdx, zoneStates.size() - 1);
         loadZoneIntoEditor(selectedZoneIdx);
         refreshAll();
+        // The rebuild dropped the Remove button that had focus: focus the one now at its place, the next
+        // zone's, or the last zone's when the last went (#188, WCAG 2.4.3). A zone always remains, since the
+        // last one cannot be removed.
+        zoneRemoveButtons.get(Math.min(idx, zoneRemoveButtons.size() - 1)).focus();
     }
 
     private void refreshAll() {

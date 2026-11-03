@@ -259,13 +259,16 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             return;
         }
         selectedZoneId = z.getId();
-        refreshMap();
+        // The rebuilt map has dropped the button that was pressed, so focus goes to the zone's new one (#188).
+        refreshMap().focusZone(zoneIdStr);
         updateSelectedLine();
     }
 
-    private void refreshMap() {
+    private VkVenueMap refreshMap() {
+        VkVenueMap map = renderMap();
         mapContainer.removeAll();
-        mapContainer.add(renderMap());
+        mapContainer.add(map);
+        return map;
     }
 
     private void updateSelectedLine() {
