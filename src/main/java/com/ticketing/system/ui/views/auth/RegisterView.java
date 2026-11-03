@@ -120,7 +120,7 @@ public class RegisterView extends LkAuthCard {
         availabilityStatus.addClassName(Lk.VISUALLY_HIDDEN);
 
         col(14, username, availabilityStatus, email, age, password, strengthMeter, confirm, create);
-        foot("Already have an account?", "Sign in →", LoginView.class);
+        foot("Already have an account?", "Sign in", LoginView.class);
     }
 
     private void applyUsernameFeedback(TextField field, String value) {

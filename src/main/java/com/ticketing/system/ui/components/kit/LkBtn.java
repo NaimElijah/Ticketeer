@@ -28,6 +28,7 @@ public class LkBtn extends NativeButton {
     private Size size = Size.m;
     private final Span labelSpan = new Span();
     private Component iconNode;
+    private Span arrowSpan;
 
     public LkBtn(String label) {
         addClassName("lk-btn");
@@ -62,6 +63,24 @@ public class LkBtn extends NativeButton {
     }
 
     public LkBtn label(String text) { labelSpan.setText(text); return this; }
+
+    /**
+     * Shows, or hides, a "→" after the label. The arrow is decoration, hidden from screen readers, so the
+     * button is named by its words alone (#188, WCAG 1.1.1).
+     *
+     * @param show whether the arrow shows
+     * @return this button, for chaining
+     */
+    public LkBtn arrow(boolean show) {
+        if (arrowSpan == null) {
+            // The space keeps the text "Label →"; a flex item drops it at the start of its line, so the gap
+            // between label and arrow stays the button's own.
+            arrowSpan = Lk.decoration(" →");
+            add(arrowSpan);
+        }
+        arrowSpan.setVisible(show);
+        return this;
+    }
 
     /**
      * Names the button for the row it acts on, "Remove: Coldplay" ({@link Lk#actionFor}); it still shows its

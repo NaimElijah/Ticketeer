@@ -213,7 +213,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         totalRow.add(totalDisplay);
         selectionListCol.add(totalRow);
 
-        selectionListCol.add(new LkBtn("Add to Cart →")
+        selectionListCol.add(new LkBtn("Add to Cart").arrow(true)
             .variant(LkBtn.Variant.primary).size(LkBtn.Size.l).full()
             .onClick(e -> reserveSeated()));
     }

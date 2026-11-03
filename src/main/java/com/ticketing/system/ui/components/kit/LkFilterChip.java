@@ -59,7 +59,7 @@ public class LkFilterChip extends Div {
     private void rebuildChip() {
         chip.removeAll();
         chip.setText(label + (selected.isEmpty() ? "" : " · " + selected.size()));
-        Span caret = new Span("▾");
+        Span caret = Lk.decoration("▾");
         caret.addClassName("lk-chip-caret");
         chip.add(caret);
         if (selected.isEmpty()) chip.removeClassName("on");

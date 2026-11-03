@@ -204,7 +204,7 @@ public class CartView extends LkPage {
         col.add(Lk.divider());
         col.add(totalRow("Total", total));
 
-        proceedBtn = new LkBtn("Proceed to Checkout →")
+        proceedBtn = new LkBtn("Proceed to Checkout").arrow(true)
             .variant(LkBtn.Variant.primary)
             .size(LkBtn.Size.l)
             .full()

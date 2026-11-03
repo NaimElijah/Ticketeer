@@ -30,7 +30,7 @@ public class LkChip extends Span {
 
     /** Add the trailing dropdown caret ("▾"). */
     public LkChip withCaret() {
-        Span caret = new Span("▾");
+        Span caret = Lk.decoration("▾");
         caret.addClassName("lk-chip-caret");
         add(caret);
         return this;

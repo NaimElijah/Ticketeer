@@ -412,7 +412,8 @@ public class CompanyEventListView extends LkPage {
         // actual ticket price (e.g. $49.99, not a truncated $49).
         row.put("from", ev.minPrice() > 0 ? String.format("$%,.2f", ev.minPrice()) : "—");
 
-        row.put("rating", ev.rating() == null ? "—" : "★ " + ratingText(ev.rating()));
+        // Read as "Rating 4.5 of 5", not "star 4.5" (#188).
+        row.put("rating", ev.rating() == null ? "—" : Lk.rating(ratingText(ev.rating())));
 
         LkStatusDot.Tone tone = ev.status() == EventStatus.ON_SALE ? LkStatusDot.Tone.ok
             : ev.status() == EventStatus.DRAFT ? LkStatusDot.Tone.muted

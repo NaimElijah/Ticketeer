@@ -23,6 +23,7 @@ import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Text;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H1;
@@ -46,6 +47,8 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm zzz", Locale.US);
+    private static final String CHOOSE_TICKETS = "Choose Tickets";
+    private static final String ORGANIZER_RATING = "Organizer rating";
 
     private final EventDetailsPresenter presenter;
     private final SessionIdentity sessionIdentity;
@@ -131,7 +134,10 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             badges.add(new LkBadge(EventCategoryLabels.label(detail.category()), LkBadge.Tone.muted).small());
         }
         if (detail.rating() != null) {
-            badges.add(new LkBadge("★ " + ratingText(detail.rating()), LkBadge.Tone.muted).small());
+            // Read as "Rating 4.5 of 5", not "star 4.5" (#188).
+            LkBadge rating = new LkBadge("", LkBadge.Tone.muted).small();
+            rating.add(Lk.rating(ratingText(detail.rating())));
+            badges.add(rating);
         }
 
         // The event's name is the page's one h1 (#188).
@@ -144,11 +150,10 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
         // Organizer (production company) name, with its DERIVED rating shown beside it when available.
         if (detail.companyName() != null && !detail.companyName().isBlank()) {
-            String organizerLine = detail.companyName();
+            Span organizer = Lk.muted(detail.companyName());
             if (companyRating != null) {
-                organizerLine += "  ·  ★ " + ratingText(companyRating);
+                organizer.add(new Text("  ·  "), Lk.rating(ORGANIZER_RATING, ratingText(companyRating)));
             }
-            Span organizer = Lk.muted(organizerLine);
             organizer.getStyle().set("font-size", "14px").set("font-weight", "600");
             meta.add(organizer);
         }
@@ -317,7 +322,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         selectedLine = Lk.asStatus(new Span());
         updateSelectedLine();
 
-        chooseBtn = new LkBtn("Choose Tickets →")
+        chooseBtn = new LkBtn(CHOOSE_TICKETS).arrow(true)
             .variant(LkBtn.Variant.primary)
             .size(LkBtn.Size.l)
             .full()
@@ -346,10 +351,10 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             chooseBtn.label("Event Ended");
         } else if (status == EventStatus.SOLD_OUT || firstSelectableZoneId() == null) {
             chooseBtn.setEnabled(false);
-            chooseBtn.label("Sold Out");
+            chooseBtn.label("Sold Out").arrow(false);
         } else {
             chooseBtn.setEnabled(true);
-            chooseBtn.label("Choose Tickets →");
+            chooseBtn.label(CHOOSE_TICKETS).arrow(true);
         }
     }
 

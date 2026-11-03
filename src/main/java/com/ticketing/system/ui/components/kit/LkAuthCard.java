@@ -19,6 +19,8 @@ import com.vaadin.flow.router.RouterLink;
  */
 public class LkAuthCard extends Div {
 
+    private static final String FOOT_ARROW = " →";
+
     private final Div card = new Div();
 
     public LkAuthCard(String title, String subtitle) {
@@ -65,7 +67,7 @@ public class LkAuthCard extends Div {
         return this;
     }
 
-    /** Footer paragraph with optional trailing {@link RouterLink}. */
+    /** Footer paragraph with an optional trailing {@link RouterLink}, which the card ends with an arrow. */
     public LkAuthCard foot(String text, String linkLabel, Class<? extends Component> linkTarget) {
         Paragraph foot = new Paragraph();
         foot.addClassName("auth-foot");
@@ -73,6 +75,8 @@ public class LkAuthCard extends Div {
         if (linkTarget != null && linkLabel != null) {
             RouterLink link = new RouterLink(linkLabel, linkTarget);
             link.addClassName("bz-link");
+            // The arrow is decoration: the link is named by its words alone (#188, WCAG 1.1.1).
+            link.add(Lk.decoration(FOOT_ARROW));
             foot.add(link);
         }
         card.add(foot);

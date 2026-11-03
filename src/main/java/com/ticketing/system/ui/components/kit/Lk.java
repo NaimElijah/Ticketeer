@@ -34,6 +34,9 @@ public final class Lk {
     private static final String SCRIPT_FOCUS_ONLY = "-1";
 
     private static final String NAME_SEPARATOR = ": ";
+    private static final String STAR = "★";
+    private static final String RATING = "Rating";
+    private static final String RATING_SCALE = " of 5";
 
     private Lk() { }
 
@@ -140,6 +143,48 @@ public final class Lk {
 
     public static String withReason(String base, String reason) {
         return (reason != null && !reason.isBlank()) ? base + ": " + reason : base + ".";
+    }
+
+    /**
+     * A rating shown as "★ 4.5" and read as "Rating 4.5 of 5".
+     *
+     * @param value the rating as shown, such as "4.5"
+     * @return the rating
+     * @see #rating(String, String)
+     */
+    public static Span rating(String value) {
+        return rating(RATING, value);
+    }
+
+    /**
+     * A rating shown as "★ 4.5" and read as, say, "Organizer rating 4.5 of 5": the star is decoration, hidden
+     * from screen readers, and a visually hidden phrase says what is rated and on what scale (#188, WCAG
+     * 1.1.1, 1.3.1).
+     *
+     * @param spokenLabel what the rating is of, read before the value, such as "Organizer rating"
+     * @param value       the rating as shown, such as "4.5"
+     * @return the rating
+     */
+    public static Span rating(String spokenLabel, String value) {
+        Span shown = new Span(STAR + " " + value);
+        shown.getElement().setAttribute(ARIA_HIDDEN, "true");
+        Span spoken = new Span(spokenLabel + " " + value + RATING_SCALE);
+        spoken.addClassName(VISUALLY_HIDDEN);
+        return new Span(shown, spoken);
+    }
+
+    /**
+     * A decorative glyph, such as an arrow after a link's text or a dropdown's caret: shown, but hidden from
+     * screen readers, so it is not read as "right arrow" or "black down-pointing small triangle" (#188, WCAG
+     * 1.1.1).
+     *
+     * @param glyph the glyph, with any space that separates it from the text before it
+     * @return the glyph, hidden from assistive technology
+     */
+    public static Span decoration(String glyph) {
+        Span s = new Span(glyph);
+        s.getElement().setAttribute(ARIA_HIDDEN, "true");
+        return s;
     }
 
     /**

@@ -55,7 +55,7 @@ public class AdminLoginView extends LkAuthCard {
         signIn.addClickShortcut(Key.ENTER).listenOn(username, password);
 
         col(14, username, password, signIn);
-        foot("Not an administrator?", "Member sign in →", LoginView.class);
+        foot("Not an administrator?", "Member sign in", LoginView.class);
     }
 
     private void attempt(TextField username, PasswordField password) {

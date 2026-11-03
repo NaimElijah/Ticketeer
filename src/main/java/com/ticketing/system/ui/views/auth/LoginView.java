@@ -63,9 +63,9 @@ public class LoginView extends LkAuthCard {
         // No password reset until #104 builds one: https://github.com/NaimElijah/Ticketeer/issues/104
         col(14, username, password, signIn);
 
-        foot("Don't have an account?", "Create one →", RegisterView.class);
+        foot("Don't have an account?", "Create one", RegisterView.class);
         // This form signs in members only; an administrator signs in at AdminLoginView.
-        foot("Platform administrator?", "Admin sign in →", AdminLoginView.class);
+        foot("Platform administrator?", "Admin sign in", AdminLoginView.class);
     }
 
     private void attemptSignIn(TextField username, PasswordField password) {
