@@ -120,7 +120,8 @@ public final class Lk {
      * reads it: makes it focusable from a script only ({@code tabindex=-1}) and focuses it (#188, WCAG 2.4.3).
      * For where focus goes once the content it was on has been swapped or removed.
      *
-     * @param target the component to focus; attached, or the call is dropped
+     * @param target the component to focus; one not yet attached is focused once it attaches, and one removed
+     *               from the page is never focused
      */
     public static void focusFromScript(Component target) {
         target.getElement().setAttribute(TABINDEX, SCRIPT_FOCUS_ONLY);
