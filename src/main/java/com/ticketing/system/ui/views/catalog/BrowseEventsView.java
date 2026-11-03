@@ -563,7 +563,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     }
 
     private Component buildGrid(List<EventRow> events) {
+        // Named, since the "All Events" heading sits apart from it, across the filter column (#188).
         LkGrid grid = new LkGrid()
+                .name("Events")
                 .col("Event", "name")
                 .col("Category", "cat")
                 .col("Venue", "venue")
