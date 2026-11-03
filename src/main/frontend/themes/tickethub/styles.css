@@ -485,7 +485,8 @@
   .pe-modal-sub{font-size:.78rem;color:var(--muted);margin-top:2px}
   /* policy-tree-map.js: an svg group draws no outline, so a focused node or pill thickens its border (#188). */
   .node-body:focus,.add-pill:focus{outline:none}
-  .node-body:focus-visible>rect,.add-pill:focus-visible>rect{stroke:var(--primary);stroke-width:3px}
+  /* Non-scaling, so the ring keeps its 3px however far the tree is zoomed out. */
+  .node-body:focus-visible>rect,.add-pill:focus-visible>rect{stroke:var(--primary);stroke-width:3px;vector-effect:non-scaling-stroke}
   .pe-modal-x{background:none;border:none;color:var(--faint);font-size:1.05rem;cursor:pointer;line-height:1}
   .pe-modal-b{padding:18px 20px;display:flex;flex-direction:column;gap:16px}
   .pe-modal-fields{display:flex;gap:18px;flex-wrap:wrap}
