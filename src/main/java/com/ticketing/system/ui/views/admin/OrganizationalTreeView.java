@@ -22,7 +22,9 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Route(value = "admin/org-tree", layout = PlatformAdminLayout.class)
 @PageTitle("Organizational Tree · Admin")
@@ -35,6 +37,8 @@ public class OrganizationalTreeView extends LkPage {
 
     private final OrgTreePresenter presenter;
     private final Div body = new Div();
+    /** The company list's buttons by company id, as the last render made them. */
+    private final Map<Integer, NativeButton> companyButtons = new HashMap<>();
     private Integer selectedCompanyId = null;
 
     public OrganizationalTreeView(OrgTreePresenter presenter) {
@@ -47,6 +51,7 @@ public class OrganizationalTreeView extends LkPage {
 
     private void render() {
         body.removeAll();
+        companyButtons.clear();
 
         switch (presenter.load(AuthSession.token(), selectedCompanyId, AuthSession.isAdmin())) {
             case OrgTreePresenter.Outcome.NotAuthenticated ignored ->
@@ -124,8 +129,19 @@ public class OrganizationalTreeView extends LkPage {
         item.addClickListener(e -> {
             selectedCompanyId = c.companyId();
             render();
+            focusCompany(c.companyId());
         });
+        companyButtons.put(c.companyId(), item);
         return item;
+    }
+
+    // The render rebuilt the list and dropped the button that was pressed, so focus goes to the company's new
+    // one (#188, PR #253 review; WCAG 2.4.3). A failed load leaves no list, and nothing to focus.
+    private void focusCompany(int companyId) {
+        NativeButton button = companyButtons.get(companyId);
+        if (button != null) {
+            button.focus();
+        }
     }
 
     private Component buildTreeCard(String companyName, OrganizationalTreeNodeDTO root) {

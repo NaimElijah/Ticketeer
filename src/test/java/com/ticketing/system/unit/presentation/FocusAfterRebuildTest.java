@@ -12,9 +12,11 @@ import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +40,8 @@ import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.ZoneType;
+import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
+import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.RefundStatus;
@@ -61,6 +65,7 @@ import com.ticketing.system.ui.components.venue.VkSeat;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
+import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
@@ -80,6 +85,7 @@ import com.ticketing.system.ui.views.account.SupportInboxView;
 import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
 import com.ticketing.system.ui.views.admin.AdminInboxView;
 import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
+import com.ticketing.system.ui.views.admin.OrganizationalTreeView;
 import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.ticketing.system.ui.views.catalog.EventDetailsView;
 import com.ticketing.system.ui.views.catalog.SeatPickerView;
@@ -531,6 +537,19 @@ class FocusAfterRebuildTest {
         assertFocusLeavesTheList(view, () -> A11y.activate(concerts), "picking a category on Browse");
     }
 
+    // ---- OrganizationalTreeView company list (PR #253 review 2) ----
+
+    @Test
+    void GivenTheOrgTreeOnAcme_WhenTheAdminActivatesBeta_ThenFocusStaysOnBetasButton() {
+        ViewHarness.signInAdmin();
+        OrganizationalTreeView view = attached(new OrganizationalTreeView(orgTreePresenter()));
+        Element beta = companyButton(view, "Beta Productions");
+
+        assertKeptOrMovesTo(view, beta, () -> A11y.activate(beta),
+            t -> A11y.isButton(t) && A11y.name(t).contains("Beta Productions"),
+            "choosing a company in the org tree", "Beta Productions' button in the company list");
+    }
+
     // ---- assertions ------------------------------------------------------------------------------
 
     // The pick rebuilds the option list, so focus must be moved to an element on the page outside the
@@ -621,6 +640,27 @@ class FocusAfterRebuildTest {
     }
 
     // ---- arrangement -----------------------------------------------------------------------------
+
+    private static OrgTreePresenter orgTreePresenter() {
+        ProductionCompanyDTO acme = new ProductionCompanyDTO(1, "Acme", "desc", "ACTIVE", 10);
+        ProductionCompanyDTO beta = new ProductionCompanyDTO(2, "Beta Productions", "desc", "ACTIVE", 11);
+        OrganizationalTreeNodeDTO tree = new OrganizationalTreeNodeDTO(10, "founder", "Owner", true, List.of(),
+            new ArrayList<>());
+        OrgTreePresenter presenter = mock(OrgTreePresenter.class);
+        when(presenter.load(any(), isNull(), anyBoolean()))
+            .thenReturn(new OrgTreePresenter.Outcome.Success(List.of(acme, beta), acme, tree));
+        when(presenter.load(any(), eq(1), anyBoolean()))
+            .thenReturn(new OrgTreePresenter.Outcome.Success(List.of(acme, beta), acme, tree));
+        when(presenter.load(any(), eq(2), anyBoolean()))
+            .thenReturn(new OrgTreePresenter.Outcome.Success(List.of(acme, beta), beta, tree));
+        return presenter;
+    }
+
+    private static Element companyButton(Component view, String company) {
+        return A11y.elements(view, e -> A11y.isButton(e) && A11y.name(e).contains(company)).stream()
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no button for " + company + " in the company list"));
+    }
 
     // The user opens the list, as a click on the trigger does in the browser.
     private static void openPopover(Component field) {
