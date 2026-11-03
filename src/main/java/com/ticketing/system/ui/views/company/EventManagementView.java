@@ -448,9 +448,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
         row.add(new LkIcon(iconName, 17));
         Span lbl = new Span(label);
         lbl.getStyle().set("flex", "1");
-        Span arrow = new Span("→");
-        arrow.getElement().setAttribute("aria-hidden", "true");
-        row.add(lbl, arrow);
+        row.add(lbl, Lk.decoration("→"));
         row.getElement().addEventListener("click", e -> r.run());
         return row;
     }

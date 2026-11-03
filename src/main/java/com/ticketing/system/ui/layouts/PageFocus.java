@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.layouts;
 
+import com.ticketing.system.ui.components.kit.Lk;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Anchor;
 import com.vaadin.flow.dom.Element;
@@ -58,10 +59,8 @@ final class PageFocus {
         Element page = content.getElement();
         page.setAttribute("id", CONTENT_ID);
         page.setAttribute(TABINDEX, SCRIPT_FOCUS_ONLY);
-        firstVisibleHeading(page).ifPresent(h1 -> {
-            h1.setAttribute(TABINDEX, SCRIPT_FOCUS_ONLY);
-            h1.callJsFunction("focus");
-        });
+        // Every h1 a page shows is a component's (H1, Lk.h1), so the lookup finds it.
+        firstVisibleHeading(page).flatMap(Element::getComponent).ifPresent(Lk::focusFromScript);
     }
 
     private static Optional<Element> firstVisibleHeading(Element element) {

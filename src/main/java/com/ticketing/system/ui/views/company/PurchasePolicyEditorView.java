@@ -50,9 +50,6 @@ import jakarta.annotation.security.PermitAll;
 @RequireCapability(Capability.EDIT_PURCHASE_POLICIES)
 public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObserver {
 
-    private static final String ROLE = "role";
-    private static final String ROLE_STATUS = "status";
-    private static final String ARIA_HIDDEN = "aria-hidden";
     private static final String ARIA_PRESSED = "aria-pressed";
 
     private final PurchasePolicyEditorPresenter presenter;
@@ -274,7 +271,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         Div status = new Div(); status.addClassName("pe-status");
         validityBadge = new Span(); validityBadge.addClassName("pe-valid");
         // A status, so a screen reader announces the policy turning valid or invalid as it is edited (#188).
-        validityBadge.getElement().setAttribute(ROLE, ROLE_STATUS);
+        Lk.asStatus(validityBadge);
         status.add(validityBadge);
 
         bar.add(scope, status);
@@ -333,8 +330,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         if (validityBadge == null) return;
         Validity v = presenter.validate(root);
         validityBadge.removeAll();
-        Span dot = new Span("● ");
-        dot.getElement().setAttribute(ARIA_HIDDEN, "true");
+        Span dot = Lk.decoration("● ");
         validityBadge.add(dot, new Span(v.valid() ? "Valid" : v.message()));
         validityBadge.getStyle()
             .set("color", v.valid() ? "#16a34a" : "#dc2626")

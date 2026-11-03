@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.components.admin;
 
+import com.ticketing.system.ui.components.kit.Lk;
 import com.vaadin.flow.component.Composite;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
@@ -26,12 +27,11 @@ public class OrgTreeLegend extends Composite<Div> {
         Div item = new Div();
         item.getStyle().set("display", "flex").set("gap", "10px").set("align-items", "center");
 
-        Span dot = new Span("●");
+        // The dot shows the role's colour; the role is in the text beside it (#188, WCAG 1.1.1).
+        Span dot = Lk.decoration("●");
         dot.addClassName("oc-avatar");
         dot.addClassName("oc-av-" + variant);
         dot.getStyle().set("width", "26px").set("height", "26px").set("font-size", "12px");
-        // The dot shows the role's colour; the role is in the text beside it (#188, WCAG 1.1.1).
-        dot.getElement().setAttribute("aria-hidden", "true");
 
         Span text = new Span();
         text.getElement().setProperty("innerHTML", "<b>" + roleLabel + "</b> · " + desc);

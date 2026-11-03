@@ -343,9 +343,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         back.setRoute(EventDetailsView.class, new RouteParameters(EVENT_ID, String.valueOf(eventId)));
         back.addClassName("bz-link");
         // The arrow is decoration; the link is named "Back to areas".
-        Span arrow = new Span(BACK_ARROW);
-        arrow.getElement().setAttribute("aria-hidden", "true");
-        back.add(arrow, new Text(BACK_TO_AREAS));
+        back.add(Lk.decoration(BACK_ARROW), new Text(BACK_TO_AREAS));
         // The zone is what the page is about, so its name is the page's one h1 (#188), drawn as the
         // muted trail it sits in.
         H1 zoneTitle = new H1(trailText);
