@@ -140,7 +140,9 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         header.addClassName("vz-canvas-h");
         Span name = new Span();
         name.getElement().setProperty("innerHTML", "<b>" + escape(zone.getName()) + "</b>");
-        Span sub = Lk.muted(" · click a green seat to select");
+        // The instructions name no colour, which a colour-blind user cannot go by; each seat says its
+        // state in its name (#188, WCAG 1.3.3, 1.4.1).
+        Span sub = Lk.muted(" · choose an available seat to select it");
         sub.getStyle().set("font-size", "13px");
         Div title = new Div();
         title.add(name, sub);
@@ -193,7 +195,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         selectionSummary.setText(labels.isEmpty() ? "No seats selected"
             : seatCount + " selected, " + money(total) + " in total");
         if (labels.isEmpty()) {
-            Span hint = Lk.muted("Click a green seat above to select.");
+            Span hint = Lk.muted("Choose an available seat above to select it.");
             hint.getStyle().set("text-align", "center").set("display", "block").set("padding", "8px 0");
             selectionListCol.add(hint);
             return;
