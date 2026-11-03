@@ -108,6 +108,11 @@
   .lk-btn-error:hover{background:#fef2f2}
   .lk-btn-success{background:var(--ok);color:#fff}
   .lk-btn-ghost-light{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.4)}
+  /* A pressed toggle, such as the analytics' "Pause auto-refresh", whose label stays the same: the theme's
+     selected look (as .lk-sidenav-item.on) plus a primary border and an inset shadow, so it reads as held
+     down (PR #253 review). After the variants, so it wins over their colours and hover. */
+  .lk-btn[aria-pressed="true"],.lk-btn[aria-pressed="true"]:hover{background:#e8f0f8;color:var(--primary);
+    border-color:var(--primary);font-weight:700;box-shadow:inset 0 1px 3px rgba(21,67,111,.25)}
   .lk-iconbtn{width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:#fff;color:#475569;
     display:inline-flex;align-items:center;justify-content:center;font-size:.95rem}
   .lk-iconbtn:hover{background:#f1f5f9;border-color:var(--border-strong)}
