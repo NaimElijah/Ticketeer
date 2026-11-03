@@ -21,9 +21,11 @@ import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.HasAriaLabel;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.textfield.IntegerField;
@@ -141,7 +143,8 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Component buildHero() {
         Div hero = new Div();
         hero.addClassName("bz-hero");
-        Div title = new Div();
+        // The page's one h1 (#188).
+        H1 title = new H1();
         title.addClassName("bz-hero-title");
         title.setText("Find your next experience");
         Div sub = new Div();
@@ -166,7 +169,8 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Component buildAllEventsHeader() {
         LkRow row = new LkRow().align("baseline").gap(10);
         row.add(Lk.h2("All Events"));
-        resultsCountSpan = Lk.muted("");
+        // A status from the start, so a filter's new count is announced without moving focus (#188).
+        resultsCountSpan = Lk.asStatus(Lk.muted(""));
         resultsCountSpan.getStyle().set("font-size", "13.5px");
         row.add(resultsCountSpan);
         return row;
@@ -248,14 +252,16 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         // other (min/max) so an inverted range can't be entered, then re-queries — clearing a date
         // re-queries with that bound left open rather than leaving the grid stale.
         customFromPicker = new DatePicker();
-        customFromPicker.setPlaceholder("Start date");
+        customFromPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_FROM);
+        customFromPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_FROM);
         customFromPicker.addValueChangeListener(e -> {
             customToPicker.setMin(e.getValue());   // null clears the constraint
             runCustomSearchIfValid();
         });
 
         customToPicker = new DatePicker();
-        customToPicker.setPlaceholder("End date");
+        customToPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_TO);
+        customToPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_TO);
         customToPicker.addValueChangeListener(e -> {
             customFromPicker.setMax(e.getValue());
             runCustomSearchIfValid();
@@ -325,7 +331,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
     private Component buildPriceRange() {
         priceMin = new IntegerField();
-        priceMin.setPlaceholder("Min");
+        priceMin.setPlaceholder(CatalogFilterSupport.BOUND_MIN);
         priceMin.setMin(0);
         priceMin.setMax(1000);
         priceMin.setStep(10);
@@ -339,7 +345,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         });
 
         priceMax = new IntegerField();
-        priceMax.setPlaceholder("Max");
+        priceMax.setPlaceholder(CatalogFilterSupport.BOUND_MAX);
         priceMax.setMin(0);
         priceMax.setMax(1000);
         priceMax.setStep(10);
@@ -352,43 +358,35 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
             runSearch();
         });
 
-        Div wrap = new Div();
-        Span label = new Span("Price range");
-        label.addClassName("lk-label");
-        label.getStyle().set("display", "block").set("margin-bottom", "6px");
-        wrap.add(label);
-        LkRow row = new LkRow().gap(8);
-        row.add(priceMin, priceMax);
-        wrap.add(row);
-        return wrap;
+        return rangeWrap("Price range", priceMin, priceMax);
     }
 
     private Component buildEventRatingRange() {
-        eventRatingMin = ratingField("Min", v -> {
+        eventRatingMin = ratingField(CatalogFilterSupport.BOUND_MIN, v -> {
             if (Objects.equals(filterMinEventRating, v)) return;
             filterMinEventRating = v;
             runSearch();
         });
-        eventRatingMax = ratingField("Max", v -> {
+        eventRatingMax = ratingField(CatalogFilterSupport.BOUND_MAX, v -> {
             if (Objects.equals(filterMaxEventRating, v)) return;
             filterMaxEventRating = v;
             runSearch();
         });
-        return ratingRangeWrap("Event rating", eventRatingMin, eventRatingMax);
+        return rangeWrap("Event rating", eventRatingMin, eventRatingMax);
     }
 
     private Component buildCompanyRatingRange() {
-        companyRatingMin = ratingField("Min", v -> {
+        companyRatingMin = ratingField(CatalogFilterSupport.BOUND_MIN, v -> {
             if (Objects.equals(filterMinCompanyRating, v)) return;
             filterMinCompanyRating = v;
             runSearch();
         });
-        companyRatingMax = ratingField("Max", v -> {
+        companyRatingMax = ratingField(CatalogFilterSupport.BOUND_MAX, v -> {
             if (Objects.equals(filterMaxCompanyRating, v)) return;
             filterMaxCompanyRating = v;
             runSearch();
         });
-        return ratingRangeWrap("Organizer rating", companyRatingMin, companyRatingMax);
+        return rangeWrap("Organizer rating", companyRatingMin, companyRatingMax);
     }
 
     /** A 0–5 rating bound input (NumberField, half-star step) wired to {@code onChange}. */
@@ -404,8 +402,11 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         return f;
     }
 
-    private static Component ratingRangeWrap(String labelText, NumberField min, NumberField max) {
-        Div wrap = new Div();
+    // A named group, so a screen reader hears each bound as "Price range, Min" rather than a bare "Min" (#188).
+    private static <T extends Component & HasAriaLabel> Component rangeWrap(String labelText, T min, T max) {
+        min.setAriaLabel(CatalogFilterSupport.BOUND_MIN);
+        max.setAriaLabel(CatalogFilterSupport.BOUND_MAX);
+        Div wrap = Lk.asGroup(new Div(), labelText);
         Span label = new Span(labelText);
         label.addClassName("lk-label");
         label.getStyle().set("display", "block").set("margin-bottom", "6px");
@@ -562,7 +563,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     }
 
     private Component buildGrid(List<EventRow> events) {
+        // Named, since the "All Events" heading sits apart from it, across the filter column (#188).
         LkGrid grid = new LkGrid()
+                .name("Events")
                 .col("Event", "name")
                 .col("Category", "cat")
                 .col("Venue", "venue")
@@ -586,11 +589,14 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         row.put("venue", ev.venue);
         row.put("date", ev.date);
         row.put("from", ev.priceCents > 0 ? String.format("$%,.2f", ev.priceCents / 100.0) : "—");
-        row.put("rating", ev.rating == null ? "—" : "★ " + ratingText(ev.rating));
+        // Read as "Rating 4.5 of 5", not "star 4.5" (#188).
+        row.put("rating", ev.rating == null ? "—" : Lk.rating(ratingText(ev.rating)));
         row.put("status", new LkStatusDot(ev.tone, ev.status));
+        // Every row repeats Reserve, so it names its event (#188).
         LkBtn reserve = new LkBtn("Reserve")
                 .variant(LkBtn.Variant.primary)
                 .size(LkBtn.Size.s)
+                .forRow(ev.name)
                 .onClick(e -> UI.getCurrent().navigate("events/" + ev.id));
         row.put("act", reserve);
         grid.row(row);
@@ -607,7 +613,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
     // ---- helpers ----
 
-    private static Div labelledWrap(String labelText, Component field) {
+    // The span shows the label but is tied to nothing, so the field carries the same text as its name (#188).
+    private static <T extends Component & HasAriaLabel> Div labelledWrap(String labelText, T field) {
+        field.setAriaLabel(labelText);
         Div wrap = new Div();
         Span label = new Span(labelText);
         label.addClassName("lk-label");

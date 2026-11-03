@@ -81,12 +81,15 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
         this.clock = clock;
+        // First, so it is the first Tab stop; the top bar is re-added after it on every navigation.
+        addToNavbar(PageFocus.skipLink());
         rebuildTopBar(null);
     }
 
     @Override
     public void afterNavigation(AfterNavigationEvent event) {
         rebuildTopBar(findActiveLabel(event));
+        PageFocus.afterNavigation(getContent());
     }
 
     // The cached hold end is on the server's clock; the browser gets only the seconds left (ADR-008).

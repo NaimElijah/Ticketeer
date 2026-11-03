@@ -49,7 +49,6 @@ public class VkSeatedZonePicker extends Div {
         double maxX = 0, maxY = 0;
         for (SeatModel seat : seats) {
             VkSeat tile = new VkSeat(seat.initialState(), seat.label());
-            tile.getElement().setAttribute("title", seat.label());
             tile.getStyle()
                     .set("position", "absolute")
                     .set("left", (int) seat.x() + "px")

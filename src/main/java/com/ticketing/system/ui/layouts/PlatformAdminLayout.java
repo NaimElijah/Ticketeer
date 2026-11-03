@@ -20,6 +20,7 @@ import com.ticketing.system.ui.views.landing.LandingView;
 import com.vaadin.flow.component.HasElement;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.applayout.AppLayout;
+import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
@@ -38,6 +39,9 @@ import java.util.Map;
  */
 public class PlatformAdminLayout extends AppLayout implements AfterNavigationObserver {
 
+    // Neutral, so it stays true whether the drawer is open or closed: the toggle does both (#188).
+    private static final String DRAWER_TOGGLE_NAME = "Navigation menu";
+
     private static final Map<Class<?>, String> ADMIN_LABELS = Map.of(
         AdminDashboardView.class,      "Admin Workspace",
         SystemAnalyticsView.class,     "System Analytics",
@@ -55,6 +59,13 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
     public PlatformAdminLayout(SignOutFlow signOutFlow, NotificationBellPresenter bellPresenter) {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
+        // First, so it is the first Tab stop; the top bar is re-added after it on every navigation.
+        addToNavbar(PageFocus.skipLink());
+        // Opens the drawer once a narrow window or zoom collapses it (#188); added before the top bar,
+        // which is re-added on every navigation, so it stays ahead of it.
+        DrawerToggle drawerToggle = new DrawerToggle();
+        drawerToggle.setAriaLabel(DRAWER_TOGGLE_NAME);
+        addToNavbar(drawerToggle);
         rebuildTopBar();
         buildDrawerOnce();
     }
@@ -63,6 +74,7 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
     public void afterNavigation(AfterNavigationEvent event) {
         rebuildTopBar();
         adminNav.setActive(findLabel(event));
+        PageFocus.afterNavigation(getContent());
     }
 
     private void rebuildTopBar() {

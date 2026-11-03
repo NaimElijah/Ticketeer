@@ -2,8 +2,11 @@ package com.ticketing.system.ui.components.buyer;
 
 import java.util.Locale;
 
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.router.RouteParameters;
+import com.vaadin.flow.router.RouterLink;
 
 /**
  * Event poster card — gradient image-block (color-keyed to a colour family)
@@ -11,8 +14,11 @@ import com.vaadin.flow.component.html.Span;
  * Ports the React {@code Poster} component from
  * {@code screens-buyer.jsx}. Used on the landing page's "Featured This Week"
  * and "On Sale Soon" rows.
+ *
+ * <p>The poster is a link to its event, named by its content, so a keyboard reaches it and a
+ * screen reader reads it as one (#188; WCAG 2.1.1, 4.1.2; {@code ClickOnlyControlsTest}).
  */
-public class BzPoster extends Div {
+public class BzPoster extends RouterLink {
 
     /**
      * @param gradientKey the colour family: "concert", "sport", "theatre" or "conference", in any case;
@@ -53,9 +59,15 @@ public class BzPoster extends Div {
         add(img, body);
     }
 
-    /** Wire a click handler — e.g. to navigate to EventDetailsView. */
-    public BzPoster onClick(Runnable handler) {
-        getElement().addEventListener("click", e -> handler.run());
+    /**
+     * Points the poster at its event's page.
+     *
+     * @param target     the page that shows the event
+     * @param parameters the route parameters naming the event
+     * @return this poster, for chaining
+     */
+    public BzPoster linkTo(Class<? extends Component> target, RouteParameters parameters) {
+        setRoute(target, parameters);
         return this;
     }
 }

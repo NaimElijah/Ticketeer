@@ -16,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ import com.ticketing.system.notifications.application.service.NotificationDispat
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.NotificationDTO;
 import com.ticketing.system.ui.components.NotificationBellComponent;
+import com.ticketing.system.ui.components.kit.LkNotifPanel;
 import com.ticketing.system.ui.presenters.notifications.NotificationBellPresenter.MarkReadOutcome;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
@@ -130,15 +132,16 @@ class NotificationPollingSchedulerTest {
         AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
         NotificationSession.store(List.of(PURCHASE_CONFIRMED));
         NotificationBellComponent bell = attachBellTo(firstTab);
-        Component renderedBefore = bell.getChildren().findFirst().orElseThrow();
+        // The bell keeps its button across a refresh (#188) and replaces only its panel, so the panel
+        // is what a re-render would change.
+        LkNotifPanel renderedBefore = panelOf(bell);
         // Delivered again although the inbox holds it: the merge drops the duplicate, so nothing changes.
         when(dispatchService.deliverPending(SHARED_ID)).thenReturn(List.of(PURCHASE_CONFIRMED));
         registerTabsInPollOrder(firstTab);
 
         scheduler.poll();
 
-        assertSame(renderedBefore, bell.getChildren().findFirst().orElseThrow(),
-                "an unchanged inbox must not re-render the bell");
+        assertSame(renderedBefore, panelOf(bell), "an unchanged inbox must not re-render the bell");
     }
 
     private static NotificationBellComponent attachBellTo(UI tab) {
@@ -161,6 +164,16 @@ class NotificationPollingSchedulerTest {
             handles.add(handle);
         }
         when(uiRegistry.getActiveUIs()).thenReturn(handles);
+    }
+
+    private static LkNotifPanel panelOf(NotificationBellComponent bell) {
+        return panelsUnder(bell).findFirst().orElseThrow(() -> new AssertionError("the bell has no panel"));
+    }
+
+    private static Stream<LkNotifPanel> panelsUnder(Component root) {
+        return root instanceof LkNotifPanel panel
+                ? Stream.of(panel)
+                : root.getChildren().flatMap(NotificationPollingSchedulerTest::panelsUnder);
     }
 
     private static List<String> badgesOf(Component root) {

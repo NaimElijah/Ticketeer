@@ -16,7 +16,7 @@ import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
@@ -78,7 +78,8 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
         check.add(new LkIcon("check", 28, 2.4));
 
         Div text = new Div();
-        H2 title = new H2("Your tickets are confirmed");
+        // The page's one h1 (#188).
+        H1 title = new H1("Your tickets are confirmed");
         title.getStyle().set("margin", "0").set("color", "#fff");
 
         String receiptDisplay = (result != null)

@@ -3,8 +3,6 @@ package com.ticketing.system.ui.views.account;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkCard;
-import com.ticketing.system.ui.components.kit.LkCol;
-import com.ticketing.system.ui.components.kit.LkField;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.layouts.MainLayout;
@@ -13,6 +11,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.html.DescriptionList;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
@@ -74,12 +73,24 @@ public class MyProfileView extends LkPage {
         info.add(nameDiv);
         idRow.add(avatar, info);
 
-        LkCol fields = new LkCol().gap(14);
-        fields.add(new LkField().label("Username").value(username));
-        fields.add(new LkField().label("Email").value(email));
+        // Read-only values are a description list, not inputs: a value drawn as an input inside a label
+        // reads as a field the user can edit (#188, WCAG 1.3.1, 4.1.2).
+        DescriptionList fields = new DescriptionList();
+        fields.getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "14px").set("margin", "0");
+        fields.add(readOnlyValue("Username", username), readOnlyValue("Email", email));
 
         card.add(idRow, Lk.divider(), fields);
         return card;
+    }
+
+    private static Div readOnlyValue(String label, String value) {
+        DescriptionList.Term term = new DescriptionList.Term(label);
+        term.addClassName("lk-label");
+        DescriptionList.Description description = new DescriptionList.Description(value == null ? "" : value);
+        description.getStyle().set("margin", "0");
+        Div pair = new Div(term, description);
+        pair.addClassName("lk-field");
+        return pair;
     }
 
     private static String initials(String name) {

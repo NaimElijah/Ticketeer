@@ -34,6 +34,8 @@ public class LkIcon extends Span {
         PATHS.put("flask", new String[] { "M9 3h6",
                 "M10 3v6.4L4.8 18.3A1.6 1.6 0 0 0 6.2 21h11.6a1.6 1.6 0 0 0 1.4-2.7L14 9.4V3", "M7.3 15h9.4" });
         PATHS.put("info", new String[] { "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 11.5v4.5", "M12 7.7h0" });
+        // The policy editor's error banners use it; with no entry it drew an empty svg (#188).
+        PATHS.put("alert-circle", new String[] { "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 7.5v5", "M12 16.3h0" });
         PATHS.put("check", new String[] { "M20 6.5 9.5 17 4.5 12" });
         PATHS.put("close", new String[] { "M18 6 6 18", "M6 6l12 12" });
         PATHS.put("plus", new String[] { "M12 5.5v13", "M5.5 12h13" });

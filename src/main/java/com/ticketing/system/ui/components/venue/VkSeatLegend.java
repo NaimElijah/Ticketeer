@@ -13,7 +13,7 @@ public class VkSeatLegend extends Div {
         addClassName("vk-legend");
         item(VkSeat.State.free, "Available");
         item(VkSeat.State.mine, "In your order");
-        item(VkSeat.State.held, "Locked by others");
+        item(VkSeat.State.held, "Reserved");
         item(VkSeat.State.sold, "Sold");
     }
 

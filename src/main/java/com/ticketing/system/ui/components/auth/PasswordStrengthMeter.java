@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.components.auth;
 
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.presenters.auth.PasswordStrength;
 import com.ticketing.system.ui.presenters.auth.PasswordStrength.Rule;
 import com.vaadin.flow.component.html.Div;
@@ -21,8 +22,18 @@ import java.util.Set;
  * <p>Call {@link #update(String)} on every value-change of the password
  * field. Empty input renders an invisible meter so the form layout
  * doesn't jump when the user starts typing.
+ *
+ * <p>The meter says in words what its colours show (#188, WCAG 1.3.1, 1.4.1, 4.1.3): the bar is named
+ * "Password strength" and gives its tier as {@code aria-valuetext}, the tier label is a status, and each
+ * rule says "met" or "not met".
  */
 public class PasswordStrengthMeter extends Div {
+
+    private static final String ARIA_LABEL = "aria-label";
+    private static final String ARIA_VALUETEXT = "aria-valuetext";
+    private static final String BAR_NAME = "Password strength";
+    private static final String RULE_MET = ", met";
+    private static final String RULE_NOT_MET = ", not met";
 
     private static final Map<Rule, String> RULE_LABELS = new LinkedHashMap<>();
     static {
@@ -46,6 +57,9 @@ public class PasswordStrengthMeter extends Div {
 
         bar.setWidthFull();
         bar.getStyle().set("height", "4px");
+        bar.getElement().setAttribute(ARIA_LABEL, BAR_NAME);
+        // A status before its first text, so a new tier is announced as the user types.
+        Lk.asStatus(label);
         label.getStyle().set("font-size", "12.5px").set("font-weight", "600");
 
         Div barRow = new Div(bar, label);
@@ -74,7 +88,11 @@ public class PasswordStrengthMeter extends Div {
             case FAIR -> { /* default amber from Lumo */ }
             case STRONG -> bar.addThemeVariants(ProgressBarVariant.LUMO_SUCCESS);
         }
-        label.setText(tier.label());
+        bar.getElement().setAttribute(ARIA_VALUETEXT, tier.label());
+        // Only a new tier is set: the status would otherwise be re-read on every keystroke.
+        if (!tier.label().equals(label.getText())) {
+            label.setText(tier.label());
+        }
         label.getStyle().set("color", tier.cssColorVar());
 
         Set<Rule> met = PasswordStrength.rulesMet(password);
@@ -89,7 +107,10 @@ public class PasswordStrengthMeter extends Div {
         icon.getStyle()
             .set("width", "12px").set("height", "12px")
             .set("color", met ? "var(--lumo-success-color)" : "var(--lumo-contrast-30pct)");
-        Span chip = new Span(icon, new Span(" " + text));
+        // The icon and colour show the state; the hidden word says it.
+        Span state = new Span(met ? RULE_MET : RULE_NOT_MET);
+        state.addClassName(Lk.VISUALLY_HIDDEN);
+        Span chip = new Span(icon, new Span(" " + text), state);
         chip.getStyle().set("display", "inline-flex").set("align-items", "center")
             .set("gap", "2px");
         if (met) {

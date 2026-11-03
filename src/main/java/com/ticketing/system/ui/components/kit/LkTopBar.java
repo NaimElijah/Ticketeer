@@ -3,6 +3,7 @@ package com.ticketing.system.ui.components.kit;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Header;
 import com.vaadin.flow.component.html.NativeButton;
+import com.vaadin.flow.component.html.Nav;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.popover.PopoverPosition;
 import com.vaadin.flow.router.RouterLink;
@@ -24,6 +25,15 @@ public class LkTopBar extends Header {
 
     public enum Variant { MAIN, ADMIN, PLATFORM }
     public record NavItem(String label, Class<? extends Component> target) { }
+
+    // Accessible names of the popover panels (#188).
+    private static final String SEARCH_PANEL = "Search";
+    private static final String NOTIFICATIONS = "Notifications";
+    private static final String ACCOUNT_PANEL = "Account menu";
+    private static final String HOLD_CHIP_NAME = "Cart held for";
+    private static final String ACCOUNT_NAME_SEPARATOR = ", ";
+    // Names the main navigation landmark, to tell it from a shell's side navigation (#188).
+    private static final String MAIN_NAV = "Main";
 
     private final Variant variant;
     private final Span rightSlot = new Span();
@@ -50,35 +60,50 @@ public class LkTopBar extends Header {
         return brand(text, null, target);
     }
 
+    /**
+     * Adds the brand line. With a {@code target} it is a link there, reachable and announced
+     * as one (#188; WCAG 2.1.1, 4.1.2; {@code TopBarA11yTest}); without one it is inert text.
+     *
+     * @param text   the brand name
+     * @param crumb  text after the name, such as " › Workspace", or {@code null}
+     * @param target the view the brand links to, or {@code null} for none
+     * @return this top bar, for chaining
+     */
     public LkTopBar brand(String text, String crumb, Class<? extends Component> target) {
-        Span brand = new Span();
-        brand.addClassName("lk-brand");
-        brand.add(new LkIcon("ticket", 20));
+        Component brand = target == null ? new Span() : new RouterLink("", target);
+        brand.getElement().getClassList().add("lk-brand");
         Span name = new Span();
         name.getElement().setProperty("innerHTML", "<b>" + escape(text) + "</b>");
-        brand.add(name);
+        brand.getElement().appendChild(new LkIcon("ticket", 20).getElement(), name.getElement());
         if (crumb != null) {
             Span c = new Span(crumb);
             c.addClassName("lk-brand-crumb");
-            brand.add(c);
-        }
-        if (target != null) {
-            brand.getStyle().set("cursor", "pointer");
-            brand.getElement().addEventListener("click", e ->
-                com.vaadin.flow.component.UI.getCurrent().navigate(target));
+            brand.getElement().appendChild(c.getElement());
         }
         add(brand);
         return this;
     }
 
+    /**
+     * Adds the main navigation links, in a {@code nav} landmark named "Main"; the link to
+     * {@code activeLabel} is highlighted and marked as the current page (#188; WCAG 1.3.1, 4.1.2).
+     *
+     * @param items       the links, in order
+     * @param activeLabel the label of the link to the page shown, or {@code null} for none
+     * @return this top bar, for chaining
+     */
     public LkTopBar nav(List<NavItem> items, String activeLabel) {
-        Span nav = new Span();
+        Nav nav = new Nav();
         nav.addClassName("lk-topnav");
+        nav.setAriaLabel(MAIN_NAV);
         for (NavItem item : items) {
             if (item.target != null) {
                 RouterLink link = new RouterLink(item.label, item.target);
                 link.addClassName("lk-topnav-link");
-                if (item.label.equals(activeLabel)) link.addClassName("on");
+                if (item.label.equals(activeLabel)) {
+                    link.addClassName("on");
+                    link.getElement().setAttribute(Lk.ARIA_CURRENT, Lk.CURRENT_PAGE);
+                }
                 nav.add(link);
             } else {
                 Span a = new Span(item.label);
@@ -98,7 +123,7 @@ public class LkTopBar extends Header {
         Span txt = new Span("Search events, artists, venues…");
         txt.addClassName("lk-search-txt");
         trigger.add(txt);
-        LkPopover pop = new LkPopover(trigger, panel)
+        LkPopover pop = new LkPopover(SEARCH_PANEL, trigger, panel)
             .position(PopoverPosition.BOTTOM_END).width("392px");
         pop.addClassName("lk-search-wrap");
         add(pop);
@@ -165,14 +190,15 @@ public class LkTopBar extends Header {
         ensureRightSlot();
         NativeButton bell = new NativeButton();
         bell.addClassName("lk-bell");
-        bell.getElement().setAttribute("aria-label", ariaLabel == null ? "Notifications" : ariaLabel);
+        String name = ariaLabel == null ? NOTIFICATIONS : ariaLabel;
+        bell.getElement().setAttribute("aria-label", name);
         bell.add(new LkIcon("bell", 18));
         if (badgeCount != null && !badgeCount.isEmpty()) {
             Span badge = new Span(badgeCount);
             badge.addClassName("lk-bell-badge");
             bell.add(badge);
         }
-        LkPopover pop = new LkPopover(bell, panel).position(PopoverPosition.BOTTOM_END);
+        LkPopover pop = new LkPopover(name, bell, panel).position(PopoverPosition.BOTTOM_END);
         rightSlot.add(pop);
         return this;
     }
@@ -187,7 +213,7 @@ public class LkTopBar extends Header {
     public LkTopBar bellDefault(boolean adminVariant) {
         return bell(adminVariant ? LkNotifPanel.admin() : LkNotifPanel.buyer(),
                     adminVariant ? "5" : "3",
-                    adminVariant ? "Admin alerts" : "Notifications");
+                    adminVariant ? "Admin alerts" : NOTIFICATIONS);
     }
 
     /**
@@ -223,6 +249,11 @@ public class LkTopBar extends Header {
             chip.addClassName("bz-timer");
             chip.getStyle().set("margin-left", "6px");
             chip.add(new LkIcon("clock", 13));
+            // The clock icon says what the time is to a sighted user; the hidden words say it to a screen
+            // reader (#188, WCAG 1.1.1). Not live: a region would read every tick.
+            Span what = new Span(HOLD_CHIP_NAME);
+            what.addClassName(Lk.VISUALLY_HIDDEN);
+            chip.add(what);
             Span text = new Span(" --:--");
             chip.add(text);
             rightSlot.add(chip);
@@ -237,12 +268,18 @@ public class LkTopBar extends Header {
 
     public LkTopBar account(String initials, String tooltip, Component menu, String bg, String fg) {
         ensureRightSlot();
-        NativeButton avatar = new NativeButton(initials);
+        NativeButton avatar = new NativeButton();
         avatar.addClassName("lk-avatar");
+        // The initials say nothing to a screen reader; the name says what the button opens and whose it is.
+        Span shownInitials = new Span(initials);
+        shownInitials.getElement().setAttribute(Lk.ARIA_HIDDEN, "true");
+        avatar.add(shownInitials);
+        avatar.getElement().setAttribute(Lk.ARIA_LABEL,
+            tooltip == null ? ACCOUNT_PANEL : ACCOUNT_PANEL + ACCOUNT_NAME_SEPARATOR + tooltip);
         if (bg != null) avatar.getStyle().set("background", bg);
         if (fg != null) avatar.getStyle().set("color", fg);
         if (tooltip != null) avatar.getElement().setAttribute("title", tooltip);
-        LkPopover pop = new LkPopover(avatar, menu).position(PopoverPosition.BOTTOM_END);
+        LkPopover pop = new LkPopover(ACCOUNT_PANEL, avatar, menu).position(PopoverPosition.BOTTOM_END);
         rightSlot.add(pop);
         return this;
     }

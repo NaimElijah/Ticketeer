@@ -22,6 +22,9 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Route(value = "cart", layout = MainLayout.class)
 @PageTitle("Cart · TicketHub")
 @AnonymousAllowed
@@ -32,6 +35,10 @@ public class CartView extends LkPage {
     private long subtotalCents;
 
     private LkCol linesCol;
+    /** Each line's Remove button, in line order, as the last rebuild made them. */
+    private final List<LkBtn> removeButtons = new ArrayList<>();
+    /** The empty-cart message, while the cart shows it. */
+    private Component emptyState;
     private Span sub, total, subText;
     private LkBtn proceedBtn;
 
@@ -76,9 +83,12 @@ public class CartView extends LkPage {
 
     private void populateLines() {
         linesCol.removeAll();
+        removeButtons.clear();
+        emptyState = null;
 
         if (activeOrder == null || activeOrder.lines().isEmpty()) {
-            linesCol.add(buildEmptyState());
+            emptyState = buildEmptyState();
+            linesCol.add(emptyState);
         } else {
             linesCol.add(buildCountdownBanner(activeOrder.remainingSecondsBeforeExpiry()));
             for (CartPresenter.CartVM.LineVM line : activeOrder.lines()) {
@@ -101,10 +111,13 @@ public class CartView extends LkPage {
         seatLine.getStyle().set("font-size", "13.5px");
         info.add(titleSpan, seatLine);
 
+        // Every line repeats Remove, so it names its event and seat (#188).
         LkBtn removeBtn = new LkBtn("Remove")
             .variant(LkBtn.Variant.tertiary)
             .size(LkBtn.Size.s)
+            .forRow(line.seatNumber() != null ? line.eventName() + ", " + line.seatNumber() : line.eventName())
             .onClick(e -> {
+                int position = activeOrder.lines().indexOf(line);
                 switch (presenter.removeLine(line)) {
                     case CartPresenter.RemoveOutcome.Removed r -> {
                         CartBadgeCache.invalidate();
@@ -113,6 +126,7 @@ public class CartView extends LkPage {
                         populateLines();
                         renderHeaderSubtitle();
                         renderTotals();
+                        focusAfterRemove(position);
                         Toasts.success("Removed from cart.");
                     }
                     case CartPresenter.RemoveOutcome.Failure f ->
@@ -120,6 +134,7 @@ public class CartView extends LkPage {
                 }
             });
 
+        removeButtons.add(removeBtn);
         info.add(removeBtn);
         lineDiv.add(info);
 
@@ -129,6 +144,16 @@ public class CartView extends LkPage {
         lineDiv.add(priceTag);
 
         return lineDiv;
+    }
+
+    // The rebuild removed the Remove button that had focus: focus the one now at its place, the next line's,
+    // or the last line's when the last went; with the cart empty, the message saying so (#188, WCAG 2.4.3).
+    private void focusAfterRemove(int position) {
+        if (!removeButtons.isEmpty()) {
+            removeButtons.get(Math.min(Math.max(position, 0), removeButtons.size() - 1)).focus();
+        } else if (emptyState != null) {
+            Lk.focusFromScript(emptyState);
+        }
     }
 
     private Component buildCountdownBanner(long remainingSeconds) {
@@ -179,7 +204,7 @@ public class CartView extends LkPage {
         col.add(Lk.divider());
         col.add(totalRow("Total", total));
 
-        proceedBtn = new LkBtn("Proceed to Checkout →")
+        proceedBtn = new LkBtn("Proceed to Checkout").arrow(true)
             .variant(LkBtn.Variant.primary)
             .size(LkBtn.Size.l)
             .full()

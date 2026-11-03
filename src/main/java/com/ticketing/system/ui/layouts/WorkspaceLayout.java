@@ -28,6 +28,7 @@ import com.ticketing.system.ui.views.landing.LandingView;
 import com.vaadin.flow.component.HasElement;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.applayout.AppLayout;
+import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
@@ -50,6 +51,11 @@ import java.util.Map;
  * (the workspace home and "My Companies") are always shown.
  */
 public class WorkspaceLayout extends AppLayout implements AfterNavigationObserver {
+
+    // Neutral, so it stays true whether the drawer is open or closed: the toggle does both (#188).
+    private static final String DRAWER_TOGGLE_NAME = "Navigation menu";
+    // Names the side navigation landmark, to tell it from the top bar's "Main" (#188).
+    private static final String OWNER_NAV = "Owner workspace";
 
     /** A drawer entry paired with the capability that gates it ({@code null} = always shown). */
     private record DrawerEntry(LkSideNav.Item item, Capability cap) { }
@@ -87,6 +93,13 @@ public class WorkspaceLayout extends AppLayout implements AfterNavigationObserve
     public WorkspaceLayout(SignOutFlow signOutFlow, NotificationBellPresenter bellPresenter) {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;
+        // First, so it is the first Tab stop; the top bar is re-added after it on every navigation.
+        addToNavbar(PageFocus.skipLink());
+        // Opens the drawer once a narrow window or zoom collapses it (#188); added before the top bar,
+        // which is re-added on every navigation, so it stays ahead of it.
+        DrawerToggle drawerToggle = new DrawerToggle();
+        drawerToggle.setAriaLabel(DRAWER_TOGGLE_NAME);
+        addToNavbar(drawerToggle);
         rebuildTopBar();
         addToDrawer(drawerWrap);
         rebuildDrawer(null);
@@ -96,6 +109,7 @@ public class WorkspaceLayout extends AppLayout implements AfterNavigationObserve
     public void afterNavigation(AfterNavigationEvent event) {
         rebuildTopBar();
         rebuildDrawer(findLabel(event, OWNER_LABELS));
+        PageFocus.afterNavigation(getContent());
     }
 
     private void rebuildTopBar() {
@@ -120,7 +134,7 @@ public class WorkspaceLayout extends AppLayout implements AfterNavigationObserve
             }
         }
         drawerWrap.removeAll();
-        ownerNav = new LkSideNav("Owner").items(visible, activeLabel);
+        ownerNav = new LkSideNav("Owner").label(OWNER_NAV).items(visible, activeLabel);
         drawerWrap.add(ownerNav);
     }
 

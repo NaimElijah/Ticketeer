@@ -6,6 +6,7 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -36,6 +37,7 @@ import java.util.List;
 public class SubmitComplaintView extends LkPage {
 
     private final SubmitComplaintPresenter presenter;
+    private final LkFormErrors errors = new LkFormErrors();
 
     private final LkSelect about    = new LkSelect("An order or ticket",
         List.of("An order or ticket", "An event or organizer", "Payment or refund", "The TicketHub app", "Something else"));
@@ -91,8 +93,17 @@ public class SubmitComplaintView extends LkPage {
     }
 
     private void submit() {
-        if (subject.isEmpty() || details.isEmpty()) {
+        errors.clear();
+        if (subject.isEmpty()) {
+            errors.reject(subject, "Enter a subject.");
+        }
+        if (details.isEmpty()) {
+            errors.reject(details, "Describe what happened.");
+        }
+        if (!errors.isEmpty()) {
+            // The toast stays, but the refused fields now carry the message too, and the first takes focus (#188).
             Toasts.failure("Please fill in subject and details.");
+            errors.focusFirst();
             return;
         }
         // The over-limit field already shows by how much; take the user there instead of sending.

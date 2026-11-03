@@ -12,7 +12,9 @@ import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkPage;
+import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.components.venue.VkSeatBlock;
@@ -25,6 +27,7 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.IntegerField;
@@ -54,6 +57,9 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private static final int MAX_ROWS_PER_ZONE = 99;
     private static final int MAX_SEATS_PER_ROW = 500;
     private static final String EVENT_NOT_FOUND = "Event not found.";
+    private static final String ARIA_PRESSED = "aria-pressed";
+    // What the seat preview shows, read instead of its seats (#188).
+    private static final String SEAT_PREVIEW = "Seat preview: %d rows of %d seats";
 
     private final VenueMapPresenter presenter;
     private final VenueLimitsProperties venueLimits;
@@ -72,11 +78,17 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private int selectedZoneIdx = 0;
 
     private final Div mapHolder = new Div();
+    /** The map preview as the last rebuild made it. */
+    private VkVenueMap mapPreview;
     private final Div zonesTableHolder = new Div();
+    /** The zone list's name buttons and remove buttons, in zone order, as the last rebuild made them. */
+    private final List<NativeButton> zoneNameButtons = new ArrayList<>();
+    private final List<LkRemoveButton> zoneRemoveButtons = new ArrayList<>();
     private final Div seatPreview = new Div();
 
     private final TextField zoneNameField = new TextField("Zone name");
     private final TextField priceField = new TextField("Price");
+    private final LkFormErrors zoneErrors = new LkFormErrors();
     private final RadioButtonGroup<String> zoneTypeGroup = new RadioButtonGroup<>();
     private final IntegerField rowsField = new IntegerField("Rows");
     private final IntegerField seatsPerRowField = new IntegerField("Seats / row");
@@ -210,6 +222,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private void refreshZonesTable() {
         zonesTableHolder.removeAll();
+        zoneNameButtons.clear();
+        zoneRemoveButtons.clear();
         for (int i = 0; i < zoneStates.size(); i++) {
             final int idx = i;
             ZoneState z = zoneStates.get(i);
@@ -218,26 +232,36 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
             if (idx == selectedZoneIdx) row.getStyle().set("font-weight", "600");
             row.getStyle().set("display", "flex").set("align-items", "center")
                     .set("gap", "8px").set("padding", "6px 4px").set("cursor", "pointer");
-            Span name = new Span(z.name());
-            name.getStyle().set("flex", "1");
+            // A button, so a keyboard can select the zone, pressed while it is the one being edited (#188).
+            // It has no listener of its own: its click reaches the row's, which selects the zone.
+            NativeButton name = new NativeButton(z.name());
+            name.getElement().setAttribute(ARIA_PRESSED, String.valueOf(idx == selectedZoneIdx));
+            name.getStyle().set("flex", "1").set("background", "none").set("border", "none")
+                    .set("padding", "0").set("font", "inherit").set("color", "inherit")
+                    .set("text-align", "left").set("cursor", "pointer");
             LkBadge type = new LkBadge(z.seated() ? "Seated" : "Standing",
                     z.seated() ? LkBadge.Tone.primary : LkBadge.Tone.contrast).small();
             Span cap = new Span(z.seated()
                     ? z.rows() * z.seatsPerRow() + " seats"
                     : z.capacity() + " cap");
             cap.getStyle().set("color", "var(--lk-muted, #888)").set("font-size", "13px");
-            row.add(name, type, cap, removeButton(idx));
-            row.getElement().addEventListener("click", e -> selectZone(idx));
+            LkRemoveButton remove = removeButton(idx, z.name());
+            row.add(name, type, cap, remove);
+            // The rebuild drops the name button the user pressed, so focus goes to the zone's new one (#188).
+            row.getElement().addEventListener("click", e -> {
+                selectZone(idx);
+                zoneNameButtons.get(idx).focus();
+            });
+            zoneNameButtons.add(name);
+            zoneRemoveButtons.add(remove);
             zonesTableHolder.add(row);
         }
     }
 
-    private Component removeButton(int idx) {
-        Span x = new Span("✕");
-        x.getStyle().set("cursor", "pointer").set("color", "var(--lk-danger, #c0392b)")
-                .set("padding", "0 4px");
-        x.getElement().addEventListener("click", e -> removeZone(idx))
-                .addEventData("event.stopPropagation()");
+    // LkRemoveButton stops the click there, so removing a zone does not also select it.
+    private LkRemoveButton removeButton(int idx, String zoneName) {
+        LkRemoveButton x = new LkRemoveButton(zoneName, () -> removeZone(idx));
+        x.getStyle().set("color", "var(--lk-danger, #c0392b)").set("padding", "0 4px");
         return x;
     }
 
@@ -267,7 +291,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                     pct(p.colSpan() * 100.0 / gridCols),
                     pct(p.rowSpan() * 100.0 / gridRows)));
         }
-        mapHolder.add(new VkVenueMap(zones, "z" + selectedZoneIdx, true, this::selectZoneByVisualId));
+        mapPreview = new VkVenueMap(zones, "z" + selectedZoneIdx, true, this::selectZoneByVisualId);
+        mapHolder.add(mapPreview);
     }
 
     private static String pct(double v) {
@@ -278,6 +303,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         if (visualId != null && visualId.startsWith("z")) {
             try {
                 selectZone(Integer.parseInt(visualId.substring(1)));
+                // As in the zone list: the rebuilt preview has dropped the zone the user pressed.
+                mapPreview.focusZone(visualId);
             } catch (NumberFormatException ignored) {
             }
         }
@@ -296,9 +323,11 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private Component buildZoneEditorCard() {
         LkCard card = new LkCard("Edit Zone").pad(20);
 
+        zoneNameField.setRequired(true);
         zoneNameField.setWidthFull();
         LkTextLimit.apply(zoneNameField);
         priceField.setPrefixComponent(new Span("$"));
+        priceField.setRequired(true);
         priceField.setWidthFull();
 
         Div formGrid = new Div();
@@ -397,10 +426,12 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         for (int r = 0; r < block.length; r++) {
             block[r] = ".".repeat(Math.max(cols, 1));
         }
-        seatPreview.add(new VkSeatBlock(block));
+        seatPreview.add(new VkSeatBlock(block).asPreview(String.format(Locale.ROOT, SEAT_PREVIEW,
+                orDefault(rowsField.getValue(), 1), orDefault(seatsPerRowField.getValue(), 1))));
     }
 
     private void saveZone() {
+        zoneErrors.clear();
         GridPlacementDTO placement = new GridPlacementDTO(
                 orDefault(gridRowField.getValue(), 1),
                 orDefault(gridColField.getValue(), 1),
@@ -427,11 +458,16 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                 refreshAll();
                 Toasts.success("Zone \"" + v.name() + "\" updated — click Save map to persist.");
             }
-            case VenueMapPresenter.ZoneOutcome.InvalidName ignored ->
-                Toasts.failure("Zone name is required.");
-            case VenueMapPresenter.ZoneOutcome.InvalidPrice ignored ->
-                Toasts.failure("Invalid price.");
+            case VenueMapPresenter.ZoneOutcome.InvalidName ignored -> refuseZone(zoneNameField, "Zone name is required.");
+            case VenueMapPresenter.ZoneOutcome.InvalidPrice ignored -> refuseZone(priceField, "Invalid price.");
         }
+    }
+
+    // The toast stays, but the refused field now carries the message too, and takes focus (#188).
+    private void refuseZone(TextField field, String message) {
+        zoneErrors.reject(field, message);
+        Toasts.failure(message);
+        zoneErrors.focusFirst();
     }
 
     private void addZone(boolean seated) {
@@ -456,6 +492,10 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         selectedZoneIdx = Math.min(selectedZoneIdx, zoneStates.size() - 1);
         loadZoneIntoEditor(selectedZoneIdx);
         refreshAll();
+        // The rebuild dropped the Remove button that had focus: focus the one now at its place, the next
+        // zone's, or the last zone's when the last went (#188, WCAG 2.4.3). A zone always remains, since the
+        // last one cannot be removed.
+        zoneRemoveButtons.get(Math.min(idx, zoneRemoveButtons.size() - 1)).focus();
     }
 
     private void refreshAll() {

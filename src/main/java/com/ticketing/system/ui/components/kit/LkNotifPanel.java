@@ -1,7 +1,9 @@
 package com.ticketing.system.ui.components.kit;
 
 import com.ticketing.system.shared.dto.NotificationDTO;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 
@@ -16,12 +18,19 @@ import java.util.function.Function;
  * Ports the React {@code NotifPanel}. Static factory methods
  * {@link #buyer()} and {@link #admin()} produce the two reference
  * variants populated with the mock data from {@code lumo-kit.jsx}.
+ *
+ * <p>The title is a heading, an unread row says "Unread" in visually hidden text as well as by
+ * its tint and dot, and an empty inbox is a message rather than a row that does nothing
+ * (#188; WCAG 1.3.1, 1.4.1, 4.1.2; {@code NotificationBellA11yTest}).
  */
 public class LkNotifPanel extends Div {
 
     public record Item(String notificationId, String iconName, String title, String body, String time, boolean unread, Runnable onClick) { }
 
+    private static final String UNREAD = "Unread";
+
     private final NativeButton markAll;
+    private final Div list = new Div();
 
     public LkNotifPanel(String headerTitle, List<Item> items) {
         this(headerTitle, items, null);
@@ -32,35 +41,29 @@ public class LkNotifPanel extends Div {
 
         Div head = new Div();
         head.addClassName("lk-notif-h");
-        Span title = new Span();
-        title.getElement().setProperty("innerHTML", "<b>" + escape(headerTitle) + "</b>");
+        H2 title = new H2(headerTitle);
+        title.addClassName("lk-notif-title");
         markAll = new NativeButton("Mark All Read");
         markAll.addClassName("lk-link-btn");
         head.add(title, markAll);
         add(head);
 
-        Div list = new Div();
         list.addClassName("lk-notif-list");
         for (Item it : items) {
             NativeButton row = new NativeButton();
             row.addClassName("lk-notif-item");
-            if (it.unread) row.addClassName("unread");
-
-            Span icoSlot = new Span();
-            icoSlot.addClassName("lk-notif-ic");
-            icoSlot.add(new LkIcon(it.iconName, 17));
-
-            Span body = new Span();
-            body.addClassName("lk-notif-body");
-            Span t = new Span(it.title); t.addClassName("lk-notif-t");
-            Span d = new Span(it.body);  d.addClassName("lk-notif-d");
-            Span tm = new Span(it.time); tm.addClassName("lk-notif-time");
-            body.add(t, d, tm);
+            if (it.unread) {
+                row.addClassName("unread");
+                // The tint and the dot say "unread" only to the eye.
+                Span unreadText = new Span(UNREAD);
+                unreadText.addClassName(Lk.VISUALLY_HIDDEN);
+                row.add(unreadText);
+            }
 
             if (it.onClick != null) {
                 row.addClickListener(e -> it.onClick().run());
             }
-            row.add(icoSlot, body);
+            addRowContent(row, it);
             if (it.unread) {
                 Span dot = new Span();
                 dot.addClassName("lk-notif-dot");
@@ -73,6 +76,31 @@ public class LkNotifPanel extends Div {
             list.add(row);
         }
         add(list);
+    }
+
+    private static void addRowContent(Component row, Item it) {
+        Span icoSlot = new Span();
+        icoSlot.addClassName("lk-notif-ic");
+        icoSlot.add(new LkIcon(it.iconName, 17));
+
+        Span body = new Span();
+        body.addClassName("lk-notif-body");
+        Span t = new Span(it.title); t.addClassName("lk-notif-t");
+        Span d = new Span(it.body);  d.addClassName("lk-notif-d");
+        Span tm = new Span(it.time); tm.addClassName("lk-notif-time");
+        body.add(t, d, tm);
+
+        row.getElement().appendChild(icoSlot.getElement(), body.getElement());
+    }
+
+    // Laid out as a row, but plain text: there is nothing to do with an empty inbox.
+    private LkNotifPanel showEmpty(String title, String body) {
+        Div message = new Div();
+        message.addClassName("lk-notif-item");
+        message.addClassName("lk-notif-empty");
+        addRowContent(message, new Item("", "bell", title, body, "", false, null));
+        list.add(message);
+        return this;
     }
 
     public LkNotifPanel onMarkAllRead(Runnable handler) {
@@ -154,9 +182,9 @@ public class LkNotifPanel extends Div {
                                          Consumer<String> onRowClick,
                                          Function<LocalDateTime, String> age) {
         if (notifications == null || notifications.isEmpty()) {
-            return new LkNotifPanel("Notifications", List.of(
-                new Item("", "bell", "You're all caught up", "No new notifications", "", false, null)
-            )).hideMarkAll();
+            return new LkNotifPanel("Notifications", List.of())
+                .showEmpty("You're all caught up", "No new notifications")
+                .hideMarkAll();
         }
         List<Item> items = notifications.stream()
             .map(n -> new Item(
@@ -172,9 +200,5 @@ public class LkNotifPanel extends Div {
         LkNotifPanel panel = new LkNotifPanel("Notifications", items, onRowClick);
         if (onMarkAllRead != null) panel.onMarkAllRead(onMarkAllRead);
         return panel;
-    }
-
-    private static String escape(String s) {
-        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

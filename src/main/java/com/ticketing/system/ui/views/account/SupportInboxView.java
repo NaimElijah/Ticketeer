@@ -66,6 +66,8 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     private final OpenedThreads opened = new OpenedThreads();
     private String focusId;        // from ?c=, applied once on the next render
     private LkCard detailCard;
+    /** The open thread's reply bar; {@code null} while the thread takes no reply. */
+    private MdReplyBar replyBar;
 
     public SupportInboxView(SupportInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
@@ -149,11 +151,13 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             MdConvRow row = new MdConvRow(iconFor(c.type()), c.subject(), whoFor(c),
                 displayTime.ageShort(c.lastMessageAt()), presenter.badge(c, opened).orElse(null));
             if (c.conversationId().equals(selectedId)) row.active();
-            row.onSelect(() -> openById(c.conversationId()));
+            row.onSelect(() -> chooseById(c.conversationId()));
             if (isLocked(c)) {
-                // Admin closed this outreach: still selectable/readable, just dimmed as a "closed" cue.
-                // renderDetail() hides the reply bar for terminal threads, so the member can read the
-                // history but can't reply until the admin starts a new conversation.
+                // Admin closed this outreach: still selectable/readable, dimmed and badged "Closed", since
+                // dimming alone says nothing to a screen reader (#188). renderDetail() hides the reply bar
+                // for terminal threads, so the member can read the history but can't reply until the admin
+                // starts a new conversation.
+                row.closed();
                 row.getStyle().set("opacity", "0.7");
             }
             convRows.add(row);
@@ -180,6 +184,7 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     }
 
     private void renderDetail() {
+        replyBar = null;
         if (detailCard == null) return;
         detailCard.removeAll();
         ConversationDTO conv = byId(selectedId);
@@ -197,9 +202,9 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             detailCard.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 17), note));
         } else if (!isTerminal(conv.status())) {
             // Inquiries and admin outreach are two-way chats (until closed).
-            MdReplyBar reply = new MdReplyBar();
-            reply.onSend(this::handleReply);
-            detailCard.add(reply);
+            replyBar = new MdReplyBar();
+            replyBar.onSend(this::handleReply);
+            detailCard.add(replyBar);
         } else {
             // Closed inquiry / admin outreach — read-only history, no reply bar.
             detailCard.add(new LkBanner(LkBanner.Tone.info, new LkIcon("info", 17),
@@ -211,6 +216,13 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     private void openById(String conversationId) {
         selectById(conversationId);
         markOpened(conversationId);
+    }
+
+    // A row the reader chose: focus moves to the thread's heading, so the swapped detail is announced (#188).
+    // Not for a deep link, where the shell focuses the page's h1 after the navigation.
+    private void chooseById(String conversationId) {
+        openById(conversationId);
+        detailCard.focusTitle();
     }
 
     // Only an explicit open marks a thread read: a mark reads it for the reader's whole side, so the
@@ -239,6 +251,8 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
             case SupportInboxPresenter.ActionOutcome.Success ignored -> {
                 Toasts.success("Reply sent.");
                 reload(); // refresh thread, ordering, and unread badges; keeps selection
+                // The reload rebuilt the thread and its reply field: focus the new field (#188, WCAG 2.4.3).
+                if (replyBar != null) replyBar.focusInput();
                 yield true;
             }
             case SupportInboxPresenter.ActionOutcome.NotAuthenticated ignored -> {

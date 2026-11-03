@@ -3,6 +3,7 @@ package com.ticketing.system.ui.views.auth;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -11,6 +12,7 @@ import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.textfield.Autocomplete;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
@@ -28,32 +30,45 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 public class AdminLoginView extends LkAuthCard {
 
     private final AdminLoginPresenter presenter;
+    private final LkFormErrors errors = new LkFormErrors();
 
     public AdminLoginView(AdminLoginPresenter presenter) {
         super("Admin sign-in", "Restricted — platform administrators only.");
         this.presenter = presenter;
 
+        // The autocomplete tokens let a browser or password manager fill the fields (#188, WCAG 1.3.5).
         TextField username = new TextField("Admin username");
         username.setRequired(true);
         username.setAutofocus(true);
+        username.setAutocomplete(Autocomplete.USERNAME);
         username.setWidthFull();
 
         PasswordField password = new PasswordField("Password");
         password.setRequired(true);
+        password.setAutocomplete(Autocomplete.CURRENT_PASSWORD);
         password.setWidthFull();
 
         Button signIn = new Button("Sign in", e -> attempt(username, password));
         signIn.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
         signIn.setWidthFull();
-        signIn.addClickShortcut(Key.ENTER);
+        // Enter in a field signs in; on the page it would also take over Enter on the link below (#188).
+        signIn.addClickShortcut(Key.ENTER).listenOn(username, password);
 
         col(14, username, password, signIn);
-        foot("Not an administrator?", "Member sign in →", LoginView.class);
+        foot("Not an administrator?", "Member sign in", LoginView.class);
     }
 
     private void attempt(TextField username, PasswordField password) {
-        if (username.isEmpty() || password.isEmpty()) {
+        errors.clear();
+        if (username.isEmpty()) {
+            errors.reject(username, "Enter your admin username.");
+        }
+        if (password.isEmpty()) {
+            errors.reject(password, "Enter your password.");
+        }
+        if (!errors.isEmpty()) {
             Toasts.failure("Please enter both username and password.");
+            errors.focusFirst();
             return;
         }
 

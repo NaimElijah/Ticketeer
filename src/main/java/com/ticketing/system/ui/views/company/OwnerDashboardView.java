@@ -41,6 +41,8 @@ public class OwnerDashboardView extends LkPage {
     private final Div statsSlot = new Div();
     /** The "Manage" tiles: each reload rebuilds them for the selected company's role. */
     private final Div tilesSlot = new Div();
+    /** The company selector the last reload built; {@code null} for a member of one company, or a banner. */
+    private LkSelect companySelector;
 
     public OwnerDashboardView(OwnerDashboardPresenter presenter) {
         this.presenter = presenter;
@@ -54,6 +56,7 @@ public class OwnerDashboardView extends LkPage {
 
     /** (Re)loads the dashboard for the given company (null or not theirs → the member's first company). */
     private void reload(Integer companyId) {
+        companySelector = null;
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(AuthSession.token(), companyId);
         // The tiles follow the company's role, which the company selector changes (#187, UI-A17).
         tilesSlot.removeAll();
@@ -123,8 +126,12 @@ public class OwnerDashboardView extends LkPage {
             if (companyId != null) {
                 presenter.selectCompany(companyId);
                 reload(companyId);
+                // The reload rebuilt the page's actions, this selector with them: focus the new one, so the
+                // member stays where they were (#188, WCAG 2.4.3). A reload that ended in a banner has none.
+                if (companySelector != null) companySelector.focus();
             }
         });
+        companySelector = selector;
         return selector;
     }
 
@@ -220,8 +227,6 @@ public class OwnerDashboardView extends LkPage {
     }
 
     private LkTile tile(String iconName, String title, String desc, Class<? extends Component> target) {
-        LkTile t = new LkTile(new LkIcon(iconName, 26), title, desc);
-        t.addClickListener(e -> UI.getCurrent().navigate(target));
-        return t;
+        return new LkTile(new LkIcon(iconName, 26), title, desc, target);
     }
 }

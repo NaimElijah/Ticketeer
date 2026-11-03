@@ -2,7 +2,7 @@ package com.ticketing.system.ui.components.kit;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.RouterLink;
@@ -19,6 +19,8 @@ import com.vaadin.flow.router.RouterLink;
  */
 public class LkAuthCard extends Div {
 
+    private static final String FOOT_ARROW = " →";
+
     private final Div card = new Div();
 
     public LkAuthCard(String title, String subtitle) {
@@ -34,8 +36,8 @@ public class LkAuthCard extends Div {
         brand.add(name);
         card.add(brand);
 
-        // Title + subtitle
-        H2 t = new H2(title);
+        // Title + subtitle. The title is the page's h1: the card is the whole page (#188).
+        H1 t = new H1(title);
         t.addClassName("auth-title");
         card.add(t);
         if (subtitle != null && !subtitle.isEmpty()) {
@@ -65,7 +67,7 @@ public class LkAuthCard extends Div {
         return this;
     }
 
-    /** Footer paragraph with optional trailing {@link RouterLink}. */
+    /** Footer paragraph with an optional trailing {@link RouterLink}, which the card ends with an arrow. */
     public LkAuthCard foot(String text, String linkLabel, Class<? extends Component> linkTarget) {
         Paragraph foot = new Paragraph();
         foot.addClassName("auth-foot");
@@ -73,6 +75,8 @@ public class LkAuthCard extends Div {
         if (linkTarget != null && linkLabel != null) {
             RouterLink link = new RouterLink(linkLabel, linkTarget);
             link.addClassName("bz-link");
+            // The arrow is decoration: the link is named by its words alone (#188, WCAG 1.1.1).
+            link.add(Lk.decoration(FOOT_ARROW));
             foot.add(link);
         }
         card.add(foot);

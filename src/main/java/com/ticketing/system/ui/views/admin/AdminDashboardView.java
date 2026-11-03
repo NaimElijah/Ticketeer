@@ -13,7 +13,6 @@ import com.ticketing.system.ui.presenters.admin.AdminDashboardPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
@@ -92,8 +91,6 @@ public class AdminDashboardView extends LkPage {
     }
 
     private LkTile tile(String iconName, String title, String desc, Class<? extends Component> target) {
-        LkTile t = new LkTile(new LkIcon(iconName, 26), title, desc);
-        t.addClickListener(e -> UI.getCurrent().navigate(target));
-        return t;
+        return new LkTile(new LkIcon(iconName, 26), title, desc, target);
     }
 }

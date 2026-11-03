@@ -29,6 +29,7 @@ import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.company.CompanySalesView;
 import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.HasAriaLabel;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.datepicker.DatePicker;
@@ -70,6 +71,8 @@ public class CompanyEventListView extends LkPage {
     private final DisplayTime displayTime;
     private final LkCard eventsCard = new LkCard().pad(0);
     private final Div filterErrorSlot = new Div();
+    /** How many events the filters leave, said to a screen reader after each reload (#188, WCAG 4.1.3). */
+    private final Span resultCount = Lk.asStatus(new Span());
 
     // ---- filter state (mirrors /browse, minus company-rating; status is owner-only & client-side) ----
     private String filterCategory  = CatalogFilterSupport.CAT_ALL;
@@ -116,6 +119,9 @@ public class CompanyEventListView extends LkPage {
         }
         add(buildFilters());
         add(filterErrorSlot);
+        // Heard, not shown: a filter rebuilds the list in place, and a sighted user sees its rows change.
+        resultCount.addClassName(Lk.VISUALLY_HIDDEN);
+        add(resultCount);
         add(eventsCard);
         Span hint = Lk.muted("Row actions → Edit metadata · Venue map · Policies · Sales · Status · Cancel.");
         hint.getStyle().set("font-size", "12.5px");
@@ -125,6 +131,8 @@ public class CompanyEventListView extends LkPage {
 
     private void reload() {
         eventsCard.removeAll();
+        // Only a loaded list has a count; the card says why the others have none.
+        resultCount.setText("");
         LkGrid grid = new LkGrid()
             .col("Event",   "name")
             .col("Date",    "date")
@@ -140,6 +148,7 @@ public class CompanyEventListView extends LkPage {
                 List<EventDetailDTO> events = ok.events().stream()
                     .filter(ev -> wanted == null || ev.status() == wanted)
                     .toList();
+                resultCount.setText(events.size() + (events.size() == 1 ? " event" : " events"));
                 if (events.isEmpty()) {
                     eventsCard.add(Lk.muted("No events match your filters."));
                 } else {
@@ -179,21 +188,23 @@ public class CompanyEventListView extends LkPage {
         });
 
         customFromPicker = new DatePicker();
-        customFromPicker.setPlaceholder("Start date");
+        customFromPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_FROM);
+        customFromPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_FROM);
         customFromPicker.addValueChangeListener(e -> { customToPicker.setMin(e.getValue()); reloadCustomIfValid(); });
         customToPicker = new DatePicker();
-        customToPicker.setPlaceholder("End date");
+        customToPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_TO);
+        customToPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_TO);
         customToPicker.addValueChangeListener(e -> { customFromPicker.setMax(e.getValue()); reloadCustomIfValid(); });
         customRangeRow = new Div();
         customRangeRow.getStyle().set("display", "flex").set("gap", "6px");
         customRangeRow.add(customFromPicker, customToPicker);
         customRangeRow.setVisible(false);
 
-        priceMin = numberRangeField("Min", v -> { filterPriceMin = v; reload(); });
-        priceMax = numberRangeField("Max", v -> { filterPriceMax = v; reload(); });
+        priceMin = numberRangeField(CatalogFilterSupport.BOUND_MIN, v -> { filterPriceMin = v; reload(); });
+        priceMax = numberRangeField(CatalogFilterSupport.BOUND_MAX, v -> { filterPriceMax = v; reload(); });
 
-        eventRatingMin = ratingField("Min", v -> { filterMinEventRating = v; reload(); });
-        eventRatingMax = ratingField("Max", v -> { filterMaxEventRating = v; reload(); });
+        eventRatingMin = ratingField(CatalogFilterSupport.BOUND_MIN, v -> { filterMinEventRating = v; reload(); });
+        eventRatingMax = ratingField(CatalogFilterSupport.BOUND_MAX, v -> { filterMaxEventRating = v; reload(); });
 
         countrySelect = new LkSelect(CatalogFilterSupport.COUNTRY_ALL,
                 CatalogFilterSupport.countryOptions(filterOptions(
@@ -231,8 +242,8 @@ public class CompanyEventListView extends LkPage {
             labelled("Keywords", keywordsField),
             labelled("Artist", artistField),
             dateRangeField, customRangeRow,
-            labelled("Price range", priceMin, priceMax),
-            labelled("Event rating", eventRatingMin, eventRatingMax),
+            rangeGroup("Price range", priceMin, priceMax),
+            rangeGroup("Event rating", eventRatingMin, eventRatingMax),
             countrySelect, citySelect, statusSelect,
             clear);
         return bar;
@@ -359,7 +370,20 @@ public class CompanyEventListView extends LkPage {
         return f;
     }
 
-    private static Component labelled(String labelText, Component... fields) {
+    // The span shows the label but is tied to nothing, so the field carries the same text as its name (#188).
+    private static <T extends Component & HasAriaLabel> Component labelled(String labelText, T field) {
+        field.setAriaLabel(labelText);
+        return labelBlock(labelText, field);
+    }
+
+    // A named group, so a screen reader hears each bound as "Price range, Min" rather than a bare "Min" (#188).
+    private static <T extends Component & HasAriaLabel> Component rangeGroup(String labelText, T min, T max) {
+        min.setAriaLabel(CatalogFilterSupport.BOUND_MIN);
+        max.setAriaLabel(CatalogFilterSupport.BOUND_MAX);
+        return Lk.asGroup(labelBlock(labelText, min, max), labelText);
+    }
+
+    private static Div labelBlock(String labelText, Component... fields) {
         Div wrap = new Div();
         Span label = new Span(labelText);
         label.addClassName("lk-label");
@@ -388,7 +412,8 @@ public class CompanyEventListView extends LkPage {
         // actual ticket price (e.g. $49.99, not a truncated $49).
         row.put("from", ev.minPrice() > 0 ? String.format("$%,.2f", ev.minPrice()) : "—");
 
-        row.put("rating", ev.rating() == null ? "—" : "★ " + ratingText(ev.rating()));
+        // Read as "Rating 4.5 of 5", not "star 4.5" (#188).
+        row.put("rating", ev.rating() == null ? "—" : Lk.rating(ratingText(ev.rating())));
 
         LkStatusDot.Tone tone = ev.status() == EventStatus.ON_SALE ? LkStatusDot.Tone.ok
             : ev.status() == EventStatus.DRAFT ? LkStatusDot.Tone.muted
@@ -400,32 +425,32 @@ public class CompanyEventListView extends LkPage {
         // map", a sales manager just "Sales", an owner the full set.
         LkRow actions = new LkRow().gap(4).noWrap();
         if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
-            actions.add(iconBtn("edit", "Edit metadata", () -> UI.getCurrent().navigate("owner/events/" + ev.eventId())));
+            actions.add(iconBtn("edit", "Edit metadata", ev.name(), () -> UI.getCurrent().navigate("owner/events/" + ev.eventId())));
         }
         if (Capabilities.has(Capability.MANAGE_VENUE_MAPS)) {
-            actions.add(iconBtn("map", "Venue map", () -> UI.getCurrent().navigate("owner/venue/" + ev.eventId())));
+            actions.add(iconBtn("map", "Venue map", ev.name(), () -> UI.getCurrent().navigate("owner/venue/" + ev.eventId())));
         }
         if (Capabilities.has(Capability.EDIT_PURCHASE_POLICIES)) {
             // Deep-link to THIS event's purchase policy (route owner/policies/:companyId?/:eventId?).
-            actions.add(iconBtn("policy", "Policies",
+            actions.add(iconBtn("policy", "Policies", ev.name(),
                     () -> UI.getCurrent().navigate("owner/policies/" + ev.companyId() + "/" + ev.eventId())));
         }
         if (Capabilities.has(Capability.VIEW_COMPANY_SALES)) {
-            actions.add(iconBtn("chart", "Sales", () -> UI.getCurrent().navigate(CompanySalesView.class)));
+            actions.add(iconBtn("chart", "Sales", ev.name(), () -> UI.getCurrent().navigate(CompanySalesView.class)));
         }
         if (ev.status() == EventStatus.CANCELED) {
             // A canceled event has no further status transitions, so this list only offers to
             // remove it. Cancelling it again, which resumes refunds a failure interrupted (#20),
             // is done from the event's management page.
             if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
-                actions.add(iconBtn("trash", "Remove event", () -> openDeleteDialog(ev)));
+                actions.add(iconBtn("trash", "Remove event", ev.name(), () -> openDeleteDialog(ev)));
             }
         } else {
             if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
-                actions.add(iconBtn("gear", "Change status", () -> openStatusDialog(ev)));
+                actions.add(iconBtn("gear", "Change status", ev.name(), () -> openStatusDialog(ev)));
             }
             if (Capabilities.has(Capability.CANCEL_EVENT)) {
-                actions.add(iconBtn("warning", "Cancel event", () -> openCancelDialog(ev)));
+                actions.add(iconBtn("warning", "Cancel event", ev.name(), () -> openCancelDialog(ev)));
             }
         }
         row.put("act", actions);
@@ -495,6 +520,8 @@ public class CompanyEventListView extends LkPage {
             case ON_SALE -> "Publish (On Sale)";
             default -> s.name();
         });
+        // A visible label names the select; the placeholder alone left a screen reader nothing to say (#188).
+        select.setLabel("New status");
         select.setPlaceholder("Select new status…");
 
         ConfirmDialog dialog = new ConfirmDialog();
@@ -550,8 +577,9 @@ public class CompanyEventListView extends LkPage {
         };
     }
 
-    private static LkIconBtn iconBtn(String iconName, String tooltip, Runnable r) {
-        LkIconBtn b = new LkIconBtn(new LkIcon(iconName, 15), tooltip);
+    // Named for its event too, since every row repeats the same buttons (#188).
+    private static LkIconBtn iconBtn(String iconName, String tooltip, String eventName, Runnable r) {
+        LkIconBtn b = new LkIconBtn(new LkIcon(iconName, 15), tooltip).forRow(eventName);
         b.addClickListener(e -> r.run());
         return b;
     }

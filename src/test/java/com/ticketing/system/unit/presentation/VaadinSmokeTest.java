@@ -296,8 +296,12 @@ class VaadinSmokeTest {
         AdminDashboardPresenter presenter = mock(AdminDashboardPresenter.class);
         when(presenter.load()).thenReturn(
             new AdminDashboardPresenter.Outcome.Success(new AdminOverviewDTO(0, 0, 0, 0.0)));
-        assertDoesNotThrow(() -> new AdminDashboardView(presenter),
-            "AdminDashboardView failed to construct");
+        // Its tool tiles are links (#188), which ask the router for their URL when built, as a running
+        // app always can; the harness supplies the UI and a router that answers every route.
+        try (ViewHarness ignored = new ViewHarness()) {
+            assertDoesNotThrow(() -> new AdminDashboardView(presenter),
+                "AdminDashboardView failed to construct");
+        }
     }
 
     // A fixed instant for the market state's recorded times (ADR-008): the view only formats them.
