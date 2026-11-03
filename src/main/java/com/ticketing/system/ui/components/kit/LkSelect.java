@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Popover-backed select. Trigger looks like {@link LkField}; panel is an
+ * Popover-backed select. Trigger looks like a text input (the kit's {@code .lk-input}); panel is an
  * {@link LkMenu} of options. Ports the React {@code Select} component.
  *
  * <p>The trigger is a native button named "label: value" that says it opens a
