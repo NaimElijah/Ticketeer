@@ -25,6 +25,8 @@ import com.vaadin.flow.component.html.Span;
 public class VkQuantitySelector extends Div {
 
     private static final String ARIA_LABEL = "aria-label";
+    private static final String DECREASE = "Decrease quantity";
+    private static final String INCREASE = "Increase quantity";
     private static final String ARIA_DISABLED = "aria-disabled";
 
     private int quantity;
@@ -48,7 +50,7 @@ public class VkQuantitySelector extends Div {
         minusBtn = new NativeButton("−");
         minusBtn.addClassName("vk-qty-btn");
         // Named for what it does; the glyph alone reads as "minus" or not at all (#188).
-        minusBtn.getElement().setAttribute(ARIA_LABEL, "Decrease quantity");
+        minusBtn.getElement().setAttribute(ARIA_LABEL, DECREASE);
         minusBtn.addClickListener(e -> decrement());
 
         countDisplay = new Span();
@@ -56,7 +58,7 @@ public class VkQuantitySelector extends Div {
 
         plusBtn = new NativeButton("+");
         plusBtn.addClassName("vk-qty-btn");
-        plusBtn.getElement().setAttribute(ARIA_LABEL, "Increase quantity");
+        plusBtn.getElement().setAttribute(ARIA_LABEL, INCREASE);
         plusBtn.addClickListener(e -> increment());
 
         Div stepper = new Div();

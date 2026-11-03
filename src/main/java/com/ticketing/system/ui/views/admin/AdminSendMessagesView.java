@@ -57,9 +57,6 @@ public class AdminSendMessagesView extends LkPage {
     private static final String NO_RECIPIENT = "Add at least one recipient, or pick all members / all producers.";
     private static final String RECIPIENTS = "Recipients";
     private static final String SEARCH_MEMBERS = "Search members";
-    private static final String CHOSEN_MEMBERS = "Chosen members";
-    private static final String ALL_MEMBERS = "All members";
-    private static final String ALL_PRODUCERS = "All producers";
 
     private final AdminSendMessagesPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
@@ -73,7 +70,7 @@ public class AdminSendMessagesView extends LkPage {
     /** Says how many members a search found and which recipient was added or removed (#188). */
     private final Span recipientStatus = Lk.asStatus(new Span());
     /** Who gets the message: the members chosen below, all members, or all producers. */
-    private final RadioButtonGroup<String> recipientMode = new RadioButtonGroup<>();
+    private final RadioButtonGroup<Audience> recipientMode = new RadioButtonGroup<>();
 
     /** Selected individual recipients: memberId → username (insertion-ordered). */
     private final Map<Integer, String> recipients = new LinkedHashMap<>();
@@ -128,8 +125,9 @@ public class AdminSendMessagesView extends LkPage {
         // cleared each other (#188, WCAG 1.3.1, 4.1.2). It comes first: it decides whether the search applies.
         // The group alone is "Recipients"; the search below is named for what it does (#188, WCAG 2.4.6).
         recipientMode.setLabel(RECIPIENTS);
-        recipientMode.setItems(CHOSEN_MEMBERS, ALL_MEMBERS, ALL_PRODUCERS);
-        recipientMode.setValue(CHOSEN_MEMBERS);
+        recipientMode.setItems(Audience.values());
+        recipientMode.setItemLabelGenerator(Audience::label);
+        recipientMode.setValue(Audience.CHOSEN_MEMBERS);
         recipientMode.addValueChangeListener(e -> updateRecipientMode());
 
         // Results and chips are rebuilt as the admin types and picks, so a status that outlives them says what
@@ -248,8 +246,9 @@ public class AdminSendMessagesView extends LkPage {
             return;
         }
         List<Integer> ids = new ArrayList<>(recipients.keySet());
+        Audience audience = recipientMode.getValue();
         switch (presenter.send(AuthSession.token(), subject.getValue(), body.getValue(),
-                ids, ALL_MEMBERS.equals(recipientMode.getValue()), ALL_PRODUCERS.equals(recipientMode.getValue()))) {
+                ids, audience == Audience.ALL_MEMBERS, audience == Audience.ALL_PRODUCERS)) {
             case AdminSendMessagesPresenter.ActionOutcome.Success ok -> {
                 Toasts.success("Sent to " + String.format("%,d", ok.recipientCount()) + " recipient(s).");
                 clearComposer();
@@ -278,12 +277,15 @@ public class AdminSendMessagesView extends LkPage {
         searchResults.removeAll();
         recipients.clear();
         renderChips();
-        recipientMode.setValue(CHOSEN_MEMBERS);
+        recipientMode.setValue(Audience.CHOSEN_MEMBERS);
         recipientSearch.setEnabled(true);
     }
 
+    // No choice counts as the chosen members, the group's default: then the search applies and a send
+    // without recipients is refused, rather than broadcast.
     private boolean isBulk() {
-        return !CHOSEN_MEMBERS.equals(recipientMode.getValue());
+        Audience audience = recipientMode.getValue();
+        return audience != null && audience != Audience.CHOSEN_MEMBERS;
     }
 
     // -- History --------------------------------------------------------------
@@ -329,5 +331,22 @@ public class AdminSendMessagesView extends LkPage {
 
     private Component banner(String message) {
         return new LkBanner(LkBanner.Tone.info, new LkIcon("info", 18), message);
+    }
+
+    /** Who an outreach goes to, one per radio choice; {@link #label()} is what the choice shows. */
+    private enum Audience {
+        CHOSEN_MEMBERS("Chosen members"),
+        ALL_MEMBERS("All members"),
+        ALL_PRODUCERS("All producers");
+
+        private final String label;
+
+        Audience(String label) {
+            this.label = label;
+        }
+
+        String label() {
+            return label;
+        }
     }
 }

@@ -130,7 +130,9 @@ public class RegisterView extends LkAuthCard {
             case UsernameAvailabilityPresenter.Outcome.Available ignored -> "Username " + value + " is available";
             case UsernameAvailabilityPresenter.Outcome.InvalidFormat ignored -> USERNAME_FORMAT;
             case UsernameAvailabilityPresenter.Outcome.Failure ignored -> AVAILABILITY_UNKNOWN;
-            default -> "";
+            case UsernameAvailabilityPresenter.Outcome.Empty ignored -> "";
+            case UsernameAvailabilityPresenter.Outcome.Taken ignored -> "";
+            case UsernameAvailabilityPresenter.Outcome.AdminReserved ignored -> "";
         });
         switch (outcome) {
             case UsernameAvailabilityPresenter.Outcome.Empty ignored -> {
