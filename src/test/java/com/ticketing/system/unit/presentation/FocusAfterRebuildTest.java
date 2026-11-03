@@ -379,23 +379,18 @@ class FocusAfterRebuildTest {
             + "the Pay button is " + A11y.describe(payButton(holder[0]).getElement()));
     }
 
+    // Pay is disabled only on the server, set and cleared within the payment's one round trip, so the browser
+    // never sees the disable and Pay keeps its focus: the buyer corrects the card and pays again from there.
     @Test
-    void GivenADeclinedPayment_WhenThePaymentEnds_ThenFocusReturnsToThePage() {
+    void GivenADeclinedPayment_WhenThePaymentEnds_ThenFocusStaysOnPay() {
         ViewHarness.signInMember();
         CheckoutPresenter presenter = checkoutPresenter();
         when(presenter.payAsMember(any(), any(), any(), any(), any(), any()))
             .thenReturn(new CheckoutPresenter.PayOutcome.PaymentDeclined("declined"));
         CheckoutView view = filledCheckout(presenter);
         NativeButton pay = payButton(view);
-        int before = harness.focusTargets().size();
 
-        click(pay);
-
-        List<Element> focused = after(before);
-        assertTrue(focused.stream().anyMatch(t -> A11y.within(t, view.getElement())),
-            "the Pay button is disabled while paying, which drops its focus, so focus must be returned to the "
-                + "page (the Pay button) after the payment; the focus calls were "
-                + focused.stream().map(A11y::describe).toList());
+        assertFocusStaysOnPage(view, pay, () -> click(pay), "a declined payment");
     }
 
     // ---- EventDetailsView zone map (review A3) ----
