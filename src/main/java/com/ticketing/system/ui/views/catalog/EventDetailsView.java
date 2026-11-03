@@ -23,8 +23,10 @@ import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Text;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
@@ -45,6 +47,8 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm zzz", Locale.US);
+    private static final String CHOOSE_TICKETS = "Choose Tickets";
+    private static final String ORGANIZER_RATING = "Organizer rating";
 
     private final EventDetailsPresenter presenter;
     private final SessionIdentity sessionIdentity;
@@ -130,10 +134,14 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             badges.add(new LkBadge(EventCategoryLabels.label(detail.category()), LkBadge.Tone.muted).small());
         }
         if (detail.rating() != null) {
-            badges.add(new LkBadge("★ " + ratingText(detail.rating()), LkBadge.Tone.muted).small());
+            // Read as "Rating 4.5 of 5", not "star 4.5" (#188).
+            LkBadge rating = new LkBadge("", LkBadge.Tone.muted).small();
+            rating.add(Lk.rating(ratingText(detail.rating())));
+            badges.add(rating);
         }
 
-        Div title = new Div();
+        // The event's name is the page's one h1 (#188).
+        H1 title = new H1();
         title.addClassName("bz-evt-title");
         title.addClassName("lk-clamp-2");
         title.setText(detail.name());
@@ -142,11 +150,10 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
         // Organizer (production company) name, with its DERIVED rating shown beside it when available.
         if (detail.companyName() != null && !detail.companyName().isBlank()) {
-            String organizerLine = detail.companyName();
+            Span organizer = Lk.muted(detail.companyName());
             if (companyRating != null) {
-                organizerLine += "  ·  ★ " + ratingText(companyRating);
+                organizer.add(new Text("  ·  "), Lk.rating(ORGANIZER_RATING, ratingText(companyRating)));
             }
-            Span organizer = Lk.muted(organizerLine);
             organizer.getStyle().set("font-size", "14px").set("font-weight", "600");
             meta.add(organizer);
         }
@@ -252,13 +259,16 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
             return;
         }
         selectedZoneId = z.getId();
-        refreshMap();
+        // The rebuilt map has dropped the button that was pressed, so focus goes to the zone's new one (#188).
+        refreshMap().focusZone(zoneIdStr);
         updateSelectedLine();
     }
 
-    private void refreshMap() {
+    private VkVenueMap refreshMap() {
+        VkVenueMap map = renderMap();
         mapContainer.removeAll();
-        mapContainer.add(renderMap());
+        mapContainer.add(map);
+        return map;
     }
 
     private void updateSelectedLine() {
@@ -311,10 +321,11 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private Component buildReserveCard() {
         LkCard card = new LkCard().pad(16).accent();
-        selectedLine = new Span();
+        // A status before its first text, so picking another zone on the map is announced (#188, WCAG 4.1.3).
+        selectedLine = Lk.asStatus(new Span());
         updateSelectedLine();
 
-        chooseBtn = new LkBtn("Choose Tickets →")
+        chooseBtn = new LkBtn(CHOOSE_TICKETS).arrow(true)
             .variant(LkBtn.Variant.primary)
             .size(LkBtn.Size.l)
             .full()
@@ -329,7 +340,10 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         return card;
     }
 
-    /** Disable + relabel 'Choose tickets' for non-purchasable events (cancelled / ended / sold out). */
+    /**
+     * Disable + relabel 'Choose tickets' for non-purchasable events (cancelled / ended / sold out). A disabled
+     * button drops the arrow, which would invite an action that does not exist (PR #253 review).
+     */
     private void updateReserveState() {
         if (chooseBtn == null) {
             return;
@@ -337,16 +351,16 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         EventStatus status = detail == null ? null : detail.status();
         if (status == EventStatus.CANCELED) {
             chooseBtn.setEnabled(false);
-            chooseBtn.label("Event Cancelled");
+            chooseBtn.label("Event Cancelled").arrow(false);
         } else if (status == EventStatus.COMPLETED) {
             chooseBtn.setEnabled(false);
-            chooseBtn.label("Event Ended");
+            chooseBtn.label("Event Ended").arrow(false);
         } else if (status == EventStatus.SOLD_OUT || firstSelectableZoneId() == null) {
             chooseBtn.setEnabled(false);
-            chooseBtn.label("Sold Out");
+            chooseBtn.label("Sold Out").arrow(false);
         } else {
             chooseBtn.setEnabled(true);
-            chooseBtn.label("Choose Tickets →");
+            chooseBtn.label(CHOOSE_TICKETS).arrow(true);
         }
     }
 

@@ -13,6 +13,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkCountdown;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -28,6 +29,7 @@ import com.vaadin.flow.component.Shortcuts;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.textfield.Autocomplete;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
@@ -47,6 +49,11 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
 
     private static final String IDEMPOTENCY_ATTR = "checkout.idempotencyKey";
     private static final long MILLIS_PER_SECOND = 1000L;
+    private static final int CARD_NUMBER_DIGITS = 16;
+    private static final String CARD_NUMBER_LENGTH = "Card number must be " + CARD_NUMBER_DIGITS + " digits.";
+    private static final String EXPIRY_FORMAT = "MM / YY";
+    private static final String GUEST_EMAIL_NEEDED = "Please enter a valid email address.";
+    private static final String GUEST_AGE_NEEDED = "Please enter your age.";
 
     private final CheckoutPresenter presenter;
     private final Clock clock;
@@ -67,6 +74,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
     private long holdEndsAtMs;
 
     private final AtomicBoolean paymentInProgress = new AtomicBoolean(false);
+    private final LkFormErrors paymentErrors = new LkFormErrors();
 
     private final TextField    cardholder = new TextField("Cardholder name");
     private final TextField    cardNumber  = new TextField("Card number");
@@ -339,19 +347,26 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         LkCard card = new LkCard("Payment").pad(20);
         LkCol col = new LkCol().gap(14);
 
+        // The cc-* tokens let a browser fill the card from its saved details (#188, WCAG 1.3.5).
         cardholder.setPlaceholder("Name on card");
         cardholder.setRequired(true);
+        cardholder.setAutocomplete(Autocomplete.CC_NAME);
         cardholder.setWidthFull();
 
         cardNumber.setPlaceholder("1234 5678 9012 3456");
         cardNumber.setSuffixComponent(new LkIcon("card", 16));
         cardNumber.setRequired(true);
+        cardNumber.setAutocomplete(Autocomplete.CC_NUMBER);
         cardNumber.setWidthFull();
 
-        expiry.setPlaceholder("MM / YY");
+        expiry.setPlaceholder(EXPIRY_FORMAT);
+        // The placeholder goes once the user types; the helper text keeps the format in view (#188).
+        expiry.setHelperText(EXPIRY_FORMAT);
         expiry.setRequired(true);
+        expiry.setAutocomplete(Autocomplete.CC_EXP);
         cvc.setPlaceholder("123");
         cvc.setRequired(true);
+        cvc.setAutocomplete(Autocomplete.CC_CSC);
 
         LkRow expiryCvc = new LkRow().gap(12);
         expiry.getStyle().set("flex", "1 1 0");
@@ -363,6 +378,7 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         if (!isMember) {
             guestEmail.setPlaceholder("you@example.com");
             guestEmail.setRequired(true);
+            guestEmail.setAutocomplete(Autocomplete.EMAIL);
             guestEmail.setWidthFull();
             // The platform sends no email yet (#102), so the field promises none.
             guestEmail.setHelperText("Kept with your order record; no email is sent.");
@@ -384,7 +400,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
                 .size(LkBtn.Size.l)
                 .full()
                 .onClick(e -> attemptPay());
-        Shortcuts.addShortcutListener(payButton, this::attemptPay, Key.ENTER);
+        // Enter pays from inside the payment form only; on the page it would pay from "Edit Cart" too (#188).
+        Shortcuts.addShortcutListener(payButton, this::attemptPay, Key.ENTER).listenOn(col);
         payButton.getElement().setEnabled(totalCents > 0);
         col.add(payButton);
 
@@ -408,23 +425,31 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             Toasts.failure("Your cart is empty.");
             return;
         }
-        if (cardholder.isEmpty() || cardNumber.isEmpty()
-                || expiry.isEmpty() || cvc.isEmpty()) {
-            Toasts.failure("Please fill in every payment field.");
+        paymentErrors.clear();
+        rejectIfEmpty(cardholder, "Enter the name on the card.");
+        rejectIfEmpty(cardNumber, "Enter the card number.");
+        rejectIfEmpty(expiry, "Enter the expiry date, as " + EXPIRY_FORMAT + ".");
+        rejectIfEmpty(cvc, "Enter the security code.");
+        if (!paymentErrors.isEmpty()) {
+            refusePayment("Please fill in every payment field.");
             return;
         }
-        if (cardNumber.getValue().replaceAll("\\s+", "").length() != 16) {
-            Toasts.failure("Card number must be 16 digits.");
+        if (cardNumber.getValue().replaceAll("\\s+", "").length() != CARD_NUMBER_DIGITS) {
+            paymentErrors.reject(cardNumber, CARD_NUMBER_LENGTH);
+            refusePayment(CARD_NUMBER_LENGTH);
             return;
         }
         if (!isMember) {
+            // Invalid is the email field's own verdict: an address it can't parse.
             if (guestEmail.isInvalid() || guestEmail.isEmpty()) {
-                Toasts.failure("Please enter a valid email address.");
+                paymentErrors.reject(guestEmail, GUEST_EMAIL_NEEDED);
+                refusePayment(GUEST_EMAIL_NEEDED);
                 return;
             }
             if (guestAge.isEmpty() || guestAge.getValue() == null
                     || guestAge.getValue() < 1) {
-                Toasts.failure("Please enter your age.");
+                paymentErrors.reject(guestAge, GUEST_AGE_NEEDED);
+                refusePayment(GUEST_AGE_NEEDED);
                 return;
             }
         }
@@ -449,6 +474,9 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         // A kept confirmation is the last order's: drop it before this one, so a failed attempt
         // leaves no older order to reopen at order-confirmed.
         OrderSession.clear();
+        // A server-side guard only: the payment runs on the request thread, so the disable is set and cleared
+        // within one round trip and the browser, sent only the final state, never sees it. Pay therefore keeps
+        // its focus throughout. Showing the payment's progress waits on running it off that thread (#252).
         payButton.getElement().setEnabled(false);
 
         try {
@@ -499,6 +527,18 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             paymentInProgress.set(false);
             payButton.getElement().setEnabled(totalCents > 0);
         }
+    }
+
+    private void rejectIfEmpty(TextField field, String message) {
+        if (field.isEmpty()) {
+            paymentErrors.reject(field, message);
+        }
+    }
+
+    // The toast stays, but the refused fields now carry the message too, and the first takes focus (#188).
+    private void refusePayment(String toast) {
+        Toasts.failure(toast);
+        paymentErrors.focusFirst();
     }
 
     /**

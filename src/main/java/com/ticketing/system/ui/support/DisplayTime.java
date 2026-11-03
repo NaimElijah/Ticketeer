@@ -105,6 +105,16 @@ public class DisplayTime {
     }
 
     /**
+     * Formats the present moment in the platform zone, for a page that says when it last refreshed.
+     *
+     * @param formatter the pattern to render it with
+     * @return now, on the application clock, as it reads on a clock in the platform zone
+     */
+    public String formatNow(DateTimeFormatter formatter) {
+        return formatter.format(clock.instant().atZone(displayZone));
+    }
+
+    /**
      * Formats a recorded timestamp in the platform zone.
      *
      * @param recorded  a recorded moment, as UTC wall time; must not be null

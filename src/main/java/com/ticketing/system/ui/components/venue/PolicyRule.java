@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.components.venue;
 
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
@@ -15,14 +16,14 @@ public class PolicyRule extends Div {
     public PolicyRule(String type, String cmp, String value, String unit) {
         addClassName("pe-rule");
 
-        Span handle = new Span("⋮⋮");
+        Span handle = Lk.decoration("⋮⋮");
         handle.addClassName("pe-rule-handle");
 
         NativeButton typeBtn = new NativeButton();
         typeBtn.addClassName("pe-rule-type");
         typeBtn.addClassName("lk-mono");
         typeBtn.add(new Span(type + " "));
-        Span typeCaret = new Span("▾");
+        Span typeCaret = Lk.decoration("▾");
         typeCaret.addClassName("pe-rule-caret");
         typeBtn.add(typeCaret);
 

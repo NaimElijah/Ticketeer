@@ -24,6 +24,14 @@ public final class CatalogFilterSupport {
     public static final String CITY_ALL    = "All cities";
     public static final String DATE_ANY    = "Any time";
 
+    // The placeholder and the accessible name of a range's lower and upper bound, and of a custom date
+    // range's two pickers. A field's name holds its visible text (#188, WCAG 2.5.3), and the named group
+    // around a range supplies what it bounds, so a screen reader says "Price range, Min".
+    public static final String BOUND_MIN   = "Min";
+    public static final String BOUND_MAX   = "Max";
+    public static final String CUSTOM_FROM = "Start date";
+    public static final String CUSTOM_TO   = "End date";
+
     /** The category filter's options: {@link #CAT_ALL}, then every category's label ({@link EventCategoryLabels}). */
     public static final List<String> CATEGORIES =
             Stream.concat(Stream.of(CAT_ALL), EventCategoryLabels.labels().stream()).toList();

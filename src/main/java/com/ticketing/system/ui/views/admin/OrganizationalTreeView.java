@@ -16,12 +16,15 @@ import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Route(value = "admin/org-tree", layout = PlatformAdminLayout.class)
 @PageTitle("Organizational Tree · Admin")
@@ -29,8 +32,13 @@ import java.util.List;
 @RequireCapability(Capability.VIEW_ORG_TREES)
 public class OrganizationalTreeView extends LkPage {
 
+    private static final String ARIA_CURRENT = "aria-current";
+    private static final String CURRENT_ITEM = "true";
+
     private final OrgTreePresenter presenter;
     private final Div body = new Div();
+    /** The company list's buttons by company id, as the last render made them. */
+    private final Map<Integer, NativeButton> companyButtons = new HashMap<>();
     private Integer selectedCompanyId = null;
 
     public OrganizationalTreeView(OrgTreePresenter presenter) {
@@ -43,6 +51,7 @@ public class OrganizationalTreeView extends LkPage {
 
     private void render() {
         body.removeAll();
+        companyButtons.clear();
 
         switch (presenter.load(AuthSession.token(), selectedCompanyId, AuthSession.isAdmin())) {
             case OrgTreePresenter.Outcome.NotAuthenticated ignored ->
@@ -95,13 +104,18 @@ public class OrganizationalTreeView extends LkPage {
         return card;
     }
 
+    // A button, so a keyboard reaches each company; the one shown is marked current, not only dark (#188).
     private Component companyItem(ProductionCompanyDTO c, boolean active) {
-        Div item = new Div();
+        NativeButton item = new NativeButton();
         item.getStyle()
             .set("display", "flex").set("flex-direction", "column").set("gap", "2px")
             .set("padding", "10px 12px").set("border-radius", "8px").set("cursor", "pointer")
             .set("border", "1px solid " + (active ? "#0f172a" : "#e2e8f0"))
-            .set("background", active ? "#0f172a" : "#fff");
+            .set("background", active ? "#0f172a" : "#fff")
+            .set("font", "inherit").set("text-align", "left").set("width", "100%");
+        if (active) {
+            item.getElement().setAttribute(ARIA_CURRENT, CURRENT_ITEM);
+        }
 
         Span name = new Span(c.name());
         name.getStyle().set("font-weight", "700").set("font-size", "13.5px")
@@ -115,8 +129,19 @@ public class OrganizationalTreeView extends LkPage {
         item.addClickListener(e -> {
             selectedCompanyId = c.companyId();
             render();
+            focusCompany(c.companyId());
         });
+        companyButtons.put(c.companyId(), item);
         return item;
+    }
+
+    // The render rebuilt the list and dropped the button that was pressed, so focus goes to the company's new
+    // one (#188, PR #253 review; WCAG 2.4.3). A failed load leaves no list, and nothing to focus.
+    private void focusCompany(int companyId) {
+        NativeButton button = companyButtons.get(companyId);
+        if (button != null) {
+            button.focus();
+        }
     }
 
     private Component buildTreeCard(String companyName, OrganizationalTreeNodeDTO root) {

@@ -14,6 +14,12 @@
   .lk-mono{font-family:var(--mono)}
   a{color:inherit}
   button{font-family:inherit;cursor:pointer}
+  /* PageFocus's skip link: out of sight until it has keyboard focus (#188). */
+  .lk-skip-link{position:fixed;top:8px;left:8px;z-index:1000;padding:8px 14px;border-radius:8px;background:#fff;
+    color:var(--primary);font-weight:700;text-decoration:none;box-shadow:0 4px 14px rgba(15,23,42,.18);transform:translateY(-200%)}
+  .lk-skip-link:focus{transform:none}
+  /* PageFocus moves focus to the page, or its h1, only so a screen reader announces it: neither is a control. */
+  #lk-content:focus,#lk-content h1:focus{outline:none}
 
   /* ============ APP LAYOUT (index + stage) ============ */
   #root{display:flex;height:100vh;overflow:hidden}
@@ -48,6 +54,8 @@
   .lk-topbar{display:flex;align-items:center;gap:18px;background:var(--primary);color:#fff;padding:0 20px;height:56px}
   .lk-brand{font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap}
   .lk-brand b{font-weight:800}
+  /* The brand is a link home (#188), drawn as the plain brand line. */
+  a.lk-brand{color:inherit;text-decoration:none}
   .lk-brand-crumb{opacity:.7;font-weight:500;font-size:.95rem}
   .lk-topnav{display:flex;gap:18px}
   .lk-topnav-link{font-size:.88rem;color:rgba(255,255,255,.78);text-decoration:none;cursor:pointer;white-space:nowrap}
@@ -100,6 +108,11 @@
   .lk-btn-error:hover{background:#fef2f2}
   .lk-btn-success{background:var(--ok);color:#fff}
   .lk-btn-ghost-light{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.4)}
+  /* A pressed toggle, such as the analytics' "Pause auto-refresh", whose label stays the same: the theme's
+     selected look (as .lk-sidenav-item.on) plus a primary border and an inset shadow, so it reads as held
+     down (PR #253 review). After the variants, so it wins over their colours and hover. */
+  .lk-btn[aria-pressed="true"],.lk-btn[aria-pressed="true"]:hover{background:#e8f0f8;color:var(--primary);
+    border-color:var(--primary);font-weight:700;box-shadow:inset 0 1px 3px rgba(21,67,111,.25)}
   .lk-iconbtn{width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:#fff;color:#475569;
     display:inline-flex;align-items:center;justify-content:center;font-size:.95rem}
   .lk-iconbtn:hover{background:#f1f5f9;border-color:var(--border-strong)}
@@ -128,10 +141,15 @@
   .lk-radio.on{color:var(--primary);font-weight:700}
   .lk-radio-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border-strong);flex:none;display:inline-block}
   .lk-radio.on .lk-radio-dot,.lk-radio-dot.on{border-color:var(--primary);background:radial-gradient(circle,var(--primary) 0 5px,#fff 6px)}
-  .lk-checkrow{display:flex;align-items:center;gap:10px;font-size:.9rem;color:#334155;cursor:pointer}
+  .lk-checkrow{position:relative;display:flex;align-items:center;gap:10px;font-size:.9rem;color:#334155;cursor:pointer}
   .lk-checkbox{width:18px;height:18px;border-radius:5px;border:2px solid var(--border-strong);flex:none;display:inline-flex;
     align-items:center;justify-content:center;font-size:.7rem;color:#fff;font-style:normal}
   .lk-checkbox.on{background:var(--primary);border-color:var(--primary)}
+  /* LkCheckRow's native checkbox is hidden, so its drawn box shows the keyboard focus (#188). */
+  .lk-checkrow input:focus-visible + .lk-checkbox{outline:2px solid var(--primary);outline-offset:2px}
+  /* Lk.VISUALLY_HIDDEN: out of sight, still read by screen readers and reached by the keyboard (#188). */
+  .lk-visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
+    clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
   .lk-formgrid{display:grid;grid-template-columns:repeat(var(--cols,2),1fr);gap:16px}
 
   /* ============ CHIPS / BADGES ============ */
@@ -139,6 +157,9 @@
     padding:7px 14px;border-radius:999px;font-size:.83rem;font-weight:600;cursor:pointer;white-space:nowrap}
   .lk-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
   .lk-chip-caret{opacity:.5;font-size:.7rem}
+  /* LkRemoveButton: a native button drawn as its glyph, with a target of at least 24 by 24 px (#188, WCAG 2.5.8). */
+  .lk-remove{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;padding:0;
+    border:none;border-radius:6px;background:none;color:inherit;font:inherit;cursor:pointer}
   .lk-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:800;
     letter-spacing:.04em;text-transform:uppercase}
   .lk-badge.sm{font-size:.65rem;padding:2px 8px}
@@ -159,7 +180,7 @@
   .lk-card-flush{overflow:visible}
   .lk-card-danger{border-color:#fbb9b9}
   .lk-card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #f1f5f9;background:#fcfdfe}
-  .lk-card-title{font-size:.82rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary)}
+  .lk-card-title{margin:0;font-size:.82rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary)}
   .lk-card-sub{font-size:.78rem;color:var(--muted);margin-top:2px;text-transform:none;letter-spacing:0;font-weight:400}
   .lk-card-body{min-width:0}
   .lk-card-f{padding:12px 18px;border-top:1px solid #f1f5f9;background:#fcfdfe}
@@ -173,6 +194,8 @@
   .lk-tile-title{font-weight:800;font-size:.98rem;color:#0f172a}
   .lk-tile-desc{font-size:.82rem;color:var(--muted);line-height:1.45}
   .lk-tile-go{font-size:.78rem;font-weight:700;color:var(--primary);margin-top:6px}
+  /* LkTile is a link (#188), drawn as the card. */
+  a.lk-tile{color:inherit;text-decoration:none}
   .lk-stat{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
   .lk-stat-label{font-size:.78rem;color:var(--muted);font-weight:600}
   .lk-stat-value{font-size:1.65rem;font-weight:800;letter-spacing:-.02em;margin-top:3px;color:#0f172a}
@@ -202,12 +225,14 @@
 
   /* ============ BUYER SCREENS ============ */
   .bz-hero{background:linear-gradient(135deg,#1a5490,#2c7bb6 55%,#f47920 200%);border-radius:16px;padding:22px clamp(20px,3.5vw,40px);color:#fff;box-shadow:0 10px 28px -14px rgba(26,84,144,.5)}
-  .bz-hero-title{font-size:clamp(1.25rem,2.4vw,1.7rem);font-weight:800;letter-spacing:-.02em}
+  .bz-hero-title{margin:0;font-size:clamp(1.25rem,2.4vw,1.7rem);font-weight:800;letter-spacing:-.02em}
   .bz-hero-sub{opacity:.9;margin-top:6px;font-size:.92rem}
   .bz-hero-search{background:#fff;color:#94a3b8;border-radius:12px;padding:14px 18px;margin-top:24px;max-width:560px;display:flex;gap:10px;box-shadow:0 6px 16px rgba(0,0,0,.15)}
   .bz-poster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
   .bz-poster{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.05),0 8px 18px -12px rgba(15,23,42,.2);cursor:pointer;transition:.12s}
   .bz-poster:hover{transform:translateY(-2px);box-shadow:0 12px 24px -12px rgba(15,23,42,.3)}
+  /* BzPoster is a link to its event (#188), drawn as the card. */
+  a.bz-poster{display:block;color:inherit;text-decoration:none}
   .bz-poster-img{display:flex;align-items:flex-end;padding:13px}
   .bz-poster-cat{background:rgba(0,0,0,.32);color:#fff;font-size:.62rem;font-weight:800;letter-spacing:.1em;padding:4px 10px;border-radius:999px;backdrop-filter:blur(4px)}
   .bz-poster-body{padding:13px 15px 16px}
@@ -223,7 +248,7 @@
   .bz-evt-hero{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
   .bz-evt-hero-poster{width:150px;height:150px;border-radius:14px;flex:none;display:flex;align-items:flex-end;padding:12px;color:rgba(255,255,255,.85);font-size:.65rem;font-weight:800;letter-spacing:.1em}
   .bz-evt-hero-meta{flex:1;min-width:240px;display:flex;flex-direction:column;gap:7px}
-  .bz-evt-title{font-size:clamp(1.4rem,2.6vw,1.9rem);font-weight:800;letter-spacing:-.02em;color:#0f172a}
+  .bz-evt-title{margin:0;font-size:clamp(1.4rem,2.6vw,1.9rem);font-weight:800;letter-spacing:-.02em;color:#0f172a}
   .bz-evt-split{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start}
   .bz-showtime{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:8px;padding:10px 14px}
   .bz-showtime.on{border-color:var(--primary);background:#f3f8fd}
@@ -246,12 +271,16 @@
   .bz-order-line{display:flex;justify-content:space-between;padding:11px 20px;border-bottom:1px solid #f1f5f9;font-size:.9rem}
   .bz-order-foot{padding:16px 20px;background:#fcfdfe;border-top:1px solid #f1f5f9}
   .bz-confirm-hero{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,#15803d,#16a34a);border-radius:16px;padding:26px 28px;box-shadow:0 10px 28px -14px rgba(22,163,74,.5)}
+  /* These heroes' titles are their pages' h1s (#188), drawn at the browser's h2 size to fit the hero. */
+  .bz-confirm-hero h1,.acct-hero h1{font-size:1.5em}
   .bz-confirm-check{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.25);color:#fff;font-size:1.8rem;display:flex;align-items:center;justify-content:center;flex:none}
   .bz-barcode{letter-spacing:.05em;color:#475569}
 
   /* ============ VENUE / SEAT (centerpiece) ============ */
   .vk-seat{width:var(--vk-seat-size);height:var(--vk-seat-size);border-radius:6px;border:1.5px solid;font-size:.62rem;font-weight:700;display:inline-flex;
     align-items:center;justify-content:center;flex:none;font-family:var(--mono);white-space:nowrap;overflow:hidden;padding:0 1px;line-height:1}
+  /* A quantity step at its limit stays focusable (aria-disabled, not disabled), so it is dimmed here (#188). */
+  .vk-qty-btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
   .vk-seat-free{background:#ecfdf3;border-color:#34d399;color:#047857}
   .vk-seat-free:hover{background:#d1fae5}
   .vk-seat-mine{background:var(--warn);border-color:#d97706;color:#fff}
@@ -459,6 +488,10 @@
   .pe-modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #f1f5f9}
   .pe-modal-title{font-size:1.02rem;font-weight:800;color:#0f172a}
   .pe-modal-sub{font-size:.78rem;color:var(--muted);margin-top:2px}
+  /* policy-tree-map.js: an svg group draws no outline, so a focused node or pill thickens its border (#188). */
+  .node-body:focus,.add-pill:focus{outline:none}
+  /* Non-scaling, so the ring keeps its 3px however far the tree is zoomed out. */
+  .node-body:focus-visible>rect,.add-pill:focus-visible>rect{stroke:var(--primary);stroke-width:3px;vector-effect:non-scaling-stroke}
   .pe-modal-x{background:none;border:none;color:var(--faint);font-size:1.05rem;cursor:pointer;line-height:1}
   .pe-modal-b{padding:18px 20px;display:flex;flex-direction:column;gap:16px}
   .pe-modal-fields{display:flex;gap:18px;flex-wrap:wrap}
@@ -508,6 +541,9 @@
 
   /* ============ VENUE SCREEN ============ */
   .vz-crumb{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .vz-crumb-trail{color:var(--muted);font-size:13px}
+  /* The seat picker's h1 (#188), drawn as plain trail text. */
+  .vz-crumb-title{display:inline;margin:0;font:inherit;color:inherit}
   .vz-split{display:grid;grid-template-columns:1.7fr 1fr;gap:18px;align-items:start}
   .vz-split>*{min-width:0}
   .vz-canvas-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #f1f5f9;background:#fcfdfe}
@@ -551,6 +587,8 @@
   .ow-edit-split>*{min-width:0}
   .ow-link-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;cursor:pointer;text-decoration:none;color:#334155}
   .ow-link-row:hover{background:#f8fafc;border-color:var(--primary-light)}
+  /* The linked-editor rows are buttons (#188), drawn as the rows. */
+  button.ow-link-row{width:100%;background:none;font:inherit;text-align:left}
   .ow-venue-split{display:grid;grid-template-columns:1fr 1.2fr;gap:18px;align-items:start}
   .ow-card-actions{display:flex;gap:8px;padding:12px 16px;border-top:1px solid #f1f5f9}
   .ow-seated-editor{margin-top:14px;border-top:1px solid #f1f5f9;padding-top:14px}
@@ -606,6 +644,9 @@
   .lk-mini{min-height:34px;font-size:.8rem;color:var(--faint);flex:1;padding:7px 10px}
   .lk-daterow-sep{color:var(--faint)}
   .lk-select{cursor:pointer}
+  /* The popover fields' triggers are native buttons (#188): undo the browser's button look so they keep the field's. */
+  button.lk-input{width:100%;margin:0;color:inherit;text-align:left}
+  button.lk-chip{margin:0}
   .lk-select:hover{border-color:var(--border-strong)}
   .lk-caret-ic{color:var(--faint);margin-left:auto}
   .lk-pop-wrap [data-open] .lk-caret-ic{transform:rotate(180deg)}
@@ -621,13 +662,16 @@
   /* notifications panel */
   .lk-notif{width:374px;display:flex;flex-direction:column}
   .lk-notif-h{display:flex;align-items:center;justify-content:space-between;padding:6px 8px 9px}
-  .lk-notif-h b{font-size:.98rem}
+  .lk-notif-title{margin:0;font-size:.98rem;font-weight:700}
   .lk-notif-list{display:flex;flex-direction:column;max-height:340px;overflow-y:auto}
   .lk-notif-item{display:flex;gap:12px;align-items:flex-start;padding:11px 10px;border-radius:10px;border:none;background:none;
     cursor:pointer;text-align:left;width:100%;position:relative}
   .lk-notif-item:hover{background:#f6f8fb}
   .lk-notif-item.unread{background:#f3f8fd}
   .lk-notif-item.unread:hover{background:#eaf2fb}
+  /* An empty inbox's message: laid out as a row, but nothing to click. */
+  .lk-notif-empty{cursor:default}
+  .lk-notif-empty:hover{background:none}
   .lk-notif-ic{flex:none;width:34px;height:34px;border-radius:9px;background:#eef4fb;color:var(--primary);display:inline-flex;align-items:center;justify-content:center}
   .lk-notif-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
   .lk-notif-t{font-size:.86rem;font-weight:700;color:#0f172a;line-height:1.3}

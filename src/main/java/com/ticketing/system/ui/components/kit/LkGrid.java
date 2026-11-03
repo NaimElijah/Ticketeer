@@ -44,9 +44,15 @@ public class LkGrid extends Div {
         }
     }
 
+    private static final String SCOPE = "scope";
+    private static final String SCOPE_COL = "col";
+    // What a column without a visible header holds in every grid that has one: the row's buttons.
+    private static final String UNLABELLED_COLUMN = "Actions";
+
     private final List<Col> columns = new ArrayList<>();
     private final List<Object> rows = new ArrayList<>();
     private boolean dense;
+    private String name;
 
     public LkGrid() {
         addClassName("lk-grid-wrap");
@@ -54,6 +60,18 @@ public class LkGrid extends Div {
 
     public LkGrid dense() {
         dense = true;
+        return this;
+    }
+
+    /**
+     * Names the table, so a screen reader says which table it is on entering it (#188, WCAG 1.3.1). For a
+     * table that no visible heading right above it names. Call before {@link #build()}.
+     *
+     * @param tableName the table's accessible name, such as "Events"
+     * @return this grid, for chaining
+     */
+    public LkGrid name(String tableName) {
+        this.name = tableName;
         return this;
     }
 
@@ -84,12 +102,25 @@ public class LkGrid extends Div {
         removeAll();
         Element tbl = new Element("table");
         tbl.setAttribute("class", "lk-grid" + (dense ? " dense" : ""));
+        if (name != null) {
+            tbl.setAttribute(Lk.ARIA_LABEL, name);
+        }
 
         Element thead = new Element("thead");
         Element thr = new Element("tr");
         for (Col c : columns) {
             Element th = new Element("th");
-            th.setText(c.header == null ? "" : c.header);
+            th.setAttribute(SCOPE, SCOPE_COL);
+            if (c.header == null || c.header.isBlank()) {
+                // A column shown without a header, such as row actions, still says what it holds to a screen
+                // reader, which announces the header with each cell (#188, WCAG 1.3.1).
+                Element hidden = new Element("span");
+                hidden.setAttribute("class", Lk.VISUALLY_HIDDEN);
+                hidden.setText(UNLABELLED_COLUMN);
+                th.appendChild(hidden);
+            } else {
+                th.setText(c.header);
+            }
             StringBuilder s = new StringBuilder();
             if (c.align != null && c.align != Align.LEFT)
                 s.append("text-align:").append(c.align.css()).append(';');

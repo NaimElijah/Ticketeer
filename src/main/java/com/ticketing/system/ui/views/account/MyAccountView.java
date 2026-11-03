@@ -28,7 +28,7 @@ import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
@@ -37,6 +37,7 @@ import jakarta.annotation.security.PermitAll;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -48,6 +49,11 @@ import java.util.Map;
 @RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyAccountView extends LkPage {
 
+    private static final String ARIA_LABEL = "aria-label";
+    private static final String VIEW = "View";
+    private static final String REQUEST_REFUND = "Request Refund";
+    private static final String ORDER_PREFIX = "order #";
+    private static final String SEAT_SEPARATOR = ", seat ";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
 
@@ -60,6 +66,8 @@ public class MyAccountView extends LkPage {
      * laid out as the page's own, under the page's spacing.
      */
     private final Div content = new Div();
+    /** Each order's View button, by order id, as the last render made them. */
+    private final Map<Integer, NativeButton> orderViewButtons = new HashMap<>();
 
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
                          SessionIdentity sessionIdentity, DisplayTime displayTime) {
@@ -76,6 +84,7 @@ public class MyAccountView extends LkPage {
     /** Builds the page from the member's history, replacing whatever it showed. */
     private void render() {
         content.removeAll();
+        orderViewButtons.clear();
         Div hero = buildHero();
         content.add(hero);
         switch (presenter.loadHistory()) {
@@ -106,7 +115,8 @@ public class MyAccountView extends LkPage {
         avatar.addClassName("acct-hero-av");
 
         Div meta = new Div();
-        H2 welcome = new H2("Welcome back, " + first);
+        // The page's one h1, above the "My Orders" and "My Tickets" h2s (#188).
+        H1 welcome = new H1("Welcome back, " + first);
         welcome.getStyle().set("margin", "0").set("color", "#fff");
         Span sub = new Span("Track your orders, view tickets, and request refunds.");
         sub.getStyle().set("color", "rgba(255,255,255,0.9)").set("font-size", "14.5px");
@@ -175,13 +185,18 @@ public class MyAccountView extends LkPage {
             case FULL    -> new LkStatusDot(LkStatusDot.Tone.muted, "Refunded");
         });
 
-        NativeButton view = new NativeButton("View");
+        NativeButton view = new NativeButton(VIEW);
         view.addClassName("bz-link");
         view.getStyle().set("background", "none").set("border", "none").set("padding", "0").set("cursor", "pointer");
         view.addClickListener(e -> UI.getCurrent().navigate("receipt/" + r.orderReceiptId()));
+        // Every order row repeats View and Request Refund, so each names its order (#188).
+        String orderName = ORDER_PREFIX + r.orderReceiptId();
+        view.getElement().setAttribute(ARIA_LABEL, Lk.actionFor(VIEW, orderName));
+        orderViewButtons.put(r.orderReceiptId(), view);
 
         if (refundEligible(r)) {
-            NativeButton refund = new NativeButton("Request Refund");
+            NativeButton refund = new NativeButton(REQUEST_REFUND);
+            refund.getElement().setAttribute(ARIA_LABEL, Lk.actionFor(REQUEST_REFUND, orderName));
             refund.addClassName("bz-link");
             refund.getStyle().set("background", "none").set("border", "none").set("padding", "0")
                 .set("cursor", "pointer").set("margin-left", "14px");
@@ -210,6 +225,12 @@ public class MyAccountView extends LkPage {
                 // Rebuild in place, then tell: a browser reload would drop the toast and its reference
                 // (#187, UI-A21).
                 render();
+                // The rebuild removed the Request Refund button that had focus: focus the same order's View,
+                // which stays on its row (#188, WCAG 2.4.3).
+                NativeButton view = orderViewButtons.get(orderId);
+                if (view != null) {
+                    view.focus();
+                }
                 Toasts.success("Refund requested — reference " + s.reference()
                     + ". Processed in 3–5 business days.");
             }
@@ -256,7 +277,8 @@ public class MyAccountView extends LkPage {
         TicketStatus st = t.currentStatus();
         row.put("status", new LkStatusDot(statusTone(st), prettyStatus(st)));
 
-        LkIconBtn viewBtn = new LkIconBtn(new LkIcon("eye", 15), "View ticket + barcode");
+        LkIconBtn viewBtn = new LkIconBtn(new LkIcon("eye", 15), "View ticket + barcode")
+            .forRow(ticketName(t.eventName(), t.eventId(), t.seatNumber()));
         viewBtn.addClickListener(e -> BzTicketDialog.show(toTicketInfo(t)));
         row.put("act", viewBtn);
         grid.row(row);
@@ -293,6 +315,12 @@ public class MyAccountView extends LkPage {
     // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).
     private static String categoryLabel(String categoryName) {
         return categoryName == null || categoryName.isBlank() ? "—" : EventCategoryLabels.labelOf(categoryName);
+    }
+
+    // What names a ticket's row for its buttons: the event, and the seat when it has one.
+    private static String ticketName(String eventName, int eventId, String seat) {
+        String event = orElse(eventName, "Event #" + eventId);
+        return seat == null || seat.isBlank() ? event : event + SEAT_SEPARATOR + seat;
     }
 
     private static String orElse(String value, String fallback) {

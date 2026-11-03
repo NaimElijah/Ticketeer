@@ -6,6 +6,7 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -15,8 +16,10 @@ import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Focusable;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
@@ -37,6 +40,7 @@ import jakarta.annotation.security.PermitAll;
 public class CompanyRegistrationView extends LkPage {
 
     private final CompanyRegistrationPresenter presenter;
+    private final LkFormErrors errors = new LkFormErrors();
 
     private final TextField name = new TextField("Company name");
     private final TextArea description = new TextArea("Description");
@@ -60,6 +64,7 @@ public class CompanyRegistrationView extends LkPage {
         LkTextLimit.apply(name);
 
         description.setPlaceholder("What kind of events does this company produce?");
+        description.setRequired(true);
         description.setMinHeight("120px");
         description.setWidthFull();
         LkTextLimit.apply(description);
@@ -84,14 +89,15 @@ public class CompanyRegistrationView extends LkPage {
     }
 
     private void attemptRegister() {
+        errors.clear();
         if (name.isEmpty()) {
-            Toasts.failure("Please fill in a company name.");
+            refuse(name, "Please fill in a company name.");
             return;
         }
 
         String descriptionValue = description.getValue() == null ? "" : description.getValue().trim();
         if (descriptionValue.isEmpty()) {
-            Toasts.failure("Please provide a company description.");
+            refuse(description, "Please provide a company description.");
             return;
         }
 
@@ -107,7 +113,7 @@ public class CompanyRegistrationView extends LkPage {
             case CompanyRegistrationPresenter.Outcome.InvalidInput invalid ->
                 Toasts.failure(Lk.withReason("Please check the company details", invalid.reason()));
             case CompanyRegistrationPresenter.Outcome.NameTaken taken ->
-                Toasts.failure("That company name is already taken — please choose another.");
+                refuse(name, "That company name is already taken — please choose another.");
             case CompanyRegistrationPresenter.Outcome.Failure fail ->
                 Toasts.failure(Lk.withReason("Registration failed", fail.reason()));
         }
@@ -115,5 +121,12 @@ public class CompanyRegistrationView extends LkPage {
         if (outcome instanceof CompanyRegistrationPresenter.Outcome.Success) {
             UI.getCurrent().navigate(OwnerDashboardView.class);
         }
+    }
+
+    // The toast stays, but the field now carries the message too, and takes focus (#188).
+    private <F extends Component & HasValidationProperties & Focusable<?>> void refuse(F field, String message) {
+        errors.reject(field, message);
+        Toasts.failure(message);
+        errors.focusFirst();
     }
 }

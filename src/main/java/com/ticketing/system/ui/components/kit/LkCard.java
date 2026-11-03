@@ -3,6 +3,7 @@ package com.ticketing.system.ui.components.kit;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Footer;
+import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Header;
 import com.vaadin.flow.component.html.Section;
 
@@ -10,12 +11,15 @@ import com.vaadin.flow.component.html.Section;
  * Card surface — ports the React {@code Card} component (title, subtitle,
  * headerRight slot, padded body, optional footer, plus {@code accent} /
  * {@code danger} / {@code flush} flags).
+ *
+ * <p>The title is an {@code h2}, under the page's {@code h1}, so a screen-reader user
+ * can jump to the card by heading (#188; WCAG 1.3.1, 2.4.10; {@code HeadingStructureTest}).
  */
 public class LkCard extends Section {
 
     private final Header header = new Header();
     private final Div titleWrap = new Div();
-    private final Div titleText = new Div();
+    private final H2 titleText = new H2();
     private final Div subtitle = new Div();
     private final Div headerRight = new Div();
     private final Div body = new Div();
@@ -40,9 +44,24 @@ public class LkCard extends Section {
     }
 
     public LkCard title(String t) {
-        titleText.setText(t == null ? "" : t);
+        String text = t == null ? "" : t;
+        titleText.setText(text);
+        // An empty heading is still announced as a heading, so a card without a title has none.
+        titleText.setVisible(!text.isEmpty());
         ensureHeader();
         return this;
+    }
+
+    /**
+     * Moves focus to the card's title, so a screen reader announces it: for a card whose content was
+     * just swapped for another item's, such as an inbox's open conversation (#188, WCAG 2.4.3). The
+     * title becomes focusable from a script but is no Tab stop. Does nothing while the card has no title.
+     */
+    public void focusTitle() {
+        if (!titleText.isVisible()) {
+            return;
+        }
+        Lk.focusFromScript(titleText);
     }
 
     public LkCard subtitle(String s) {

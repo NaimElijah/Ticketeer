@@ -50,6 +50,8 @@ import jakarta.annotation.security.PermitAll;
 @RequireCapability(Capability.EDIT_PURCHASE_POLICIES)
 public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObserver {
 
+    private static final String ARIA_PRESSED = "aria-pressed";
+
     private final PurchasePolicyEditorPresenter presenter;
 
     private Group   root;
@@ -142,8 +144,8 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         List<EventDetailDTO> events = switch (presenter.listEvents(memberToken, companyId)) {
             case ListOutcome.Loaded<EventDetailDTO> loaded -> loaded.items();
             case ListOutcome.Failure<EventDetailDTO> failure -> {
-                eventsErrorSlot.add(new LkBanner(LkBanner.Tone.error, new LkIcon("alert-circle", 16),
-                        Lk.withReason("Could not load this company's events", failure.reason())));
+                eventsErrorSlot.add(Lk.asAlert(new LkBanner(LkBanner.Tone.error, new LkIcon("alert-circle", 16),
+                        Lk.withReason("Could not load this company's events", failure.reason()))));
                 yield List.of();
             }
         };
@@ -190,7 +192,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         this.companyId = -1;
         this.eventId = -1;
         this.root = presenter.emptyPolicy();
-        loadErrorSlot.add(new LkBanner(LkBanner.Tone.error, new LkIcon("alert-circle", 16), message));
+        loadErrorSlot.add(Lk.asAlert(new LkBanner(LkBanner.Tone.error, new LkIcon("alert-circle", 16), message)));
         rebuildTree();
     }
 
@@ -215,7 +217,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
     }
 
     private void showLoadError(String message, Runnable retry) {
-        LkBanner err = new LkBanner(LkBanner.Tone.error, new LkIcon("alert-circle", 16), message);
+        LkBanner err = Lk.asAlert(new LkBanner(LkBanner.Tone.error, new LkIcon("alert-circle", 16), message));
         LkBtn retryBtn = new LkBtn("Retry").variant(LkBtn.Variant.secondary);
         retryBtn.addClickListener(ev -> retry.run());
         err.setAction(retryBtn);
@@ -268,6 +270,8 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
 
         Div status = new Div(); status.addClassName("pe-status");
         validityBadge = new Span(); validityBadge.addClassName("pe-valid");
+        // A status, so a screen reader announces the policy turning valid or invalid as it is edited (#188).
+        Lk.asStatus(validityBadge);
         status.add(validityBadge);
 
         bar.add(scope, status);
@@ -291,9 +295,12 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         rebuildTree();
     }
 
+    // The highlight shows the chosen scope only to the eye; aria-pressed tells a screen reader (#188).
     private void setScopeButtons() {
         if (isEventLevel) { eventBtn.addClassName("on"); companyBtn.removeClassName("on"); }
         else              { companyBtn.addClassName("on"); eventBtn.removeClassName("on"); }
+        companyBtn.getElement().setAttribute(ARIA_PRESSED, String.valueOf(!isEventLevel));
+        eventBtn.getElement().setAttribute(ARIA_PRESSED, String.valueOf(isEventLevel));
     }
 
     private void refreshScope() {
@@ -323,7 +330,8 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
         if (validityBadge == null) return;
         Validity v = presenter.validate(root);
         validityBadge.removeAll();
-        validityBadge.add(new Span("● "), new Span(v.valid() ? "Valid" : v.message()));
+        Span dot = Lk.decoration("● ");
+        validityBadge.add(dot, new Span(v.valid() ? "Valid" : v.message()));
         validityBadge.getStyle()
             .set("color", v.valid() ? "#16a34a" : "#dc2626")
             .set("font-size", "12.5px")

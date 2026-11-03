@@ -2,6 +2,7 @@ package com.ticketing.system.ui.components.company;
 
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.components.Toasts;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.components.kit.LkCol;
@@ -20,8 +21,8 @@ import java.util.function.Consumer;
 /**
  * Edit-manager-permissions dialog (V2-CADMIN-03). Shows the manager's name and
  * role, then one toggle per {@link Permission} — pre-checked from their current
- * grant set. Save collects the checked permissions' enum names and hands them to
- * the supplied callback (the view forwards them to
+ * grant set — in a group named "Permissions" (#188). Save collects the checked
+ * permissions' enum names and hands them to the supplied callback (the view forwards them to
  * {@code CompanyManagementService.editManagerPermissions}).
  *
  * <p>The dialog is fully built in the constructor (no UI context required); only
@@ -30,6 +31,10 @@ import java.util.function.Consumer;
  * a Manager must keep at least one permission.
  */
 public class EditPermissionsDialog {
+
+    private static final String PERMISSIONS = "Permissions";
+    // The rows inside the permissions group are spaced as the dialog's own rows are.
+    private static final int ROW_GAP = 14;
 
     private final Dialog dialog = new Dialog();
     private final Map<Permission, LkCheckRow> rows = new LinkedHashMap<>();
@@ -42,7 +47,7 @@ public class EditPermissionsDialog {
         dialog.setWidth("min(460px, 100vw - 32px)");
         dialog.setMaxWidth("92vw");
 
-        LkCol col = new LkCol().gap(14);
+        LkCol col = new LkCol().gap(ROW_GAP);
 
         Span who = new Span();
         who.getElement().setProperty("innerHTML", "<b>" + escape(managerName) + "</b>");
@@ -52,11 +57,13 @@ public class EditPermissionsDialog {
         col.add(header);
 
         List<String> current = currentPermissionNames == null ? List.of() : currentPermissionNames;
+        LkCol permissions = Lk.asGroup(new LkCol().gap(ROW_GAP), PERMISSIONS);
         for (Permission p : Permission.values()) {
             LkCheckRow row = new LkCheckRow(humanize(p.name()), current.contains(p.name()));
             rows.put(p, row);
-            col.add(row);
+            permissions.add(row);
         }
+        col.add(permissions);
 
         dialog.add(col);
 

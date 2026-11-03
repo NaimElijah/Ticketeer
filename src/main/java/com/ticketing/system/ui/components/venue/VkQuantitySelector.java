@@ -2,6 +2,7 @@ package com.ticketing.system.ui.components.venue;
 
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.ui.components.Money;
+import com.ticketing.system.ui.components.kit.Lk;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
@@ -9,9 +10,10 @@ import com.vaadin.flow.component.html.Span;
 /**
  * V2-RES-02 — quantity selector for a StandingZone.
  *
- * <p>Renders − / count / + buttons capped at {@code availableCount}.
- * A live price preview is kept in sync with every change:
- * "N tickets at $X.YZ each = $A.BC".
+ * <p>Renders − / count / + buttons capped at {@code availableCount}, named "Decrease quantity" and
+ * "Increase quantity". At a limit a button stays focusable and says it is unavailable
+ * ({@code aria-disabled}) instead of being disabled. A price preview, a polite live region, is
+ * kept in sync with every change: "N tickets at $X.YZ each = $A.BC" (#188, WCAG 4.1.3).
  *
  * <p>Minimum selectable quantity is 1; the component starts there
  * automatically when any tickets are available. When {@code availableCount}
@@ -21,6 +23,11 @@ import com.vaadin.flow.component.html.Span;
  * {@link InventorySelectionDTO} for the reservation service.
  */
 public class VkQuantitySelector extends Div {
+
+    private static final String ARIA_LABEL = "aria-label";
+    private static final String DECREASE = "Decrease quantity";
+    private static final String INCREASE = "Increase quantity";
+    private static final String ARIA_DISABLED = "aria-disabled";
 
     private int quantity;
     private final int maxQuantity;
@@ -42,6 +49,8 @@ public class VkQuantitySelector extends Div {
 
         minusBtn = new NativeButton("−");
         minusBtn.addClassName("vk-qty-btn");
+        // Named for what it does; the glyph alone reads as "minus" or not at all (#188).
+        minusBtn.getElement().setAttribute(ARIA_LABEL, DECREASE);
         minusBtn.addClickListener(e -> decrement());
 
         countDisplay = new Span();
@@ -49,13 +58,15 @@ public class VkQuantitySelector extends Div {
 
         plusBtn = new NativeButton("+");
         plusBtn.addClassName("vk-qty-btn");
+        plusBtn.getElement().setAttribute(ARIA_LABEL, INCREASE);
         plusBtn.addClickListener(e -> increment());
 
         Div stepper = new Div();
         stepper.addClassName("vk-qty-stepper");
         stepper.add(minusBtn, countDisplay, plusBtn);
 
-        pricePreview = new Span();
+        // A status before its first text, so each new count and price is announced (#188).
+        pricePreview = Lk.asStatus(new Span());
         pricePreview.addClassName("vk-qty-price");
 
         add(stepper, pricePreview);
@@ -102,8 +113,10 @@ public class VkQuantitySelector extends Div {
 
     private void refresh() {
         countDisplay.setText(String.valueOf(quantity));
-        minusBtn.setEnabled(quantity > 1);
-        plusBtn.setEnabled(quantity < maxQuantity);
+        // aria-disabled, not disabled: a disabled button drops the focus the user stepped to the limit with.
+        // increment and decrement refuse to pass the limit themselves.
+        markUnavailable(minusBtn, quantity <= 1);
+        markUnavailable(plusBtn, quantity >= maxQuantity);
         if (maxQuantity == 0) {
             pricePreview.setText("Sold out");
         } else {
@@ -112,6 +125,10 @@ public class VkQuantitySelector extends Div {
             pricePreview.setText(quantity + " ticket" + (quantity == 1 ? "" : "s")
                 + " at " + Money.format(priceCentsEach) + " each = " + Money.format(totalCents));
         }
+    }
+
+    private static void markUnavailable(NativeButton button, boolean unavailable) {
+        button.getElement().setAttribute(ARIA_DISABLED, String.valueOf(unavailable));
     }
 
     private void notifyChange() {

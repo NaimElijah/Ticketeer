@@ -10,12 +10,16 @@ import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
 import com.ticketing.system.ui.support.EventCategoryLabels;
+import com.ticketing.system.ui.views.catalog.EventDetailsView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
 import java.time.LocalDateTime;
@@ -40,6 +44,8 @@ public class LandingView extends LkPage {
 
     // A colour family BzPoster does not know, so it draws its neutral gradient.
     private static final String NEUTRAL_POSTER_GRADIENT = "";
+    // EventDetailsView's route parameter.
+    private static final String EVENT_ID = "eventId";
 
     private final LandingPresenter presenter;
 
@@ -59,7 +65,8 @@ public class LandingView extends LkPage {
     private Component buildHero() {
         Div hero = new Div();
         hero.addClassName("bz-hero");
-        Div title = new Div();
+        // The page's one h1 (#188).
+        H1 title = new H1();
         title.addClassName("bz-hero-title");
         title.setText("Find your next unforgettable experience.");
         Div sub = new Div();
@@ -102,7 +109,7 @@ public class LandingView extends LkPage {
     private BzPoster poster(EventSummaryDTO e) {
         return new BzPoster(posterGradient(e.category()), EventCategoryLabels.labelOf(e.category()),
                 e.name(), meta(e), priceLabel(e))
-            .onClick(() -> UI.getCurrent().navigate("events/" + e.eventId()));
+            .linkTo(EventDetailsView.class, new RouteParameters(EVENT_ID, String.valueOf(e.eventId())));
     }
 
     private Component emptyFeatured() {
@@ -164,17 +171,20 @@ public class LandingView extends LkPage {
     }
 
     // Each card is a category that exists, under the label that filters Browse to it (#187, UI-A6).
-    private Div categoryCard(EventCategory category, String iconName, String g1, String g2) {
+    // A button, named by its category, so a keyboard reaches it (#188); it holds only spans, as a
+    // button's content must be phrasing content.
+    private NativeButton categoryCard(EventCategory category, String iconName, String g1, String g2) {
         String name = EventCategoryLabels.label(category);
-        Div card = new Div();
+        NativeButton card = new NativeButton();
         card.getStyle()
             .set("background", "linear-gradient(135deg, " + g1 + ", " + g2 + ")")
             .set("border-radius", "12px").set("padding", "22px")
             .set("color", "#fff").set("cursor", "pointer")
             .set("box-shadow", "0 4px 14px -6px rgba(15,23,42,0.25)")
-            .set("display", "flex").set("flex-direction", "column").set("gap", "10px");
+            .set("display", "flex").set("flex-direction", "column").set("gap", "10px")
+            .set("border", "none").set("font", "inherit").set("text-align", "left");
 
-        Div iconWrap = new Div();
+        Span iconWrap = new Span();
         iconWrap.getStyle()
             .set("width", "44px").set("height", "44px")
             .set("background", "rgba(255,255,255,0.18)")

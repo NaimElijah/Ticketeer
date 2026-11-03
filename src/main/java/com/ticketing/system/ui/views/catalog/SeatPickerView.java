@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.views.catalog;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.ticketing.system.sales.config.ReservationHoldProperties;
@@ -7,6 +8,7 @@ import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.domain.ZoneType;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
+import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
@@ -24,11 +26,15 @@ import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
 import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.views.order.CartView;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Text;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
+import com.vaadin.flow.router.RouteParameters;
+import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
@@ -46,6 +52,10 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     // Derived from the tile size so seats never overlap or drift — one source of truth.
     private static final int SEAT_STEP = VkSeatedZonePicker.TILE_PX + 6;
     private static final String RESERVE_FAILED = "Couldn't reserve those tickets";
+    private static final String SEAT = "seat ";
+    private static final String BACK_ARROW = "← ";
+    private static final String BACK_TO_AREAS = "Back to areas";
+    private static final String EVENT_ID = "eventId";
 
     private final SeatPickerPresenter presenter;
     /** The configured hold, so the page says how long seats stay locked (#187, UI-A18). */
@@ -58,6 +68,11 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
 
     private VkSeatedZonePicker seatPicker;
     private LkCol selectionListCol;
+    /** What the rail holds, said to a screen reader on each pick (#188). */
+    private final Span selectionSummary = Lk.asStatus(new Span());
+    /** The rail's remove buttons, in seat order, and its hint while empty, as the last rebuild made them. */
+    private final List<LkRemoveButton> railRemoveButtons = new ArrayList<>();
+    private Span railHint;
     private VkQuantitySelector qtySelector;
     private LkBtn holdButton;
     private final Div bodyHolder = new Div();
@@ -129,7 +144,9 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         header.addClassName("vz-canvas-h");
         Span name = new Span();
         name.getElement().setProperty("innerHTML", "<b>" + escape(zone.getName()) + "</b>");
-        Span sub = Lk.muted(" · click a green seat to select");
+        // The instructions name no colour, which a colour-blind user cannot go by; each seat says its
+        // state in its name (#188, WCAG 1.3.3, 1.4.1).
+        Span sub = Lk.muted(" · choose an available seat to select it");
         sub.getStyle().set("font-size", "13px");
         Div title = new Div();
         title.add(name, sub);
@@ -161,7 +178,10 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         LkCol rail = new LkCol().gap(14);
         LkCard selection = new LkCard("Your Selection").pad(16);
         selectionListCol = new LkCol().gap(10);
-        selection.add(selectionListCol);
+        // The rail is rebuilt on every pick, so its summary is said by a status that outlives it; heard, not
+        // shown, since the rail already shows it (#188, WCAG 4.1.3).
+        selectionSummary.addClassName(Lk.VISUALLY_HIDDEN);
+        selection.add(selectionListCol, selectionSummary);
         rail.add(selection);
         updateSelectionRail();
         return rail;
@@ -172,12 +192,19 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
             return;
         }
         selectionListCol.removeAll();
+        railRemoveButtons.clear();
+        railHint = null;
         List<String> labels = seatPicker.hasSelection()
                 ? seatPicker.getSelection().getSeatNumbers() : List.of();
+        String seatCount = labels.size() + " seat" + (labels.size() == 1 ? "" : "s");
+        double total = labels.size() * zonePrice;
+        selectionSummary.setText(labels.isEmpty() ? "No seats selected"
+            : seatCount + " selected, " + money(total) + " in total");
         if (labels.isEmpty()) {
-            Span hint = Lk.muted("Click a green seat above to select.");
+            Span hint = Lk.muted("Choose an available seat above to select it.");
             hint.getStyle().set("text-align", "center").set("display", "block").set("padding", "8px 0");
             selectionListCol.add(hint);
+            railHint = hint;
             return;
         }
         Div list = new Div();
@@ -188,15 +215,14 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         selectionListCol.add(list);
         selectionListCol.add(Lk.divider());
 
-        double total = labels.size() * zonePrice;
         LkRow totalRow = new LkRow().justify("space-between");
-        totalRow.add(Lk.muted(labels.size() + " seat" + (labels.size() == 1 ? "" : "s")));
+        totalRow.add(Lk.muted(seatCount));
         Span totalDisplay = new Span();
         totalDisplay.getElement().setProperty("innerHTML", "<b style='font-size:16px'>" + money(total) + "</b>");
         totalRow.add(totalDisplay);
         selectionListCol.add(totalRow);
 
-        selectionListCol.add(new LkBtn("Add to Cart →")
+        selectionListCol.add(new LkBtn("Add to Cart").arrow(true)
             .variant(LkBtn.Variant.primary).size(LkBtn.Size.l).full()
             .onClick(e -> reserveSeated()));
     }
@@ -211,16 +237,27 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         subline.getStyle().set("font-size", "12.5px").set("display", "block");
         info.add(name, subline);
 
-        Span remove = new Span();
-        remove.addClassName("vz-selseat-x");
-        remove.add(new LkIcon("close", 15));
-        remove.getElement().addEventListener("click", e -> {
-            if (seatPicker != null) {
+        LkRemoveButton remove = new LkRemoveButton(SEAT + label, new LkIcon("close", 15), () -> {
+            if (seatPicker != null && seatPicker.hasSelection()) {
+                int position = seatPicker.getSelection().getSeatNumbers().indexOf(label);
                 seatPicker.deselect(label);
+                focusAfterRemove(position);
             }
         });
+        remove.addClassName("vz-selseat-x");
+        railRemoveButtons.add(remove);
         row.add(info, remove);
         return row;
+    }
+
+    // The rebuild removed the remove button that had focus: focus the one now at its place, the next seat's,
+    // or the last seat's when the last went; with the rail empty, its hint saying what to do (#188, WCAG 2.4.3).
+    private void focusAfterRemove(int position) {
+        if (!railRemoveButtons.isEmpty()) {
+            railRemoveButtons.get(Math.min(Math.max(position, 0), railRemoveButtons.size() - 1)).focus();
+        } else if (railHint != null) {
+            Lk.focusFromScript(railHint);
+        }
     }
 
     private void reserveSeated() {
@@ -302,11 +339,17 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private Component buildBreadcrumb(String trailText) {
         Div crumb = new Div();
         crumb.addClassName("vz-crumb");
-        Span back = new Span("← Back to areas");
+        RouterLink back = new RouterLink();
+        back.setRoute(EventDetailsView.class, new RouteParameters(EVENT_ID, String.valueOf(eventId)));
         back.addClassName("bz-link");
-        back.getElement().addEventListener("click", e -> UI.getCurrent().navigate("events/" + eventId));
-        Span trail = Lk.muted(" / " + trailText + " · " + money(zonePrice));
-        trail.getStyle().set("font-size", "13px");
+        // The arrow is decoration; the link is named "Back to areas".
+        back.add(Lk.decoration(BACK_ARROW), new Text(BACK_TO_AREAS));
+        // The zone is what the page is about, so its name is the page's one h1 (#188), drawn as the
+        // muted trail it sits in.
+        H1 zoneTitle = new H1(trailText);
+        zoneTitle.addClassName("vz-crumb-title");
+        Div trail = new Div(new Text(" / "), zoneTitle, new Text(" · " + money(zonePrice)));
+        trail.addClassName("vz-crumb-trail");
         crumb.add(back, trail);
         return crumb;
     }
@@ -316,7 +359,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         LkCol col = new LkCol().gap(9);
         col.add(lockLegendRow("mine", "<b>In your order</b> — held for you for "
             + hold.ticketReservationDuration() + " min."));
-        col.add(lockLegendRow("held", "<b>Locked by others</b> — another buyer is mid-purchase."));
+        col.add(lockLegendRow("held", "<b>Reserved</b>: held while a buyer completes a purchase."));
         col.add(lockLegendRow("sold", "<b>Sold</b> — already purchased."));
         Span fine = Lk.muted("Two buyers can never hold the same seat — first tap wins.");
         fine.getStyle().set("font-size", "12px").set("margin-top", "2px").set("display", "block");
@@ -347,7 +390,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         grid.add(stateCell(VkSeat.State.free, "", "Available", "Tap to hold"));
         grid.add(stateCell(VkSeat.State.mine, "12", "In your order",
             "Locked " + hold.ticketReservationDuration() + " min"));
-        grid.add(stateCell(VkSeat.State.held, "12", "Locked by others", "Live update"));
+        grid.add(stateCell(VkSeat.State.held, "12", "Reserved", "Live update"));
         grid.add(stateCell(VkSeat.State.sold, "12", "Sold", "Unavailable"));
         card.add(grid);
         return card;
@@ -356,7 +399,8 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private Div stateCell(VkSeat.State state, String num, String title, String sub) {
         Div cell = new Div();
         cell.addClassName("vz-state-cell");
-        VkSeat seat = new VkSeat(state, num);
+        // The key's text says what the colour means; the seat is only a swatch (#188).
+        VkSeat seat = new VkSeat(state, num).decorative();
         Div meta = new Div();
         Span t = new Span();
         t.getElement().setProperty("innerHTML", "<b style='font-size:13.5px'>" + title + "</b>");

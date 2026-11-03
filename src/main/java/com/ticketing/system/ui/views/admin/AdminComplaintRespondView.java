@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
+import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -43,16 +44,20 @@ import java.util.List;
 @RequireCapability(Capability.MANAGE_COMPLAINTS)
 public class AdminComplaintRespondView extends LkPage implements BeforeEnterObserver {
 
+    private static final String WRITE_RESPONSE = "Please write a response.";
+
     private final AdminComplaintQueuePresenter presenter;
     private final DisplayTime displayTime;
     private final Div content = new Div();
     private final TextArea reply = new TextArea("Your response");
+    private final LkFormErrors errors = new LkFormErrors();
 
     private String conversationId;
 
     public AdminComplaintRespondView(AdminComplaintQueuePresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;
+        reply.setRequired(true);
         LkTextLimit.apply(reply);
         title("Respond to Complaint");
         add(content);
@@ -108,8 +113,12 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
     }
 
     private void submit() {
+        errors.clear();
         if (reply.isEmpty()) {
-            Toasts.failure("Please write a response.");
+            // The toast stays, but the reply field now carries the message too, and takes focus (#188).
+            errors.reject(reply, WRITE_RESPONSE);
+            Toasts.failure(WRITE_RESPONSE);
+            errors.focusFirst();
             return;
         }
         switch (presenter.respond(AuthSession.token(), conversationId, reply.getValue())) {
