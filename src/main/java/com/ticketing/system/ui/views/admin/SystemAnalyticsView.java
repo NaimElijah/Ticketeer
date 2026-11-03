@@ -41,7 +41,8 @@ import java.util.Locale;
  * presenter's sealed outcomes and never calls services directly. The KPI numbers
  * refresh on open, on the manual "Refresh" button, and on a poll tick
  * ({@link SystemAnalyticsPresenter#refreshIntervalMs()}); the Open/Close buttons
- * are built once so a refresh never drops a click.
+ * are built once so a refresh never drops a click. While the poll is on, a
+ * "Pause auto-refresh" toggle stops and restarts it (#188, WCAG 2.2.2).
  */
 @Route(value = "admin/analytics", layout = PlatformAdminLayout.class)
 @PageTitle("System Analytics · Event Ticket Platform")
@@ -55,32 +56,46 @@ public class SystemAnalyticsView extends LkPage {
     // Seconds, since the self-heal re-checks WSEP every 30 s by default.
     private static final DateTimeFormatter CHECKED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", Locale.US);
     private static final String LAST_UPDATED = "Last updated ";
+    // One name in both states: aria-pressed says whether it is paused, and a name that flipped as well would
+    // contradict it, read as "Resume auto-refresh, pressed".
+    private static final String PAUSE_AUTO_REFRESH = "Pause auto-refresh";
+    private static final String ARIA_PRESSED = "aria-pressed";
+    private static final int NO_POLL = -1;
 
     private final LkBadge statusBadge = new LkBadge("—");
     private final Span marketDetail = new Span();
     private final Div statsSlot = new Div();
     /** When the figures were last loaded; a failed refresh leaves the last success's time. */
     private final Span lastUpdated = Lk.muted("");
+    /** The poll cadence in ms; {@code 0} or less means no auto-refresh, and then no pause toggle. */
+    private final int refreshIntervalMs;
+    private final LkBtn pauseToggle = new LkBtn(PAUSE_AUTO_REFRESH).variant(LkBtn.Variant.secondary);
+    private boolean paused;
 
     private Registration pollRegistration;
 
     public SystemAnalyticsView(SystemAnalyticsPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;
+        this.refreshIntervalMs = presenter.refreshIntervalMs();
 
         title("System Analytics");
         subtitle("Real-time and historical platform performance metrics.");
-        actions(
-            new LkBtn("Refresh").variant(LkBtn.Variant.secondary).onClick(e -> refreshData()),
-            new LkBtn("Back").variant(LkBtn.Variant.tertiary)
-                .icon(new LkIcon("arrowLeft", 15))
-                .onClick(e -> UI.getCurrent().navigate(AdminDashboardView.class))
-        );
+        LkBtn refresh = new LkBtn("Refresh").variant(LkBtn.Variant.secondary).onClick(e -> refreshData());
+        LkBtn back = new LkBtn("Back").variant(LkBtn.Variant.tertiary)
+            .icon(new LkIcon("arrowLeft", 15))
+            .onClick(e -> UI.getCurrent().navigate(AdminDashboardView.class));
+        if (refreshIntervalMs > 0) {
+            pauseToggle.getElement().setAttribute(ARIA_PRESSED, String.valueOf(paused));
+            pauseToggle.onClick(e -> togglePause());
+            actions(refresh, pauseToggle, back);
+        } else {
+            actions(refresh, back);
+        }
 
         add(buildMarketCard());
-        // The figures change on a timer, so the page says when they last did. Deliberately no live region:
-        // a screen reader would read every refresh, and there is no control to pause them (#188, WCAG 2.2.2,
-        // 4.1.3).
+        // The figures change on a timer, so the page says when they last did. Deliberately no live region: a
+        // screen reader would read every refresh. The pause toggle stops the timer (#188, WCAG 2.2.2, 4.1.3).
         lastUpdated.getStyle().set("font-size", "12.5px");
         add(lastUpdated);
         add(statsSlot);
@@ -198,21 +213,42 @@ public class SystemAnalyticsView extends LkPage {
     @Override
     protected void onAttach(AttachEvent attachEvent) {
         super.onAttach(attachEvent);
-        int ms = presenter.refreshIntervalMs();
-        if (ms > 0) {
-            UI ui = attachEvent.getUI();
-            ui.setPollInterval(ms);
-            pollRegistration = ui.addPollListener(e -> refreshData());
+        if (refreshIntervalMs > 0 && !paused) {
+            startPolling(attachEvent.getUI());
         }
     }
 
     @Override
     protected void onDetach(DetachEvent detachEvent) {
+        stopPolling(detachEvent.getUI());
+        super.onDetach(detachEvent);
+    }
+
+    private void togglePause() {
+        paused = !paused;
+        pauseToggle.getElement().setAttribute(ARIA_PRESSED, String.valueOf(paused));
+        getUI().ifPresent(ui -> {
+            if (paused) {
+                stopPolling(ui);
+            } else {
+                startPolling(ui);
+            }
+        });
+    }
+
+    private void startPolling(UI ui) {
+        if (pollRegistration == null) {
+            ui.setPollInterval(refreshIntervalMs);
+            pollRegistration = ui.addPollListener(e -> refreshData());
+        }
+    }
+
+    // Stopping the interval too, not only the listener, so a paused page sends no requests either.
+    private void stopPolling(UI ui) {
         if (pollRegistration != null) {
             pollRegistration.remove();
             pollRegistration = null;
         }
-        detachEvent.getUI().setPollInterval(-1);
-        super.onDetach(detachEvent);
+        ui.setPollInterval(NO_POLL);
     }
 }

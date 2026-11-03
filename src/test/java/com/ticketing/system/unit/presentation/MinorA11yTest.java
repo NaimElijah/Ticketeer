@@ -17,7 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -110,6 +114,9 @@ import com.ticketing.system.ui.views.company.ManagerListView;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.ticketing.system.ui.views.order.CartView;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.ComponentUtil;
+import com.vaadin.flow.component.PollEvent;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.dom.Element;
@@ -147,6 +154,7 @@ class MinorA11yTest {
     private static final Pattern MET = Pattern.compile("(?i)\\bmet\\b");
     // The hour and minute of a time, as a screen shows it whatever its full format.
     private static final DateTimeFormatter TIME_OF_DAY = DateTimeFormatter.ofPattern("HH:mm", Locale.US);
+    private static final int POLL_INTERVAL_MS = 5_000;
 
     private ViewHarness harness;
 
@@ -542,6 +550,69 @@ class MinorA11yTest {
             + live.stream().map(A11y::describe).toList());
     }
 
+    // ---- SystemAnalyticsView pause (WCAG 2.2.2, review Q) ----
+
+    @Test
+    void GivenTheAnalytics_WhenTheyLoad_ThenANamedToggleOffersToPauseTheAutoRefresh() {
+        SystemAnalyticsView view = new SystemAnalyticsView(pollingAnalyticsPresenter(), displayTime());
+
+        Element pause = pauseToggle(view);
+        assertEquals("false", pause.getAttribute("aria-pressed"),
+            "while the figures refresh on their own the pause toggle is not pressed: " + A11y.describe(pause));
+    }
+
+    @Test
+    void GivenTheAutoRefreshRunning_WhenTheAdminPressesPause_ThenTheToggleIsPressed() {
+        SystemAnalyticsView view = new SystemAnalyticsView(pollingAnalyticsPresenter(), displayTime());
+        harness.attach(view);
+
+        A11y.activate(pauseToggle(view));
+
+        assertEquals("true", pauseToggle(view).getAttribute("aria-pressed"),
+            "a paused auto-refresh must say so: " + A11y.describe(pauseToggle(view)));
+    }
+
+    @Test
+    void GivenTheAutoRefreshPaused_WhenAPollTicks_ThenTheFiguresAreNotReloaded() {
+        SystemAnalyticsPresenter presenter = pollingAnalyticsPresenter();
+        SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime());
+        harness.attach(view);
+        A11y.activate(pauseToggle(view));
+        clearInvocations(presenter);
+
+        pollTick();
+
+        verify(presenter, never()).load();
+    }
+
+    @Test
+    void GivenTheAutoRefreshPausedThenResumed_WhenAPollTicks_ThenTheFiguresReload() {
+        SystemAnalyticsPresenter presenter = pollingAnalyticsPresenter();
+        SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime());
+        harness.attach(view);
+        A11y.activate(pauseToggle(view));
+        A11y.activate(pauseToggle(view));
+        clearInvocations(presenter);
+
+        pollTick();
+
+        assertEquals("false", pauseToggle(view).getAttribute("aria-pressed"), "a resumed auto-refresh is not paused");
+        verify(presenter, times(1)).load();
+    }
+
+    // Kept: the auto-refresh the toggle pauses is real, so the pause tests above are not vacuous.
+    @Test
+    void GivenTheAutoRefreshRunning_WhenAPollTicks_ThenTheFiguresReload() {
+        SystemAnalyticsPresenter presenter = pollingAnalyticsPresenter();
+        SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime());
+        harness.attach(view);
+        clearInvocations(presenter);
+
+        pollTick();
+
+        verify(presenter, times(1)).load();
+    }
+
     // ---- cart-hold chip ----
 
     @Test
@@ -834,6 +905,30 @@ class MinorA11yTest {
         public Instant instant() {
             return now;
         }
+    }
+
+    // The analytics presenter with the auto-refresh on, as it is outside tests.
+    private static SystemAnalyticsPresenter pollingAnalyticsPresenter() {
+        SystemAnalyticsPresenter presenter = analyticsPresenter();
+        when(presenter.refreshIntervalMs()).thenReturn(POLL_INTERVAL_MS);
+        return presenter;
+    }
+
+    // The control that pauses and resumes the auto-refresh: a toggle button (aria-pressed) named for it.
+    private static Element pauseToggle(Component view) {
+        return A11y.elements(view, e -> A11y.isButton(e) && e.hasAttribute("aria-pressed")
+                && Pattern.compile("(?i)pause|auto-?refresh").matcher(A11y.name(e)).find())
+            .stream()
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("figures that refresh on their own need a toggle button "
+                + "(aria-pressed) named to pause the auto-refresh (WCAG 2.2.2); the page's buttons are "
+                + A11y.elements(view, A11y::isButton).stream().map(A11y::describe).toList()));
+    }
+
+    // A poll tick from the browser, as UI.setPollInterval makes it send.
+    private static void pollTick() {
+        UI ui = UI.getCurrent();
+        ComponentUtil.fireEvent(ui, new PollEvent(ui, true));
     }
 
     private static SystemAnalyticsPresenter analyticsPresenter() {
