@@ -39,7 +39,8 @@ import java.util.Map;
  */
 public class PlatformAdminLayout extends AppLayout implements AfterNavigationObserver {
 
-    private static final String OPEN_NAVIGATION = "Open navigation";
+    // Neutral, so it stays true whether the drawer is open or closed: the toggle does both (#188).
+    private static final String DRAWER_TOGGLE_NAME = "Navigation menu";
 
     private static final Map<Class<?>, String> ADMIN_LABELS = Map.of(
         AdminDashboardView.class,      "Admin Workspace",
@@ -63,7 +64,7 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
         // Opens the drawer once a narrow window or zoom collapses it (#188); added before the top bar,
         // which is re-added on every navigation, so it stays ahead of it.
         DrawerToggle drawerToggle = new DrawerToggle();
-        drawerToggle.setAriaLabel(OPEN_NAVIGATION);
+        drawerToggle.setAriaLabel(DRAWER_TOGGLE_NAME);
         addToNavbar(drawerToggle);
         rebuildTopBar();
         buildDrawerOnce();

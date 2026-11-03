@@ -1,8 +1,8 @@
 package com.ticketing.system.unit.presentation;
 
 import static com.ticketing.system.unit.presentation.ViewHarness.founderOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import java.util.List;
@@ -30,6 +30,9 @@ class DrawerToggleTest {
 
     // ---- F7: DrawerToggle in the workspace and admin shells (#188) ----
 
+    // Neutral, so it is true whether the drawer is open or closed (review A11).
+    private static final String NAME = "Navigation menu";
+
     private ViewHarness harness;
 
     @BeforeEach
@@ -43,7 +46,7 @@ class DrawerToggleTest {
     }
 
     @Test
-    void GivenAnOwnerInTheWorkspace_WhenTheShellRenders_ThenItHasANamedDrawerToggle() {
+    void GivenAnOwnerInTheWorkspace_WhenTheShellRenders_ThenItsDrawerToggleIsNamedNavigationMenu() {
         ViewHarness.signInMember();
         harness.memberships(founderOf(3, "Acme"));
 
@@ -51,7 +54,7 @@ class DrawerToggleTest {
     }
 
     @Test
-    void GivenAnAdmin_WhenTheAdminShellRenders_ThenItHasANamedDrawerToggle() {
+    void GivenAnAdmin_WhenTheAdminShellRenders_ThenItsDrawerToggleIsNamedNavigationMenu() {
         ViewHarness.signInAdmin();
 
         assertNamedDrawerToggle(new PlatformAdminLayout(mock(SignOutFlow.class), mock(NotificationBellPresenter.class)));
@@ -62,8 +65,8 @@ class DrawerToggleTest {
         assertFalse(toggles.isEmpty(), "the shell must offer a DrawerToggle to open its side navigation");
         for (DrawerToggle toggle : toggles) {
             String label = toggle.getAriaLabel().orElse(toggle.getElement().getProperty("ariaLabel", ""));
-            assertTrue(!label.isBlank(),
-                "the drawer toggle must carry an aria-label: " + A11y.describe(toggle.getElement()));
+            assertEquals(NAME, label, "the drawer toggle must carry the aria-label \"" + NAME + "\", which holds "
+                + "whether the drawer is open or closed: " + A11y.describe(toggle.getElement()));
         }
     }
 }
