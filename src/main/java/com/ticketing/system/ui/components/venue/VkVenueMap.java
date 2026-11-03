@@ -16,6 +16,8 @@ import java.util.function.Consumer;
 public class VkVenueMap extends Div {
 
     private static final String ARIA_PRESSED = "aria-pressed";
+    /** The tone of a zone nobody can pick, as its page marks a sold-out one. */
+    private static final String SOLD_OUT_TONE = "danger";
 
     /** Each zone's button, by zone id, so a page that rebuilt the map can put focus back on one. */
     private final Map<String, NativeButton> zoneButtons = new HashMap<>();
@@ -39,8 +41,14 @@ public class VkVenueMap extends Div {
             zb.addClassName("vk-zone");
             zb.addClassName("vk-zone-" + z.tone);
             if (z.id.equals(selectedId)) zb.addClassName("sel");
-            // The highlight shows the selected zone only to the eye (#188; SeatAndZoneStateTest).
-            zb.getElement().setAttribute(ARIA_PRESSED, String.valueOf(z.id.equals(selectedId)));
+            if (SOLD_OUT_TONE.equals(z.tone)) {
+                // It has no click listener, so as an enabled toggle it would be a control that does nothing;
+                // its note still says why when read (#188; SeatAndZoneStateTest).
+                zb.setEnabled(false);
+            } else {
+                // The highlight shows the selected zone only to the eye (#188; SeatAndZoneStateTest).
+                zb.getElement().setAttribute(ARIA_PRESSED, String.valueOf(z.id.equals(selectedId)));
+            }
             zb.getStyle()
                 .set("position", "absolute")
                 .set("top", z.top).set("left", z.left)
@@ -55,7 +63,7 @@ public class VkVenueMap extends Div {
                 note.addClassName("vk-zone-note");
                 zb.add(note);
             }
-            if (onPick != null && !"danger".equals(z.tone)) {
+            if (onPick != null && !SOLD_OUT_TONE.equals(z.tone)) {
                 zb.addClickListener(e -> onPick.accept(z.id));
             }
             zoneButtons.put(z.id, zb);

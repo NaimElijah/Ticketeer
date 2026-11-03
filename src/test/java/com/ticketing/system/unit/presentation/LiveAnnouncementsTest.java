@@ -359,7 +359,7 @@ class LiveAnnouncementsTest {
 
     private static VkSeat seat(SeatPickerView view, String label) {
         return find(view, VkSeat.class).stream()
-            .filter(s -> label.equals(s.getElement().getAttribute("title")))
+            .filter(s -> A11y.name(s.getElement()).startsWith("Seat " + label + ","))
             .findFirst()
             .orElseThrow(() -> new AssertionError("no seat " + label + " on the picker"));
     }

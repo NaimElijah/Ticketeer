@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -129,6 +130,65 @@ class SeatAndZoneStateTest {
             "a zone not selected is a toggle that is not pressed: " + A11y.describe(zone(map, "Balcony")));
     }
 
+    // A sold-out zone has no click listener: as an enabled toggle it would be a control that does nothing.
+    @Test
+    void GivenASoldOutZone_WhenTheVenueMapRenders_ThenItIsUnavailableAndNoToggle() {
+        VkVenueMap map = new VkVenueMap(List.of(
+            new VkVenueMap.Zone("floor", "Floor", "$50", "primary", null, "0", "0", "50%", "50%"),
+            new VkVenueMap.Zone("balcony", "Balcony", "$30", "danger", "Sold out", "0", "50%", "50%", "50%")),
+            "floor", false, id -> { });
+
+        Element soldOut = zone(map, "Balcony");
+        assertTrue(A11y.disabledForAt(soldOut), "a sold-out zone cannot be picked, so it must be disabled or "
+            + "aria-disabled=true: " + A11y.describe(soldOut));
+        assertFalse(soldOut.hasAttribute("aria-pressed"), "a zone that cannot be picked is no toggle, so it must "
+            + "carry no aria-pressed: " + A11y.describe(soldOut));
+    }
+
+    // ---- seat titles and the reserved state (review A7, C3) ----
+
+    @Test
+    void GivenASeat_WhenItRenders_ThenItsTitleIsAbsentOrItsName() {
+        Element seat = new VkSeat(VkSeat.State.free, "7").getElement();
+
+        assertTitleIsAbsentOrTheName(seat);
+    }
+
+    @Test
+    void GivenAFreeSeat_WhenItIsSelected_ThenItsTitleIsAbsentOrItsNewName() {
+        VkSeat seat = new VkSeat(VkSeat.State.free, "7");
+
+        seat.setState(VkSeat.State.mine);
+
+        assertTitleIsAbsentOrTheName(seat.getElement());
+    }
+
+    @Test
+    void GivenTheSeatPicker_WhenItRendersItsSeats_ThenEachSeatsTitleIsAbsentOrItsName() {
+        SeatPickerPresenter presenter = mock(SeatPickerPresenter.class);
+        when(presenter.loadZone(anyInt(), anyInt())).thenReturn(new SeatPickerPresenter.LoadOutcome.Loaded(
+            new InventoryZoneDTO(8, "Floor", "SEATED", 1, 1, 0, 0, 10.0,
+                List.of(new SeatDTO("A1", 1, 0, "AVAILABLE")), null), ZoneType.SEATED));
+        SeatPickerView view = new SeatPickerView(presenter, new ReservationHoldProperties(10));
+        view.beforeEnter(routeTo("eventId", "5", "zoneId", "8"));
+
+        List<Element> seats = A11y.elements(view, e -> e.getClassList().contains(SEAT_CLASS) && !A11y.ariaHidden(e));
+        assertFalse(seats.isEmpty(), "the picker shows no seat");
+        seats.forEach(SeatAndZoneStateTest::assertTitleIsAbsentOrTheName);
+    }
+
+    // The seat data says only that someone holds it, maybe the buyer, so the name must not say who.
+    @Test
+    void GivenAHeldSeat_WhenItRenders_ThenItsNameSaysReservedWithoutClaimingAnotherBuyer() {
+        String name = A11y.name(new VkSeat(VkSeat.State.held, "7").getElement());
+
+        assertTrue(Pattern.compile("(?i)\\breserved\\b").matcher(name).find(),
+            "a held seat must be named \"reserved\"; it is named \"" + name + "\"");
+        assertFalse(name.toLowerCase(Locale.ROOT).contains("another buyer"),
+            "nothing says who holds the seat, which may be the buyer themself, so its name must not say "
+                + "\"another buyer\": \"" + name + "\"");
+    }
+
     // ---- seats drawn for show ----
 
     @Test
@@ -158,6 +218,14 @@ class SeatAndZoneStateTest {
     }
 
     // ---- helpers ---------------------------------------------------------------------------------
+
+    // A title other than the name is read as a description after it, and goes stale as the state changes.
+    private static void assertTitleIsAbsentOrTheName(Element seat) {
+        String title = seat.getAttribute("title");
+        assertTrue(title == null || title.equals(A11y.name(seat)),
+            "a seat's title must be absent or say what its name says, not a stale or second description: "
+                + A11y.describe(seat) + " has title \"" + title + "\"");
+    }
 
     private static Element zone(VkVenueMap map, String label) {
         return A11y.elements(map, e -> "button".equals(A11y.role(e)) && A11y.name(e).contains(label)).stream()

@@ -10,11 +10,24 @@ import com.vaadin.flow.component.html.NativeButton;
  * colour; a free or selected seat is a toggle ({@code aria-pressed}), and a held or sold seat
  * is disabled, so a keyboard user does not tab through every seat nobody can pick, while its
  * name still says why when read (#188; WCAG 1.4.1, 2.4.3, 4.1.2; {@code SeatAndZoneStateTest}).
+ * A numbered seat's tooltip ({@code title}) is its name, kept in step with each state change: a
+ * different title would be read as a second description, and go stale.
  */
 public class VkSeat extends NativeButton {
 
+    /**
+     * A seat's state, each drawn in its own colour and said in words in the seat's name.
+     *
+     * <ul>
+     *   <li>{@code free}: nobody holds it; the buyer may pick it.</li>
+     *   <li>{@code mine}: the buyer's choice, picked on the page they are on.</li>
+     *   <li>{@code held}: reserved by a buyer and not yet paid for. The seat data does not say by whom,
+     *       so it may be the buyer's own reservation, and its name says only "reserved".</li>
+     *   <li>{@code sold}: paid for.</li>
+     * </ul>
+     */
     public enum State {
-        free("available"), mine("selected"), held("held by another buyer"), sold("sold");
+        free("available"), mine("selected"), held("reserved"), sold("sold");
 
         private final String spoken;
 
@@ -24,6 +37,7 @@ public class VkSeat extends NativeButton {
     }
 
     private static final String ARIA_LABEL = "aria-label";
+    private static final String TITLE = "title";
     private static final String ARIA_PRESSED = "aria-pressed";
     private static final String ARIA_HIDDEN = "aria-hidden";
     private static final String TABINDEX = "tabindex";
@@ -37,16 +51,22 @@ public class VkSeat extends NativeButton {
         addClassName("vk-seat");
         if (num != null) {
             setText(num);
-            getElement().setAttribute("title", "Seat " + num + " · " + state.name());
         }
         setState(state);
     }
 
-    /** Swaps the state CSS class and the state a screen reader hears, in place — avoids recreating the DOM node on toggle. */
+    /**
+     * Swaps the state CSS class, the state a screen reader hears and the tooltip, in place — avoids
+     * recreating the DOM node on toggle.
+     */
     public void setState(State state) {
         for (State s : State.values()) removeClassName("vk-seat-" + s.name());
         addClassName("vk-seat-" + state.name());
-        getElement().setAttribute(ARIA_LABEL, spokenName(state));
+        String name = spokenName(state);
+        getElement().setAttribute(ARIA_LABEL, name);
+        if (num != null) {
+            getElement().setAttribute(TITLE, name);
+        }
         boolean pickable = state == State.free || state == State.mine;
         setEnabled(pickable);
         if (pickable) {

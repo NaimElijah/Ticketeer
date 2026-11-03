@@ -361,7 +361,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         LkCol col = new LkCol().gap(9);
         col.add(lockLegendRow("mine", "<b>In your order</b> — held for you for "
             + hold.ticketReservationDuration() + " min."));
-        col.add(lockLegendRow("held", "<b>Locked by others</b> — another buyer is mid-purchase."));
+        col.add(lockLegendRow("held", "<b>Reserved</b>: held while a buyer completes a purchase."));
         col.add(lockLegendRow("sold", "<b>Sold</b> — already purchased."));
         Span fine = Lk.muted("Two buyers can never hold the same seat — first tap wins.");
         fine.getStyle().set("font-size", "12px").set("margin-top", "2px").set("display", "block");
@@ -392,7 +392,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
         grid.add(stateCell(VkSeat.State.free, "", "Available", "Tap to hold"));
         grid.add(stateCell(VkSeat.State.mine, "12", "In your order",
             "Locked " + hold.ticketReservationDuration() + " min"));
-        grid.add(stateCell(VkSeat.State.held, "12", "Locked by others", "Live update"));
+        grid.add(stateCell(VkSeat.State.held, "12", "Reserved", "Live update"));
         grid.add(stateCell(VkSeat.State.sold, "12", "Sold", "Unavailable"));
         card.add(grid);
         return card;
