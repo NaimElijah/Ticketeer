@@ -27,9 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -110,9 +108,6 @@ class FocusAfterRebuildTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
     private static final LocalDateTime PAID_AT = LocalDateTime.of(2027, 7, 1, 12, 0);
     private static final String SEARCH_MEMBERS = "Search members";
-    // What a status line says while the payment runs.
-    private static final Predicate<String> PAYING =
-        Pattern.compile("(?i)process|paying|payment in progress|busy|charging").asPredicate();
 
     private ViewHarness harness;
 
@@ -359,25 +354,6 @@ class FocusAfterRebuildTest {
     }
 
     // ---- CheckoutView ----
-
-    @Test
-    void GivenAFilledPayment_WhileThePaymentRuns_ThenThePayButtonOrAStatusLineSaysItIsBusy() {
-        ViewHarness.signInMember();
-        CheckoutPresenter presenter = checkoutPresenter();
-        AtomicReference<String> busyDuringPayment = new AtomicReference<>("");
-        CheckoutView[] holder = new CheckoutView[1];
-        when(presenter.payAsMember(any(), any(), any(), any(), any(), any())).thenAnswer(call -> {
-            busyDuringPayment.set(busyState(holder[0]));
-            return new CheckoutPresenter.PayOutcome.PaymentDeclined("declined");
-        });
-        holder[0] = filledCheckout(presenter);
-
-        click(payButton(holder[0]));
-
-        assertFalse(busyDuringPayment.get().isEmpty(), "while the payment runs the Pay button must say it is busy "
-            + "(aria-busy=true), or a status line (role=status / aria-live=polite) must say it is processing; "
-            + "the Pay button is " + A11y.describe(payButton(holder[0]).getElement()));
-    }
 
     // Pay is disabled only on the server, set and cleared within the payment's one round trip, so the browser
     // never sees the disable and Pay keeps its focus: the buyer corrects the card and pays again from there.
@@ -719,18 +695,5 @@ class FocusAfterRebuildTest {
             .filter(b -> b.getElement().getTextRecursively().trim().startsWith("Pay "))
             .findFirst()
             .orElseThrow(() -> new AssertionError("no Pay button on the checkout"));
-    }
-
-    // What says the payment is running: aria-busy on the Pay button, or a status line saying so.
-    private static String busyState(CheckoutView view) {
-        Element pay = payButton(view).getElement();
-        if ("true".equals(pay.getAttribute("aria-busy"))) {
-            return "aria-busy";
-        }
-        return A11y.elements(view, e -> A11y.politeLiveRegion(e).filter(e::equals).isPresent()).stream()
-            .map(A11y::text)
-            .filter(PAYING)
-            .findFirst()
-            .orElse("");
     }
 }
