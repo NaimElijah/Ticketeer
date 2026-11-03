@@ -13,7 +13,8 @@ import java.util.function.Consumer;
  *
  * <p>The trigger is a native button named "label: value" that says it opens a
  * popup, and each option is a radio that says whether it is chosen (#188; WCAG
- * 2.1.1, 4.1.2; {@code PopoverTriggerA11yTest}). The field is a {@code div}, not a
+ * 2.1.1, 4.1.2; {@code PopoverTriggerA11yTest}). A pick closes the list and returns
+ * focus to the trigger ({@code FocusAfterRebuildTest}). The field is a {@code div}, not a
  * {@code label}: a label would hand every click inside the popover to the trigger,
  * which toggles the popover.
  */
@@ -146,11 +147,20 @@ public class LkSelect extends Div {
             LkMenu.Item item = new LkMenu.Item(opt).choice(opt.equals(currentValue));
             item.onClick(() -> {
                 show(opt);
+                rebuildOptions(options);
+                closeAndFocusTrigger();
                 if (onChange != null)
                     onChange.accept(opt);
-                rebuildOptions(options);
             });
             menu.add(item);
         }
+    }
+
+    // A select takes one choice, and the rebuild has removed the option that had focus, so the list closes
+    // and focus goes back to the trigger (#188, PR #253 review; WCAG 2.4.3). It runs before onChange, so a
+    // view that rebuilds and refocuses the select in answer has the last word.
+    private void closeAndFocusTrigger() {
+        popover.close();
+        trigger.focus();
     }
 }

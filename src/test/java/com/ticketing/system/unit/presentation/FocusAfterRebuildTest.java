@@ -47,16 +47,21 @@ import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.CompanyDashboardDTO;
+import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.dto.MemberSearchResultDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.shared.dto.SeatDTO;
+import com.ticketing.system.ui.components.kit.LkDateRangeField;
 import com.ticketing.system.ui.components.kit.LkFilterChip;
+import com.ticketing.system.ui.components.kit.LkSelect;
 import com.ticketing.system.ui.components.kit.LkTextRows;
 import com.ticketing.system.ui.components.messaging.MdReplyBar;
 import com.ticketing.system.ui.components.venue.VkSeat;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
+import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
 import com.ticketing.system.ui.presenters.company.ManagerListPresenter;
@@ -75,6 +80,7 @@ import com.ticketing.system.ui.views.account.SupportInboxView;
 import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
 import com.ticketing.system.ui.views.admin.AdminInboxView;
 import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
+import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.ticketing.system.ui.views.catalog.EventDetailsView;
 import com.ticketing.system.ui.views.catalog.SeatPickerView;
 import com.ticketing.system.ui.views.company.CompanyInquiryRespondView;
@@ -85,6 +91,7 @@ import com.ticketing.system.ui.views.order.CartView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.NativeButton;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.router.AfterNavigationEvent;
@@ -108,6 +115,7 @@ class FocusAfterRebuildTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
     private static final LocalDateTime PAID_AT = LocalDateTime.of(2027, 7, 1, 12, 0);
     private static final String SEARCH_MEMBERS = "Search members";
+    private static final List<String> CATEGORIES = List.of("All categories", "Concerts", "Sports", "Theatre");
 
     private ViewHarness harness;
 
@@ -470,7 +478,81 @@ class FocusAfterRebuildTest {
             "removing the only recipient", "the member search field");
     }
 
+    // ---- LkSelect and LkDateRangeField picks (PR #253 review 1) ----
+
+    @Test
+    void GivenAnOpenSelect_WhenTheUserPicksAnOption_ThenFocusMovesToAnElementOutsideTheClosedList() {
+        LkSelect select = attached(new LkSelect("All categories", CATEGORIES).label("Category"));
+        openPopover(select);
+        Element concerts = option(select, "Concerts");
+
+        assertFocusLeavesTheList(select, () -> A11y.activate(concerts), "picking a category");
+    }
+
+    @Test
+    void GivenAnOpenSelect_WhenTheUserPicksAnOption_ThenThePopoverCloses() {
+        LkSelect select = attached(new LkSelect("All categories", CATEGORIES).label("Category"));
+        openPopover(select);
+
+        A11y.activate(option(select, "Concerts"));
+
+        assertPopoverClosed(select, "a select takes one choice");
+    }
+
+    @Test
+    void GivenAnOpenDateRange_WhenTheUserPicksAPreset_ThenFocusMovesToAnElementOutsideTheClosedList() {
+        LkDateRangeField range = attached(new LkDateRangeField().label("Date Range"));
+        openPopover(range);
+        Element today = option(range, "Today");
+
+        assertFocusLeavesTheList(range, () -> A11y.activate(today), "picking a date range");
+    }
+
+    @Test
+    void GivenAnOpenDateRange_WhenTheUserPicksAPreset_ThenThePopoverCloses() {
+        LkDateRangeField range = attached(new LkDateRangeField().label("Date Range"));
+        openPopover(range);
+
+        A11y.activate(option(range, "Today"));
+
+        assertPopoverClosed(range, "a date range takes one preset");
+    }
+
+    @Test
+    void GivenBrowse_WhenTheBuyerPicksACategory_ThenFocusMovesToAnElementOutsideTheClosedList() {
+        BrowseEventsView view = attached(browse());
+        LkSelect category = find(view, LkSelect.class).stream()
+            .filter(select -> A11y.text(select.getElement()).startsWith("Category"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Browse has no Category select"));
+        openPopover(category);
+        Element concerts = option(category, "Concerts");
+
+        assertFocusLeavesTheList(view, () -> A11y.activate(concerts), "picking a category on Browse");
+    }
+
     // ---- assertions ------------------------------------------------------------------------------
+
+    // The pick rebuilds the option list, so focus must be moved to an element on the page outside the
+    // list's popover: the trigger, in practice.
+    private void assertFocusLeavesTheList(Component root, Runnable pick, String what) {
+        int before = harness.focusTargets().size();
+
+        pick.run();
+
+        List<Element> focused = after(before);
+        assertTrue(focused.stream().anyMatch(t -> A11y.within(t, root.getElement()) && !inPopover(t)),
+            "after " + what + " the option pressed is gone with the rebuilt list, so focus must move to an element "
+                + "on the page outside the list (its trigger); the page asked to focus "
+                + focused.stream().map(A11y::describe).toList());
+    }
+
+    private static void assertPopoverClosed(Component field, String why) {
+        List<Popover> popovers = find(field, Popover.class);
+        assertFalse(popovers.isEmpty(), "the field has no popover");
+        assertTrue(popovers.stream().noneMatch(Popover::isOpened),
+            why + ", so its popover must close after a pick; it is still open");
+    }
 
     // The control used is still on the page, focusable and as the predicate wants it (updated in place, so
     // the browser kept focus on it), or the page asked to focus such an element.
@@ -539,6 +621,29 @@ class FocusAfterRebuildTest {
     }
 
     // ---- arrangement -----------------------------------------------------------------------------
+
+    // The user opens the list, as a click on the trigger does in the browser.
+    private static void openPopover(Component field) {
+        find(field, Popover.class).forEach(popover -> popover.setOpened(true));
+    }
+
+    private static boolean inPopover(Element e) {
+        for (Element a = e.getParent(); a != null; a = a.getParent()) {
+            if ("vaadin-popover".equals(a.getTag())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static BrowseEventsView browse() {
+        BrowseEventsPresenter presenter = mock(BrowseEventsPresenter.class);
+        when(presenter.search(any(), any())).thenReturn(new ListOutcome.Loaded<>(List.of(
+            new EventSummaryDTO(1, "Hamlet", "ON_SALE", null, "Acme", EventCategory.THEATER.name(), "Tel Aviv",
+                List.of(), ZoneOffset.UTC, 50.0, 50.0, false, List.of()))));
+        when(presenter.countries()).thenReturn(new ListOutcome.Loaded<>(List.of()));
+        return new BrowseEventsView(presenter, mock(SessionIdentity.class), displayTime());
+    }
 
     private static EventDetailsView eventPage() {
         EventDetailsPresenter presenter = mock(EventDetailsPresenter.class);

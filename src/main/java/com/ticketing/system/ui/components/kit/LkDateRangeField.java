@@ -14,7 +14,8 @@ import java.util.function.Consumer;
  *
  * <p>The trigger is a native button named "label: value" that says it opens a
  * popup, and each preset is a radio that says whether it is chosen (#188; WCAG
- * 2.1.1, 4.1.2; {@code PopoverTriggerA11yTest}). The field is a {@code div}, not a
+ * 2.1.1, 4.1.2; {@code PopoverTriggerA11yTest}). A pick closes the list and returns
+ * focus to the trigger ({@code FocusAfterRebuildTest}). The field is a {@code div}, not a
  * {@code label}, for the reason {@link LkSelect} gives.
  */
 public class LkDateRangeField extends Div {
@@ -108,12 +109,23 @@ public class LkDateRangeField extends Div {
         for (String preset : PRESETS) {
             LkMenu.Item item = new LkMenu.Item(preset).choice(preset.equals(currentValue));
             item.onClick(() -> {
-                if (preset.equals(currentValue)) return;
+                if (preset.equals(currentValue)) {
+                    closeAndFocusTrigger();
+                    return;
+                }
                 show(preset);
                 rebuild();
+                closeAndFocusTrigger();
                 if (onChange != null) onChange.accept(preset);
             });
             menu.add(item);
         }
+    }
+
+    // As LkSelect does: the field takes one preset, and the rebuild has removed the one that had focus, so the
+    // list closes and focus goes back to the trigger (#188, PR #253 review; WCAG 2.4.3).
+    private void closeAndFocusTrigger() {
+        popover.close();
+        trigger.focus();
     }
 }

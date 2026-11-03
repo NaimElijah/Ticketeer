@@ -67,6 +67,11 @@ public class LkPopover extends Div {
         return this;
     }
 
+    /** Closes the panel, as a pick in a list that takes one choice does; closing a closed panel does nothing. */
+    public void close() {
+        popover.close();
+    }
+
     public LkPopover position(PopoverPosition p) { popover.setPosition(p); return this; }
     public LkPopover width(String w)             { popover.setWidth(w); return this; }
     public LkPopover variant(PopoverVariant v)   { popover.addThemeVariants(v); return this; }
