@@ -30,6 +30,8 @@ public class OrgTreeLegend extends Composite<Div> {
         dot.addClassName("oc-avatar");
         dot.addClassName("oc-av-" + variant);
         dot.getStyle().set("width", "26px").set("height", "26px").set("font-size", "12px");
+        // The dot shows the role's colour; the role is in the text beside it (#188, WCAG 1.1.1).
+        dot.getElement().setAttribute("aria-hidden", "true");
 
         Span text = new Span();
         text.getElement().setProperty("innerHTML", "<b>" + roleLabel + "</b> · " + desc);

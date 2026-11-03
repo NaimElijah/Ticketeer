@@ -12,10 +12,14 @@ import java.util.stream.Collectors;
 
 public class OrgTreeRenderer extends Composite<Div> {
 
+    private static final String ROLE = "role";
+    private static final String ROLE_LIST = "list";
+    private static final String ARIA_HIDDEN = "aria-hidden";
+
     public OrgTreeRenderer(OrganizationalTreeNodeDTO root) {
         Div tree = getContent();
         tree.addClassName("org-chart");
-        UnorderedList ul = new UnorderedList();
+        UnorderedList ul = list();
         ul.add(buildNode(root));
         tree.add(ul);
     }
@@ -47,6 +51,8 @@ public class OrgTreeRenderer extends Composite<Div> {
         Span avatar = new Span(initial);
         avatar.addClassName("oc-avatar");
         avatar.addClassName("oc-av-" + variant);
+        // The initial repeats the name beside it (#188, WCAG 1.1.1).
+        avatar.getElement().setAttribute(ARIA_HIDDEN, "true");
 
         Div name = new Div(new Span(dto.username()));
         name.addClassName("oc-name");
@@ -64,10 +70,18 @@ public class OrgTreeRenderer extends Composite<Div> {
         li.add(ocCard);
 
         if (composite) {
-            UnorderedList kidsUl = new UnorderedList();
+            UnorderedList kidsUl = list();
             for (OrganizationalTreeNodeDTO child : dto.appointedByThisUser()) kidsUl.add(buildNode(child));
             li.add(kidsUl);
         }
         return li;
+    }
+
+    // The chart's styling drops the bullets, and Safari then stops calling the list a list; the role keeps
+    // the nesting, and how many each member appointed, audible (#188, WCAG 1.3.1).
+    private static UnorderedList list() {
+        UnorderedList ul = new UnorderedList();
+        ul.getElement().setAttribute(ROLE, ROLE_LIST);
+        return ul;
     }
 }
