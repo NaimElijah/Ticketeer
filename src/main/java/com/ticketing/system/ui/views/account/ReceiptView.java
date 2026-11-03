@@ -117,7 +117,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
         bodyHolder.add(buildStatusCard(receipt));
         if (receipt.refundStatus() != RefundStatus.NONE) {
-            bodyHolder.add(buildRefundTimeline(refunds));
+            bodyHolder.add(buildRefundTimeline(receipt.refundStatus(), refunds));
         }
         bodyHolder.add(Lk.h2("Items"));
         bodyHolder.add(buildItemsCard(receipt));
@@ -178,7 +178,8 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         }
     }
 
-    private Component buildRefundTimeline(Optional<ReceiptPresenter.Refunds> refunds) {
+    // Shown only once the order has a refund, so NONE does not reach it.
+    private Component buildRefundTimeline(RefundStatus status, Optional<ReceiptPresenter.Refunds> refunds) {
         LkCard card = new LkCard().pad(18);
         LkCol col = new LkCol().gap(10);
         // A section heading under the receipt's h1, beside "Items", "Payment" and "Tickets" (#188),
@@ -188,12 +189,13 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
             .set("font-size", "inherit").set("margin", "0");
         col.add(heading);
 
-        LkRow steps = new LkRow().gap(8);
-        steps.add(
-                new LkBadge("✓ Requested", LkBadge.Tone.success).small(),
-                new LkBadge("✓ Processing", LkBadge.Tone.success).small(),
-                new LkBadge("✓ Refunded", LkBadge.Tone.success).small());
-        col.add(steps);
+        // The refund's actual state, not three ticked steps whatever happened: a recorded refund has no
+        // "processing" stage, and a partial one is not every step done (#188, WCAG 1.3.1).
+        col.add(switch (status) {
+            case PARTIAL -> new LkBadge("Partly refunded", LkBadge.Tone.warn).small();
+            case FULL -> new LkBadge("Refunded", LkBadge.Tone.success).small();
+            case NONE -> throw new IllegalStateException("an order with no refund has no refund status card");
+        });
 
         refunds.ifPresent(r -> {
             Span note = Lk.muted("Refunded " + money(r.total())
