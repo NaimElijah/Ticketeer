@@ -54,10 +54,13 @@ public class SystemAnalyticsView extends LkPage {
     private static final DateTimeFormatter OPENED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.US);
     // Seconds, since the self-heal re-checks WSEP every 30 s by default.
     private static final DateTimeFormatter CHECKED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", Locale.US);
+    private static final String LAST_UPDATED = "Last updated ";
 
     private final LkBadge statusBadge = new LkBadge("—");
     private final Span marketDetail = new Span();
     private final Div statsSlot = new Div();
+    /** When the figures were last loaded; a failed refresh leaves the last success's time. */
+    private final Span lastUpdated = Lk.muted("");
 
     private Registration pollRegistration;
 
@@ -75,6 +78,11 @@ public class SystemAnalyticsView extends LkPage {
         );
 
         add(buildMarketCard());
+        // The figures change on a timer, so the page says when they last did. Deliberately no live region:
+        // a screen reader would read every refresh, and there is no control to pause them (#188, WCAG 2.2.2,
+        // 4.1.3).
+        lastUpdated.getStyle().set("font-size", "12.5px");
+        add(lastUpdated);
         add(statsSlot);
 
         refreshData();
@@ -125,6 +133,7 @@ public class SystemAnalyticsView extends LkPage {
                 applyStatus(ok.market());
                 statsSlot.removeAll();
                 statsSlot.add(buildStats(ok.analytics()));
+                lastUpdated.setText(LAST_UPDATED + displayTime.formatNow(CHECKED_FMT));
             }
             case SystemAnalyticsPresenter.Outcome.Failure f -> {
                 statsSlot.removeAll();

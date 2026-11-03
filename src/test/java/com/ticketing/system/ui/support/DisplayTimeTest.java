@@ -91,6 +91,13 @@ class DisplayTimeTest {
         assertThat(shown).isEqualTo("15 Jul 2026 · 20:00");
     }
 
+    @Test
+    void GivenClockAtMiddayUtc_WhenFormatNow_ThenShownAt1500InJerusalem() {
+        String shown = displayTime.formatNow(DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss"));
+
+        assertThat(shown).isEqualTo("15 Jul 2026 · 15:00:00");
+    }
+
     // A "since midnight today" range bound in Jerusalem is 21:00 the day before in UTC.
     @Test
     void GivenMidnightInJerusalem_WhenToRecorded_ThenThePreviousDayAt2100Utc() {
