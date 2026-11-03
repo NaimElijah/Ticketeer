@@ -169,7 +169,7 @@ class ClickOnlyControlsTest {
             List.of(new MemberSearchResultDTO(7, "bob"))));
         AdminSendMessagesView view = new AdminSendMessagesView(presenter, InboxViewHarness.displayTime());
 
-        field(view, TextField.class, "Recipients").setValue("bo");
+        field(view, TextField.class, "Search members").setValue("bo");
         activate(control(view, "bob"));
 
         assertRemover(view, "bob");

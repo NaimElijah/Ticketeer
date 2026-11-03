@@ -6,7 +6,6 @@ import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
-import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.components.kit.LkChip;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
@@ -27,6 +26,7 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.value.ValueChangeMode;
@@ -42,8 +42,9 @@ import java.util.Map;
 
 /**
  * Admin proactive outreach (II.6.3.2 — "Send Messages"). The admin composes a subject + body and
- * picks recipients three ways: search-and-add individual members (chips), "All members", or
- * "All producers". Each recipient receives a two-way DIRECT conversation in their Support Inbox.
+ * picks recipients three ways, in one "Recipients" radio group: chosen members (search-and-add,
+ * shown as chips), "All members", or "All producers". Each recipient receives a two-way DIRECT
+ * conversation in their Support Inbox.
  * Backed by {@link AdminSendMessagesPresenter} → {@code MessagingService}.
  */
 @Route(value = "admin/messages", layout = PlatformAdminLayout.class)
@@ -54,6 +55,11 @@ public class AdminSendMessagesView extends LkPage {
 
     private static final DateTimeFormatter SENT_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
     private static final String NO_RECIPIENT = "Add at least one recipient, or pick all members / all producers.";
+    private static final String RECIPIENTS = "Recipients";
+    private static final String SEARCH_MEMBERS = "Search members";
+    private static final String CHOSEN_MEMBERS = "Chosen members";
+    private static final String ALL_MEMBERS = "All members";
+    private static final String ALL_PRODUCERS = "All producers";
 
     private final AdminSendMessagesPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
@@ -61,13 +67,13 @@ public class AdminSendMessagesView extends LkPage {
 
     private final TextField subject = new TextField("Subject");
     private final TextArea body = new TextArea("Body");
-    private final TextField recipientSearch = new TextField("Recipients");
+    private final TextField recipientSearch = new TextField(SEARCH_MEMBERS);
     private final Div searchResults = new Div();
     private final Div recipientChips = new Div();
     /** Says how many members a search found and which recipient was added or removed (#188). */
     private final Span recipientStatus = Lk.asStatus(new Span());
-    private final LkCheckRow allMembers = new LkCheckRow("All members", false);
-    private final LkCheckRow allProducers = new LkCheckRow("All producers", false);
+    /** Who gets the message: the members chosen below, all members, or all producers. */
+    private final RadioButtonGroup<String> recipientMode = new RadioButtonGroup<>();
 
     /** Selected individual recipients: memberId → username (insertion-ordered). */
     private final Map<Integer, String> recipients = new LinkedHashMap<>();
@@ -116,18 +122,20 @@ public class AdminSendMessagesView extends LkPage {
         recipientChips.addClassName("md-recipient-chips");
         recipientChips.getStyle().set("display", "flex").set("flex-wrap", "wrap").set("gap", "6px");
 
-        // "All members" and "All producers" are mutually exclusive — checking one clears the other.
-        // (LkCheckRow.setChecked does not re-fire onToggle, so this can't loop.)
-        allMembers.onToggle(on -> { if (on) allProducers.setChecked(false); updateRecipientMode(); });
-        allProducers.onToggle(on -> { if (on) allMembers.setChecked(false); updateRecipientMode(); });
+        // The three choices exclude each other, so they are one radio group rather than two checkboxes that
+        // cleared each other (#188, WCAG 1.3.1, 4.1.2). It comes first: it decides whether the search applies.
+        // The group alone is "Recipients"; the search below is named for what it does (#188, WCAG 2.4.6).
+        recipientMode.setLabel(RECIPIENTS);
+        recipientMode.setItems(CHOSEN_MEMBERS, ALL_MEMBERS, ALL_PRODUCERS);
+        recipientMode.setValue(CHOSEN_MEMBERS);
+        recipientMode.addValueChangeListener(e -> updateRecipientMode());
 
         // Results and chips are rebuilt as the admin types and picks, so a status that outlives them says what
         // changed; heard, not shown, since both lists show it (#188, WCAG 4.1.3).
         recipientStatus.addClassName(Lk.VISUALLY_HIDDEN);
 
         LkCol col = new LkCol().gap(14);
-        col.add(subject, body, recipientSearch, recipientStatus, searchResults, recipientChips,
-                new LkRow(allMembers, allProducers).gap(16));
+        col.add(subject, body, recipientMode, recipientSearch, recipientStatus, searchResults, recipientChips);
         card.add(col);
 
         LkRow actions = new LkRow().gap(8).justify("flex-end");
@@ -138,9 +146,9 @@ public class AdminSendMessagesView extends LkPage {
         return card;
     }
 
-    /** When "All members"/"All producers" is checked, the search bar is greyed out and cleared. */
+    /** While "All members" or "All producers" is chosen, the search bar is greyed out and cleared. */
     private void updateRecipientMode() {
-        boolean bulk = allMembers.isChecked() || allProducers.isChecked();
+        boolean bulk = isBulk();
         recipientSearch.setEnabled(!bulk);
         if (bulk) {
             recipients.clear();
@@ -214,15 +222,14 @@ public class AdminSendMessagesView extends LkPage {
             refuse("Subject and body are required.");
             return;
         }
-        boolean bulk = allMembers.isChecked() || allProducers.isChecked();
-        if (!bulk && recipients.isEmpty()) {
+        if (!isBulk() && recipients.isEmpty()) {
             errors.reject(recipientSearch, NO_RECIPIENT);
             refuse(NO_RECIPIENT);
             return;
         }
         List<Integer> ids = new ArrayList<>(recipients.keySet());
         switch (presenter.send(AuthSession.token(), subject.getValue(), body.getValue(),
-                ids, allMembers.isChecked(), allProducers.isChecked())) {
+                ids, ALL_MEMBERS.equals(recipientMode.getValue()), ALL_PRODUCERS.equals(recipientMode.getValue()))) {
             case AdminSendMessagesPresenter.ActionOutcome.Success ok -> {
                 Toasts.success("Sent to " + String.format("%,d", ok.recipientCount()) + " recipient(s).");
                 clearComposer();
@@ -251,9 +258,12 @@ public class AdminSendMessagesView extends LkPage {
         searchResults.removeAll();
         recipients.clear();
         renderChips();
-        allMembers.setChecked(false);
-        allProducers.setChecked(false);
+        recipientMode.setValue(CHOSEN_MEMBERS);
         recipientSearch.setEnabled(true);
+    }
+
+    private boolean isBulk() {
+        return !CHOSEN_MEMBERS.equals(recipientMode.getValue());
     }
 
     // -- History --------------------------------------------------------------

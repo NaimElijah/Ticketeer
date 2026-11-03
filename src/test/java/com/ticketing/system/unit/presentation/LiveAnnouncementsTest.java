@@ -228,7 +228,7 @@ class LiveAnnouncementsTest {
         AdminSendMessagesView view = sendMessagesView();
         Set<Element> regionsBefore = Set.copyOf(politeRegions(view));
 
-        field(view, TextField.class, "Recipients").setValue("al");
+        field(view, TextField.class, "Search members").setValue("al");
 
         assertAnnouncedByAnExistingRegion(view, regionsBefore, Pattern.compile("\\b2\\b"),
             "the number of members found");
@@ -237,7 +237,7 @@ class LiveAnnouncementsTest {
     @Test
     void GivenSearchResults_WhenTheAdminAddsARecipient_ThenALiveRegionOnThePageAnnouncesTheRecipient() {
         AdminSendMessagesView view = sendMessagesView();
-        field(view, TextField.class, "Recipients").setValue("al");
+        field(view, TextField.class, "Search members").setValue("al");
         Set<Element> regionsBefore = Set.copyOf(politeRegions(view));
 
         click(buttons(view, "alice").get(0));

@@ -300,7 +300,7 @@ class ViewFailureReasonTest {
         when(presenter.searchUsers(any(), any())).thenReturn(new AdminSendMessagesPresenter.SearchOutcome.Failure(REASON));
         AdminSendMessagesView view = new AdminSendMessagesView(presenter, displayTime());
 
-        field(view, TextField.class, "Recipients").setValue("al");
+        field(view, TextField.class, "Search members").setValue("al");
 
         assertToastShows(REASON);
     }
