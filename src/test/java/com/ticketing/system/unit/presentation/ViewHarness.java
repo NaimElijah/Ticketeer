@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.mockito.Mockito;
@@ -72,11 +73,14 @@ final class ViewHarness implements AutoCloseable {
     static final int ADMIN_ID = 1;
 
     private static final Pattern TAG = Pattern.compile("<[^>]*>");
+    // A script focusing its Nth parameter: Focusable.focus() and callJsFunction("focus") both send one.
+    private static final Pattern FOCUS_CALL = Pattern.compile("\\$(\\d+)\\.focus\\(");
 
     private RecordingUi ui = new RecordingUi();
     // CurrentInstance keeps the current service weakly; this keeps it alive for the test.
     private final VaadinService service = stubRouterService();
     private final List<List<Object>> javaScript = new ArrayList<>();
+    private final List<Element> focused = new ArrayList<>();
     private CompanyManagementService companyManagementService;
     private CompanyManagementService bridgedBefore;
 
@@ -217,28 +221,36 @@ final class ViewHarness implements AutoCloseable {
             call.add(pending.getInvocation().getExpression());
             call.addAll(pending.getInvocation().getParameters());
             javaScript.add(call);
+            focusTarget(call).ifPresent(focused::add);
         }
         return new ArrayList<>(javaScript);
     }
 
     /**
-     * The element of every focus call queued so far, in order: what a component's {@code focus()} or a
-     * script calling {@code .focus()} on an element parameter asked the browser to focus. A call made on a
-     * component that was detached before the response is dropped, as the browser never sees it.
+     * The element of every focus call queued so far, in order: the element parameter a script calls
+     * {@code $N.focus(} on, as a component's {@code focus()} and {@code callJsFunction("focus")} do. A call
+     * counts only when its element can take focus when the call is sent (visible, enabled, and natively
+     * focusable or carrying a {@code tabindex}): the browser ignores focus on anything else. A call made on a
+     * component that was detached before the response is dropped, as the browser never sees it, and a
+     * script that focuses an element it looks up itself, such as the skip link's click handler, is no
+     * focus call.
      */
     List<Element> focusTargets() {
-        List<Element> targets = new ArrayList<>();
-        for (List<Object> call : javaScriptCalls()) {
-            if (!String.valueOf(call.get(0)).contains(".focus(")) {
-                continue;
-            }
-            call.subList(1, call.size()).stream()
-                .filter(Element.class::isInstance)
-                .map(Element.class::cast)
-                .reduce((first, last) -> last)
-                .ifPresent(targets::add);
+        javaScriptCalls();
+        return List.copyOf(focused);
+    }
+
+    // The element a call focuses: parameter N of its first "$N.focus(", when that element can take focus.
+    private static Optional<Element> focusTarget(List<Object> call) {
+        Matcher focusCall = FOCUS_CALL.matcher(String.valueOf(call.get(0)));
+        if (!focusCall.find()) {
+            return Optional.empty();
         }
-        return targets;
+        int index = Integer.parseInt(focusCall.group(1)) + 1;
+        if (index >= call.size() || !(call.get(index) instanceof Element target)) {
+            return Optional.empty();
+        }
+        return A11y.scriptFocusable(target) ? Optional.of(target) : Optional.empty();
     }
 
     /** {@code true} when something asked the browser to reload the page. */
@@ -256,6 +268,7 @@ final class ViewHarness implements AutoCloseable {
         UI.setCurrent(ui);
         ensureUiSession();
         javaScript.clear();
+        focused.clear();
     }
 
     /** The cell texts of column {@code header} of every grid table under {@code root}, top to bottom. */

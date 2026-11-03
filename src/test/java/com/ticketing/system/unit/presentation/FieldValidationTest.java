@@ -60,7 +60,6 @@ import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.select.Select;
@@ -474,10 +473,7 @@ class FieldValidationTest {
     }
 
     private static void assertRequired(Component field, String name) {
-        boolean required = field instanceof HasValue<?, ?> value && value.isRequiredIndicatorVisible()
-            || field.getElement().getProperty("required", false)
-            || "true".equals(field.getElement().getAttribute("aria-required"));
-        assertTrue(required, "\"" + name + "\" is enforced on submit, so it must show a required indicator: "
+        assertTrue(A11y.showsRequired(field), "\"" + name + "\" is enforced on submit, so it must show a required indicator: "
             + A11y.describe(field.getElement()));
     }
 

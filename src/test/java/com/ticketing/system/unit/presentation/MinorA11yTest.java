@@ -20,7 +20,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +51,7 @@ import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecor
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TransactionRecordDTO;
 import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.sales.domain.TicketStatus;
+import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.dto.AppointmentInfoDTO;
 import com.ticketing.system.shared.dto.CompanySummaryDTO;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
@@ -63,6 +69,7 @@ import com.ticketing.system.ui.components.kit.LkFilterChip;
 import com.ticketing.system.ui.components.kit.LkGrid;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkIconBtn;
+import com.ticketing.system.ui.components.kit.LkStat;
 import com.ticketing.system.ui.components.kit.LkTopBar;
 import com.ticketing.system.ui.components.venue.PolicyRule;
 import com.ticketing.system.ui.presenters.ListOutcome;
@@ -85,6 +92,7 @@ import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 import com.ticketing.system.ui.presenters.order.CartPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.account.MyInvitationsView;
 import com.ticketing.system.ui.views.account.MyProfileView;
@@ -137,6 +145,8 @@ class MinorA11yTest {
     private static final int ORDER_ID = 42;
     private static final Pattern NOT_MET = Pattern.compile("(?i)\\bnot met\\b");
     private static final Pattern MET = Pattern.compile("(?i)\\bmet\\b");
+    // The hour and minute of a time, as a screen shows it whatever its full format.
+    private static final DateTimeFormatter TIME_OF_DAY = DateTimeFormatter.ofPattern("HH:mm", Locale.US);
 
     private ViewHarness harness;
 
@@ -485,17 +495,51 @@ class MinorA11yTest {
                 + A11y.text(view.getElement()));
     }
 
-    // Kept: figures refreshed on a timer are not read out on every tick unless the user can pause them.
     @Test
-    void GivenTheAnalytics_WhenTheyLoad_ThenTheAutoUpdatingFiguresAreNotLiveUnlessTheyCanBePaused() {
+    void GivenTheAnalytics_WhenTheyLoad_ThenLastUpdatedShowsTheClocksTime() {
         SystemAnalyticsView view = new SystemAnalyticsView(analyticsPresenter(), displayTime());
 
-        boolean pausable = A11y.elements(view, e -> A11y.isButton(e)
-            && Pattern.compile("(?i)pause|stop auto").matcher(A11y.name(e)).find()).size() > 0;
-        List<Element> liveFigures = A11y.elements(view, e -> e.getText().equals("0.00") && A11y.inLiveRegion(e));
-        assertTrue(pausable || liveFigures.isEmpty(), "auto-updating figures in a live region would be read on "
-            + "every refresh; offer a pause control or keep them out of a live region: "
-            + liveFigures.stream().map(A11y::describe).toList());
+        String shown = lastUpdatedLine(view);
+        String now = displayTime().formatNow(TIME_OF_DAY);
+        assertTrue(shown.contains(now), "\"Last updated\" must give the time of the load, " + now
+            + " on the platform clock as DisplayTime shows it; it reads \"" + shown + "\"");
+    }
+
+    @Test
+    void GivenALoadedDashboard_WhenARefreshFails_ThenLastUpdatedStillShowsTheLastSuccess() {
+        MovableClock clock = new MovableClock(InboxViewHarness.NOW.toInstant(ZoneOffset.UTC));
+        DisplayTime displayTime = new DisplayTime(clock, new PlatformTimeProperties(ZoneOffset.UTC));
+        SystemAnalyticsPresenter presenter = analyticsPresenter();
+        when(presenter.load()).thenReturn(
+            new SystemAnalyticsPresenter.Outcome.Success(
+                new MarketStateDTO("OPEN", null, null, true, true, null, true),
+                new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5)),
+            new SystemAnalyticsPresenter.Outcome.Failure("analytics-down"));
+        SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime);
+        String loadedAt = displayTime.formatNow(TIME_OF_DAY);
+        clock.advance(Duration.ofMinutes(5));
+
+        click(buttons(view, "Refresh").get(0));
+
+        String shown = lastUpdatedLine(view);
+        assertTrue(shown.contains(loadedAt) && !shown.contains(displayTime.formatNow(TIME_OF_DAY)),
+            "a failed refresh updated nothing, so \"Last updated\" must still give the last success, " + loadedAt
+                + "; it reads \"" + shown + "\"");
+    }
+
+    // Kept: figures refreshed on a timer are not read out on every tick. Each stat's value is a figure,
+    // found by structure so the check holds whatever the figures are or how a locale writes them.
+    @Test
+    void GivenTheAnalytics_WhenTheyLoad_ThenTheAutoUpdatingFiguresAreNotLive() {
+        SystemAnalyticsView view = new SystemAnalyticsView(analyticsPresenter(), displayTime());
+
+        List<Element> figures = find(view, LkStat.class).stream()
+            .map(stat -> stat.getElement().getChild(1))
+            .toList();
+        assertEquals(8, figures.size(), "the dashboard shows eight figures: three counts and five rates");
+        List<Element> live = figures.stream().filter(A11y::inLiveRegion).toList();
+        assertTrue(live.isEmpty(), "auto-updating figures in a live region would be read on every refresh: "
+            + live.stream().map(A11y::describe).toList());
     }
 
     // ---- cart-hold chip ----
@@ -753,6 +797,43 @@ class MinorA11yTest {
         AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
         when(presenter.load(any())).thenReturn(new AdminSendMessagesPresenter.Outcome.Success(List.of()));
         return new AdminSendMessagesView(presenter, displayTime());
+    }
+
+    private static String lastUpdatedLine(SystemAnalyticsView view) {
+        return A11y.elements(view, e -> e.getText().startsWith("Last updated")).stream()
+            .map(Element::getText)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("the page has no \"Last updated\" line: "
+                + A11y.text(view.getElement())));
+    }
+
+    // A clock a test moves forward, to tell one load's time from the next.
+    private static final class MovableClock extends Clock {
+
+        private Instant now;
+
+        MovableClock(Instant start) {
+            this.now = start;
+        }
+
+        void advance(Duration by) {
+            now = now.plus(by);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            throw new UnsupportedOperationException("the test reads the clock in UTC only");
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
     }
 
     private static SystemAnalyticsPresenter analyticsPresenter() {

@@ -110,7 +110,7 @@ class FocusAfterRebuildTest {
     // ---- CartView ----
 
     @Test
-    void GivenACartOfTwoLines_WhenTheBuyerRemovesTheFirst_ThenFocusStaysOnTheCart() {
+    void GivenACartOfTwoLines_WhenTheBuyerRemovesTheFirst_ThenFocusMovesToTheNextLinesRemove() {
         CartPresenter presenter = mock(CartPresenter.class);
         CartPresenter.CartVM.LineVM first = new CartPresenter.CartVM.LineVM("Coldplay", "A1", 10.0, 5, 8);
         CartPresenter.CartVM.LineVM second = new CartPresenter.CartVM.LineVM("Hamlet", "B2", 20.0, 6, 9);
@@ -121,13 +121,31 @@ class FocusAfterRebuildTest {
         CartView view = attached(new CartView(presenter));
         Component remove = removeButtons(view).get(0);
 
-        assertFocusStaysOnPage(view, remove, () -> click(remove), "removing a cart line");
+        assertFocusMovesTo(view, () -> click(remove),
+            t -> A11y.name(t).startsWith("Remove") && A11y.name(t).contains("Hamlet"),
+            "removing a cart line", "the next line's Remove button (named for Hamlet)");
+    }
+
+    @Test
+    void GivenACartOfOneLine_WhenTheBuyerRemovesIt_ThenFocusMovesToTheEmptyCartMessage() {
+        CartPresenter presenter = mock(CartPresenter.class);
+        CartPresenter.CartVM.LineVM only = new CartPresenter.CartVM.LineVM("Coldplay", "A1", 10.0, 5, 8);
+        when(presenter.loadCart()).thenReturn(new CartPresenter.LoadOutcome.Shown(
+            new CartPresenter.CartVM(List.of(only), 300), 1000));
+        when(presenter.removeLine(any())).thenReturn(new CartPresenter.RemoveOutcome.Removed(
+            new CartPresenter.CartVM(List.of(), 0), 0));
+        CartView view = attached(new CartView(presenter));
+        Component remove = removeButtons(view).get(0);
+
+        assertFocusMovesTo(view, () -> click(remove),
+            t -> A11y.text(t).toLowerCase(Locale.ROOT).contains("cart is empty"),
+            "removing the cart's last line", "the message saying the cart is empty");
     }
 
     // ---- MyAccountView ----
 
     @Test
-    void GivenARefundableOrder_WhenTheMemberConfirmsItsRefund_ThenFocusStaysOnTheRebuiltPage() {
+    void GivenARefundableOrder_WhenTheMemberConfirmsItsRefund_ThenFocusMovesToTheOrdersViewButton() {
         ViewHarness.signInMember();
         MyAccountPresenter accountPresenter = mock(MyAccountPresenter.class);
         when(accountPresenter.loadHistory()).thenReturn(new MyAccountPresenter.Outcome.Success(
@@ -140,10 +158,11 @@ class FocusAfterRebuildTest {
         MyAccountView view = attached(new MyAccountView(accountPresenter, refundPresenter, identity, displayTime()));
         Component refund = button(view, "Request Refund");
 
-        assertFocusStaysOnPage(view, refund, () -> {
+        assertFocusMovesTo(view, () -> {
             click(refund);
             assertTrue(harness.confirmOpenDialog(), "a refund asks for confirmation first");
-        }, "a refund");
+        }, t -> A11y.name(t).startsWith("View") && A11y.name(t).contains("42"),
+            "a refund", "the refunded order's View button (named for order 42)");
     }
 
     // ---- AdminInboxView ----
@@ -239,17 +258,19 @@ class FocusAfterRebuildTest {
     }
 
     @Test
-    void GivenAFilterChipWithAnOptionTicked_WhenTheUserClearsIt_ThenFocusStaysInTheMenu() {
+    void GivenAFilterChipWithAnOptionTicked_WhenTheUserClearsIt_ThenFocusMovesToTheFirstOption() {
         LkFilterChip chip = attached(new LkFilterChip("Status", List.of("Open", "Closed"), false, List.of("Open")));
         Element clear = namedStartingWith(chip, "Clear");
 
-        assertFocusStaysOnPage(chip, clear, () -> A11y.activate(clear), "clearing the filter chip");
+        assertFocusMovesTo(chip, () -> A11y.activate(clear),
+            t -> "Open".equals(A11y.name(t)) && "checkbox".equals(A11y.role(t)),
+            "clearing the filter chip", "the menu's first option, \"Open\"");
     }
 
     // ---- ManagerListView ----
 
     @Test
-    void GivenTwoManagers_WhenTheOwnerRevokesTheFirst_ThenFocusStaysOnTheRoster() {
+    void GivenTwoManagers_WhenTheOwnerRevokesTheFirst_ThenFocusMovesToTheNextManagersRevoke() {
         ViewHarness.signInMember();
         harness.memberships(ViewHarness.founderOf(3, "Acme"));
         ManagerListPresenter presenter = mock(ManagerListPresenter.class);
@@ -262,10 +283,29 @@ class FocusAfterRebuildTest {
         ManagerListView view = attached(new ManagerListView(presenter, displayTime()));
         Element revoke = namedStartingWith(view, "Revoke");
 
-        assertFocusStaysOnPage(view, revoke, () -> {
+        assertFocusMovesTo(view, () -> {
             A11y.activate(revoke);
             assertTrue(harness.confirmOpenDialog(), "revoking asks for confirmation first");
-        }, "revoking a manager");
+        }, t -> A11y.name(t).startsWith("Revoke") && A11y.name(t).contains("dave"),
+            "revoking a manager", "the next manager's Revoke button (named for dave)");
+    }
+
+    @Test
+    void GivenOneManager_WhenTheOwnerRevokesThem_ThenFocusMovesToTheRosterHeading() {
+        ViewHarness.signInMember();
+        harness.memberships(ViewHarness.founderOf(3, "Acme"));
+        ManagerListPresenter presenter = mock(ManagerListPresenter.class);
+        when(presenter.loadRoster(any())).thenReturn(
+            new ManagerListPresenter.Outcome.Success("Acme", List.of(manager(9, "carol")), List.of()),
+            new ManagerListPresenter.Outcome.Success("Acme", List.of(), List.of()));
+        when(presenter.revoke(any(), anyInt(), anyInt())).thenReturn(new ManagerListPresenter.ActionOutcome.Success());
+        ManagerListView view = attached(new ManagerListView(presenter, displayTime()));
+        Element revoke = namedStartingWith(view, "Revoke");
+
+        assertFocusMovesTo(view, () -> {
+            A11y.activate(revoke);
+            assertTrue(harness.confirmOpenDialog(), "revoking asks for confirmation first");
+        }, t -> "heading".equals(A11y.role(t)), "revoking the last manager", "the roster's heading");
     }
 
     // ---- LkTextRows ----
@@ -359,12 +399,30 @@ class FocusAfterRebuildTest {
             + " (an element still on the page is needed)");
     }
 
+    // The reload replaces the reply bar, so focus must reach the new bar's field, not only the page.
     private void assertReplyKeepsFocus(Component view) {
         MdReplyBar bar = find(view, MdReplyBar.class).get(0);
         TextField input = find(bar, TextField.class).get(0);
         input.setValue("Thanks, sorted.");
 
-        assertFocusStaysOnPage(view, input, () -> click(button(bar, "Send")), "sending a reply");
+        assertFocusMovesTo(view, () -> click(button(bar, "Send")),
+            t -> find(view, MdReplyBar.class).stream()
+                .flatMap(current -> find(current, TextField.class).stream())
+                .anyMatch(field -> field.getElement().equals(t)),
+            "sending a reply", "the reply field of the reply bar now on the page");
+    }
+
+    // After the action the page asked to focus an element on it that the predicate accepts.
+    private void assertFocusMovesTo(Component root, Runnable action, Predicate<Element> isTarget, String what,
+                                    String target) {
+        int before = harness.focusTargets().size();
+
+        action.run();
+
+        List<Element> focused = after(before);
+        assertTrue(focused.stream().anyMatch(t -> A11y.within(t, root.getElement()) && isTarget.test(t)),
+            "after " + what + " focus must move to " + target + "; the page asked to focus "
+                + focused.stream().map(A11y::describe).toList());
     }
 
     private List<Element> after(int before) {

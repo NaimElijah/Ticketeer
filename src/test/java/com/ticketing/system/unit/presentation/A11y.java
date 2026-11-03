@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentUtil;
+import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.dom.DomEvent;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.internal.nodefeature.ElementListenerMap;
@@ -45,6 +46,13 @@ final class A11y {
         "vaadin-number-field", "vaadin-big-decimal-field", "vaadin-text-area", "vaadin-select",
         "vaadin-combo-box", "vaadin-multi-select-combo-box", "vaadin-date-picker", "vaadin-time-picker",
         "vaadin-date-time-picker");
+
+    // Tags the browser presses with Enter and Space itself.
+    private static final Set<String> NATIVE_BUTTON_TAGS = Set.of("button", "vaadin-button", "vaadin-drawer-toggle");
+
+    // The keys a keydown listener's filter names to press a button, as Flow's key filters spell them.
+    private static final Pattern ENTER_KEY = Pattern.compile("['\"]Enter['\"]");
+    private static final Pattern SPACE_KEY = Pattern.compile("['\"] ['\"]|['\"]Space(bar)?['\"]");
 
     // Roles whose accessible name may come from the element's content.
     private static final Set<String> NAMED_FROM_CONTENT = Set.of(
@@ -220,9 +228,41 @@ final class A11y {
         return false;
     }
 
-    /** A focusable element with role button: a native button, a Vaadin button, or role=button + tabindex. */
+    /**
+     * {@code true} when {@code field} shows a required indicator by any of the means a fix may use: Vaadin's
+     * {@code setRequiredIndicatorVisible} (or {@code setRequired}), the web component's {@code required}
+     * property, or {@code aria-required="true"}.
+     */
+    static boolean showsRequired(Component field) {
+        return field instanceof HasValue<?, ?> value && value.isRequiredIndicatorVisible()
+            || field.getElement().getProperty("required", false)
+            || "true".equals(field.getElement().getAttribute("aria-required"));
+    }
+
+    /**
+     * {@code true} when a script's {@code focus()} on {@code e} takes effect: it is visible and enabled, and
+     * natively focusable or carries a {@code tabindex} of any value ({@code -1} included, which makes it
+     * focusable from a script without making it a Tab stop). The browser ignores focus on anything else,
+     * such as a heading without a {@code tabindex}.
+     */
+    static boolean scriptFocusable(Element e) {
+        if (!e.isVisible() || disabled(e)) {
+            return false;
+        }
+        return tabIndex(e) != null || FOCUSABLE_TAGS.contains(e.getTag())
+            || ("a".equals(e.getTag()) && e.hasAttribute("href"));
+    }
+
+    /**
+     * A focusable element with role button that a keyboard can press: a native or Vaadin button, or another
+     * element with {@code role=button} that also handles Enter and Space, as a native button does. A
+     * {@code role=button} that only listens for clicks is announced as a button but does nothing on a key.
+     */
     static boolean isButton(Element e) {
-        return "button".equals(role(e)) && focusable(e);
+        if (!"button".equals(role(e)) || !focusable(e)) {
+            return false;
+        }
+        return NATIVE_BUTTON_TAGS.contains(e.getTag()) || (listensForKey(e, ENTER_KEY) && listensForKey(e, SPACE_KEY));
     }
 
     /** A link the browser follows: an anchor with an href. */

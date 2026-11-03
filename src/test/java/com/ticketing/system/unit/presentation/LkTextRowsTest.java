@@ -10,7 +10,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.ui.components.kit.LkBtn;
-import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkTextRows;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.textfield.TextField;
@@ -124,9 +123,9 @@ class LkTextRowsTest {
         return descendantsOf(root, TextField.class).size();
     }
 
-    // Each row's remove control is an LkRemoveButton (#188); its "✕" glyph is decoration.
+    // Each row has a remove control in the rendered DOM: a button (by role) whose name starts "Remove" (#188).
     private static int removeControlCount(Component root) {
-        return descendantsOf(root, LkRemoveButton.class).size();
+        return A11y.elements(root, e -> A11y.isButton(e) && A11y.name(e).startsWith("Remove")).size();
     }
 
     private static boolean addButtonVisible(Component root) {

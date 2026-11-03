@@ -39,7 +39,6 @@ import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.views.account.MyInvitationsView;
 import com.ticketing.system.ui.views.company.EventManagementView;
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.TextField;
@@ -120,15 +119,20 @@ class ReloadInPlaceTest {
     void GivenTheCreatePage_WhenTheSameViewIsEnteredForTheCreatedEvent_ThenTheCreateOnlyFieldsShowNoRequiredIndicator() {
         EventManagementView view = enteredForCreateThenForTheNewEvent();
 
-        List<HasValue<?, ?>> createOnly = List.of(
-            field(view, Select.class, "Category"),
-            field(view, TextField.class, "Country"),
-            field(view, TextField.class, "City"),
-            field(view, DateTimePicker.class, "Starts"),
-            field(view, DateTimePicker.class, "Ends"));
-        for (HasValue<?, ?> f : createOnly) {
-            assertFalse(f.isRequiredIndicatorVisible(), "an edit save treats a blank field as \"leave alone\", so "
-                + "it must show no required indicator: " + ((Component) f).getElement().getProperty("label"));
+        for (Component f : createOnlyFields(view)) {
+            assertFalse(A11y.showsRequired(f), "an edit save treats a blank field as \"leave alone\", so "
+                + "it must show no required indicator: " + A11y.describe(f.getElement()));
+        }
+    }
+
+    // The reverse: the edit page cleared the indicators, so the create page entered next must set them again.
+    @Test
+    void GivenAnEditPage_WhenTheSameViewIsEnteredForANewEvent_ThenTheCreateOnlyFieldsShowARequiredIndicator() {
+        EventManagementView view = enteredForAnEventThenForANewOne();
+
+        for (Component f : createOnlyFields(view)) {
+            assertTrue(A11y.showsRequired(f), "creating an event refuses a blank field, so it must show a "
+                + "required indicator: " + A11y.describe(f.getElement()));
         }
     }
 
@@ -141,6 +145,21 @@ class ReloadInPlaceTest {
         when(presenter.load(any())).thenReturn(new MyInvitationsPresenter.Outcome.Success(List.of(invitation), List.of()));
         when(presenter.accept(any(), anyInt())).thenReturn(new MyInvitationsPresenter.ActionOutcome.Success());
         return presenter;
+    }
+
+    private static List<Component> createOnlyFields(EventManagementView view) {
+        return List.of(
+            field(view, Select.class, "Category"),
+            field(view, TextField.class, "Country"),
+            field(view, TextField.class, "City"),
+            field(view, DateTimePicker.class, "Starts"),
+            field(view, DateTimePicker.class, "Ends"));
+    }
+
+    private EventManagementView enteredForAnEventThenForANewOne() {
+        EventManagementView view = enteredForCreateThenForTheNewEvent();
+        view.beforeEnter(routeTo("eventId", "new"));
+        return view;
     }
 
     private EventManagementView enteredForCreateThenForTheNewEvent() {
