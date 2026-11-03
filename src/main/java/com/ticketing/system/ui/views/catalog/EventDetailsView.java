@@ -340,7 +340,10 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         return card;
     }
 
-    /** Disable + relabel 'Choose tickets' for non-purchasable events (cancelled / ended / sold out). */
+    /**
+     * Disable + relabel 'Choose tickets' for non-purchasable events (cancelled / ended / sold out). A disabled
+     * button drops the arrow, which would invite an action that does not exist (PR #253 review).
+     */
     private void updateReserveState() {
         if (chooseBtn == null) {
             return;
@@ -348,10 +351,10 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         EventStatus status = detail == null ? null : detail.status();
         if (status == EventStatus.CANCELED) {
             chooseBtn.setEnabled(false);
-            chooseBtn.label("Event Cancelled");
+            chooseBtn.label("Event Cancelled").arrow(false);
         } else if (status == EventStatus.COMPLETED) {
             chooseBtn.setEnabled(false);
-            chooseBtn.label("Event Ended");
+            chooseBtn.label("Event Ended").arrow(false);
         } else if (status == EventStatus.SOLD_OUT || firstSelectableZoneId() == null) {
             chooseBtn.setEnabled(false);
             chooseBtn.label("Sold Out").arrow(false);

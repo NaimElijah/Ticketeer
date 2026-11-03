@@ -384,6 +384,17 @@ class MinorA11yTest {
             "the \"→\" is decoration and must be aria-hidden, out of the button's name: " + A11y.describe(choose));
     }
 
+    // A disabled button that ends in "→" invites an action that does not exist (PR #253 review 3).
+    @Test
+    void GivenACancelledEvent_WhenItsPageRenders_ThenTheDisabledTicketsButtonShowsNoArrow() {
+        assertEndedButtonShowsNoArrow(EventStatus.CANCELED, "Event Cancelled");
+    }
+
+    @Test
+    void GivenACompletedEvent_WhenItsPageRenders_ThenTheDisabledTicketsButtonShowsNoArrow() {
+        assertEndedButtonShowsNoArrow(EventStatus.COMPLETED, "Event Ended");
+    }
+
     @Test
     void GivenARatedEvent_WhenBrowseRenders_ThenItsRatingReadsAsRatingOutOfFive() {
         assertRatingReadAloud(browse(4.5));
@@ -837,11 +848,42 @@ class MinorA11yTest {
         return new BrowseEventsView(presenter, mock(SessionIdentity.class), displayTime());
     }
 
+    private static void assertEndedButtonShowsNoArrow(EventStatus status, String label) {
+        EventDetailsView view = eventPage(status);
+
+        Element button = find(view, NativeButton.class).stream()
+            .map(Component::getElement)
+            .filter(e -> e.getTextRecursively().contains(label))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("the page has no \"" + label + "\" button"));
+        assertTrue(A11y.disabledForAt(button), "the \"" + label + "\" button is disabled: " + A11y.describe(button));
+        String shown = visibleText(button);
+        assertFalse(shown.contains("→"), "a disabled \"" + label + "\" button must show no \"→\", which invites an "
+            + "action that does not exist; it shows \"" + shown + "\"");
+    }
+
+    // The text a sighted user sees: every visible text node, aria-hidden ones included.
+    private static String visibleText(Element e) {
+        if (e.isTextNode()) {
+            return e.getText();
+        }
+        if (!e.isVisible()) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        e.getChildren().forEach(child -> text.append(visibleText(child)));
+        return text.toString();
+    }
+
     private static EventDetailsView eventPage() {
+        return eventPage(EventStatus.ON_SALE);
+    }
+
+    private static EventDetailsView eventPage(EventStatus status) {
         EventDetailsPresenter presenter = mock(EventDetailsPresenter.class);
         when(presenter.load(any(), anyInt())).thenReturn(new EventDetailsPresenter.Outcome.Success(
             new EventDetailDTO("5", "Coldplay", 4.5, "Live", EventCategory.CONCERT, null, "3", "Acme",
-                EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of(), 10.0),
+                status, List.of(), ZoneOffset.UTC, List.of(), 10.0),
             List.of(new InventoryZoneDTO(8, "Floor", "STANDING", 100, 50, 0, 50, 10.0, List.of(), null)),
             3, 3, null));
         EventDetailsView view = new EventDetailsView(presenter, mock(SessionIdentity.class),
