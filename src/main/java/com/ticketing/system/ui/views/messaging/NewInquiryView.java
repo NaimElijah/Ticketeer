@@ -10,6 +10,7 @@ import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
+import com.ticketing.system.ui.components.kit.LkRemoveButton;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.layouts.MainLayout;
@@ -48,6 +49,7 @@ import java.util.List;
 public class NewInquiryView extends LkPage implements BeforeEnterObserver {
 
     private static final String CHOOSE_COMPANY = "Please choose a production company.";
+    private static final String CHOSEN_COMPANY_LABEL = "Company:";
 
     private final NewInquiryPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
@@ -173,8 +175,20 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
     private void renderSelected() {
         selectedCompanyBox.removeAll();
         if (selectedCompanyId != null) {
-            selectedCompanyBox.add(new LkChip(selectedCompanyName).active());
+            // Labelled as the company the inquiry goes to, and removable, rather than a bare chip (#188,
+            // WCAG 1.3.1, 2.1.1).
+            LkChip chip = new LkChip(selectedCompanyName).active();
+            chip.add(new LkRemoveButton(selectedCompanyName, this::clearCompany));
+            selectedCompanyBox.add(Lk.muted(CHOSEN_COMPANY_LABEL), chip);
         }
+    }
+
+    // The chip's remove button is gone with it, so focus goes back to the search to pick another.
+    private void clearCompany() {
+        selectedCompanyId = null;
+        selectedCompanyName = null;
+        renderSelected();
+        companySearch.focus();
     }
 
     private void submit() {
