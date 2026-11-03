@@ -42,7 +42,7 @@ import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
-import com.vaadin.flow.router.PageTitle;
+import com.vaadin.flow.router.HasDynamicTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
@@ -53,13 +53,14 @@ import java.util.List;
 import java.util.Optional;
 
 @Route(value = "owner/events/:eventId", layout = WorkspaceLayout.class)
-@PageTitle("Edit Event · TicketHub")
 @PermitAll
 @RequireCapability(Capability.EDIT_COMPANY_EVENTS)
-public class EventManagementView extends LkPage implements BeforeEnterObserver {
+public class EventManagementView extends LkPage implements BeforeEnterObserver, HasDynamicTitle {
 
     private static final String VENUE_TIME_HINT = "Local time at the venue";
     private static final String EDIT_TITLE = "Edit Event";
+    private static final String CREATE_TITLE = "Create Event";
+    private static final String TITLE_SUFFIX = " · TicketHub";
     private static final String EDIT_SUBTITLE = "Configure event details.";
     private static final String SAVE_LABEL = "Save Changes";
     private static final String EVENT_NOT_FOUND = "Event not found.";
@@ -87,6 +88,8 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
     /** Linked editors / status / danger zone — hidden in create mode (they need a saved event). */
     private Component sideCol;
     private String eventId = null;   // "new"/null = create flow
+    /** Whether the route names no saved event, so the page creates one; set on each entry. */
+    private boolean createMode;
     /**
      * The id of the event being edited, parsed from the route; {@code null} in create mode and when the
      * route's id is no number, so no action reaches the service with an id that names no event.
@@ -111,16 +114,25 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver {
         add(buildSplit());
     }
 
+    /**
+     * The document title: "Create Event" on the create page, "Edit Event" otherwise, since one route serves
+     * both and a fixed title would call the create page an edit (#188, WCAG 2.4.2).
+     */
+    @Override
+    public String getPageTitle() {
+        return (createMode ? CREATE_TITLE : EDIT_TITLE) + TITLE_SUFFIX;
+    }
+
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
         eventId = event.getRouteParameters().get("eventId").orElse(null);
-        boolean createMode = eventId == null || "new".equals(eventId);
+        createMode = eventId == null || "new".equals(eventId);
         editedEventId = createMode ? null : parseEventId(eventId).orElse(null);
         saveBtn.setEnabled(true);
         if (createMode) {
-            title("Create Event");
+            title(CREATE_TITLE);
             subtitle("Create the event as a draft, then configure its venue and publish it.");
-            saveBtn.label("Create Event");
+            saveBtn.label(CREATE_TITLE);
             artists.readOnly(false);
             markCreateRequirements(true);
             timeZone.setValue(presenter.defaultTimeZone());

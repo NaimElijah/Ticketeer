@@ -77,7 +77,7 @@ public class AdminComplaintQueueView extends LkPage {
         this.displayTime = displayTime;
 
         title("Complaint Queue");
-        subtitle("Member complaints opened via Conversation type=COMPLAINT.");
+        subtitle("Complaints members have sent to the TicketHub team.");
         // Outside content, which each reload rebuilds: a replaced live region is not announced.
         // Heard, not shown: a sighted user sees the list change.
         resultCount.addClassName(Lk.VISUALLY_HIDDEN);

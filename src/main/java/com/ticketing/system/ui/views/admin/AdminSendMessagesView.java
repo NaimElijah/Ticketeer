@@ -79,7 +79,8 @@ public class AdminSendMessagesView extends LkPage {
         this.presenter = presenter;
         this.displayTime = displayTime;
 
-        title("Outreach System Members");
+        // Named as the navigation names it, so the page a user opened says it is that page (#188, WCAG 2.4.6).
+        title("Send Messages");
         subtitle("Send a message to individual members, all members, or all producers.");
 
         add(buildComposer());
