@@ -30,6 +30,7 @@ public class LkTopBar extends Header {
     private static final String SEARCH_PANEL = "Search";
     private static final String NOTIFICATIONS = "Notifications";
     private static final String ACCOUNT_PANEL = "Account menu";
+    private static final String HOLD_CHIP_NAME = "Cart held for";
     private static final String ACCOUNT_NAME_SEPARATOR = ", ";
     // Names the main navigation landmark, to tell it from a shell's side navigation (#188).
     private static final String MAIN_NAV = "Main";
@@ -248,6 +249,11 @@ public class LkTopBar extends Header {
             chip.addClassName("bz-timer");
             chip.getStyle().set("margin-left", "6px");
             chip.add(new LkIcon("clock", 13));
+            // The clock icon says what the time is to a sighted user; the hidden words say it to a screen
+            // reader (#188, WCAG 1.1.1). Not live: a region would read every tick.
+            Span what = new Span(HOLD_CHIP_NAME);
+            what.addClassName(Lk.VISUALLY_HIDDEN);
+            chip.add(what);
             Span text = new Span(" --:--");
             chip.add(text);
             rightSlot.add(chip);
