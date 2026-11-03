@@ -111,9 +111,11 @@ public class CartView extends LkPage {
         seatLine.getStyle().set("font-size", "13.5px");
         info.add(titleSpan, seatLine);
 
+        // Every line repeats Remove, so it names its event and seat (#188).
         LkBtn removeBtn = new LkBtn("Remove")
             .variant(LkBtn.Variant.tertiary)
             .size(LkBtn.Size.s)
+            .forRow(line.seatNumber() != null ? line.eventName() + ", " + line.seatNumber() : line.eventName())
             .onClick(e -> {
                 int position = activeOrder.lines().indexOf(line);
                 switch (presenter.removeLine(line)) {

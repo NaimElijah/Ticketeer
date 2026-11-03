@@ -49,6 +49,11 @@ import java.util.Map;
 @RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyAccountView extends LkPage {
 
+    private static final String ARIA_LABEL = "aria-label";
+    private static final String VIEW = "View";
+    private static final String REQUEST_REFUND = "Request Refund";
+    private static final String ORDER_PREFIX = "order #";
+    private static final String SEAT_SEPARATOR = ", seat ";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
 
@@ -180,14 +185,18 @@ public class MyAccountView extends LkPage {
             case FULL    -> new LkStatusDot(LkStatusDot.Tone.muted, "Refunded");
         });
 
-        NativeButton view = new NativeButton("View");
+        NativeButton view = new NativeButton(VIEW);
         view.addClassName("bz-link");
         view.getStyle().set("background", "none").set("border", "none").set("padding", "0").set("cursor", "pointer");
         view.addClickListener(e -> UI.getCurrent().navigate("receipt/" + r.orderReceiptId()));
+        // Every order row repeats View and Request Refund, so each names its order (#188).
+        String orderName = ORDER_PREFIX + r.orderReceiptId();
+        view.getElement().setAttribute(ARIA_LABEL, Lk.actionFor(VIEW, orderName));
         orderViewButtons.put(r.orderReceiptId(), view);
 
         if (refundEligible(r)) {
-            NativeButton refund = new NativeButton("Request Refund");
+            NativeButton refund = new NativeButton(REQUEST_REFUND);
+            refund.getElement().setAttribute(ARIA_LABEL, Lk.actionFor(REQUEST_REFUND, orderName));
             refund.addClassName("bz-link");
             refund.getStyle().set("background", "none").set("border", "none").set("padding", "0")
                 .set("cursor", "pointer").set("margin-left", "14px");
@@ -268,7 +277,8 @@ public class MyAccountView extends LkPage {
         TicketStatus st = t.currentStatus();
         row.put("status", new LkStatusDot(statusTone(st), prettyStatus(st)));
 
-        LkIconBtn viewBtn = new LkIconBtn(new LkIcon("eye", 15), "View ticket + barcode");
+        LkIconBtn viewBtn = new LkIconBtn(new LkIcon("eye", 15), "View ticket + barcode")
+            .forRow(ticketName(t.eventName(), t.eventId(), t.seatNumber()));
         viewBtn.addClickListener(e -> BzTicketDialog.show(toTicketInfo(t)));
         row.put("act", viewBtn);
         grid.row(row);
@@ -305,6 +315,12 @@ public class MyAccountView extends LkPage {
     // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).
     private static String categoryLabel(String categoryName) {
         return categoryName == null || categoryName.isBlank() ? "—" : EventCategoryLabels.labelOf(categoryName);
+    }
+
+    // What names a ticket's row for its buttons: the event, and the seat when it has one.
+    private static String ticketName(String eventName, int eventId, String seat) {
+        String event = orElse(eventName, "Event #" + eventId);
+        return seat == null || seat.isBlank() ? event : event + SEAT_SEPARATOR + seat;
     }
 
     private static String orElse(String value, String fallback) {

@@ -374,7 +374,8 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         code.getStyle()
                 .set("font-size", "0.78rem").set("color", "var(--muted)").set("letter-spacing", "0.06em");
 
-        LkIconBtn viewBtn = new LkIconBtn(new LkIcon("eye", 15), "View ticket");
+        // Every ticket row repeats this button, so it names the ticket's zone and seat (#188).
+        LkIconBtn viewBtn = new LkIconBtn(new LkIcon("eye", 15), "View ticket").forRow(ticketMeta(t));
         viewBtn.addClickListener(e -> BzTicketDialog.show(toTicketInfo(t)));
 
         LkRow actions = new LkRow().gap(4).noWrap();

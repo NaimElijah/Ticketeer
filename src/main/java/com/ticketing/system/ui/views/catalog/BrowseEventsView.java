@@ -589,9 +589,11 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         row.put("from", ev.priceCents > 0 ? String.format("$%,.2f", ev.priceCents / 100.0) : "—");
         row.put("rating", ev.rating == null ? "—" : "★ " + ratingText(ev.rating));
         row.put("status", new LkStatusDot(ev.tone, ev.status));
+        // Every row repeats Reserve, so it names its event (#188).
         LkBtn reserve = new LkBtn("Reserve")
                 .variant(LkBtn.Variant.primary)
                 .size(LkBtn.Size.s)
+                .forRow(ev.name)
                 .onClick(e -> UI.getCurrent().navigate("events/" + ev.id));
         row.put("act", reserve);
         grid.row(row);

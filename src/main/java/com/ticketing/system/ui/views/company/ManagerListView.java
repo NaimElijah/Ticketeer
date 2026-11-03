@@ -133,14 +133,14 @@ public class ManagerListView extends LkPage {
         row.put("status", new LkStatusDot(LkStatusDot.Tone.ok, "Active"));
         LkRow actions = new LkRow().gap(4).noWrap();
         if (Capabilities.has(Capability.EDIT_MANAGER_PERMISSIONS)) {
-            LkIconBtn edit = new LkIconBtn(new LkIcon("edit", 15), "Edit permissions");
+            LkIconBtn edit = new LkIconBtn(new LkIcon("edit", 15), "Edit permissions").forRow(m.targetUsername());
             edit.addClickListener(e -> new EditPermissionsDialog(
                 m.targetUsername(), m.role(), m.grantedPermissions(),
                 names -> handleEdit(m, names)).open());
             actions.add(edit);
         }
         if (Capabilities.has(Capability.REVOKE_MANAGER)) {
-            LkIconBtn revoke = new LkIconBtn(new LkIcon("trash", 15), "Revoke");
+            LkIconBtn revoke = new LkIconBtn(new LkIcon("trash", 15), "Revoke").forRow(m.targetUsername());
             revoke.addClickListener(e -> new LkConfirm("Revoke manager",
                 "Remove " + m.targetUsername() + " from the team? They'll lose all "
                     + "access to this company.",

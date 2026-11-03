@@ -424,32 +424,32 @@ public class CompanyEventListView extends LkPage {
         // map", a sales manager just "Sales", an owner the full set.
         LkRow actions = new LkRow().gap(4).noWrap();
         if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
-            actions.add(iconBtn("edit", "Edit metadata", () -> UI.getCurrent().navigate("owner/events/" + ev.eventId())));
+            actions.add(iconBtn("edit", "Edit metadata", ev.name(), () -> UI.getCurrent().navigate("owner/events/" + ev.eventId())));
         }
         if (Capabilities.has(Capability.MANAGE_VENUE_MAPS)) {
-            actions.add(iconBtn("map", "Venue map", () -> UI.getCurrent().navigate("owner/venue/" + ev.eventId())));
+            actions.add(iconBtn("map", "Venue map", ev.name(), () -> UI.getCurrent().navigate("owner/venue/" + ev.eventId())));
         }
         if (Capabilities.has(Capability.EDIT_PURCHASE_POLICIES)) {
             // Deep-link to THIS event's purchase policy (route owner/policies/:companyId?/:eventId?).
-            actions.add(iconBtn("policy", "Policies",
+            actions.add(iconBtn("policy", "Policies", ev.name(),
                     () -> UI.getCurrent().navigate("owner/policies/" + ev.companyId() + "/" + ev.eventId())));
         }
         if (Capabilities.has(Capability.VIEW_COMPANY_SALES)) {
-            actions.add(iconBtn("chart", "Sales", () -> UI.getCurrent().navigate(CompanySalesView.class)));
+            actions.add(iconBtn("chart", "Sales", ev.name(), () -> UI.getCurrent().navigate(CompanySalesView.class)));
         }
         if (ev.status() == EventStatus.CANCELED) {
             // A canceled event has no further status transitions, so this list only offers to
             // remove it. Cancelling it again, which resumes refunds a failure interrupted (#20),
             // is done from the event's management page.
             if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
-                actions.add(iconBtn("trash", "Remove event", () -> openDeleteDialog(ev)));
+                actions.add(iconBtn("trash", "Remove event", ev.name(), () -> openDeleteDialog(ev)));
             }
         } else {
             if (Capabilities.has(Capability.EDIT_COMPANY_EVENTS)) {
-                actions.add(iconBtn("gear", "Change status", () -> openStatusDialog(ev)));
+                actions.add(iconBtn("gear", "Change status", ev.name(), () -> openStatusDialog(ev)));
             }
             if (Capabilities.has(Capability.CANCEL_EVENT)) {
-                actions.add(iconBtn("warning", "Cancel event", () -> openCancelDialog(ev)));
+                actions.add(iconBtn("warning", "Cancel event", ev.name(), () -> openCancelDialog(ev)));
             }
         }
         row.put("act", actions);
@@ -576,8 +576,9 @@ public class CompanyEventListView extends LkPage {
         };
     }
 
-    private static LkIconBtn iconBtn(String iconName, String tooltip, Runnable r) {
-        LkIconBtn b = new LkIconBtn(new LkIcon(iconName, 15), tooltip);
+    // Named for its event too, since every row repeats the same buttons (#188).
+    private static LkIconBtn iconBtn(String iconName, String tooltip, String eventName, Runnable r) {
+        LkIconBtn b = new LkIconBtn(new LkIcon(iconName, 15), tooltip).forRow(eventName);
         b.addClickListener(e -> r.run());
         return b;
     }

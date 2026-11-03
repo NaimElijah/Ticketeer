@@ -143,6 +143,19 @@ public final class Lk {
     }
 
     /**
+     * The accessible name of a button repeated on every row of a list: its action, then the row it acts
+     * on, "Revoke: carol", so a screen-reader user moving through the buttons hears which row each is for
+     * (#188, WCAG 2.4.6). It starts with the visible label, so a voice user can still say it (WCAG 2.5.3).
+     *
+     * @param action the button's visible label or tooltip
+     * @param row    what names the row, such as an event's or a member's name
+     * @return the accessible name
+     */
+    public static String actionFor(String action, String row) {
+        return action + NAME_SEPARATOR + row;
+    }
+
+    /**
      * The accessible name of a control that shows its value but not its label, such as a
      * popover field's trigger: "Country: Israel", or the value alone while it has no label (#188).
      */

@@ -119,9 +119,10 @@ public class MyInvitationsView extends LkPage {
 
         LkRow actions = new LkRow().gap(6).noWrap();
         actions.add(
-            new LkBtn("Accept").variant(LkBtn.Variant.primary).size(LkBtn.Size.s)
+            // Every pending row repeats these, so each names its company (#188).
+            new LkBtn("Accept").variant(LkBtn.Variant.primary).size(LkBtn.Size.s).forRow(inv.companyName())
                 .onClick(e -> handleAccept(inv)),
-            new LkBtn("Reject").variant(LkBtn.Variant.tertiary).size(LkBtn.Size.s)
+            new LkBtn("Reject").variant(LkBtn.Variant.tertiary).size(LkBtn.Size.s).forRow(inv.companyName())
                 .onClick(e -> handleDecline(inv))
         );
         row.put("act", actions);

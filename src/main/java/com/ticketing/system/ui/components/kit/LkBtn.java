@@ -62,6 +62,18 @@ public class LkBtn extends NativeButton {
     }
 
     public LkBtn label(String text) { labelSpan.setText(text); return this; }
+
+    /**
+     * Names the button for the row it acts on, "Remove: Coldplay" ({@link Lk#actionFor}); it still shows its
+     * bare label. Call it after the label is final: a later {@link #label} does not rename it.
+     *
+     * @param row what names the row
+     * @return this button, for chaining
+     */
+    public LkBtn forRow(String row) {
+        getElement().setAttribute(Lk.ARIA_LABEL, Lk.actionFor(labelSpan.getText(), row));
+        return this;
+    }
     public LkBtn full() { getStyle().set("width", "100%"); return this; }
     public LkBtn onClick(ComponentEventListener<ClickEvent<NativeButton>> l) { addClickListener(l); return this; }
 
