@@ -427,9 +427,6 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             Toasts.failure("Your cart is empty.");
             return;
         }
-        // Read before clearing: the email field's own validation marks an address it can't parse, and
-        // clearing would drop that mark if this form had also marked the field on the last attempt.
-        boolean emailUnusable = guestEmail.isInvalid() || guestEmail.isEmpty();
         paymentErrors.clear();
         rejectIfEmpty(cardholder, "Enter the name on the card.");
         rejectIfEmpty(cardNumber, "Enter the card number.");
@@ -445,7 +442,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             return;
         }
         if (!isMember) {
-            if (emailUnusable) {
+            // Invalid is the email field's own verdict: an address it can't parse.
+            if (guestEmail.isInvalid() || guestEmail.isEmpty()) {
                 paymentErrors.reject(guestEmail, GUEST_EMAIL_NEEDED);
                 refusePayment(GUEST_EMAIL_NEEDED);
                 return;
