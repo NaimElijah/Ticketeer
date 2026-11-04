@@ -29,14 +29,14 @@ class NotificationTest extends BaseDomainTest {
     }
 
     @Test
-    void givenPendingNotification_whenMarkSent_thenStatusSent() {
+    void GivenPendingNotification_WhenMarkSent_ThenStatusSent() {
         Notification n = pending();
         n.markSent();
         assertTrue(n.isSent());
     }
 
     @Test
-    void givenSentNotification_whenMarkRead_thenStatusRead() {
+    void GivenSentNotification_WhenMarkRead_ThenStatusRead() {
         Notification n = pending();
         n.markSent();
         n.markRead();

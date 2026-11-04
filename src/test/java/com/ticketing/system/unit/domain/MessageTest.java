@@ -33,25 +33,25 @@ class MessageTest {
     }
 
     @Test
-    void construct_blankBody_throws() {
+    void GivenBlankBody_WhenConstruct_ThenThrows() {
         assertThrows(IllegalStateException.class,
                 () -> new Message("m1", 10, ParticipantType.MEMBER, "   ", LocalDateTime.now()));
     }
 
     @Test
-    void construct_blankId_throws() {
+    void GivenBlankId_WhenConstruct_ThenThrows() {
         assertThrows(IllegalStateException.class,
                 () -> new Message("", 10, ParticipantType.MEMBER, "hello", LocalDateTime.now()));
     }
 
     @Test
-    void construct_nullSenderType_throws() {
+    void GivenNullSenderType_WhenConstruct_ThenThrows() {
         assertThrows(IllegalStateException.class,
                 () -> new Message("m1", 10, null, "hello", LocalDateTime.now()));
     }
 
     @Test
-    void construct_nullSentAt_throws() {
+    void GivenNullSentAt_WhenConstruct_ThenThrows() {
         assertThrows(IllegalStateException.class,
                 () -> new Message("m1", 10, ParticipantType.MEMBER, "hello", null));
     }

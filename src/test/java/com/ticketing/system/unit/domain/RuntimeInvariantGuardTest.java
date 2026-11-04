@@ -59,7 +59,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     // --- Pattern A: status mutation re-asserts invariants ------------------------
 
     @Test
-    void addManager_whenTargetIsAlreadyOwner_throwsAndLeavesManagersUnchanged() {
+    void GivenTargetIsAlreadyOwner_WhenAddManager_ThenThrowsAndLeavesManagersUnchanged() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
 
@@ -72,7 +72,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void clearSession_onMemberCart_succeeds() {
+    void GivenAMemberCart_WhenClearSession_ThenSucceedsAndKeepsTheMember() {
         // Member cart keeps userId after the session pointer clears — still valid.
         ActiveOrder memberCart = track(ActiveOrder.forMember(42, "session-xyz", LocalDateTime.now()));
 
@@ -85,7 +85,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     // --- Pattern B: defensive copies on leaky getters ----------------------------
 
     @Test
-    void getManagers_returnsDefensiveCopy_externalMutationDoesNotLeak() {
+    void GivenACompanyWithAManager_WhenGetManagers_ThenReturnsDefensiveCopyExternalMutationDoesNotLeak() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
         company.addManager(TARGET_ID);
@@ -98,7 +98,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void getOwnersIds_returnsDefensiveCopy_externalMutationDoesNotLeak() {
+    void GivenACompanyWithAnOwner_WhenGetOwnersIds_ThenReturnsDefensiveCopyExternalMutationDoesNotLeak() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
 
@@ -113,7 +113,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     // --- More validate-before-commit rollbacks -----------------------------------
 
     @Test
-    void session_touchBeforeCreatedAt_throwsAndRollsBack() {
+    void GivenASession_WhenTouchBeforeCreatedAt_ThenThrowsAndRollsBack() {
         Instant createdAt = Instant.now();
         Session session = track(new Session("sess-1", 1, createdAt, createdAt.plusSeconds(3600)));
 
@@ -125,7 +125,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void ticket_setTicketIdNonPositive_throwsAndRollsBack() {
+    void GivenATicket_WhenSetTicketIdNonPositive_ThenThrowsAndRollsBack() {
         Ticket ticket = track(new Ticket(1, 0, 1, null, 10.0, 5, "BC-1"));
 
         assertThrows(IllegalStateException.class, () -> ticket.setTicketId(0));
@@ -135,7 +135,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void setRating_outOfRange_throwsAndRollsBack() {
+    void GivenACompany_WhenSetRatingOutOfRange_ThenThrowsAndRollsBack() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
 
