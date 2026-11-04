@@ -105,10 +105,9 @@ class CatalogServiceTest {
                 () -> catalogService.searchGlobal(VALID_TOKEN, filters));
     }
 
-    // UC-7: searchGlobal propagates SessionExpiredException from the session
-    // manager
+    // UC-7: searchGlobal propagates InvalidTokenException from the credential check
     @Test
-    void GivenExpiredToken_WhenSearchGlobal_ThenThrowsSessionExpiredException() {
+    void GivenTheCredentialCheckThrowsInvalidToken_WhenSearchGlobal_ThenPropagatesInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
         CatalogSearchFiltersDTO filters = emptyFilters();
 
@@ -218,10 +217,9 @@ class CatalogServiceTest {
                 () -> catalogService.searchByCompany(VALID_TOKEN, 10, filters));
     }
 
-    // UC-7: searchByCompany propagates SessionExpiredException from the session
-    // manager
+    // UC-7: searchByCompany propagates InvalidTokenException from the credential check
     @Test
-    void GivenExpiredToken_WhenSearchByCompany_ThenThrowsSessionExpiredException() {
+    void GivenTheCredentialCheckThrowsInvalidToken_WhenSearchByCompany_ThenPropagatesInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
         CatalogSearchFiltersDTO filters = emptyFilters();
 

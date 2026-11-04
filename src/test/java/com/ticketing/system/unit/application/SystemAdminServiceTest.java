@@ -203,7 +203,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void GivenAlreadyInitialized_WhenInitializePlatformAgain_ThenSecondCallIsNoOp() {
+    void GivenAlreadyInitialized_WhenInitializePlatformAgain_ThenDoesNotThrow() {
         when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         svc.initializePlatform();
