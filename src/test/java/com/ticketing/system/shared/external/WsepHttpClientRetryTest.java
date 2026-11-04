@@ -22,7 +22,7 @@ class WsepHttpClientRetryTest {
     }
 
     @Test
-    void withRetry_succeedsOnALaterAttempt_afterTransientFailures() {
+    void GivenTransientFailures_WhenWithRetry_ThenSucceedsOnALaterAttempt() {
         AtomicInteger calls = new AtomicInteger();
         String result = client().withRetry(() -> {
             if (calls.incrementAndGet() < 3) {
@@ -35,7 +35,7 @@ class WsepHttpClientRetryTest {
     }
 
     @Test
-    void withRetry_rethrowsAfterExhaustingAttempts() {
+    void GivenAnEndpointThatStaysDown_WhenWithRetry_ThenRethrowsAfterExhaustingAttempts() {
         AtomicInteger calls = new AtomicInteger();
         WsepCommunicationException ex = assertThrows(WsepCommunicationException.class,
                 () -> client().withRetry(() -> {
@@ -47,7 +47,7 @@ class WsepHttpClientRetryTest {
     }
 
     @Test
-    void withRetry_doesNotRetryWhenTheFirstAttemptSucceeds() {
+    void GivenASuccessfulFirstAttempt_WhenWithRetry_ThenDoesNotRetry() {
         AtomicInteger calls = new AtomicInteger();
         String result = client().withRetry(() -> {
             calls.incrementAndGet();
