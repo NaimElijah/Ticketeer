@@ -6,6 +6,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -103,7 +104,8 @@ class HexagonalRulesTest {
     // Fixture packages mirror module names below this root; see its package-info.
     private static final String FIXTURE_ROOT = "com.ticketing.system.architecture.fixture";
 
-    // Production classes only (tests excluded), imported once and reused by every rule below.
+    // Production classes only (tests excluded), imported once and reused by the rules below. Only the
+    // clock rules also run over the test classes, which testClassesOtherThanTheseFixtures imports.
     private static final JavaClasses PRODUCTION_CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages(PRODUCTION_ROOT);
@@ -652,6 +654,33 @@ class HexagonalRulesTest {
     @Test
     void GivenProductionCode_WhenScanned_ThenOnlyTheClockBeanCreatesASystemClock() {
         ONLY_THE_CLOCK_BEAN_CREATES_A_SYSTEM_CLOCK.check(PRODUCTION_CLASSES);
+    }
+
+    // ADR-024: test code reads time from a clock too. In the 17 PRs after ADR-008, 4 added such reads, and
+    // each cost a review finding and a fix commit. Both rules are proven by the self-tests below.
+    @Test
+    void GivenTestCode_WhenScanned_ThenNothingReadsTheSystemClockOrDefaultZone() {
+        JavaClasses testClasses = testClassesOtherThanTheseFixtures();
+
+        NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE.check(testClasses);
+        ONLY_THE_CLOCK_BEAN_CREATES_A_SYSTEM_CLOCK.check(testClasses);
+    }
+
+    @Test
+    void GivenTheTestClassesTheClockRulesScan_WhenInspected_ThenTheyHoldAbstractContractTestsButNotTheseFixtures() {
+        JavaClasses testClasses = testClassesOtherThanTheseFixtures();
+
+        assertThat(testClasses.contain(PRODUCTION_ROOT
+                + ".unit.infrastructure.persistence.UserPersistence.IUserRepositoryContractTest")).isTrue();
+        assertThat(testClasses.contain(CallsLocalDateTimeNow.class)).isFalse();
+    }
+
+    // Imported per call, not held in a static, so the classes aren't kept for the rest of the shared test JVM.
+    private static JavaClasses testClassesOtherThanTheseFixtures() {
+        return new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.ONLY_INCLUDE_TESTS)
+                .withImportOption(location -> !location.contains("/architecture/HexagonalRulesTest$"))
+                .importPackages(PRODUCTION_ROOT);
     }
 
     // The class comment records a rule engine that silently checked nothing; these prove the clock
