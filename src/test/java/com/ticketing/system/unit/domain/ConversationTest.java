@@ -31,6 +31,7 @@ class ConversationTest extends BaseDomainTest {
     // refused by the domain, not by the database insert (#186).
     private static final int SUBJECT_LIMIT = 255;
     private static final LocalDateTime STARTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+    private static final LocalDateTime REPLIED_AT = STARTED_AT.plusMinutes(1);
 
     private Conversation inquiry() {
         return track(Conversation.start(ConversationType.INQUIRY,
@@ -55,11 +56,11 @@ class ConversationTest extends BaseDomainTest {
     }
 
     @Test
-    void GivenAnInquiry_WhenAddMessage_ThenAppendsAndLastMessageAtIsNotBeforeCreatedAt() {
+    void GivenAnInquiry_WhenAddMessage_ThenAppendsAndAdvancesLastMessageAt() {
         Conversation c = inquiry();
-        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "Yes — there is a paid lot nearby.", STARTED_AT);
+        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "Yes — there is a paid lot nearby.", REPLIED_AT);
         assertEquals(2, c.getMessages().size());
-        assertFalse(c.getLastMessageAt().isBefore(c.getCreatedAt()));
+        assertEquals(REPLIED_AT, c.getLastMessageAt());
     }
 
     @Test
