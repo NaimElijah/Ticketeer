@@ -15,13 +15,13 @@ import org.springframework.transaction.CannotCreateTransactionException;
 class GlobalUiErrorHandlerTest {
 
     @Test
-    void dbOutage_getsTheTemporarilyUnavailableMessage() {
+    void GivenADbOutage_WhenMessageFor_ThenGetsTheTemporarilyUnavailableMessage() {
         assertEquals(ServiceErrors.DB_UNAVAILABLE_MESSAGE,
             GlobalUiErrorHandler.messageFor(new CannotCreateTransactionException("no connection")));
     }
 
     @Test
-    void anyOtherError_getsTheGenericMessage() {
+    void GivenAnyOtherError_WhenMessageFor_ThenGetsTheGenericMessage() {
         assertEquals(GlobalUiErrorHandler.GENERIC_MESSAGE,
             GlobalUiErrorHandler.messageFor(new IllegalStateException("boom")));
     }
