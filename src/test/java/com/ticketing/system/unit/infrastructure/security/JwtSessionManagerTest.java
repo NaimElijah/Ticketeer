@@ -951,7 +951,7 @@ class JwtSessionManagerTest {
     private static final String OTHER_SECRET =
         "another-secret-that-is-also-long-enough-for-hmac-sha-256-but-not-ours";
 
-    /** A manager on the fixed FIXED_CLOCK, over {@code store}. */
+    /** A manager on the fixed clock, over {@code store}. */
     private static JwtSessionManager onFixedClock(SessionRepository store) {
         return new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, FIXED_CLOCK);
     }
