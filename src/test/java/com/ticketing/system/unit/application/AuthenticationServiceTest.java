@@ -308,6 +308,7 @@ class AuthenticationServiceTest {
         assertEquals(42, savedUser.getValue().getUserId());
         assertEquals("alice", savedUser.getValue().getUsername());
         assertEquals("alice@example.com", savedUser.getValue().getEmail());
+        assertEquals("HASHED", savedUser.getValue().getPasswordHash());
     }
 
     @Test
