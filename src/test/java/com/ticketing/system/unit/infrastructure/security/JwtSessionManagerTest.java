@@ -73,7 +73,7 @@ class JwtSessionManagerTest {
 
     @BeforeEach
     void setUp() {
-        clock = Clock.systemUTC();
+        clock = FIXED_CLOCK;
         sessions = new MemorySessionRepository(clock);
         manager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), sessions, clock);
 
@@ -121,7 +121,7 @@ class JwtSessionManagerTest {
     @Test
     void GivenExpiredToken_WhenValidateToken_ThenThrowsSessionExpired() {
         // Negative expiration → token is issued already past its exp claim.
-        Clock expiredClock = Clock.systemUTC();
+        Clock expiredClock = FIXED_CLOCK;
         SessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
         JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), expiredSessions, expiredClock);
         String token = expiredManager.generateToken(42, "alice");
@@ -243,7 +243,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenFreshToken_WhenExtractExpiration_ThenReturnsFutureEpochMillis() {
-        long before = System.currentTimeMillis();
+        long before = clock.millis();
         String token = manager.generateToken(42, "alice");
         long expiry = manager.extractExpiration(token);
         assertTrue(expiry > before, "expiry should be after issuance time");
@@ -393,7 +393,7 @@ class JwtSessionManagerTest {
     @Test
     void GivenPreexistingMemberSession_WhenGenerateTokenForSession_ThenTokenValidatesWithTheSessionsUserAndUsername() {
         // Promote-on-login scenario: an existing Session row gains a JWT.
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         Session preexisting = new Session(
                 "preserved-sid",
                 9,
@@ -418,7 +418,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenGuestSession_WhenGenerateTokenForSession_ThenRejectsItWithIllegalState() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         Session guest = new Session("guest-sid", null, now, now.plusSeconds(3600));
         sessions.save(guest);
 
@@ -447,7 +447,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenRawGuestSessionId_WhenValidateCredential_ThenTrue() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         Session guest = new Session("guest-sid-xyz", null, now, now.plusSeconds(3600));
         sessions.save(guest);
 
@@ -461,7 +461,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenExpiredSession_WhenValidateCredential_ThenFalse() {
-        Instant past = Instant.now().minusSeconds(3600);
+        Instant past = clock.instant().minusSeconds(3600);
         Session expired = new Session("expired-sid", null, past, past.plusSeconds(60));
         sessions.save(expired);
 

@@ -28,6 +28,8 @@ import com.ticketing.system.organization.domain.Permission;
  */
 abstract class ICompanyAppointmentRepositoryContractTest {
 
+    private static final LocalDateTime INVITED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     protected abstract CompanyAppointmentRepository newRepository();
 
     private CompanyAppointmentRepository repo;
@@ -39,7 +41,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
     // Helper — mints an id and builds a PENDING manager appointment with the given permissions.
     private CompanyAppointment manager(int companyId, int targetId, int inviterId, List<Permission> permissions) {
-        return CompanyAppointment.ManagerAppointment(repo.nextId(), companyId, targetId, inviterId, permissions, LocalDateTime.now());
+        return CompanyAppointment.ManagerAppointment(repo.nextId(), companyId, targetId, inviterId, permissions, INVITED_AT);
     }
 
     @Test
