@@ -33,7 +33,7 @@ Classify each read by where the stamp flows. The first match wins:
 2. **A test that controls a clock** stamps its data from that clock's instant, and uses `Clock.fixed`, or `AdjustableClock` where
    time must move. Three `@DataJpaTest` slices declare a fixed `Clock` bean this way.
 3. **A `@SpringBootTest` whose stamp meets the application's clock** injects the bean and stamps with `LocalDateTime.now(clock)`. The
-   bean stays real. A show date is wall time at the venue (ADR-008), so it reads `LocalDateTime.now(clock.withZone(eventZone))`.
+   bean stays real. A show date is wall time at the venue (ADR-008) while `now(clock)` is UTC wall time, so the two differ by the venue's offset. `now(clock).plusDays(n)` is safe where the margin is at least a day, as in the acceptance tests. A smaller margin must read `LocalDateTime.now(clock.withZone(eventZone))`, as `SeatedShowFixture` does.
 
 `HexagonalRulesTest` runs its two clock rules over the test classes too, leaving out only the fixtures nested in it.
 
@@ -43,7 +43,7 @@ Classify each read by where the stamp flows. The first match wins:
 
 - A clock read added to a test fails in CI, on the required check, with no review round.
 - A test's data no longer depends on the JVM's zone.
-- A show date that passes through `addEvent` in a `@SpringBootTest` no longer starts failing as the calendar moves on.
+- A show date stamped from the clock stays ahead of it as the calendar moves on, which a fixed constant in a `@SpringBootTest` would not.
 
 **What this makes hard:**
 
