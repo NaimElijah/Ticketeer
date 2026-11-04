@@ -99,7 +99,7 @@ class RefundConcurrencyTest {
     }
 
     @Test
-    void givenManyConcurrentRefundsForSameReceipt_thenGatewayIsCalledExactlyOnce() throws InterruptedException {
+    void GivenManyConcurrentRefundsForSameReceipt_WhenRequestRefund_ThenExactlyOneWinsAndGatewayIsCalledExactlyOnce() throws InterruptedException {
         ExecutorService pool = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
         CountDownLatch armed = new CountDownLatch(CONCURRENT_REQUESTS);
         CountDownLatch fire = new CountDownLatch(1);

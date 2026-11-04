@@ -134,7 +134,7 @@ class ReservationConcurrencyTest {
     }
 
     @Test
-    void givenManyGuestsReserveTheSameSeatConcurrently_thenExactlyOneWinsAndTheSeatIsNotOversold()
+    void GivenManyGuestsAndOneContestedSeat_WhenReserveConcurrently_ThenExactlyOneWinsAndTheSeatIsNotOversold()
             throws InterruptedException {
         Outcome outcome = runConcurrentReserves(seatedZoneId,
                 InventorySelectionDTO.seated(List.of(CONTESTED_SEAT)));
@@ -147,7 +147,7 @@ class ReservationConcurrencyTest {
     }
 
     @Test
-    void givenManyGuestsReserveTheSameStandingPlaceConcurrently_thenExactlyOneWinsAndTheZoneIsNotOversold()
+    void GivenManyGuestsAndOneStandingPlace_WhenReserveConcurrently_ThenExactlyOneWinsAndTheZoneIsNotOversold()
             throws InterruptedException {
         Outcome outcome = runConcurrentReserves(standingZoneId, InventorySelectionDTO.standing(1));
 
