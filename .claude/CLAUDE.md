@@ -130,7 +130,7 @@ Events are in-process, with no outbox and no Modulith event registry. Catalog â†
 allowances, each domain inside its context, application-not-adapter, no-backendâ†’ui, ui never depends on
 another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
 stay open, #208), the module map,
-`bounded_contexts_are_acyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules;
+`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules;
 the clock, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
 they fail on a fixture) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed

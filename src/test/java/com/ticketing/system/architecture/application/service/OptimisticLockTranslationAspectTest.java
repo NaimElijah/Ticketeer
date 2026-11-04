@@ -48,7 +48,7 @@ class OptimisticLockTranslationAspectTest {
     }
 
     @Test
-    void translatesOptimisticLockFailureIntoConcurrentReservationException() {
+    void GivenOptimisticLockFailure_WhenTranslated_ThenBecomesConcurrentReservationExceptionWithOriginalCause() {
         FakeService target = new FakeService();
         OptimisticLockingFailureException conflict = new OptimisticLockingFailureException("version mismatch");
         target.toThrow = conflict;
@@ -83,7 +83,7 @@ class OptimisticLockTranslationAspectTest {
     }
 
     @Test
-    void passesSuccessfulResultsThroughUnchanged() {
+    void GivenASuccessfulResult_WhenAdvisedServiceRuns_ThenPassesResultThroughUnchanged() {
         FakeService target = new FakeService();
         target.result = "done";
 
@@ -93,7 +93,7 @@ class OptimisticLockTranslationAspectTest {
     }
 
     @Test
-    void leavesNonConflictExceptionsUntouched() {
+    void GivenANonConflictException_WhenAdvisedServiceRuns_ThenLeavesExceptionUntouched() {
         FakeService target = new FakeService();
         IllegalStateException unrelated = new IllegalStateException("not a conflict");
         target.toThrow = unrelated;

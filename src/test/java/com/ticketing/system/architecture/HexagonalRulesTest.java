@@ -85,7 +85,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
  * rules silently reported zero executed tests and a deliberately-failing rule did not fail the build.
  * Plain {@code @Test} methods are guaranteed to run under Surefire and to fail on a violation.
  *
- * <p>Alongside the hexagonal-layering invariants, {@link #bounded_contexts_are_acyclic()} enforces
+ * <p>Alongside the hexagonal-layering invariants, {@link #GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic()} enforces
      * that the bounded-context modules form a directed acyclic graph. This is the substantive cycle
      * guarantee: it uses ArchUnit slices (the same cycle engine Spring Modulith uses) run directly here,
      * so it applies even though the modules are declared <em>open</em> (open modules are exempt from
@@ -119,7 +119,7 @@ class HexagonalRulesTest {
      * holds the repository locks, the lock-translation aspect and the adapter profiles.
      */
     @Test
-    void domain_is_free_of_framework_and_outer_layers() {
+    void GivenProductionCode_WhenScanned_ThenTheDomainIsFreeOfFrameworkAndOuterLayers() {
         DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS.check(PRODUCTION_CLASSES);
     }
 
@@ -144,7 +144,7 @@ class HexagonalRulesTest {
      * Spring — the dependency arrow points inward, from adapter to application, never the reverse).
      */
     @Test
-    void application_does_not_depend_on_adapters() {
+    void GivenProductionCode_WhenScanned_ThenTheApplicationDoesNotDependOnAdapters() {
         noClasses()
                 .that().resideInAPackage("..application..")
                 .should().dependOnClassesThat().resideInAPackage("..adapter..")
@@ -162,7 +162,7 @@ class HexagonalRulesTest {
      * session. {@code reporting} is gated too: the UI reads it, so it must not read the UI back.
      */
     @Test
-    void no_backend_context_depends_on_the_ui() {
+    void GivenProductionCode_WhenScanned_ThenNoBackendContextDependsOnTheUi() {
         noClasses()
                 .that().resideInAnyPackage(
                         "com.ticketing.system.identity..", "com.ticketing.system.organization..",
@@ -180,7 +180,7 @@ class HexagonalRulesTest {
      * with {@code notifications} on {@code shared} alone, {@code governance} and {@code reporting}
      * reading the backend contexts other than {@code notifications} (a sink: it only consumes
      * notices), {@code ui} above them and {@code bootstrap} above everything. An
-     * edge that closes no cycle would pass {@link #bounded_contexts_are_acyclic()}, so only this rule
+     * edge that closes no cycle would pass {@link #GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic()}, so only this rule
      * stops, say, {@code notifications} starting to read {@code organization}.
      *
      * <p>A class in a module that {@link #ALLOWED_MODULE_DEPENDENCIES} does not name fails outright,
@@ -598,7 +598,7 @@ class HexagonalRulesTest {
      */
     
     @Test
-    void bounded_contexts_are_acyclic() {
+    void GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic() {
         slices()
                 .matching("com.ticketing.system.(*)..")   // one slice per top-level module (catalog, sales, ...)
                 .should().beFreeOfCycles()
