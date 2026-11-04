@@ -81,7 +81,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_success_returnsNewEventId() {
+    void GivenOneOwnedCompany_WhenCreate_ThenReturnsNewEventId() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
         when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("5"));
 
@@ -93,7 +93,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_prefersSelectedCompanyWhenOwned() {
+    void GivenASelectedCompanyThatIsOwned_WhenCreate_ThenPrefersTheSelectedCompany() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1), company(2)));
         when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("9"));
 
@@ -105,7 +105,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_preferredNotOwned_returnsChooseCompany() {
+    void GivenAPreferredCompanyNotOwned_WhenCreate_ThenReturnsChooseCompanyAndNothingCreated() {
         // A selected company the caller doesn't own must not silently retarget to another company.
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1), company(2)));
 
@@ -125,7 +125,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_noOwnedCompany_returnsNoCompany() {
+    void GivenNoOwnedCompany_WhenCreate_ThenReturnsNoCompanyAndNothingCreated() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of());
 
         assertInstanceOf(EventManagementPresenter.CreateOutcome.NoCompany.class,
@@ -134,7 +134,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_nullToken_returnsNotAuthenticated() {
+    void GivenANullToken_WhenCreate_ThenReturnsNotAuthenticatedAndNoServiceCall() {
         EventManagementPresenter.CreateOutcome outcome = presenter.create(null, 1, "Gala", "d",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
                 JERUSALEM,
@@ -145,7 +145,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenCreate_ThenReturnsNotAuthenticated() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
         when(eventService.addEvent(eq(TOKEN), any())).thenThrow(new InvalidTokenException());
 
@@ -154,7 +154,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_blankCategory_returnsInvalidInput() {
+    void GivenANullCategory_WhenCreate_ThenReturnsInvalidInputAndNoServiceCall() {
         // Required inputs are validated before any service call, so a null category maps to
         // InvalidInput (not a leaked NPE → Failure) and touches neither service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
@@ -165,7 +165,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_ratingOutOfRange_returnsInvalidInput() {
+    void GivenARatingOutOfRange_WhenCreate_ThenReturnsInvalidInputAndNoServiceCall() {
         // Rating is validated up front (0–5), so a bad value maps to InvalidInput and touches no service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
@@ -177,7 +177,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_nullRating_returnsInvalidInput() {
+    void GivenANullRating_WhenCreate_ThenReturnsInvalidInputAndNoServiceCall() {
         // Rating is required — a null rating maps to InvalidInput and touches no service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
@@ -261,7 +261,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_serviceFailure_returnsFailure() {
+    void GivenTheServiceFails_WhenCreate_ThenReturnsFailure() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
         when(eventService.addEvent(eq(TOKEN), any())).thenThrow(new RuntimeException("boom"));
 

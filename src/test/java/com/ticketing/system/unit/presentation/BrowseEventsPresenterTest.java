@@ -43,7 +43,7 @@ class BrowseEventsPresenterTest {
     }
 
     @Test
-    void search_delegatesToSearchGlobalAndReturnsResults() {
+    void GivenMatchingEvents_WhenSearch_ThenDelegatesToSearchGlobalAndReturnsResults() {
         CatalogSearchFiltersDTO filters = CatalogSearchFiltersDTO.empty();
         List<EventSummaryDTO> events = List.of(summary());
         when(catalogService.searchGlobal(eq(CRED), eq(filters))).thenReturn(events);

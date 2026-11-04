@@ -49,14 +49,14 @@ class VenueMapPresenterTest {
     }
 
     @Test
-    void saveMap_nullToken_returnsNotAuthenticatedWithoutTouchingService() {
+    void GivenANullToken_WhenSaveMap_ThenReturnsNotAuthenticatedWithoutTouchingService() {
         assertInstanceOf(VenueMapPresenter.SaveOutcome.NotAuthenticated.class,
                 presenter.saveMap(null, String.valueOf(EVENT_ID), config()));
         verifyNoInteractions(eventService);
     }
 
     @Test
-    void saveMap_resolvesCompanyFromEvent_thenConfiguresAndSucceeds() {
+    void GivenAnEventInACompany_WhenSaveMap_ThenResolvesCompanyFromEventThenConfiguresAndSucceeds() {
         when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenReturn(eventInCompany(COMPANY_ID));
         VenueMapConfigDTO config = config();
 
@@ -69,7 +69,7 @@ class VenueMapPresenterTest {
     }
 
     @Test
-    void saveMap_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenSaveMap_ThenReturnsNotAuthenticated() {
         when(eventService.getEventDetail(eq(TOKEN), anyInt()))
                 .thenThrow(new InvalidTokenException("bad"));
 
@@ -78,7 +78,7 @@ class VenueMapPresenterTest {
     }
 
     @Test
-    void saveMap_serviceThrowsRuntime_returnsFailureWithMessage() {
+    void GivenTheServiceThrowsIllegalStateException_WhenSaveMap_ThenReturnsFailureWithMessage() {
         when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenReturn(eventInCompany(COMPANY_ID));
         doThrow(new IllegalStateException("Cannot reconfigure venue map while tickets are reserved or sold"))
                 .when(eventService).configureVenueMap(eq(TOKEN), eq(COMPANY_ID), any());

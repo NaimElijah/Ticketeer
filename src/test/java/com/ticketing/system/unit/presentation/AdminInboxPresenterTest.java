@@ -51,7 +51,7 @@ class AdminInboxPresenterTest {
     // -- load -----------------------------------------------------------------
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminInboxPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(AdminInboxPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -59,7 +59,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void load_success_returnsConversations() {
+    void GivenTheServiceReturnsConversations_WhenLoad_ThenReturnsConversations() {
         ConversationDTO a = direct("c1");
         when(messaging.viewAdminInbox(TOKEN)).thenReturn(List.of(a));
 
@@ -71,14 +71,14 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(messaging.viewAdminInbox(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         assertInstanceOf(AdminInboxPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(messaging.viewAdminInbox(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         AdminInboxPresenter.Outcome.Failure fail =
@@ -89,7 +89,7 @@ class AdminInboxPresenterTest {
     // -- reply ----------------------------------------------------------------
 
     @Test
-    void reply_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenReply_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.reply(null, "c1", "hi");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -97,7 +97,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_happyPath_sendsConversationIdAndBody() {
+    void GivenTheServiceAcceptsTheMessage_WhenReply_ThenReturnsSuccessAndSendsConversationIdAndBody() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "any update?");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.Success.class, outcome);
@@ -108,7 +108,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("conversation closed")).when(messaging).sendMessage(anyString(), any());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
@@ -117,7 +117,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenReply_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(messaging).sendMessage(anyString(), any());
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class,
@@ -127,7 +127,7 @@ class AdminInboxPresenterTest {
     // -- close ----------------------------------------------------------------
 
     @Test
-    void close_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenClose_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.close(null, "c1");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -135,7 +135,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void close_happyPath_closesConversation() {
+    void GivenTheServiceAcceptsTheClose_WhenClose_ThenReturnsSuccessAndClosesConversation() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.close(TOKEN, "c1");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.Success.class, outcome);
@@ -143,7 +143,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void close_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenClose_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("already closed")).when(messaging).closeConversation(anyString(), anyString());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
@@ -152,7 +152,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void close_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenClose_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(messaging).closeConversation(anyString(), anyString());
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class,
@@ -160,7 +160,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+    void GivenAClosedConversation_WhenReply_ThenReturnsFailureWithTheRulesMessage() {
         ConversationClosedException rule = new ConversationClosedException("c1");
         doThrow(rule).when(messaging).sendMessage(anyString(), any());
 

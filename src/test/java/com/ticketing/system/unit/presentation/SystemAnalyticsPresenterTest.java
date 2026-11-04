@@ -61,7 +61,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void load_returnsSuccess_withMarketAndAnalytics() {
+    void GivenMarketAndAnalyticsAvailable_WhenLoad_ThenReturnsSuccessWithMarketAndAnalytics() {
         MarketStateDTO market = marketState("OPEN");
         SystemAnalyticsDTO analytics = zeroAnalytics();
         when(adminService.viewMarketState(TOKEN)).thenReturn(market);
@@ -76,14 +76,14 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void load_returnsFailure_whenAServiceThrows() {
+    void GivenTheAdminServiceThrows_WhenLoad_ThenReturnsFailure() {
         when(adminService.viewMarketState(TOKEN)).thenThrow(new RuntimeException("boom"));
 
         assertInstanceOf(SystemAnalyticsPresenter.Outcome.Failure.class, presenter.load());
     }
 
     @Test
-    void openMarket_withNullToken_isNotAuthenticated_andDoesNotCallService() {
+    void GivenANullToken_WhenOpenMarket_ThenIsNotAuthenticatedAndDoesNotCallService() {
         SystemAnalyticsPresenter.MarketActionOutcome outcome = presenter.openMarket(null, "x");
 
         assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class, outcome);
@@ -91,7 +91,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void openMarket_success_returnsUpdatedState() {
+    void GivenTheServiceOpensTheMarket_WhenOpenMarket_ThenReturnsUpdatedState() {
         MarketStateDTO opened = marketState("OPEN");
         when(adminService.openMarket(any())).thenReturn(opened);
 
@@ -103,7 +103,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void openMarket_unauthorized_mapsToNotAuthenticated() {
+    void GivenAnUnauthorizedCaller_WhenOpenMarket_ThenMapsToNotAuthenticated() {
         when(adminService.openMarket(any())).thenThrow(new UnauthorizedActionException("nope"));
 
         assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class,
@@ -111,7 +111,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void openMarket_marketNotOpen_mapsToRejected() {
+    void GivenAMarketNotOpenRefusal_WhenOpenMarket_ThenMapsToRejected() {
         when(adminService.openMarket(any())).thenThrow(new MarketNotOpenException("platform not initialized"));
 
         assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Rejected.class,
@@ -119,7 +119,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void closeMarket_invalidTransition_mapsToRejected() {
+    void GivenAnInvalidTransition_WhenCloseMarket_ThenMapsToRejected() {
         when(adminService.closeMarket(any()))
                 .thenThrow(new InvalidStateTransitionException("market is not open; cannot close"));
 
@@ -128,7 +128,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void closeMarket_unexpectedError_mapsToFailure() {
+    void GivenAnUnexpectedError_WhenCloseMarket_ThenMapsToFailure() {
         when(adminService.closeMarket(any())).thenThrow(new RuntimeException("db down"));
 
         assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Failure.class,

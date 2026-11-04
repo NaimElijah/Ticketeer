@@ -23,7 +23,7 @@ class LkTextRowsTest {
     private static final int ARTIST_LIMIT = 40;
 
     @Test
-    void newComponent_startsWithOneEmptyRow_noValues() {
+    void GivenNoValuesSet_WhenConstructed_ThenStartsWithOneEmptyRowAndNoValues() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         assertEquals(List.of(), rows.getValues());
@@ -31,7 +31,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void setValues_roundTripsInOrder_oneRowEach() {
+    void GivenThreeValues_WhenSetValues_ThenRoundTripsInOrderWithOneRowEach() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         rows.setValues(List.of("The Beatles", "Pink Floyd", "Queen"));
@@ -41,7 +41,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void getValues_trimsAndDropsBlanks() {
+    void GivenValuesWithPaddingAndBlanks_WhenGetValues_ThenTrimsAndDropsBlanks() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         rows.setValues(List.of("The Beatles", "   ", " Pink Floyd ", "", "  Queen"));
@@ -51,7 +51,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void setValues_emptyOrNull_keepsOneEmptyRow_whenEditable() {
+    void GivenAnEditableComponent_WhenSetValuesEmptyOrNull_ThenKeepsOneEmptyRow() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         rows.setValues(List.of());
@@ -64,7 +64,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void editable_showsAddButtonAndRemoveControls() {
+    void GivenAnEditableComponent_WhenSetValues_ThenShowsAddButtonAndRemoveControls() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
         rows.setValues(List.of("A", "B"));
 
@@ -73,7 +73,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void readOnly_hidesAddButtonAndRemoveControls_butStillReportsValues() {
+    void GivenTwoRows_WhenReadOnly_ThenHidesAddButtonAndRemoveControlsButStillReportsValues() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
         rows.setValues(List.of("A", "B"));
 

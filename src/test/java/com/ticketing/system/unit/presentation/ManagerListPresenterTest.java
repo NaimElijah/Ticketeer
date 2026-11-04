@@ -47,7 +47,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoadRoster_ThenReturnsNotAuthenticatedWithoutCallingService() {
         ManagerListPresenter.Outcome outcome = presenter.loadRoster(null);
 
         assertInstanceOf(ManagerListPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -55,7 +55,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void noOwnedCompany_returnsNoCompany() {
+    void GivenNoOwnedCompany_WhenLoadRoster_ThenReturnsNoCompanyWithoutListingManagers() {
         when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of());
 
         ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
@@ -65,7 +65,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void ownedCompany_returnsSuccessWithBothRosters() {
+    void GivenASelectedOwnedCompany_WhenLoadRoster_ThenReturnsSuccessWithBothRosters() {
         MapBackedVaadinSession.install();
         CurrentCompanies.setCurrentCompany(7);
         ProductionCompanyDTO company = new ProductionCompanyDTO(7, "Acme", "desc", "ACTIVE", 1);
@@ -90,7 +90,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoadRoster_ThenReturnsGenericFailure() {
         when(service.findOwnedCompanies(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         ManagerListPresenter.Outcome outcome = presenter.loadRoster(TOKEN);
@@ -187,7 +187,7 @@ class ManagerListPresenterTest {
     // -- editPermissions ------------------------------------------------------
 
     @Test
-    void editPermissions_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenEditPermissions_ThenReturnsNotAuthenticatedWithoutCallingService() {
         ManagerListPresenter.ActionOutcome outcome =
             presenter.editPermissions(null, 7, 2, List.of("VIEW_SALES"));
 
@@ -196,7 +196,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void editPermissions_happyPath_returnsSuccess_andBuildsDtoWithConvertedPermissions() {
+    void GivenTheServiceAcceptsTheEdit_WhenEditPermissions_ThenReturnsSuccessAndBuildsDtoWithConvertedPermissions() {
         ManagerListPresenter.ActionOutcome outcome = presenter.editPermissions(
             TOKEN, 7, 2, List.of("VIEW_SALES", "EDIT_POLICIES"));
 
@@ -210,7 +210,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void editPermissions_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenEditPermissions_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("only the appointer may edit"))
             .when(service).editManagerPermissions(anyString(), any());
 
@@ -223,7 +223,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void editPermissions_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenEditPermissions_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(service).editManagerPermissions(anyString(), any());
 
@@ -236,7 +236,7 @@ class ManagerListPresenterTest {
     // -- revoke ---------------------------------------------------------------
 
     @Test
-    void revoke_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenRevoke_ThenReturnsNotAuthenticatedWithoutCallingService() {
         ManagerListPresenter.ActionOutcome outcome = presenter.revoke(null, 7, 2);
 
         assertInstanceOf(ManagerListPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -244,7 +244,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void revoke_happyPath_returnsSuccess_andBuildsDto() {
+    void GivenTheServiceAcceptsTheRevoke_WhenRevoke_ThenReturnsSuccessAndBuildsDto() {
         ManagerListPresenter.ActionOutcome outcome = presenter.revoke(TOKEN, 7, 2);
 
         assertInstanceOf(ManagerListPresenter.ActionOutcome.Success.class, outcome);
@@ -257,7 +257,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void revoke_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenRevoke_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("Cannot revoke appointment of the founder"))
             .when(service).RevokeAppointment(anyString(), any());
 
@@ -269,7 +269,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void revoke_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenRevoke_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(service).RevokeAppointment(anyString(), any());
 
@@ -279,7 +279,7 @@ class ManagerListPresenterTest {
     }
 
     @Test
-    void editPermissions_notTheAppointer_returnsFailureWithTheRulesMessage() {
+    void GivenTheCallerIsNotTheAppointer_WhenEditPermissions_ThenReturnsFailureWithTheRulesMessage() {
         UnauthorizedActionException rule =
             new UnauthorizedActionException("Only the original appointer can modify manager permissions");
         doThrow(rule).when(service).editManagerPermissions(anyString(), any());

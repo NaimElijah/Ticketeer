@@ -27,19 +27,19 @@ class UsernameAvailabilityPresenterTest {
     }
 
     @Test
-    void emptyOrBlankInput_returnsEmpty() {
+    void GivenNullEmptyOrBlankInput_WhenCheck_ThenReturnsEmpty() {
         assertInstanceOf(Outcome.Empty.class, presenter.check(null));
         assertInstanceOf(Outcome.Empty.class, presenter.check(""));
         assertInstanceOf(Outcome.Empty.class, presenter.check("   "));
     }
 
     @Test
-    void tooShort_returnsInvalidFormat() {
+    void GivenATooShortName_WhenCheck_ThenReturnsInvalidFormat() {
         assertInstanceOf(Outcome.InvalidFormat.class, presenter.check("ab"));
     }
 
     @Test
-    void disallowedCharacters_returnInvalidFormat() {
+    void GivenDisallowedCharacters_WhenCheck_ThenReturnsInvalidFormat() {
         assertInstanceOf(Outcome.InvalidFormat.class, presenter.check("with space"));
         assertInstanceOf(Outcome.InvalidFormat.class, presenter.check("with#symbol"));
     }
@@ -54,7 +54,7 @@ class UsernameAvailabilityPresenterTest {
     }
 
     @Test
-    void adminPoolName_returnsAdminReserved() {
+    void GivenAnAdminPoolName_WhenCheck_ThenReturnsAdminReserved() {
         // Which names are reserved is the identity service's answer, the one register enforces.
         when(authenticationService.isUsernameReserved("admin")).thenReturn(true);
         when(authenticationService.isUsernameReserved("platform.admin")).thenReturn(true);
@@ -64,21 +64,21 @@ class UsernameAvailabilityPresenterTest {
     }
 
     @Test
-    void existingMemberName_returnsTaken() {
+    void GivenAnExistingMemberName_WhenCheck_ThenReturnsTaken() {
         when(memberQueryService.usernameExists("naim.founder")).thenReturn(true);
 
         assertInstanceOf(Outcome.Taken.class, presenter.check("naim.founder"));
     }
 
     @Test
-    void newValidName_returnsAvailable() {
+    void GivenANewValidName_WhenCheck_ThenReturnsAvailable() {
         when(memberQueryService.usernameExists("brand.new")).thenReturn(false);
 
         assertInstanceOf(Outcome.Available.class, presenter.check("brand.new"));
     }
 
     @Test
-    void serviceFailure_returnsFailureWithMessage() {
+    void GivenTheServiceThrowsIllegalStateException_WhenCheck_ThenReturnsFailureWithMessage() {
         when(memberQueryService.usernameExists("anyone")).thenThrow(new IllegalStateException("db down"));
 
         Outcome.Failure failure = assertInstanceOf(Outcome.Failure.class, presenter.check("anyone"));

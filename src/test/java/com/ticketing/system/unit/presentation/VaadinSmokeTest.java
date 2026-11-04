@@ -124,7 +124,7 @@ class VaadinSmokeTest {
     private ApplicationContext context;
 
     @Test
-    void springContextLoadsWithVaadin() {
+    void GivenVaadinAutoConfiguration_WhenSpringContextBoots_ThenContextLoads() {
         // Reaching this method means @SpringBootTest succeeded. If Vaadin's
         // auto-configuration were broken or the starter were missing, context
         // load would have thrown.
@@ -132,7 +132,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void vaadinClassesAreReachable() {
+    void GivenTheTestClasspath_WhenVaadinClassesAreLoadedByName_ThenDoesNotThrow() {
         assertDoesNotThrow(() -> Class.forName("com.vaadin.flow.spring.SpringServlet"),
             "Vaadin SpringServlet class not on classpath");
         assertDoesNotThrow(() -> Class.forName("com.vaadin.flow.server.VaadinService"),
@@ -144,7 +144,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void presentationPackageIsConfigured() {
+    void GivenBrowseEventsAndAdminDashboardViews_WhenPackageNameRead_ThenTheyLiveUnderTheUiPackage() {
         // All view classes must live under the package configured in
         // application.yml `vaadin.allowed-packages`, otherwise Vaadin's
         // route scanner won't discover them.
@@ -157,7 +157,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void layoutsAreLoadable() {
+    void GivenMainAndWorkspaceLayouts_WhenClassesAreReferenced_ThenAreLoadable() {
         // We can't instantiate the layouts here — they build RouterLinks in
         // their constructors and RouterLink calls VaadinService.getCurrent()
         // which is null outside a real UI context. So just verify the
@@ -169,7 +169,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void workspaceDrawerTargetsAreNavigableWithoutParameters() throws Exception {
+    void GivenTheWorkspaceDrawerItems_WhenTheirRoutesAreRead_ThenTargetsAreNavigableWithoutParameters() throws Exception {
         // Regression for the /owner workspace crash. WorkspaceLayout's drawer builds one
         // RouterLink per entry via LkSideNav.items() -> link.setRoute(target). Vaadin's
         // RouterLink.setRoute(Class) throws when the target's @Route template carries a
@@ -205,7 +205,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void coreViewsInstantiate() {
+    void GivenPresentersFromTheContext_WhenCoreViewsConstructed_ThenDoesNotThrow() {
         // Spot-check one MainLayout view and one WorkspaceLayout view as a
         // cheap canary for kit-API breakage. Both now take an injected
         // presenter, so resolve it from the Spring context.
@@ -219,7 +219,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void eventDetailsViewInstantiates() {
+    void GivenABareMockPresenter_WhenEventDetailsViewConstructed_ThenDoesNotThrow() {
         // Buyer event page wired to a presenter (#272). The constructor only builds the
         // bodyHolder shell — load + page build happen in beforeEnter — so bare mocks exercise
         // the construction path (a canary for kit-API breakage at wiring time).
@@ -231,7 +231,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void receiptViewInstantiates() {
+    void GivenBareMockPresenters_WhenReceiptViewConstructed_ThenDoesNotThrow() {
         // Member receipt page wired to presenters (#276 + refund #284). The constructor only adds
         // the bodyHolder shell — load + render happen in beforeEnter — so bare mocks exercise the
         // construction path.
@@ -243,7 +243,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void myAccountViewInstantiates() {
+    void GivenAnEmptyPurchaseHistory_WhenMyAccountViewConstructed_ThenDoesNotThrow() {
         // Member account page (#284 refund affordance). It builds in the constructor, so the
         // presenter must return a (here empty) history; bare mocks for the rest.
         MyAccountPresenter presenter = mock(MyAccountPresenter.class);
@@ -280,7 +280,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void platformAdminViewsInstantiate() {
+    void GivenANotAuthenticatedOrgTreeOutcome_WhenOrganizationalTreeViewConstructed_ThenDoesNotThrow() {
         // No-arg PlatformAdminLayout views. AdminDashboardView takes a presenter, so it has
         // its own test below.
         OrgTreePresenter orgTreePresenter = mock(OrgTreePresenter.class);
@@ -290,7 +290,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void adminDashboardViewInstantiates() {
+    void GivenAnOverviewLoaded_WhenAdminDashboardViewConstructed_ThenDoesNotThrow() {
         // Admin workspace landing wired to a presenter (#279). The constructor runs an initial
         // load() to build the KPI row, so the mock presenter returns a success outcome.
         AdminDashboardPresenter presenter = mock(AdminDashboardPresenter.class);
@@ -308,7 +308,7 @@ class VaadinSmokeTest {
     private static final LocalDateTime MARKET_STATE_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     @Test
-    void systemAnalyticsViewInstantiates() {
+    void GivenMarketAndAnalyticsLoaded_WhenSystemAnalyticsViewConstructed_ThenDoesNotThrow() {
         // System Analytics dashboard wired to a presenter (UC-46 / #43, #279). The constructor
         // runs an initial load(), so the mock presenter returns a success outcome to exercise the
         // market-card + KPI-stat build path without a UI context.
@@ -361,7 +361,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void eventManagementViewInstantiates() {
+    void GivenABareMockPresenter_WhenEventManagementViewConstructed_ThenDoesNotThrow() {
         // Owner create/edit-event screen (route owner/events/:eventId). The constructor builds the
         // whole form (incl. the create-mode Artists field and the side column) but doesn't invoke the
         // presenter — load/create happen on beforeEnter/click — so a bare mock exercises construction.
@@ -371,7 +371,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void managerListViewInstantiates() {
+    void GivenAnEmptyRoster_WhenManagerListViewConstructed_ThenDoesNotThrow() {
         // Owner-workspace view wired to a presenter (#264). A mock presenter
         // returning an empty success roster exercises the grid-building path
         // without a UI context — a canary for kit-API breakage.
@@ -383,7 +383,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void myInvitationsViewInstantiates() {
+    void GivenNoInvitations_WhenMyInvitationsViewConstructed_ThenDoesNotThrow() {
         // Member account view wired to a presenter (#275). A mock presenter
         // returning an empty success outcome exercises the grid-building path
         // without a UI context — a canary for kit-API breakage.
@@ -395,7 +395,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void ownerDashboardViewInstantiates() {
+    void GivenOneCompanyLoaded_WhenOwnerDashboardViewConstructed_ThenDoesNotThrow() {
         // Owner-workspace hub wired to a presenter (#292). A mock presenter returning a
         // single-company success outcome exercises the stat-tile + tile-grid build path
         // without a UI context.
@@ -409,7 +409,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void landingViewInstantiates() {
+    void GivenEmptyPosterRows_WhenLandingViewConstructed_ThenDoesNotThrow() {
         // Public landing root wired to a presenter (#285). A mock presenter returning an
         // empty success outcome exercises the poster-row build path without a UI context.
         LandingPresenter presenter = mock(LandingPresenter.class);
@@ -420,7 +420,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void submitComplaintViewInstantiates() {
+    void GivenABareMockPresenter_WhenSubmitComplaintViewConstructed_ThenDoesNotThrow() {
         // Messaging view wired to a presenter (#267). Construction doesn't invoke
         // submit(), so a bare mock presenter is enough to exercise the form-build
         // path without a UI context — a canary for kit-API breakage.
@@ -430,7 +430,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void supportInboxViewInstantiates() {
+    void GivenOneConversationLoaded_WhenSupportInboxViewConstructed_ThenDoesNotThrow() {
         // Member Support inbox wired to a presenter (#277). A mock presenter
         // returning one conversation with one message exercises the master-list +
         // thread + reply-bar build path without a UI context.
@@ -448,7 +448,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void companyInquiryInboxViewInstantiates() {
+    void GivenOneCompanyAndOneInquiryLoaded_WhenCompanyInquiryInboxViewConstructed_ThenDoesNotThrow() {
         // Company member-inquiry inbox wired to a presenter (#268). A mock presenter returning
         // one company + one inquiry with one message exercises the status-filter + master-list +
         // thread + reply-bar build path without a UI context.
@@ -467,11 +467,11 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void adminComplaintQueueViewInstantiates() {
+    void GivenOneComplaintLoaded_WhenAdminComplaintQueueViewConstructed_ThenDoesNotThrow() {
         // Admin complaint queue wired to a presenter (#269). A mock presenter returning one
         // complaint with one message exercises the status-filter + master-list + thread +
         // reply-bar build path without a UI context. (The view now takes a presenter, so it
-        // moved out of the no-arg platformAdminViewsInstantiate group.)
+        // moved out of the no-arg GivenANotAuthenticatedOrgTreeOutcome_WhenOrganizationalTreeViewConstructed_ThenDoesNotThrow group.)
         AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "COMPLAINT", "OPEN", 1, "MEMBER", 0, "ADMIN_GROUP",
@@ -486,7 +486,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void adminInboxViewInstantiates() {
+    void GivenOneDirectConversationLoaded_WhenAdminInboxViewConstructed_ThenDoesNotThrow() {
         // Admin outreach inbox wired to a presenter. A mock presenter returning one DIRECT conversation
         // with a message exercises the master-list + thread + reply-bar + close build path.
         AdminInboxPresenter presenter = mock(AdminInboxPresenter.class);
@@ -502,7 +502,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void adminSendMessagesViewInstantiates() {
+    void GivenOneSentRowLoaded_WhenAdminSendMessagesViewConstructed_ThenDoesNotThrow() {
         // Admin "Send Messages" outreach wired to a presenter (II.6.3.2). A mock presenter returning
         // one sent row exercises the composer + recipient picker + history-grid build path without a
         // UI context.
@@ -516,7 +516,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void newInquiryViewInstantiates() {
+    void GivenABareMockPresenter_WhenNewInquiryViewConstructed_ThenDoesNotThrow() {
         // Member "New inquiry" composer (II.3.10). The constructor builds the form shell; company
         // search + submit happen on interaction, so a bare mock presenter exercises construction.
         NewInquiryPresenter presenter = mock(NewInquiryPresenter.class);
@@ -525,7 +525,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void adminComplaintRespondViewInstantiates() {
+    void GivenABareMockPresenter_WhenAdminComplaintRespondViewConstructed_ThenDoesNotThrow() {
         // Admin complaint respond page. The constructor only adds the content shell (load happens in
         // beforeEnter), so a bare mock presenter exercises construction.
         AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
@@ -534,7 +534,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void companyInquiryRespondViewInstantiates() {
+    void GivenABareMockPresenter_WhenCompanyInquiryRespondViewConstructed_ThenDoesNotThrow() {
         // Company inquiry respond page. The constructor only adds the content shell (load happens in
         // beforeEnter), so a bare mock presenter exercises construction.
         CompanyInquiryInboxPresenter presenter = mock(CompanyInquiryInboxPresenter.class);
@@ -543,7 +543,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void managerActionDialogsConstruct() {
+    void GivenRevokeAndEditPermissionsArguments_WhenManagerActionDialogsConstructed_ThenDoesNotThrow() {
         // V2-CADMIN-03 dialogs — build path only (open() needs a UI context).
         assertDoesNotThrow(() -> new LkConfirm("Revoke manager", "Remove Carol?",
                 LkConfirm.Severity.danger)
@@ -555,7 +555,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void kitComponentsInstantiate() {
+    void GivenValidArguments_WhenKitComponentsConstructed_ThenDoesNotThrow() {
         // Generic kit primitives — these underpin every view.
         assertDoesNotThrow(() -> new LkIcon("ticket"),    "LkIcon failed");
         assertDoesNotThrow(() -> new LkBtn("Sign in"),    "LkBtn failed");
@@ -594,7 +594,7 @@ class VaadinSmokeTest {
     }
 
     @Test
-    void toastsUtilityIsLoadable() {
+    void GivenTheToastsUtility_WhenClassIsReferenced_ThenIsLoadable() {
         // Just checking the class loads — we can't invoke Notification.show
         // outside a UI context.
         assertNotNull(Toasts.class);

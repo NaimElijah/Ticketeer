@@ -107,7 +107,7 @@ class AdminLoginPresenterTest {
     }
 
     @Test
-    void success_returnsSuccessWrappingTheToken() {
+    void GivenValidCredentials_WhenAttemptAdminLogin_ThenReturnsSuccessWrappingTheToken() {
         AuthTokenDTO token = new AuthTokenDTO("jwt", 9_999_999_999L, 1, "root");
         when(authenticationService.signInAsAdmin("root", "pw")).thenReturn(token);
 
@@ -119,7 +119,7 @@ class AdminLoginPresenterTest {
     }
 
     @Test
-    void authenticationFailed_returnsInvalidCredentials() {
+    void GivenAuthenticationFails_WhenAttemptAdminLogin_ThenReturnsInvalidCredentials() {
         when(authenticationService.signInAsAdmin("root", "wrong"))
             .thenThrow(new AuthenticationFailedException());
 
@@ -128,7 +128,7 @@ class AdminLoginPresenterTest {
     }
 
     @Test
-    void accountLocked_returnsLocked() {
+    void GivenALockedAccount_WhenAttemptAdminLogin_ThenReturnsLocked() {
         when(authenticationService.signInAsAdmin("root", "pw"))
             .thenThrow(new AccountLockedException("locked for 15 minutes"));
 
@@ -137,7 +137,7 @@ class AdminLoginPresenterTest {
     }
 
     @Test
-    void databaseUnavailable_returnsServiceUnavailable() {
+    void GivenTheDatabaseIsUnavailable_WhenAttemptAdminLogin_ThenReturnsServiceUnavailable() {
         // A DB outage surfaces as a connectivity exception — must map to ServiceUnavailable.
         when(authenticationService.signInAsAdmin("root", "pw"))
             .thenThrow(new DataAccessResourceFailureException("could not get a connection"));
@@ -147,7 +147,7 @@ class AdminLoginPresenterTest {
     }
 
     @Test
-    void unexpectedRuntime_returnsFailure() {
+    void GivenAnUnexpectedIllegalStateException_WhenAttemptAdminLogin_ThenReturnsFailure() {
         when(authenticationService.signInAsAdmin("root", "pw"))
             .thenThrow(new IllegalStateException("boom"));
 

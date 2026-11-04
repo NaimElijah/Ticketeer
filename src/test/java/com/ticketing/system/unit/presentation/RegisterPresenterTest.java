@@ -34,7 +34,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void success_returnsSuccessOutcome() {
+    void GivenValidRegistrationDetails_WhenAttemptRegister_ThenReturnsSuccessOutcome() {
         doNothing().when(authenticationService).register(any(RegisterRequestDTO.class));
 
         RegisterPresenter.Outcome outcome = presenter.attemptRegister(
@@ -45,7 +45,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void success_forwardsAllFieldsToTheService() {
+    void GivenValidRegistrationDetails_WhenAttemptRegister_ThenForwardsAllFieldsToTheService() {
         doNothing().when(authenticationService).register(any(RegisterRequestDTO.class));
 
         presenter.attemptRegister("adam", "adam@x.com", "password1", 22, "guest-sid");
@@ -61,7 +61,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void duplicateUsername_returnsUsernameTaken() {
+    void GivenADuplicateUsername_WhenAttemptRegister_ThenReturnsUsernameTaken() {
         doThrow(new DuplicateUsernameException("adam")).when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -71,7 +71,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void duplicateEmail_returnsEmailTaken() {
+    void GivenADuplicateEmail_WhenAttemptRegister_ThenReturnsEmailTaken() {
         doThrow(new DuplicateEmailException()).when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -81,7 +81,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void weakPassword_returnsWeakPasswordWithReason() {
+    void GivenAWeakPassword_WhenAttemptRegister_ThenReturnsWeakPasswordWithReason() {
         doThrow(new WeakPasswordException("must be at least 8 characters"))
             .when(authenticationService).register(any());
 
@@ -95,7 +95,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void invalidEmail_returnsInvalidEmail() {
+    void GivenAnInvalidEmail_WhenAttemptRegister_ThenReturnsInvalidEmail() {
         doThrow(new InvalidEmailFormatException())
             .when(authenticationService).register(any());
 
@@ -106,7 +106,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void guestSessionRequired_returnsGuestSessionMissingWithMessage() {
+    void GivenAGuestSessionIsRequired_WhenAttemptRegister_ThenReturnsGuestSessionMissingWithMessage() {
         doThrow(new GuestSessionRequiredException("session is not a guest session"))
             .when(authenticationService).register(any());
 
@@ -119,7 +119,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void illegalArgument_returnsInvalidInputWithMessage() {
+    void GivenAnIllegalArgument_WhenAttemptRegister_ThenReturnsInvalidInputWithMessage() {
         doThrow(new IllegalArgumentException("Age cannot be negative"))
             .when(authenticationService).register(any());
 
@@ -132,7 +132,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void unexpectedRuntime_returnsFailureWithMessage() {
+    void GivenAnUnexpectedIllegalStateException_WhenAttemptRegister_ThenReturnsFailureWithMessage() {
         doThrow(new IllegalStateException("database down"))
             .when(authenticationService).register(any());
 

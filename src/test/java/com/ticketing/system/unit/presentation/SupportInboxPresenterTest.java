@@ -56,7 +56,7 @@ class SupportInboxPresenterTest {
     // -- load -----------------------------------------------------------------
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         SupportInboxPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(SupportInboxPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -64,7 +64,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void load_returnsAllConversationsFromService() {
+    void GivenComplaintInquiryAndOutreachConversations_WhenLoad_ThenReturnsAllConversationsFromService() {
         ConversationDTO complaint = conversation("c1", "COMPLAINT", "MEMBER");
         ConversationDTO inquiry = conversation("c2", "INQUIRY", "MEMBER");
         ConversationDTO outreach = conversation("c3", "DIRECT", "ADMIN");   // admin → member, member is counterparty
@@ -81,7 +81,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(service.viewMyConversations(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         SupportInboxPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -116,7 +116,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(service.viewMyConversations(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         SupportInboxPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -127,7 +127,7 @@ class SupportInboxPresenterTest {
     // -- reply ----------------------------------------------------------------
 
     @Test
-    void reply_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenReply_ThenReturnsNotAuthenticatedWithoutCallingService() {
         SupportInboxPresenter.ActionOutcome outcome = presenter.reply(null, "c1", "hi");
 
         assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -135,7 +135,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_happyPath_returnsSuccess_andSendsConversationIdAndBody() {
+    void GivenTheServiceAcceptsTheMessage_WhenReply_ThenReturnsSuccessAndSendsConversationIdAndBody() {
         SupportInboxPresenter.ActionOutcome outcome =
             presenter.reply(TOKEN, "c1", "any update?");
 
@@ -148,7 +148,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("conversation closed"))
             .when(service).sendMessage(anyString(), any());
 
@@ -160,7 +160,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenReply_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(service).sendMessage(anyString(), any());
 
@@ -170,7 +170,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+    void GivenAClosedConversation_WhenReply_ThenReturnsFailureWithTheRulesMessage() {
         ConversationClosedException rule = new ConversationClosedException("c1");
         doThrow(rule).when(service).sendMessage(anyString(), any());
 

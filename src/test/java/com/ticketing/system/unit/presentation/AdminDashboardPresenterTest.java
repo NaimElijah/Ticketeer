@@ -42,7 +42,7 @@ class AdminDashboardPresenterTest {
     }
 
     @Test
-    void load_returnsSuccess_withOverview() {
+    void GivenTheServiceReturnsAnOverview_WhenLoad_ThenReturnsSuccessWithOverview() {
         AdminOverviewDTO overview = new AdminOverviewDTO(2, 3, 1, 1500.0);
         when(analyticsService.adminOverview(ADMIN_TOKEN)).thenReturn(overview);
 
@@ -54,7 +54,7 @@ class AdminDashboardPresenterTest {
     }
 
     @Test
-    void load_returnsFailure_whenServiceThrows() {
+    void GivenTheServiceThrows_WhenLoad_ThenReturnsFailure() {
         when(analyticsService.adminOverview(ADMIN_TOKEN)).thenThrow(new RuntimeException("boom"));
 
         assertInstanceOf(AdminDashboardPresenter.Outcome.Failure.class, presenter.load());

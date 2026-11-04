@@ -49,13 +49,13 @@ import static org.mockito.Mockito.when;
 class CapabilitiesTest {
 
     @Test
-    void resolverIsCallableWithoutSession() {
+    void GivenNoVaadinSession_WhenForCurrentUser_ThenTheResolverIsCallableAndReturnsNonNull() {
         Set<Capability> caps = Capabilities.forCurrentUser();
         assertNotNull(caps, "Capabilities.forCurrentUser() must never return null");
     }
 
     @Test
-    void guestBaseIncludesCatalogButNotCheckout() {
+    void GivenNoVaadinSession_WhenForCurrentUser_ThenGuestBaseIncludesCatalogButNotCheckoutOrWorkspaces() {
         // No VaadinSession in this test → resolver short-circuits to GUEST_BASE.
         Set<Capability> caps = Capabilities.forCurrentUser();
         assertTrue(caps.contains(Capability.BROWSE_CATALOG),
@@ -69,7 +69,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void hasAndHasAllAndHasAnyAreConsistent() {
+    void GivenOnlyTheGuestBaseline_WhenHasHasAllAndHasAny_ThenTheyAreConsistent() {
         // With only the guest baseline available, these helpers must agree.
         assertTrue(Capabilities.has(Capability.BROWSE_CATALOG));
         assertTrue(Capabilities.hasAll(Capability.BROWSE_CATALOG, Capability.VIEW_EVENT_DETAILS));
@@ -83,7 +83,7 @@ class CapabilitiesTest {
     // matrix is pinned without faking a VaadinSession (which forCurrentUser would require).
 
     @Test
-    void everyManagerPermissionGrantsTheReadOnlyEventsHub() {
+    void GivenEveryManagerPermission_WhenCapabilitiesFromPermissions_ThenEachGrantsTheReadOnlyEventsHub() {
         for (Permission p : Permission.values()) {
             assertTrue(capsFor(p).contains(Capability.VIEW_COMPANY_EVENTS),
                 p + " must grant VIEW_COMPANY_EVENTS — every manager lands on the My Events hub");
@@ -91,7 +91,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void eachManagerPermissionGrantsExactlyItsOwnAction() {
+    void GivenEachManagerPermissionExceptManageInventory_WhenCapabilitiesFromPermissions_ThenItGrantsExactlyItsOwnAction() {
         assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES),
             capsFor(Permission.VIEW_SALES));
         assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_PURCHASE_POLICIES),
@@ -103,7 +103,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void manageInventoryOwnsTheFullEventLifecycleIncludingCancel() {
+    void GivenManageInventory_WhenCapabilitiesFromPermissions_ThenItOwnsTheFullEventLifecycleIncludingCancel() {
         Set<Capability> caps = capsFor(Permission.MANAGE_INVENTORY);
         assertTrue(caps.contains(Capability.VIEW_COMPANY_EVENTS));
         assertTrue(caps.contains(Capability.EDIT_COMPANY_EVENTS));
@@ -112,7 +112,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void aSalesOnlyManagerCannotEditOrCancelEvents() {   // no privilege escalation through the shared hub
+    void GivenASalesOnlyManager_WhenCapabilitiesFromPermissions_ThenCannotEditOrCancelEvents() {   // no privilege escalation through the shared hub
         Set<Capability> caps = capsFor(Permission.VIEW_SALES);
         assertFalse(caps.contains(Capability.EDIT_COMPANY_EVENTS),
             "VIEW_SALES sees My Events but must not edit them");
@@ -121,7 +121,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void combinedPermissionsGrantTheUnionOfTheirCapabilities() {
+    void GivenCombinedPermissions_WhenCapabilitiesFromPermissions_ThenGrantTheUnionOfTheirCapabilities() {
         Set<Capability> caps = capsFor(Permission.VIEW_SALES, Permission.MANAGE_INVENTORY);
         assertTrue(caps.containsAll(EnumSet.of(
             Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES,

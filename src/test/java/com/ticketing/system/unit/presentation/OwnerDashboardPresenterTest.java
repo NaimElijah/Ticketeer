@@ -71,7 +71,7 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void loadFor_nullToken_returnsNotAuthenticated_withoutCallingServices() {
+    void GivenANullToken_WhenLoadFor_ThenReturnsNotAuthenticatedWithoutCallingServices() {
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(null, null);
 
         assertInstanceOf(OwnerDashboardPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -79,7 +79,7 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void loadFor_noCompanies_returnsNoCompany() {
+    void GivenNoCompanies_WhenLoadFor_ThenReturnsNoCompanyWithoutLoadingTheDashboard() {
         when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of());
 
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
@@ -89,7 +89,7 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void loadFor_nullCompanyId_defaultsToFirstCompany() {
+    void GivenANullCompanyId_WhenLoadFor_ThenDefaultsToFirstCompany() {
         MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Founder");
         MyCompanyDTO second = new MyCompanyDTO(9, "Globex", "Manager");
         when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first, second));
@@ -105,7 +105,7 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void loadFor_explicitCompanyId_selectsThatCompany() {
+    void GivenAnExplicitCompanyId_WhenLoadFor_ThenSelectsThatCompany() {
         MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Founder");
         MyCompanyDTO second = new MyCompanyDTO(9, "Globex", "Manager");
         when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first, second));
@@ -120,7 +120,7 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void loadFor_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoadFor_ThenReturnsNotAuthenticated() {
         when(companyManagementService.findMyCompanies(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
@@ -141,7 +141,7 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void loadFor_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoadFor_ThenReturnsGenericFailure() {
         when(companyManagementService.findMyCompanies(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);

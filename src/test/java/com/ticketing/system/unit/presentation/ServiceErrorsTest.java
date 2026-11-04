@@ -33,38 +33,38 @@ class ServiceErrorsTest {
     // ---- outages: must be detected ----
 
     @Test
-    void cannotOpenTransaction_isAnOutage() {
+    void GivenCannotOpenTransaction_WhenIsDatabaseUnavailable_ThenIsAnOutage() {
         assertTrue(ServiceErrors.isDatabaseUnavailable(
             new CannotCreateTransactionException("Could not open JPA EntityManager for transaction")));
     }
 
     @Test
-    void resourceFailure_isAnOutage() {
+    void GivenAResourceFailure_WhenIsDatabaseUnavailable_ThenIsAnOutage() {
         assertTrue(ServiceErrors.isDatabaseUnavailable(
             new DataAccessResourceFailureException("could not get a connection")));
     }
 
     @Test
-    void hikariPoolTimeout_isAnOutage() {
+    void GivenAHikariPoolTimeout_WhenIsDatabaseUnavailable_ThenIsAnOutage() {
         assertTrue(ServiceErrors.isDatabaseUnavailable(
             new SQLTransientConnectionException("Connection is not available, request timed out")));
     }
 
     @Test
-    void connectionRefused_deepInTheCauseChain_isAnOutage() {
+    void GivenConnectionRefusedDeepInTheCauseChain_WhenIsDatabaseUnavailable_ThenIsAnOutage() {
         Throwable wrapped = new RuntimeException("checkout failed",
             new IllegalStateException("layer", new ConnectException("Connection refused")));
         assertTrue(ServiceErrors.isDatabaseUnavailable(wrapped));
     }
 
     @Test
-    void connectionSqlState08_isAnOutage() {
+    void GivenConnectionSqlState08_WhenIsDatabaseUnavailable_ThenIsAnOutage() {
         assertTrue(ServiceErrors.isDatabaseUnavailable(
             new SQLException("connection failure", "08006")));
     }
 
     @Test
-    void wrappedTransactionException_isStillAnOutage() {
+    void GivenAWrappedTransactionException_WhenIsDatabaseUnavailable_ThenIsStillAnOutage() {
         // Mirrors how services wrap failures (e.g. CheckoutService's "Checkout failed" wrapper).
         Throwable wrapped = new RuntimeException("Sign-in failed",
             new CannotCreateTransactionException("no connection"));
@@ -74,31 +74,31 @@ class ServiceErrorsTest {
     // ---- look-alikes: must NOT be treated as an outage ----
 
     @Test
-    void constraintViolation_isNotAnOutage() {
+    void GivenAConstraintViolation_WhenIsDatabaseUnavailable_ThenIsNotAnOutage() {
         assertFalse(ServiceErrors.isDatabaseUnavailable(
             new DataIntegrityViolationException("duplicate key value violates unique constraint")));
     }
 
     @Test
-    void optimisticLockConflict_isNotAnOutage() {
+    void GivenAnOptimisticLockConflict_WhenIsDatabaseUnavailable_ThenIsNotAnOutage() {
         assertFalse(ServiceErrors.isDatabaseUnavailable(
             new OptimisticLockingFailureException("row was updated by another transaction")));
     }
 
     @Test
-    void plainBug_isNotAnOutage() {
+    void GivenAPlainBug_WhenIsDatabaseUnavailable_ThenIsNotAnOutage() {
         assertFalse(ServiceErrors.isDatabaseUnavailable(new IllegalStateException("boom")));
         assertFalse(ServiceErrors.isDatabaseUnavailable(new NullPointerException()));
     }
 
     @Test
-    void nonConnectionSqlState_isNotAnOutage() {
+    void GivenANonConnectionSqlState_WhenIsDatabaseUnavailable_ThenIsNotAnOutage() {
         assertFalse(ServiceErrors.isDatabaseUnavailable(
             new SQLException("syntax error", "42601")));
     }
 
     @Test
-    void nullIsHandledGracefully() {
+    void GivenNull_WhenIsDatabaseUnavailable_ThenIsHandledGracefullyAsNotAnOutage() {
         assertFalse(ServiceErrors.isDatabaseUnavailable(null));
     }
 

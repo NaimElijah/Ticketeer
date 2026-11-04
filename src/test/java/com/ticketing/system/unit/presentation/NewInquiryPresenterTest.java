@@ -46,7 +46,7 @@ class NewInquiryPresenterTest {
     // -- searchCompanies ------------------------------------------------------
 
     @Test
-    void searchCompanies_returnsMatches() {
+    void GivenAMatchingCompany_WhenSearchCompanies_ThenReturnsMatches() {
         when(catalog.searchCompaniesByName("ac"))
             .thenReturn(List.of(new CompanySummaryDTO(1, "Acme", null)));
 
@@ -59,7 +59,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void searchCompanies_serviceThrows_returnsFailure() {
+    void GivenTheServiceThrows_WhenSearchCompanies_ThenReturnsGenericFailure() {
         when(catalog.searchCompaniesByName(anyString())).thenThrow(new RuntimeException("catalog down"));
 
         NewInquiryPresenter.SearchOutcome outcome = presenter.searchCompanies("ac");
@@ -72,7 +72,7 @@ class NewInquiryPresenterTest {
     // -- submit ---------------------------------------------------------------
 
     @Test
-    void submit_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSubmit_ThenReturnsNotAuthenticatedWithoutCallingService() {
         NewInquiryPresenter.ActionOutcome outcome = presenter.submit(null, 5, "S", "B");
 
         assertInstanceOf(NewInquiryPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -80,7 +80,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_happyPath_returnsConversationId_andTargetsCompany() {
+    void GivenTheServiceStartsAConversation_WhenSubmit_ThenReturnsConversationIdAndTargetsCompany() {
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "INQUIRY", "OPEN", 1, "MEMBER", 5, "COMPANY",
             "Parking?", LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
@@ -101,7 +101,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenSubmit_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("company not found"))
             .when(messaging).startConversation(anyString(), any());
 
@@ -113,7 +113,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenSubmit_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(messaging).startConversation(anyString(), any());
 
@@ -123,7 +123,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_companyNotFound_returnsFailureWithTheRulesMessage() {
+    void GivenTheCompanyIsNotFound_WhenSubmit_ThenReturnsFailureWithTheRulesMessage() {
         CompanyNotFoundException rule = new CompanyNotFoundException();
         doThrow(rule).when(messaging).startConversation(anyString(), any());
 
