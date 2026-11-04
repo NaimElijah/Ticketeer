@@ -303,7 +303,7 @@ class CompanyAcceptanceTest {
                 orderReceiptRepository.nextId(), buyer.userId(), 300.0,
                 List.of(new ReceiptLine(1, 100.0, eventId, 1, null, purchasedAt),
                         new ReceiptLine(2, 200.0, otherEventId, 1, null, purchasedAt)),
-                LocalDateTime.now(clock),
+                purchasedAt,
                 List.of(TransactionRecord.paymentCharge(4242, "test-gateway", 300.0, "ILS", purchasedAt),
                         TransactionRecord.ticketIssuance("ISS-4242", "test-issuer", purchasedAt))));
 

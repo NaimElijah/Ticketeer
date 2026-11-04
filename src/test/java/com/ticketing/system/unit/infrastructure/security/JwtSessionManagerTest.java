@@ -63,23 +63,20 @@ class JwtSessionManagerTest {
     private static final String MEMBER_SID = "member-sid";
     private static final String GUEST_SID = "guest-sid";
 
-    private Clock clock;
     private SessionRepository sessions;
     private JwtSessionManager manager;
 
-    // A manager on a fixed clock, for the token-to-row binding tests.
+    // A second manager with its own session store, for the token-to-row binding tests.
     private SessionRepository boundSessions;
     private JwtSessionManager boundManager;
 
     @BeforeEach
     void setUp() {
-        clock = FIXED_CLOCK;
-        sessions = new MemorySessionRepository(clock);
-        manager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), sessions, clock);
+        sessions = new MemorySessionRepository(FIXED_CLOCK);
+        manager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), sessions, FIXED_CLOCK);
 
-        Clock fixed = Clock.fixed(T0, ZoneOffset.UTC);
-        boundSessions = new MemorySessionRepository(fixed);
-        boundManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), boundSessions, fixed);
+        boundSessions = new MemorySessionRepository(FIXED_CLOCK);
+        boundManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), boundSessions, FIXED_CLOCK);
     }
 
     @Test
@@ -121,9 +118,7 @@ class JwtSessionManagerTest {
     @Test
     void GivenExpiredToken_WhenValidateToken_ThenThrowsSessionExpired() {
         // Negative expiration → token is issued already past its exp claim.
-        Clock expiredClock = FIXED_CLOCK;
-        SessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
-        JwtSessionManager expiredManager = new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(-1), expiredSessions, expiredClock);
+        JwtSessionManager expiredManager = expiredOnIssueManager();
         String token = expiredManager.generateToken(42, "alice");
         assertThrows(SessionExpiredException.class, () -> expiredManager.validateToken(token));
     }
@@ -243,7 +238,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenFreshToken_WhenExtractExpiration_ThenReturnsFutureEpochMillis() {
-        long before = clock.millis();
+        long before = FIXED_CLOCK.millis();
         String token = manager.generateToken(42, "alice");
         long expiry = manager.extractExpiration(token);
         assertTrue(expiry > before, "expiry should be after issuance time");
@@ -393,7 +388,7 @@ class JwtSessionManagerTest {
     @Test
     void GivenPreexistingMemberSession_WhenGenerateTokenForSession_ThenTokenValidatesWithTheSessionsUserAndUsername() {
         // Promote-on-login scenario: an existing Session row gains a JWT.
-        Instant now = clock.instant();
+        Instant now = FIXED_CLOCK.instant();
         Session preexisting = new Session(
                 "preserved-sid",
                 9,
@@ -418,7 +413,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenGuestSession_WhenGenerateTokenForSession_ThenRejectsItWithIllegalState() {
-        Instant now = clock.instant();
+        Instant now = FIXED_CLOCK.instant();
         Session guest = new Session("guest-sid", null, now, now.plusSeconds(3600));
         sessions.save(guest);
 
@@ -447,7 +442,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenRawGuestSessionId_WhenValidateCredential_ThenTrue() {
-        Instant now = clock.instant();
+        Instant now = FIXED_CLOCK.instant();
         Session guest = new Session("guest-sid-xyz", null, now, now.plusSeconds(3600));
         sessions.save(guest);
 
@@ -461,7 +456,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenExpiredSession_WhenValidateCredential_ThenFalse() {
-        Instant past = clock.instant().minusSeconds(3600);
+        Instant past = FIXED_CLOCK.instant().minusSeconds(3600);
         Session expired = new Session("expired-sid", null, past, past.plusSeconds(60));
         sessions.save(expired);
 
@@ -956,7 +951,7 @@ class JwtSessionManagerTest {
     private static final String OTHER_SECRET =
         "another-secret-that-is-also-long-enough-for-hmac-sha-256-but-not-ours";
 
-    /** A manager on the fixed clock, over {@code store}. */
+    /** A manager on the fixed FIXED_CLOCK, over {@code store}. */
     private static JwtSessionManager onFixedClock(SessionRepository store) {
         return new JwtSessionManager(new JwtProperties(SECRET), sessionTtl(60), store, FIXED_CLOCK);
     }
