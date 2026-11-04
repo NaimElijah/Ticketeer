@@ -36,14 +36,14 @@ class ConversationTest extends BaseDomainTest {
         return track(Conversation.start(ConversationType.INQUIRY,
                 MEMBER_ID, ParticipantType.MEMBER,
                 COMPANY_ID, ParticipantType.COMPANY,
-                "Parking?", "Is there parking near the venue?", LocalDateTime.now()));
+                "Parking?", "Is there parking near the venue?", STARTED_AT));
     }
 
     private Conversation complaint() {
         return track(Conversation.start(ConversationType.COMPLAINT,
                 MEMBER_ID, ParticipantType.MEMBER,
                 0, ParticipantType.ADMIN_GROUP,
-                "Refund", "Where is my refund?", LocalDateTime.now()));
+                "Refund", "Where is my refund?", STARTED_AT));
     }
 
     @Test
@@ -57,7 +57,7 @@ class ConversationTest extends BaseDomainTest {
     @Test
     void GivenAnInquiry_WhenAddMessage_ThenAppendsAndLastMessageAtIsNotBeforeCreatedAt() {
         Conversation c = inquiry();
-        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "Yes — there is a paid lot nearby.", LocalDateTime.now());
+        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "Yes — there is a paid lot nearby.", STARTED_AT);
         assertEquals(2, c.getMessages().size());
         assertFalse(c.getLastMessageAt().isBefore(c.getCreatedAt()));
     }
@@ -66,7 +66,7 @@ class ConversationTest extends BaseDomainTest {
     void GivenAnInquiry_WhenAddMessageByNonParticipant_ThenThrowsInvalidParticipant() {
         Conversation c = inquiry();
         assertThrows(InvalidParticipantException.class,
-                () -> c.addMessage(OUTSIDER_ID, ParticipantType.MEMBER, "I'm an outsider", LocalDateTime.now()));
+                () -> c.addMessage(OUTSIDER_ID, ParticipantType.MEMBER, "I'm an outsider", STARTED_AT));
     }
 
     @Test
@@ -74,7 +74,7 @@ class ConversationTest extends BaseDomainTest {
         Conversation c = inquiry();
         c.transitionToClosed();
         assertThrows(ConversationClosedException.class,
-                () -> c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "still there?", LocalDateTime.now()));
+                () -> c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "still there?", STARTED_AT));
     }
 
     @Test
@@ -82,15 +82,15 @@ class ConversationTest extends BaseDomainTest {
         Conversation c = complaint();
         c.transitionToResolved();
         assertThrows(ConversationClosedException.class,
-                () -> c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "another point", LocalDateTime.now()));
+                () -> c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "another point", STARTED_AT));
     }
 
     @Test
     void GivenAnOpenInquiry_WhenCounterpartyAndInitiatorReplyInTurn_ThenFlipsOpenToRespondedAndBack() {
         Conversation c = inquiry();
-        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "We replied", LocalDateTime.now());
+        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "We replied", STARTED_AT);
         assertEquals(ConversationStatus.RESPONDED, c.getStatus());
-        c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "Thanks, one more thing", LocalDateTime.now());
+        c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "Thanks, one more thing", STARTED_AT);
         assertEquals(ConversationStatus.OPEN, c.getStatus());
     }
 
@@ -98,7 +98,7 @@ class ConversationTest extends BaseDomainTest {
     void GivenAComplaint_WhenSpecificAdminReplies_ThenActsForAdminGroup() {
         Conversation c = complaint();
         assertTrue(c.involvesParticipant(ADMIN_ID, ParticipantType.ADMIN));
-        c.addMessage(ADMIN_ID, ParticipantType.ADMIN, "Looking into it", LocalDateTime.now());
+        c.addMessage(ADMIN_ID, ParticipantType.ADMIN, "Looking into it", STARTED_AT);
         assertEquals(ConversationStatus.RESPONDED, c.getStatus());
     }
 
@@ -108,15 +108,15 @@ class ConversationTest extends BaseDomainTest {
     void GivenAComplaint_WhenMemberRepliesAfterOpening_ThenThrows() {
         Conversation c = complaint();  // already carries the member's opening message
         assertThrows(BusinessRuleViolationException.class,
-                () -> c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "any update?", LocalDateTime.now()));
+                () -> c.addMessage(MEMBER_ID, ParticipantType.MEMBER, "any update?", STARTED_AT));
     }
 
     @Test
     void GivenAComplaintWithAnAdminReply_WhenSecondAdminReply_ThenThrows() {
         Conversation c = complaint();
-        c.addMessage(ADMIN_ID, ParticipantType.ADMIN, "First and only response", LocalDateTime.now());
+        c.addMessage(ADMIN_ID, ParticipantType.ADMIN, "First and only response", STARTED_AT);
         assertThrows(BusinessRuleViolationException.class,
-                () -> c.addMessage(ADMIN_ID, ParticipantType.ADMIN, "second response", LocalDateTime.now()));
+                () -> c.addMessage(ADMIN_ID, ParticipantType.ADMIN, "second response", STARTED_AT));
     }
 
     @Test
@@ -166,7 +166,7 @@ class ConversationTest extends BaseDomainTest {
     @Test
     void GivenOneMessageFromEachSide_WhenUnreadCountFor_ThenExcludesOwnMessages() {
         Conversation c = inquiry();                                   // 1 message from the member
-        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "reply", LocalDateTime.now());   // 1 message from the company
+        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "reply", STARTED_AT);   // 1 message from the company
         assertEquals(1, c.unreadCountFor(MEMBER_ID, ParticipantType.MEMBER));    // only the company's message
         assertEquals(1, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));  // only the member's message
     }

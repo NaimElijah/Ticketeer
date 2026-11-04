@@ -36,37 +36,37 @@ class OrderReceiptTest extends BaseDomainTest {
 
     @Test
     void GivenAUserId_WhenForMember_ThenSetsUserIdCorrectly() {
-        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
-        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
+        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", AT);
+        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), AT));
         assertEquals(5, receipt.getUserid());
     }
 
     @Test
     void GivenAUserId_WhenForMember_ThenIdentifiesAsMemberReceipt() {
-        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
-        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
+        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", AT);
+        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), AT));
         assertTrue(receipt.isMemberReceipt());
     }
 
     @Test
     void GivenAGuestEmail_WhenForGuest_ThenSetsGuestEmailCorrectly() {
-        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
-        OrderReceipt receipt = track(OrderReceipt.forGuest("test@test.com", "session-123", RECEIPT_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
+        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", AT);
+        OrderReceipt receipt = track(OrderReceipt.forGuest("test@test.com", "session-123", RECEIPT_ID, 100.0, new ArrayList<>(List.of(item)), AT));
         assertEquals("test@test.com", receipt.getGuestEmail());
     }
 
     @Test
     void GivenAGuestEmail_WhenForGuest_ThenIdentifiesAsGuestReceipt() {
-        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
-        OrderReceipt receipt = track(OrderReceipt.forGuest("test@test.com", "session-123", RECEIPT_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
+        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", AT);
+        OrderReceipt receipt = track(OrderReceipt.forGuest("test@test.com", "session-123", RECEIPT_ID, 100.0, new ArrayList<>(List.of(item)), AT));
         assertTrue(receipt.isGuestReceipt());
     }
 
     @Test
     void GivenAMemberReceipt_WhenMarkRefunded_ThenChangesRefundStateToFullyRefunded() {
 
-        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
-        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
+        ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", AT);
+        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), AT));
         receipt.markRefunded();
         assertTrue(receipt.isFullyRefunded());
     }
@@ -82,7 +82,7 @@ class OrderReceiptTest extends BaseDomainTest {
         return track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, List.of(
                 new ReceiptLine(1, 30.0, CANCELLED_EVENT, 1, "A1", AT),
                 new ReceiptLine(2, 20.0, CANCELLED_EVENT, 1, "A2", AT),
-                new ReceiptLine(3, 50.0, OTHER_EVENT, 1, "B1", AT)), LocalDateTime.now()));
+                new ReceiptLine(3, 50.0, OTHER_EVENT, 1, "B1", AT)), AT));
     }
 
     private TransactionRecord refundOf(double amount) {
@@ -217,7 +217,7 @@ class OrderReceiptTest extends BaseDomainTest {
     void GivenClaimedFreeLines_WhenCompleteUnchargedEventRefund_ThenLinesAreRefundedWithoutARecord() {
         OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 0.0,
                 List.of(new ReceiptLine(1, 0.0, CANCELLED_EVENT, 1, "A1", AT)),
-                LocalDateTime.now()));
+                AT));
         assertEquals(0.0, receipt.claimRefundForEvent(CANCELLED_EVENT).orElseThrow());
 
         receipt.completeUnchargedEventRefund(CANCELLED_EVENT);

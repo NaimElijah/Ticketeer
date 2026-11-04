@@ -35,6 +35,8 @@ import com.ticketing.system.support.BaseDomainTest;
  */
 class RuntimeInvariantGuardTest extends BaseDomainTest {
 
+    private static final LocalDateTime CART_CREATED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private static final int COMPANY_ID = 100;
     private static final int OWNER_ID = 1;
     private static final int TARGET_ID = 3;
@@ -74,7 +76,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     @Test
     void GivenAMemberCart_WhenClearSession_ThenSucceedsAndKeepsTheMember() {
         // Member cart keeps userId after the session pointer clears — still valid.
-        ActiveOrder memberCart = track(ActiveOrder.forMember(42, "session-xyz", LocalDateTime.now()));
+        ActiveOrder memberCart = track(ActiveOrder.forMember(42, "session-xyz", CART_CREATED_AT));
 
         memberCart.clearSession();
 
@@ -114,7 +116,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
 
     @Test
     void GivenASession_WhenTouchBeforeCreatedAt_ThenThrowsAndRollsBack() {
-        Instant createdAt = Instant.now();
+        Instant createdAt = Instant.parse("2027-07-15T17:00:00Z");
         Session session = track(new Session("sess-1", 1, createdAt, createdAt.plusSeconds(3600)));
 
         // lastSeenAt must stay >= createdAt — a backwards clock value must be rejected.
