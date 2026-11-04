@@ -47,7 +47,7 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheConversation() {
+    void GivenASavedConversation_WhenFindById_ThenReturnsTheConversation() {
         Conversation c = inquiry(5, 10, "Help", "hello");
         repo.save(c);
 
@@ -59,13 +59,13 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void findById_emptyWhenMissingOrNull() {
+    void GivenAMissingOrNullId_WhenFindById_ThenIsEmpty() {
         assertFalse(repo.findById("ghost").isPresent());
         assertFalse(repo.findById(null).isPresent());
     }
 
     @Test
-    void findByParticipant_findsAsInitiatorAndAsCounterparty() {
+    void GivenASavedConversation_WhenFindByParticipant_ThenFindsAsInitiatorAndAsCounterpartyButNotForAnotherMember() {
         Conversation c = inquiry(5, 10, "Help", "hello");
         repo.save(c);
 
@@ -75,7 +75,7 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void findByType_andFindByCompanyAsCounterparty_andFindByTypeAndStatus() {
+    void GivenASavedOpenInquiry_WhenFindByTypeOrCompanyAsCounterpartyOrTypeAndStatus_ThenReturnsItOnlyForMatchingArguments() {
         Conversation c = inquiry(5, 10, "Help", "hello");
         repo.save(c);
 
@@ -91,7 +91,7 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void save_persistsMessagesInOrderWithReadState() {
+    void GivenAConversationWithAReply_WhenSave_ThenPersistsMessagesInOrderWithReadState() {
         Conversation c = inquiry(5, 10, "Help", "first");
         c.addMessage(10, ParticipantType.COMPANY, "reply", LocalDateTime.now());
         repo.save(c);

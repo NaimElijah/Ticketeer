@@ -43,7 +43,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheSavedAppointment() {
+    void GivenASavedAppointment_WhenFindById_ThenReturnsTheSavedAppointment() {
         CompanyAppointment saved = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
 
         CompanyAppointment found = repo.findById(saved.getAppointmentId()).orElseThrow();
@@ -53,12 +53,12 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void findById_isEmptyWhenMissing() {
+    void GivenNoSuchAppointment_WhenFindById_ThenIsEmpty() {
         assertTrue(repo.findById(9999).isEmpty());
     }
 
     @Test
-    void save_roundTripsRoleStatusAndPermissions() {
+    void GivenAManagerAppointmentWithPermissions_WhenSave_ThenRoundTripsRoleStatusAndPermissions() {
         CompanyAppointment saved = repo.save(
                 manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY, Permission.VIEW_SALES)));
 
@@ -69,7 +69,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void findByTargetId_returnsOnlyThatUsersAppointments() {
+    void GivenAppointmentsOfSeveralUsers_WhenFindByTargetId_ThenReturnsOnlyThatUsersAppointments() {
         repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
         repo.save(manager(20, 5, 99, List.of(Permission.VIEW_SALES)));
         repo.save(manager(10, 6, 99, List.of(Permission.CONFIGURE_VENUE)));
@@ -80,7 +80,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void findByTargetIdAndCompanyId_narrowsToOneCompany() {
+    void GivenOneUsersAppointmentsInTwoCompanies_WhenFindByTargetIdAndCompanyId_ThenNarrowsToOneCompany() {
         repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
         repo.save(manager(20, 5, 99, List.of(Permission.VIEW_SALES)));
 
@@ -91,7 +91,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void findByCompanyId_returnsEveryAppointmentForThatCompany() {
+    void GivenAppointmentsInTwoCompanies_WhenFindByCompanyId_ThenReturnsEveryAppointmentForThatCompany() {
         repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
         repo.save(manager(10, 6, 99, List.of(Permission.VIEW_SALES)));
         repo.save(manager(20, 7, 99, List.of(Permission.CONFIGURE_VENUE)));
@@ -102,7 +102,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void save_persistsAnAcceptedLifecycleTransition() {
+    void GivenASavedAppointmentThatIsAccepted_WhenSave_ThenPersistsTheAcceptedLifecycleTransition() {
         CompanyAppointment appt = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
         appt.accept();            // PENDING -> ACTIVE
         repo.save(appt);          // persist the transition
@@ -112,7 +112,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void delete_removesTheAppointment() {
+    void GivenASavedAppointment_WhenDelete_ThenRemovesTheAppointment() {
         CompanyAppointment appt = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
         assertTrue(repo.findById(appt.getAppointmentId()).isPresent());
 
@@ -121,7 +121,7 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     }
 
     @Test
-    void nextId_producesDistinctIncreasingValues() {
+    void GivenRepository_WhenNextIdCalledTwice_ThenProducesDistinctIncreasingValues() {
         int a = repo.nextId();
         int b = repo.nextId();
         assertNotEquals(a, b);

@@ -23,7 +23,7 @@ class InMemorySystemMetricsTest {
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
 
     @Test
-    void countWindow_onlyCountsEventsInsideTheWindow() {
+    void GivenEventsTenMinutesApart_WhenCountAndTotal_ThenOnlyCountsEventsInsideTheWindowAndTotalCountsAll() {
         MutableClock clock = new MutableClock(T0);
         InMemorySystemMetrics metrics = new InMemorySystemMetrics(clock);
 
@@ -39,7 +39,7 @@ class InMemorySystemMetricsTest {
     }
 
     @Test
-    void typesAreIndependent_andUnseenTypeIsZero() {
+    void GivenOneTypeRecorded_WhenTotalAndCount_ThenTypesAreIndependentAndUnseenTypeIsZero() {
         MutableClock clock = new MutableClock(T0);
         InMemorySystemMetrics metrics = new InMemorySystemMetrics(clock);
 
@@ -51,7 +51,7 @@ class InMemorySystemMetricsTest {
     }
 
     @Test
-    void longGap_windowCountReflectsOnlyRecentEvents_totalStaysCumulative() {
+    void GivenALongGapBetweenEvents_WhenCountAndTotal_ThenWindowCountReflectsOnlyRecentEventsAndTotalStaysCumulative() {
         MutableClock clock = new MutableClock(T0);
         InMemorySystemMetrics metrics = new InMemorySystemMetrics(clock);
 

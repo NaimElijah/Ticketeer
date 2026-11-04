@@ -41,7 +41,7 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheSavedSession() {
+    void GivenSavedSession_WhenFindById_ThenReturnsTheSavedSession() {
         Session s = new Session("sid-1", 5, T0, T_FAR_FUTURE);
         repo.save(s);
 
@@ -51,17 +51,17 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void findById_returnsEmptyWhenMissing() {
+    void GivenNoSuchSession_WhenFindById_ThenReturnsEmpty() {
         assertFalse(repo.findById("ghost").isPresent());
     }
 
     @Test
-    void findById_nullReturnsEmpty() {
+    void GivenNullId_WhenFindById_ThenReturnsEmpty() {
         assertFalse(repo.findById(null).isPresent());
     }
 
     @Test
-    void delete_removesTheSession() {
+    void GivenSavedSession_WhenDelete_ThenRemovesTheSession() {
         repo.save(new Session("sid-1", 5, T0, T_FAR_FUTURE));
         assertTrue(repo.findById("sid-1").isPresent());
 
@@ -71,31 +71,31 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void delete_unknownIsIdempotent() {
+    void GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrow() {
         assertDoesNotThrow(() -> repo.delete("ghost"));
         assertDoesNotThrow(() -> repo.delete(null));
     }
 
     @Test
-    void existsByUserId_trueForLiveMemberSession() {
+    void GivenLiveMemberSession_WhenExistsByUserId_ThenTrue() {
         repo.save(new Session("sid-1", 5, T0, T_FAR_FUTURE));
         assertTrue(repo.existsByUserId(5));
     }
 
     @Test
-    void existsByUserId_falseWhenNoSessionForUser() {
+    void GivenNoSessionForUser_WhenExistsByUserId_ThenFalse() {
         repo.save(new Session("sid-1", 7, T0, T_FAR_FUTURE));
         assertFalse(repo.existsByUserId(5));
     }
 
     @Test
-    void existsByUserId_ignoresExpiredSessions() {
+    void GivenExpiredSession_WhenExistsByUserId_ThenIgnoresIt() {
         repo.save(new Session("sid-1", 5, T_PAST, T_PAST_PLUS_ONE));
         assertFalse(repo.existsByUserId(5));
     }
 
     @Test
-    void existsByUserId_ignoresGuestSessions() {
+    void GivenLiveGuestSession_WhenExistsByUserId_ThenIgnoresIt() {
         repo.save(new Session("sid-guest", null, T0, T_FAR_FUTURE));
         // No userId equals null's "missing user," so any int query returns false.
         assertFalse(repo.existsByUserId(0));
@@ -110,7 +110,7 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void existsByUserId_trueWithMultipleSessionsForSameUser() {
+    void GivenMultipleSessionsForSameUser_WhenExistsByUserId_ThenTrue() {
         // Q4 — allow-multiple Member sessions per userId (multi-device login).
         repo.save(new Session("sid-1", 5, T0, T_FAR_FUTURE));
         repo.save(new Session("sid-2", 5, T0, T_FAR_FUTURE));
@@ -118,7 +118,7 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void findExpiredBefore_returnsOnlyExpired() {
+    void GivenLiveAndExpiredSessions_WhenFindExpiredBefore_ThenReturnsOnlyExpired() {
         Session live = new Session("live", 5, T0, T_FAR_FUTURE);
         Session expired = new Session("expired", 7, T_PAST, T_PAST_PLUS_ONE);
         repo.save(live);
@@ -131,21 +131,21 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void findExpiredBefore_atCutoffBoundaryCountsAsExpired() {
+    void GivenSessionExpiringAtTheCutoff_WhenFindExpiredBefore_ThenCountsAsExpired() {
         // expiresAt == cutoff → counts as expired (matches Session.isExpiredAt boundary).
         repo.save(new Session("boundary", 5, T_PAST, T0));
         assertEquals(1, repo.findExpiredBefore(T0).size());
     }
 
     @Test
-    void findExpiredBefore_emptyWhenNothingExpired() {
+    void GivenOnlyLiveSessions_WhenFindExpiredBefore_ThenIsEmpty() {
         repo.save(new Session("live-1", 5, T0, T_FAR_FUTURE));
         repo.save(new Session("live-2", 7, T0, T_FAR_FUTURE));
         assertTrue(repo.findExpiredBefore(T0).isEmpty());
     }
 
     @Test
-    void save_withSameSessionIdOverwrites() {
+    void GivenSavedSession_WhenSaveWithSameSessionId_ThenOverwrites() {
         repo.save(new Session("sid", 5, T0, T_FAR_FUTURE));
         repo.save(new Session("sid", 7, T0, T_FAR_FUTURE));
 

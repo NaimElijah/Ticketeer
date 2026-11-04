@@ -24,7 +24,7 @@ import com.ticketing.system.bootstrap.PlatformInitializationRunner;
 class PlatformInitializationRunnerTest {
 
     @Test
-    void whenRun_thenInitializePlatformInvoked() {
+    void GivenPlatformInitializationSucceeds_WhenRun_ThenInitializePlatformInvoked() {
         SystemAdminService service = mock(SystemAdminService.class);
         PlatformInitializationRunner runner = new PlatformInitializationRunner(service);
 

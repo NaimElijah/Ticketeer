@@ -36,7 +36,7 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void save_thenGetByUserId_returnsMemberCart() {
+    void GivenSavedMemberCart_WhenGetByUserId_ThenReturnsMemberCart() {
         ActiveOrder member = ActiveOrder.forMember(5, "sid-A", NOW);
         repo.save(member);
 
@@ -47,12 +47,12 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void getByUserId_returnsNullWhenMissing() {
+    void GivenNoCartForTheUser_WhenGetByUserId_ThenReturnsNull() {
         assertNull(repo.getByUserId(99));
     }
 
     @Test
-    void save_thenGetBySessionId_returnsGuestCart() {
+    void GivenSavedGuestCart_WhenGetBySessionId_ThenReturnsGuestCart() {
         ActiveOrder guest = ActiveOrder.forGuest("sid-G", NOW);
         repo.save(guest);
 
@@ -62,12 +62,12 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void getBySessionId_returnsEmptyWhenMissing() {
+    void GivenNoCartForTheSession_WhenGetBySessionId_ThenReturnsEmpty() {
         assertTrue(repo.getBySessionId("ghost-sid").isEmpty());
     }
 
     @Test
-    void getBySessionId_returnsMemberCartWhenSessionMatches() {
+    void GivenSavedMemberCartOnTheSession_WhenGetBySessionId_ThenReturnsMemberCart() {
         // Member cart with active session — same lookup path as Guest.
         ActiveOrder member = ActiveOrder.forMember(7, "sid-M", NOW);
         repo.save(member);
@@ -78,17 +78,17 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void getBySessionId_nullReturnsEmpty() {
+    void GivenNullSessionId_WhenGetBySessionId_ThenReturnsEmpty() {
         assertTrue(repo.getBySessionId(null).isEmpty());
     }
 
     @Test
-    void getBySessionId_blankReturnsEmpty() {
+    void GivenBlankSessionId_WhenGetBySessionId_ThenReturnsEmpty() {
         assertTrue(repo.getBySessionId("   ").isEmpty());
     }
 
     @Test
-    void delete_removesCart() {
+    void GivenSavedCart_WhenDelete_ThenRemovesCart() {
         ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
         repo.save(cart);
         assertNotNull(repo.getByUserId(5));
@@ -98,14 +98,14 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void delete_unknownIsNoOp() {
+    void GivenUnknownOrNullCart_WhenDelete_ThenDoesNotThrow() {
         ActiveOrder cart = ActiveOrder.forMember(99, "sid-Z", NOW);
         assertDoesNotThrow(() -> repo.delete(cart));
         assertDoesNotThrow(() -> repo.delete(null));
     }
 
     @Test
-    void save_sameMemberTwiceCollapsesIdentity() {
+    void GivenAnotherCartOfTheMemberHoldingNothing_WhenSavingANewCart_ThenTheSecondCartWins() {
         // D9a edge: re-saving a Member cart (e.g., after promotion) replaces
         // any prior cart with the same userId that holds nothing.
         ActiveOrder cartV1 = ActiveOrder.forMember(5, "sid-A", NOW);
@@ -166,7 +166,7 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void save_guestAndMemberWithSameSessionId_stayDistinct() {
+    void GivenGuestAndMemberCartsWithTheSameSessionId_WhenSave_ThenUserIdAndSessionIdLookupsBothFindACart() {
         // Edge: a Guest cart and a Member cart that happen to share a sessionId
         // should remain distinct rows (different identities).
         ActiveOrder guest = ActiveOrder.forGuest("shared-sid", NOW);
@@ -181,7 +181,7 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void findExpired_emptyWhenNoExpiredItems() {
+    void GivenCartWithNoExpiredItems_WhenFindExpired_ThenNothingIsReturned() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-G", NOW);
         cart.addStandingReservation(1, 10, 1, 25.0, NOW);
         repo.save(cart);
@@ -223,7 +223,7 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void findAll_returnsEveryCart() {
+    void GivenMemberAndGuestCarts_WhenFindAll_ThenReturnsEveryCart() {
         repo.save(ActiveOrder.forMember(5, "sid-M", NOW));
         repo.save(ActiveOrder.forGuest("sid-G", NOW));
 
@@ -232,12 +232,12 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void findAll_emptyWhenNoCarts() {
+    void GivenNoCarts_WhenFindAll_ThenReturnsEmpty() {
         assertTrue(repo.findAll().isEmpty());
     }
 
     @Test
-    void save_persistsCartItems() {
+    void GivenMemberCartWithStandingAndSeatedItems_WhenSave_ThenPersistsCartItems() {
         // A member cart with items survives save/reload (the "cart survives a restart" acceptance).
         ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
         cart.addStandingReservation(1, 10, 2, 50.0, java.time.LocalDateTime.now());          // 2 standing

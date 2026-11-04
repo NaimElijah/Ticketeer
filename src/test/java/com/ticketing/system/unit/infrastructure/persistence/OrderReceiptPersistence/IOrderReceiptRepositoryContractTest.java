@@ -58,7 +58,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void nextId_producesDistinctIncreasingValues() {
+    void GivenRepository_WhenNextIdCalledTwice_ThenProducesDistinctIncreasingValues() {
         int a = repo.nextId();
         int b = repo.nextId();
         assertNotEquals(a, b);
@@ -66,7 +66,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheMemberReceipt() {
+    void GivenASavedMemberReceipt_WhenFindByOrderReceiptId_ThenReturnsTheMemberReceipt() {
         repo.save(member(1, 7, 5));
 
         OrderReceipt found = repo.findByOrderReceiptId(1).orElseThrow();
@@ -75,7 +75,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheGuestReceipt() {
+    void GivenASavedGuestReceipt_WhenFindByOrderReceiptId_ThenReturnsTheGuestReceipt() {
         repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 2, 50.0, List.of(line(20, 5)), LocalDateTime.now()));
 
         OrderReceipt found = repo.findByOrderReceiptId(2).orElseThrow();
@@ -84,12 +84,12 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void findById_emptyWhenMissing() {
+    void GivenNoSuchReceipt_WhenFindByOrderReceiptId_ThenIsEmpty() {
         assertFalse(repo.findByOrderReceiptId(9999).isPresent());
     }
 
     @Test
-    void save_persistsReceiptLinesAndTransactions() {
+    void GivenAReceiptWithLinesAndATransaction_WhenSavedAndReloaded_ThenPersistsReceiptLinesAndTransactions() {
         OrderReceipt r = OrderReceipt.forMember(1, 7, 100.0, List.of(line(10, 5), line(11, 5)), LocalDateTime.now());
         r.addTransaction(TransactionRecord.paymentCharge(999, "WSEP", 100.0, "ILS", LocalDateTime.now()));
         repo.save(r);
@@ -122,7 +122,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void findByHolderUserId_returnsMemberReceiptsForThatBuyer() {
+    void GivenMemberAndGuestReceipts_WhenFindByHolderUserId_ThenReturnsMemberReceiptsForThatBuyer() {
         repo.save(member(1, 7, 5));
         repo.save(member(2, 7, 6));
         repo.save(member(3, 9, 5));
@@ -133,7 +133,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void findByEventId_returnsReceiptsContainingThatEvent() {
+    void GivenReceiptsForTwoEvents_WhenFindByEventId_ThenReturnsReceiptsContainingThatEvent() {
         repo.save(member(1, 7, 5));
         repo.save(member(2, 7, 6));
 
@@ -142,7 +142,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void findByEventIds_returnsReceiptsContainingAnyOfThoseEvents() {
+    void GivenReceiptsForThreeEvents_WhenFindByEventIds_ThenReturnsReceiptsContainingAnyOfThoseEventsAndNoneForAnEmptyList() {
         repo.save(member(1, 7, 5));
         repo.save(member(2, 7, 6));
         repo.save(member(3, 7, 8));
@@ -179,7 +179,7 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void findGlobal_noFiltersReturnsAll_filterByBuyerNarrows() {
+    void GivenReceiptsOfTwoBuyers_WhenFindGlobal_ThenNoFiltersReturnsAllAndFilterByBuyerOrEventNarrows() {
         repo.save(member(1, 7, 5));
         repo.save(member(2, 9, 6));
 

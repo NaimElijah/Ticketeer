@@ -50,7 +50,7 @@ abstract class ITicketRepositoryContractTest {
     // --- save / findById -------------------------------------------------------
 
     @Test
-    void save_thenFindById_returnsTheSavedTicket() {
+    void GivenSavedTicket_WhenFindById_ThenReturnsTheSavedTicket() {
         assertTrue(repo.save(ticket(1, 10, 2, 1)));
 
         Ticket found = repo.findById(1);
@@ -60,12 +60,12 @@ abstract class ITicketRepositoryContractTest {
     }
 
     @Test
-    void findById_returnsNullWhenMissing() {
+    void GivenNoSuchTicket_WhenFindById_ThenReturnsNull() {
         assertNull(repo.findById(999));
     }
 
     @Test
-    void save_updatesALoadedTicketInPlace() {
+    void GivenLoadedTicketMarkedRefunded_WhenSave_ThenUpdatesItInPlace() {
         repo.save(ticket(1, 10, 2, 1)); // PAID
         Ticket loaded = repo.findById(1);
         loaded.markRefunded();
@@ -77,7 +77,7 @@ abstract class ITicketRepositoryContractTest {
     // --- findByEventId ---------------------------------------------------------
 
     @Test
-    void findByEventId_returnsOnlyThatEvent() {
+    void GivenTicketsOfTwoEvents_WhenFindByEventId_ThenReturnsOnlyThatEventsTickets() {
         repo.save(ticket(1, 10, 2, 1));
         repo.save(ticket(2, 10, 3, 1));
         repo.save(ticket(3, 20, 2, 1));
@@ -87,7 +87,7 @@ abstract class ITicketRepositoryContractTest {
     }
 
     @Test
-    void findByEventId_emptyWhenNoMatch() {
+    void GivenNoTicketMatchingTheEvent_WhenFindByEventId_ThenIsEmpty() {
         repo.save(ticket(1, 10, 2, 1));
         assertTrue(repo.findByEventId(999).isEmpty());
     }
@@ -95,7 +95,7 @@ abstract class ITicketRepositoryContractTest {
     // --- findByOrderReceiptId ----------------------------------------------------
 
     @Test
-    void findByOrderReceiptId_returnsOnlyThatReceipt() {
+    void GivenTicketsOfTwoReceipts_WhenFindByOrderReceiptId_ThenReturnsOnlyThatReceiptsTickets() {
         repo.save(ticket(1, 10, 2, 100));
         repo.save(ticket(2, 10, 2, 100));
         repo.save(ticket(3, 10, 2, 200));

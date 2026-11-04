@@ -59,7 +59,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheSavedNotification() {
+    void GivenASavedNotification_WhenFindById_ThenReturnsTheSavedNotification() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
 
         Notification found = repo.findById("n1");
@@ -70,17 +70,17 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void findById_returnsNullWhenMissing() {
+    void GivenNoSuchNotification_WhenFindById_ThenReturnsNull() {
         assertNull(repo.findById("ghost"));
     }
 
     @Test
-    void findById_returnsNullForNullId() {
+    void GivenANullId_WhenFindById_ThenReturnsNull() {
         assertNull(repo.findById(null));
     }
 
     @Test
-    void save_updatesALoadedNotificationInPlace() {
+    void GivenALoadedNotificationMarkedSent_WhenSave_ThenUpdatesItInPlace() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
         Notification loaded = repo.findById("n1");
         loaded.markSent();
@@ -90,7 +90,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void findByRecipientAndStatus_filtersByRecipientAndStatus() {
+    void GivenNotificationsOfSeveralRecipientsAndStatuses_WhenFindByRecipientAndStatus_ThenFiltersByRecipientAndStatus() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
         repo.save(note("n2", 5, NotificationStatus.SENT));
         repo.save(note("n3", 7, NotificationStatus.PENDING));
@@ -101,7 +101,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void findByRecipient_returnsAllForThatRecipient() {
+    void GivenNotificationsOfTwoRecipients_WhenFindByRecipient_ThenReturnsAllForThatRecipient() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
         repo.save(note("n2", 5, NotificationStatus.SENT));
         repo.save(note("n3", 7, NotificationStatus.PENDING));
@@ -111,7 +111,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void heterogeneousData_roundTrips() {
+    void GivenANotificationWithHeterogeneousData_WhenSaved_ThenDataRoundTrips() {
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", "ord-123");          // String
         data.put("total", 100);                  // Integer
@@ -127,7 +127,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void emptyData_roundTripsAsEmptyMap() {
+    void GivenANotificationWithEmptyData_WhenSaved_ThenDataRoundTripsAsEmptyMap() {
         repo.save(note("n1", 5, NotificationStatus.PENDING)); // 6-arg ctor → empty data
         assertTrue(repo.findById("n1").getData().isEmpty());
     }

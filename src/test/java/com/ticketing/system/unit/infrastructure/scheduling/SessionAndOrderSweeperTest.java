@@ -85,7 +85,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void emptySweep_noWorkDone() {
+    void GivenNothingExpired_WhenSweep_ThenNoWorkDone() {
         sweeper.sweep();
 
         verify(sessionRepo).findExpiredBefore(T0);
@@ -99,7 +99,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void expiredGuestSessionWithCart_deletesSessionAndCart_releasesTickets() {
+    void GivenExpiredGuestSessionWithCart_WhenSweepExpiredSessions_ThenDeletesSessionAndCartAndReleasesTickets() {
         Session guest = new Session("guest-sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
 
@@ -120,7 +120,7 @@ class SessionAndOrderSweeperTest {
     }
 
     @Test
-    void expiredGuestSessionWithoutCart_deletesSessionOnly() {
+    void GivenExpiredGuestSessionWithoutCart_WhenSweepExpiredSessions_ThenDeletesSessionOnlyAndRecordsVisitorExit() {
         Session guest = new Session("orphan-sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
         when(orderRepo.getBySessionId("orphan-sid")).thenReturn(Optional.empty());
@@ -139,7 +139,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void expiredMemberSession_deletesSession_butPreservesCart_D9a() {
+    void GivenExpiredMemberSession_WhenSweepExpiredSessions_ThenDeletesSessionButPreservesCartWithoutVisitorExitD9a() {
         Session member = new Session("member-sid", 5, T0.minusSeconds(86400 + 60),
                 T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(member));
@@ -160,7 +160,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void cartWithExpiredItems_deletedAndTicketsReleased() {
+    void GivenCartWithExpiredItems_WhenSweepExpiredOrders_ThenDeletedAndTicketsReleased() {
         ActiveOrder expiredCart = ActiveOrder.forMember(5, "sid-1", NOW);
         expiredCart.addStandingReservation(2, 20, 3, 30.0, NOW.minusMinutes(30));
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(expiredCart));
@@ -192,7 +192,7 @@ class SessionAndOrderSweeperTest {
     }
 
     @Test
-    void cartWithExpiredItemsAcrossMultipleEvents_releasesPerZoneAggregated() {
+    void GivenCartWithExpiredItemsAcrossMultipleEvents_WhenSweepExpiredOrders_ThenReleasesPerZoneAndSavesEachEventOnce() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-multi", NOW);
         cart.addStandingReservation(1, 10, 2, 50.0, NOW.minusMinutes(30));   // 2 in event=1 zone=10
         cart.addStandingReservation(1, 20, 1, 75.0, NOW.minusMinutes(30));   // 1 in event=1 zone=20
@@ -215,7 +215,7 @@ class SessionAndOrderSweeperTest {
     }
 
     @Test
-    void cartWithEventMissingFromRepo_skipsReleaseGracefully() {
+    void GivenCartWithEventMissingFromRepo_WhenSweepExpiredOrders_ThenSkipsReleaseGracefullyAndDeletesCart() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-1", NOW);
         cart.addStandingReservation(99, 10, 1, 25.0, NOW.minusMinutes(30));
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
@@ -233,7 +233,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void combinedSweep_handlesSessionsAndOrders_logsAggregate() {
+    void GivenExpiredSessionAndExpiredCart_WhenSweep_ThenHandlesSessionsAndOrders() {
         Session guest = new Session("sid-g", null, T0.minusSeconds(3600), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
         when(orderRepo.getBySessionId("sid-g")).thenReturn(Optional.empty());
@@ -253,7 +253,7 @@ class SessionAndOrderSweeperTest {
     }
 
     @Test
-    void emptyOrderItems_releaseStandingSpotsIsNoOp() {
+    void GivenExpiredOrderWithEmptyItems_WhenSweepExpiredOrders_ThenReleaseStandingSpotsIsNoOpAndCartIsDeleted() {
         // Defensive: an ActiveOrder with no line items shouldn't blow up.
         ActiveOrder emptyCart = ActiveOrder.forGuest("sid-empty", NOW);
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(emptyCart));
@@ -275,7 +275,7 @@ class SessionAndOrderSweeperTest {
 
 
     @Test
-    void expiredSeatedOrder_releasesExactReservedSeats() {
+    void GivenExpiredSeatedOrder_WhenSweepExpiredOrders_ThenReleasesExactReservedSeats() {
         ActiveOrder expiredCart = ActiveOrder.forMember(5, "sid-1", NOW);
 
         SeatedZone seatedZone = new SeatedZone(
@@ -315,7 +315,7 @@ class SessionAndOrderSweeperTest {
 
 
     @Test
-    void expiredMixedOrder_releasesStandingQuantityAndExactSeatedSeats() {
+    void GivenExpiredMixedOrder_WhenSweepExpiredOrders_ThenReleasesStandingQuantityAndExactSeatedSeats() {
         ActiveOrder expiredCart = ActiveOrder.forGuest("sid-mixed", NOW);
 
         StandingZone standingZone = new StandingZone(10, "General Admission", 5, 50.0);
@@ -353,7 +353,7 @@ class SessionAndOrderSweeperTest {
 
 
     @Test
-    void expiredGuestSessionWithSeatedCart_releasesExactSeatsAndDeletesCart() {
+    void GivenExpiredGuestSessionWithSeatedCart_WhenSweepExpiredSessions_ThenReleasesExactSeatsAndDeletesSessionAndCart() {
         Session guest = new Session("guest-seated-sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
 
@@ -423,7 +423,7 @@ class SessionAndOrderSweeperTest {
     // buyer has manually removed the expired line (now allowed), leaving only fresh items. The sweeper
     // must re-validate expiry under the lock and NOT destroy the salvaged cart.
     @Test
-    void cartNoLongerExpiredWhenLocked_isSkippedNotDeleted() {
+    void GivenCartNoLongerExpiredWhenLocked_WhenSweepExpiredOrders_ThenIsSkippedNotDeleted() {
         ActiveOrder healthyAgain = ActiveOrder.forMember(5, "sid-healthy", NOW);
         healthyAgain.addStandingReservation(1, 10, 1, 30.0, NOW); // fresh, not expired
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(healthyAgain));
@@ -442,7 +442,7 @@ class SessionAndOrderSweeperTest {
     // RC1: one zone release failing (e.g. a double-release race with abandonActiveOrder) must not abort
     // release of the other events or the deletion of the order.
     @Test
-    void zoneReleaseFailure_doesNotAbortRemainingReleasesOrDelete() {
+    void GivenZoneReleaseFailure_WhenSweepExpiredOrders_ThenDoesNotAbortRemainingReleasesOrDelete() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-resilient", NOW);
         cart.addStandingReservation(1, 10, 1, 50.0, NOW.minusMinutes(30)); // event 1 -> throws
         cart.addStandingReservation(2, 20, 1, 60.0, NOW.minusMinutes(30)); // event 2 -> ok

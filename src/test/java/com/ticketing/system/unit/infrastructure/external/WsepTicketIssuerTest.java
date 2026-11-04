@@ -53,7 +53,7 @@ class WsepTicketIssuerTest {
     }
 
     @Test
-    void verifyConnection_trueOnOk_falseOtherwise() {
+    void GivenOkOrOtherAnswerOrTransportError_WhenVerifyConnection_ThenTrueOnOkFalseOtherwise() {
         // verifyConnection now goes through the retrying postWithRetry (idempotent handshake).
         when(http.postWithRetry(any())).thenReturn("OK");
         assertTrue(issuer.verifyConnection());
@@ -66,7 +66,7 @@ class WsepTicketIssuerTest {
     }
 
     @Test
-    void issue_oneCallPerTicket_collectsCodesIntoBarcodes() {
+    void GivenATwoTicketRequest_WhenIssue_ThenMakesOneCallPerTicketAndCollectsCodesIntoBarcodes() {
         when(http.post(any())).thenReturn("TIX-aaaa-1111", "TIX-bbbb-2222");
 
         IssuanceResultDTO result = issuer.issue(twoTicketRequest());
@@ -90,19 +90,19 @@ class WsepTicketIssuerTest {
     }
 
     @Test
-    void issue_minusOneFailsTheWholeIssuance() {
+    void GivenIssuerAnswersMinusOne_WhenIssue_ThenFailsTheWholeIssuance() {
         when(http.post(any())).thenReturn("-1");
         assertThrows(TicketIssuanceFailedException.class, () -> issuer.issue(twoTicketRequest()));
     }
 
     @Test
-    void issue_emptyItemsThrows() {
+    void GivenEmptyItems_WhenIssue_ThenIssuanceFails() {
         IssuanceRequestDTO empty = new IssuanceRequestDTO(42, null, List.of());
         assertThrows(TicketIssuanceFailedException.class, () -> issuer.issue(empty));
     }
 
     @Test
-    void issue_transportFailureBecomesIssuanceFailure() {
+    void GivenATransportFailure_WhenIssue_ThenItBecomesAnIssuanceFailure() {
         when(http.post(any())).thenThrow(new WsepCommunicationException("refused", new RuntimeException()));
         assertThrows(TicketIssuanceFailedException.class, () -> issuer.issue(twoTicketRequest()));
     }

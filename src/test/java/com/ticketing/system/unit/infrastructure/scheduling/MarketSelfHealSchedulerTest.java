@@ -20,7 +20,7 @@ import com.ticketing.system.bootstrap.scheduling.MarketSelfHealScheduler;
 class MarketSelfHealSchedulerTest {
 
     @Test
-    void reopenMarketIfNeeded_delegatesToEnsureMarketOpen() {
+    void GivenTheSystemAdminService_WhenTheTickRuns_ThenDelegatesToEnsureMarketOpen() {
         SystemAdminService admin = mock(SystemAdminService.class);
         new MarketSelfHealScheduler(admin).reopenMarketIfNeeded();
         verify(admin).ensureMarketOpen();
