@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -57,6 +58,7 @@ class ManagerPermissionMatrixAcceptanceTest {
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
     @Autowired private EventManagementService eventManagementService;
+    @Autowired private Clock clock;
 
     @Test
     void GivenAConfigureVenueManager_WhenEditingEventVenueAndPolicies_ThenCanEditVenueButNotEventOrPolicies() {
@@ -88,7 +90,7 @@ class ManagerPermissionMatrixAcceptanceTest {
         EventDetailDTO created = eventManagementService.addEvent(m.token(), new EventCreationDTO(
                 f.companyId, "Manager-Created", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(5), LocalDateTime.now().plusDays(5).plusHours(2))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(5), LocalDateTime.now(clock).plusDays(5).plusHours(2))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         assertNotNull(created.eventId(), "a MANAGE_INVENTORY manager can create events");
@@ -133,7 +135,7 @@ class ManagerPermissionMatrixAcceptanceTest {
         EventDetailDTO ev = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Matrix Event", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(10), LocalDateTime.now(clock).plusDays(10).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(ev.eventId());

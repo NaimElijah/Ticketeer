@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -46,6 +47,8 @@ class AuthAcceptanceTest {
     private SessionRepository sessionRepository;
     @Autowired
     private ActiveOrderRepository activeOrderRepository;
+    @Autowired
+    private Clock clock;
 
     // ------------------------------------------------------------------
     // Guest session lifecycle
@@ -134,7 +137,7 @@ class AuthAcceptanceTest {
         assertEquals("dave", tokenResult.username());
         assertTrue(authService.validateToken(tokenResult.token()));
         assertEquals(tokenResult.userId(), authService.extractUserId(tokenResult.token()));
-        assertTrue(tokenResult.expiresAtEpochMillis() > System.currentTimeMillis());
+        assertTrue(tokenResult.expiresAtEpochMillis() > clock.millis());
     }
 
     @Test
@@ -196,8 +199,8 @@ class AuthAcceptanceTest {
         LoginDTO first = authService.login(new LoginRequestDTO("rest1", "Password1", firstSid));
 
         // Simulate an active cart on the first session.
-        ActiveOrder cart = ActiveOrder.forMember(first.authToken().userId(), firstSid, LocalDateTime.now());
-        cart.addStandingReservation(1, 10, 1, 50.0, LocalDateTime.now());
+        ActiveOrder cart = ActiveOrder.forMember(first.authToken().userId(), firstSid, LocalDateTime.now(clock));
+        cart.addStandingReservation(1, 10, 1, 50.0, LocalDateTime.now(clock));
         activeOrderRepository.save(cart);
 
         // Logout — D8 (L1) deletes the Session row; D9a preserves the cart.
@@ -266,8 +269,8 @@ class AuthAcceptanceTest {
         authService.register(new RegisterRequestDTO("link1", "link1@example.com", "Password1", sid, 20));
         LoginDTO session = authService.login(new LoginRequestDTO("link1", "Password1", sid));
 
-        ActiveOrder cart = ActiveOrder.forMember(session.authToken().userId(), sid, LocalDateTime.now());
-        cart.addStandingReservation(2, 20, 2, 30.0, LocalDateTime.now());
+        ActiveOrder cart = ActiveOrder.forMember(session.authToken().userId(), sid, LocalDateTime.now(clock));
+        cart.addStandingReservation(2, 20, 2, 30.0, LocalDateTime.now(clock));
         activeOrderRepository.save(cart);
 
         authService.logout(new LogoutRequestDTO(session.authToken().token()));

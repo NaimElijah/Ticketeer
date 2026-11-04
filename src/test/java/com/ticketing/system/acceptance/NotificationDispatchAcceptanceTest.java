@@ -13,6 +13,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -100,6 +101,7 @@ class NotificationDispatchAcceptanceTest {
     @Autowired private UserRepository userRepository;
     @Autowired private ApplicationEventPublisher eventPublisher;
     @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private Clock clock;
 
     private static final AtomicInteger SEQ = new AtomicInteger(0);
 
@@ -227,7 +229,7 @@ class NotificationDispatchAcceptanceTest {
     private Fixture newStandingEvent(AuthTokenDTO owner) {
         int companyId = companyService.registerCompany(
                 owner.token(), new CompanyRegistrationDTO("DispatchCo" + SEQ.incrementAndGet(), "desc")).companyId();
-        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime start = LocalDateTime.now(clock).plusDays(10);
         EventDetailDTO event = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Dispatch Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"), List.of(new ShowDate(start, start.plusHours(3))), ZoneId.of("Asia/Jerusalem"), null));

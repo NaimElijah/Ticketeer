@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -40,6 +41,7 @@ class PurchasePolicyAcceptanceTest {
     @Autowired private CompanyManagementService companyService;
     @Autowired private EventManagementService  eventManagementService;
     @Autowired private ReservationService      reservationService;
+    @Autowired private Clock clock;
 
     // unique counter so each @BeforeEach creates a fresh user + company
     private static final AtomicInteger SEQ = new AtomicInteger(0);
@@ -76,8 +78,8 @@ class PurchasePolicyAcceptanceTest {
                         0.0,
                         new Location("Israel", "Tel Aviv"),
                         List.of(new ShowDate(
-                                LocalDateTime.now().plusDays(30),
-                                LocalDateTime.now().plusDays(30).plusHours(3)
+                                LocalDateTime.now(clock).plusDays(30),
+                                LocalDateTime.now(clock).plusDays(30).plusHours(3)
                         )),
                         ZoneId.of("Asia/Jerusalem"),
                         null

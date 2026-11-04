@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -53,6 +54,8 @@ class CompanySalesReportAcceptanceTest {
     private OrderReceiptRepository orderReceiptRepository;
     @Autowired
     private CompanySalesPresenter presenter;
+    @Autowired
+    private Clock clock;
 
     private AuthTokenDTO registerAndLoginMember(String name) {
         String sid = authService.startGuestSession().sessionId();
@@ -65,7 +68,7 @@ class CompanySalesReportAcceptanceTest {
                 companyId, eventName, "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         return Integer.parseInt(event.eventId());
@@ -75,8 +78,8 @@ class CompanySalesReportAcceptanceTest {
     private void recordPurchase(AuthTokenDTO buyer, int eventId, double total) {
         orderReceiptRepository.save(OrderReceipt.forMember(
                 orderReceiptRepository.nextId(), buyer.userId(), total,
-                List.of(new ReceiptLine(1, total, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now()));
+                List.of(new ReceiptLine(1, total, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock)));
     }
 
     private CompanySalesPresenter.Outcome.Success loadSuccess(AuthTokenDTO owner) {
