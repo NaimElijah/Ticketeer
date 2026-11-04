@@ -100,7 +100,7 @@ class EventCancellationRefundConcurrencyTest {
                 throw new RefundFailedException(chargeId, "gateway unavailable");
             }
             refundsByCharge.computeIfAbsent(chargeId, id -> new AtomicInteger()).incrementAndGet();
-            return new RefundResultDTO("refund-" + chargeId, String.valueOf(chargeId), amount, LocalDateTime.now(),
+            return new RefundResultDTO("refund-" + chargeId, String.valueOf(chargeId), amount, WHEN,
                     List.of(), List.of());
         });
 
@@ -109,7 +109,7 @@ class EventCancellationRefundConcurrencyTest {
             ticketRepository.save(new Ticket(EVENT_ID, 1, receiptId, "A" + receiptId, PRICE, ticketId, "BC-" + ticketId));
             ReceiptLine line = new ReceiptLine(ticketId, PRICE, EVENT_ID, 1, "A" + receiptId, WHEN);
             TransactionRecord charge = TransactionRecord.paymentCharge(CHARGE_BASE + receiptId, "test-gateway", PRICE, "ILS", WHEN);
-            orderReceiptRepository.save(OrderReceipt.forMember(receiptId, BUYER_ID, PRICE, List.of(line), LocalDateTime.now(), List.of(charge)));
+            orderReceiptRepository.save(OrderReceipt.forMember(receiptId, BUYER_ID, PRICE, List.of(line), WHEN, List.of(charge)));
         }
     }
 
@@ -168,7 +168,7 @@ class EventCancellationRefundConcurrencyTest {
             int chargeId = invocation.getArgument(0);
             committedStatesDuringGatewayCalls.add(committedRefundStateOf(chargeId - CHARGE_BASE));
             return new RefundResultDTO("refund-" + chargeId, String.valueOf(chargeId), invocation.getArgument(1),
-                    LocalDateTime.now(), List.of(), List.of());
+                    WHEN, List.of(), List.of());
         });
 
         new TransactionTemplate(transactionManager).executeWithoutResult(
