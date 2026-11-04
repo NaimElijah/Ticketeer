@@ -17,7 +17,7 @@ import com.tngtech.archunit.lang.ArchRule;
 
 /**
  * Holds the test suite to its own conventions. The repo has no linter, and about 4% of the tests added
- * since the first import still broke the naming convention (ADR-023, #189). The self-tests prove the
+ * since July 2026 still broke the naming convention (ADR-023, #189). The self-tests prove the
  * rule fails on each kind of offender, because a rule that matches nothing checks nothing.
  */
 class TestConventionsTest {

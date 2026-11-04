@@ -10,7 +10,7 @@ The project's test names read `Given<scenario>_When<action>_Then<outcome>`, a ru
 instructions. At #189, 944 of the 3,140 test methods broke it: some in lowercase, some named after the method
 under test, many with no stated scenario at all.
 
-Most of that was inherited, not new. At the first import in July 2026, 937 of 1,409 tests (67%) already broke
+Most of that was inherited, not new. On 2026-07-08, when this repo's own work began, 937 of 1,409 tests (67%) already broke
 it, and the count stayed near 940 as 1,726 tests were added. Of those added, 74 (4%) broke it. So the
 instruction mostly held, and it still leaked.
 
