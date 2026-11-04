@@ -89,6 +89,8 @@ class AuthBootstrapTest {
 
     @BeforeEach
     void setUp() {
+        bridgedBefore = CompanyManagementBridge.service();
+        new CompanyManagementBridge(null);
         MapBackedVaadinSession.install();
         GuestSession.setSessionId(GUEST_SESSION_ID);
         authenticationService = mock(AuthenticationService.class);
@@ -389,23 +391,21 @@ class AuthBootstrapTest {
     private static final int COMPANY_ID = 7;
 
     private CompanyManagementService companyManagementService;
-    // The bridge is static and a Spring context in the same JVM may have set it, so it is restored after.
+    // The bridge is static, and a Spring context in the same JVM may have left a dead service in it, so
+    // each test starts with it empty, and it is restored after.
     private CompanyManagementService bridgedBefore;
     // Vaadin holds the current request through a weak reference, so the test keeps it reachable.
     private VaadinRequest currentRequest;
 
     @AfterEach
     void restoreTheBridgeAndTheRequest() {
-        if (companyManagementService != null) {
-            new CompanyManagementBridge(bridgedBefore);
-        }
+        new CompanyManagementBridge(bridgedBefore);
         CurrentInstance.set(VaadinRequest.class, null);
         currentRequest = null;
     }
 
     private void bridgeMemberships(List<UserCompanyDTO> memberships) {
         if (companyManagementService == null) {
-            bridgedBefore = CompanyManagementBridge.service();
             companyManagementService = mock(CompanyManagementService.class);
             new CompanyManagementBridge(companyManagementService);
         }
