@@ -92,6 +92,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -122,6 +123,9 @@ class VaadinSmokeTest {
 
     @Autowired
     private ApplicationContext context;
+
+    @Autowired
+    private Clock clock;
 
     @Test
     void GivenVaadinAutoConfiguration_WhenSpringContextBoots_ThenContextLoads() {
@@ -304,8 +308,10 @@ class VaadinSmokeTest {
 
     // A fixed instant for the market state's recorded times (ADR-008): the view only formats them.
     private static final LocalDateTime MARKET_STATE_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
-    // A fixed instant for the threads' and sent rows' recorded times: the views only format them.
-    private static final LocalDateTime THREAD_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+    // The inbox views age a thread's times on the application's clock, so its stamps come from that clock.
+    private LocalDateTime threadAt() {
+        return LocalDateTime.now(clock);
+    }
 
     @Test
     void GivenMarketAndAnalyticsLoaded_WhenSystemAnalyticsViewConstructed_ThenDoesNotThrow() {
@@ -437,9 +443,9 @@ class VaadinSmokeTest {
         SupportInboxPresenter presenter = mock(SupportInboxPresenter.class);
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "COMPLAINT", "OPEN", 1, "MEMBER", 0, "ADMIN_GROUP",
-            "Refund delay", THREAD_AT, THREAD_AT, 0,
+            "Refund delay", threadAt(), threadAt(), 0,
             List.of(new MessageDTO("m-1", 1, "MEMBER", "Where's my refund?",
-                THREAD_AT, false)),
+                threadAt(), false)),
             "alice", "TicketHub Support");
         when(presenter.load(any())).thenReturn(
             new SupportInboxPresenter.Outcome.Success(List.of(conv)));
@@ -456,9 +462,9 @@ class VaadinSmokeTest {
         MyCompanyDTO company = new MyCompanyDTO(7, "Acme", "Founder");
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "INQUIRY", "OPEN", 1, "MEMBER", 7, "COMPANY",
-            "Wheelchair access", THREAD_AT, THREAD_AT, 0,
+            "Wheelchair access", threadAt(), threadAt(), 0,
             List.of(new MessageDTO("m-1", 1, "MEMBER", "Is there step-free access?",
-                THREAD_AT, false)),
+                threadAt(), false)),
             "alice", "Acme");
         when(presenter.loadFor(any(), any())).thenReturn(
             new CompanyInquiryInboxPresenter.Outcome.Success(List.of(company), company, List.of(conv)));
@@ -474,9 +480,9 @@ class VaadinSmokeTest {
         AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "COMPLAINT", "OPEN", 1, "MEMBER", 0, "ADMIN_GROUP",
-            "Charged twice", THREAD_AT, THREAD_AT, 0,
+            "Charged twice", threadAt(), threadAt(), 0,
             List.of(new MessageDTO("m-1", 1, "MEMBER", "My card was charged twice.",
-                THREAD_AT, false)),
+                threadAt(), false)),
             "alice", "TicketHub Support");
         when(presenter.load(any(), any())).thenReturn(
             new AdminComplaintQueuePresenter.Outcome.Success(List.of(conv)));
@@ -491,8 +497,8 @@ class VaadinSmokeTest {
         AdminInboxPresenter presenter = mock(AdminInboxPresenter.class);
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "DIRECT", "OPEN", 1, "ADMIN", 7, "MEMBER",
-            "Heads up", THREAD_AT, THREAD_AT, 0,
-            List.of(new MessageDTO("m-1", 1, "ADMIN", "hi alice", THREAD_AT, false)),
+            "Heads up", threadAt(), threadAt(), 0,
+            List.of(new MessageDTO("m-1", 1, "ADMIN", "hi alice", threadAt(), false)),
             "TicketHub Support", "alice");
         when(presenter.load(any())).thenReturn(
             new AdminInboxPresenter.Outcome.Success(List.of(conv)));
@@ -507,7 +513,7 @@ class VaadinSmokeTest {
         // UI context.
         AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
         AdminSendMessagesPresenter.SentOutreach row = new AdminSendMessagesPresenter.SentOutreach(
-            THREAD_AT, "Maintenance window", 82481);
+            threadAt(), "Maintenance window", 82481);
         when(presenter.load(any())).thenReturn(
             new AdminSendMessagesPresenter.Outcome.Success(List.of(row)));
         assertDoesNotThrow(() -> new AdminSendMessagesView(presenter, context.getBean(DisplayTime.class)),
