@@ -281,8 +281,6 @@ class VaadinSmokeTest {
 
     @Test
     void GivenANotAuthenticatedOrgTreeOutcome_WhenOrganizationalTreeViewConstructed_ThenDoesNotThrow() {
-        // No-arg PlatformAdminLayout views. AdminDashboardView takes a presenter, so it has
-        // its own test below.
         OrgTreePresenter orgTreePresenter = mock(OrgTreePresenter.class);
         when(orgTreePresenter.load(any(), any(), anyBoolean())).thenReturn(new OrgTreePresenter.Outcome.NotAuthenticated());
         assertDoesNotThrow(() -> new OrganizationalTreeView(orgTreePresenter),
@@ -470,8 +468,7 @@ class VaadinSmokeTest {
     void GivenOneComplaintLoaded_WhenAdminComplaintQueueViewConstructed_ThenDoesNotThrow() {
         // Admin complaint queue wired to a presenter (#269). A mock presenter returning one
         // complaint with one message exercises the status-filter + master-list + thread +
-        // reply-bar build path without a UI context. (The view now takes a presenter, so it
-        // moved out of the no-arg GivenANotAuthenticatedOrgTreeOutcome_WhenOrganizationalTreeViewConstructed_ThenDoesNotThrow group.)
+        // reply-bar build path without a UI context.
         AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "COMPLAINT", "OPEN", 1, "MEMBER", 0, "ADMIN_GROUP",
