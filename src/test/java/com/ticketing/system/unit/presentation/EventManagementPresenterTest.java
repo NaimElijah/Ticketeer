@@ -49,6 +49,8 @@ class EventManagementPresenterTest {
     private static final String TOKEN = "owner-token";
     private static final int EVENT_ID = 9;
     private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
+    // The service is a mock and the presenter reads no clock: the dates are only passed through.
+    private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private EventManagementService eventService;
     private CompanyManagementService companyService;
@@ -67,11 +69,11 @@ class EventManagementPresenterTest {
     }
 
     private static LocalDateTime futureStart() {
-        return LocalDateTime.now().plusDays(1);
+        return NOW.plusDays(1);
     }
 
     private static LocalDateTime futureEnd() {
-        return LocalDateTime.now().plusDays(1).plusHours(3);
+        return NOW.plusDays(1).plusHours(3);
     }
 
     private EventManagementPresenter.CreateOutcome createWith(Integer preferredCompanyId,
@@ -226,7 +228,7 @@ class EventManagementPresenterTest {
                 .thenThrow(new IllegalArgumentException("Start time must be in the future"));
 
         EventManagementPresenter.CreateOutcome outcome =
-                createWith(null, LocalDateTime.now().minusDays(1), futureEnd());
+                createWith(null, NOW.minusDays(1), futureEnd());
 
         EventManagementPresenter.CreateOutcome.InvalidInput invalid =
                 assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);

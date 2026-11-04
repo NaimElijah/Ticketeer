@@ -59,7 +59,7 @@ class CompanyInquiryInboxPresenterTest {
     private static ConversationDTO conversation(String id, String type) {
         return new ConversationDTO(
             id, type, "OPEN", 1, "MEMBER", 7, "COMPANY",
-            "Subject " + id, LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Subject " + id, LAST_MESSAGE_AT, LAST_MESSAGE_AT, 0, List.of(),
             "alice", "Acme");
     }
 

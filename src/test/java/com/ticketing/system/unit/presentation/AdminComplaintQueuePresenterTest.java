@@ -53,7 +53,7 @@ class AdminComplaintQueuePresenterTest {
     private static ConversationDTO complaint(String id, String status) {
         return new ConversationDTO(
             id, "COMPLAINT", status, 1, "MEMBER", 0, "ADMIN_GROUP",
-            "Subject " + id, LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Subject " + id, LAST_MESSAGE_AT, LAST_MESSAGE_AT, 0, List.of(),
             "alice", "TicketHub Support");
     }
 
