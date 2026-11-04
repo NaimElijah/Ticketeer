@@ -63,7 +63,7 @@ class WsepPaymentGatewayTest {
     }
 
     @Test
-    void verifyConnection_trueOnOk_falseOtherwise_falseOnTransportError() {
+    void GivenOkOrOtherAnswerOrTransportError_WhenVerifyConnection_ThenTrueOnOkFalseOtherwiseFalseOnTransportError() {
         // verifyConnection now goes through the retrying postWithRetry (idempotent handshake).
         when(http.postWithRetry(any())).thenReturn("OK");
         assertTrue(gateway.verifyConnection());
@@ -76,7 +76,7 @@ class WsepPaymentGatewayTest {
     }
 
     @Test
-    void charge_mapsEveryPayParamAndReturnsTransactionId() {
+    void GivenWsepReturnsATransactionId_WhenCharge_ThenMapsEveryPayParamAndReturnsTransactionIdStampedByTheClock() {
         when(http.post(any())).thenReturn("54321");
 
         PaymentResultDTO result = gateway.charge(request());
@@ -103,7 +103,7 @@ class WsepPaymentGatewayTest {
     }
 
     @Test
-    void charge_minusOneIsDecline_notUnreachable() {
+    void GivenWsepAnswersMinusOne_WhenCharge_ThenDeclineNotUnreachable() {
         when(http.post(any())).thenReturn("-1");
         // A real WSEP "-1" decline must be the base PaymentGatewayException, NOT the unreachable
         // subtype — that's what keeps the buyer's "Payment declined" UX distinct from the generic one.
@@ -114,25 +114,25 @@ class WsepPaymentGatewayTest {
     }
 
     @Test
-    void charge_unparseableBodyIsUnreachable_notDecline() {
+    void GivenAnUnparseableBody_WhenCharge_ThenUnreachableNotDecline() {
         when(http.post(any())).thenReturn("not-a-number");
         assertThrows(PaymentGatewayUnreachableException.class, () -> gateway.charge(request()));
     }
 
     @Test
-    void charge_nonPositiveBodyIsUnreachable_notDecline() {
+    void GivenANonPositiveBody_WhenCharge_ThenUnreachableNotDecline() {
         when(http.post(any())).thenReturn("0");
         assertThrows(PaymentGatewayUnreachableException.class, () -> gateway.charge(request()));
     }
 
     @Test
-    void charge_transportFailureIsUnreachable_notDecline() {
+    void GivenATransportFailure_WhenCharge_ThenUnreachableNotDecline() {
         when(http.post(any())).thenThrow(new WsepCommunicationException("refused", new RuntimeException()));
         assertThrows(PaymentGatewayUnreachableException.class, () -> gateway.charge(request()));
     }
 
     @Test
-    void refund_oneIsSuccess_minusOneFails() {
+    void GivenWsepAnswersOneOrMinusOne_WhenRefund_ThenOneIsSuccessMinusOneFails() {
         when(http.post(any())).thenReturn("1");
         RefundResultDTO ok = gateway.refund(54321, 100.0);
         assertEquals("54321", ok.orderReceiptId());
@@ -175,7 +175,7 @@ class WsepPaymentGatewayTest {
     }
 
     @Test
-    void charge_neverLogsFullPanOrCvv() {
+    void GivenDebugLogging_WhenCharge_ThenLogsTheMaskedCardButNeverFullPanOrCvv() {
         Logger logger = (Logger) LoggerFactory.getLogger(WsepPaymentGateway.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();

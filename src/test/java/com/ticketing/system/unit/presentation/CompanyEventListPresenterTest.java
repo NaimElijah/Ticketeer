@@ -52,14 +52,14 @@ class CompanyEventListPresenterTest {
     // ── load ──────────────────────────────────────────────────────────────────
 
     @Test
-    void load_nullToken_returnsNotAuthenticated() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingServices() {
         assertInstanceOf(CompanyEventListPresenter.Outcome.NotAuthenticated.class,
                 presenter.load(null, null, CatalogSearchFiltersDTO.empty()));
         verifyNoInteractions(eventService, companyService);
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(companyService.findMyCompanies(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         assertInstanceOf(CompanyEventListPresenter.Outcome.NotAuthenticated.class,
@@ -67,7 +67,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void load_noCompanies_returnsNoCompany() {
+    void GivenNoCompanies_WhenLoad_ThenReturnsNoCompanyWithoutCallingEventService() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of());
 
         assertInstanceOf(CompanyEventListPresenter.Outcome.NoCompany.class,
@@ -76,7 +76,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void load_success_returnsEventsForFirstCompany() {
+    void GivenOneCompanyAndNoSelection_WhenLoad_ThenReturnsEventsForThatCompany() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
         List<EventDetailDTO> events = List.of(event(EVENT_ID, "Gala Night"));
         when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(events);
@@ -90,7 +90,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void load_managerMembership_returnsThatCompanysEvents() {
+    void GivenAManagerMembership_WhenLoad_ThenReturnsThatCompanysEvents() {
         // The exact bug (#429): a manager holds a Manager appointment, not an Owner one, so the old
         // owner-only lookup returned NoCompany. findMyCompanies keeps managers; the presenter must
         // resolve the company and serve its events.
@@ -107,7 +107,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void load_honorsSelectedCompanyAmongMemberships() {
+    void GivenASelectedCompanyAmongMemberships_WhenLoad_ThenHonorsTheSelectedCompany() {
         // Multiple memberships: the workspace's selected company id must win over "first".
         when(companyService.findMyCompanies(TOKEN))
                 .thenReturn(List.of(company(99, "Co-owner"), company(COMPANY_ID, "Manager")));
@@ -119,7 +119,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void load_passesFiltersThroughToService() {
+    void GivenSearchFilters_WhenLoad_ThenPassesFiltersThroughToService() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
         CatalogSearchFiltersDTO filters = new CatalogSearchFiltersDTO(
                 "Othello", null, null, null, null, null, null, null, null, null, null, null, null);
@@ -131,7 +131,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void load_serviceThrowsRuntime_returnsFailure() {
+    void GivenTheServiceThrowsRuntime_WhenLoad_ThenReturnsGenericFailure() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
         when(eventService.listEventsForCompany(anyString(), anyInt(), any()))
                 .thenThrow(new RuntimeException("db error"));
@@ -172,14 +172,14 @@ class CompanyEventListPresenterTest {
     // ── cancelEvent ───────────────────────────────────────────────────────────
 
     @Test
-    void cancelEvent_nullToken_returnsNotAuthenticated() {
+    void GivenANullToken_WhenCancelEvent_ThenReturnsNotAuthenticatedWithoutCallingService() {
         assertInstanceOf(CompanyEventListPresenter.CancelOutcome.NotAuthenticated.class,
                 presenter.cancelEvent(null, EVENT_ID));
         verifyNoInteractions(eventService);
     }
 
     @Test
-    void cancelEvent_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenCancelEvent_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         assertInstanceOf(CompanyEventListPresenter.CancelOutcome.NotAuthenticated.class,
@@ -187,7 +187,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void cancelEvent_success_callsServiceAndReturnsSuccess() {
+    void GivenTheServiceAcceptsTheCancel_WhenCancelEvent_ThenCallsServiceAndReturnsSuccess() {
         doNothing().when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Success.class,
@@ -197,7 +197,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void cancelEvent_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenCancelEvent_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("refund failed")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         CompanyEventListPresenter.CancelOutcome.Failure fail =
@@ -257,14 +257,14 @@ class CompanyEventListPresenterTest {
     // ── deleteEvent ───────────────────────────────────────────────────────────
 
     @Test
-    void deleteEvent_nullToken_returnsNotAuthenticated() {
+    void GivenANullToken_WhenDeleteEvent_ThenReturnsNotAuthenticatedWithoutCallingService() {
         assertInstanceOf(CompanyEventListPresenter.ActionOutcome.NotAuthenticated.class,
                 presenter.deleteEvent(null, EVENT_ID));
         verifyNoInteractions(eventService);
     }
 
     @Test
-    void deleteEvent_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenDeleteEvent_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(eventService).deleteEvent(TOKEN, EVENT_ID);
 
         assertInstanceOf(CompanyEventListPresenter.ActionOutcome.NotAuthenticated.class,
@@ -272,7 +272,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void deleteEvent_success_callsServiceAndReturnsSuccess() {
+    void GivenTheServiceAcceptsTheDelete_WhenDeleteEvent_ThenCallsServiceAndReturnsSuccess() {
         doNothing().when(eventService).deleteEvent(TOKEN, EVENT_ID);
 
         assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Success.class,
@@ -282,7 +282,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void deleteEvent_notCanceled_returnsFailureWithMessage() {
+    void GivenAnEventNotCanceled_WhenDeleteEvent_ThenReturnsFailureWithMessage() {
         doThrow(new InvalidStateTransitionException("Only CANCELED events can be deleted"))
                 .when(eventService).deleteEvent(TOKEN, EVENT_ID);
 
@@ -294,7 +294,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void deleteEvent_withSalesHistory_returnsFailureWithMessage() {
+    void GivenAnEventWithSalesHistory_WhenDeleteEvent_ThenReturnsFailureWithMessage() {
         doThrow(new BusinessRuleViolationException("Can't delete an event with sales history"))
                 .when(eventService).deleteEvent(TOKEN, EVENT_ID);
 
@@ -308,14 +308,14 @@ class CompanyEventListPresenterTest {
     // ── changeEventStatus ─────────────────────────────────────────────────────
 
     @Test
-    void changeEventStatus_nullToken_returnsNotAuthenticated() {
+    void GivenANullToken_WhenChangeEventStatus_ThenReturnsNotAuthenticatedWithoutCallingService() {
         assertInstanceOf(CompanyEventListPresenter.ActionOutcome.NotAuthenticated.class,
                 presenter.changeEventStatus(null, EVENT_ID, EventStatus.ON_SALE));
         verifyNoInteractions(eventService);
     }
 
     @Test
-    void changeEventStatus_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenChangeEventStatus_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
                 .when(eventService).changeEventStatus(TOKEN, EVENT_ID, EventStatus.ON_SALE);
 
@@ -324,7 +324,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void changeEventStatus_toOnSale_callsServiceAndReturnsSuccess() {
+    void GivenTheTargetStatusOnSale_WhenChangeEventStatus_ThenCallsServiceAndReturnsSuccess() {
         doNothing().when(eventService).changeEventStatus(TOKEN, EVENT_ID, EventStatus.ON_SALE);
 
         assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Success.class,
@@ -334,7 +334,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void changeEventStatus_toScheduled_callsServiceAndReturnsSuccess() {
+    void GivenTheTargetStatusScheduled_WhenChangeEventStatus_ThenCallsServiceAndReturnsSuccess() {
         doNothing().when(eventService).changeEventStatus(TOKEN, EVENT_ID, EventStatus.SCHEDULED);
 
         assertInstanceOf(CompanyEventListPresenter.ActionOutcome.Success.class,
@@ -344,7 +344,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void changeEventStatus_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenChangeEventStatus_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("invalid transition"))
                 .when(eventService).changeEventStatus(TOKEN, EVENT_ID, EventStatus.ON_SALE);
 
@@ -358,13 +358,13 @@ class CompanyEventListPresenterTest {
     // ── countries / cities (owner-scope filter options) ───────────────────────
 
     @Test
-    void countries_nullToken_isEmpty() {
+    void GivenANullToken_WhenCountries_ThenIsEmptyWithoutCallingServices() {
         assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.countries(null, null));
         verifyNoInteractions(eventService, companyService);
     }
 
     @Test
-    void countries_noCompany_isEmpty() {
+    void GivenNoCompany_WhenCountries_ThenIsEmptyWithoutCallingEventService() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of());
 
         assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.countries(TOKEN, null));
@@ -372,7 +372,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void countries_distinctSortedFromCompanyEvents() {
+    void GivenCompanyEventsWithARepeatedCountry_WhenCountries_ThenReturnsThemDistinctAndSorted() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
         when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(List.of(
                 eventAt(1, "Israel", "Tel Aviv"),
@@ -383,7 +383,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void cities_filtersToCountryDistinctSorted() {
+    void GivenCompanyEventsInTwoCountries_WhenCities_ThenFiltersToTheCountryDistinctAndSorted() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
         when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(List.of(
                 eventAt(1, "Israel", "Tel Aviv"),
@@ -395,7 +395,7 @@ class CompanyEventListPresenterTest {
     }
 
     @Test
-    void cities_nullCountry_isEmpty() {
+    void GivenANullCountry_WhenCities_ThenIsEmpty() {
         assertEquals(new ListOutcome.Loaded<>(List.of()), presenter.cities(TOKEN, null, null));
     }
 

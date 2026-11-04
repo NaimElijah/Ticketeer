@@ -12,19 +12,19 @@ import static org.junit.jupiter.api.Assertions.*;
 class ReceiptLineTest extends BaseDomainTest {
 
     @Test
-    void testGetTicketIdReturnsCorrectId() {
+    void GivenAReceiptLine_WhenGetTicketId_ThenReturnsCorrectId() {
         ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, LocalDateTime.now()));
         assertEquals(100, line.getTicketId());
     }
 
     @Test
-    void testGetEventIdReturnsCorrectEventId() {
+    void GivenAReceiptLine_WhenGetEventId_ThenReturnsCorrectEventId() {
         ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, LocalDateTime.now()));
         assertEquals(10, line.getEventId());
     }
 
     @Test
-    void testGetPriceAtReservationReturnsCorrectPrice() {
+    void GivenAReceiptLine_WhenGetPriceAtReservation_ThenReturnsCorrectPrice() {
         ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, LocalDateTime.now()));
         assertEquals(50.0, line.getPriceAtReservation());
     }

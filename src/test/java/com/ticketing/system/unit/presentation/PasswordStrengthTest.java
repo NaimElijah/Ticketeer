@@ -13,7 +13,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 class PasswordStrengthTest {
 
     @Test
-    void emptyInput_isNone() {
+    void GivenEmptyOrNullInput_WhenOf_ThenIsNone() {
         assertEquals(PasswordStrength.NONE, PasswordStrength.of(""));
         assertEquals(PasswordStrength.NONE, PasswordStrength.of(null));
     }
@@ -29,12 +29,12 @@ class PasswordStrengthTest {
         "Aa1!Bb2@Cc3#,     STRONG",      // 12 chars, every variety
         "Aa1Bbcdef,        FAIR",        // 9 chars, mixed-case + digit but no special and < 12
     })
-    void of_returnsExpectedTier(String pw, PasswordStrength expected) {
+    void GivenWeakFairAndStrongPasswords_WhenOf_ThenReturnsExpectedTier(String pw, PasswordStrength expected) {
         assertEquals(expected, PasswordStrength.of(pw));
     }
 
     @Test
-    void passesServerRules_matchesAuthenticationServiceValidation() {
+    void GivenPasswordsOnBothSidesOfTheServerRules_WhenPassesServerRules_ThenAcceptsOnlyLongEnoughPasswordsWithALetterAndADigit() {
         // Mirrors AuthenticationService.validatePassword:
         //  - rejects null / < 8 chars
         //  - requires letter AND digit
@@ -49,14 +49,14 @@ class PasswordStrengthTest {
     }
 
     @Test
-    void progressValue_isOrdered() {
+    void GivenTheStrengthTiers_WhenProgressValue_ThenIsOrdered() {
         assertTrue(PasswordStrength.NONE.progressValue() < PasswordStrength.WEAK.progressValue());
         assertTrue(PasswordStrength.WEAK.progressValue() < PasswordStrength.FAIR.progressValue());
         assertTrue(PasswordStrength.FAIR.progressValue() < PasswordStrength.STRONG.progressValue());
     }
 
     @Test
-    void labels_areUserFacing() {
+    void GivenTheStrengthTiers_WhenLabel_ThenLabelsAreUserFacing() {
         assertEquals("", PasswordStrength.NONE.label());
         assertEquals("Weak", PasswordStrength.WEAK.label());
         assertEquals("Fair", PasswordStrength.FAIR.label());

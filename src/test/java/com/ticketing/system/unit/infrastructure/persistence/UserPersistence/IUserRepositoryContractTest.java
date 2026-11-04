@@ -32,7 +32,7 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindByUsername_returnsTheSavedUser() {
+    void GivenSavedUser_WhenFindByUsername_ThenReturnsTheSavedUser() {
         int id = repo.nextId();
         User user = new User(id, "alice", "alice@example.com", "HASH",20);
         repo.save(user);
@@ -44,7 +44,7 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindByEmail_returnsTheSavedUser() {
+    void GivenSavedUser_WhenFindByEmail_ThenReturnsTheSavedUser() {
         int id = repo.nextId();
         User user = new User(id, "alice", "alice@example.com", "HASH",2);
         repo.save(user);
@@ -55,24 +55,24 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void findByUsername_returnsEmptyWhenMissing() {
+    void GivenNoSuchUser_WhenFindByUsername_ThenReturnsEmpty() {
         assertFalse(repo.findByUsername("ghost").isPresent());
     }
 
     @Test
-    void findByEmail_returnsEmptyWhenMissing() {
+    void GivenNoSuchUser_WhenFindByEmail_ThenReturnsEmpty() {
         assertFalse(repo.findByEmail("ghost@example.com").isPresent());
     }
 
     @Test
-    void existsByUsername_falseWhenMissingTrueWhenSaved() {
+    void GivenARepositoryBeforeAndAfterASave_WhenExistsByUsername_ThenFalseWhenMissingTrueWhenSaved() {
         assertFalse(repo.existsByUsername("alice"));
         repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH",15));
         assertTrue(repo.existsByUsername("alice"));
     }
 
     @Test
-    void nextId_producesDistinctIncreasingValues() {
+    void GivenRepository_WhenNextIdCalledThreeTimes_ThenProducesDistinctIncreasingValues() {
         int a = repo.nextId();
         int b = repo.nextId();
         int c = repo.nextId();
@@ -83,7 +83,7 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void getUserById_returnsTheSavedUser() {
+    void GivenSavedUser_WhenGetUserById_ThenReturnsTheSavedUser() {
         int id = repo.nextId();
         User user = new User(id, "alice", "alice@example.com", "HASH",15);
         repo.save(user);
@@ -93,12 +93,12 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void getUserById_throwsWhenMissing() {
+    void GivenNoSuchUser_WhenGetUserById_ThenThrowsUserNotFound() {
         assertThrows(UserNotFoundException.class, () -> repo.getUserById(9999));
     }
 
     @Test
-    void delete_removesTheUser() {
+    void GivenSavedUser_WhenDelete_ThenRemovesTheUser() {
         int id = repo.nextId();
         repo.save(new User(id, "alice", "alice@example.com", "HASH",15));
         assertTrue(repo.existsByUsername("alice"));

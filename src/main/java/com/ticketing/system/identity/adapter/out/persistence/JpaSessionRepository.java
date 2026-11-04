@@ -98,7 +98,7 @@ public class JpaSessionRepository implements SessionRepository {
             return;
         }
         // Idempotent: deleteById would throw EmptyResultDataAccessException for an
-        // unknown id, but the contract requires a silent no-op (delete_unknownIsIdempotent).
+        // unknown id, but the contract requires a silent no-op (GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrow).
         if (data.existsById(sessionId)) {
             data.deleteById(sessionId);
         }

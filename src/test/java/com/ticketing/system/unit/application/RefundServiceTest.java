@@ -97,7 +97,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenOwnPaidOrder_whenRequestRefund_thenReceiptAndTicketsRefunded() {
+    void GivenOwnPaidOrder_WhenRequestRefund_ThenReceiptAndTicketsRefunded() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         RefundResultDTO result = gatewayResult();
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
@@ -118,7 +118,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenSeatedPaidOrder_whenRequestRefund_thenSeatReturnedToStock() {
+    void GivenSeatedPaidOrder_WhenRequestRefund_ThenSeatReturnedToStock() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         RefundResultDTO result = gatewayResult();
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
@@ -142,7 +142,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenInventoryReturnFails_whenRequestRefund_thenRefundStillSucceeds() {
+    void GivenInventoryReturnFails_WhenRequestRefund_ThenRefundStillSucceeds() {
         // Regression: a failure while returning inventory to stock must NOT propagate — the gateway
         // refund and the receipt/ticket flips have already committed, so the refund must still report
         // success. The inventory return is now owned by the catalog port; RefundService guards the call
@@ -169,7 +169,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenInvalidToken_whenRequestRefund_thenInvalidTokenThrown() {
+    void GivenInvalidToken_WhenRequestRefund_ThenInvalidTokenThrown() {
         Mockito.when(authenticationService.validateToken(INVALID_TOKEN)).thenReturn(false);
 
         assertThatThrownBy(() -> service.requestRefund(INVALID_TOKEN, ORDER_ID, "x"))
@@ -179,7 +179,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenMissingOrder_whenRequestRefund_thenEntityNotFoundThrown() {
+    void GivenMissingOrder_WhenRequestRefund_ThenEntityNotFoundThrown() {
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.empty());
@@ -189,7 +189,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenAnotherMembersOrder_whenRequestRefund_thenUnauthorizedThrown() {
+    void GivenAnotherMembersOrder_WhenRequestRefund_ThenUnauthorizedThrown() {
         OrderReceipt receipt = memberReceiptWithCharge(OTHER_USER);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -202,7 +202,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenAlreadyRefundedOrder_whenRequestRefund_thenNotEligibleThrown() {
+    void GivenAlreadyRefundedOrder_WhenRequestRefund_ThenNotEligibleThrown() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         receipt.markRefunded();
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
@@ -232,7 +232,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenGatewayFailure_whenRequestRefund_thenRefundFailedPropagatesAndNoStateChange() {
+    void GivenGatewayFailure_WhenRequestRefund_ThenRefundFailedPropagatesAndNoStateChange() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -252,7 +252,7 @@ class RefundServiceTest {
     // the loser must see the order already refunded and bail. Deterministic given the lock (one wins,
     // one throws BusinessRuleViolationException) regardless of thread timing.
     @Test
-    void givenConcurrentRefundRequests_whenRequestRefund_thenGatewayRefundsExactlyOnce() throws Exception {
+    void GivenConcurrentRefundRequests_WhenRequestRefund_ThenGatewayRefundsExactlyOnce() throws Exception {
         OrderReceiptRepository realReceiptRepo = new MemoryOrderReceiptRepository();
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         realReceiptRepo.save(receipt); // id == ORDER_ID

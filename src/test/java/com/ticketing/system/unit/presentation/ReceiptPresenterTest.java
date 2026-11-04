@@ -47,7 +47,7 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_success_carriesReceipt() {
+    void GivenTheMembersOwnReceipt_WhenLoad_ThenCarriesReceipt() {
         PurchaseRecordDTO record = record();
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenReturn(record);
 
@@ -94,7 +94,7 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_missingReceipt_returnsNotFound() {
+    void GivenAMissingReceipt_WhenLoad_ThenReturnsNotFound() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
                 .thenThrow(new EntityNotFoundException("OrderReceipt", RECEIPT_ID));
 
@@ -104,7 +104,7 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_otherMembersReceipt_returnsNotFound() {
+    void GivenAnotherMembersReceipt_WhenLoad_ThenReturnsNotFound() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
                 .thenThrow(new UnauthorizedActionException("view receipt " + RECEIPT_ID, 42));
 
@@ -132,7 +132,7 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsFailure() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsFailure() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenThrow(new InvalidTokenException());
 
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);

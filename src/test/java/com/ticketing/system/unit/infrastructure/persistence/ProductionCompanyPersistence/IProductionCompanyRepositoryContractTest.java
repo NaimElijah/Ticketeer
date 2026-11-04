@@ -44,7 +44,7 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void save_thenGetCompanyById_returnsTheSavedCompany() {
+    void GivenASavedCompany_WhenGetCompanyById_ThenReturnsTheSavedCompany() {
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
 
         ProductionCompany found = repo.getCompanyById(1);
@@ -54,12 +54,12 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void getCompanyById_throwsWhenMissing() {
+    void GivenNoSuchCompany_WhenGetCompanyById_ThenThrowsCompanyNotFound() {
         assertThrows(CompanyNotFoundException.class, () -> repo.getCompanyById(9999));
     }
 
     @Test
-    void findByName_returnsSavedAndEmptyOtherwise() {
+    void GivenASavedCompany_WhenFindByName_ThenReturnsSavedAndEmptyOtherwise() {
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
 
         assertTrue(repo.findByName("Acme").isPresent());
@@ -68,14 +68,14 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void existsByName_trueAfterSaveFalseOtherwise() {
+    void GivenARepositoryBeforeAndAfterASave_WhenExistsByName_ThenTrueAfterSaveFalseOtherwise() {
         assertFalse(repo.existsByName("Acme"));
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
         assertTrue(repo.existsByName("Acme"));
     }
 
     @Test
-    void findActive_returnsOnlyActiveCompanies() {
+    void GivenActiveAndInactiveCompanies_WhenFindActive_ThenReturnsOnlyActiveCompanies() {
         repo.save(company(1, 7, "ActiveCo", CompanyStatus.ACTIVE));
         repo.save(company(2, 7, "InactiveCo", CompanyStatus.INACTIVE));
 
@@ -84,7 +84,7 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void findByFounder_returnsCompaniesFoundedByThatUser() {
+    void GivenCompaniesOfTwoFounders_WhenFindByFounder_ThenReturnsCompaniesFoundedByThatUser() {
         repo.save(company(1, 7, "First", CompanyStatus.ACTIVE));
         repo.save(company(2, 7, "Second", CompanyStatus.ACTIVE));
         repo.save(company(3, 9, "Other", CompanyStatus.ACTIVE));
@@ -95,7 +95,7 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void nextId_producesDistinctIncreasingValues() {
+    void GivenRepository_WhenNextIdCalledTwice_ThenProducesDistinctIncreasingValues() {
         int a = repo.nextId();
         int b = repo.nextId();
         assertNotEquals(a, b);
@@ -103,7 +103,7 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void save_persistsOwnerAndManagerLists() {
+    void GivenACompanyWithOwnersAndAManager_WhenSave_ThenPersistsOwnerAndManagerLists() {
         ProductionCompany c = company(1, 7, "Acme", CompanyStatus.ACTIVE); // founder 7 is the first owner
         c.addOwner(7, 8);   // owner 7 adds owner 8
         c.addManager(9);    // 9 becomes a manager
@@ -115,13 +115,13 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void save_roundTripsTheDefaultNoPurchasePolicy() {
+    void GivenACompanyWithTheDefaultPolicy_WhenSave_ThenRoundTripsTheDefaultNoPurchasePolicy() {
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
         assertTrue(repo.getCompanyById(1).getPurchasePolicy() instanceof NoPurchasePolicy);
     }
 
     @Test
-    void save_roundTripsAComposedPurchasePolicyTree() {
+    void GivenACompanyWithAComposedPurchasePolicy_WhenSave_ThenRoundTripsTheComposedPurchasePolicyTree() {
         ProductionCompany c = company(1, 7, "Acme", CompanyStatus.ACTIVE);
         c.setPurchasePolicy(new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(4)));
         repo.save(c);

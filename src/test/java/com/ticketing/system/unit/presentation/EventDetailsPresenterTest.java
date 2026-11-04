@@ -60,7 +60,7 @@ class EventDetailsPresenterTest {
     }
 
     @Test
-    void load_success_carriesEventAndZones() {
+    void GivenAnEventWithAVenueMap_WhenLoad_ThenCarriesEventZonesGridAndCompanyRating() {
         EventDetailDTO detail = detail();
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenReturn(detail);
         when(catalogService.getEventVenueMap(CRED, EVENT_ID)).thenReturn(venueMap());
@@ -78,7 +78,7 @@ class EventDetailsPresenterTest {
     }
 
     @Test
-    void load_eventNotFound_returnsNotFound() {
+    void GivenTheEventIsNotFound_WhenLoad_ThenReturnsNotFound() {
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
@@ -87,7 +87,7 @@ class EventDetailsPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsFailure() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsFailure() {
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new InvalidTokenException());
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
@@ -97,7 +97,7 @@ class EventDetailsPresenterTest {
 
     // An event with no (accessible) venue map still shows its detail — zones fall back to empty.
     @Test
-    void load_venueMapMissing_stillSuccessWithEmptyZones() {
+    void GivenAMissingVenueMap_WhenLoad_ThenStillSuccessWithEmptyZonesAndTheDefaultGrid() {
         EventDetailDTO detail = detail();
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenReturn(detail);
         when(catalogService.getEventVenueMap(CRED, EVENT_ID)).thenThrow(new NullVenueMapException(EVENT_ID));
@@ -114,7 +114,7 @@ class EventDetailsPresenterTest {
 
     // ---- UI-B3: a failed load reads as a failure, not as an event without a map (#187) ----
     // A missing map (NullVenueMapException) still shows the detail with no zones:
-    // load_venueMapMissing_stillSuccessWithEmptyZones above.
+    // GivenAMissingVenueMap_WhenLoad_ThenStillSuccessWithEmptyZonesAndTheDefaultGrid above.
 
     @Test
     void GivenTheStoreIsDown_WhenLoad_ThenFailureCarriesTheOutageMessage() {

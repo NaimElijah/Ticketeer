@@ -72,20 +72,20 @@ class TicketTest extends BaseDomainTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void freshlyConstructedTicket_hasNullHolderUserId() {
+    void GivenAFreshlyConstructedTicket_WhenGetHolderUserId_ThenHasNullHolderUserId() {
         Ticket t = track(new Ticket(1, 10, 11, null, 25.0, 100, "barcode-X"));
         assertNull(t.getHolderUserId());
     }
 
     @Test
-    void setHolderUserId_assignsMemberOwnership() {
+    void GivenATicketWithoutAHolder_WhenSetHolderUserId_ThenAssignsMemberOwnership() {
         Ticket t = track(new Ticket(1, 10, 11, null, 25.0, 100, "barcode-X"));
         t.setHolderUserId(42);
         assertEquals(42, t.getHolderUserId());
     }
 
     @Test
-    void setHolderUserId_nullClearsOwnership() {
+    void GivenATicketWithAHolder_WhenSetHolderUserIdToNull_ThenClearsOwnership() {
         // E.g., refund-to-pool flow could clear the holder. Domain allows it.
         Ticket t = track(new Ticket(1, 10, 11, null, 25.0, 100, "barcode-X"));
         t.setHolderUserId(42);
@@ -94,7 +94,7 @@ class TicketTest extends BaseDomainTest {
     }
 
     @Test
-    void testMarkRefundedChangesStatusToRefunded() {
+    void GivenPaidTicket_WhenMarkRefunded_ThenChangesStatusToRefunded() {
         Ticket ticket = track(new Ticket(10, 1, 11, null, 50.0, 100, "BARCODE123"));
         ticket.markRefunded();
         assertEquals(TicketStatus.REFUNDED, ticket.getStatus());

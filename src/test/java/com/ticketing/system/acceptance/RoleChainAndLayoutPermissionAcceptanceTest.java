@@ -90,7 +90,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
     }
 
     @Test
-    void GivenFounderAppointsOwnerAppointsManager_ThenChainAndGrantedPermissionsHold() {
+    void GivenFounderAppointsOwnerAppointsManager_WhenCheckingRolesAndPermissions_ThenChainAndGrantedPermissionsHold() {
         Chain c = buildChain();
 
         assertEquals(c.u1Id, companyRepository.getCompanyById(c.companyId).getFounderId(),

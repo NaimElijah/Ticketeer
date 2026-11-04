@@ -11,7 +11,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 class EventTicketSystemApplicationTests {
 
 	@Test
-	void contextLoads() {
+	void GivenTheTestAndMemoryProfiles_WhenTheApplicationContextStarts_ThenContextLoads() {
 	}
 
 }

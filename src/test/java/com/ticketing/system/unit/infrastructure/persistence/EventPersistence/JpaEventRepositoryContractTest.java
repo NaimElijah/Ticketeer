@@ -149,7 +149,7 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     }
 
     @Test
-    void save_roundTripsFullVenueWithSeatsAndPolicies() {
+    void GivenAnEventWithAFullVenueSeatsAndPolicies_WhenSaveAndFindById_ThenReturnsFullVenueWithSeatsAndPolicies() {
         int eventId = repository.nextId();
         SeatedZone seated = new SeatedZone(1, "Stage", 80.0,
                 List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));

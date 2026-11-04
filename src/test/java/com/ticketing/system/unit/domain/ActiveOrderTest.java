@@ -33,7 +33,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     @Disabled("V1: addReservation appends CartLineItem (UC-5)")
-    void givenEmptyOrder_whenAddReservation_thenLineAdded() {
+    void GivenEmptyOrder_WhenAddReservation_ThenLineAdded() {
     }
 
     // UC-10: an empty cart, or one whose hold has run out, cannot be checked out; the buyer reads the refusal
@@ -57,7 +57,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     @Disabled("V1: ReturnToStock empties order (UC-2 / UC-14)")
-    void givenOrderWithItems_whenReturnToStock_thenOrderEmpty() {
+    void GivenOrderWithItems_WhenReturnToStock_ThenOrderEmpty() {
     }
 
     @Test

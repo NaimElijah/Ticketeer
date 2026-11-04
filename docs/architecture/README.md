@@ -3,7 +3,7 @@
 Spring Modulith–generated documentation of the platform's bounded-context modules.
 
 The files here are a **hand-copied snapshot, last refreshed on 2026-07-09**, so they can lag the
-code. `ModularityTests.writesModuleDocumentation()` writes fresh output on every test run, but into
+code. `ModularityTests.GivenTheApplicationModules_WhenWriteModuleDocumentation_ThenDoesNotThrow()` writes fresh output on every test run, but into
 `target/spring-modulith-docs/`, not into this folder. To refresh the snapshot, copy the files over
 from `target/`. Making the generator write here directly is tracked in #43.
 
@@ -70,10 +70,10 @@ Both gates run on every build and are **green**:
     the root [README](../../README.md) and described in
     [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md); the reasoning is in
     [ADR-011](../ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md);
-  - **`bounded_contexts_are_acyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is
+  - **`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is
     the same cycle engine Spring Modulith uses, run *without* the open-module exemption, so it is the
     substantive cycle guarantee.
-- **Spring Modulith `verify()`** (`ModularityTests.verifiesModuleBoundaries`) — **enabled** and green.
+- **Spring Modulith `verify()`** (`ModularityTests.GivenTheOpenApplicationModules_WhenVerifyModuleBoundaries_ThenReportsNoViolations`) — **enabled** and green.
   The modules are declared *open*, so Modulith validates the module model and cycle-freedom at its
   level; full type-level encapsulation (closed modules exposing only named-interface ports) is
   documented future work — this former layered monolith crosses boundaries through services and

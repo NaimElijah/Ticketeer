@@ -59,7 +59,7 @@ class ManagerPermissionMatrixAcceptanceTest {
     @Autowired private EventManagementService eventManagementService;
 
     @Test
-    void ConfigureVenueManager_CanEditVenue_ButNotEventOrPolicies() {
+    void GivenAConfigureVenueManager_WhenEditingEventVenueAndPolicies_ThenCanEditVenueButNotEventOrPolicies() {
         Fixture f = setup("venue");
         AuthTokenDTO m = appointManagerWith(f, "venueMgr", Permission.CONFIGURE_VENUE);
 
@@ -77,7 +77,7 @@ class ManagerPermissionMatrixAcceptanceTest {
     }
 
     @Test
-    void InventoryManager_CanManageEvents_ButNotVenueOrPolicies() {
+    void GivenAnInventoryManager_WhenEditingEventVenueAndPolicies_ThenCanManageEventsButNotVenueOrPolicies() {
         Fixture f = setup("inv");
         AuthTokenDTO m = appointManagerWith(f, "invMgr", Permission.MANAGE_INVENTORY);
 
@@ -102,7 +102,7 @@ class ManagerPermissionMatrixAcceptanceTest {
     }
 
     @Test
-    void PoliciesManager_CanEditPolicies_ButNotEventsOrVenue() {
+    void GivenAPoliciesManager_WhenEditingEventVenueAndPolicies_ThenCanEditPoliciesButNotEventsOrVenue() {
         Fixture f = setup("pol");
         AuthTokenDTO m = appointManagerWith(f, "polMgr", Permission.EDIT_POLICIES);
 

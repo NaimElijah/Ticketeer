@@ -66,7 +66,7 @@ class CompanyInquiryInboxPresenterTest {
     // -- loadFor --------------------------------------------------------------
 
     @Test
-    void loadFor_nullToken_returnsNotAuthenticated_withoutCallingServices() {
+    void GivenANullToken_WhenLoadFor_ThenReturnsNotAuthenticatedWithoutCallingServices() {
         CompanyInquiryInboxPresenter.Outcome outcome = presenter.loadFor(null, 7);
 
         assertInstanceOf(CompanyInquiryInboxPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -75,7 +75,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void loadFor_noCompanies_returnsNoCompany_withoutQueryingInbox() {
+    void GivenNoCompanies_WhenLoadFor_ThenReturnsNoCompanyWithoutQueryingInbox() {
         when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of());
 
         CompanyInquiryInboxPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
@@ -85,7 +85,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void loadFor_selectsRequestedCompany_andKeepsOnlyInquiries() {
+    void GivenARequestedCompanyAndAMixedInbox_WhenLoadFor_ThenSelectsRequestedCompanyAndKeepsOnlyInquiries() {
         MyCompanyDTO other = company(9, "Other");
         MyCompanyDTO acme = company(7, "Acme");
         when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(other, acme));
@@ -104,7 +104,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void loadFor_defaultsToFirstCompany_whenCompanyIdNull() {
+    void GivenANullCompanyId_WhenLoadFor_ThenDefaultsToFirstCompany() {
         MyCompanyDTO first = company(7, "Acme");
         MyCompanyDTO second = company(9, "Other");
         when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(first, second));
@@ -119,7 +119,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void loadFor_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoadFor_ThenReturnsNotAuthenticated() {
         when(companyManagement.findMyCompanies(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         CompanyInquiryInboxPresenter.Outcome outcome = presenter.loadFor(TOKEN, 7);
@@ -128,7 +128,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void loadFor_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoadFor_ThenReturnsGenericFailure() {
         when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(company(7, "Acme")));
         when(messaging.viewCompanyInbox(TOKEN, 7)).thenThrow(new RuntimeException("inbox down"));
 
@@ -166,7 +166,7 @@ class CompanyInquiryInboxPresenterTest {
     // -- reply ----------------------------------------------------------------
 
     @Test
-    void reply_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenReply_ThenReturnsNotAuthenticatedWithoutCallingService() {
         CompanyInquiryInboxPresenter.ActionOutcome outcome = presenter.reply(null, "c1", "hi");
 
         assertInstanceOf(CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -174,7 +174,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void reply_happyPath_returnsSuccess_andSendsConversationIdAndBody() {
+    void GivenTheServiceAcceptsTheMessage_WhenReply_ThenReturnsSuccessAndSendsConversationIdAndBody() {
         CompanyInquiryInboxPresenter.ActionOutcome outcome =
             presenter.reply(TOKEN, "c1", "on it — accessible seats held");
 
@@ -187,7 +187,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("conversation closed"))
             .when(messaging).sendMessage(anyString(), any());
 
@@ -199,7 +199,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void reply_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenReply_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(messaging).sendMessage(anyString(), any());
 
@@ -211,7 +211,7 @@ class CompanyInquiryInboxPresenterTest {
     // -- close ----------------------------------------------------------------
 
     @Test
-    void close_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenClose_ThenReturnsNotAuthenticatedWithoutCallingService() {
         CompanyInquiryInboxPresenter.ActionOutcome outcome = presenter.close(null, "c1");
 
         assertInstanceOf(CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -219,7 +219,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void close_happyPath_returnsSuccess_andClosesConversation() {
+    void GivenTheServiceAcceptsTheClose_WhenClose_ThenReturnsSuccessAndClosesConversation() {
         CompanyInquiryInboxPresenter.ActionOutcome outcome = presenter.close(TOKEN, "c1");
 
         assertInstanceOf(CompanyInquiryInboxPresenter.ActionOutcome.Success.class, outcome);
@@ -227,7 +227,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void close_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenClose_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("already closed"))
             .when(messaging).closeConversation(anyString(), anyString());
 
@@ -239,7 +239,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void close_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenClose_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(messaging).closeConversation(anyString(), anyString());
 
@@ -251,7 +251,7 @@ class CompanyInquiryInboxPresenterTest {
     // -- loadOne --------------------------------------------------------------
 
     @Test
-    void loadOne_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoadOne_ThenReturnsNotAuthenticatedWithoutViewingTheConversation() {
         CompanyInquiryInboxPresenter.SingleOutcome outcome = presenter.loadOne(null, "c1");
 
         assertInstanceOf(CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated.class, outcome);
@@ -259,7 +259,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void loadOne_success_returnsConversation() {
+    void GivenAnExistingConversation_WhenLoadOne_ThenReturnsConversation() {
         ConversationDTO inquiry = conversation("c1", "INQUIRY");
         when(messaging.viewConversation(TOKEN, "c1")).thenReturn(inquiry);
 
@@ -271,7 +271,7 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     @Test
-    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+    void GivenAClosedConversation_WhenReply_ThenReturnsFailureWithTheRulesMessage() {
         ConversationClosedException rule = new ConversationClosedException("c1");
         doThrow(rule).when(messaging).sendMessage(anyString(), any());
 

@@ -22,50 +22,50 @@ class VkQuantitySelectorTest {
     // ── construction ────────────────────────────────────────────────────────
 
     @Test
-    void givenPositiveAvailable_constructsWithoutError() {
+    void GivenPositiveAvailable_WhenConstructed_ThenDoesNotThrow() {
         assertDoesNotThrow(() -> new VkQuantitySelector(100, 9000, null));
     }
 
     @Test
-    void givenZeroAvailable_constructsWithoutError() {
+    void GivenZeroAvailable_WhenConstructed_ThenDoesNotThrow() {
         assertDoesNotThrow(() -> new VkQuantitySelector(0, 9000, null));
     }
 
     // ── initial state ────────────────────────────────────────────────────────
 
     @Test
-    void givenPositiveAvailable_initialQuantityIsOne() {
+    void GivenPositiveAvailable_WhenConstructed_ThenInitialQuantityIsOne() {
         var sel = new VkQuantitySelector(100, 9000, null);
         assertEquals(1, sel.getQuantity());
     }
 
     @Test
-    void givenPositiveAvailable_hasSelection() {
+    void GivenPositiveAvailable_WhenConstructed_ThenHasSelection() {
         var sel = new VkQuantitySelector(100, 9000, null);
         assertTrue(sel.hasSelection());
     }
 
     @Test
-    void givenPositiveAvailable_getSelectionReturnsStandingDto() {
+    void GivenPositiveAvailable_WhenGetSelection_ThenReturnsStandingDto() {
         var sel = new VkQuantitySelector(100, 9000, null);
         assertNotNull(sel.getSelection());
         assertTrue(sel.getSelection().isStandingSelection());
     }
 
     @Test
-    void givenZeroAvailable_quantityIsZero() {
+    void GivenZeroAvailable_WhenConstructed_ThenQuantityIsZero() {
         var sel = new VkQuantitySelector(0, 9000, null);
         assertEquals(0, sel.getQuantity());
     }
 
     @Test
-    void givenZeroAvailable_hasNoSelection() {
+    void GivenZeroAvailable_WhenConstructed_ThenHasNoSelection() {
         var sel = new VkQuantitySelector(0, 9000, null);
         assertFalse(sel.hasSelection());
     }
 
     @Test
-    void givenZeroAvailable_getSelectionReturnsNull() {
+    void GivenZeroAvailable_WhenGetSelection_ThenReturnsNull() {
         var sel = new VkQuantitySelector(0, 9000, null);
         assertNull(sel.getSelection());
     }
@@ -73,21 +73,21 @@ class VkQuantitySelectorTest {
     // ── increment ─────────────────────────────────────────────────────────────
 
     @Test
-    void givenBelowMax_whenIncrement_quantityIncreases() {
+    void GivenBelowMax_WhenIncrement_ThenQuantityIncreases() {
         var sel = new VkQuantitySelector(5, 9000, null);
         sel.increment();
         assertEquals(2, sel.getQuantity());
     }
 
     @Test
-    void givenAtMax_whenIncrement_quantityStaysAtMax() {
+    void GivenAtMax_WhenIncrement_ThenQuantityStaysAtMax() {
         var sel = new VkQuantitySelector(1, 9000, null); // starts at 1, max = 1
         sel.increment();
         assertEquals(1, sel.getQuantity());
     }
 
     @Test
-    void givenMultipleIncrements_quantityMatchesCount() {
+    void GivenBelowMax_WhenMultipleIncrements_ThenQuantityMatchesCountPlusTheInitialOne() {
         var sel = new VkQuantitySelector(10, 9000, null);
         sel.increment();
         sel.increment();
@@ -98,7 +98,7 @@ class VkQuantitySelectorTest {
     // ── decrement ─────────────────────────────────────────────────────────────
 
     @Test
-    void givenAboveOne_whenDecrement_quantityDecreases() {
+    void GivenAboveOne_WhenDecrement_ThenQuantityDecreases() {
         var sel = new VkQuantitySelector(5, 9000, null);
         sel.increment(); // qty = 2
         sel.decrement(); // qty = 1
@@ -106,7 +106,7 @@ class VkQuantitySelectorTest {
     }
 
     @Test
-    void givenAtOne_whenDecrement_quantityStaysAtOne() {
+    void GivenAtOne_WhenDecrement_ThenQuantityStaysAtOne() {
         var sel = new VkQuantitySelector(5, 9000, null); // starts at 1
         sel.decrement();
         assertEquals(1, sel.getQuantity());
@@ -115,7 +115,7 @@ class VkQuantitySelectorTest {
     // ── getSelection quantity value ───────────────────────────────────────────
 
     @Test
-    void givenQuantityThree_getSelectionHasQuantityThree() {
+    void GivenQuantityThree_WhenGetSelection_ThenHasQuantityThree() {
         var sel = new VkQuantitySelector(5, 9000, null);
         sel.increment();
         sel.increment();
@@ -125,7 +125,7 @@ class VkQuantitySelectorTest {
     // ── callbacks ─────────────────────────────────────────────────────────────
 
     @Test
-    void givenCallback_whenIncrement_callbackFires() {
+    void GivenCallback_WhenIncrement_ThenCallbackFires() {
         var count = new AtomicInteger(0);
         var sel = new VkQuantitySelector(5, 9000, count::incrementAndGet);
         sel.increment();
@@ -133,7 +133,7 @@ class VkQuantitySelectorTest {
     }
 
     @Test
-    void givenCallback_whenDecrement_callbackFires() {
+    void GivenCallbackAboveOne_WhenDecrement_ThenCallbackFires() {
         var count = new AtomicInteger(0);
         var sel = new VkQuantitySelector(5, 9000, count::incrementAndGet);
         sel.increment(); // count = 1
@@ -143,7 +143,7 @@ class VkQuantitySelectorTest {
     }
 
     @Test
-    void givenCallback_atMax_incrementDoesNotFireCallback() {
+    void GivenCallbackAtMax_WhenIncrement_ThenDoesNotFireCallback() {
         var count = new AtomicInteger(0);
         var sel = new VkQuantitySelector(1, 9000, count::incrementAndGet); // max = 1 = current
         sel.increment();
@@ -151,7 +151,7 @@ class VkQuantitySelectorTest {
     }
 
     @Test
-    void givenCallback_atOne_decrementDoesNotFireCallback() {
+    void GivenCallbackAtOne_WhenDecrement_ThenDoesNotFireCallback() {
         var count = new AtomicInteger(0);
         var sel = new VkQuantitySelector(5, 9000, count::incrementAndGet);
         sel.decrement(); // already at 1 — no-op
@@ -159,13 +159,13 @@ class VkQuantitySelectorTest {
     }
 
     @Test
-    void givenNullCallback_noNullPointerOnIncrement() {
+    void GivenNullCallback_WhenIncrement_ThenDoesNotThrow() {
         var sel = new VkQuantitySelector(5, 9000, null);
         assertDoesNotThrow(sel::increment);
     }
 
     @Test
-    void givenNullCallback_noNullPointerOnDecrement() {
+    void GivenNullCallbackAboveOne_WhenDecrement_ThenDoesNotThrow() {
         var sel = new VkQuantitySelector(5, 9000, null);
         sel.increment();
         assertDoesNotThrow(sel::decrement);

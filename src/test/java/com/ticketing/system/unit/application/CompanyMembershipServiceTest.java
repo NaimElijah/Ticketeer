@@ -103,7 +103,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenFounderAppointment_whenListForUser_thenReturnsFounderMembership() {
+    void GivenFounderAppointment_WhenListForUser_ThenReturnsFounderMembership() {
         User user = new User(USER_ID, "founder", "founder@test.com", "hash", 30);
         membershipService.addFounderAppointment(USER_ID, COMPANY_ID);
 
@@ -124,7 +124,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenManagerAppointment_whenListForUser_thenReturnsManagerPermissions() {
+    void GivenManagerAppointment_WhenListForUser_ThenReturnsManagerPermissions() {
         User user = new User(USER_ID, "manager", "manager@test.com", "hash", 30);
         membershipService.receiveManagerAppointment(USER_ID, COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
         membershipService.acceptInvitation(USER_ID, COMPANY_ID);
@@ -161,7 +161,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenOwnerAppointment_whenIsOwnerOf_thenTrueForCoOwner() {
+    void GivenOwnerAppointment_WhenIsOwnerOf_ThenTrueForCoOwner() {
         User user = new User(USER_ID, "owner", "owner@test.com", "hash", 30);
         membershipService.receiveOwnerAppointment(USER_ID, COMPANY_ID, 1);
         membershipService.acceptInvitation(USER_ID, COMPANY_ID);
@@ -172,7 +172,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenManagerAppointment_whenIsOwnerOf_thenFalse() {
+    void GivenManagerAppointment_WhenIsOwnerOf_ThenFalse() {
         User user = new User(USER_ID, "manager", "manager@test.com", "hash", 30);
         membershipService.receiveManagerAppointment(USER_ID, COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
         membershipService.acceptInvitation(USER_ID, COMPANY_ID);

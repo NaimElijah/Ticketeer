@@ -35,35 +35,35 @@ class OrderReceiptTest extends BaseDomainTest {
     }
 
     @Test
-    void testForMemberSetsUserIdCorrectly() {
+    void GivenAUserId_WhenForMember_ThenSetsUserIdCorrectly() {
         ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
         OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
         assertEquals(5, receipt.getUserid());
     }
 
     @Test
-    void testForMemberIdentifiesAsMemberReceipt() {
+    void GivenAUserId_WhenForMember_ThenIdentifiesAsMemberReceipt() {
         ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
         OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
         assertTrue(receipt.isMemberReceipt());
     }
 
     @Test
-    void testForGuestSetsGuestEmailCorrectly() {
+    void GivenAGuestEmail_WhenForGuest_ThenSetsGuestEmailCorrectly() {
         ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
         OrderReceipt receipt = track(OrderReceipt.forGuest("test@test.com", "session-123", RECEIPT_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
         assertEquals("test@test.com", receipt.getGuestEmail());
     }
 
     @Test
-    void testForGuestIdentifiesAsGuestReceipt() {
+    void GivenAGuestEmail_WhenForGuest_ThenIdentifiesAsGuestReceipt() {
         ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
         OrderReceipt receipt = track(OrderReceipt.forGuest("test@test.com", "session-123", RECEIPT_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));
         assertTrue(receipt.isGuestReceipt());
     }
 
     @Test
-    void testMarkRefundedChangesRefundStateToTrue() {
+    void GivenAMemberReceipt_WhenMarkRefunded_ThenChangesRefundStateToFullyRefunded() {
 
         ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", LocalDateTime.now());
         OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), LocalDateTime.now()));

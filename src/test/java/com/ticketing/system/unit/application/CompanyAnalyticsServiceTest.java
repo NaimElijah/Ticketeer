@@ -178,7 +178,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void dashboard_aggregatesLiveCountersForTheCompany() {
+    void GivenSalesInquiriesAndEventsOfTheCompany_WhenDashboard_ThenAggregatesLiveCountersForTheCompany() {
         givenOwner();
         LocalDateTime now = NOW;
 
@@ -271,7 +271,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void dashboard_freshCompanyWithNoEvents_returnsZeros() {
+    void GivenFreshCompanyWithNoEvents_WhenDashboard_ThenReturnsZerosAndNoRating() {
         givenOwner();
         when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of());
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
@@ -287,7 +287,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void dashboard_derivesRatingAsMeanOfCompanyEventRatings() {
+    void GivenTwoRatedEventsAndOneUnrated_WhenDashboard_ThenDerivesRatingAsMeanOfCompanyEventRatings() {
         givenOwner();
         when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of());
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
@@ -442,7 +442,7 @@ class CompanyAnalyticsServiceTest {
     // ─── salesHistory unit tests ──────────────────────────────────────────────────
 
     @Test
-    void salesHistory_noEventsForCompany_returnsEmptyHistory() {
+    void GivenNoEventsForCompany_WhenSalesHistory_ThenReturnsEmptyHistory() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
 
@@ -452,7 +452,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void salesHistory_eventsExistButNoReceipts_returnsEmptyHistory() {
+    void GivenEventsExistButNoReceipts_WhenSalesHistory_ThenReturnsEmptyHistory() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A, EVENT_B));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A, EVENT_B))).thenReturn(List.of());
@@ -463,7 +463,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void salesHistory_twoReceipts_returnsTwoRecords() {
+    void GivenTwoReceipts_WhenSalesHistory_ThenReturnsTwoRecords() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         OrderReceipt r1 = fullReceipt(false, NOW.minusDays(1),
@@ -479,7 +479,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void salesHistory_refundedReceiptIsIncluded() {
+    void GivenRefundedReceipt_WhenSalesHistory_ThenRefundedReceiptIsIncludedAsFullyRefunded() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         OrderReceipt r = fullReceipt(true, NOW.minusDays(3),
@@ -494,7 +494,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void salesHistory_linesFromOtherCompanyEventsAreExcluded() {
+    void GivenReceiptWithALineFromAnotherCompanysEvent_WhenSalesHistory_ThenLinesFromOtherCompanyEventsAreExcluded() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         // receipt contains one line for EVENT_A and one for a different company's event

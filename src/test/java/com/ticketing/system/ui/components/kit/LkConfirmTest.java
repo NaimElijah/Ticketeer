@@ -15,13 +15,13 @@ import org.junit.jupiter.api.Test;
 class LkConfirmTest {
 
     @Test
-    void newDialog_resultFutureStartsIncomplete() {
+    void GivenANewDialog_WhenResultRead_ThenResultFutureStartsIncomplete() {
         LkConfirm dialog = new LkConfirm("Revoke", "Sure?", LkConfirm.Severity.danger);
         assertFalse(dialog.result().isDone(), "future must not resolve before a decision");
     }
 
     @Test
-    void settleTrue_completesFutureWithTrue() {
+    void GivenAnUnsettledDialog_WhenSettleTrue_ThenCompletesFutureWithTrue() {
         LkConfirm dialog = new LkConfirm("Revoke", "Sure?", LkConfirm.Severity.danger)
             .confirmText("Revoke");
 
@@ -32,7 +32,7 @@ class LkConfirmTest {
     }
 
     @Test
-    void settleFalse_completesFutureWithFalse() {
+    void GivenAnUnsettledDialog_WhenSettleFalse_ThenCompletesFutureWithFalse() {
         LkConfirm dialog = new LkConfirm("Clear cart", "Remove all items?", LkConfirm.Severity.warn);
 
         dialog.settle(false);
@@ -42,7 +42,7 @@ class LkConfirmTest {
     }
 
     @Test
-    void settle_isIdempotent_firstDecisionWins() {
+    void GivenADialogSettledTrue_WhenSettleFalse_ThenSettleIsIdempotentAndFirstDecisionWins() {
         LkConfirm dialog = new LkConfirm("Heads up", "Proceed?", LkConfirm.Severity.info);
 
         dialog.settle(true);
@@ -52,7 +52,7 @@ class LkConfirmTest {
     }
 
     @Test
-    void builders_areChainableAcrossAllSeverities() {
+    void GivenEverySeverity_WhenBuildersChained_ThenBuildersAreChainableAndResultFutureStaysIncomplete() {
         for (LkConfirm.Severity sev : LkConfirm.Severity.values()) {
             LkConfirm dialog = new LkConfirm("Title", "Body", sev)
                 .severity(sev)

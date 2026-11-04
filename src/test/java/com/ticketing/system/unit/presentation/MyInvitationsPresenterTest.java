@@ -48,7 +48,7 @@ class MyInvitationsPresenterTest {
     // -- load -----------------------------------------------------------------
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         MyInvitationsPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(MyInvitationsPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -56,7 +56,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void load_splitsPendingFromResolvedHistory() {
+    void GivenPendingAndResolvedInvitations_WhenLoad_ThenSplitsPendingFromResolvedHistory() {
         InvitationDTO pending = invitation(1, "Manager", "PENDING");
         InvitationDTO accepted = invitation(2, "Manager", "ACTIVE");
         InvitationDTO rejected = invitation(3, "Owner", "REJECTED");
@@ -71,7 +71,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(service.listMyInvitations(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         MyInvitationsPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -82,7 +82,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(service.listMyInvitations(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         MyInvitationsPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -93,7 +93,7 @@ class MyInvitationsPresenterTest {
     // -- accept / decline -----------------------------------------------------
 
     @Test
-    void accept_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenAccept_ThenReturnsNotAuthenticatedWithoutCallingService() {
         MyInvitationsPresenter.ActionOutcome outcome = presenter.accept(null, 7);
 
         assertInstanceOf(MyInvitationsPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -101,7 +101,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void accept_happyPath_returnsSuccess_andRespondsWithAcceptTrue() {
+    void GivenTheServiceAcceptsTheResponse_WhenAccept_ThenReturnsSuccessAndRespondsWithAcceptTrue() {
         MyInvitationsPresenter.ActionOutcome outcome = presenter.accept(TOKEN, 7);
 
         assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Success.class, outcome);
@@ -113,7 +113,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void decline_happyPath_returnsSuccess_andRespondsWithAcceptFalse() {
+    void GivenTheServiceAcceptsTheResponse_WhenDecline_ThenReturnsSuccessAndRespondsWithAcceptFalse() {
         MyInvitationsPresenter.ActionOutcome outcome = presenter.decline(TOKEN, 9);
 
         assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Success.class, outcome);
@@ -125,7 +125,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void accept_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenAccept_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("no pending appointment"))
             .when(service).respondToAppointment(anyString(), any());
 
@@ -137,7 +137,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void decline_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenDecline_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(service).respondToAppointment(anyString(), any());
 
@@ -147,7 +147,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void accept_noPendingInvitation_returnsFailureWithTheRulesMessage() {
+    void GivenNoPendingInvitation_WhenAccept_ThenReturnsFailureWithTheRulesMessage() {
         AppointmentNotFoundException rule = new AppointmentNotFoundException("No pending invitation for this company");
         doThrow(rule).when(service).respondToAppointment(anyString(), any());
 

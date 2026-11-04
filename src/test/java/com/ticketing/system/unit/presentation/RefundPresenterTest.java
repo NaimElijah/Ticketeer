@@ -89,7 +89,7 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_success_carriesReferenceAndAmount() {
+    void GivenARefundThatSucceeds_WhenRequestRefund_ThenCarriesReferenceAndAmount() {
         RefundResultDTO result = new RefundResultDTO(
                 "refund-1", "555", 150.00, LocalDateTime.of(2026, 6, 1, 12, 0), List.of(), List.of());
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenReturn(result);
@@ -103,7 +103,7 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_alreadyRefunded_returnsNotEligible() {
+    void GivenAnAlreadyRefundedOrder_WhenRequestRefund_ThenReturnsNotEligible() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new BusinessRuleViolationException("already refunded"));
 
@@ -112,7 +112,7 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_missingOrder_returnsNotFound() {
+    void GivenAMissingOrder_WhenRequestRefund_ThenReturnsNotFound() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new EntityNotFoundException("OrderReceipt", ORDER_ID));
 
@@ -121,7 +121,7 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_otherMembersOrder_returnsNotFound() {
+    void GivenAnotherMembersOrder_WhenRequestRefund_ThenReturnsNotFound() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new UnauthorizedActionException("refund order " + ORDER_ID, 42));
 
@@ -148,7 +148,7 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_invalidToken_returnsFailure() {
+    void GivenAnInvalidToken_WhenRequestRefund_ThenReturnsFailure() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenThrow(new InvalidTokenException());
 
         assertInstanceOf(RefundPresenter.Outcome.Failure.class,

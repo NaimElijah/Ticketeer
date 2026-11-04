@@ -28,7 +28,7 @@ public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
     // can't race with buyer read locks or other lifecycle writes.
 
     @Test
-    void givenExistingEvent_whenDeletedWithoutHoldingWriteLock_thenThrows() {
+    void GivenExistingEvent_WhenDeletedWithoutHoldingWriteLock_ThenThrows() {
         EventRepository repo = newRepository();
         repo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
 
@@ -36,7 +36,7 @@ public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
     }
 
     @Test
-    void givenExistingEvent_whenDeletedHoldingWriteLock_thenEventIsRemoved() {
+    void GivenExistingEvent_WhenDeletedHoldingWriteLock_ThenEventIsRemoved() {
         EventRepository repo = newRepository();
         repo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
 

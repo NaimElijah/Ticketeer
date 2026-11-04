@@ -28,14 +28,14 @@ class BcryptPasswordHasherTest {
     }
 
     @Test
-    void hash_producesNonNullNonEmptyString() {
+    void GivenARawPassword_WhenHash_ThenProducesNonNullNonEmptyString() {
         String result = hasher.hash("Password1");
         assertNotNull(result);
         assertTrue(result.length() > 0);
     }
 
     @Test
-    void hash_producesBcryptFormat() {
+    void GivenARawPassword_WhenHash_ThenProducesBcryptFormat() {
         String result = hasher.hash("Password1");
         // BCrypt strings start with $2a$, $2b$, or $2y$ followed by the cost factor.
         assertTrue(result.startsWith("$2a$") || result.startsWith("$2b$") || result.startsWith("$2y$"),
@@ -43,7 +43,7 @@ class BcryptPasswordHasherTest {
     }
 
     @Test
-    void hash_sameInputProducesDifferentOutput() {
+    void GivenTheSameRawPasswordTwice_WhenHash_ThenProducesDifferentOutput() {
         // Each call uses a fresh random salt, so identical inputs hash to different strings.
         String first = hasher.hash("Password1");
         String second = hasher.hash("Password1");
@@ -51,32 +51,32 @@ class BcryptPasswordHasherTest {
     }
 
     @Test
-    void hash_doesNotContainRawPassword() {
+    void GivenARawPassword_WhenHash_ThenDoesNotContainRawPassword() {
         String raw = "Password1";
         String result = hasher.hash(raw);
         assertTrue(!result.contains(raw), "hash should not contain the raw password");
     }
 
     @Test
-    void matches_returnsTrueForCorrectPassword() {
+    void GivenTheCorrectPassword_WhenMatches_ThenReturnsTrue() {
         String stored = hasher.hash("Password1");
         assertTrue(hasher.matches("Password1", stored));
     }
 
     @Test
-    void matches_returnsFalseForWrongPassword() {
+    void GivenAWrongPassword_WhenMatches_ThenReturnsFalse() {
         String stored = hasher.hash("Password1");
         assertFalse(hasher.matches("WrongPassword", stored));
     }
 
     @Test
-    void matches_returnsFalseForNullRawPassword() {
+    void GivenANullRawPassword_WhenMatches_ThenReturnsFalse() {
         String stored = hasher.hash("Password1");
         assertFalse(hasher.matches(null, stored));
     }
 
     @Test
-    void matches_returnsFalseForNullStoredHash() {
+    void GivenANullStoredHash_WhenMatches_ThenReturnsFalse() {
         assertFalse(hasher.matches("Password1", null));
     }
 

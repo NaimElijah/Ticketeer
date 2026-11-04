@@ -10,14 +10,14 @@ import com.ticketing.system.EventTicketSystemApplication;
 /**
  * Spring Modulith model of the bounded-context modules.
  *
- * <p>{@link #writesModuleDocumentation()} is enabled — it regenerates the C4/PlantUML component
+ * <p>{@link #GivenTheApplicationModules_WhenWriteModuleDocumentation_ThenDoesNotThrow()} is enabled — it regenerates the C4/PlantUML component
  * diagrams and per-module canvases into {@code target/spring-modulith-docs}; a committed snapshot
  * lives under {@code docs/architecture}. It works regardless of the current cross-context cycles
  * (it documents the model as-is).
  *
- * <p>{@link #verifiesModuleBoundaries()} is enabled: the bounded-context graph is acyclic. Because the
+ * <p>{@link #GivenTheOpenApplicationModules_WhenVerifyModuleBoundaries_ThenReportsNoViolations()} is enabled: the bounded-context graph is acyclic. Because the
  * modules are modelled as open, Modulith validates the module model and its cycle check here; the
- * substantive, non-exempt cycle guarantee lives in {@code HexagonalRulesTest#bounded_contexts_are_acyclic}.
+ * substantive, non-exempt cycle guarantee lives in {@code HexagonalRulesTest#GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic}.
  */
 class ModularityTests {
 
@@ -26,7 +26,7 @@ class ModularityTests {
 
     /** Regenerates the architecture diagrams + module canvases (the migration's showcase artifact). */
     @Test
-    void writesModuleDocumentation() {
+    void GivenTheApplicationModules_WhenWriteModuleDocumentation_ThenDoesNotThrow() {
         new Documenter(modules).writeDocumentation(); // emits AsciiDoc + PlantUML under target/spring-modulith-docs
     }
 
@@ -34,12 +34,12 @@ class ModularityTests {
      * Spring Modulith boundary verification. The bounded contexts are modelled as <em>open</em>
      * modules, so this validates the module model and the absence of cross-module cycles at the
      * Modulith level. The substantive, non-exempt cycle guarantee is enforced separately by
-     * {@code HexagonalRulesTest#bounded_contexts_are_acyclic} (ArchUnit slices — the same engine
+     * {@code HexagonalRulesTest#GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic} (ArchUnit slices — the same engine
      * Modulith uses, run without the open-module exemption). Full type-level encapsulation
      * (closed modules exposing only named-interface ports) is documented future work.
      */
     @Test
-    void verifiesModuleBoundaries() {
+    void GivenTheOpenApplicationModules_WhenVerifyModuleBoundaries_ThenReportsNoViolations() {
         modules.verify();
     }
 }

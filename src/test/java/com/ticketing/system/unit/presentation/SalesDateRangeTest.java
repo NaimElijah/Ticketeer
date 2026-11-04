@@ -19,19 +19,19 @@ class SalesDateRangeTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 6, 30); // Q2
 
     @Test
-    void allTimeAndUnknownAndNull_haveNoLowerBound() {
+    void GivenAllTimeUnknownOrNullRange_WhenStartOf_ThenHasNoLowerBound() {
         assertNull(SalesDateRange.startOf("All time", TODAY));
         assertNull(SalesDateRange.startOf(null, TODAY));
         assertNull(SalesDateRange.startOf("nonsense", TODAY));
     }
 
     @Test
-    void last7Days_isSevenDaysBack() {
+    void GivenLast7Days_WhenStartOf_ThenIsSevenDaysBack() {
         assertEquals(TODAY.minusDays(7).atStartOfDay(), SalesDateRange.startOf("Last 7 days", TODAY));
     }
 
     @Test
-    void last30Days_excludesA45DayOldOrderButKeepsRecentOnes() {
+    void GivenLast30Days_WhenStartOf_ThenExcludesA45DayOldOrderButKeepsRecentOnes() {
         LocalDateTime from = SalesDateRange.startOf("Last 30 days", TODAY);
         assertNotNull(from);
         assertTrue(TODAY.minusDays(45).atStartOfDay().isBefore(from), "45-day-old purchase is excluded");
@@ -39,12 +39,12 @@ class SalesDateRangeTest {
     }
 
     @Test
-    void thisQuarter_startsOnFirstDayOfTheQuarter() {
+    void GivenThisQuarter_WhenStartOf_ThenStartsOnFirstDayOfTheQuarter() {
         assertEquals(LocalDate.of(2026, 4, 1).atStartOfDay(), SalesDateRange.startOf("This quarter", TODAY));
     }
 
     @Test
-    void thisYear_startsOnJanuaryFirst() {
+    void GivenThisYear_WhenStartOf_ThenStartsOnJanuaryFirst() {
         assertEquals(LocalDate.of(2026, 1, 1).atStartOfDay(), SalesDateRange.startOf("This year", TODAY));
     }
 }

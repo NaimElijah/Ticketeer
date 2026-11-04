@@ -54,7 +54,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_withoutVaadinSession_callsStartGuestSessionAndSkipsLogout() {
+    void GivenNoVaadinSession_WhenExecute_ThenCallsStartGuestSessionAndSkipsLogout() {
         signOutFlow.execute();
 
         verify(authenticationService).startGuestSession();
@@ -62,7 +62,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_withTokenPresent_callsLogoutWithThatTokenThenMintsGuest() {
+    void GivenATokenPresent_WhenExecute_ThenCallsLogoutWithThatTokenThenMintsGuest() {
         VaadinSession session = mock(VaadinSession.class);
         when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
         VaadinSession.setCurrent(session);
@@ -75,7 +75,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_withNullToken_skipsLogout() {
+    void GivenANullToken_WhenExecute_ThenSkipsLogoutAndStillMintsGuest() {
         VaadinSession session = mock(VaadinSession.class);
         when(session.getAttribute("authSession.token")).thenReturn(null);
         VaadinSession.setCurrent(session);
@@ -87,7 +87,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_withBlankToken_skipsLogout() {
+    void GivenABlankToken_WhenExecute_ThenSkipsLogoutAndStillMintsGuest() {
         VaadinSession session = mock(VaadinSession.class);
         when(session.getAttribute("authSession.token")).thenReturn("   ");
         VaadinSession.setCurrent(session);
@@ -99,7 +99,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_pinsFreshGuestSessionIdOnSession() {
+    void GivenAVaadinSession_WhenExecute_ThenPinsFreshGuestSessionIdOnSession() {
         VaadinSession session = mock(VaadinSession.class);
         VaadinSession.setCurrent(session);
 
@@ -109,7 +109,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_clearsAuthSessionAttributes() {
+    void GivenASignedInVaadinSession_WhenExecute_ThenClearsAuthSessionAttributes() {
         VaadinSession session = mock(VaadinSession.class);
         when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
         VaadinSession.setCurrent(session);
@@ -124,7 +124,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_doesNotThrowWhenStartGuestSessionFails() {
+    void GivenStartGuestSessionFails_WhenExecute_ThenDoesNotThrow() {
         when(authenticationService.startGuestSession())
             .thenThrow(new IllegalStateException("session store down"));
 
@@ -132,7 +132,7 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_doesNotThrowWhenLogoutFails() {
+    void GivenLogoutFails_WhenExecute_ThenDoesNotThrowAndStillMintsGuest() {
         VaadinSession session = mock(VaadinSession.class);
         when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
         VaadinSession.setCurrent(session);

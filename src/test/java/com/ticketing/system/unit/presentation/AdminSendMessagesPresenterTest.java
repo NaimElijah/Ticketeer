@@ -58,7 +58,7 @@ class AdminSendMessagesPresenterTest {
     // -- send -----------------------------------------------------------------
 
     @Test
-    void send_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSend_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminSendMessagesPresenter.ActionOutcome outcome =
             presenter.send(null, "S", "B", List.of(1), false, false);
 
@@ -67,7 +67,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_explicitRecipients_passesIds_andReturnsRecipientCount() {
+    void GivenExplicitRecipients_WhenSend_ThenPassesIdsAndReturnsRecipientCount() {
         when(messaging.sendOutreach(eq(TOKEN), any())).thenReturn(new OutreachResultDTO(2, "conv-1"));
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
@@ -85,7 +85,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_allMembers_passesFlagThrough() {
+    void GivenAllMembersSelected_WhenSend_ThenPassesFlagThrough() {
         when(messaging.sendOutreach(eq(TOKEN), any())).thenReturn(new OutreachResultDTO(42, "conv-1"));
 
         presenter.send(TOKEN, "Notice", "Body", List.of(), true, false);
@@ -96,7 +96,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenSend_ThenReturnsGenericFailure() {
         doThrow(new RuntimeException("no recipients")).when(messaging).sendOutreach(anyString(), any());
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
@@ -108,7 +108,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenSend_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(messaging).sendOutreach(anyString(), any());
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
@@ -120,7 +120,7 @@ class AdminSendMessagesPresenterTest {
     // -- searchUsers ----------------------------------------------------------
 
     @Test
-    void searchUsers_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSearchUsers_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminSendMessagesPresenter.SearchOutcome outcome = presenter.searchUsers(null, "ali");
 
         assertInstanceOf(AdminSendMessagesPresenter.SearchOutcome.NotAuthenticated.class, outcome);
@@ -128,7 +128,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void searchUsers_returnsResults_fromMemberQueryService() {
+    void GivenTwoMatchingMembers_WhenSearchUsers_ThenReturnsTwoResultsFromMemberQueryService() {
         when(memberQuery.searchByUsername(TOKEN, "ali"))
             .thenReturn(List.of(new MemberSearchResultDTO(7, "alice"), new MemberSearchResultDTO(8, "alistair")));
 
@@ -151,7 +151,7 @@ class AdminSendMessagesPresenterTest {
     // -- load (grouping) ------------------------------------------------------
 
     @Test
-    void load_groupsFanOutBySubjectAndBody() {
+    void GivenAFanOutToTwoRecipientsWithTheSameSubjectAndBody_WhenLoad_ThenGroupsThemIntoOneHistoryRow() {
         // Two recipients of the same logical send → one history row with recipientCount = 2.
         when(messaging.viewSentOutreach(TOKEN)).thenReturn(List.of(
             outreach("c1", 7, "Maintenance", "We are down tonight."),
@@ -167,7 +167,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminSendMessagesPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(AdminSendMessagesPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -175,7 +175,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_ruleViolated_returnsFailureWithTheRulesMessage() {
+    void GivenARuleViolation_WhenSend_ThenReturnsFailureWithTheRulesMessage() {
         BusinessRuleViolationException rule = new BusinessRuleViolationException("Choose at least one recipient.");
         doThrow(rule).when(messaging).sendOutreach(anyString(), any());
 

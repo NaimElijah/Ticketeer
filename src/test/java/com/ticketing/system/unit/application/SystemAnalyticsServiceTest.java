@@ -71,7 +71,7 @@ class SystemAnalyticsServiceTest {
     }
 
     @Test
-    void computeAnalytics_computesRatesThroughputAndDerivesPurchasesFromReceipts() {
+    void GivenMetricsAndReceipts_WhenComputeAnalytics_ThenComputesRatesThroughputAndDerivesPurchasesFromReceipts() {
         when(metrics.count(MetricType.VISITOR_ENTRY, Duration.ofMinutes(WINDOW))).thenReturn(10L);
         when(metrics.count(MetricType.VISITOR_EXIT, Duration.ofMinutes(WINDOW))).thenReturn(5L);
         when(metrics.count(MetricType.REGISTRATION, Duration.ofMinutes(WINDOW))).thenReturn(0L);
@@ -109,7 +109,7 @@ class SystemAnalyticsServiceTest {
     }
 
     @Test
-    void computeAnalytics_clampsActiveVisitorsAtZero_whenExitsExceedEntries() {
+    void GivenExitsExceedEntriesAndNoReceipts_WhenComputeAnalytics_ThenClampsActiveVisitorsAtZeroAndPurchaseFiguresAreZero() {
         when(metrics.total(MetricType.VISITOR_ENTRY)).thenReturn(3L);
         when(metrics.total(MetricType.VISITOR_EXIT)).thenReturn(8L);
         when(orderReceiptRepository.findGlobal(any())).thenReturn(List.of());
@@ -128,7 +128,7 @@ class SystemAnalyticsServiceTest {
     }
 
     @Test
-    void adminOverview_countsActiveCompaniesLiveEventsOpenComplaints_andSums30dRevenue() {
+    void GivenCompaniesEventsComplaintsAndReceipts_WhenAdminOverview_ThenCountsActiveCompaniesLiveEventsOpenComplaintsAndSums30dRevenue() {
         when(companyRepository.findActive()).thenReturn(List.of(
                 mock(ProductionCompany.class), mock(ProductionCompany.class)));               // 2 active
         when(eventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(

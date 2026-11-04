@@ -1751,7 +1751,7 @@ void GivenUserMeetsAgePolicy_WhenCheckout_ThenCheckoutSucceeds() {
     assertEquals(1, result.issuedTicketIds().size());
 }
 @Test
-void GivenUserTooYoungForAgePolicy_WhenCheckout_ThenThrowExceptionAndPaymentNotCharged_NoReceiptNoTicket_AndTicketReturnedToStock() {
+void GivenUserTooYoungForAgePolicy_WhenCheckout_ThenThrowsPaymentNotChargedNoReceiptNoTicketAndTicketReturnedToStock() {
     givenUserAge(17);
 
     ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);

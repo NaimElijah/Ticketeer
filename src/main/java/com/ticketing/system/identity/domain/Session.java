@@ -245,6 +245,6 @@ public class Session implements InvariantChecked {
         }
         // Note: userId is intentionally NOT bounds-checked here. The Session domain stays
         // permissive about userId values — positive/zero/negative is the User aggregate's
-        // concern. See SessionTest#memberSession_acceptsZeroAndNegativeUserIds.
+        // concern. See SessionTest#GivenZeroAndNegativeUserIds_WhenMemberSessionConstructed_ThenDoesNotThrow.
     }
 }

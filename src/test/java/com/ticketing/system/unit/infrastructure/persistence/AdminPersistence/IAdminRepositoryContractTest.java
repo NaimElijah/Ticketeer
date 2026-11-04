@@ -29,7 +29,7 @@ abstract class IAdminRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheSavedAdmin() {
+    void GivenSavedAdmin_WhenFindById_ThenReturnsTheSavedAdmin() {
         repo.save(new Admin(1, "admin", "HASH", true));
 
         Admin found = repo.findById(1);
@@ -38,7 +38,7 @@ abstract class IAdminRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindByUsername_returnsTheSavedAdmin() {
+    void GivenSavedAdmin_WhenFindByUsername_ThenReturnsTheSavedAdmin() {
         repo.save(new Admin(7, "root", "HASH", false));
 
         Admin found = repo.findByUsername("root");
@@ -46,29 +46,29 @@ abstract class IAdminRepositoryContractTest {
     }
 
     @Test
-    void findById_returnsNullWhenMissing() {
+    void GivenNoSuchAdmin_WhenFindById_ThenReturnsNull() {
         assertNull(repo.findById(9999));
     }
 
     @Test
-    void findByUsername_returnsNullWhenMissing() {
+    void GivenNoSuchAdmin_WhenFindByUsername_ThenReturnsNull() {
         assertNull(repo.findByUsername("ghost"));
     }
 
     @Test
-    void findByUsername_nullArgument_returnsNull() {
+    void GivenNullUsername_WhenFindByUsername_ThenReturnsNull() {
         assertNull(repo.findByUsername(null));
     }
 
     @Test
-    void existsAny_falseWhenEmpty_trueAfterSave() {
+    void GivenARepositoryBeforeAndAfterASave_WhenExistsAny_ThenFalseWhenEmptyTrueAfterSave() {
         assertFalse(repo.existsAny());
         repo.save(new Admin(1, "admin", "HASH", true));
         assertTrue(repo.existsAny());
     }
 
     @Test
-    void findAll_returnsEverySavedAdmin() {
+    void GivenARepositoryBeforeAndAfterTwoSaves_WhenFindAll_ThenEmptyBeforeAndReturnsTwoAdminsAfter() {
         assertTrue(repo.findAll().isEmpty());
         repo.save(new Admin(1, "admin", "HASH", true));
         repo.save(new Admin(2, "second", "HASH2", false));
@@ -93,7 +93,7 @@ abstract class IAdminRepositoryContractTest {
     }
 
     @Test
-    void lockForUpdateThenUnlock_isCallableWithoutThrowing() {
+    void GivenNoSavedAdmin_WhenLockForUpdateAndUnlock_ThenDoesNotThrow() {
         // Admin is never contended (created once at synchronized platform init); the lock
         // primitives must simply be callable. The JPA adapter makes them no-ops (optimistic
         // @Version handles any future contention).

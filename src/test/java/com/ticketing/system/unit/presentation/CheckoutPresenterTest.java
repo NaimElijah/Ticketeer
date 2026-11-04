@@ -72,7 +72,7 @@ class CheckoutPresenterTest {
     }
 
     @Test
-    void pay_gatewayUnreachable_mapsToGatewayUnavailable() {
+    void GivenAnUnreachableGateway_WhenPay_ThenMapsToGatewayUnavailable() {
         when(checkoutService.checkoutMember(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock",
                         new PaymentGatewayUnreachableException("payment gateway unreachable: timeout")));
@@ -81,7 +81,7 @@ class CheckoutPresenterTest {
     }
 
     @Test
-    void pay_declined_mapsToPaymentDeclined() {
+    void GivenAGatewayDecline_WhenPay_ThenMapsToPaymentDeclined() {
         when(checkoutService.checkoutMember(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock",
                         new PaymentGatewayException("payment declined by gateway")));

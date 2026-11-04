@@ -57,7 +57,7 @@ class CartRestorationAdapterTest {
 
     /** The adapter returns exactly what the sales service produces, unmodified. */
     @Test
-    void restoreActiveOrder_delegatesToReservationService() {
+    void GivenReservationServiceRestoresAnOrder_WhenRestoreActiveOrder_ThenDelegatesToReservationServiceAndReturnsItsOrder() {
         ActiveOrderDTO restored = new ActiveOrderDTO(7, null, null, 0L, 0.0, List.of());
         when(mockReservation.restoreActiveOrder(7)).thenReturn(restored);
 
@@ -71,7 +71,7 @@ class CartRestorationAdapterTest {
 
     /** Case 1: a guest cart bound to the session is claimed for the now-authenticated member. */
     @Test
-    void mergeGuestCartOnPromotion_whenGuestCartExists_promotesItToMember() {
+    void GivenGuestCartAndNoMemberOrder_WhenMergeGuestCartOnPromotion_ThenPromotesItToMemberWithoutAbandoningAnOrder() {
         ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid", CART_CREATED); // real guest cart
         when(mockActiveOrderRepo.getBySessionId("preserved-sid")).thenReturn(Optional.of(guestCart));
 
@@ -121,7 +121,7 @@ class CartRestorationAdapterTest {
 
     /** Case 2: no guest cart, but an orphaned member cart is re-attached to the new session. */
     @Test
-    void mergeGuestCartOnPromotion_whenNoGuestCartButOrphanedMemberCartExists_restoresIt() {
+    void GivenNoGuestCartButOrphanedMemberCart_WhenMergeGuestCartOnPromotion_ThenRestoresItOnTheNewSession() {
         when(mockActiveOrderRepo.getBySessionId("new-sid")).thenReturn(Optional.empty());
         ActiveOrder priorCart = ActiveOrder.forMember(7, "old-stale-sid", CART_CREATED); // stale-session member cart
         when(mockActiveOrderRepo.getByUserId(7)).thenReturn(priorCart);
@@ -136,7 +136,7 @@ class CartRestorationAdapterTest {
 
     /** Case 3: no cart at all — the merge is a no-op on the repository (no save). */
     @Test
-    void mergeGuestCartOnPromotion_whenNoCartAtAll_isNoOp() {
+    void GivenNoCartAtAll_WhenMergeGuestCartOnPromotion_ThenSavesNothing() {
         when(mockActiveOrderRepo.getBySessionId("sid-1")).thenReturn(Optional.empty());
         when(mockActiveOrderRepo.getByUserId(7)).thenReturn(null);
 
@@ -151,7 +151,7 @@ class CartRestorationAdapterTest {
      * the original private method.
      */
     @Test
-    void mergeGuestCartOnPromotion_locksAndUnlocksBothKeysInCanonicalOrder() {
+    void GivenNoCartAtAll_WhenMergeGuestCartOnPromotion_ThenLocksAndUnlocksBothKeysInCanonicalOrder() {
         when(mockActiveOrderRepo.getBySessionId("sid-1")).thenReturn(Optional.empty());
         when(mockActiveOrderRepo.getByUserId(7)).thenReturn(null);
 

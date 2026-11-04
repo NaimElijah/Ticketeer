@@ -112,7 +112,7 @@ public class ReservationAcceptanceTests {
     }
 
     @Test
-    void GivenValidMemberReservation_WhenreserveStandingTicketsForMember_ThenReturnReservationResult() {
+    void GivenValidMemberReservation_WhenReserveStandingTicketsForMember_ThenReturnReservationResult() {
         ReservationResultDTO result = reservationService.reserveForMember(
                 "validToken",
                 100,
@@ -124,7 +124,7 @@ public class ReservationAcceptanceTests {
     }
 
     @Test
-    void GivenInvalidToken_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenInvalidToken_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken("badToken")).thenReturn(false);
 
         String result;
@@ -147,7 +147,7 @@ public class ReservationAcceptanceTests {
     }
 
     @Test
-    void GivenQuantityIsZero_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenQuantityIsZero_WhenReserveStandingTicketsForMember_ThenThrowException() {
         String result;
 
         try {
@@ -168,7 +168,7 @@ public class ReservationAcceptanceTests {
     }
 
     @Test
-    void GivenEventNotFound_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenEventNotFound_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(eventRepository.findById(100)).thenThrow(new EventNotFoundException(100));
 
         String result;
@@ -191,7 +191,7 @@ public class ReservationAcceptanceTests {
     }
 
     @Test
-    void GivenZoneNotFound_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenZoneNotFound_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(event.getVenueMap().getZone(1)).thenThrow(new IllegalArgumentException("Zone not found: " + 1));
 
         String result;
@@ -215,7 +215,7 @@ public class ReservationAcceptanceTests {
 
  
    @Test
-void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowException() {
+void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowException() {
     doThrow(new IllegalStateException("Only 1 tickets left"))
             .when(event).reserveInventory(eq(1), argThat(s -> s.isStandingSelection() && s.getQuantity() == 2));
 
@@ -298,7 +298,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
     }
 
     @Test
-    void GivenValidReservedTickets_WhenremoveReservedStandingSpotsForMember_ThenReturnReservationResult() {
+    void GivenValidReservedTickets_WhenRemoveReservedStandingSpotsForMember_ThenReturnReservationResult() {
         activeOrder.addStandingReservation(100, 1, 3, 50.0, NOW);
 
         ReservationResultDTO result = reservationService.removeForMember(
@@ -312,7 +312,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
     }
 
     @Test
-    void GivenRemoveQuantityIsZero_WhenremoveReservedStandingSpotsForMember_ThenThrowException() {
+    void GivenRemoveQuantityIsZero_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
         String result;
 
         try {
@@ -335,7 +335,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
 
     
     @Test
-    void GivenNoActiveOrder_WhenremoveReservedStandingSpotsForMember_ThenThrowException() {
+    void GivenNoActiveOrder_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
         when(activeOrderRepository.getByUserId(1)).thenReturn(null);
 
         String result;
@@ -358,7 +358,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
     }
 
     @Test
-    void GivenActiveOrderDoesNotContainEvent_WhenremoveReservedStandingSpotsForMember_ThenThrowException() {
+    void GivenActiveOrderDoesNotContainEvent_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
         String result;
 
         try {
@@ -379,7 +379,7 @@ void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowExceptio
     }
 
     @Test
-    void GivenNotEnoughReservedTickets_WhenremoveReservedStandingSpotsForMember_ThenThrowException() {
+    void GivenNotEnoughReservedTickets_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
         activeOrder.addStandingReservation(100, 1, 1, 50.0, NOW);
 
         String result;

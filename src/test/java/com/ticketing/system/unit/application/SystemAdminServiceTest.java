@@ -131,28 +131,28 @@ class SystemAdminServiceTest {
     // --- UC-1: initializePlatform ---
 
     @Test
-    void givenAllServicesReachableAndAdminExists_whenInitializePlatform_thenSucceeds() {
+    void GivenAllServicesReachableAndAdminExists_WhenInitializePlatform_ThenSucceeds() {
         when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         assertDoesNotThrow(svc::initializePlatform);
     }
 
     @Test
-    void givenNoReachablePaymentGateway_whenInitializePlatform_thenThrows() {
+    void GivenNoReachablePaymentGateway_WhenInitializePlatform_ThenThrows() {
         when(adminRepository.existsAny()).thenReturn(true);   // admin present, so only WSEP fails
         SystemAdminService svc = serviceWith(List.of(), List.of(reachableIssuer()));
         assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
     }
 
     @Test
-    void givenNoReachableTicketIssuer_whenInitializePlatform_thenThrows() {
+    void GivenNoReachableTicketIssuer_WhenInitializePlatform_ThenThrows() {
         when(adminRepository.existsAny()).thenReturn(true);   // admin present, so only WSEP fails
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of());
         assertThrows(ExternalServiceUnavailableException.class, svc::initializePlatform);
     }
 
     @Test
-    void givenNoAdmin_whenInitializePlatform_thenDefaultAdminCreated() {
+    void GivenNoAdmin_WhenInitializePlatform_ThenDefaultAdminCreated() {
         when(adminRepository.existsAny()).thenReturn(false, true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         svc.initializePlatform();
@@ -160,7 +160,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenNoAdminAndCreationDoesNotPersist_whenInitializePlatform_thenThrows() {
+    void GivenNoAdminAndCreationDoesNotPersist_WhenInitializePlatform_ThenThrows() {
         // existsAny() stays false even after save() → auto-creation failed.
         when(adminRepository.existsAny()).thenReturn(false);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
@@ -203,7 +203,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenAlreadyInitialized_whenInitializePlatformAgain_thenSecondCallIsNoOp() {
+    void GivenAlreadyInitialized_WhenInitializePlatformAgain_ThenDoesNotThrow() {
         when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         svc.initializePlatform();
@@ -213,7 +213,7 @@ class SystemAdminServiceTest {
     // --- UC-32: market lifecycle (open / close / view) ---
 
     @Test
-    void givenInitializedPlatform_whenOpenMarket_thenStateOpen() {
+    void GivenInitializedPlatform_WhenOpenMarket_ThenStateOpen() {
         SystemAdminService svc = readyService();
         MarketStateDTO state = svc.openMarket(openRequest());
         assertEquals("OPEN", state.currentStatus());
@@ -231,13 +231,13 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenUninitializedPlatform_whenOpenMarket_thenThrowsMarketNotOpen() {
+    void GivenUninitializedPlatform_WhenOpenMarket_ThenThrowsMarketNotOpen() {
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         assertThrows(MarketNotOpenException.class, () -> svc.openMarket(openRequest()));
     }
 
     @Test
-    void givenPaymentDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady() {
+    void GivenPaymentDownAtOpen_WhenOpenMarket_ThenThrowsAndStaysReady() {
         when(adminRepository.existsAny()).thenReturn(true);
         PaymentGateway gateway = reachablePayment();
         SystemAdminService svc = serviceWith(List.of(gateway), List.of(reachableIssuer()));
@@ -248,7 +248,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenIssuerDownAtOpen_whenOpenMarket_thenThrowsAndStaysReady() {
+    void GivenIssuerDownAtOpen_WhenOpenMarket_ThenThrowsAndStaysReady() {
         when(adminRepository.existsAny()).thenReturn(true);
         TicketIssuer issuer = reachableIssuer();
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(issuer));
@@ -259,7 +259,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenNoAdminAtOpen_whenOpenMarket_thenThrowsAndStaysReady() {
+    void GivenNoAdminAtOpen_WhenOpenMarket_ThenThrowsAndStaysReady() {
         when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         svc.initializePlatform();                          // READY
@@ -269,7 +269,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenNonAdminToken_whenOpenMarket_thenRejected() {
+    void GivenNonAdminToken_WhenOpenMarket_ThenRejected() {
         stubLiveMemberToken("member-token");
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", "member-token");
@@ -278,7 +278,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenNoToken_whenOpenMarket_thenUnauthorized() {
+    void GivenNoToken_WhenOpenMarket_ThenUnauthorized() {
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", null);
         assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(request));
@@ -286,7 +286,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenAdminTokenWhoseAdminNoLongerExists_whenOpenMarket_thenUnauthorized() {
+    void GivenAdminTokenWhoseAdminNoLongerExists_WhenOpenMarket_ThenUnauthorized() {
         when(adminRepository.findById(ADMIN_USER_ID)).thenReturn(null);
         SystemAdminService svc = readyService();
         assertThrows(UnauthorizedActionException.class, () -> svc.openMarket(openRequest()));
@@ -296,7 +296,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenOpenMarket_whenOpenAgain_thenStillOpenNoError() {
+    void GivenOpenMarket_WhenOpenAgain_ThenStillOpenNoError() {
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
         MarketStateDTO state = assertDoesNotThrow(() -> svc.openMarket(openRequest()));
@@ -304,7 +304,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenOpenMarket_whenCloseMarket_thenStateClosed() {
+    void GivenOpenMarket_WhenCloseMarket_ThenStateClosed() {
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
         MarketStateDTO state = svc.closeMarket(closeRequest());
@@ -313,7 +313,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenClosedMarket_whenCloseAgain_thenStillClosedNoError() {
+    void GivenClosedMarket_WhenCloseAgain_ThenStillClosedNoError() {
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
         svc.closeMarket(closeRequest());
@@ -322,7 +322,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenClosedMarket_whenOpenMarket_thenReopens() {
+    void GivenClosedMarket_WhenOpenMarket_ThenReopens() {
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
         svc.closeMarket(closeRequest());
@@ -331,13 +331,13 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenNeverOpened_whenCloseMarket_thenThrows() {
+    void GivenNeverOpened_WhenCloseMarket_ThenThrows() {
         SystemAdminService svc = readyService(); // READY, never opened
         assertThrows(InvalidStateTransitionException.class, () -> svc.closeMarket(closeRequest()));
     }
 
     @Test
-    void givenNonAdminToken_whenCloseMarket_thenRejected() {
+    void GivenNonAdminToken_WhenCloseMarket_ThenRejected() {
         stubLiveMemberToken("member-token");
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
@@ -358,7 +358,7 @@ class SystemAdminServiceTest {
     // --- #455: ensureMarketOpen (system self-heal — no admin token, recovers from a boot-time outage) ---
 
     @Test
-    void givenReachableServices_whenEnsureMarketOpen_thenOpens() {
+    void GivenReachableServices_WhenEnsureMarketOpen_ThenOpens() {
         when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
         svc.ensureMarketOpen();   // UNINITIALIZED -> READY -> OPEN in one shot
@@ -366,7 +366,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenServicesDownThenUp_whenEnsureMarketOpenTwice_thenSelfHealsToOpen() {
+    void GivenServicesDownThenUp_WhenEnsureMarketOpenTwice_ThenSelfHealsToOpen() {
         when(adminRepository.existsAny()).thenReturn(true);
         PaymentGateway gateway = mock(PaymentGateway.class);
         when(gateway.verifyConnection()).thenReturn(false);   // WSEP cold / unreachable at boot
@@ -381,7 +381,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenAdminClosedMarket_whenEnsureMarketOpen_thenStaysClosed() {
+    void GivenAdminClosedMarket_WhenEnsureMarketOpen_ThenStaysClosed() {
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
         svc.closeMarket(closeRequest());                      // admin deliberately closes the market
@@ -391,14 +391,14 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenNoReachableServices_whenEnsureMarketOpen_thenNeverThrowsAndStaysClosed() {
+    void GivenNoReachableServices_WhenEnsureMarketOpen_ThenNeverThrowsAndStaysClosed() {
         SystemAdminService svc = serviceWith(List.of(), List.of());
         assertDoesNotThrow(svc::ensureMarketOpen);            // self-heal must never throw out to its caller
         assertFalse(svc.isMarketOpen());
     }
 
     @Test
-    void givenInitializedPlatform_whenViewMarketState_thenReportsHealth() {
+    void GivenInitializedPlatform_WhenViewMarketState_ThenReportsHealth() {
         SystemAdminService svc = readyService();
         MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
         assertEquals("READY", state.currentStatus());
@@ -408,12 +408,12 @@ class SystemAdminServiceTest {
     }
 
     @Test @Disabled("UC-31: viewGlobalHistory admin-only RBAC")
-    void givenNonAdmin_whenViewGlobalHistory_thenRejected() {}
+    void GivenNonAdmin_WhenViewGlobalHistory_ThenRejected() {}
 
     // --- UC-31: viewGlobalHistory ---
 
     @Test
-    void givenNoMatchingReceipts_whenViewGlobalHistory_thenReturnsEmptyRecords() {
+    void GivenNoMatchingReceipts_WhenViewGlobalHistory_ThenReturnsEmptyRecords() {
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of());
 
@@ -424,7 +424,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenOneReceipt_whenViewGlobalHistory_thenRecordMapped() {
+    void GivenOneReceipt_WhenViewGlobalHistory_ThenRecordMapped() {
         int ticketId = 1;
         double price = 99.0;
         ReceiptLine line1 = new ReceiptLine(1, 25.0, 25, 1, null, LocalDateTime.now());
@@ -453,7 +453,7 @@ class SystemAdminServiceTest {
 
 
     @Test
-    void givenMultipleReceipts_whenViewGlobalHistory_thenAllRecordsMapped() {
+    void GivenMultipleReceipts_WhenViewGlobalHistory_ThenAllRecordsMapped() {
         ReceiptLine line1 = new ReceiptLine(1, 25.0, 25, 1, null, LocalDateTime.now());
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", LocalDateTime.now());
         OrderReceipt receipt1 = OrderReceipt.forMember(11, 1, 50.0, List.of(line1), LocalDateTime.now());
@@ -473,7 +473,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenFilters_whenViewGlobalHistory_thenFiltersPassedToRepository() {
+    void GivenFilters_WhenViewGlobalHistory_ThenFiltersPassedToRepository() {
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(
                 7, 3, List.of(10, 11),
                 LocalDate.of(2026, 1, 1),
@@ -492,7 +492,7 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void givenReceiptWithMultipleTickets_whenViewGlobalHistory_thenTotalPaidIsSumOfTicketPrices() {
+    void GivenReceiptWithMultipleTickets_WhenViewGlobalHistory_ThenTotalPaidIsSumOfTicketPrices() {
         ReceiptLine line1 = new ReceiptLine(1, 50.0, 25, 1, null, LocalDateTime.now());
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", LocalDateTime.now());
         OrderReceipt receipt = OrderReceipt.forMember(11, 1, 75.0, List.of(line1, line2), LocalDateTime.now());

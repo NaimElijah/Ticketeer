@@ -35,7 +35,7 @@ class LandingPresenterTest {
     }
 
     @Test
-    void load_success_carriesBothRowsFromService() {
+    void GivenFeaturedAndUpcomingEvents_WhenLoad_ThenCarriesBothRowsFromService() {
         EventSummaryDTO featured = event(1, "Coldplay");
         EventSummaryDTO upcoming = event(2, "Mashina");
         when(catalogService.featured(4)).thenReturn(List.of(featured));
@@ -53,7 +53,7 @@ class LandingPresenterTest {
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(catalogService.featured(4)).thenThrow(new RuntimeException("catalog down"));
 
         LandingPresenter.Outcome outcome = presenter.load();
@@ -64,7 +64,7 @@ class LandingPresenterTest {
     }
 
     @Test
-    void load_ruleViolated_returnsFailureWithTheRulesMessage() {
+    void GivenARuleViolation_WhenLoad_ThenReturnsFailureWithTheRulesMessage() {
         BusinessRuleViolationException rule = new BusinessRuleViolationException("The catalog is closed for maintenance.");
         when(catalogService.featured(4)).thenThrow(rule);
 

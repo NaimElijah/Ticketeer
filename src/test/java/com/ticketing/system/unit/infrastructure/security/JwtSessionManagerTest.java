@@ -83,35 +83,35 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void generateToken_producesDottedJwtString() {
+    void GivenMemberIdAndUsername_WhenGenerateToken_ThenProducesDottedJwtString() {
         String token = manager.generateToken(42, "alice");
         assertNotNull(token);
         assertEquals(3, token.split("\\.").length, "JWT should have 3 dot-separated parts");
     }
 
     @Test
-    void validateToken_returnsTrueForFreshToken() {
+    void GivenFreshToken_WhenValidateToken_ThenTrue() {
         String token = manager.generateToken(42, "alice");
         assertTrue(manager.validateToken(token));
     }
 
     @Test
-    void validateToken_returnsFalseForNull() {
+    void GivenNullToken_WhenValidateToken_ThenFalse() {
         assertFalse(manager.validateToken(null));
     }
 
     @Test
-    void validateToken_returnsFalseForBlank() {
+    void GivenBlankToken_WhenValidateToken_ThenFalse() {
         assertFalse(manager.validateToken("   "));
     }
 
     @Test
-    void validateToken_throwsInvalidTokenForGarbage() {
+    void GivenGarbageToken_WhenValidateToken_ThenThrowsInvalidToken() {
         assertThrows(InvalidTokenException.class, () -> manager.validateToken("not.a.jwt"));
     }
 
     @Test
-    void validateToken_throwsInvalidTokenForTamperedSignature() {
+    void GivenTamperedSignatureToken_WhenValidateToken_ThenThrowsInvalidToken() {
         String token = manager.generateToken(42, "alice");
         // Append extra bytes to the signature segment so HMAC verification fails.
         String tampered = token + "AAAA";
@@ -119,7 +119,7 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void validateToken_throwsSessionExpiredForExpiredToken() {
+    void GivenExpiredToken_WhenValidateToken_ThenThrowsSessionExpired() {
         // Negative expiration → token is issued already past its exp claim.
         Clock expiredClock = Clock.systemUTC();
         SessionRepository expiredSessions = new MemorySessionRepository(expiredClock);
@@ -230,19 +230,19 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void extractUserId_returnsEncodedUserId() {
+    void GivenFreshToken_WhenExtractUserId_ThenReturnsEncodedUserId() {
         String token = manager.generateToken(42, "alice");
         assertEquals(42, manager.extractUserId(token));
     }
 
     @Test
-    void extractUsername_returnsEncodedUsername() {
+    void GivenFreshToken_WhenExtractUsername_ThenReturnsEncodedUsername() {
         String token = manager.generateToken(42, "alice");
         assertEquals("alice", manager.extractUsername(token));
     }
 
     @Test
-    void extractExpiration_returnsFutureEpochMillis() {
+    void GivenFreshToken_WhenExtractExpiration_ThenReturnsFutureEpochMillis() {
         long before = System.currentTimeMillis();
         String token = manager.generateToken(42, "alice");
         long expiry = manager.extractExpiration(token);
@@ -250,18 +250,18 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void isExpired_returnsFalseForFreshToken() {
+    void GivenFreshToken_WhenIsExpired_ThenFalse() {
         String token = manager.generateToken(42, "alice");
         assertFalse(manager.isExpired(token));
     }
 
     @Test
-    void isExpired_returnsTrueForGarbage() {
+    void GivenGarbageToken_WhenIsExpired_ThenTrue() {
         assertTrue(manager.isExpired("not.a.jwt"));
     }
 
     @Test
-    void tryExtractUserId_returnsPresentForValidToken() {
+    void GivenValidToken_WhenTryExtractUserId_ThenPresentWithEncodedUserId() {
         String token = manager.generateToken(42, "alice");
         Optional<Integer> id = manager.tryExtractUserId(token);
         assertTrue(id.isPresent());
@@ -269,19 +269,19 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void tryExtractUserId_returnsEmptyForGarbage() {
+    void GivenGarbageToken_WhenTryExtractUserId_ThenEmpty() {
         assertTrue(manager.tryExtractUserId("not.a.jwt").isEmpty());
     }
 
     @Test
-    void invalidate_thenValidate_throwsInvalidToken() {
+    void GivenInvalidatedToken_WhenValidateToken_ThenThrowsInvalidToken() {
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
         assertThrows(InvalidTokenException.class, () -> manager.validateToken(token));
     }
 
     @Test
-    void invalidate_thenExtractUserId_throwsInvalidToken() {
+    void GivenInvalidatedToken_WhenExtractUserId_ThenThrowsInvalidToken() {
         // Revocation flows through parseClaims, so every reader respects it.
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
@@ -289,38 +289,38 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void invalidate_thenTryExtractUserId_returnsEmpty() {
+    void GivenInvalidatedToken_WhenTryExtractUserId_ThenEmpty() {
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
         assertTrue(manager.tryExtractUserId(token).isEmpty());
     }
 
     @Test
-    void invalidate_thenIsExpired_returnsTrue() {
+    void GivenInvalidatedToken_WhenIsExpired_ThenTrue() {
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
         assertTrue(manager.isExpired(token));
     }
 
     @Test
-    void invalidate_twice_doesNotThrow() {
+    void GivenInvalidatedToken_WhenInvalidateAgain_ThenDoesNotThrow() {
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
         manager.invalidate(token);
     }
 
     @Test
-    void invalidate_null_doesNotThrow() {
+    void GivenNullToken_WhenInvalidate_ThenDoesNotThrow() {
         manager.invalidate(null);
     }
 
     @Test
-    void invalidate_blank_doesNotThrow() {
+    void GivenBlankToken_WhenInvalidate_ThenDoesNotThrow() {
         manager.invalidate("   ");
     }
 
     @Test
-    void invalidate_doesNotAffectOtherTokens() {
+    void GivenTokensOfTwoMembers_WhenInvalidateOne_ThenDoesNotAffectOtherTokens() {
         String tokenA = manager.generateToken(1, "alice");
         String tokenB = manager.generateToken(2, "bob");
         manager.invalidate(tokenA);
@@ -335,14 +335,14 @@ class JwtSessionManagerTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void generateToken_createsSessionRow() {
+    void GivenNoSessionForUser_WhenGenerateToken_ThenCreatesSessionRow() {
         manager.generateToken(42, "alice");
         // Exactly one row should now exist for userId 42.
         assertTrue(sessions.existsByUserId(42));
     }
 
     @Test
-    void generateToken_eachCallProducesDistinctSessionId() {
+    void GivenSameMemberTwice_WhenGenerateToken_ThenEachCallProducesDistinctSessionId() {
         String a = manager.generateToken(42, "alice");
         String b = manager.generateToken(42, "alice");
         // Different JWTs → different sid claims → both rows exist (Q4 multi-device).
@@ -352,7 +352,7 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void invalidate_deletesOnlyThatTokensSessionRow() {
+    void GivenTwoTokensOfOneMember_WhenInvalidateOne_ThenDeletesOnlyThatTokensSessionRow() {
         String tokenA = manager.generateToken(42, "alice");
         String tokenB = manager.generateToken(42, "alice");   // second device per Q4
 
@@ -365,25 +365,25 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void isOnline_falseWhenNoSession() {
+    void GivenNoSession_WhenIsOnline_ThenFalse() {
         assertFalse(manager.isOnline(99));
     }
 
     @Test
-    void isOnline_trueAfterGenerateToken() {
+    void GivenGeneratedToken_WhenIsOnline_ThenTrue() {
         manager.generateToken(7, "carol");
         assertTrue(manager.isOnline(7));
     }
 
     @Test
-    void isOnline_falseAfterInvalidate() {
+    void GivenInvalidatedToken_WhenIsOnline_ThenFalse() {
         String token = manager.generateToken(7, "carol");
         manager.invalidate(token);
         assertFalse(manager.isOnline(7));
     }
 
     @Test
-    void isOnline_trueAcrossMultipleDevices() {
+    void GivenTokensOnMultipleDevices_WhenIsOnline_ThenTrue() {
         // Q4 — allow-multiple Member sessions per userId.
         manager.generateToken(7, "carol");
         manager.generateToken(7, "carol");
@@ -391,7 +391,7 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void generateTokenForSession_reusesSessionId() {
+    void GivenPreexistingMemberSession_WhenGenerateTokenForSession_ThenTokenValidatesWithTheSessionsUserAndUsername() {
         // Promote-on-login scenario: an existing Session row gains a JWT.
         Instant now = Instant.now();
         Session preexisting = new Session(
@@ -411,13 +411,13 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void generateTokenForSession_rejectsNull() {
+    void GivenNullSession_WhenGenerateTokenForSession_ThenRejectsItWithIllegalArgument() {
         assertThrows(IllegalArgumentException.class,
                 () -> manager.generateTokenForSession(null, "dave"));
     }
 
     @Test
-    void generateTokenForSession_rejectsGuestSession() {
+    void GivenGuestSession_WhenGenerateTokenForSession_ThenRejectsItWithIllegalState() {
         Instant now = Instant.now();
         Session guest = new Session("guest-sid", null, now, now.plusSeconds(3600));
         sessions.save(guest);
@@ -427,7 +427,7 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void validateToken_throwsWhenSessionRowDeletedExternally() {
+    void GivenSessionRowDeletedExternally_WhenValidateToken_ThenThrowsInvalidToken() {
         String token = manager.generateToken(11, "ed");
         // Simulate sweeper deleting the only session for user 11 directly.
         sessionsForUser(11).forEach(s -> sessions.delete(s.getSessionId()));
@@ -440,13 +440,13 @@ class JwtSessionManagerTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void validateCredential_trueForFreshJwt() {
+    void GivenFreshJwt_WhenValidateCredential_ThenTrue() {
         String token = manager.generateToken(42, "alice");
         assertTrue(manager.validateCredential(token));
     }
 
     @Test
-    void validateCredential_trueForRawGuestSessionId() {
+    void GivenRawGuestSessionId_WhenValidateCredential_ThenTrue() {
         Instant now = Instant.now();
         Session guest = new Session("guest-sid-xyz", null, now, now.plusSeconds(3600));
         sessions.save(guest);
@@ -455,12 +455,12 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void validateCredential_falseForUnknownSessionId() {
+    void GivenUnknownSessionId_WhenValidateCredential_ThenFalse() {
         assertFalse(manager.validateCredential("ghost-sid"));
     }
 
     @Test
-    void validateCredential_falseForExpiredSession() {
+    void GivenExpiredSession_WhenValidateCredential_ThenFalse() {
         Instant past = Instant.now().minusSeconds(3600);
         Session expired = new Session("expired-sid", null, past, past.plusSeconds(60));
         sessions.save(expired);
@@ -469,21 +469,21 @@ class JwtSessionManagerTest {
     }
 
     @Test
-    void validateCredential_falseForNullAndBlank() {
+    void GivenNullOrBlank_WhenValidateCredential_ThenFalse() {
         assertFalse(manager.validateCredential(null));
         assertFalse(manager.validateCredential(""));
         assertFalse(manager.validateCredential("   "));
     }
 
     @Test
-    void validateCredential_falseForRevokedJwt() {
+    void GivenRevokedJwt_WhenValidateCredential_ThenFalse() {
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
         assertFalse(manager.validateCredential(token));
     }
 
     @Test
-    void validateCredential_falseForGarbageString() {
+    void GivenGarbageString_WhenValidateCredential_ThenFalse() {
         // Not a JWT (no dots) and not a known sessionId → false, not throw.
         assertFalse(manager.validateCredential("just-some-random-string"));
     }

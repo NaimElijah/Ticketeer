@@ -30,32 +30,32 @@ class OrgTreeRendererTest {
     // ── construction ───────────────────────────────────────────────────────────
 
     @Test
-    void founderLeaf_constructsWithoutError() {
+    void GivenAFounderLeaf_WhenConstructed_ThenDoesNotThrow() {
         OrganizationalTreeNodeDTO founder = leaf(1, "Alice Cohen", "Owner", true);
         assertDoesNotThrow(() -> new OrgTreeRenderer(founder));
     }
 
     @Test
-    void ownerLeaf_constructsWithoutError() {
+    void GivenAnOwnerLeaf_WhenConstructed_ThenDoesNotThrow() {
         OrganizationalTreeNodeDTO owner = leaf(2, "Bob Mizrahi", "Owner", false);
         assertDoesNotThrow(() -> new OrgTreeRenderer(owner));
     }
 
     @Test
-    void managerLeaf_constructsWithoutError() {
+    void GivenAManagerLeaf_WhenConstructed_ThenDoesNotThrow() {
         OrganizationalTreeNodeDTO manager = leaf(3, "Carol Levy", "Manager", false);
         assertDoesNotThrow(() -> new OrgTreeRenderer(manager));
     }
 
     @Test
-    void compositeOwner_constructsWithoutError() {
+    void GivenACompositeOwner_WhenConstructed_ThenDoesNotThrow() {
         OrganizationalTreeNodeDTO carol = leaf(3, "Carol Levy", "Manager", false);
         OrganizationalTreeNodeDTO bob   = node(2, "Bob Mizrahi", "Owner", false, List.of(), List.of(carol));
         assertDoesNotThrow(() -> new OrgTreeRenderer(bob));
     }
 
     @Test
-    void deepTree_constructsWithoutError() {
+    void GivenADeepTree_WhenConstructed_ThenDoesNotThrow() {
         OrganizationalTreeNodeDTO carol = leaf(3, "Carol Levy",  "Manager", false);
         OrganizationalTreeNodeDTO dave  = leaf(4, "Dave Peretz", "Manager", false);
         OrganizationalTreeNodeDTO bob   = node(2, "Bob Mizrahi", "Owner", false, List.of(), List.of(carol, dave));
@@ -68,7 +68,7 @@ class OrgTreeRendererTest {
     // ── CSS structure ──────────────────────────────────────────────────────────
 
     @Test
-    void content_hasOrgChartClass() {
+    void GivenAFounderLeaf_WhenConstructed_ThenContentHasOrgChartClass() {
         var renderer = new OrgTreeRenderer(leaf(1, "Alice Cohen", "Owner", true));
         String classes = renderer.getElement().getAttribute("class");
         assertNotNull(classes, "class attribute must not be null");
@@ -79,21 +79,21 @@ class OrgTreeRendererTest {
     // ── variant mapping ────────────────────────────────────────────────────────
 
     @Test
-    void founder_variantIsFounder() {
+    void GivenAFounder_WhenConstructed_ThenVariantIsFounder() {
         var renderer = new OrgTreeRenderer(leaf(1, "Alice Cohen", "Owner", true));
         String html = renderer.getElement().getOuterHTML();
         assertTrue(html.contains("oc-founder"), "founder node must carry 'oc-founder' variant class");
     }
 
     @Test
-    void owner_variantIsOwner() {
+    void GivenAnOwner_WhenConstructed_ThenVariantIsOwner() {
         var renderer = new OrgTreeRenderer(leaf(2, "Bob Mizrahi", "Owner", false));
         String html = renderer.getElement().getOuterHTML();
         assertTrue(html.contains("oc-owner"), "owner node must carry 'oc-owner' variant class");
     }
 
     @Test
-    void manager_variantIsManager() {
+    void GivenAManager_WhenConstructed_ThenVariantIsManager() {
         var renderer = new OrgTreeRenderer(leaf(3, "Carol Levy", "Manager", false));
         String html = renderer.getElement().getOuterHTML();
         assertTrue(html.contains("oc-manager"), "manager node must carry 'oc-manager' variant class");
@@ -102,7 +102,7 @@ class OrgTreeRendererTest {
     // ── permissions displayed in sub ───────────────────────────────────────────
 
     @Test
-    void managerWithPermissions_subTextContainsPermissionNames() {
+    void GivenAManagerWithPermissions_WhenConstructed_ThenSubTextContainsPermissionNames() {
         OrganizationalTreeNodeDTO manager = new OrganizationalTreeNodeDTO(
                 3, "Carol Levy", "Manager", false,
                 List.of(Permission.MANAGE_INVENTORY, Permission.VIEW_SALES), new ArrayList<>());
@@ -113,7 +113,7 @@ class OrgTreeRendererTest {
     }
 
     @Test
-    void owner_doesNotRenderSubTextBlock() {
+    void GivenAnOwnerWithNoPermissions_WhenConstructed_ThenDoesNotRenderSubTextBlock() {
         OrganizationalTreeNodeDTO owner = new OrganizationalTreeNodeDTO(
                 2, "Bob Mizrahi", "Owner", false, List.of(), new ArrayList<>());
         var renderer = new OrgTreeRenderer(owner);

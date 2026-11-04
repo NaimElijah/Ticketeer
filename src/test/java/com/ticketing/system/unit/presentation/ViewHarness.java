@@ -63,7 +63,8 @@ import elemental.json.Json;
  * {@code VaadinSession} for the session holders, and a {@link VaadinService} whose router answers every
  * route with a stub URL, so a view or layout that builds a {@code RouterLink} can be constructed. It can
  * also sign a member or an admin in, and make the member a company's founder or manager through
- * {@link CompanyManagementBridge}, which it restores on {@link #close()}. Create one per test.
+ * {@link CompanyManagementBridge}, which it clears while open and restores on {@link #close()}.
+ * Create one per test.
  */
 final class ViewHarness implements AutoCloseable {
 
@@ -82,9 +83,12 @@ final class ViewHarness implements AutoCloseable {
     private final List<List<Object>> javaScript = new ArrayList<>();
     private final List<Element> focused = new ArrayList<>();
     private CompanyManagementService companyManagementService;
-    private CompanyManagementService bridgedBefore;
+    // The bridge is static, and a Spring context closed by an earlier test class leaves its dead service
+    // in it, so a view test must never inherit what it holds.
+    private final CompanyManagementService bridgedBefore = CompanyManagementBridge.service();
 
     ViewHarness() {
+        new CompanyManagementBridge(null);
         MapBackedVaadinSession.install();
         VaadinService.setCurrent(service);
         UI.setCurrent(ui);
@@ -107,7 +111,6 @@ final class ViewHarness implements AutoCloseable {
      */
     CompanyManagementService memberships(UserCompanyDTO... memberships) {
         if (companyManagementService == null) {
-            bridgedBefore = CompanyManagementBridge.service();
             companyManagementService = mock(CompanyManagementService.class);
             new CompanyManagementBridge(companyManagementService);
         }
@@ -349,9 +352,7 @@ final class ViewHarness implements AutoCloseable {
 
     @Override
     public void close() {
-        if (companyManagementService != null) {
-            new CompanyManagementBridge(bridgedBefore);
-        }
+        new CompanyManagementBridge(bridgedBefore);
         UI.setCurrent(null);
         VaadinService.setCurrent(null);
         MapBackedVaadinSession.uninstall();

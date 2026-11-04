@@ -69,12 +69,12 @@ class SystemIntegrityVerifierTest {
     // ---- existing structural scans (#4 / #6) ----
 
     @Test
-    void givenEmptySystem_whenVerify_thenPasses() {
+    void GivenEmptySystem_WhenVerify_ThenPasses() {
         assertDoesNotThrow(verifier::verify);
     }
 
     @Test
-    void givenActiveCompanyWithOwnerAndKnownProducers_whenVerify_thenPasses() {
+    void GivenActiveCompanyWithOwnerAndKnownProducers_WhenVerify_ThenPasses() {
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getOwnerIds()).thenReturn(List.of(5));
         when(company.getManagers()).thenReturn(List.of(6));
@@ -86,7 +86,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenActiveCompanyWithNoOwner_whenVerify_thenThrows() {   // constraint #6
+    void GivenActiveCompanyWithNoOwner_WhenVerify_ThenThrows() {   // constraint #6
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getOwnerIds()).thenReturn(List.of());
         when(company.getName()).thenReturn("Ghost Co");
@@ -96,7 +96,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenProducerThatIsNotAUser_whenVerify_thenThrows() {     // constraint #4
+    void GivenProducerThatIsNotAUser_WhenVerify_ThenThrows() {     // constraint #4
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getOwnerIds()).thenReturn(List.of(5));
         when(company.getManagers()).thenReturn(List.of());
@@ -110,7 +110,7 @@ class SystemIntegrityVerifierTest {
     // ---- #372 V3 scans against loaded state ----
 
     @Test
-    void givenLoadedAggregateThatViolatesItsInvariant_whenVerify_thenThrows() {   // re-validation sweep
+    void GivenLoadedAggregateThatViolatesItsInvariant_WhenVerify_ThenThrows() {   // re-validation sweep
         Event badEvent = mock(Event.class);
         doThrow(new IllegalStateException("rating out of range")).when(badEvent).checkInvariants();
         when(eventRepository.findAll()).thenReturn(List.of(badEvent));
@@ -119,7 +119,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenDuplicateUsernames_whenVerify_thenThrows() {   // constraint #1
+    void GivenDuplicateUsernames_WhenVerify_ThenThrows() {   // constraint #1
         User a = mock(User.class);
         User b = mock(User.class);
         when(a.getUsername()).thenReturn("alice");
@@ -130,7 +130,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenDistinctUsernames_whenVerify_thenPasses() {   // constraint #1 — happy path
+    void GivenDistinctUsernames_WhenVerify_ThenPasses() {   // constraint #1 — happy path
         User a = mock(User.class);
         User b = mock(User.class);
         when(a.getUsername()).thenReturn("alice");
@@ -141,7 +141,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenBuyerWithTwoOrdersForSameEvent_whenVerify_thenThrows() {   // constraint #8
+    void GivenBuyerWithTwoOrdersForSameEvent_WhenVerify_ThenThrows() {   // constraint #8
         ActiveOrder order1 = orderFor(5, "ok-1", 7);
         ActiveOrder order2 = orderFor(5, "ok-2", 7);
         when(activeOrderRepository.findAll()).thenReturn(List.of(order1, order2));
@@ -150,7 +150,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenBuyerWithOrdersForDifferentEvents_whenVerify_thenPasses() {   // constraint #8 — happy path
+    void GivenBuyerWithOrdersForDifferentEvents_WhenVerify_ThenPasses() {   // constraint #8 — happy path
         ActiveOrder order1 = orderFor(5, "ok-1", 7);
         ActiveOrder order2 = orderFor(5, "ok-2", 8);
         when(activeOrderRepository.findAll()).thenReturn(List.of(order1, order2));
@@ -159,14 +159,14 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenOversoldZone_whenVerify_thenThrows() {   // constraint #12
+    void GivenOversoldZone_WhenVerify_ThenThrows() {   // constraint #12
         when(eventRepository.findAll()).thenReturn(List.of(eventWithSoldUnits(200))); // 200 > capacity 100
 
         assertThrows(SystemIntegrityViolationException.class, verifier::verify);
     }
 
     @Test
-    void givenZoneWithinCapacity_whenVerify_thenPasses() {   // constraint #12 — happy path
+    void GivenZoneWithinCapacity_WhenVerify_ThenPasses() {   // constraint #12 — happy path
         when(eventRepository.findAll()).thenReturn(List.of(eventWithSoldUnits(0))); // sold 0 <= capacity 100
 
         assertDoesNotThrow(verifier::verify);

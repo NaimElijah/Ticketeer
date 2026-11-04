@@ -52,7 +52,7 @@ class AuthAcceptanceTest {
     // ------------------------------------------------------------------
 
     @Test
-    void GuestSession_StartsAndGetsRowPersisted() {
+    void GivenNoGuestSession_WhenStartGuestSession_ThenSessionStartsAndGuestRowIsPersisted() {
         GuestSessionDTO dto = authService.startGuestSession();
 
         assertNotNull(dto.sessionId());
@@ -62,7 +62,7 @@ class AuthAcceptanceTest {
     }
 
     @Test
-    void GuestSession_EndDeletesRow() {
+    void GivenAStartedGuestSession_WhenEndGuestSession_ThenDeletesRow() {
         GuestSessionDTO dto = authService.startGuestSession();
         assertTrue(sessionRepository.findById(dto.sessionId()).isPresent());
 
@@ -138,7 +138,7 @@ class AuthAcceptanceTest {
     }
 
     @Test
-    void GivenLogin_ThenGuestSessionPromotedInPlace_SidPreserved() {
+    void GivenARegisteredMemberOnAGuestSession_WhenLogin_ThenGuestSessionPromotedInPlaceSidPreserved() {
         String sid = authService.startGuestSession().sessionId();
         authService.register(new RegisterRequestDTO("hank", "hank@example.com", "Password1", sid, 20));
 
@@ -252,7 +252,7 @@ class AuthAcceptanceTest {
     }
 
     @Test
-    void DifferentGuestSessionsHaveDifferentIds() {
+    void GivenAStartedGuestSession_WhenStartAnotherGuestSession_ThenDifferentGuestSessionsHaveDifferentIds() {
         String sidA = authService.startGuestSession().sessionId();
         String sidB = authService.startGuestSession().sessionId();
         assertNotEquals(sidA, sidB);

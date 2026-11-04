@@ -47,7 +47,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSubmit_ThenReturnsNotAuthenticatedWithoutCallingService() {
         SubmitComplaintPresenter.Outcome outcome =
             presenter.submit(null, "Subject", "Body", "Payment or refund");
 
@@ -56,7 +56,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_happyPath_returnsSuccessWithConversationId_andForwardsFormFields() {
+    void GivenTheServiceOpensAComplaint_WhenSubmit_ThenReturnsSuccessWithConversationIdAndForwardsFormFields() {
         when(service.submitComplaint(eq(TOKEN), any())).thenReturn(conversation("conv-42"));
 
         SubmitComplaintPresenter.Outcome outcome =
@@ -76,7 +76,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenSubmit_ThenReturnsGenericFailure() {
         when(service.submitComplaint(eq(TOKEN), any()))
             .thenThrow(new RuntimeException("backend down"));
 
@@ -89,7 +89,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenSubmit_ThenReturnsNotAuthenticated() {
         when(service.submitComplaint(eq(TOKEN), any()))
             .thenThrow(new InvalidTokenException("bad"));
 
@@ -100,7 +100,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_ruleViolated_returnsFailureWithTheRulesMessage() {
+    void GivenARuleViolation_WhenSubmit_ThenReturnsFailureWithTheRulesMessage() {
         BusinessRuleViolationException rule = new BusinessRuleViolationException("A complaint needs a subject.");
         when(service.submitComplaint(eq(TOKEN), any())).thenThrow(rule);
 

@@ -64,7 +64,7 @@ class SeatedReservationJpaTest {
     @Autowired private EventRepository eventRepository;
 
     @Test
-    void memberReservesTwoFreeSeats_underJpa_succeeds() {
+    void GivenAPublishedSeatedEventUnderJpa_WhenMemberReservesTwoFreeSeats_ThenSucceedsAndOneSeatStaysAvailable() {
         ensureMarketOpen();
 
         AuthTokenDTO owner = registerAndLogin("seatOwner");
@@ -83,7 +83,7 @@ class SeatedReservationJpaTest {
     }
 
     @Test
-    void publishedFutureEvent_survivesTheCompletionSweep_andStaysReservable() {
+    void GivenAPublishedFutureEvent_WhenCompletionSweepRuns_ThenSurvivesTheSweepAndStaysReservable() {
         ensureMarketOpen();
         AuthTokenDTO owner = registerAndLogin("sweepOwner");
         int companyId = companyService.registerCompany(

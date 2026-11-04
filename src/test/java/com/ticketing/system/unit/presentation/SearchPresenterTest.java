@@ -32,7 +32,7 @@ class SearchPresenterTest {
     }
 
     @Test
-    void search_delegatesToCatalogAndReturnsRows() {
+    void GivenMatchingRows_WhenSearch_ThenDelegatesToCatalogAndReturnsRows() {
         List<SearchResultDTO> rows = List.of(new SearchResultDTO("EVENT", "Coldplay", "Live Nation", 1));
         when(catalogService.search(eq(CRED), eq("coldplay"), anyInt())).thenReturn(rows);
 
@@ -42,7 +42,7 @@ class SearchPresenterTest {
     }
 
     @Test
-    void search_onServiceFailure_returnsEmpty() {
+    void GivenAServiceFailure_WhenSearch_ThenReturnsEmpty() {
         when(catalogService.search(eq(CRED), eq("coldplay"), anyInt()))
                 .thenThrow(new RuntimeException("boom"));
 
@@ -64,13 +64,13 @@ class SearchPresenterTest {
     }
 
     @Test
-    void recents_withNoVaadinSession_returnsEmpty() {
+    void GivenNoVaadinSession_WhenRecents_ThenReturnsEmpty() {
         // No live VaadinSession in a plain unit test — RecentSearches degrades to empty without throwing.
         assertEquals(List.of(), presenter.recents());
     }
 
     @Test
-    void record_withNoVaadinSession_isNoOp() {
+    void GivenNoVaadinSession_WhenRecord_ThenDoesNotThrowAndRecentsStayEmpty() {
         // Should not throw even though there is no session to store into.
         presenter.record("coldplay");
         assertEquals(List.of(), presenter.recents());
