@@ -50,6 +50,8 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
  */
 class CompanyMembershipServiceTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
+
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
     // Outbound port to catalog's active-event count (replaces the former direct EventRepository read).
@@ -74,7 +76,7 @@ class CompanyMembershipServiceTest {
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         companyEventStatsPort = mock(CompanyEventStatsPort.class);
-        membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
+        membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), FIXED_CLOCK);
         sessionManager = mock(SessionManager.class);
         when(sessionManager.validateToken(MEMBER_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(MEMBER_TOKEN)).thenReturn(USER_ID);

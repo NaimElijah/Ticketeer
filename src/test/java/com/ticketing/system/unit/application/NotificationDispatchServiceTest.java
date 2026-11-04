@@ -38,6 +38,8 @@ import com.ticketing.system.testutil.LogCapture;
 
 class NotificationDispatchServiceTest {
 
+    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private NotificationRepository mockRepo;
     private PushNotificationService mockPushService;
     private NotificationDispatchService service;
@@ -57,7 +59,7 @@ class NotificationDispatchServiceTest {
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
                 "Your purchase has been confirmed",
-                LocalDateTime.now());
+                CREATED_AT);
 
         service.dispatch(notification);
 
@@ -73,7 +75,7 @@ class NotificationDispatchServiceTest {
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.SENT,
                 "msg",
-                LocalDateTime.now());
+                CREATED_AT);
 
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> service.dispatch(notification));
@@ -91,7 +93,7 @@ class NotificationDispatchServiceTest {
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
                 "Your purchase has been confirmed",
-                LocalDateTime.now());
+                CREATED_AT);
 
         Notification notif2 = new Notification(
                 "notif-2",
@@ -99,7 +101,7 @@ class NotificationDispatchServiceTest {
                 NotificationType.EVENT_SOLD_OUT,
                 NotificationStatus.PENDING,
                 "An event you're interested in is sold out",
-                LocalDateTime.now());
+                CREATED_AT);
 
         List<Notification> pendingNotifications = new ArrayList<>();
         pendingNotifications.add(notif1);

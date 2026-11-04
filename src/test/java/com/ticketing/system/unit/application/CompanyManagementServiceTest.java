@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -64,6 +66,8 @@ import com.ticketing.system.shared.exception.UserNotFoundException;
 
 public class CompanyManagementServiceTest {
 
+        private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
+
         private ProductionCompanyRepository mockCompanyRepo;
         private UserRepository mockUserRepo;
         private SessionManager sessionManager;
@@ -94,7 +98,7 @@ public class CompanyManagementServiceTest {
                 sessionManager = mock(SessionManager.class);
                 companyEventStatsPort = mock(CompanyEventStatsPort.class);
                 eventPublisher = mock(ApplicationEventPublisher.class);
-                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), FIXED_CLOCK);
 
                 companyService = new CompanyManagementService(
                                 mockCompanyRepo,

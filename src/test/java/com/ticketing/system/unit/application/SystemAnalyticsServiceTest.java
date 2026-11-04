@@ -161,7 +161,7 @@ class SystemAnalyticsServiceTest {
     // #21: an event cancellation refunds only that event's lines, so the rest of the order is revenue.
     @Test
     void GivenPartlyRefundedOrder_WhenAdminOverview_ThenItsRemainingLinesCount() {
-        LocalDateTime boughtAt = LocalDateTime.now();
+        LocalDateTime boughtAt = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
         OrderReceipt order = OrderReceipt.forMember(1, 7, 150.0,
                 List.of(new ReceiptLine(10, 100.0, 1, 1, null, boughtAt), new ReceiptLine(11, 50.0, 2, 1, null, boughtAt)),
                 boughtAt,
@@ -190,11 +190,11 @@ class SystemAnalyticsServiceTest {
 
     /**
      * A real order refunded in full, so it is the domain, not a stub, that says it earns nothing (review
-     * finding 2 on #132). OrderReceipt stamps its purchase time with the real clock, which is always
-     * after the window's start (the fixed clock's T0 minus 30 days), so only the refund can exclude it.
+     * finding 2 on #132). It is bought at T0, inside the revenue window (the 30 days up to the fixed
+     * clock's T0), so only the refund can exclude it.
      */
     private static OrderReceipt fullyRefundedOrder(double total) {
-        LocalDateTime boughtAt = LocalDateTime.now();
+        LocalDateTime boughtAt = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
         OrderReceipt order = OrderReceipt.forMember(2, 7, total, List.of(new ReceiptLine(20, total, 1, 1, null, boughtAt)),
                 boughtAt,
                 List.of(TransactionRecord.paymentCharge(4202, "test-gateway", total, "ILS", boughtAt)));
