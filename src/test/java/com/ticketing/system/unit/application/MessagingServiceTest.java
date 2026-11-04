@@ -174,7 +174,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void startConversation_createsInquiry_andNotifiesCompanyOwners() {
+    void GivenACompanyWithAnOwner_WhenStartConversation_ThenCreatesInquiryAndNotifiesCompanyOwners() {
         ConversationDTO dto = service.startConversation(MEMBER_TOKEN, inquiryReq());
 
         assertEquals("INQUIRY", dto.type());
@@ -188,7 +188,7 @@ class MessagingServiceTest {
     // --- sendMessage ---
 
     @Test
-    void sendMessage_byCompanyOwner_appends_transitionsResponded_andNotifiesMember() {
+    void GivenAnInquiry_WhenSendMessageByCompanyOwner_ThenAppendsTransitionsRespondedAndNotifiesMember() {
         ConversationDTO created = service.startConversation(MEMBER_TOKEN, inquiryReq());
 
         service.sendMessage(OWNER_TOKEN,
@@ -202,7 +202,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void sendMessage_byNonParticipant_rejected() {
+    void GivenAnInquiry_WhenSendMessageByNonParticipant_ThenRejected() {
         ConversationDTO created = service.startConversation(MEMBER_TOKEN, inquiryReq());
         assertThrows(InvalidParticipantException.class,
                 () -> service.sendMessage(OUTSIDER_TOKEN,
@@ -213,7 +213,7 @@ class MessagingServiceTest {
 
     // Admins learn of a complaint from their complaint queue, not from a notice (#185).
     @Test
-    void submitComplaint_createsComplaintToAdminGroup_andListsItInTheAdminQueue() {
+    void GivenAMember_WhenSubmitComplaint_ThenCreatesComplaintToAdminGroupAndListsItInTheAdminQueue() {
         ConversationDTO dto = service.submitComplaint(MEMBER_TOKEN,
                 new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Where is it?", null));
 
@@ -287,7 +287,7 @@ class MessagingServiceTest {
     // --- respondToComplaint (II.6.3.1) ---
 
     @Test
-    void respondToComplaint_byAdmin_resolves_andNotifiesMember() {
+    void GivenAComplaint_WhenRespondToComplaintByAdmin_ThenResolvesAndNotifiesMember() {
         // One-shot: the admin's single response always resolves the complaint, regardless of newStatus.
         ConversationDTO complaint = service.submitComplaint(MEMBER_TOKEN,
                 new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Where is it?", null));
@@ -302,7 +302,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void respondToComplaint_secondAdminReply_rejected() {
+    void GivenAnAnsweredComplaint_WhenRespondToComplaintWithASecondAdminReply_ThenRejected() {
         ConversationDTO complaint = service.submitComplaint(MEMBER_TOKEN,
                 new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Where is it?", null));
 
@@ -316,7 +316,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void sendMessage_onComplaint_byMember_rejected() {
+    void GivenAComplaint_WhenSendMessageByMember_ThenRejected() {
         // Complaints are one-shot: the member never replies via the chat path.
         ConversationDTO complaint = service.submitComplaint(MEMBER_TOKEN,
                 new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Where is it?", null));
@@ -327,7 +327,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void respondToComplaint_byNonAdmin_rejected() {
+    void GivenANonAdminToken_WhenRespondToComplaint_ThenRejected() {
         assertThrows(UnauthorizedActionException.class,
                 () -> service.respondToComplaint(MEMBER_TOKEN,
                         new RespondToComplaintRequestDTO("any-id", MEMBER_ID, "hi", "RESPONDED")));
@@ -336,7 +336,7 @@ class MessagingServiceTest {
     // --- sendOutreach (II.6.3.2) ---
 
     @Test
-    void sendOutreach_allMembers_fansOutDirect_andNotifiesEach() {
+    void GivenTwoMembers_WhenSendOutreachToAllMembers_ThenFansOutDirectAndNotifiesEach() {
         User u10 = plainUser(MEMBER_ID);
         User u11 = plainUser(MEMBER2_ID);
         when(userRepository.findAll()).thenReturn(List.of(u10, u11));
@@ -350,7 +350,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void sendOutreach_explicitRecipients_targetsOnlyListed() {
+    void GivenExplicitRecipients_WhenSendOutreach_ThenTargetsOnlyListed() {
         OutreachResultDTO result = service.sendOutreach(ADMIN_TOKEN,
                 new OutreachRequestDTO("Notice", "Body", List.of(MEMBER2_ID), false, false));
 
@@ -363,7 +363,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void sendOutreach_producers_targetsOwnersAsMembers() {
+    void GivenAnActiveCompany_WhenSendOutreachToProducers_ThenTargetsOwnersAsMembers() {
         ProductionCompany company = companyMock(COMPANY_ID, OWNER_ID);
         when(companyRepository.findActive()).thenReturn(List.of(company));
 
@@ -380,21 +380,21 @@ class MessagingServiceTest {
     }
 
     @Test
-    void sendOutreach_byNonAdmin_rejected() {
+    void GivenANonAdminToken_WhenSendOutreach_ThenRejected() {
         assertThrows(UnauthorizedActionException.class,
                 () -> service.sendOutreach(MEMBER_TOKEN,
                         new OutreachRequestDTO("x", "y", List.of(MEMBER2_ID), false, false)));
     }
 
     @Test
-    void sendOutreach_noRecipients_rejected() {
+    void GivenNoRecipients_WhenSendOutreach_ThenRejected() {
         assertThrows(BusinessRuleViolationException.class,
                 () -> service.sendOutreach(ADMIN_TOKEN,
                         new OutreachRequestDTO("x", "y", List.of(), false, false)));
     }
 
     @Test
-    void viewSentOutreach_returnsAdminDirect_forAdmin() {
+    void GivenOutreachToTwoMembers_WhenViewSentOutreachForAdmin_ThenReturnsAdminDirect() {
         service.sendOutreach(ADMIN_TOKEN,
                 new OutreachRequestDTO("Notice", "Body", List.of(MEMBER_ID, MEMBER2_ID), false, false));
 
@@ -405,7 +405,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void viewSentOutreach_byNonAdmin_rejected() {
+    void GivenANonAdminToken_WhenViewSentOutreach_ThenRejected() {
         assertThrows(UnauthorizedActionException.class,
                 () -> service.viewSentOutreach(MEMBER_TOKEN));
     }
@@ -413,7 +413,7 @@ class MessagingServiceTest {
     // --- viewAdminInbox ---
 
     @Test
-    void viewAdminInbox_returnsCallersDirectOutreach_notComplaints() {
+    void GivenAnOutreachAndAComplaint_WhenViewAdminInbox_ThenReturnsCallersDirectOutreachNotComplaints() {
         // The admin starts a DIRECT outreach to a member; a member also files a complaint.
         service.sendOutreach(ADMIN_TOKEN,
                 new OutreachRequestDTO("Hi", "Body", List.of(MEMBER_ID), false, false));
@@ -428,13 +428,13 @@ class MessagingServiceTest {
     }
 
     @Test
-    void viewAdminInbox_byNonAdmin_rejected() {
+    void GivenANonAdminToken_WhenViewAdminInbox_ThenRejected() {
         assertThrows(UnauthorizedActionException.class,
                 () -> service.viewAdminInbox(MEMBER_TOKEN));
     }
 
     @Test
-    void adminOperation_byMemberTokenWhoseIdCollidesWithAnAdmin_rejected() {
+    void GivenAMemberTokenWhoseIdCollidesWithAnAdmin_WhenAdminOperation_ThenRejected() {
         // Member and admin id pools overlap: a member token whose userId happens to equal an admin's
         // id must NOT pass the admin gate, because it lacks the ADMIN role claim (isAdminToken=false).
         String collidingToken = "colliding-member-tok";
@@ -452,7 +452,7 @@ class MessagingServiceTest {
     // --- views ---
 
     @Test
-    void viewMyConversations_returnsOnlyParticipantScoped() {
+    void GivenAnInquiryAndOutreachToAnotherMember_WhenViewMyConversations_ThenReturnsOnlyParticipantScoped() {
         service.startConversation(MEMBER_TOKEN, inquiryReq());                 // member 10 <-> company 5
         service.sendOutreach(ADMIN_TOKEN,
                 new OutreachRequestDTO("x", "y", List.of(MEMBER2_ID), false, false)); // admin -> member 11
@@ -463,7 +463,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void viewMyConversations_includesAdminDirectOutreach() {
+    void GivenAdminOutreachToTheMember_WhenViewMyConversations_ThenIncludesAdminDirectOutreach() {
         // Admin outreach to the member (member is the DIRECT counterparty) must surface in the inbox.
         service.sendOutreach(ADMIN_TOKEN,
                 new OutreachRequestDTO("Heads up", "Body", List.of(MEMBER_ID), false, false));
@@ -474,7 +474,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void viewConversation_byParticipant_returnsThread_andOutsiderRejected() {
+    void GivenAnInquiry_WhenViewConversation_ThenReturnsThreadForParticipantAndOutsiderRejected() {
         ConversationDTO created = service.startConversation(MEMBER_TOKEN, inquiryReq());
 
         ConversationDTO viewed = service.viewConversation(MEMBER_TOKEN, created.conversationId());
@@ -485,7 +485,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void viewCompanyInbox_returnsCounterpartyConversations_andRejectsNonOwner() {
+    void GivenAnInquiryToTheCompany_WhenViewCompanyInbox_ThenReturnsCounterpartyConversationsAndRejectsNonOwner() {
         service.startConversation(MEMBER_TOKEN, inquiryReq());
 
         assertEquals(1, service.viewCompanyInbox(OWNER_TOKEN, COMPANY_ID).size());
@@ -494,7 +494,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void viewAllComplaints_adminOnly_andFiltersByMember() {
+    void GivenComplaintsFromTwoMembers_WhenViewAllComplaints_ThenAdminOnlyAndFiltersByMember() {
         service.submitComplaint(MEMBER_TOKEN, new SubmitComplaintRequestDTO(MEMBER_ID, "A", "a", null));
         service.submitComplaint(MEMBER2_TOKEN, new SubmitComplaintRequestDTO(MEMBER2_ID, "B", "b", null));
 
@@ -537,7 +537,7 @@ class MessagingServiceTest {
     }
 
     @Test
-    void closeConversation_blocksFurtherMessages() {
+    void GivenAnInquiry_WhenCloseConversation_ThenBlocksFurtherMessages() {
         ConversationDTO created = service.startConversation(MEMBER_TOKEN, inquiryReq());
 
         service.closeConversation(MEMBER_TOKEN, created.conversationId());

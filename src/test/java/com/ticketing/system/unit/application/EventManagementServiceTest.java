@@ -421,17 +421,17 @@ class EventManagementServiceTest {
 
         @Test
         @Disabled("UC-19: Owner adds event — DRAFT state initially")
-        void givenOwner_whenAddEvent_thenEventInDraft() {
+        void GivenOwner_WhenAddEvent_ThenEventInDraft() {
         }
 
         @Test
         @Disabled("UC-19: Manager without permission rejected")
-        void givenManagerWithoutPermission_whenAddEvent_thenRejected() {
+        void GivenManagerWithoutPermission_WhenAddEvent_ThenRejected() {
         }
 
         @Test
         @Disabled("UC-21: setEventPolicies stores PurchasePolicy + DiscountPolicy")
-        void givenOwner_whenSetEventPolicies_thenStored() {
+        void GivenOwner_WhenSetEventPolicies_ThenStored() {
         }
 
         // -------------------------------------------------------------------------

@@ -83,12 +83,12 @@ class CatalogServiceTest {
 
     @Test
     @Disabled("UC-3: browseEventCatalog returns active events from active companies")
-    void givenActiveCompanies_whenBrowse_thenReturnsActiveEvents() {
+    void GivenActiveCompanies_WhenBrowse_ThenReturnsActiveEvents() {
     }
 
     @Test
     @Disabled("UC-3: events from closed companies excluded")
-    void givenClosedCompany_whenBrowse_thenEventsExcluded() {
+    void GivenClosedCompany_WhenBrowse_ThenEventsExcluded() {
     }
 
     // -------------------------------------------------------------------------
@@ -97,7 +97,7 @@ class CatalogServiceTest {
 
     // UC-7: searchGlobal throws InvalidTokenException for an invalid token
     @Test
-    void givenInvalidToken_whenSearchGlobal_thenThrowsInvalidTokenException() {
+    void GivenInvalidToken_WhenSearchGlobal_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
@@ -108,7 +108,7 @@ class CatalogServiceTest {
     // UC-7: searchGlobal propagates SessionExpiredException from the session
     // manager
     @Test
-    void givenExpiredToken_whenSearchGlobal_thenThrowsSessionExpiredException() {
+    void GivenExpiredToken_WhenSearchGlobal_ThenThrowsSessionExpiredException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
         CatalogSearchFiltersDTO filters = emptyFilters();
 
@@ -119,7 +119,7 @@ class CatalogServiceTest {
     // UC-7: searchGlobal returns all matching events when no company-rating filters
     // are set
     @Test
-    void givenValidTokenAndNoFilters_whenSearchGlobal_thenReturnsAllMatchingEvents() {
+    void GivenValidTokenAndNoFilters_WhenSearchGlobal_ThenReturnsAllMatchingEvents() {
         CatalogSearchFiltersDTO filters = emptyFilters();
         Event event1 = createMockEvent(1, 10);
         Event event2 = createMockEvent(2, 20);
@@ -139,7 +139,7 @@ class CatalogServiceTest {
     // UC-7: searchGlobal excludes events whose company rating is below
     // minCompanyRating
     @Test
-    void givenMinCompanyRatingFilter_whenSearchGlobal_thenExcludesLowRatedCompanies() {
+    void GivenMinCompanyRatingFilter_WhenSearchGlobal_ThenExcludesLowRatedCompanies() {
         CatalogSearchFiltersDTO filters = new CatalogSearchFiltersDTO(
                 null, null, null, null, null, null, null, null, null, null, null, 3.5, null);
         Event event1 = createMockEvent(1, 10);
@@ -166,7 +166,7 @@ class CatalogServiceTest {
     // UC-7: searchGlobal excludes events whose company rating is above
     // maxCompanyRating
     @Test
-    void givenMaxCompanyRatingFilter_whenSearchGlobal_thenExcludesHighRatedCompanies() {
+    void GivenMaxCompanyRatingFilter_WhenSearchGlobal_ThenExcludesHighRatedCompanies() {
         CatalogSearchFiltersDTO filters = new CatalogSearchFiltersDTO(
                 null, null, null, null, null, null, null, null, null, null, null, null, 3.0);
         Event event1 = createMockEvent(1, 10);
@@ -193,7 +193,7 @@ class CatalogServiceTest {
     // UC-7: searchGlobal returns an empty list when the repository returns no
     // events
     @Test
-    void givenValidTokenAndEmptyRepository_whenSearchGlobal_thenReturnsEmptyList() {
+    void GivenValidTokenAndEmptyRepository_WhenSearchGlobal_ThenReturnsEmptyList() {
         CatalogSearchFiltersDTO filters = emptyFilters();
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         when(mockEventRepository.searchONSALE(filters)).thenReturn(List.of());
@@ -210,7 +210,7 @@ class CatalogServiceTest {
 
     // UC-7: searchByCompany throws InvalidTokenException for an invalid token
     @Test
-    void givenInvalidToken_whenSearchByCompany_thenThrowsInvalidTokenException() {
+    void GivenInvalidToken_WhenSearchByCompany_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
@@ -221,7 +221,7 @@ class CatalogServiceTest {
     // UC-7: searchByCompany propagates SessionExpiredException from the session
     // manager
     @Test
-    void givenExpiredToken_whenSearchByCompany_thenThrowsSessionExpiredException() {
+    void GivenExpiredToken_WhenSearchByCompany_ThenThrowsSessionExpiredException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
         CatalogSearchFiltersDTO filters = emptyFilters();
 
@@ -231,7 +231,7 @@ class CatalogServiceTest {
 
     // UC-7: searchByCompany returns only events belonging to the requested company
     @Test
-    void givenValidTokenAndCompanyId_whenSearchByCompany_thenReturnsOnlyThatCompanysEvents() {
+    void GivenValidTokenAndCompanyId_WhenSearchByCompany_ThenReturnsOnlyThatCompanysEvents() {
         CatalogSearchFiltersDTO filters = emptyFilters();
         Event event1 = createMockEvent(1, 10);
         Event event2 = createMockEvent(2, 20);
@@ -249,7 +249,7 @@ class CatalogServiceTest {
 
     // UC-7: searchByCompany does NOT apply the company-rating filter (II.2.3.2)
     @Test
-    void givenCompanyRatingFilter_whenSearchByCompany_thenCompanyRatingFilterNotApplied() {
+    void GivenCompanyRatingFilter_WhenSearchByCompany_ThenCompanyRatingFilterNotApplied() {
         // minCompanyRating=4.0 but the company rating is only 1.5 — must still be
         // returned
         CatalogSearchFiltersDTO filters = new CatalogSearchFiltersDTO(
@@ -269,7 +269,7 @@ class CatalogServiceTest {
     // UC-7: searchByCompany returns an empty list when no events match the given
     // company id
     @Test
-    void givenValidTokenAndNoMatchingCompanyEvents_whenSearchByCompany_thenReturnsEmptyList() {
+    void GivenValidTokenAndNoMatchingCompanyEvents_WhenSearchByCompany_ThenReturnsEmptyList() {
         CatalogSearchFiltersDTO filters = emptyFilters();
         Event event1 = createMockEvent(1, 20); // belongs to a different company
         ProductionCompany company10 = createMockCompany("Company A", 4.5);
@@ -286,7 +286,7 @@ class CatalogServiceTest {
 
     // UC-8: getEventVenueMap returns correct venue map for event
     @Test
-    void givenValidTokenAndEventWithVenueMap_whenGetEventVenueMap_thenReturnsCorrectVenueMapDTO() {
+    void GivenValidTokenAndEventWithVenueMap_WhenGetEventVenueMap_ThenReturnsCorrectVenueMapDTO() {
         InventoryZone zone = new StandingZone(10, "Floor", 200, 50);
         VenueMap venueMap = new VenueMap(5, LOCATION, List.of(zone));
         Event mockEvent = mock(Event.class);
@@ -321,7 +321,7 @@ class CatalogServiceTest {
     // distinction
     // should call AuthenticationService directly.
     @Test
-    void givenInvalidOrExpiredCredential_whenGetEventVenueMap_thenThrowsInvalidTokenException() {
+    void GivenInvalidOrExpiredCredential_WhenGetEventVenueMap_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
 
         assertThrows(InvalidTokenException.class,
@@ -331,7 +331,7 @@ class CatalogServiceTest {
     // UC-8: getEventVenueMap throws EventNotFoundException when event does not
     // exist
     @Test
-    void givenValidTokenAndNonExistentEvent_whenGetEventVenueMap_thenThrowsEventNotFoundException() {
+    void GivenValidTokenAndNonExistentEvent_WhenGetEventVenueMap_ThenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
@@ -342,7 +342,7 @@ class CatalogServiceTest {
     // UC-8: getEventVenueMap throws NullVenueMapException when event has no venue
     // map
     @Test
-    void givenValidTokenAndEventWithNullVenueMap_whenGetEventVenueMap_thenThrowsNullVenueMapException() {
+    void GivenValidTokenAndEventWithNullVenueMap_WhenGetEventVenueMap_ThenThrowsNullVenueMapException() {
         Event mockEvent = mock(Event.class);
         when(mockEvent.getVenueMap()).thenReturn(null);
         when(mockEvent.getCompanyId()).thenReturn(10);
@@ -361,7 +361,7 @@ class CatalogServiceTest {
     // UC-8: mapper preserves all zones and their insertion order for a multi-zone
     // venue map
     @Test
-    void givenMultiZoneVenueMap_whenGetEventVenueMap_thenAllZonesReturnedInOrder() {
+    void GivenMultiZoneVenueMap_WhenGetEventVenueMap_ThenAllZonesReturnedInOrder() {
         InventoryZone zone1 = new StandingZone(1, "Floor", 100, 50);
         InventoryZone zone2 = new StandingZone(2, "Balcony", 80, 30);
         InventoryZone zone3 = new StandingZone(3, "VIP", 20, 150);
@@ -389,7 +389,7 @@ class CatalogServiceTest {
     // UC-8: a venue map with no zones still produces a valid (non-null, empty-list)
     // DTO
     @Test
-    void givenZeroZoneVenueMap_whenGetEventVenueMap_thenReturnsDTOWithEmptyZoneList() {
+    void GivenZeroZoneVenueMap_WhenGetEventVenueMap_ThenReturnsDTOWithEmptyZoneList() {
         VenueMap venueMap = new VenueMap(5, LOCATION, List.of());
 
         Event mockEvent = mock(Event.class);
@@ -413,7 +413,7 @@ class CatalogServiceTest {
     // UC-8: null or blank token must raise InvalidTokenException, not
     // SessionExpiredException
     @Test
-    void givenNullToken_whenGetEventVenueMap_thenThrowsInvalidTokenException() {
+    void GivenNullToken_WhenGetEventVenueMap_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(null)).thenReturn(false);
 
         assertThrows(InvalidTokenException.class,
@@ -421,7 +421,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenBlankToken_whenGetEventVenueMap_thenThrowsInvalidTokenException() {
+    void GivenBlankToken_WhenGetEventVenueMap_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential("")).thenReturn(false);
 
         assertThrows(InvalidTokenException.class,
@@ -429,7 +429,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenSeatedZone_whenGetVenueMap_thenPerSeatStatusesReturned() {
+    void GivenSeatedZone_WhenGetVenueMap_ThenPerSeatStatusesReturned() {
         SeatedZone seatedZone = new SeatedZone(
                 5,
                 "Orchestra",
@@ -494,7 +494,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenStandingZone_whenGetVenueMap_thenZoneCountAvailabilityReturned() {
+    void GivenStandingZone_WhenGetVenueMap_ThenZoneCountAvailabilityReturned() {
         StandingZone standingZone = new StandingZone(5, "General Admission", 10, 50.0);
         standingZone.reserve(InventorySelection.standing(3));
 
@@ -531,7 +531,7 @@ class CatalogServiceTest {
     // getEventDetail returns the full detail (incl. lineup) for an ON_SALE event of
     // an active company.
     @Test
-    void givenValidCredentialAndOnSaleEvent_whenGetEventDetail_thenReturnsDetailWithLineup() {
+    void GivenValidCredentialAndOnSaleEvent_WhenGetEventDetail_ThenReturnsDetailWithLineup() {
         Event event = detailEvent(EVENT_ID, 10, EventStatus.ON_SALE);
         ProductionCompany company = createMockCompany("Acme Live", 4.5);
 
@@ -552,7 +552,7 @@ class CatalogServiceTest {
     // A SOLD_OUT event is still publicly viewable (the page shows a badge +
     // disabled purchase).
     @Test
-    void givenSoldOutEvent_whenGetEventDetail_thenReturnsDetail() {
+    void GivenSoldOutEvent_WhenGetEventDetail_ThenReturnsDetail() {
         Event event = detailEvent(EVENT_ID, 10, EventStatus.SOLD_OUT);
         ProductionCompany company = createMockCompany("Acme Live", 4.5);
 
@@ -567,7 +567,7 @@ class CatalogServiceTest {
 
     // Invalid/expired credential is rejected before any lookup.
     @Test
-    void givenInvalidCredential_whenGetEventDetail_thenThrowsInvalidTokenException() {
+    void GivenInvalidCredential_WhenGetEventDetail_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
 
         assertThrows(InvalidTokenException.class,
@@ -576,7 +576,7 @@ class CatalogServiceTest {
 
     // A missing event yields EventNotFoundException.
     @Test
-    void givenNonExistentEvent_whenGetEventDetail_thenThrowsEventNotFoundException() {
+    void GivenNonExistentEvent_WhenGetEventDetail_ThenThrowsEventNotFoundException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         when(mockEventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
@@ -606,7 +606,7 @@ class CatalogServiceTest {
 
     // DRAFT / SCHEDULED events are not yet public — treated as not found.
     @Test
-    void givenDraftEvent_whenGetEventDetail_thenThrowsEventNotFoundException() {
+    void GivenDraftEvent_WhenGetEventDetail_ThenThrowsEventNotFoundException() {
         Event event = detailEvent(EVENT_ID, 10, EventStatus.DRAFT);
         ProductionCompany company = createMockCompany("Acme Live", 4.5);
 
@@ -625,7 +625,7 @@ class CatalogServiceTest {
     // featured returns the ON_SALE events of active companies, best-rated first,
     // capped at the limit.
     @Test
-    void givenOnSaleEvents_whenFeatured_thenReturnsBestRatedFirstWithinLimit() {
+    void GivenOnSaleEvents_WhenFeatured_ThenReturnsBestRatedFirstWithinLimit() {
         ProductionCompany company = createMockCompany("Acme", 4.5);
         when(company.getCompanyId()).thenReturn(10);
         Event low = onSaleEvent(1, 10, 3.0);
@@ -646,7 +646,7 @@ class CatalogServiceTest {
     // upcomingOnSale returns SCHEDULED events of active companies only, soonest
     // show date first.
     @Test
-    void givenScheduledEvents_whenUpcomingOnSale_thenSoonestFirstAndActiveCompaniesOnly() {
+    void GivenScheduledEvents_WhenUpcomingOnSale_ThenSoonestFirstAndActiveCompaniesOnly() {
         ProductionCompany active = createMockCompany("Acme", 4.5);
         ProductionCompany inactive = mock(ProductionCompany.class);
         when(inactive.getStatus()).thenReturn(CompanyStatus.INACTIVE);
@@ -705,7 +705,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenInvalidCredential_whenSearch_thenThrowsInvalidTokenException() {
+    void GivenInvalidCredential_WhenSearch_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
 
         assertThrows(InvalidTokenException.class,
@@ -713,14 +713,14 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenBlankQuery_whenSearch_thenReturnsEmpty() {
+    void GivenBlankQuery_WhenSearch_ThenReturnsEmpty() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
 
         assertTrue(catalogService.search(VALID_TOKEN, "   ", 8).isEmpty());
     }
 
     @Test
-    void givenEventNameMatch_whenSearch_thenEventRowReturned() {
+    void GivenEventNameMatch_WhenSearch_ThenEventRowReturned() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         Event e = searchEvent(1, 10, "Coldplay Live", List.of("Coldplay"));
         ProductionCompany company = createMockCompany("Live Nation", 4.5);
@@ -736,7 +736,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenArtistMatch_whenSearch_thenArtistRowReturned() {
+    void GivenArtistMatch_WhenSearch_ThenArtistRowReturned() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         Event e = searchEvent(2, 10, "Mystery Show", List.of("Coldplay", "Support Act"));
         ProductionCompany company = createMockCompany("Live Nation", 4.5);
@@ -752,7 +752,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenVenueMatch_whenSearch_thenVenueRowReturned() {
+    void GivenVenueMatch_WhenSearch_ThenVenueRowReturned() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         Event e = searchEvent(3, 10, "Some Gig", List.of("Nobody"));
         ProductionCompany company = createMockCompany("Live Nation", 4.5);
@@ -768,7 +768,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenInactiveCompany_whenSearch_thenEventExcluded() {
+    void GivenInactiveCompany_WhenSearch_ThenEventExcluded() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         Event e = searchEvent(1, 10, "Coldplay Live", List.of("Coldplay"));
         when(mockEventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
@@ -780,7 +780,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void givenManyMatches_whenSearch_thenCappedToLimit() {
+    void GivenManyMatches_WhenSearch_ThenCappedToLimit() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
         List<Event> many = new ArrayList<>();
         for (int i = 1; i <= 10; i++) {
@@ -817,7 +817,7 @@ class CatalogServiceTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void onSaleCountries_distinctSortedAndVisibleOnly() {
+    void GivenActiveCompanyEventsSharingACountry_WhenOnSaleCountries_ThenDistinctAndSorted() {
         // Build mocks into locals BEFORE stubbing the repos — helper calls invoke when(...) themselves,
         // which Mockito rejects if nested inside an ongoing thenReturn(...) stub.
         Event e1 = locatedEvent(1, 10, "Israel", "Tel Aviv");
@@ -833,7 +833,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void onSaleCountries_excludesInactiveCompanyEvents() {
+    void GivenEventOfInactiveCompany_WhenOnSaleCountries_ThenExcludesInactiveCompanyEvents() {
         Event e1 = locatedEvent(1, 10, "Israel", "Tel Aviv");
         Event e2 = locatedEvent(2, 20, "USA", "New York");
         ProductionCompany active = createMockCompany("A", 4.0);
@@ -847,7 +847,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void onSaleCountries_skipsEventsWithoutLocation() {
+    void GivenEventWithoutLocation_WhenOnSaleCountries_ThenSkipsEventsWithoutLocation() {
         Event noLoc = mock(Event.class);
         when(noLoc.getCompanyId()).thenReturn(10);
         when(noLoc.getVenueMap()).thenReturn(null);
@@ -859,7 +859,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void onSaleCitiesInCountry_filtersToCountryDistinctSorted() {
+    void GivenEventsInTwoCountriesWithADuplicateCity_WhenOnSaleCitiesInCountry_ThenFiltersToCountryDistinctSorted() {
         Event e1 = locatedEvent(1, 10, "Israel", "Tel Aviv");
         Event e2 = locatedEvent(2, 10, "Israel", "Haifa");
         Event e4 = locatedEvent(4, 10, "Israel", "Tel Aviv");   // duplicate city
@@ -874,7 +874,7 @@ class CatalogServiceTest {
     }
 
     @Test
-    void onSaleCitiesInCountry_nullCountry_isEmpty() {
+    void GivenNullCountry_WhenOnSaleCitiesInCountry_ThenIsEmpty() {
         assertTrue(catalogService.onSaleCitiesInCountry(null).isEmpty());
     }
 

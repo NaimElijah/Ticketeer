@@ -70,7 +70,7 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenOwnReceipt_whenViewMyReceipt_thenRecordReturned() {
+    void GivenOwnReceipt_WhenViewMyReceipt_ThenRecordReturned() {
         OrderReceipt own = memberReceipt(RECEIPT_ID, USER_ID);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -88,7 +88,7 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenInvalidToken_whenViewMyReceipt_thenInvalidTokenThrown() {
+    void GivenInvalidToken_WhenViewMyReceipt_ThenInvalidTokenThrown() {
         Mockito.when(authenticationService.validateToken(INVALID_TOKEN)).thenReturn(false);
 
         assertThatThrownBy(() -> service.viewMyReceipt(INVALID_TOKEN, RECEIPT_ID))
@@ -98,7 +98,7 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenMissingReceipt_whenViewMyReceipt_thenEntityNotFoundThrown() {
+    void GivenMissingReceipt_WhenViewMyReceipt_ThenEntityNotFoundThrown() {
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(Optional.empty());
@@ -108,7 +108,7 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenAnotherMembersReceipt_whenViewMyReceipt_thenUnauthorizedThrown() {
+    void GivenAnotherMembersReceipt_WhenViewMyReceipt_ThenUnauthorizedThrown() {
         OrderReceipt someoneElses = memberReceipt(RECEIPT_ID, OTHER_USER);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -122,7 +122,7 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenGuestReceipt_whenViewMyReceipt_thenUnauthorizedThrown() {
+    void GivenGuestReceipt_WhenViewMyReceipt_ThenUnauthorizedThrown() {
         LocalDateTime t = LocalDateTime.of(2026, 6, 1, 12, 0);
         ReceiptLine line = new ReceiptLine(101, 150.00, 2, 1, "15", t);
         OrderReceipt guestReceipt = OrderReceipt.forGuest("g@example.com", "guest-sess-1", RECEIPT_ID, 150.00, List.of(line), LocalDateTime.now());

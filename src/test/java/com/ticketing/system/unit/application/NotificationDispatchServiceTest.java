@@ -50,7 +50,7 @@ class NotificationDispatchServiceTest {
     }
 
     @Test
-    void dispatch_savesPendingNotification() {
+    void GivenAPendingNotification_WhenDispatch_ThenSavesPendingNotification() {
         Notification notification = new Notification(
                 "notif-1",
                 42,
@@ -66,7 +66,7 @@ class NotificationDispatchServiceTest {
     }
 
     @Test
-    void dispatch_rejectsNonPendingNotification() {
+    void GivenANonPendingNotification_WhenDispatch_ThenRejectsNonPendingNotificationWithoutSaving() {
         Notification notification = new Notification(
                 "notif-1",
                 42,
@@ -82,7 +82,7 @@ class NotificationDispatchServiceTest {
 
     /* UC-37: deliver pending notifications */
     @Test
-    void givenPendingNotifications_whenDeliverPending_thenAllDelivered() {
+    void GivenPendingNotifications_WhenDeliverPending_ThenAllDelivered() {
         int userId = 42;
 
         Notification notif1 = new Notification(
@@ -130,7 +130,7 @@ class NotificationDispatchServiceTest {
 
     /* UC-37: no pending notifications is no-op */
     @Test
-    void givenNoPending_whenDeliverPending_thenNoop() {
+    void GivenNoPending_WhenDeliverPending_ThenNoop() {
         int userId = 42;
 
         // Mock repository to return empty list (no pending notifications)

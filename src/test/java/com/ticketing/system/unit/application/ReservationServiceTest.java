@@ -154,7 +154,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenValidRequest_WhenremoveReservedStandingSpots_ThenReturnReservationResult() {
+    void GivenValidRequest_WhenRemoveReservedStandingSpots_ThenReturnReservationResult() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -170,13 +170,13 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenMissingToken_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenMissingToken_WhenRemoveReservedStandingSpots_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(null, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
 
     @Test
-    void GivenInvalidToken_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenInvalidToken_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
 
         assertThrows(IllegalStateException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
@@ -184,7 +184,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenInvalidQuantity_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenInvalidQuantity_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
 
@@ -193,7 +193,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenEventDoesNotExist_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenEventDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         // The member's cart holds the line, so the removal reaches the event lookup.
@@ -205,7 +205,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenZoneDoesNotExist_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenZoneDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -216,7 +216,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenActiveOrderDoesNotExist_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenActiveOrderDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -228,7 +228,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenOrderDoesNotContainEvent_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenOrderDoesNotContainEvent_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -246,7 +246,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNotEnoughReservedTickets_WhenremoveReservedStandingSpots_ThenThrowException() {
+    void GivenNotEnoughReservedTickets_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -308,7 +308,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenValidMemberRequest_WhenreserveStandingTicketsForMember_ThenReturnReservationResult() {
+    void GivenValidMemberRequest_WhenReserveStandingTicketsForMember_ThenReturnReservationResult() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -326,13 +326,13 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenMissingToken_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenMissingToken_WhenReserveStandingTicketsForMember_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(null, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
 
     @Test
-    void GivenInvalidToken_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenInvalidToken_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
 
         assertThrows(IllegalStateException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
@@ -340,7 +340,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenInvalidUserId_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenInvalidUserId_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(0);
 
@@ -349,7 +349,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenInvalidQuantity_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenInvalidQuantity_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
 
@@ -358,7 +358,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenEventDoesNotExist_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenEventDoesNotExist_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
@@ -368,7 +368,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenZoneDoesNotExist_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenZoneDoesNotExist_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -380,7 +380,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNotEnoughTickets_WhenreserveStandingTicketsForMember_ThenThrowException() {
+    void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -398,7 +398,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNoActiveOrder_WhenreserveStandingTicketsForMember_ThenCreateNewOrderAndReturnResult() {
+    void GivenNoActiveOrder_WhenReserveStandingTicketsForMember_ThenCreateNewOrderAndReturnResult() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -415,7 +415,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenValidGuestRequest_WhenreserveStandingTicketsForGuest_ThenReturnReservationResult() {
+    void GivenValidGuestRequest_WhenReserveStandingTicketsForGuest_ThenReturnReservationResult() {
         String sessionId = "guest-session";
 
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -454,19 +454,19 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenMissingSessionId_WhenreserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenMissingSessionId_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest(null, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
 
     @Test
-    void GivenBlankSessionId_WhenreserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenBlankSessionId_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest("   ", EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
 
     @Test
-    void GivenInvalidQuantity_WhenreserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenInvalidQuantity_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
@@ -474,7 +474,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenEventDoesNotExist_WhenreserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenEventDoesNotExist_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
@@ -484,7 +484,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenZoneDoesNotExist_WhenreserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenZoneDoesNotExist_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -497,7 +497,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNotEnoughTickets_WhenreserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenNotEnoughTickets_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -515,7 +515,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNoActiveOrder_WhenreserveStandingTicketsForGuest_ThenCreateNewOrderAndReturnResult() {
+    void GivenNoActiveOrder_WhenReserveStandingTicketsForGuest_ThenCreateNewOrderAndReturnResult() {
         String sessionId = "guest-session";
 
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -532,7 +532,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenManyGuestsReserveSameZoneConcurrently_WhenreserveStandingTicketsForGuest_ThenDoNotOverReserve()
+    void GivenManyGuestsReserveSameZoneConcurrently_WhenReserveStandingTicketsForGuest_ThenDoNotOverReserve()
             throws InterruptedException {
         int capacity = 5;
         int numberOfThreads = 20;
@@ -594,7 +594,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenManyMembersReserveSameZoneConcurrently_WhenreserveStandingTicketsForMember_ThenDoNotOverReserve()
+    void GivenManyMembersReserveSameZoneConcurrently_WhenReserveStandingTicketsForMember_ThenDoNotOverReserve()
             throws InterruptedException {
 
         int capacity = 5;
@@ -660,7 +660,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenManyThreadsremoveReservedStandingSpotsForMemberConcurrently_WhenremoveReservedStandingSpots_ThenDoNotOverRelease()
+    void GivenManyThreadsRemoveReservedStandingSpotsForMemberConcurrently_WhenRemoveReservedStandingSpots_ThenDoNotOverRelease()
             throws InterruptedException {
 
         int initialReservedTickets = 5;
@@ -1041,7 +1041,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenSeatedZone_WhenreserveStandingTicketsForMemberWithQuantityOnly_ThenThrowsException() {
+    void GivenSeatedZone_WhenReserveStandingTicketsForMemberWithQuantityOnly_ThenThrowsException() {
         SeatedZone seatedZone = new SeatedZone(
                 ZONE_ID,
                 "Orchestra",

@@ -23,18 +23,18 @@ class CompanyRatingsTest {
     }
 
     @Test
-    void averagesNonNullRatings_roundedToOneDecimal() {
+    void GivenTwoRatedEvents_WhenFromEvents_ThenAveragesNonNullRatingsRoundedToOneDecimal() {
         // (4.8 + 4.9) / 2 = 4.85 -> 4.9
         assertEquals(4.9, CompanyRatings.fromEvents(List.of(rated(4.8), rated(4.9))), 0.0001);
     }
 
     @Test
-    void ignoresUnratedEvents() {
+    void GivenARatedAndAnUnratedEvent_WhenFromEvents_ThenIgnoresUnratedEvents() {
         assertEquals(4.6, CompanyRatings.fromEvents(Arrays.asList(rated(4.6), rated(null))), 0.0001);
     }
 
     @Test
-    void nullWhenNoRatedEventsOrEmptyOrNull() {
+    void GivenNoRatedEventsOrEmptyOrNull_WhenFromEvents_ThenNull() {
         assertNull(CompanyRatings.fromEvents(List.of(rated(null))));
         assertNull(CompanyRatings.fromEvents(List.of()));
         assertNull(CompanyRatings.fromEvents(null));
