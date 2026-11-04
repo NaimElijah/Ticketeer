@@ -46,7 +46,7 @@ class AdminSessionPersistenceJpaTest {
     private SessionRepository sessionRepository;
 
     @Test
-    void adminSignIn_persistsSessionRow_soTheTokenValidates() {
+    void GivenTheDefaultAdmin_WhenSignInAsAdmin_ThenPersistsAdminSessionRowSoTheTokenValidates() {
         // PlatformInitializationRunner is @Profile("!test"), so seed the default admin explicitly
         // (admin/admin from platform.admin.* in application.yml), as acceptance tests do.
         systemAdminService.createDefaultAdminIfMissing();
