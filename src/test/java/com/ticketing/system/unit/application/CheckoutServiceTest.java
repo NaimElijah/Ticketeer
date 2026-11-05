@@ -1073,6 +1073,50 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
         assertEquals(NOW, receiptCaptor.getValue().getPurchaseTime());
     }
 
+    // What the gateway is asked to charge: the cart's total, in the buyer's currency, on the buyer's card, under
+    // the buyer's idempotency key, for the member who is buying.
+    @Test
+    void GivenMemberCart_WhenCheckout_ThenTheGatewayIsChargedTheTotalInTheCurrencyWithTheKeyAndCard() {
+        arrangeMemberCartOfTwoZonesOfOneEvent();
+        givenSuccessfulPaymentAndIssuanceWithFlag(2);
+
+        checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+        PaymentRequestDTO request = theChargeRequest();
+        assertAll(
+                () -> assertEquals(250.0, request.amount(), "the total of 100 and 150"),
+                () -> assertEquals(CURRENCY, request.currency()),
+                () -> assertEquals(IDEMPOTENCY_KEY, request.idempotencyKey()),
+                () -> assertEquals(PAYMENT_METHOD_TOKEN, request.card()),
+                () -> assertEquals(USER_ID, request.buyerUserId()),
+                () -> assertNull(request.buyerEmail(), "a member is charged by user id"));
+    }
+
+    @Test
+    void GivenGuestCart_WhenCheckoutGuest_ThenTheGatewayIsChargedTheTotalInTheCurrencyWithTheKeyCardAndEmail() {
+        arrangeGuestStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlagGuest(1);
+
+        checkoutService.checkoutGuest(
+                VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE);
+
+        PaymentRequestDTO request = theChargeRequest();
+        assertAll(
+                () -> assertEquals(100.0, request.amount()),
+                () -> assertEquals(CURRENCY, request.currency()),
+                () -> assertEquals(IDEMPOTENCY_KEY, request.idempotencyKey()),
+                () -> assertEquals(PAYMENT_METHOD_TOKEN, request.card()),
+                () -> assertEquals(GUEST_EMAIL, request.buyerEmail()),
+                () -> assertNull(request.buyerUserId(), "a guest has no user id"));
+    }
+
+    // The one charge request the checkout sent.
+    private PaymentRequestDTO theChargeRequest() {
+        ArgumentCaptor<PaymentRequestDTO> requests = ArgumentCaptor.forClass(PaymentRequestDTO.class);
+        verify(mockPaymentGateway).charge(requests.capture());
+        return requests.getValue();
+    }
+
    @Test
    void GivenTicketsFromDifferentEvents_WhenCheckout_ThenBuyAllTicketsAndSaveTicketsAndReceipt() {
            PaymentResultDTO paymentResult = new PaymentResultDTO(
