@@ -113,6 +113,8 @@ class CheckoutServiceTest {
     // as UTC wall time, the way the services read the injected clock (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+    // A discount is a fraction of a price, so prices are compared to within a hundredth of a cent.
+    private static final double PRICE_TOLERANCE = 0.0001;
 
     private ActiveOrderRepository mockActiveOrderRepo;
     private EventRepository mockEventRepo;
@@ -1110,6 +1112,34 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                 () -> assertNull(request.buyerUserId(), "a guest has no user id"));
     }
 
+    // An event's discount reaches the buyer: the charge, each ticket and each receipt line carry the discounted
+    // price, not the price the places were reserved at.
+    @Test
+    void GivenEventWithADiscount_WhenCheckout_ThenChargeTicketsAndReceiptLinesCarryTheDiscountedPrice() {
+        StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 10, 100.0);
+        Event event = createRealEventWithDiscount(EVENT_ID_1, zone, new DiscountPolicy(20));
+        ActiveOrder order = givenMemberCart();
+        holdStanding(order, EVENT_ID_1, zone, 2);
+        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+        givenSuccessfulPaymentAndIssuanceWithFlag(2);
+
+        CheckoutResultDTO result = checkoutService.checkoutMember(
+                VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+        double discounted = 80.0;   // 100 less 20%
+        assertEquals(2 * discounted, theChargeRequest().amount(), PRICE_TOLERANCE, "two places at 100, 20% off");
+        assertEquals(2 * discounted, result.totalCharged(), PRICE_TOLERANCE);
+        ArgumentCaptor<Ticket> tickets = ArgumentCaptor.forClass(Ticket.class);
+        verify(mockTicketRepo, times(2)).save(tickets.capture());
+        tickets.getAllValues().forEach(ticket -> assertEquals(discounted, ticket.getPrice(), PRICE_TOLERANCE));
+        ArgumentCaptor<OrderReceipt> receipt = ArgumentCaptor.forClass(OrderReceipt.class);
+        verify(mockOrderReceiptRepo).save(receipt.capture());
+        assertEquals(2 * discounted, receipt.getValue().getTotalAmount(), PRICE_TOLERANCE);
+        assertEquals(2, receipt.getValue().getReceiptLines().size());
+        receipt.getValue().getReceiptLines().forEach(
+                line -> assertEquals(discounted, line.getPriceAtReservation(), PRICE_TOLERANCE));
+    }
+
     // The one charge request the checkout sent.
     private PaymentRequestDTO theChargeRequest() {
         ArgumentCaptor<PaymentRequestDTO> requests = ArgumentCaptor.forClass(PaymentRequestDTO.class);
@@ -2086,6 +2116,23 @@ void GivenTicketsFromDifferentEventsAndSecondEventBelowMinPolicy_WhenCheckout_Th
 
         private Event createRealEventWithZone(int eventId, InventoryZone zone) {
         return createRealEventWithZones(eventId, zone);
+        }
+
+        private Event createRealEventWithDiscount(int eventId, InventoryZone zone, DiscountPolicy discount) {
+        return new Event(
+                eventId,
+                "Concert",
+                4.5,
+                List.of("Artist"),
+                EventCategory.CONCERT,
+                100,
+                EventStatus.ON_SALE,
+                new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(zone)),
+                List.of(new ShowDate(NOW.plusDays(10), NOW.plusDays(10).plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"),
+                acceptingPurchasePolicy(),
+                discount
+        );
         }
 
         private Event createRealEventWithZones(int eventId, InventoryZone... zones) {
