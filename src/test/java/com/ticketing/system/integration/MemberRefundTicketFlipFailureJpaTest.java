@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -45,6 +46,7 @@ import com.ticketing.system.shared.dto.CheckoutResultDTO;
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@DirtiesContext // its bean overrides give this class a context no other class reuses
 class MemberRefundTicketFlipFailureJpaTest {
 
     private static final List<String> BOUGHT_SEATS = SeatedShowFixture.SEATS.subList(0, 2);

@@ -340,6 +340,12 @@ About 3,100 test methods, organised by what they boot. Each name reads `Given…
 `-Pno-vaadin` skips Vaadin's frontend preparation, which the tests don't need. Use it for tests only,
 because the app then serves no views.
 
+Run tests from a shell that sets none of the variables `application.yml` reads, and none named after
+a property: most of them override the `test` profile. `PLATFORM_ADMIN_PASSWORD` fails the
+acceptance tests that sign in as the admin, and `SPRING_DATASOURCE_URL` with
+`SPRING_DATASOURCE_DRIVER_CLASS_NAME` would point the suite at that database. `application-test.yml`
+lists the ones known so far ([#261](https://github.com/NaimElijah/Ticketeer/issues/261)).
+
 **What gates a merge:** pull requests into `main` and `dev` need the CI check (`mvn -B verify` on
 Temurin 21, with the JVM in UTC) and CodeQL to pass. A second job, "Test in Asia/Jerusalem", runs
 the same suite with the JVM at UTC+2/+3, so code that depends on the server's zone fails there

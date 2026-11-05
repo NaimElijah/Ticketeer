@@ -84,6 +84,7 @@ import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.testutil.DefaultLocale;
 
 class EventManagementServiceTest {
 
@@ -576,14 +577,8 @@ class EventManagementServiceTest {
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                java.util.Locale defaultLocale = java.util.Locale.getDefault();
-                java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
-                try {
-                        eventService.editEventDetails(OWNER_TOKEN,
-                                        new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "music", null, null, null));
-                } finally {
-                        java.util.Locale.setDefault(defaultLocale);
-                }
+                DefaultLocale.runUnder(java.util.Locale.forLanguageTag("tr-TR"), () -> eventService.editEventDetails(OWNER_TOKEN,
+                                new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "music", null, null, null)));
 
                 assertEquals(EventCategory.MUSIC, event.getCategory());
         }

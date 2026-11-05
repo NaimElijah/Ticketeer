@@ -44,6 +44,7 @@ import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.dto.BarcodeDTO;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.TestTransactions.RecordingTransactionManager;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.ticketing.system.shared.dto.IssuanceRequestDTO;
@@ -121,6 +122,8 @@ class CheckoutServiceTest {
     private MarketGate mockMarketGate;
 
     private CheckoutService checkoutService;
+    // The checkout's own transactions (Phase 3), apart from the inventory service's.
+    private RecordingTransactionManager checkoutTransactions;
 
     private final String VALID_TOKEN = "valid-token";
     private final String INVALID_TOKEN = "invalid-token";
@@ -184,11 +187,12 @@ class CheckoutServiceTest {
         // onto the SAME mock event store (and a mock company port for policy), so the existing
         // event/zone/seat stubs still drive confirm/validate/price/policy one layer down. CheckoutService
         // keeps mockEventRepo for the Phase-3 buyer-lock.
+        checkoutTransactions = TestTransactions.recordingManager();
         checkoutService = new CheckoutService(
                 mockActiveOrderRepo,
                 mockEventRepo,
                 new InventoryService(mockEventRepo, CompanyRepositories.everyCompanyWithoutAPolicy(),
-                        TestTransactions.noOpManager()),
+                        TestTransactions.recordingManager()),
                 mockTicketRepo,
                 mockOrderReceiptRepo,
                 mockTicketIssuer,
@@ -197,7 +201,7 @@ class CheckoutServiceTest {
                 mockiSessionManager,
                 mockUserRepository,
                 mockMarketGate,
-                TestTransactions.noOpManager(),
+                checkoutTransactions,
                 Clock.fixed(T0, ZoneOffset.UTC)
         );
 
@@ -890,6 +894,8 @@ void GivenPhase3LosesOneVersionRace_WhenCheckout_ThenPhase3RunsAgainAndThePurcha
     verify(mockOrderReceiptRepo, times(2)).save(any());
     verify(mockPaymentGateway, times(1)).charge(any(PaymentRequestDTO.class));
     verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+    assertEquals(1, checkoutTransactions.rollbacks(), "the attempt that lost the race must roll back whole");
+    assertEquals(1, checkoutTransactions.commits(), "only the attempt that won commits");
 }
 
 // On PostgreSQL a sale can also be the victim of a deadlock, or wait out a lock: Phase 3 is just as safe to
@@ -923,6 +929,8 @@ void GivenPhase3LosesEveryVersionRace_WhenCheckout_ThenItFailsAfterThreeAttempts
             "the checkout fails on the race it kept losing, not on something else");
     verify(mockOrderReceiptRepo, times(3)).save(any());
     verify(mockPaymentGateway, times(1)).refund(PAYMENT_TRANSACTION_ID, 100.0);
+    assertEquals(3, checkoutTransactions.rollbacks(), "each of the three attempts must roll back whole");
+    assertEquals(0, checkoutTransactions.commits(), "no attempt may commit");
 }
 
 // The guest path runs its Phase 3 through the same bounded retry.
@@ -1668,6 +1676,9 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                                 
                 assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
                 assertTrue(activeOrder.isEmpty());
+                assertEquals(1, checkoutTransactions.rollbacks(),
+                                "Phase 3, which saved the tickets before the receipt failed, must roll back");
+                assertEquals(0, checkoutTransactions.commits(), "nothing of the failed sale may commit");
         }
 
         // Fix #3: a Phase-2 failure rollback over a multi-event cart must release every event
@@ -2658,8 +2669,7 @@ private AtomicBoolean trackReceiptSave() {
             assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
                     VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
 
-            assertEquals(List.of(), logs.eventsContaining(VALID_GUEST_SID),
-                    "a failed guest checkout must not log the guest's session id");
+            logs.assertNeverLogged(VALID_GUEST_SID);
         }
     }
 

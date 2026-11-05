@@ -55,14 +55,6 @@ public abstract class BaseDomainTest {
         return aggregate;
     }
 
-    /**
-     * Drop a previously-tracked aggregate (e.g. if a test legitimately leaves
-     * it in a state that {@code checkInvariants} would reject — rare).
-     */
-    protected final void untrack(InvariantChecked aggregate) {
-        tracked.remove(aggregate);
-    }
-
     @AfterEach
     final void verifyTrackedInvariants() {
         List<AssertionError> failures = new ArrayList<>();

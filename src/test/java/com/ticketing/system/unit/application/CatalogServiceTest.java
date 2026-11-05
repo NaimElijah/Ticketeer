@@ -58,6 +58,7 @@ import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.dto.SeatDTO;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.testutil.DefaultLocale;
 import com.ticketing.system.testutil.LogCapture;
 
 class CatalogServiceTest {
@@ -1169,12 +1170,6 @@ class CatalogServiceTest {
     }
 
     private static <T> T underTurkishLocale(java.util.function.Supplier<T> call) {
-        Locale defaultLocale = Locale.getDefault();
-        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
-        try {
-            return call.get();
-        } finally {
-            Locale.setDefault(defaultLocale);
-        }
+        return DefaultLocale.callUnder(Locale.forLanguageTag("tr-TR"), call);
     }
 }

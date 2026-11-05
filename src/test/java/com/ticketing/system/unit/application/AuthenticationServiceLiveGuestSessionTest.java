@@ -62,7 +62,7 @@ class AuthenticationServiceLiveGuestSessionTest {
                 sessions, mock(ISystemMetrics.class), clock, mock(AdminRepository.class),
                 sessionProperties, new LockoutProperties(5, 15L),
                 new IdentityProperties(List.of(), "admin"),
-                TestTransactions.noOpManager());
+                TestTransactions.recordingManager());
     }
 
     @Test

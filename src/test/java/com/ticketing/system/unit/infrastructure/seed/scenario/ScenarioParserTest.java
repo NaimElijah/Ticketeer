@@ -2,6 +2,7 @@ package com.ticketing.system.unit.infrastructure.seed.scenario;
 
 import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioCommand;
 import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioParser;
+import com.ticketing.system.testutil.DefaultLocale;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -92,14 +93,8 @@ class ScenarioParserTest {
 
     @Test
     void GivenTurkishDefaultLocale_WhenAnUpperCaseOperationIsParsed_ThenItIsTheLowerCaseOperation() {
-        Locale original = Locale.getDefault();
-        Locale.setDefault(Locale.forLanguageTag("tr"));
-        try {
-            ScenarioCommand c = parser.parse("LOGIN u1").get(0);
+        ScenarioCommand c = DefaultLocale.callUnder(Locale.forLanguageTag("tr"), () -> parser.parse("LOGIN u1").get(0));
 
-            assertEquals("login", c.op());
-        } finally {
-            Locale.setDefault(original);
-        }
+        assertEquals("login", c.op());
     }
 }

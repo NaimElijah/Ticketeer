@@ -19,7 +19,8 @@ import com.vaadin.flow.component.textfield.TextField;
 /**
  * {@link MdReplyBar} keeps what the user wrote until the reply is sent, names its input for
  * assistive technology, and flags a reply over the stored length instead of truncating it.
- * Constructed headless; {@link Button#click()} fires the same listener a user's click does.
+ * Constructed headless; {@link ViewHarness#click} fires the same listener a user's click does, and only on a
+ * Send button a user could click.
  */
 class MdReplyBarTest {
 
@@ -31,7 +32,7 @@ class MdReplyBarTest {
         TextField input = inputOf(bar);
         input.setValue(REPLY);
 
-        sendButtonOf(bar).click();
+        ViewHarness.click(sendButtonOf(bar));
 
         assertEquals(REPLY, input.getValue());
     }
@@ -43,7 +44,7 @@ class MdReplyBarTest {
         TextField input = inputOf(bar);
         input.setValue(REPLY);
 
-        sendButtonOf(bar).click();
+        ViewHarness.click(sendButtonOf(bar));
 
         assertEquals(List.of(REPLY), sent);
         assertTrue(input.isEmpty());
@@ -57,7 +58,7 @@ class MdReplyBarTest {
         String tooLong = "a".repeat(TextLimits.MAX_TEXT_LENGTH + 1);
         input.setValue(tooLong);
 
-        sendButtonOf(bar).click();
+        ViewHarness.click(sendButtonOf(bar));
 
         assertTrue(sent.isEmpty());
         assertEquals(tooLong, input.getValue());

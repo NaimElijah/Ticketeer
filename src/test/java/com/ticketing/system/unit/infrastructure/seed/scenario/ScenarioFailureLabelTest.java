@@ -1,6 +1,5 @@
 package com.ticketing.system.unit.infrastructure.seed.scenario;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,10 +68,10 @@ class ScenarioFailureLabelTest {
 
         int labelled = harnessLogs.eventsContaining(LABEL).size() + runnerLogs.eventsContaining(LABEL).size();
         assertTrue(labelled > 0, "precondition: the failed step must be logged under its label " + LABEL);
-        assertEquals(List.of(), harnessLogs.eventsContaining(PASSWORD), "the step's failure log must not carry the password");
-        assertEquals(List.of(), harnessLogs.eventsContaining(EMAIL), "the step's failure log must not carry the email");
-        assertEquals(List.of(), runnerLogs.eventsContaining(PASSWORD), "the scenario report must not carry the password");
-        assertEquals(List.of(), runnerLogs.eventsContaining(EMAIL), "the scenario report must not carry the email");
+        harnessLogs.assertNeverLogged(PASSWORD);
+        harnessLogs.assertNeverLogged(EMAIL);
+        runnerLogs.assertNeverLogged(PASSWORD);
+        runnerLogs.assertNeverLogged(EMAIL);
     }
 
     @Test
@@ -87,8 +85,8 @@ class ScenarioFailureLabelTest {
                 "the abort that stops the boot is logged, so it must not carry the password: " + abort.getMessage());
         assertFalse(abort.getMessage().contains(EMAIL),
                 "the abort that stops the boot is logged, so it must not carry the email: " + abort.getMessage());
-        assertEquals(List.of(), runnerLogs.eventsContaining(PASSWORD), "the scenario report must not carry the password");
-        assertEquals(List.of(), harnessLogs.eventsContaining(PASSWORD), "the step's failure log must not carry the password");
+        runnerLogs.assertNeverLogged(PASSWORD);
+        harnessLogs.assertNeverLogged(PASSWORD);
     }
 
     private ScenarioRunner runnerFor(boolean failFast) throws IOException {

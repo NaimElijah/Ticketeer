@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,15 @@ class AdminAcceptanceTest {
     @Autowired AdminRepository adminRepository;
     @Autowired StubPaymentGateway stubPaymentGateway;
     @Autowired StubTicketIssuer stubTicketIssuer;
+
+    // BEFORE_EACH_TEST_METHOD leaves the last method's context cached under the shared
+    // {test, memory} key, so a method that ends with an unreachable stub would make every
+    // later acceptance class fail its platform init.
+    @AfterEach
+    void restoreReachableStubs() {
+        stubPaymentGateway.setReachable(true);
+        stubTicketIssuer.setReachable(true);
+    }
 
     // UC-1
     @Test

@@ -12,9 +12,7 @@ import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.messaging.MdConvRow;
 import com.ticketing.system.ui.support.DisplayTime;
-import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.notification.Notification;
@@ -77,9 +75,13 @@ final class InboxViewHarness implements AutoCloseable {
             .orElse(null);
     }
 
-    /** Clicks {@code component} as the reader would. */
+    /**
+     * Clicks {@code component} as the reader would, which only a control that shows and is enabled allows.
+     *
+     * @throws AssertionError when {@code component} or an ancestor is hidden, or it is disabled
+     */
     static void click(Component component) {
-        ComponentUtil.fireEvent(component, new ClickEvent<>(component));
+        ViewHarness.click(component);
     }
 
     /** Every component of {@code type} under {@code root}, {@code root} included, in tree order. */

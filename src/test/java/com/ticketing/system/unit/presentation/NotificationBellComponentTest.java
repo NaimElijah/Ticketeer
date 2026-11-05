@@ -30,7 +30,8 @@ import com.vaadin.flow.component.html.NativeButton;
  * fail the same way (#187).
  *
  * <p>The bell's rows and its "Mark All Read" button are clicked through Vaadin's own event path
- * ({@link InboxViewHarness#click}); the store is the {@code markRead} function the bell is built with.
+ * ({@link InboxViewHarness#click}), once the bell's panel is open; the store is the {@code markRead}
+ * function the bell is built with.
  */
 class NotificationBellComponentTest {
 
@@ -62,7 +63,7 @@ class NotificationBellComponentTest {
         NotificationSession.store(List.of(unread("n1", 0)));
         NotificationBellComponent bell = bell(id -> new MarkReadOutcome.Success());
 
-        InboxViewHarness.click(rows(bell).get(0));
+        clickInPanel(rows(bell).get(0));
 
         assertEquals(Map.of("n1", READ), statuses());
         assertEquals(List.of(), harness.toasts());
@@ -73,7 +74,7 @@ class NotificationBellComponentTest {
         NotificationSession.store(List.of(unread("n1", 0)));
         NotificationBellComponent bell = bell(id -> new MarkReadOutcome.Failure(REFUSAL));
 
-        InboxViewHarness.click(rows(bell).get(0));
+        clickInPanel(rows(bell).get(0));
 
         assertEquals(Map.of("n1", UNREAD), statuses(), "a read the store refused must not clear the badge");
         assertEquals(List.of(REFUSAL), harness.toasts(), "the refusal's reason should be shown as a toast");
@@ -86,7 +87,7 @@ class NotificationBellComponentTest {
                 ? new MarkReadOutcome.Failure(REFUSAL)
                 : new MarkReadOutcome.Success());
 
-        InboxViewHarness.click(markAll(bell));
+        clickInPanel(markAll(bell));
 
         assertEquals(List.of("n1", "n2"), attempted, "mark-all should stop at the first refused read");
         assertEquals(Map.of("n1", READ, "n2", UNREAD, "n3", UNREAD), statuses());
@@ -100,7 +101,7 @@ class NotificationBellComponentTest {
         NotificationSession.store(List.of(unread("n1", 0), unread("n2", 1), unread("n3", 2)));
         NotificationBellComponent bell = bell(id -> new MarkReadOutcome.NotAuthenticated());
 
-        InboxViewHarness.click(markAll(bell));
+        clickInPanel(markAll(bell));
 
         assertEquals(List.of("n1"), attempted, "mark-all should stop after the first read that is not stored");
         assertEquals(Map.of("n1", UNREAD, "n2", UNREAD, "n3", UNREAD), statuses());
@@ -124,6 +125,12 @@ class NotificationBellComponentTest {
     // The bell lists the newest first, so minutesAgo orders the rows top to bottom.
     private static NotificationDTO unread(String id, int minutesAgo) {
         return new NotificationDTO(id, "DIRECT_MESSAGE", UNREAD, "Message " + id, NOW.minusMinutes(minutesAgo));
+    }
+
+    // A visitor opens the bell's panel before clicking anything in it.
+    private static void clickInPanel(NativeButton button) {
+        ViewHarness.openPopoverHolding(button.getElement());
+        InboxViewHarness.click(button);
     }
 
     private static List<NativeButton> rows(NotificationBellComponent bell) {

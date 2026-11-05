@@ -127,7 +127,7 @@ public class ReservationServiceTest {
         // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
         // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.recordingManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,

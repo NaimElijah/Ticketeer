@@ -103,10 +103,9 @@ class CommittedAdminPasswordRotationTest {
         List<String> logged = logs.eventsContaining("");
         assertTrue(logged.stream().anyMatch(event -> event.startsWith("WARN ")),
                 "replacing the default admin's password must be logged at WARN, but the log was " + logged);
-        assertEquals(List.of(), logs.eventsContaining(CONFIGURED_PASSWORD), "the configured password must not be logged");
-        assertEquals(List.of(), logs.eventsContaining(committed.getPasswordHash()), "the old hash must not be logged");
-        assertEquals(List.of(), logs.eventsContaining(admins.findById(DEFAULT_ADMIN_ID).getPasswordHash()),
-                "the new hash must not be logged");
+        logs.assertNeverLogged(CONFIGURED_PASSWORD);
+        logs.assertNeverLogged(committed.getPasswordHash());
+        logs.assertNeverLogged(admins.findById(DEFAULT_ADMIN_ID).getPasswordHash());
     }
 
     @Test

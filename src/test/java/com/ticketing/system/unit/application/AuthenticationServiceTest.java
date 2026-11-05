@@ -132,7 +132,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY, TestTransactions.noOpManager());
+                IDENTITY, TestTransactions.recordingManager());
         clearInvocations(mockHasher);
     }
 
@@ -748,7 +748,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY, TestTransactions.noOpManager());
+                IDENTITY, TestTransactions.recordingManager());
         String adminToken = realSessionManager.generateAdminToken(sharedId, "admin");
 
         assertEquals(OptionalInt.empty(), serviceOnRealSessions.liveMemberId(adminToken),
@@ -1146,7 +1146,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY, TestTransactions.noOpManager());
+                IDENTITY, TestTransactions.recordingManager());
     }
 
     // ----------------------------------------------------------------------
@@ -1324,7 +1324,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 clock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity,
-                TestTransactions.noOpManager());
+                TestTransactions.recordingManager());
         clearInvocations(mockHasher);
         return built;
     }

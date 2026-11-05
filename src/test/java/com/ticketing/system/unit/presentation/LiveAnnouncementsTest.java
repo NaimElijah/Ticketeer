@@ -327,6 +327,7 @@ class LiveAnnouncementsTest {
             .stream()
             .findFirst()
             .orElseThrow(() -> new AssertionError("no option \"" + option + "\" to choose"));
+        ViewHarness.openPopoverHolding(choice);
         A11y.activate(choice);
     }
 

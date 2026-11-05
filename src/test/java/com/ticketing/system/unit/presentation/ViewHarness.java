@@ -36,6 +36,7 @@ import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.internal.PendingJavaScriptInvocation;
 import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.DomEvent;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.function.DeploymentConfiguration;
@@ -232,8 +233,9 @@ final class ViewHarness implements AutoCloseable {
     /**
      * The element of every focus call queued so far, in order: the element parameter a script calls
      * {@code $N.focus(} on, as a component's {@code focus()} and {@code callJsFunction("focus")} do. A call
-     * counts only when its element can take focus when the call is sent (visible, enabled, and natively
-     * focusable or carrying a {@code tabindex}): the browser ignores focus on anything else. A call made on a
+     * counts only when its element can take focus when the call is sent (rendered, with no hidden ancestor and
+     * not inside a closed popover or dialog; enabled; and natively focusable or carrying a {@code tabindex}):
+     * the browser ignores focus on anything else. A call made on a
      * component that was detached before the response is dropped, as the browser never sees it, and a
      * script that focuses an element it looks up itself, such as the skip link's click handler, is no
      * focus call.
@@ -241,6 +243,25 @@ final class ViewHarness implements AutoCloseable {
     List<Element> focusTargets() {
         javaScriptCalls();
         return List.copyOf(focused);
+    }
+
+    /**
+     * The targets of the focus calls {@code action} queues, in the order sent. {@link #focusTargets()} says
+     * which calls count.
+     */
+    List<Element> focusCallsDuring(Runnable action) {
+        int before = focusTargets().size();
+        action.run();
+        List<Element> all = focusTargets();
+        return List.copyOf(all.subList(before, all.size()));
+    }
+
+    /**
+     * The element focus ends on after {@code focusCalls}, sent in that order: the last, since each call takes
+     * focus from the one before. Empty when there were none, so focus stayed where it was.
+     */
+    static Optional<Element> focusEndsOn(List<Element> focusCalls) {
+        return focusCalls.isEmpty() ? Optional.empty() : Optional.of(focusCalls.get(focusCalls.size() - 1));
     }
 
     // The element a call focuses: parameter N of its first "$N.focus(", when that element can take focus.
@@ -281,9 +302,16 @@ final class ViewHarness implements AutoCloseable {
         return cells;
     }
 
-    /** All text {@code root} shows: text nodes plus the text of every {@code innerHTML} property. */
+    /**
+     * All text {@code root} shows: the text nodes, then the text of every {@code innerHTML} property, of each
+     * element that is visible with all its ancestors up to {@code root}. A hidden element's text is left out,
+     * as the browser does not render it; a hidden {@code root} shows nothing. Hidden text still reaches the
+     * browser, so this cannot show that data stayed private: a test of that asserts the data never reached
+     * the component.
+     */
     static String text(Component root) {
-        StringBuilder text = new StringBuilder(root.getElement().getTextRecursively());
+        StringBuilder text = new StringBuilder();
+        appendShownText(root.getElement(), text);
         appendInnerHtml(root.getElement(), text);
         return text.toString();
     }
@@ -329,15 +357,75 @@ final class ViewHarness implements AutoCloseable {
             .orElseThrow(() -> new AssertionError("no " + type.getSimpleName() + " labelled \"" + label + "\""));
     }
 
-    /** Clicks {@code component} as the visitor would. */
+    /**
+     * Clicks {@code component} as the visitor would, which only a control that shows and is enabled allows.
+     *
+     * @throws AssertionError when {@code component} or an ancestor is hidden, or it is disabled
+     */
     static void click(Component component) {
+        A11y.requireActionable(component.getElement(), "click");
+        forceClick(component);
+    }
+
+    /**
+     * Fires a click on {@code component} whether or not it shows or is enabled. For a hidden or disabled
+     * control no request can do this: Flow drops a client event aimed at a hidden control, and at a disabled
+     * one unless its listener opts in with {@code DisabledUpdateMode.ALWAYS}. It does not check whether a
+     * popover or dialog is open. Only for a test that pins a view's own guard behind such a control, so the
+     * guard still holds if that ever changes.
+     */
+    static void forceClick(Component component) {
         ComponentUtil.fireEvent(component, new ClickEvent<>(component));
     }
 
-    /** Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}. */
+    /**
+     * Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}.
+     *
+     * @throws AssertionError when {@code element} or an ancestor is hidden, or it is disabled
+     */
     static void domClick(Element element) {
+        A11y.requireActionable(element, "click");
         element.getNode().getFeature(ElementListenerMap.class)
             .fireEvent(new DomEvent(element, "click", Json.createObject()));
+    }
+
+    /**
+     * Opens the popover holding {@code element} as a visitor does, by clicking its trigger, so a test can then
+     * reach what the popover shows. The browser opens a popover set to open on a click, and a server-side
+     * click does not, so such a popover is opened directly once its trigger proves to be one a visitor could
+     * click; any other trigger is clicked, and its listener must open the popover. An open popover is left as
+     * it is.
+     *
+     * @throws AssertionError when no popover holds {@code element}, it has no trigger or no visitor could
+     *     click it, or the click leaves the popover closed
+     */
+    static void openPopoverHolding(Element element) {
+        Popover popover = popoverHolding(element);
+        if (popover.isOpened()) {
+            return;
+        }
+        Component trigger = popover.getTarget();
+        if (trigger == null) {
+            throw new AssertionError(A11y.describe(element) + " sits in a popover with no trigger to open it");
+        }
+        if (popover.isOpenOnClick()) {
+            A11y.requireActionable(trigger.getElement(), "click");
+            popover.open();
+        } else {
+            click(trigger);
+        }
+        if (!popover.isOpened()) {
+            throw new AssertionError("clicking " + A11y.describe(trigger.getElement()) + " left its popover closed");
+        }
+    }
+
+    private static Popover popoverHolding(Element element) {
+        for (Element a = element; a != null; a = a.getParent()) {
+            if (a.getComponent().orElse(null) instanceof Popover popover) {
+                return popover;
+            }
+        }
+        throw new AssertionError("no popover holds " + A11y.describe(element));
     }
 
     /** {@code true} when {@code component} and every ancestor is visible. */
@@ -397,7 +485,20 @@ final class ViewHarness implements AutoCloseable {
             .forEach(row -> cells.add(row.getChild(column).getTextRecursively()));
     }
 
+    private static void appendShownText(Element element, StringBuilder text) {
+        if (element.isTextNode()) {
+            text.append(element.getText());
+            return;
+        }
+        if (element.isVisible()) {
+            element.getChildren().forEach(child -> appendShownText(child, text));
+        }
+    }
+
     private static void appendInnerHtml(Element element, StringBuilder text) {
+        if (element.isTextNode() || !element.isVisible()) {
+            return;
+        }
         if (element.hasProperty("innerHTML")) {
             text.append(' ').append(TAG.matcher(element.getProperty("innerHTML", "")).replaceAll(" "));
         }

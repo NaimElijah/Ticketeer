@@ -196,7 +196,9 @@ class PopoverTriggerA11yTest {
     }
 
     private static void choose(Component field, String label) {
-        A11y.activate(option(field, label));
+        Element option = option(field, label);
+        ViewHarness.openPopoverHolding(option);
+        A11y.activate(option);
     }
 
     private static void assertPopoverNamed(Component field, String label) {

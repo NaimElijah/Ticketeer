@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -41,6 +42,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.sales.adapter.out.persistence.SpringDataActiveOrderRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
@@ -70,11 +72,14 @@ import com.ticketing.system.organization.adapter.out.persistence.SpringDataProdu
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@DirtiesContext // its bean overrides give this class a context no other class reuses
 class ReservationConcurrencyTest {
 
     private static final int CONCURRENT_BUYERS = 8;
     private static final int COMPANY_ID = 100;
     private static final String CONTESTED_SEAT = "A1";
+    // How long a worker waits for the start signal: one that never gets it ends instead of waiting forever.
+    private static final int FIRE_TIMEOUT_SECONDS = 10;
 
     @Autowired
     private ReservationService reservationService;
@@ -168,27 +173,35 @@ class ReservationConcurrencyTest {
         AtomicInteger successes = new AtomicInteger();
         ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
 
-        for (int i = 0; i < CONCURRENT_BUYERS; i++) {
-            // Minted before the workers start, so the session writes are not part of the race.
-            String guestSessionId = authenticationService.startGuestSession().sessionId();
-            pool.submit(() -> {
-                try {
-                    armed.countDown();
-                    fire.await(); // release all workers at once to maximise the race window
-                    reservationService.reserveForGuest(guestSessionId, eventId, zoneId, selection);
-                    successes.incrementAndGet();
-                } catch (Throwable t) {
-                    failures.add(t);
-                } finally {
-                    finished.countDown();
-                }
-            });
-        }
+        try {
+            for (int i = 0; i < CONCURRENT_BUYERS; i++) {
+                // Minted before the workers start, so the session writes are not part of the race.
+                String guestSessionId = authenticationService.startGuestSession().sessionId();
+                pool.submit(() -> {
+                    try {
+                        armed.countDown();
+                        // release all workers at once to maximise the race window
+                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("the race was never started");
+                        }
+                        reservationService.reserveForGuest(guestSessionId, eventId, zoneId, selection);
+                        successes.incrementAndGet();
+                    } catch (Throwable t) {
+                        failures.add(t);
+                    } finally {
+                        finished.countDown();
+                    }
+                });
+            }
 
-        assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
-        fire.countDown();
-        assertTrue(finished.await(20, TimeUnit.SECONDS), "reservations did not finish in time");
-        pool.shutdownNow();
+            assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
+            fire.countDown();
+            assertTrue(finished.await(20, TimeUnit.SECONDS), "reservations did not finish in time");
+        } finally {
+            // Interrupts the workers even when an assertion above failed. One blocked where an interrupt does not
+            // reach, such as a database call, can still outlast the test.
+            pool.shutdownNow();
+        }
         return new Outcome(successes.get(), failures);
     }
 
@@ -198,6 +211,14 @@ class ReservationConcurrencyTest {
                         + " — more than one means an oversell)");
         assertEquals(CONCURRENT_BUYERS - 1, outcome.failures().size(),
                 "every other buyer must fail cleanly; failures: " + outcome.failures());
+        // A loser that read the zone before the winner committed fails the version check
+        // (ConcurrentReservationException); one that read it after is refused by the zone itself, which throws
+        // IllegalStateException until #219 retypes rule violations. A dropped connection, a lock timeout (both
+        // DataAccessExceptions) or an NPE is no clean loss.
+        List<Throwable> unclean = outcome.failures().stream()
+                .filter(failure -> !(failure instanceof DomainException || failure instanceof IllegalStateException))
+                .toList();
+        assertTrue(unclean.isEmpty(), "every other buyer must be refused by the domain, but got: " + unclean);
     }
 
     private InventoryZone reloadZone(Class<? extends InventoryZone> zoneType) {

@@ -175,15 +175,12 @@ class ConversationA11yTest {
 
     private void assertChoosingMovesFocusToHeading(Component view, String subject) {
         harness.attach(view);
-        int before = harness.focusTargets().size();
 
-        click(rows(view).get(1));
+        List<Element> focused = harness.focusCallsDuring(() -> click(rows(view).get(1)));
 
-        List<Element> all = harness.focusTargets();
-        List<Element> focused = all.subList(before, all.size());
-        assertTrue(focused.stream().anyMatch(t -> A11y.within(t, view.getElement())
-                && "heading".equals(A11y.role(t)) && A11y.text(t).contains(subject)),
-            "choosing a conversation must move focus to the heading of its detail, \"" + subject + "\", so the "
-                + "swap is announced; the focus calls were " + focused.stream().map(A11y::describe).toList());
+        assertTrue(ViewHarness.focusEndsOn(focused).filter(t -> A11y.within(t, view.getElement())
+                && "heading".equals(A11y.role(t)) && A11y.text(t).contains(subject)).isPresent(),
+            "choosing a conversation must end focus on the heading of its detail, \"" + subject + "\", so the "
+                + "swap is announced; the focus calls were, in order, " + focused.stream().map(A11y::describe).toList());
     }
 }

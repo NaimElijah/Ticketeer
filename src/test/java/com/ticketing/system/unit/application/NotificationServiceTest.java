@@ -44,6 +44,7 @@ import com.ticketing.system.notifications.application.service.NotificationServic
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
+import com.ticketing.system.testutil.DefaultLocale;
 
 class NotificationServiceTest {
 
@@ -264,16 +265,8 @@ class NotificationServiceTest {
 
     @Test
     void GivenATotalWithThreeDecimals_WhenNotifyPurchaseCompleted_ThenItReadsWithTwoDecimalsWhateverTheJvmLocale() {
-        Locale jvmLocale = Locale.getDefault();
-        // setDefault(Locale) resets every category, so the format category is put back on its own.
-        Locale jvmFormatLocale = Locale.getDefault(Locale.Category.FORMAT);
-        Locale.setDefault(COMMA_DECIMAL_LOCALE);
-        try {
-            service.notifyPurchaseCompleted(RECIPIENT, 35.982, List.of(1, 2));
-        } finally {
-            Locale.setDefault(jvmLocale);
-            Locale.setDefault(Locale.Category.FORMAT, jvmFormatLocale);
-        }
+        DefaultLocale.runUnder(COMMA_DECIMAL_LOCALE,
+            () -> service.notifyPurchaseCompleted(RECIPIENT, 35.982, List.of(1, 2)));
 
         assertEquals("Purchase completed successfully. Total price: 35.98", dispatchedMessage(),
                 "the total should read 35.98, two decimals with a point under any JVM locale");
