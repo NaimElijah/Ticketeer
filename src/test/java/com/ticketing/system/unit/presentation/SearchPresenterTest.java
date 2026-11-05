@@ -59,7 +59,7 @@ class SearchPresenterTest {
         try (LogCapture logs = LogCapture.of(SearchPresenter.class)) {
             presenter.search(CRED, query);
 
-            assertEquals(List.of(), logs.eventsContaining(query), "the search text must not be logged");
+            logs.assertNeverLogged(query);
         }
     }
 

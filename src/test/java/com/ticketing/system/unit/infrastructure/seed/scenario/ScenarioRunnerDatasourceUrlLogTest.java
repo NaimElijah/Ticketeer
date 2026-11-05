@@ -89,7 +89,7 @@ class ScenarioRunnerDatasourceUrlLogTest {
     }
 
     private void assertNoQueryLogged() {
-        assertEquals(List.of(), logs.eventsContaining(DB_PASSWORD), "the URL's password must not be logged");
-        assertEquals(List.of(), logs.eventsContaining(DB_USER), "the URL's query must not be logged");
+        logs.assertNeverLogged(DB_PASSWORD);
+        logs.assertNeverLogged(DB_USER);
     }
 }

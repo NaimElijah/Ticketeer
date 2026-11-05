@@ -1,8 +1,11 @@
 package com.ticketing.system.testutil;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.slf4j.LoggerFactory;
 
@@ -46,10 +49,13 @@ public final class LogCapture implements AutoCloseable {
 
     /**
      * Each recorded event that carries {@code text}, case-insensitively, in its formatted message or
-     * in the message of any throwable attached to it, rendered as {@code LEVEL message} for a failure
-     * message.
+     * in the message of any throwable attached to it, its causes and suppressed throwables included,
+     * rendered as {@code LEVEL message} for a failure message.
      *
-     * @param text the value that must not have been logged
+     * <p>An empty result also holds when the path logged nothing through this logger; to assert that
+     * a value is never logged, use {@link #assertNeverLogged(String)}, which refuses that case.
+     *
+     * @param text the value to look for
      * @return the matching events, empty when none carried it
      */
     public List<String> eventsContaining(String text) {
@@ -93,6 +99,25 @@ public final class LogCapture implements AutoCloseable {
                 .toList();
     }
 
+    /**
+     * Fails unless the path logged at least one event through this logger and none of them carries
+     * {@code text}, as {@link #eventsContaining(String)} matches it. With nothing recorded the absence
+     * proves nothing: the path may log through another logger, or not have run.
+     *
+     * @param text the value that must never have been logged
+     * @throws AssertionError when nothing was recorded, or when a recorded event carries {@code text}
+     */
+    public void assertNeverLogged(String text) {
+        if (eventCount() == 0) {
+            throw new AssertionError("nothing was logged through " + logger.getName()
+                    + ", so the absence of \"" + text + "\" proves nothing");
+        }
+        List<String> carrying = eventsContaining(text);
+        if (!carrying.isEmpty()) {
+            throw new AssertionError("\"" + text + "\" must never be logged, but these events carry it: " + carrying);
+        }
+    }
+
     /** How many events were recorded, so a test can show its path logged anything at all. */
     public int eventCount() {
         return appender.list.size();
@@ -100,10 +125,21 @@ public final class LogCapture implements AutoCloseable {
 
     private static String throwableMessages(IThrowableProxy throwable) {
         StringBuilder messages = new StringBuilder();
-        for (IThrowableProxy t = throwable; t != null; t = t.getCause()) {
-            messages.append(" | ").append(t.getMessage());
-        }
+        appendMessages(throwable, messages, Collections.newSetFromMap(new IdentityHashMap<>()));
         return messages.toString();
+    }
+
+    // A value can hide in a suppressed throwable (a close() failure, a second attempt) as well as a cause;
+    // the identity set stops a throwable that is its own ancestor from looping forever.
+    private static void appendMessages(IThrowableProxy t, StringBuilder messages, Set<IThrowableProxy> seen) {
+        if (t == null || !seen.add(t)) {
+            return;
+        }
+        messages.append(" | ").append(t.getMessage());
+        for (IThrowableProxy suppressed : t.getSuppressed()) {
+            appendMessages(suppressed, messages, seen);
+        }
+        appendMessages(t.getCause(), messages, seen);
     }
 
     @Override

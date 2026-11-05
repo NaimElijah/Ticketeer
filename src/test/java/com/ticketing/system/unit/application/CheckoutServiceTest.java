@@ -2658,8 +2658,7 @@ private AtomicBoolean trackReceiptSave() {
             assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
                     VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE));
 
-            assertEquals(List.of(), logs.eventsContaining(VALID_GUEST_SID),
-                    "a failed guest checkout must not log the guest's session id");
+            logs.assertNeverLogged(VALID_GUEST_SID);
         }
     }
 

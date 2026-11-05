@@ -882,8 +882,7 @@ class SystemAdminServiceTest {
         try (LogCapture log = LogCapture.of(SystemAdminService.class)) {
             assertThrows(UnauthorizedActionException.class, () -> service.viewGlobalHistory(null, filters));
 
-            assertTrue(log.eventsContaining("buyerUserId").isEmpty(),
-                    "a refused call must not log its filters, got " + log.eventsContaining("buyerUserId"));
+            log.assertNeverLogged("buyerUserId");
         }
     }
 
