@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -192,7 +193,7 @@ class CompanyMembershipServiceTest {
     void GivenNoLiveMemberToken_WhenListForUser_ThenInvalidToken(String token) {
         seedFounder(OTHER_USER_ID, COMPANY_ID, "Other's Company");
 
-        assertThrows(InvalidTokenException.class, () -> service.listForUser(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.listForUser(token));
     }
 
     @Test
@@ -212,7 +213,7 @@ class CompanyMembershipServiceTest {
     void GivenNoLiveMemberToken_WhenIsOwnerOf_ThenInvalidToken(String token) {
         seedFounder(OTHER_USER_ID, COMPANY_ID, "Other's Company");
 
-        assertThrows(InvalidTokenException.class, () -> service.isOwnerOf(token, COMPANY_ID));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.isOwnerOf(token, COMPANY_ID));
     }
 
     @Test

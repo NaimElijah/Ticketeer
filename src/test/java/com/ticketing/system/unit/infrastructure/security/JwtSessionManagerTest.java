@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -104,7 +105,7 @@ class JwtSessionManagerTest {
 
     @Test
     void GivenGarbageToken_WhenValidateToken_ThenThrowsInvalidToken() {
-        assertThrows(InvalidTokenException.class, () -> manager.validateToken("not.a.jwt"));
+        assertThrowsExactly(InvalidTokenException.class, () -> manager.validateToken("not.a.jwt"));
     }
 
     @Test
@@ -112,7 +113,7 @@ class JwtSessionManagerTest {
         String token = manager.generateToken(42, "alice");
         // Append extra bytes to the signature segment so HMAC verification fails.
         String tampered = token + "AAAA";
-        assertThrows(InvalidTokenException.class, () -> manager.validateToken(tampered));
+        assertThrowsExactly(InvalidTokenException.class, () -> manager.validateToken(tampered));
     }
 
     @Test
@@ -272,7 +273,7 @@ class JwtSessionManagerTest {
     void GivenInvalidatedToken_WhenValidateToken_ThenThrowsInvalidToken() {
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
-        assertThrows(InvalidTokenException.class, () -> manager.validateToken(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> manager.validateToken(token));
     }
 
     @Test
@@ -280,7 +281,7 @@ class JwtSessionManagerTest {
         // Revocation flows through parseClaims, so every reader respects it.
         String token = manager.generateToken(42, "alice");
         manager.invalidate(token);
-        assertThrows(InvalidTokenException.class, () -> manager.extractUserId(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> manager.extractUserId(token));
     }
 
     @Test
@@ -356,7 +357,7 @@ class JwtSessionManagerTest {
         // The other session for the same user survives.
         assertTrue(sessions.existsByUserId(42));
         assertTrue(manager.validateToken(tokenB));
-        assertThrows(InvalidTokenException.class, () -> manager.validateToken(tokenA));
+        assertThrowsExactly(InvalidTokenException.class, () -> manager.validateToken(tokenA));
     }
 
     @Test
@@ -427,7 +428,7 @@ class JwtSessionManagerTest {
         // Simulate sweeper deleting the only session for user 11 directly.
         sessionsForUser(11).forEach(s -> sessions.delete(s.getSessionId()));
 
-        assertThrows(InvalidTokenException.class, () -> manager.validateToken(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> manager.validateToken(token));
     }
 
     // ---------------------------------------------------------------------
@@ -493,7 +494,7 @@ class JwtSessionManagerTest {
         String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
         String token = signedToken(OTHER_MEMBER_ID, sidOf(memberToken), ROLE_MEMBER);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
                 "a token naming another user's session row must not validate");
     }
 
@@ -502,7 +503,7 @@ class JwtSessionManagerTest {
         String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
         String token = signedToken(OTHER_MEMBER_ID, sidOf(memberToken), ROLE_MEMBER);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.extractUserId(token),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractUserId(token),
                 "the user id must come from a token whose subject matches its session row");
     }
 
@@ -511,7 +512,7 @@ class JwtSessionManagerTest {
         String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
         String token = signedToken(MEMBER_ID, sidOf(memberToken), ROLE_ADMIN);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
                 "a role claim that does not match the row's kind must not validate");
     }
 
@@ -529,7 +530,7 @@ class JwtSessionManagerTest {
         String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
         String token = signedToken(ADMIN_ID, sidOf(adminToken), ROLE_MEMBER);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
                 "an admin session row must not back a member token");
     }
 
@@ -538,7 +539,7 @@ class JwtSessionManagerTest {
         String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
         String token = signedToken(ADMIN_ID, sidOf(adminToken), ROLE_MEMBER);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.extractUserId(token),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractUserId(token),
                 "an admin session row must not yield a member user id");
     }
 
@@ -547,7 +548,7 @@ class JwtSessionManagerTest {
         boundSessions.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
         String token = signedToken(MEMBER_ID, GUEST_SID, ROLE_MEMBER);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
                 "a guest session's credential is its raw id, never a JWT");
     }
 
@@ -580,7 +581,7 @@ class JwtSessionManagerTest {
     void GivenAdminToken_WhenValidateToken_ThenThrowsInvalidToken() {
         String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(adminToken),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(adminToken),
                 "member paths must reject an admin token as they reject a revoked one");
     }
 
@@ -588,7 +589,7 @@ class JwtSessionManagerTest {
     void GivenAdminToken_WhenExtractUserId_ThenThrowsInvalidToken() {
         String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.extractUserId(adminToken),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractUserId(adminToken),
                 "an admin id must never be read as a member id");
     }
 
@@ -642,7 +643,7 @@ class JwtSessionManagerTest {
     void GivenMemberToken_WhenValidateAdminToken_ThenThrowsInvalidToken() {
         String memberToken = boundManager.generateToken(ADMIN_ID, "alice");
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateAdminToken(memberToken),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateAdminToken(memberToken),
                 "a member token whose id equals an admin's must not pass as an admin token");
     }
 
@@ -650,7 +651,7 @@ class JwtSessionManagerTest {
     void GivenMemberToken_WhenExtractAdminId_ThenThrowsInvalidToken() {
         String memberToken = boundManager.generateToken(ADMIN_ID, "alice");
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.extractAdminId(memberToken),
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractAdminId(memberToken),
                 "a member id must never be read as an admin id");
     }
 
@@ -665,7 +666,7 @@ class JwtSessionManagerTest {
         String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
         boundManager.invalidate(adminToken);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateAdminToken(adminToken));
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateAdminToken(adminToken));
     }
 
     // ---- validateCredential's raw path accepts only a live guest row ----
@@ -789,7 +790,7 @@ class JwtSessionManagerTest {
         boundManager.invalidate(token);
         logs = LogCapture.of(JwtSessionManager.class);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
         assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid), "rejecting a revoked token must not log its id");
@@ -801,7 +802,7 @@ class JwtSessionManagerTest {
         String sid = sidOf(adminToken);
         logs = LogCapture.of(JwtSessionManager.class);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(adminToken));
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(adminToken));
 
         assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid),
@@ -814,7 +815,7 @@ class JwtSessionManagerTest {
         String token = signedToken(MEMBER_ID, GUEST_SID, ROLE_MEMBER);
         logs = LogCapture.of(JwtSessionManager.class);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
         assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(GUEST_SID),
@@ -828,7 +829,7 @@ class JwtSessionManagerTest {
         String token = signedToken(OTHER_MEMBER_ID, sid, ROLE_MEMBER);
         logs = LogCapture.of(JwtSessionManager.class);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
         assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid),
@@ -842,7 +843,7 @@ class JwtSessionManagerTest {
         String token = signedToken(MEMBER_ID, sid, ROLE_ADMIN);
         logs = LogCapture.of(JwtSessionManager.class);
 
-        assertThrows(InvalidTokenException.class, () -> boundManager.validateToken(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token));
 
         assertTrue(logs.eventCount() > 0, "control: this path logs, so the capture sees the manager's logger");
         assertEquals(java.util.List.of(), logs.eventsContaining(sid),

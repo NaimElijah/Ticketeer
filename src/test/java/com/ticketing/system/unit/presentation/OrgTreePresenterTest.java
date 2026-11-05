@@ -4,6 +4,7 @@ import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeD
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -56,8 +57,16 @@ class OrgTreePresenterTest {
     }
 
     @Test
-    void GivenAnAdminWithAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
-        when(service.adminListAllCompanies(ADMIN_TOKEN)).thenThrow(new InvalidTokenException("expired"));
+    void GivenAnAdminWithARevokedToken_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(service.adminListAllCompanies(ADMIN_TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertInstanceOf(OrgTreePresenter.Outcome.NotAuthenticated.class,
+                presenter.load(ADMIN_TOKEN, null, true));
+    }
+
+    @Test
+    void GivenAnAdminWhoseSessionExpired_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(service.adminListAllCompanies(ADMIN_TOKEN)).thenThrow(new SessionExpiredException());
 
         assertInstanceOf(OrgTreePresenter.Outcome.NotAuthenticated.class,
                 presenter.load(ADMIN_TOKEN, null, true));

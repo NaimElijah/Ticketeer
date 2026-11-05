@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Disabled;
@@ -236,7 +237,7 @@ class AuthAcceptanceTest {
 
         authService.logout(new LogoutRequestDTO(session.authToken().token()));
 
-        assertThrows(InvalidTokenException.class, () -> authService.validateToken(session.authToken().token()));
+        assertThrowsExactly(InvalidTokenException.class, () -> authService.validateToken(session.authToken().token()));
         // Session row gone — user must startGuestSession() to act again (D8 = L1).
         assertFalse(sessionRepository.findById(sid).isPresent());
     }

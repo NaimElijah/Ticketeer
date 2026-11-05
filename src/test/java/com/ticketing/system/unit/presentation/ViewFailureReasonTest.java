@@ -182,6 +182,18 @@ class ViewFailureReasonTest {
         assertPageShows(view, REASON);
     }
 
+    // The view is behind MEMBER_ACCOUNT, so only a token that died after the check reaches this outcome (#122).
+    @Test
+    void GivenTheSessionDiedBeforeTheProfileLoads_WhenTheMemberOpensTheProfile_ThenThePageSaysToSignInAgain() {
+        ViewHarness.signInMember();
+        MyProfilePresenter presenter = mock(MyProfilePresenter.class);
+        when(presenter.load()).thenReturn(new MyProfilePresenter.Outcome.NotAuthenticated());
+
+        MyProfileView view = new MyProfileView(presenter);
+
+        assertPageShows(view, "Your session has expired — please sign in again.");
+    }
+
     @Test
     void GivenTheCompanySearchFailsWithAReason_WhenTheMemberSearchesForACompany_ThenTheToastShowsTheReason() {
         NewInquiryPresenter presenter = mock(NewInquiryPresenter.class);

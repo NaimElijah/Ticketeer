@@ -2,6 +2,7 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -78,20 +79,20 @@ class MemberQueryServiceCredentialTest {
     void GivenAdminTokenWithAMembersId_WhenGetMemberProfile_ThenRefusedWithoutReadingAnyMember() {
         String adminToken = sessionManager.generateAdminToken(ADMIN_ID, "admin");
 
-        assertThrows(InvalidTokenException.class, () -> service.getMemberProfile(adminToken),
+        assertThrowsExactly(InvalidTokenException.class, () -> service.getMemberProfile(adminToken),
                 "an admin token names no member, even when a member has the admin's id");
         verifyNoInteractions(userRepository);
     }
 
     @Test
     void GivenMalformedToken_WhenGetMemberProfile_ThenRefusedWithoutReadingAnyMember() {
-        assertThrows(InvalidTokenException.class, () -> service.getMemberProfile("not.a.jwt"));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.getMemberProfile("not.a.jwt"));
         verifyNoInteractions(userRepository);
     }
 
     @Test
     void GivenNoToken_WhenGetMemberProfile_ThenRefusedWithoutReadingAnyMember() {
-        assertThrows(InvalidTokenException.class, () -> service.getMemberProfile(null),
+        assertThrowsExactly(InvalidTokenException.class, () -> service.getMemberProfile(null),
                 "a missing token must be refused like an invalid one");
         verifyNoInteractions(userRepository);
     }
@@ -125,20 +126,20 @@ class MemberQueryServiceCredentialTest {
     void GivenMemberToken_WhenSearchByUsername_ThenRefusedWithoutReadingAnyMember() {
         String memberToken = sessionManager.generateToken(MEMBER_ID, "alice");
 
-        assertThrows(InvalidTokenException.class, () -> service.searchByUsername(memberToken, "ali"),
+        assertThrowsExactly(InvalidTokenException.class, () -> service.searchByUsername(memberToken, "ali"),
                 "the member search is an admin capability (II.6.3.2)");
         verifyNoInteractions(userRepository);
     }
 
     @Test
     void GivenMalformedToken_WhenSearchByUsername_ThenRefusedWithoutReadingAnyMember() {
-        assertThrows(InvalidTokenException.class, () -> service.searchByUsername("not.a.jwt", "ali"));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.searchByUsername("not.a.jwt", "ali"));
         verifyNoInteractions(userRepository);
     }
 
     @Test
     void GivenNoToken_WhenSearchByUsername_ThenRefusedWithoutReadingAnyMember() {
-        assertThrows(InvalidTokenException.class, () -> service.searchByUsername(null, "ali"),
+        assertThrowsExactly(InvalidTokenException.class, () -> service.searchByUsername(null, "ali"),
                 "a missing token must be refused like an invalid one");
         verifyNoInteractions(userRepository);
     }
@@ -158,7 +159,7 @@ class MemberQueryServiceCredentialTest {
     void GivenMemberTokenAndBlankQuery_WhenSearchByUsername_ThenRefused() {
         String memberToken = sessionManager.generateToken(MEMBER_ID, "alice");
 
-        assertThrows(InvalidTokenException.class, () -> service.searchByUsername(memberToken, "   "),
+        assertThrowsExactly(InvalidTokenException.class, () -> service.searchByUsername(memberToken, "   "),
                 "a blank query must not answer before the token is checked");
         verifyNoInteractions(userRepository);
     }

@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import com.ticketing.system.shared.dto.MemberDTO;
 import com.ticketing.system.identity.application.service.MemberQueryService;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 
@@ -17,7 +18,7 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * does: an admin's session stores the admin's id, and admin and member ids share one id space
  * (ADR-012), so the stored id alone would show an admin the profile of the member with that id.
  * Degrades to {@link Outcome.NotAuthenticated} for anyone who is not a live member, an admin
- * included, and to {@link Outcome.Failure} on any service error.
+ * included, and to {@link Outcome.Failure} on any other service error.
  */
 @Component
 public class MyProfilePresenter {
@@ -36,7 +37,10 @@ public class MyProfilePresenter {
         record Failure(String reason) implements Outcome { }
     }
 
-    /** The live member's profile; NotAuthenticated for a guest or an admin, Failure on error. */
+    /**
+     * The live member's profile; NotAuthenticated for a guest, an admin, or a token revoked or expired
+     * since the check, Failure on any other error.
+     */
     public Outcome load() {
         String memberToken = identity.memberToken();
         if (memberToken == null) {
@@ -44,6 +48,8 @@ public class MyProfilePresenter {
         }
         try {
             return new Outcome.Success(memberQueryService.getMemberProfile(memberToken));
+        } catch (InvalidTokenException e) {
+            return new Outcome.NotAuthenticated();
         } catch (RuntimeException e) {
             return new Outcome.Failure(ServiceErrors.userMessageLogged(e, "load profile"));
         }
