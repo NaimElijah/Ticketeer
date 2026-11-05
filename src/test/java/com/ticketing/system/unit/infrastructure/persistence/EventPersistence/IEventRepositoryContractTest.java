@@ -26,6 +26,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.testutil.DefaultLocale;
 
 // Contract tests every EventRepository implementation must satisfy. Future JPA-backed
 // adapter will subclass this with its own newRepository() factory; tests are reused.
@@ -580,15 +581,9 @@ public abstract class IEventRepositoryContractTest {
     void GivenATurkishDefaultLocale_WhenSearchingByALowercaseCategory_ThenOnlyThatCategoryMatches() {
         eventRepo.save(buildEvent(1, "Jazz Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.MUSIC));
         eventRepo.save(buildEvent(2, "Hamlet", 4.5, 10, EventStatus.ON_SALE, EventCategory.THEATER));
-        java.util.Locale defaultLocale = java.util.Locale.getDefault();
-        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
-        List<Event> found;
-        try {
-            found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
-                    null, null, "music", null, null, null, null, null, null, null, null, null, null));
-        } finally {
-            java.util.Locale.setDefault(defaultLocale);
-        }
+        List<Event> found = DefaultLocale.callUnder(java.util.Locale.forLanguageTag("tr-TR"),
+                () -> eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                        null, null, "music", null, null, null, null, null, null, null, null, null, null)));
 
         assertEquals(List.of(1), found.stream().map(Event::getId).toList());
     }
