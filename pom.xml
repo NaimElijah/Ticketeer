@@ -101,7 +101,7 @@
 			<dependency>
 				<groupId>com.google.guava</groupId>
 				<artifactId>guava</artifactId>
-				<version>33.7.2-jre</version>
+				<version>33.8.0-jre</version>
 			</dependency>
 			<!-- Only Boot's BOM reads the Tomcat, Jackson, pgjdbc and Netty properties above, and
 			     Dependabot doesn't follow a property into a parent's BOM, so it would never propose
