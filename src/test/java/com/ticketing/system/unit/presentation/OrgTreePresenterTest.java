@@ -57,7 +57,7 @@ class OrgTreePresenterTest {
     }
 
     @Test
-    void GivenAnAdminWithAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
+    void GivenAnAdminWithARevokedToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(service.adminListAllCompanies(ADMIN_TOKEN)).thenThrow(new InvalidTokenException("revoked"));
 
         assertInstanceOf(OrgTreePresenter.Outcome.NotAuthenticated.class,

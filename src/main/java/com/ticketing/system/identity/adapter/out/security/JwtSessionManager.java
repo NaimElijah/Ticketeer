@@ -235,10 +235,8 @@ public class JwtSessionManager implements SessionManager {
         try {
             parseBoundClaims(token);
             return false;
-        } catch (SessionExpiredException e) {
-            return true;
         } catch (InvalidTokenException e) {
-            // Malformed / revoked tokens cannot be checked for expiry; treat as unusable.
+            // An expired token, and a malformed or revoked one that cannot be checked for expiry, is unusable.
             return true;
         }
     }
