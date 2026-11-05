@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
@@ -86,14 +87,14 @@ class DisplayTimeTest {
     @Test
     void GivenPurchaseRecordedAt1700Utc_WhenFormatted_ThenShownAt2000InJerusalem() {
         String shown = displayTime.format(LocalDateTime.of(2026, 7, 15, 17, 0),
-                DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm"));
+                DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH));
 
         assertThat(shown).isEqualTo("15 Jul 2026 · 20:00");
     }
 
     @Test
     void GivenClockAtMiddayUtc_WhenFormatNow_ThenShownAt1500InJerusalem() {
-        String shown = displayTime.formatNow(DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss"));
+        String shown = displayTime.formatNow(DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", Locale.ENGLISH));
 
         assertThat(shown).isEqualTo("15 Jul 2026 · 15:00:00");
     }

@@ -1168,13 +1168,19 @@ class CatalogServiceTest {
         assertEquals(1, found.size());
     }
 
+    // setDefault(Locale) also resets the DISPLAY and FORMAT categories, which can differ from the default (a
+    // Windows user's format locale does), so each is put back on its own for the tests that run after.
     private static <T> T underTurkishLocale(java.util.function.Supplier<T> call) {
         Locale defaultLocale = Locale.getDefault();
+        Locale displayLocale = Locale.getDefault(Locale.Category.DISPLAY);
+        Locale formatLocale = Locale.getDefault(Locale.Category.FORMAT);
         Locale.setDefault(Locale.forLanguageTag("tr-TR"));
         try {
             return call.get();
         } finally {
             Locale.setDefault(defaultLocale);
+            Locale.setDefault(Locale.Category.DISPLAY, displayLocale);
+            Locale.setDefault(Locale.Category.FORMAT, formatLocale);
         }
     }
 }

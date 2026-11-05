@@ -577,12 +577,17 @@ class EventManagementServiceTest {
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 java.util.Locale defaultLocale = java.util.Locale.getDefault();
+                // setDefault(Locale) also resets these two, which can differ from the default, so each is put back.
+                java.util.Locale displayLocale = java.util.Locale.getDefault(java.util.Locale.Category.DISPLAY);
+                java.util.Locale formatLocale = java.util.Locale.getDefault(java.util.Locale.Category.FORMAT);
                 java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
                 try {
                         eventService.editEventDetails(OWNER_TOKEN,
                                         new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "music", null, null, null));
                 } finally {
                         java.util.Locale.setDefault(defaultLocale);
+                        java.util.Locale.setDefault(java.util.Locale.Category.DISPLAY, displayLocale);
+                        java.util.Locale.setDefault(java.util.Locale.Category.FORMAT, formatLocale);
                 }
 
                 assertEquals(EventCategory.MUSIC, event.getCategory());
