@@ -356,7 +356,8 @@ final class A11y {
      * The text a screen reader reads from {@code e}'s content: text nodes and {@code innerHTML}, minus
      * anything hidden ({@code setVisible(false)}, which the browser does not render) and anything under
      * {@code aria-hidden="true"}; children separated by a space, whitespace collapsed. A hidden {@code e}
-     * reads as "".
+     * reads as "". Hidden text still reaches the browser, so this cannot show that data stayed private: a test
+     * of that asserts the data never reached the component.
      */
     static String text(Element e) {
         StringBuilder out = new StringBuilder();

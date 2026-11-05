@@ -304,7 +304,9 @@ final class ViewHarness implements AutoCloseable {
     /**
      * All text {@code root} shows: the text nodes, then the text of every {@code innerHTML} property, of each
      * element that is visible with all its ancestors up to {@code root}. A hidden element's text is left out,
-     * as the browser does not render it; a hidden {@code root} shows nothing.
+     * as the browser does not render it; a hidden {@code root} shows nothing. Hidden text still reaches the
+     * browser, so this cannot show that data stayed private: a test of that asserts the data never reached
+     * the component.
      */
     static String text(Component root) {
         StringBuilder text = new StringBuilder();
