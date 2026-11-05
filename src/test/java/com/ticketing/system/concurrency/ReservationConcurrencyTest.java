@@ -41,6 +41,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
+import com.ticketing.system.shared.exception.DomainException;
 import com.ticketing.system.sales.adapter.out.persistence.SpringDataActiveOrderRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepository;
 import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
@@ -198,6 +199,11 @@ class ReservationConcurrencyTest {
                         + " — more than one means an oversell)");
         assertEquals(CONCURRENT_BUYERS - 1, outcome.failures().size(),
                 "every other buyer must fail cleanly; failures: " + outcome.failures());
+        // A loser must be refused by the domain; a dropped connection, a lock timeout or an NPE is no clean loss.
+        List<Throwable> unclean = outcome.failures().stream()
+                .filter(failure -> !(failure instanceof DomainException))
+                .toList();
+        assertTrue(unclean.isEmpty(), "every other buyer must be refused with a DomainException, but got: " + unclean);
     }
 
     private InventoryZone reloadZone(Class<? extends InventoryZone> zoneType) {
