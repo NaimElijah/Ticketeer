@@ -82,6 +82,21 @@ class A11yFixtureTest {
             "a listener that will focus an element it looks up later is no focus call now");
     }
 
+    // Flow holds back a script whose own element is hidden, so a shown element runs this one.
+    @Test
+    void GivenAButtonInAHiddenContainer_WhenAScriptFocusesIt_ThenTheCallDoesNotCount() {
+        NativeButton pay = new NativeButton("Pay");
+        Div container = new Div();
+        NativeButton retry = new NativeButton("Retry");
+        container.add(retry);
+        container.setVisible(false);
+        page.add(pay, container);
+
+        pay.getElement().executeJs("$0.focus()", retry.getElement());
+
+        assertEquals(List.of(), harness.focusTargets(), "the browser ignores focus on a button it does not render");
+    }
+
     // ---- #189: focus ends on the last focus call ----
 
     @Test

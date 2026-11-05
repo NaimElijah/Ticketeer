@@ -163,6 +163,22 @@ final class A11y {
         return focusable(e);
     }
 
+    /**
+     * The nearest of {@code e} and its ancestors, up to {@code root} or else to the top, that the browser does
+     * not render, as it is set invisible.
+     */
+    static Optional<Element> unrendered(Element e, Element root) {
+        for (Element a = e; a != null; a = a.getParent()) {
+            if (!a.isVisible()) {
+                return Optional.of(a);
+            }
+            if (a.equals(root)) {
+                break;
+            }
+        }
+        return Optional.empty();
+    }
+
     static boolean disabled(Element e) {
         return e.hasAttribute("disabled") || e.getProperty("disabled", false) || !e.isEnabled();
     }
@@ -240,13 +256,14 @@ final class A11y {
     }
 
     /**
-     * {@code true} when a script's {@code focus()} on {@code e} takes effect: it is visible and enabled, and
-     * natively focusable or carries a {@code tabindex} of any value ({@code -1} included, which makes it
-     * focusable from a script without making it a Tab stop). The browser ignores focus on anything else,
-     * such as a heading without a {@code tabindex}.
+     * {@code true} when a script's {@code focus()} on {@code e} takes effect: the browser renders it and every
+     * ancestor, it is enabled, and it is natively focusable or carries a {@code tabindex} of any value
+     * ({@code -1} included, which makes it focusable from a script without making it a Tab stop). The browser
+     * ignores focus on anything else, such as a heading without a {@code tabindex} or a button in a hidden
+     * container.
      */
     static boolean scriptFocusable(Element e) {
-        if (!e.isVisible() || disabled(e)) {
+        if (unrendered(e, null).isPresent() || disabled(e)) {
             return false;
         }
         return tabIndex(e) != null || FOCUSABLE_TAGS.contains(e.getTag())
