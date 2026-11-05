@@ -80,10 +80,9 @@ class ScenarioRunnerAskMenuTest {
 
         assertTrue(stopped.getMessage().contains("demo") && stopped.getMessage().contains("review"),
                 "the message must name the valid choices, but was: " + stopped.getMessage());
-        // The runner logs nothing before the menu stops, so the log alone cannot show the scenario never ran;
-        // its steps would reach the scenario services.
+        // The runner logs nothing before the menu stops, so a not-logged check would pass whatever ran; the
+        // scenario's steps would reach the scenario services, so their absence shows it never ran.
         fixture.verifyNoScenarioStepRan();
-        assertTrue(logs.eventsContaining(DEFAULT_SCENARIO).isEmpty(), "the default scenario must not run");
     }
 
     // With no console the menu takes each question's default, as before: an answer that never came is not a typo.
