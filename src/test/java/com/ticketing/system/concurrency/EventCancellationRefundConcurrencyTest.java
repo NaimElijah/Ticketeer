@@ -158,7 +158,8 @@ class EventCancellationRefundConcurrencyTest {
             fire.countDown();
             assertTrue(finished.await(30, TimeUnit.SECONDS), "cancellation runs did not finish in time");
         } finally {
-            // Stops the workers even when an assertion above failed, so none outlives this test.
+            // Interrupts the workers even when an assertion above failed. One blocked where an interrupt does not
+            // reach, such as a database call, can still outlast the test.
             pool.shutdownNow();
         }
 

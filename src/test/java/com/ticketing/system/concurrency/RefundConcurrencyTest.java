@@ -135,7 +135,8 @@ class RefundConcurrencyTest {
             fire.countDown();
             assertTrue(finished.await(20, TimeUnit.SECONDS), "refunds did not finish in time");
         } finally {
-            // Stops the workers even when an assertion above failed, so none outlives this test.
+            // Interrupts the workers even when an assertion above failed. One blocked where an interrupt does not
+            // reach, such as a database call, can still outlast the test.
             pool.shutdownNow();
         }
 
