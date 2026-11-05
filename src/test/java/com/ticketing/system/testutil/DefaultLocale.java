@@ -15,21 +15,25 @@ public final class DefaultLocale {
     }
 
     /**
+     * Makes {@code locale} the default in every category until the returned swap is closed, for a swap that
+     * spans a test's set-up and tear-down.
+     *
+     * @return the swap, whose {@code close} puts back the default and each category as they were
+     */
+    public static Swap swapTo(Locale locale) {
+        Swap swap = new Swap();
+        Locale.setDefault(locale);
+        return swap;
+    }
+
+    /**
      * Calls {@code call} with {@code locale} as the default in every category.
      *
      * @return what {@code call} returns
      */
     public static <T> T callUnder(Locale locale, Supplier<T> call) {
-        Locale defaultLocale = Locale.getDefault();
-        Locale displayLocale = Locale.getDefault(Locale.Category.DISPLAY);
-        Locale formatLocale = Locale.getDefault(Locale.Category.FORMAT);
-        Locale.setDefault(locale);
-        try {
+        try (Swap swap = swapTo(locale)) {
             return call.get();
-        } finally {
-            Locale.setDefault(defaultLocale);
-            Locale.setDefault(Locale.Category.DISPLAY, displayLocale);
-            Locale.setDefault(Locale.Category.FORMAT, formatLocale);
         }
     }
 
@@ -39,5 +43,23 @@ public final class DefaultLocale {
             action.run();
             return null;
         });
+    }
+
+    /** The default locale and its two categories as they were before a swap; closing it puts them back. */
+    public static final class Swap implements AutoCloseable {
+
+        private final Locale defaultLocale = Locale.getDefault();
+        private final Locale displayLocale = Locale.getDefault(Locale.Category.DISPLAY);
+        private final Locale formatLocale = Locale.getDefault(Locale.Category.FORMAT);
+
+        private Swap() {
+        }
+
+        @Override
+        public void close() {
+            Locale.setDefault(defaultLocale);
+            Locale.setDefault(Locale.Category.DISPLAY, displayLocale);
+            Locale.setDefault(Locale.Category.FORMAT, formatLocale);
+        }
     }
 }
