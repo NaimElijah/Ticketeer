@@ -403,7 +403,12 @@ final class A11y {
                 d.append(' ').append(n).append("=\"").append(e.getAttribute(n)).append('"');
             }
         });
-        return d.append("> named \"").append(name(e)).append('"').toString();
+        // A hidden element's content reads as "", so a failure about one names it by the text it would show.
+        String named = name(e);
+        if (named.isEmpty() && !e.isVisible()) {
+            named = referencedText(e);
+        }
+        return d.append("> named \"").append(named).append('"').toString();
     }
 
     // ---- keyboard and DOM events ---------------------------------------------------------------

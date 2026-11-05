@@ -216,6 +216,17 @@ class A11yFixtureTest {
     }
 
     @Test
+    void GivenAHiddenButton_WhenClicked_ThenTheFailureNamesIt() {
+        NativeButton button = new NativeButton("Pay", e -> { });
+        button.setVisible(false);
+        page.add(button);
+
+        AssertionError refused = assertThrows(AssertionError.class, () -> ViewHarness.click(button));
+
+        assertTrue(refused.getMessage().contains("named \"Pay\""), "the failure must say which control: " + refused);
+    }
+
+    @Test
     void GivenAButtonInAHiddenContainer_WhenClicked_ThenTheClickFails() {
         Div container = new Div();
         container.setVisible(false);
