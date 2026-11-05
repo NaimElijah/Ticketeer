@@ -3026,6 +3026,27 @@ private AtomicBoolean trackReceiptSave() {
         }
     }
 
+    // Business rule 1: a buyer is charged only the declared amount. A gateway that charged another sum fails the
+    // purchase before any ticket, and checkout refunds what the gateway charged, not the sum it asked for.
+    @Test
+    void GivenGatewayChargesADifferentAmount_WhenCheckout_ThenPurchaseFails() {
+        arrangeMemberStandingCart();
+        double charged = 120.0;
+        when(mockPaymentGateway.charge(any())).thenReturn(
+                new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", charged, CURRENCY, NOW));
+
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        PaymentGatewayException mismatch = assertInstanceOf(PaymentGatewayException.class, failure.getCause(),
+                "the purchase must fail on the amount, but the cause was " + failure.getCause());
+        assertTrue(mismatch.getMessage().contains("payment amount mismatch"),
+                "the failure must name the amount, but was: " + mismatch.getMessage());
+        verify(mockTicketIssuer, never()).issue(any());
+        verify(mockOrderReceiptRepo, never()).save(any());
+        verify(mockPaymentGateway).refund(PAYMENT_TRANSACTION_ID, charged);
+    }
+
     // A race lost on every Phase 3 attempt is an expected outcome under load, not an operator's problem.
     @Test
     void GivenPhase3LosesEveryVersionRace_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {

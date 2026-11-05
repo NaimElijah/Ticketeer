@@ -1187,7 +1187,7 @@ public class CheckoutService {
         // Refund only if the sale did NOT commit. Once inventory is confirmed SOLD the purchase is final;
         // refunding here would leave the buyer holding tickets they were also refunded for (C2).
         if (paymentResult != null && !inventorySaleConfirmed) {
-            safelyRefundPayment(paymentResult, totalPrice);
+            safelyRefundPayment(paymentResult);
         }
 
         if (userId > 0) {
@@ -1235,7 +1235,7 @@ public class CheckoutService {
         // Refund only if the sale did NOT commit. Once inventory is confirmed SOLD the purchase is final;
         // refunding here would leave the buyer holding tickets they were also refunded for (C2).
         if (paymentResult != null && !inventorySaleConfirmed) {
-            safelyRefundPayment(paymentResult, totalPrice);
+            safelyRefundPayment(paymentResult);
         }
     }
 
@@ -1404,15 +1404,17 @@ public class CheckoutService {
     // (e.g. issues with the payment gateway), we log the error but do not let it
     // propagate further since we are already in an error handling flow and we want
     // to avoid masking the original failure with additional exceptions from the
-    // refund process.
-    private void safelyRefundPayment(PaymentResultDTO paymentResult, double totalPrice) {
+    // refund process. It refunds what the gateway says it charged: after an amount mismatch that differs
+    // from the order's total, and the buyer is owed what was taken.
+    private void safelyRefundPayment(PaymentResultDTO paymentResult) {
+        double charged = paymentResult.chargedAmount();
         try {
-            paymentGateway.refund(paymentResult.paymentTransactionId(), totalPrice);
+            paymentGateway.refund(paymentResult.paymentTransactionId(), charged);
         } catch (RuntimeException refundFailure) {
             log.error(
                     "Refund failed after checkout failure. transactionId={}, amount={}",
                     paymentResult.paymentTransactionId(),
-                    totalPrice,
+                    charged,
                     refundFailure);
         }
     }
