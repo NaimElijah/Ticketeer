@@ -329,13 +329,31 @@ final class ViewHarness implements AutoCloseable {
             .orElseThrow(() -> new AssertionError("no " + type.getSimpleName() + " labelled \"" + label + "\""));
     }
 
-    /** Clicks {@code component} as the visitor would. */
+    /**
+     * Clicks {@code component} as the visitor would, which only a control that shows and is enabled allows.
+     *
+     * @throws AssertionError when {@code component} or an ancestor is hidden, or it is disabled
+     */
     static void click(Component component) {
+        A11y.requireActionable(component.getElement(), "click");
+        forceClick(component);
+    }
+
+    /**
+     * Fires a click on {@code component} whether or not it shows or is enabled, as a crafted request could:
+     * only for a test of the server's own guard behind a control the browser would not let anyone click.
+     */
+    static void forceClick(Component component) {
         ComponentUtil.fireEvent(component, new ClickEvent<>(component));
     }
 
-    /** Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}. */
+    /**
+     * Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}.
+     *
+     * @throws AssertionError when {@code element} or an ancestor is hidden, or it is disabled
+     */
     static void domClick(Element element) {
+        A11y.requireActionable(element, "click");
         element.getNode().getFeature(ElementListenerMap.class)
             .fireEvent(new DomEvent(element, "click", Json.createObject()));
     }

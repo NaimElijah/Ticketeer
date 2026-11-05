@@ -405,13 +405,37 @@ final class A11y {
     /**
      * Activates {@code e} as a click does: through its component's click listeners when it has any (they
      * expect a click's coordinates, which a bare DOM event lacks), else as a DOM click.
+     *
+     * @throws AssertionError when {@code e} or an ancestor is hidden, or it is disabled, as no visitor can
+     *     click it then
      */
     static void activate(Element e) {
+        requireActionable(e, "activate");
         Optional<Component> component = e.getComponent();
         if (component.isPresent() && ComponentUtil.hasEventListener(component.get(), ClickEvent.class)) {
             ComponentUtil.fireEvent(component.get(), new ClickEvent<>(component.get()));
         } else {
             fire(e, "click");
+        }
+    }
+
+    /**
+     * Fails unless a visitor could {@code action} {@code e}: it and every ancestor is visible, and it is
+     * enabled. Flow hands a component event to its listeners whatever the component's state, while the
+     * browser never sends a click on a hidden or disabled control, so a test without this check would prove
+     * a control works that no visitor can use.
+     *
+     * @throws AssertionError naming the hidden element or the disabled state
+     */
+    static void requireActionable(Element e, String action) {
+        for (Element a = e; a != null; a = a.getParent()) {
+            if (!a.isVisible()) {
+                throw new AssertionError("cannot " + action + " " + describe(e) + ": "
+                    + (a.equals(e) ? "it is hidden" : "it sits in hidden " + describe(a)));
+            }
+        }
+        if (disabled(e)) {
+            throw new AssertionError("cannot " + action + " " + describe(e) + ": it is disabled");
         }
     }
 

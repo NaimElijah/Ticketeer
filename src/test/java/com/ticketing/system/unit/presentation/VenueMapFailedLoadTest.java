@@ -1,7 +1,7 @@
 package com.ticketing.system.unit.presentation;
 
 import static com.ticketing.system.unit.presentation.ViewHarness.button;
-import static com.ticketing.system.unit.presentation.ViewHarness.click;
+import static com.ticketing.system.unit.presentation.ViewHarness.forceClick;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,7 +93,8 @@ class VenueMapFailedLoadTest {
         VenueMapEditorView view = new VenueMapEditorView(presenter, LIMITS);
         view.beforeEnter(routeTo("eventId", "abc"));
 
-        click(button(view, "Save Map"));
+        // The browser never sends a click on the disabled Save Map; a crafted request could, and must save nothing.
+        forceClick(button(view, "Save Map"));
 
         assertTrue(harness.toasts().contains("Event not found."), "the visitor must be told: " + harness.toasts());
         assertFalse(button(view, "Save Map").getElement().isEnabled(), "Save Map must be disabled for no event");
