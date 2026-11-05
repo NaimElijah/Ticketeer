@@ -341,7 +341,7 @@ About 3,100 test methods, organised by what they boot. Each name reads `Given…
 because the app then serves no views.
 
 Run tests from a shell that sets none of the variables `application.yml` reads, and none named after
-a property: such a variable overrides the `test` profile. `PLATFORM_ADMIN_PASSWORD` fails the
+a property: most of them override the `test` profile. `PLATFORM_ADMIN_PASSWORD` fails the
 acceptance tests that sign in as the admin, and `SPRING_DATASOURCE_URL` with
 `SPRING_DATASOURCE_DRIVER_CLASS_NAME` would point the suite at that database. `application-test.yml`
 lists the ones known so far ([#261](https://github.com/NaimElijah/Ticketeer/issues/261)).
