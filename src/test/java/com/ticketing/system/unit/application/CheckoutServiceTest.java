@@ -439,7 +439,7 @@ void GivenTicketIssuanceFailsAfterPayment_WhenCheckout_ThenClearCartAndReturnTic
     when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class)))
             .thenReturn(null);
 
-    assertThrows(RuntimeException.class, () ->
+    RuntimeException failure = assertThrows(RuntimeException.class, () ->
             checkoutService.checkoutMember(
                     VALID_TOKEN,
                     IDEMPOTENCY_KEY,
@@ -447,6 +447,8 @@ void GivenTicketIssuanceFailsAfterPayment_WhenCheckout_ThenClearCartAndReturnTic
                     PAYMENT_METHOD_TOKEN
             )
     );
+
+    assertIssuanceRefusedAndChargeRefunded(failure, 100.0);
 
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
     assertEquals(5, zone.getAvailableAmount());
@@ -495,7 +497,7 @@ void GivenTicketIssuanceReturnsNullBarcodes_WhenCheckout_ThenClearCartAndReturnT
     when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class)))
             .thenReturn(issuanceResult);
 
-    assertThrows(RuntimeException.class, () ->
+    RuntimeException failure = assertThrows(RuntimeException.class, () ->
             checkoutService.checkoutMember(
                     VALID_TOKEN,
                     IDEMPOTENCY_KEY,
@@ -503,6 +505,8 @@ void GivenTicketIssuanceReturnsNullBarcodes_WhenCheckout_ThenClearCartAndReturnT
                     PAYMENT_METHOD_TOKEN
             )
     );
+
+    assertIssuanceRefusedAndChargeRefunded(failure, 100.0);
 
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
     assertEquals(5, zone.getAvailableAmount());
@@ -547,7 +551,7 @@ void GivenTicketIssuanceReturnsEmptyBarcodes_WhenCheckout_ThenClearCartAndReturn
     when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class)))
             .thenReturn(issuanceResult);
 
-    assertThrows(RuntimeException.class, () ->
+    RuntimeException failure = assertThrows(RuntimeException.class, () ->
             checkoutService.checkoutMember(
                     VALID_TOKEN,
                     IDEMPOTENCY_KEY,
@@ -555,6 +559,8 @@ void GivenTicketIssuanceReturnsEmptyBarcodes_WhenCheckout_ThenClearCartAndReturn
                     PAYMENT_METHOD_TOKEN
             )
     );
+
+    assertIssuanceRefusedAndChargeRefunded(failure, 100.0);
 
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
     assertEquals(5, zone.getAvailableAmount());
@@ -603,7 +609,7 @@ void GivenMultipleTicketsButIssuerReturnsLessBarcodes_WhenCheckout_ThenClearCart
     when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class)))
             .thenReturn(issuanceResult);
 
-    assertThrows(RuntimeException.class, () ->
+    RuntimeException failure = assertThrows(RuntimeException.class, () ->
             checkoutService.checkoutMember(
                     VALID_TOKEN,
                     IDEMPOTENCY_KEY,
@@ -611,6 +617,8 @@ void GivenMultipleTicketsButIssuerReturnsLessBarcodes_WhenCheckout_ThenClearCart
                     PAYMENT_METHOD_TOKEN
             )
     );
+
+    assertIssuanceRefusedAndChargeRefunded(failure, 450.0);
 
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_2, NOW));
@@ -624,6 +632,34 @@ void GivenMultipleTicketsButIssuerReturnsLessBarcodes_WhenCheckout_ThenClearCart
     assertEquals(0, zone2.getReservedAmount());
     assertEquals(0, zone3.getReservedAmount());
 }
+
+    // The count check holds both ways: more barcodes than tickets is refused too, not trimmed to fit.
+    @Test
+    void GivenOneTicketButIssuerReturnsTwoBarcodes_WhenCheckout_ThenTheChargeIsRefundedAndTheTicketReturnedToStock() {
+        StandingZone zone = arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any())).thenReturn(
+                new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", 100.0, CURRENCY, NOW));
+        when(mockTicketIssuer.issue(any())).thenReturn(new IssuanceResultDTO(ISSUANCE_TRANSACTION_ID, "issuer", NOW,
+                List.of(new BarcodeDTO("barcode-1", "QR"), new BarcodeDTO("barcode-2", "QR"))));
+
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+        assertIssuanceRefusedAndChargeRefunded(failure, 100.0);
+        assertTrue(mockActiveOrderRepo.getByUserId(USER_ID).isEmpty(), "the rollback must clear the cart");
+        assertEquals(5, zone.getAvailableAmount(), "the held place must be back in stock");
+    }
+
+    // The issuer answered and checkout refused the answer: the charge is refunded and nothing is saved.
+    private void assertIssuanceRefusedAndChargeRefunded(RuntimeException failure, double charged) {
+        assertInstanceOf(TicketIssuanceFailedException.class, failure.getCause(),
+                "the checkout must fail on the issuer's answer, but the cause was " + failure.getCause());
+        verify(mockTicketIssuer).issue(any());
+        verify(mockPaymentGateway).refund(PAYMENT_TRANSACTION_ID, charged);
+        verify(mockTicketRepo, never()).save(any());
+        verify(mockOrderReceiptRepo, never()).save(any());
+    }
+
    @Test
 void GivenPaymentRefundFails_WhenCheckout_ThenClearCartReturnTicketsToStockAndThrowRefundException() {
     ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
@@ -2834,8 +2870,8 @@ private AtomicBoolean trackReceiptSave() {
         }
     }
 
-    // One standing ticket of a real event, held by the member's real cart.
-    private void arrangeMemberStandingCart() {
+    // One standing ticket of a real event, held by the member's real cart; returns the zone, of five places.
+    private StandingZone arrangeMemberStandingCart() {
         StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
         Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
         ActiveOrder order = new ActiveOrder(USER_ID, NOW);
@@ -2843,6 +2879,7 @@ private AtomicBoolean trackReceiptSave() {
         zone.reserve(InventorySelection.standing(1, order.getOrderKey()));
         when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(order);
         when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+        return zone;
     }
 
     // One standing ticket of a real event, held by a live guest's real cart.
