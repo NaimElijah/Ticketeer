@@ -284,7 +284,7 @@ class FocusAfterRebuildTest {
         Optional<Element> endsOn = ViewHarness.focusEndsOn(focused);
         boolean onOpen = endsOn.isPresent()
             ? A11y.within(endsOn.get(), chip.getElement()) && "Open".equals(A11y.name(endsOn.get()))
-            : A11y.within(open, chip.getElement()) && A11y.focusable(open)
+            : A11y.within(open, chip.getElement()) && A11y.inTabOrder(open, chip.getElement())
                 && "true".equals(open.getAttribute("aria-checked"));
         assertTrue(onOpen, "after a toggle focus must stay on the option \"Open\": it must be "
             + "updated in place, or the rebuilt option focused last; the option is "
