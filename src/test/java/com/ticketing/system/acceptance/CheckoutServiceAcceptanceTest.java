@@ -137,7 +137,7 @@ public class CheckoutServiceAcceptanceTest {
         checkoutService = new CheckoutService(
                 activeOrderRepository,
                 eventRepository,
-                new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager()),
+                new InventoryService(eventRepository, companyRepository, TestTransactions.recordingManager()),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
@@ -146,7 +146,7 @@ public class CheckoutServiceAcceptanceTest {
                 sessionManager,
                 userRepository,
                 marketGate,
-                TestTransactions.noOpManager(),
+                TestTransactions.recordingManager(),
                 Clock.fixed(T0, ZoneOffset.UTC)
         );
 
@@ -923,7 +923,7 @@ public class CheckoutServiceAcceptanceTest {
         return new CheckoutService(
                 realRepo,
                 eventRepository,
-                new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager()),
+                new InventoryService(eventRepository, companyRepository, TestTransactions.recordingManager()),
                 ticketRepository,
                 orderReceiptRepository,
                 ticketIssuer,
@@ -932,7 +932,7 @@ public class CheckoutServiceAcceptanceTest {
                 sessionManager,
                 userRepository,
                 marketGate,
-                TestTransactions.noOpManager(),
+                TestTransactions.recordingManager(),
                 Clock.fixed(T0, ZoneOffset.UTC)
         );
     }

@@ -80,7 +80,7 @@ public class ReservationAcceptanceTests {
         // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
         // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
         InventoryService inventoryService = new InventoryService(
-                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.noOpManager());
+                eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.recordingManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,

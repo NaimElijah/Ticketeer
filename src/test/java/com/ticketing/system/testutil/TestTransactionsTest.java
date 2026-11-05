@@ -15,7 +15,7 @@ import com.ticketing.system.testutil.TestTransactions.RecordingTransactionManage
  */
 class TestTransactionsTest {
 
-    private final RecordingTransactionManager transactions = TestTransactions.noOpManager();
+    private final RecordingTransactionManager transactions = TestTransactions.recordingManager();
     private final TransactionTemplate template = new TransactionTemplate(transactions);
 
     @Test

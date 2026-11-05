@@ -68,7 +68,7 @@ class AuthenticationServiceLiveAdminIdTest {
                 sessions, mock(ISystemMetrics.class), clock, admins,
                 sessionProperties, new LockoutProperties(5, 15L),
                 new IdentityProperties(List.of(), "admin"),
-                TestTransactions.noOpManager());
+                TestTransactions.recordingManager());
     }
 
     @Test

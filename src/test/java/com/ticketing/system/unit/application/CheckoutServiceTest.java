@@ -187,12 +187,12 @@ class CheckoutServiceTest {
         // onto the SAME mock event store (and a mock company port for policy), so the existing
         // event/zone/seat stubs still drive confirm/validate/price/policy one layer down. CheckoutService
         // keeps mockEventRepo for the Phase-3 buyer-lock.
-        checkoutTransactions = TestTransactions.noOpManager();
+        checkoutTransactions = TestTransactions.recordingManager();
         checkoutService = new CheckoutService(
                 mockActiveOrderRepo,
                 mockEventRepo,
                 new InventoryService(mockEventRepo, CompanyRepositories.everyCompanyWithoutAPolicy(),
-                        TestTransactions.noOpManager()),
+                        TestTransactions.recordingManager()),
                 mockTicketRepo,
                 mockOrderReceiptRepo,
                 mockTicketIssuer,

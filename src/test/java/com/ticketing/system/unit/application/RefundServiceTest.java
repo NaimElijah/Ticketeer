@@ -83,7 +83,7 @@ class RefundServiceTest {
     @BeforeEach
     void setUp() {
         service = new RefundService(authenticationService, orderReceiptRepository, ticketRepository,
-                paymentGateway, inventoryPort, TestTransactions.noOpManager());
+                paymentGateway, inventoryPort, TestTransactions.recordingManager());
     }
 
     private static OrderReceipt memberReceiptWithCharge(int userId) {
@@ -275,7 +275,7 @@ class RefundServiceTest {
         Mockito.when(ticketRepo.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of());
         InventoryCommandPort inventoryPortMock = Mockito.mock(InventoryCommandPort.class);
 
-        RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, inventoryPortMock, TestTransactions.noOpManager());
+        RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, inventoryPortMock, TestTransactions.recordingManager());
 
         int threads = 2;
         CyclicBarrier barrier = new CyclicBarrier(threads);

@@ -71,7 +71,7 @@ class EventCancellationRefundServiceTest {
         paymentGateway = mock(PaymentGateway.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new EventCancellationRefundService(orderReceiptRepository, ticketRepository, paymentGateway,
-                eventPublisher, TestTransactions.noOpManager());
+                eventPublisher, TestTransactions.recordingManager());
 
         when(orderReceiptRepository.findByEventId(EVENT_ID)).thenAnswer(inv -> List.copyOf(receipts));
         when(orderReceiptRepository.findByOrderReceiptId(anyInt())).thenAnswer(inv -> receipts.stream()

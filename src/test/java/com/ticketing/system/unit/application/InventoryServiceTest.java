@@ -73,7 +73,7 @@ class InventoryServiceTest {
         // A sale loads its events through findForSale; each test stubs the events once, on findById.
         when(eventRepository.findForSale(anyInt())).thenAnswer(call -> eventRepository.findById(call.<Integer>getArgument(0)));
         companyRepository = mock(ProductionCompanyRepository.class);
-        service = new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager());
+        service = new InventoryService(eventRepository, companyRepository, TestTransactions.recordingManager());
     }
 
     // ---- reserve --------------------------------------------------------

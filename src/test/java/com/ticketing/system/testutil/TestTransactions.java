@@ -30,7 +30,7 @@ public final class TestTransactions {
      *
      * @return a fresh manager with both counts at zero
      */
-    public static RecordingTransactionManager noOpManager() {
+    public static RecordingTransactionManager recordingManager() {
         return new RecordingTransactionManager();
     }
 

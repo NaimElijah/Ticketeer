@@ -38,7 +38,7 @@ class InventoryServiceStockReturnFailureTest {
 
     private final EventRepository events = mock(EventRepository.class);
     private final InventoryCommandPort inventory =
-            new InventoryService(events, mock(ProductionCompanyRepository.class), TestTransactions.noOpManager());
+            new InventoryService(events, mock(ProductionCompanyRepository.class), TestTransactions.recordingManager());
 
     private LogCapture inventoryLog;
 
