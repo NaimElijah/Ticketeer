@@ -19,6 +19,7 @@ import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -40,6 +41,7 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@DirtiesContext // its bean overrides give this class a context no other class reuses
 class ConcurrentRegistrationJpaTest {
 
     private static final String USERNAME = "racing.registrant";

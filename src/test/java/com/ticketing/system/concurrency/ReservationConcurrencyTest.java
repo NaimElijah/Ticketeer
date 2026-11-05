@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -71,6 +72,7 @@ import com.ticketing.system.organization.adapter.out.persistence.SpringDataProdu
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@DirtiesContext // its bean overrides give this class a context no other class reuses
 class ReservationConcurrencyTest {
 
     private static final int CONCURRENT_BUYERS = 8;
