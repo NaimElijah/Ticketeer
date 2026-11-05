@@ -18,4 +18,15 @@ public class InvalidTokenException extends DomainException {
     public InvalidTokenException(String reason) {
         super("Invalid authentication token: " + reason);
     }
+
+    /**
+     * For a subtype with its own wording, which the public constructors would prefix with the bad-token
+     * text.
+     *
+     * @param message the whole message, as the user may read it
+     * @param cause   the failure behind it, or {@code null}
+     */
+    protected InvalidTokenException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }
