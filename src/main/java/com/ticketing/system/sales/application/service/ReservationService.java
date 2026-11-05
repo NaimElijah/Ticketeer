@@ -907,7 +907,7 @@ public class ReservationService {
     private boolean isLiveMemberToken(String credential) {
         try {
             return iSessionManager.validateToken(credential);
-        } catch (InvalidTokenException | SessionExpiredException notALiveMemberToken) {
+        } catch (InvalidTokenException notALiveMemberToken) {
             return false;
         }
     }

@@ -130,7 +130,7 @@ public class JwtSessionManager implements SessionManager {
         try {
             parseClaimsOfKind(token, SessionKind.ADMIN);
             return true;
-        } catch (InvalidTokenException | SessionExpiredException e) {
+        } catch (InvalidTokenException e) {
             return false;
         }
     }
@@ -175,7 +175,7 @@ public class JwtSessionManager implements SessionManager {
         if (looksLikeJwt(credential)) {
             try {
                 return validateToken(credential);
-            } catch (InvalidTokenException | SessionExpiredException e) {
+            } catch (InvalidTokenException e) {
                 return false;
             }
         }
@@ -271,7 +271,7 @@ public class JwtSessionManager implements SessionManager {
     public Optional<Integer> tryExtractUserId(String token) {
         try {
             return Optional.of(extractUserId(token));
-        } catch (InvalidTokenException | SessionExpiredException e) {
+        } catch (InvalidTokenException e) {
             return Optional.empty();
         }
     }

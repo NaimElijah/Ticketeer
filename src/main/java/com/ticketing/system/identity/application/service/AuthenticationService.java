@@ -53,7 +53,6 @@ import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.InvalidEmailFormatException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.ReservedUsernameException;
-import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.application.port.out.UserRepository;
@@ -216,7 +215,7 @@ public class AuthenticationService {
             return sessionManager.validateToken(token)
                     ? OptionalInt.of(sessionManager.extractUserId(token))
                     : OptionalInt.empty();
-        } catch (SessionExpiredException | InvalidTokenException e) {
+        } catch (InvalidTokenException e) {
             return OptionalInt.empty();
         }
     }
@@ -243,7 +242,7 @@ public class AuthenticationService {
             }
             int adminId = sessionManager.extractAdminId(token);
             return adminRepository.findById(adminId) == null ? OptionalInt.empty() : OptionalInt.of(adminId);
-        } catch (SessionExpiredException | InvalidTokenException e) {
+        } catch (InvalidTokenException e) {
             return OptionalInt.empty();
         }
     }

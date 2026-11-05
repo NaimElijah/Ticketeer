@@ -199,7 +199,7 @@ public final class Capabilities {
     private static List<UserCompanyDTO> readMemberships(String token, CompanyManagementService service) {
         try {
             return List.copyOf(service.listForUser(token));
-        } catch (InvalidTokenException | SessionExpiredException e) {
+        } catch (InvalidTokenException e) {
             // The token died after sign-in: revoked (InvalidTokenException) or expired (SessionExpiredException).
             // A dead token holds no memberships, so it gets no company capabilities; AuthBootstrap signs the
             // visitor out on their next navigation. Any other failure is not a dead token and propagates.

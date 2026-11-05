@@ -23,6 +23,7 @@ import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
 import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -262,7 +263,18 @@ class AdminInboxPresenterTest {
     void GivenAnExpiredToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
         OpenedThreads opened = new OpenedThreads();
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
-        doThrow(new InvalidTokenException("bad")).when(messaging).markConversationRead(anyString(), anyString());
+        doThrow(new SessionExpiredException()).when(messaging).markConversationRead(anyString(), anyString());
+
+        assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
+
+        assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
+        OpenedThreads opened = new OpenedThreads();
+        ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
+        doThrow(new InvalidTokenException("revoked")).when(messaging).markConversationRead(anyString(), anyString());
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
 
