@@ -129,8 +129,8 @@ public final class LogCapture implements AutoCloseable {
         return messages.toString();
     }
 
-    // A value can hide in a suppressed throwable (a close() failure, a second attempt) as well as a cause;
-    // the identity set stops a throwable that is its own ancestor from looping forever.
+    // A value can hide in a suppressed throwable (a close() failure, a second attempt) as well as a cause.
+    // Logback already ends a cycle when it builds the proxy; the identity set only skips one met twice.
     private static void appendMessages(IThrowableProxy t, StringBuilder messages, Set<IThrowableProxy> seen) {
         if (t == null || !seen.add(t)) {
             return;
