@@ -243,6 +243,25 @@ final class ViewHarness implements AutoCloseable {
         return List.copyOf(focused);
     }
 
+    /**
+     * The targets of the focus calls {@code action} queues, in the order sent. {@link #focusTargets()} says
+     * which calls count.
+     */
+    List<Element> focusCallsDuring(Runnable action) {
+        int before = focusTargets().size();
+        action.run();
+        List<Element> all = focusTargets();
+        return List.copyOf(all.subList(before, all.size()));
+    }
+
+    /**
+     * The element focus ends on after {@code focusCalls}, sent in that order: the last, since each call takes
+     * focus from the one before. Empty when there were none, so focus stayed where it was.
+     */
+    static Optional<Element> focusEndsOn(List<Element> focusCalls) {
+        return focusCalls.isEmpty() ? Optional.empty() : Optional.of(focusCalls.get(focusCalls.size() - 1));
+    }
+
     // The element a call focuses: parameter N of its first "$N.focus(", when that element can take focus.
     private static Optional<Element> focusTarget(List<Object> call) {
         Matcher focusCall = FOCUS_CALL.matcher(String.valueOf(call.get(0)));

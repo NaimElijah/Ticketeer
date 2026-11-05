@@ -9,6 +9,7 @@ import static com.ticketing.system.unit.presentation.ViewHarness.click;
 import static com.ticketing.system.unit.presentation.ViewHarness.field;
 import static com.ticketing.system.unit.presentation.ViewHarness.find;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,6 +19,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -216,7 +218,10 @@ class FocusAfterRebuildTest {
         AdminInboxView view = attached(new AdminInboxView(presenter, displayTime()));
         Component close = button(view, "Close Conversation");
 
-        assertFocusStaysOnPage(view, close, () -> click(close), "closing the conversation");
+        assertKeptOrMovesTo(view, close.getElement(), () -> click(close),
+            t -> "heading".equals(A11y.role(t)) && A11y.text(t).contains("Subject c1"),
+            "closing the conversation", "the conversation's heading, \"Subject c1\"");
+        verify(presenter).close(any(), eq("c1"));
     }
 
     // ---- SupportInboxView ----
@@ -261,7 +266,9 @@ class FocusAfterRebuildTest {
         AdminComplaintQueueView view = attached(new AdminComplaintQueueView(presenter, displayTime()));
         Element trigger = namedStartingWith(view, "Status");
 
-        assertFocusStaysOnPage(view, trigger, () -> choose(view, "Open"), "changing the status filter");
+        assertKeptOrMovesTo(view, trigger, () -> choose(view, "Open"), t -> "Status: Open".equals(A11y.name(t)),
+            "changing the status filter", "the status filter's trigger, now \"Status: Open\"");
+        verify(presenter).load(any(), eq("Open"));
     }
 
     // ---- LkFilterChip ----
@@ -271,17 +278,16 @@ class FocusAfterRebuildTest {
         LkFilterChip chip = attached(new LkFilterChip("Status", List.of("Open", "Closed")));
         Element open = option(chip, "Open");
 
-        int before = harness.focusTargets().size();
-        A11y.activate(open);
+        List<Element> focused = harness.focusCallsDuring(() -> A11y.activate(open));
 
-        boolean keptInPlace = A11y.within(open, chip.getElement()) && A11y.focusable(open)
-            && "true".equals(open.getAttribute("aria-checked"));
-        List<Element> focused = after(before);
-        boolean refocused = focused.stream().anyMatch(t -> A11y.within(t, chip.getElement())
-            && "Open".equals(A11y.name(t)));
-        assertTrue(keptInPlace || refocused, "after a toggle focus must stay on the option \"Open\": it must be "
-            + "updated in place, or the rebuilt option focused; the option is "
-            + (A11y.within(open, chip.getElement()) ? "still there" : "gone") + " and the focus calls were "
+        Optional<Element> endsOn = ViewHarness.focusEndsOn(focused);
+        boolean onOpen = endsOn.isPresent()
+            ? A11y.within(endsOn.get(), chip.getElement()) && "Open".equals(A11y.name(endsOn.get()))
+            : A11y.within(open, chip.getElement()) && A11y.focusable(open)
+                && "true".equals(open.getAttribute("aria-checked"));
+        assertTrue(onOpen, "after a toggle focus must stay on the option \"Open\": it must be "
+            + "updated in place, or the rebuilt option focused last; the option is "
+            + (A11y.within(open, chip.getElement()) ? "still there" : "gone") + " and the focus calls were, in order, "
             + focused.stream().map(A11y::describe).toList());
     }
 
@@ -341,10 +347,13 @@ class FocusAfterRebuildTest {
     @Test
     void GivenTwoArtistRows_WhenTheUserRemovesTheFirst_ThenFocusStaysOnTheRows() {
         LkTextRows rows = attached(new LkTextRows("Artists", "+ Add artist"));
-        click(button(rows, "+ Add artist"));
+        rows.setValues(List.of("Coldplay", "Adele"));
         Element remove = namedStartingWith(rows, "Remove");
 
-        assertFocusStaysOnPage(rows, remove, () -> A11y.activate(remove), "removing an artist row");
+        assertKeptOrMovesTo(rows, remove, () -> A11y.activate(remove),
+            t -> A11y.isButton(t) && "Remove Artists row 1".equals(A11y.name(t)),
+            "removing an artist row", "the Remove button of the row now first (\"Remove Artists row 1\")");
+        assertEquals(List.of("Adele"), rows.getValues(), "the first artist row must be gone");
     }
 
     // ---- OwnerDashboardView ----
@@ -364,7 +373,9 @@ class FocusAfterRebuildTest {
         OwnerDashboardView view = attached(new OwnerDashboardView(presenter));
         Element selector = namedStartingWith(view, "Company");
 
-        assertFocusStaysOnPage(view, selector, () -> choose(view, "Beta"), "switching company");
+        assertKeptOrMovesTo(view, selector, () -> choose(view, "Beta"), t -> "Company: Beta".equals(A11y.name(t)),
+            "switching company", "the company selector, now \"Company: Beta\"");
+        verify(presenter).loadFor(any(), eq(2));
     }
 
     // ---- CheckoutView ----
@@ -380,7 +391,9 @@ class FocusAfterRebuildTest {
         CheckoutView view = filledCheckout(presenter);
         NativeButton pay = payButton(view);
 
-        assertFocusStaysOnPage(view, pay, () -> click(pay), "a declined payment");
+        assertKeptOrMovesTo(view, pay.getElement(), () -> click(pay), t -> t.equals(pay.getElement()),
+            "a declined payment", "Pay");
+        verify(presenter).payAsMember(any(), any(), any(), any(), any(), any());
     }
 
     // ---- EventDetailsView zone map (review A3) ----
@@ -555,14 +568,12 @@ class FocusAfterRebuildTest {
     // The pick rebuilds the option list, so focus must be moved to an element on the page outside the
     // list's popover: the trigger, in practice.
     private void assertFocusLeavesTheList(Component root, Runnable pick, String what) {
-        int before = harness.focusTargets().size();
+        List<Element> focused = harness.focusCallsDuring(pick);
 
-        pick.run();
-
-        List<Element> focused = after(before);
-        assertTrue(focused.stream().anyMatch(t -> A11y.within(t, root.getElement()) && !inPopover(t)),
-            "after " + what + " the option pressed is gone with the rebuilt list, so focus must move to an element "
-                + "on the page outside the list (its trigger); the page asked to focus "
+        Optional<Element> endsOn = ViewHarness.focusEndsOn(focused);
+        assertTrue(endsOn.filter(t -> A11y.within(t, root.getElement()) && !inPopover(t)).isPresent(),
+            "after " + what + " the option pressed is gone with the rebuilt list, so focus must end on an element "
+                + "on the page outside the list (its trigger); the page asked to focus, in order, "
                 + focused.stream().map(A11y::describe).toList());
     }
 
@@ -573,39 +584,20 @@ class FocusAfterRebuildTest {
             why + ", so its popover must close after a pick; it is still open");
     }
 
-    // The control used is still on the page, focusable and as the predicate wants it (updated in place, so
-    // the browser kept focus on it), or the page asked to focus such an element.
+    // Focus ends on an element the predicate accepts: the last focus call's target when the action made any,
+    // since the browser ends there, else the control used, when it is still on the page, focusable and as the
+    // predicate wants it (updated in place, so the browser kept focus on it).
     private void assertKeptOrMovesTo(Component root, Element used, Runnable action, Predicate<Element> isTarget,
                                      String what, String target) {
-        int before = harness.focusTargets().size();
+        List<Element> focused = harness.focusCallsDuring(action);
 
-        action.run();
-
-        boolean keptInPlace = A11y.within(used, root.getElement()) && A11y.inTabOrder(used, root.getElement())
-            && isTarget.test(used);
-        List<Element> focused = after(before);
-        boolean moved = focused.stream().anyMatch(t -> A11y.within(t, root.getElement()) && isTarget.test(t));
-        assertTrue(keptInPlace || moved, "after " + what + " focus must stay on " + target + ": the control used is "
+        Optional<Element> endsOn = ViewHarness.focusEndsOn(focused);
+        boolean onTarget = endsOn.isPresent()
+            ? A11y.within(endsOn.get(), root.getElement()) && isTarget.test(endsOn.get())
+            : A11y.within(used, root.getElement()) && A11y.inTabOrder(used, root.getElement()) && isTarget.test(used);
+        assertTrue(onTarget, "after " + what + " focus must end on " + target + ": the control used is "
             + (A11y.within(used, root.getElement()) ? "still there as " + A11y.describe(used) : "gone")
-            + ", and the page asked to focus " + focused.stream().map(A11y::describe).toList());
-    }
-
-    private void assertFocusStaysOnPage(Component root, Component used, Runnable action, String what) {
-        assertFocusStaysOnPage(root, used.getElement(), action, what);
-    }
-
-    private void assertFocusStaysOnPage(Component root, Element used, Runnable action, String what) {
-        int before = harness.focusTargets().size();
-
-        action.run();
-
-        boolean keptInPlace = A11y.within(used, root.getElement()) && A11y.inTabOrder(used, root.getElement());
-        List<Element> focused = after(before);
-        boolean refocused = focused.stream().anyMatch(t -> A11y.within(t, root.getElement()));
-        assertTrue(keptInPlace || refocused, "after " + what + " focus must stay on the page: the control used ("
-            + A11y.describe(used) + ") is " + (A11y.within(used, root.getElement()) ? "still there but not focusable"
-            : "gone") + ", and the page asked to focus " + focused.stream().map(A11y::describe).toList()
-            + " (an element still on the page is needed)");
+            + ", and the page asked to focus, in order, " + focused.stream().map(A11y::describe).toList());
     }
 
     // The reload replaces the reply bar, so focus must reach the new bar's field, not only the page.
@@ -621,22 +613,16 @@ class FocusAfterRebuildTest {
             "sending a reply", "the reply field of the reply bar now on the page");
     }
 
-    // After the action the page asked to focus an element on it that the predicate accepts.
+    // The last focus call the action made, where the browser ends, is to an element on the page that the
+    // predicate accepts.
     private void assertFocusMovesTo(Component root, Runnable action, Predicate<Element> isTarget, String what,
                                     String target) {
-        int before = harness.focusTargets().size();
+        List<Element> focused = harness.focusCallsDuring(action);
 
-        action.run();
-
-        List<Element> focused = after(before);
-        assertTrue(focused.stream().anyMatch(t -> A11y.within(t, root.getElement()) && isTarget.test(t)),
-            "after " + what + " focus must move to " + target + "; the page asked to focus "
+        Optional<Element> endsOn = ViewHarness.focusEndsOn(focused);
+        assertTrue(endsOn.filter(t -> A11y.within(t, root.getElement()) && isTarget.test(t)).isPresent(),
+            "after " + what + " focus must end on " + target + "; the page asked to focus, in order, "
                 + focused.stream().map(A11y::describe).toList());
-    }
-
-    private List<Element> after(int before) {
-        List<Element> all = harness.focusTargets();
-        return new ArrayList<>(all.subList(before, all.size()));
     }
 
     // ---- arrangement -----------------------------------------------------------------------------

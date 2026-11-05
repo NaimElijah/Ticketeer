@@ -82,6 +82,36 @@ class A11yFixtureTest {
             "a listener that will focus an element it looks up later is no focus call now");
     }
 
+    // ---- #189: focus ends on the last focus call ----
+
+    @Test
+    void GivenAnActionThatFocusesTwoElements_WhenItsFocusCallsAreRead_ThenFocusEndsOnTheSecond() {
+        NativeButton first = new NativeButton("Remove Hamlet");
+        NativeButton second = new NativeButton("Your cart");
+        page.add(first, second);
+
+        List<Element> focused = harness.focusCallsDuring(() -> {
+            first.focus();
+            second.focus();
+        });
+
+        assertEquals(List.of(first.getElement(), second.getElement()), focused, "both calls, in the order sent");
+        assertEquals(second.getElement(), ViewHarness.focusEndsOn(focused).orElseThrow(),
+            "each focus call takes focus from the one before, so the browser ends on the last");
+    }
+
+    @Test
+    void GivenAnActionThatFocusesNothing_WhenItsFocusCallsAreRead_ThenFocusEndsNowhereNew() {
+        NativeButton earlier = new NativeButton("Earlier");
+        page.add(earlier);
+        earlier.focus();
+
+        List<Element> focused = harness.focusCallsDuring(() -> { });
+
+        assertEquals(List.of(), focused, "a focus call made before the action is not the action's");
+        assertTrue(ViewHarness.focusEndsOn(focused).isEmpty());
+    }
+
     // ---- focusTargets: the target must be able to take focus ----
 
     @Test
