@@ -15,7 +15,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -37,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 
 import ch.qos.logback.classic.Level;
 
@@ -87,6 +85,7 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
 import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
@@ -191,10 +190,18 @@ class CheckoutServiceTest {
         // test stubs on findById drive confirm/validate/price/policy one layer down. CheckoutService
         // keeps mockEventRepo for the Phase-3 buyer-lock.
         checkoutTransactions = TestTransactions.recordingManager();
-        checkoutService = new CheckoutService(
+        checkoutService = checkoutServiceOn(mockEventRepo);
+
+        when(mockiSessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
+        when(mockiSessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+    }
+
+    // A checkout service whose inventory and buyer locks both use the given event store.
+    private CheckoutService checkoutServiceOn(EventRepository events) {
+        return new CheckoutService(
                 mockActiveOrderRepo,
-                mockEventRepo,
-                new InventoryService(mockEventRepo, CompanyRepositories.everyCompanyWithoutAPolicy(),
+                events,
+                new InventoryService(events, CompanyRepositories.everyCompanyWithoutAPolicy(),
                         TestTransactions.recordingManager()),
                 mockTicketRepo,
                 mockOrderReceiptRepo,
@@ -207,9 +214,6 @@ class CheckoutServiceTest {
                 checkoutTransactions,
                 Clock.fixed(T0, ZoneOffset.UTC)
         );
-
-        when(mockiSessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(mockiSessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
     }
 
     // --- UC-32 / I.2.1: sales gated on an OPEN market ---
@@ -370,8 +374,10 @@ void GivenOrderCannotCheckout_WhenCheckout_ThenClearCartAndReturnTicketsToStock(
     assertEquals(0, zone.getReservedAmount());
 }
 
+   // PaymentGateway throws on a decline and never answers null; this pins checkout's defence against an adapter
+   // that does: the answer is refused as a gateway failure, and nothing was charged to refund.
    @Test
-void GivenPaymentFails_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
+void GivenGatewayAnswersNull_WhenCheckout_ThenRefusedAsAGatewayFailureAndTicketReturnedToStock() {
     ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
@@ -391,7 +397,7 @@ void GivenPaymentFails_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
     when(mockPaymentGateway.charge(any(PaymentRequestDTO.class)))
             .thenReturn(null);
 
-    assertThrows(RuntimeException.class, () ->
+    RuntimeException failure = assertThrows(RuntimeException.class, () ->
             checkoutService.checkoutMember(
                     VALID_TOKEN,
                     IDEMPOTENCY_KEY,
@@ -400,45 +406,40 @@ void GivenPaymentFails_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
             )
     );
 
+    assertInstanceOf(PaymentGatewayException.class, failure.getCause(),
+            "a null answer must be refused as a gateway failure, but the cause was " + failure.getCause());
+    verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
     assertEquals(5, zone.getAvailableAmount());
     assertEquals(0, zone.getReservedAmount());
 }
 
     // Regression for the non-atomic rollback (atomic checkout-failure rollback): on a Phase-2 payment failure
-    // the inventory return must run UNDER the event lock, so eventRepository.save is legal (never throws the
-    // "Event must be locked before saving" guard) and the loop reaches the cart clear. We assert the lock is
-    // held across the save via Mockito InOrder: lockForBuyerOperation -> save -> unlockBuyerOperation.
+    // the inventory return must run UNDER the event lock. The in-memory event store refuses to save an event
+    // its caller has not locked, so a return outside the lock fails, and the rollback then keeps the cart's
+    // lines instead of clearing them.
     @Test
     void GivenPaymentFails_WhenCheckout_ThenInventoryReturnedUnderEventLock() {
-        ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
-        String orderKey = activeOrder.getOrderKey();
-        InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
-        zone.reserve(InventorySelection.standing(1, orderKey));
-        activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW);
+        MemoryEventRepository lockCheckingEvents = new MemoryEventRepository();
+        StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
+        lockCheckingEvents.save(createRealEventWithZone(EVENT_ID_1, zone));   // a new event needs no lock
+        ActiveOrder activeOrder = givenMemberCart();
+        holdStanding(activeOrder, EVENT_ID_1, zone, 1);
+        when(mockPaymentGateway.charge(any(PaymentRequestDTO.class)))
+                .thenThrow(new PaymentGatewayException("payment declined by gateway"));
 
-        Event event = createRealEventWithZone(EVENT_ID_1, zone);
-        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
-        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
-        when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(null);   // Phase-2 payment failure
+        assertThrows(RuntimeException.class, () -> checkoutServiceOn(lockCheckingEvents)
+                .checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
-
-        // Inventory + cart were rolled back...
-        assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
+        assertTrue(activeOrder.isEmpty(), "the rollback must reach the cart clear");
         assertEquals(5, zone.getAvailableAmount());
-
-        // ...with the event lock held across the save (and released after), proving the save can't hit the
-        // "must be locked" guard and the loop reaches the cart clear.
-        InOrder inOrder = inOrder(mockEventRepo);
-        inOrder.verify(mockEventRepo).lockForBuyerOperation(EVENT_ID_1);
-        inOrder.verify(mockEventRepo).save(event);
-        inOrder.verify(mockEventRepo).unlockBuyerOperation(EVENT_ID_1);
+        assertEquals(0, zone.getReservedAmount());
     }
 
+    // TicketIssuer throws on failure and never answers null; this pins checkout's defence against an adapter that
+    // does: the answer is refused as an issuance failure, and the charge is refunded.
     @Test
-void GivenTicketIssuanceFailsAfterPayment_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
+void GivenIssuerAnswersNullAfterPayment_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
     ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
@@ -1385,7 +1386,8 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                 when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
                 when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(realEvent);
                 when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult);
-                when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(null);
+                when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class)))
+                                .thenThrow(new TicketIssuanceFailedException("rejected by the issuer"));
 
                 assertThrows(RuntimeException.class, () -> checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY,
                                 CURRENCY, PAYMENT_METHOD_TOKEN));
@@ -1516,7 +1518,8 @@ void GivenMultipleTicketsFromDifferentZonesSameEvent_WhenCheckout_ThenBuyAllTick
                 when(mockEventRepo.findById(EVENT_ID_2)).thenReturn(createRealEventWithZone(EVENT_ID_2, zoneB));
 
                 // Force a Phase-2 failure (before any inventory is confirmed) so the rollback runs.
-                when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(null);
+                when(mockPaymentGateway.charge(any(PaymentRequestDTO.class)))
+                        .thenThrow(new PaymentGatewayException("payment declined by gateway"));
 
                 assertThrows(RuntimeException.class, () ->
                         checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
@@ -2525,7 +2528,7 @@ private AtomicBoolean trackReceiptSave() {
 
         when(mockActiveOrderRepo.getBySessionId(VALID_GUEST_SID)).thenReturn(Optional.of(activeOrder));
         when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
-        when(mockPaymentGateway.charge(any())).thenReturn(null);
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
 
         assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
@@ -2547,7 +2550,7 @@ private AtomicBoolean trackReceiptSave() {
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
         when(mockActiveOrderRepo.getBySessionId(VALID_GUEST_SID)).thenReturn(Optional.of(activeOrder));
         when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
-        when(mockPaymentGateway.charge(any())).thenReturn(null);
+        when(mockPaymentGateway.charge(any())).thenThrow(new PaymentGatewayException("payment declined by gateway"));
 
         try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
             assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
@@ -2575,7 +2578,7 @@ private AtomicBoolean trackReceiptSave() {
             PaymentRequestDTO req = inv.getArgument(0);
             return new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", req.amount(), CURRENCY, NOW);
         });
-        when(mockTicketIssuer.issue(any())).thenReturn(null);
+        when(mockTicketIssuer.issue(any())).thenThrow(new TicketIssuanceFailedException("rejected by the issuer"));
 
         AtomicBoolean refunded = new AtomicBoolean(false);
         when(mockPaymentGateway.refund(anyInt(), anyDouble())).thenAnswer(inv -> {
