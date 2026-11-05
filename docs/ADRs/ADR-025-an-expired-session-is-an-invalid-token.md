@@ -9,9 +9,9 @@
 ADR-012 decision 2 rejects a revoked, mismatched or unknown token with `InvalidTokenException`, and an expired one with
 `SessionExpiredException`. Both extended `DomainException` side by side.
 
-Callers that treat a dead session as "sign in again" caught only `InvalidTokenException`. The 21 presenters under `ui/presenters`
-that have a not-authenticated outcome map that exception to it, but an expiry fell through to their generic `RuntimeException` arm
-and became a failure. The four inbox views ignore a failure, so clicking a row after the session had expired did nothing at all.
+Callers that treat a dead session as "sign in again" caught only `InvalidTokenException`. 21 presenters under `ui/presenters`
+catch it as a dead session: 18 map it to their not-authenticated outcome, and 3 to a message asking the visitor to sign in
+(`EventDetails`, `Receipt`, `Refund`). An expiry fell through to their generic `RuntimeException` arm and became a failure. The four inbox views ignore a failure, so clicking a row after the session had expired did nothing at all.
 Six tests named an expiry but stubbed a revoked token, so nothing caught it.
 
 #122 offered two remedies: map both exceptions in every presenter, or relate the two types.
@@ -42,7 +42,8 @@ Six tests named an expiry but stubbed a revoked token, so nothing caught it.
   refusal is now an `InvalidTokenException` too. A guest path must not map it to "sign in", since a guest has no account to sign in to.
   No presenter does today.
 - The not-authenticated outcome is still a message, not a redirect: the visitor reads "please sign in again" and is signed out on the
-  next navigation. A redirect, and presenters with no not-authenticated outcome at all, remain open on #122.
+  next navigation. A redirect, and the presenters that still turn a dead token into a failure, remain open on #122,
+  which lists them.
 
 ## Alternatives considered
 
