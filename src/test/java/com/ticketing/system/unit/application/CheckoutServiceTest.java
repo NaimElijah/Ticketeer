@@ -61,13 +61,16 @@ import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
 import com.ticketing.system.shared.exception.CheckoutInProgressException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
+import com.ticketing.system.shared.exception.EntityNotFoundException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 import com.ticketing.system.sales.domain.ActiveOrder;
@@ -224,27 +227,39 @@ class CheckoutServiceTest {
         verify(mockPaymentGateway, never()).charge(any());
     }
 
+    // checkoutMember wraps every refusal in its generic checkout failure, so each refusal below asserts its
+    // reason as the cause: a bare assertThrows(RuntimeException) would pass on any later failure instead.
     @Test
-    void GivenMissingToken_WhenCheckout_ThenThrowException() {
-        assertThrows(RuntimeException.class, () ->
+    void GivenMissingToken_WhenCheckout_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember("", IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
         );
+
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class);
     }
 
     @Test
-    void GivenNullToken_WhenCheckout_ThenThrowException() {
-        assertThrows(RuntimeException.class, () ->
+    void GivenNullToken_WhenCheckout_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(null, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
         );
+
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class);
     }
 
+    // SessionManager answers false only for a null or blank token, which checkout refuses before asking, and
+    // throws for a revoked or expired one. This pins checkout's defence against an adapter that answers false
+    // for a token that still names a user, as the null-answer tests pin the gateway's and issuer's.
     @Test
-    void GivenInvalidToken_WhenCheckout_ThenThrowException() {
+    void GivenSessionManagerAnswersFalse_WhenCheckout_ThenAuthenticationFailsAndNothingCharged() {
         when(mockiSessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
+        when(mockiSessionManager.extractUserId(INVALID_TOKEN)).thenReturn(USER_ID);
 
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(INVALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
         );
+
+        assertRefusedBeforeAnyCharge(failure, AuthenticationFailedException.class);
     }
 
     // #187: a live token that names no user is a failed sign-in, not a missing user, so the refusal
@@ -263,12 +278,21 @@ class CheckoutServiceTest {
     }
 
     @Test
-    void GivenNoActiveOrder_WhenCheckout_ThenThrowException() {
+    void GivenNoActiveOrder_WhenCheckout_ThenRefusedAsNotFoundAndNothingCharged() {
         when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(null);
 
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
         );
+
+        assertRefusedBeforeAnyCharge(failure, EntityNotFoundException.class);
+    }
+
+    // A refusal before anything was charged: the reason is the cause, and the gateway was never asked.
+    private void assertRefusedBeforeAnyCharge(RuntimeException failure, Class<? extends Throwable> reason) {
+        assertInstanceOf(reason, failure.getCause(),
+                "the refusal must carry its own reason, but the cause was " + failure.getCause());
+        verify(mockPaymentGateway, never()).charge(any());
     }
 
     //////////////////////////////////////////////////////////added test for expired order with multiple tickets scenario after check1
@@ -2210,78 +2234,104 @@ private AtomicBoolean trackReceiptSave() {
     // --- Guest identity validation ---
 
     @Test
-    void GivenNullGuestSessionId_WhenGuestCheckout_ThenThrowException() {
-        assertThrows(RuntimeException.class, () ->
+    void GivenNullGuestSessionId_WhenGuestCheckout_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(null, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class);
+        // SessionExpiredException is an InvalidTokenException too: a missing id must be refused as missing,
+        // before any session is looked up, not as a session that has expired.
+        assertEquals(InvalidTokenException.class, failure.getCause().getClass(),
+                "a missing session id must be refused as missing, but the cause was " + failure.getCause());
     }
 
     @Test
-    void GivenBlankGuestSessionId_WhenGuestCheckout_ThenThrowException() {
-        assertThrows(RuntimeException.class, () ->
+    void GivenBlankGuestSessionId_WhenGuestCheckout_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest("  ", GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class);
+        // SessionExpiredException is an InvalidTokenException too: a missing id must be refused as missing,
+        // before any session is looked up, not as a session that has expired.
+        assertEquals(InvalidTokenException.class, failure.getCause().getClass(),
+                "a missing session id must be refused as missing, but the cause was " + failure.getCause());
     }
 
     @Test
-    void GivenInvalidGuestSession_WhenGuestCheckout_ThenThrowException() {
+    void GivenInvalidGuestSession_WhenGuestCheckout_ThenRefusedAsAnExpiredSessionAndNothingCharged() {
         givenInvalidGuestSession();
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(INVALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, SessionExpiredException.class);
     }
 
     @Test
-    void GivenNullGuestEmail_WhenGuestCheckout_ThenThrowException() {
+    void GivenNullGuestEmail_WhenGuestCheckout_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
         givenValidGuestSession();
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, null, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class);
     }
 
     @Test
-    void GivenBlankGuestEmail_WhenGuestCheckout_ThenThrowException() {
+    void GivenBlankGuestEmail_WhenGuestCheckout_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
         givenValidGuestSession();
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, "  ", IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class);
     }
 
   
 
     @Test
-    void GivenNullIdempotencyKey_WhenGuestCheckout_ThenThrowException() {
+    void GivenNullIdempotencyKey_WhenGuestCheckout_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         givenValidGuestSession();
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, GUEST_EMAIL, null, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class);
     }
 
     @Test
-    void GivenNullCurrency_WhenGuestCheckout_ThenThrowException() {
+    void GivenNullCurrency_WhenGuestCheckout_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         givenValidGuestSession();
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, null, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class);
     }
 
     @Test
-    void GivenNullPaymentMethodToken_WhenGuestCheckout_ThenThrowException() {
+    void GivenNullPaymentMethodToken_WhenGuestCheckout_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         givenValidGuestSession();
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, null, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class);
     }
 
     // --- Order state ---
 
     @Test
-    void GivenNoGuestActiveOrder_WhenGuestCheckout_ThenThrowException() {
+    void GivenNoGuestActiveOrder_WhenGuestCheckout_ThenRefusedAsNotFoundAndNothingCharged() {
         givenValidGuestSession();
         givenNoGuestOrder();
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
+
+        assertRefusedBeforeAnyCharge(failure, EntityNotFoundException.class);
     }
 
     @Test
