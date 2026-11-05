@@ -1079,7 +1079,7 @@ public class CompanyManagementServiceTest {
                 when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
                 when(sessionManager.extractAdminId(ADMIN_TOKEN)).thenReturn(OWNER_ID);
 
-                assertThrows(InvalidTokenException.class, () -> companyService.resolveUserId(token, INVITEE_USERNAME));
+                assertThrowsExactly(InvalidTokenException.class, () -> companyService.resolveUserId(token, INVITEE_USERNAME));
                 verify(mockUserRepo, never()).findByUsername(anyString());
                 verify(mockUserRepo, never()).findByEmail(anyString());
         }

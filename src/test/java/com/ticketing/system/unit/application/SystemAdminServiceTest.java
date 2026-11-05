@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -274,7 +275,7 @@ class SystemAdminServiceTest {
         stubLiveMemberToken("member-token");
         SystemAdminService svc = readyService();
         MarketControlRequestDTO request = new MarketControlRequestDTO("OPEN", "x", "member-token");
-        assertThrows(InvalidTokenException.class, () -> svc.openMarket(request));
+        assertThrowsExactly(InvalidTokenException.class, () -> svc.openMarket(request));
         assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
@@ -343,7 +344,7 @@ class SystemAdminServiceTest {
         SystemAdminService svc = readyService();
         svc.openMarket(openRequest());
         MarketControlRequestDTO request = new MarketControlRequestDTO("CLOSE", "x", "member-token");
-        assertThrows(InvalidTokenException.class, () -> svc.closeMarket(request));
+        assertThrowsExactly(InvalidTokenException.class, () -> svc.closeMarket(request));
         assertTrue(svc.isMarketOpen());
     }
 
@@ -653,7 +654,7 @@ class SystemAdminServiceTest {
         stubLiveMemberToken("member-token");
         SystemAdminService svc = readyService();
 
-        assertThrows(InvalidTokenException.class, () -> svc.viewMarketState("member-token"));
+        assertThrowsExactly(InvalidTokenException.class, () -> svc.viewMarketState("member-token"));
     }
 
     @Test

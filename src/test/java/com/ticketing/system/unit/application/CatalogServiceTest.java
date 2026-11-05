@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -101,7 +102,7 @@ class CatalogServiceTest {
         when(mockSessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.searchGlobal(VALID_TOKEN, filters));
     }
 
@@ -111,7 +112,7 @@ class CatalogServiceTest {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.searchGlobal(VALID_TOKEN, filters));
     }
 
@@ -213,7 +214,7 @@ class CatalogServiceTest {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.searchByCompany(VALID_TOKEN, 10, filters));
     }
 
@@ -223,7 +224,7 @@ class CatalogServiceTest {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.searchByCompany(VALID_TOKEN, 10, filters));
     }
 
@@ -322,7 +323,7 @@ class CatalogServiceTest {
     void GivenInvalidOrExpiredCredential_WhenGetEventVenueMap_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.getEventVenueMap(VALID_TOKEN, EVENT_ID));
     }
 
@@ -414,7 +415,7 @@ class CatalogServiceTest {
     void GivenNullToken_WhenGetEventVenueMap_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(null)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.getEventVenueMap(null, EVENT_ID));
     }
 
@@ -422,7 +423,7 @@ class CatalogServiceTest {
     void GivenBlankToken_WhenGetEventVenueMap_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential("")).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.getEventVenueMap("", EVENT_ID));
     }
 
@@ -568,7 +569,7 @@ class CatalogServiceTest {
     void GivenInvalidCredential_WhenGetEventDetail_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.getEventDetail(VALID_TOKEN, EVENT_ID));
     }
 
@@ -706,7 +707,7 @@ class CatalogServiceTest {
     void GivenInvalidCredential_WhenSearch_ThenThrowsInvalidTokenException() {
         when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class,
+        assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.search(VALID_TOKEN, "coldplay", 8));
     }
 

@@ -3,6 +3,7 @@ package com.ticketing.system.unit.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -308,7 +309,7 @@ class CompanyAnalyticsServiceTest {
     void GivenInvalidToken_WhenDashboard_ThenThrowsInvalidTokenException() {
         when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class, () -> service.dashboard(INVALID_TOKEN, COMPANY_ID));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.dashboard(INVALID_TOKEN, COMPANY_ID));
         verify(eventRepository, never()).findActiveByCompany(anyInt());
     }
 
@@ -390,7 +391,7 @@ class CompanyAnalyticsServiceTest {
     void GivenInvalidToken_WhenSalesHistory_ThenThrowsInvalidTokenException() {
         when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class, () -> service.salesHistory(INVALID_TOKEN, COMPANY_ID));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.salesHistory(INVALID_TOKEN, COMPANY_ID));
     }
 
     @Test
