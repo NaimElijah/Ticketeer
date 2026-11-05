@@ -422,8 +422,12 @@ final class A11y {
     /**
      * Fires a DOM event on {@code e} as the browser would report it, with every listener expression true,
      * so a listener whose filter names a key runs as if that key was pressed.
+     *
+     * @throws AssertionError when the browser does not render {@code e} or it is disabled, as no visitor's
+     *     click or key press reaches it then
      */
     static void fire(Element e, String type) {
+        requireActionable(e, type);
         JsonObject data = Json.createObject();
         listenerExpressions(e, type).forEach(x -> data.put(x, true));
         e.getNode().getFeature(ElementListenerMap.class).fireEvent(new DomEvent(e, type, data));

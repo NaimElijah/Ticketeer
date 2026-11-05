@@ -268,6 +268,27 @@ class A11yFixtureTest {
     }
 
     @Test
+    void GivenADisabledElementWithAClickListener_WhenDomClicked_ThenTheClickFails() {
+        Div card = new Div();
+        card.getElement().addEventListener("click", e -> { });
+        card.setEnabled(false);
+        page.add(card);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.domClick(card.getElement()));
+    }
+
+    @Test
+    void GivenAHiddenElementWithAKeyListener_WhenAKeyIsFired_ThenTheEventFails() {
+        Div row = new Div();
+        row.getElement().addEventListener("keydown", e -> { }).setFilter("event.key === 'Enter'");
+        row.setVisible(false);
+        page.add(row);
+
+        assertThrows(AssertionError.class, () -> A11y.fire(row.getElement(), "keydown"),
+            "no key press reaches an element the browser does not render");
+    }
+
+    @Test
     void GivenAHiddenElementWithAClickListener_WhenDomClicked_ThenTheClickFails() {
         Div card = new Div();
         card.getElement().addEventListener("click", e -> { });
