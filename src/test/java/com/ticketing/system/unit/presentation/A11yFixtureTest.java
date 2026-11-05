@@ -24,8 +24,8 @@ import com.vaadin.flow.dom.Element;
  * keyboard cannot press is no button. Without these, a focus test passes on a call the browser ignores,
  * and a button test passes on a span that only listens for clicks.
  *
- * <p>They also click only what shows (#189): a click or an activation fails on a hidden or disabled control,
- * which no visitor can use.
+ * <p>They also click and read only what shows (#189): a click or an activation fails on a hidden or disabled
+ * control, which no visitor can use, and text under a hidden element is not shown text.
  */
 class A11yFixtureTest {
 
@@ -262,6 +262,56 @@ class A11yFixtureTest {
         page.add(card);
 
         assertThrows(AssertionError.class, () -> A11y.activate(card.getElement()));
+    }
+
+    // ---- #189: text under a hidden element is not shown ----
+
+    @Test
+    void GivenAHiddenChild_WhenTheHarnessReadsTheText_ThenOnlyTheShownTextCounts() {
+        Span shown = new Span("Tickets on sale");
+        Span hidden = new Span("Could not load events");
+        hidden.setVisible(false);
+        page.add(shown, hidden);
+
+        String text = ViewHarness.text(page);
+
+        assertTrue(text.contains("Tickets on sale"), "shown text must count: " + text);
+        assertFalse(text.contains("Could not load events"), "hidden text must not count: " + text);
+    }
+
+    @Test
+    void GivenAHiddenChildWithMarkup_WhenTheHarnessReadsTheText_ThenItsMarkupTextDoesNotCount() {
+        Div hidden = new Div();
+        hidden.getElement().setProperty("innerHTML", "<b>Could not load events</b>");
+        hidden.setVisible(false);
+        page.add(hidden);
+
+        String text = ViewHarness.text(page);
+
+        assertFalse(text.contains("Could not load events"), "hidden markup must not count: " + text);
+    }
+
+    @Test
+    void GivenAHiddenChild_WhenA11yReadsTheText_ThenOnlyTheShownTextCounts() {
+        Span shown = new Span("Held for 7 minutes");
+        Span hidden = new Span("Expired");
+        hidden.setVisible(false);
+        page.add(shown, hidden);
+
+        assertEquals("Held for 7 minutes", A11y.text(page.getElement()), "a screen reader reads no hidden text");
+    }
+
+    @Test
+    void GivenAFieldLabelledByAHiddenElement_WhenNamed_ThenTheHiddenElementStillNamesIt() {
+        Span label = new Span("Card number");
+        label.setId("card-label");
+        label.setVisible(false);
+        Div field = new Div();
+        field.getElement().setAttribute("aria-labelledby", "card-label");
+        page.add(label, field);
+
+        assertEquals("Card number", A11y.name(field.getElement()),
+            "aria-labelledby reads the element it names even when that element is hidden");
     }
 
     private static Span roleButtonSpan() {

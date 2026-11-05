@@ -285,7 +285,7 @@ final class A11y {
             ? e.getAttribute("aria-labelledby") : e.getProperty("accessibleNameRef", "");
         if (labelledBy != null && !labelledBy.isBlank()) {
             String fromIds = Arrays.stream(labelledBy.trim().split("\\s+"))
-                .map(id -> byId(e, id).map(A11y::text).orElse(""))
+                .map(id -> byId(e, id).map(A11y::referencedText).orElse(""))
                 .collect(Collectors.joining(" "));
             if (!fromIds.isBlank()) {
                 return normalise(fromIds);
@@ -335,27 +335,37 @@ final class A11y {
 
     /**
      * The text a screen reader reads from {@code e}'s content: text nodes and {@code innerHTML}, minus
-     * anything under {@code aria-hidden="true"}; children separated by a space, whitespace collapsed.
+     * anything hidden ({@code setVisible(false)}, which the browser does not render) and anything under
+     * {@code aria-hidden="true"}; children separated by a space, whitespace collapsed. A hidden {@code e}
+     * reads as "".
      */
     static String text(Element e) {
         StringBuilder out = new StringBuilder();
-        appendText(e, out);
+        appendText(e, out, true);
         return normalise(out.toString());
     }
 
-    private static void appendText(Element e, StringBuilder out) {
+    // The accessible name computation (step 2A) still reads an element that aria-labelledby names directly
+    // when it is hidden, so a hidden label element keeps naming its field.
+    private static String referencedText(Element e) {
+        StringBuilder out = new StringBuilder();
+        appendText(e, out, e.isVisible());
+        return normalise(out.toString());
+    }
+
+    private static void appendText(Element e, StringBuilder out, boolean skipHidden) {
         if (e.isTextNode()) {
             out.append(e.getText());
             return;
         }
-        if ("true".equals(e.getAttribute("aria-hidden"))) {
+        if ("true".equals(e.getAttribute("aria-hidden")) || (skipHidden && !e.isVisible())) {
             return;
         }
         if (e.hasProperty("innerHTML")) {
             out.append(' ').append(TAG.matcher(e.getProperty("innerHTML", "")).replaceAll(" ")).append(' ');
         }
         e.getChildren().forEach(child -> {
-            appendText(child, out);
+            appendText(child, out, skipHidden);
             if (!child.isTextNode()) {
                 out.append(' ');
             }

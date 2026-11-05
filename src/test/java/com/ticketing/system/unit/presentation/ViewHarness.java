@@ -281,9 +281,14 @@ final class ViewHarness implements AutoCloseable {
         return cells;
     }
 
-    /** All text {@code root} shows: text nodes plus the text of every {@code innerHTML} property. */
+    /**
+     * All text {@code root} shows: the text nodes, then the text of every {@code innerHTML} property, of each
+     * element that is visible with all its ancestors up to {@code root}. A hidden element's text is left out,
+     * as the browser does not render it; a hidden {@code root} shows nothing.
+     */
     static String text(Component root) {
-        StringBuilder text = new StringBuilder(root.getElement().getTextRecursively());
+        StringBuilder text = new StringBuilder();
+        appendShownText(root.getElement(), text);
         appendInnerHtml(root.getElement(), text);
         return text.toString();
     }
@@ -415,7 +420,20 @@ final class ViewHarness implements AutoCloseable {
             .forEach(row -> cells.add(row.getChild(column).getTextRecursively()));
     }
 
+    private static void appendShownText(Element element, StringBuilder text) {
+        if (element.isTextNode()) {
+            text.append(element.getText());
+            return;
+        }
+        if (element.isVisible()) {
+            element.getChildren().forEach(child -> appendShownText(child, text));
+        }
+    }
+
     private static void appendInnerHtml(Element element, StringBuilder text) {
+        if (element.isTextNode() || !element.isVisible()) {
+            return;
+        }
         if (element.hasProperty("innerHTML")) {
             text.append(' ').append(TAG.matcher(element.getProperty("innerHTML", "")).replaceAll(" "));
         }
