@@ -76,6 +76,8 @@ class ReservationConcurrencyTest {
     private static final int CONCURRENT_BUYERS = 8;
     private static final int COMPANY_ID = 100;
     private static final String CONTESTED_SEAT = "A1";
+    // How long a worker waits for the start signal: one that never gets it ends instead of waiting forever.
+    private static final int FIRE_TIMEOUT_SECONDS = 10;
 
     @Autowired
     private ReservationService reservationService;
@@ -169,27 +171,34 @@ class ReservationConcurrencyTest {
         AtomicInteger successes = new AtomicInteger();
         ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
 
-        for (int i = 0; i < CONCURRENT_BUYERS; i++) {
-            // Minted before the workers start, so the session writes are not part of the race.
-            String guestSessionId = authenticationService.startGuestSession().sessionId();
-            pool.submit(() -> {
-                try {
-                    armed.countDown();
-                    fire.await(); // release all workers at once to maximise the race window
-                    reservationService.reserveForGuest(guestSessionId, eventId, zoneId, selection);
-                    successes.incrementAndGet();
-                } catch (Throwable t) {
-                    failures.add(t);
-                } finally {
-                    finished.countDown();
-                }
-            });
-        }
+        try {
+            for (int i = 0; i < CONCURRENT_BUYERS; i++) {
+                // Minted before the workers start, so the session writes are not part of the race.
+                String guestSessionId = authenticationService.startGuestSession().sessionId();
+                pool.submit(() -> {
+                    try {
+                        armed.countDown();
+                        // release all workers at once to maximise the race window
+                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("the race was never started");
+                        }
+                        reservationService.reserveForGuest(guestSessionId, eventId, zoneId, selection);
+                        successes.incrementAndGet();
+                    } catch (Throwable t) {
+                        failures.add(t);
+                    } finally {
+                        finished.countDown();
+                    }
+                });
+            }
 
-        assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
-        fire.countDown();
-        assertTrue(finished.await(20, TimeUnit.SECONDS), "reservations did not finish in time");
-        pool.shutdownNow();
+            assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
+            fire.countDown();
+            assertTrue(finished.await(20, TimeUnit.SECONDS), "reservations did not finish in time");
+        } finally {
+            // Stops the workers even when an assertion above failed, so none outlives this test.
+            pool.shutdownNow();
+        }
         return new Outcome(successes.get(), failures);
     }
 

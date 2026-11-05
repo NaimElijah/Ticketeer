@@ -55,6 +55,8 @@ import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 class RefundConcurrencyTest {
 
     private static final int CONCURRENT_REQUESTS = 6;
+    // How long a worker waits for the start signal: one that never gets it ends instead of waiting forever.
+    private static final int FIRE_TIMEOUT_SECONDS = 10;
     private static final int RECEIPT_ID = 7;
     private static final int BUYER_ID = 42;
     private static final int PAYMENT_TX = 5000;
@@ -108,27 +110,34 @@ class RefundConcurrencyTest {
         AtomicInteger alreadyRefunded = new AtomicInteger();
         ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
-        for (int i = 0; i < CONCURRENT_REQUESTS; i++) {
-            pool.submit(() -> {
-                try {
-                    armed.countDown();
-                    fire.await(); // release all requests at once to maximise the race
-                    refundService.requestRefund(buyerToken, RECEIPT_ID, "double-click");
-                    refunded.incrementAndGet();
-                } catch (BusinessRuleViolationException alreadyDone) {
-                    alreadyRefunded.incrementAndGet(); // the loser saw is_refunded=true and bailed
-                } catch (Throwable t) {
-                    unexpected.add(t);
-                } finally {
-                    finished.countDown();
-                }
-            });
-        }
+        try {
+            for (int i = 0; i < CONCURRENT_REQUESTS; i++) {
+                pool.submit(() -> {
+                    try {
+                        armed.countDown();
+                        // release all requests at once to maximise the race
+                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("the race was never started");
+                        }
+                        refundService.requestRefund(buyerToken, RECEIPT_ID, "double-click");
+                        refunded.incrementAndGet();
+                    } catch (BusinessRuleViolationException alreadyDone) {
+                        alreadyRefunded.incrementAndGet(); // the loser saw is_refunded=true and bailed
+                    } catch (Throwable t) {
+                        unexpected.add(t);
+                    } finally {
+                        finished.countDown();
+                    }
+                });
+            }
 
-        assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
-        fire.countDown();
-        assertTrue(finished.await(20, TimeUnit.SECONDS), "refunds did not finish in time");
-        pool.shutdownNow();
+            assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
+            fire.countDown();
+            assertTrue(finished.await(20, TimeUnit.SECONDS), "refunds did not finish in time");
+        } finally {
+            // Stops the workers even when an assertion above failed, so none outlives this test.
+            pool.shutdownNow();
+        }
 
         assertTrue(unexpected.isEmpty(), "only clean already-refunded failures expected, got: " + unexpected);
         assertEquals(1, refunded.get(), "exactly one refund should succeed");

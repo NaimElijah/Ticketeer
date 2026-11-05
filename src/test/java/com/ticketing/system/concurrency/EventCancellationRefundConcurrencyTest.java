@@ -65,6 +65,8 @@ class EventCancellationRefundConcurrencyTest {
     private static final int CHARGE_BASE = 6000;
     private static final double PRICE = 80.0;
     private static final int CONCURRENT_RUNS = 6;
+    // How long a worker waits for the start signal: one that never gets it ends instead of waiting forever.
+    private static final int FIRE_TIMEOUT_SECONDS = 10;
     private static final LocalDateTime WHEN = LocalDateTime.of(2026, 6, 1, 12, 0);
 
     @Autowired private ApplicationEventPublisher publisher;
@@ -132,26 +134,33 @@ class EventCancellationRefundConcurrencyTest {
         AtomicInteger reportedStillPending = new AtomicInteger();
         ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
-        for (int i = 0; i < CONCURRENT_RUNS; i++) {
-            pool.submit(() -> {
-                try {
-                    armed.countDown();
-                    fire.await(); // release every run at once to maximise the race
-                    publishCancellation();
-                } catch (RefundFailedException stillPending) {
-                    reportedStillPending.incrementAndGet(); // skipped a receipt another run had claimed
-                } catch (Throwable t) {
-                    unexpected.add(t);
-                } finally {
-                    finished.countDown();
-                }
-            });
-        }
+        try {
+            for (int i = 0; i < CONCURRENT_RUNS; i++) {
+                pool.submit(() -> {
+                    try {
+                        armed.countDown();
+                        // release every run at once to maximise the race
+                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("the race was never started");
+                        }
+                        publishCancellation();
+                    } catch (RefundFailedException stillPending) {
+                        reportedStillPending.incrementAndGet(); // skipped a receipt another run had claimed
+                    } catch (Throwable t) {
+                        unexpected.add(t);
+                    } finally {
+                        finished.countDown();
+                    }
+                });
+            }
 
-        assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
-        fire.countDown();
-        assertTrue(finished.await(30, TimeUnit.SECONDS), "cancellation runs did not finish in time");
-        pool.shutdownNow();
+            assertTrue(armed.await(5, TimeUnit.SECONDS), "workers did not arm in time");
+            fire.countDown();
+            assertTrue(finished.await(30, TimeUnit.SECONDS), "cancellation runs did not finish in time");
+        } finally {
+            // Stops the workers even when an assertion above failed, so none outlives this test.
+            pool.shutdownNow();
+        }
 
         assertTrue(unexpected.isEmpty(), "a run may only report refunds still pending, got: " + unexpected);
         assertTrue(reportedStillPending.get() < CONCURRENT_RUNS, "at least one run completes cleanly");
