@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -30,6 +31,8 @@ public class CompanyRegistrationPresenter {
                     new CompanyRegistrationDTO(name, description));
             CurrentCompanies.setCurrentCompany(company.companyId());
             return new Outcome.Success(company);
+        } catch (InvalidTokenException e) {
+            return new Outcome.NotAuthenticated();
         } catch (IllegalArgumentException e) {
             return new Outcome.InvalidInput(ServiceErrors.userMessage(e));
         } catch (IllegalStateException e) {

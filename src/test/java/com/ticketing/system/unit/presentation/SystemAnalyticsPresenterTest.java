@@ -21,7 +21,9 @@ import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
 import com.ticketing.system.ui.session.AuthSession;
@@ -105,6 +107,22 @@ class SystemAnalyticsPresenterTest {
     @Test
     void GivenAnUnauthorizedCaller_WhenOpenMarket_ThenMapsToNotAuthenticated() {
         when(adminService.openMarket(any())).thenThrow(new UnauthorizedActionException("nope"));
+
+        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class,
+                presenter.openMarket(TOKEN, "go"));
+    }
+
+    @Test
+    void GivenAnExpiredAdminToken_WhenOpenMarket_ThenNotAuthenticated() {
+        when(adminService.openMarket(any())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class,
+                presenter.openMarket(TOKEN, "go"));
+    }
+
+    @Test
+    void GivenARevokedAdminToken_WhenOpenMarket_ThenNotAuthenticated() {
+        when(adminService.openMarket(any())).thenThrow(new InvalidTokenException("revoked"));
 
         assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class,
                 presenter.openMarket(TOKEN, "go"));
