@@ -258,7 +258,7 @@ class A11yFixtureTest {
 
         ViewHarness.forceClick(button);
 
-        assertEquals(1, clicks.get(), "a forced click stands in for a crafted request, so it reaches the listener");
+        assertEquals(1, clicks.get(), "a forced click skips the guards, so it reaches the listener");
     }
 
     @Test

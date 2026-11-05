@@ -93,7 +93,8 @@ class VenueMapFailedLoadTest {
         VenueMapEditorView view = new VenueMapEditorView(presenter, LIMITS);
         view.beforeEnter(routeTo("eventId", "abc"));
 
-        // The browser never sends a click on the disabled Save Map; a crafted request could, and must save nothing.
+        // Neither the browser nor Flow lets a click reach the disabled Save Map; forced through, the view's own
+        // guard must still save nothing.
         forceClick(button(view, "Save Map"));
 
         assertTrue(harness.toasts().contains("Event not found."), "the visitor must be told: " + harness.toasts());

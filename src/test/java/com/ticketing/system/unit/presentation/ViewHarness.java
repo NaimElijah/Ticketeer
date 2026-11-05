@@ -365,8 +365,10 @@ final class ViewHarness implements AutoCloseable {
     }
 
     /**
-     * Fires a click on {@code component} whether or not it shows or is enabled, as a crafted request could:
-     * only for a test of the server's own guard behind a control the browser would not let anyone click.
+     * Fires a click on {@code component} whether or not it shows or is enabled. No request can do this: Flow
+     * drops a client event aimed at a hidden control, and at a disabled one unless its listener opts in with
+     * {@code DisabledUpdateMode.ALWAYS}. Only for a test that pins a view's own guard behind such a control, so
+     * the guard still holds if that ever changes.
      */
     static void forceClick(Component component) {
         ComponentUtil.fireEvent(component, new ClickEvent<>(component));
