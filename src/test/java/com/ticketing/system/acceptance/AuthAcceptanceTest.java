@@ -126,9 +126,9 @@ class AuthAcceptanceTest {
     // ------------------------------------------------------------------
 
     @Test
-    @Disabled("Will fix later")
     void GivenValidCredentials_WhenLogin_ThenTokenIssued() {
-        authService.register(new RegisterRequestDTO("dave", "dave@example.com", "Password1", null, 20));
+        String registerSid = authService.startGuestSession().sessionId();
+        authService.register(new RegisterRequestDTO("dave", "dave@example.com", "Password1", registerSid, 20));
         LoginDTO result = authService
                 .login(new LoginRequestDTO("dave", "Password1", authService.startGuestSession().sessionId()));
         AuthTokenDTO tokenResult = result.authToken();
