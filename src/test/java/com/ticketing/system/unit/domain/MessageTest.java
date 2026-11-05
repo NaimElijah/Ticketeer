@@ -22,7 +22,7 @@ class MessageTest {
     private static final LocalDateTime SENT_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private Message sample() {
-        return new Message("m1", 10, ParticipantType.MEMBER, "hello", LocalDateTime.now());
+        return new Message("m1", 10, ParticipantType.MEMBER, "hello", SENT_AT);
     }
 
     // Marking read is Conversation.markReadBy's job, and markRead is package-private (#187); its flip
@@ -35,19 +35,19 @@ class MessageTest {
     @Test
     void GivenBlankBody_WhenConstruct_ThenThrows() {
         assertThrows(IllegalStateException.class,
-                () -> new Message("m1", 10, ParticipantType.MEMBER, "   ", LocalDateTime.now()));
+                () -> new Message("m1", 10, ParticipantType.MEMBER, "   ", SENT_AT));
     }
 
     @Test
     void GivenBlankId_WhenConstruct_ThenThrows() {
         assertThrows(IllegalStateException.class,
-                () -> new Message("", 10, ParticipantType.MEMBER, "hello", LocalDateTime.now()));
+                () -> new Message("", 10, ParticipantType.MEMBER, "hello", SENT_AT));
     }
 
     @Test
     void GivenNullSenderType_WhenConstruct_ThenThrows() {
         assertThrows(IllegalStateException.class,
-                () -> new Message("m1", 10, null, "hello", LocalDateTime.now()));
+                () -> new Message("m1", 10, null, "hello", SENT_AT));
     }
 
     @Test

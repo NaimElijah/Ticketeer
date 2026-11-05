@@ -116,9 +116,11 @@ class EventManagementServiceTest {
         private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
         // 16:30Z on 15 July 2027 is 19:30 in Jerusalem (IDT, UTC+3).
         private static final Instant JERUSALEM_1930 = Instant.parse("2027-07-15T16:30:00Z");
-        // The venue-limit tests' "now": before any show the shared event fixture schedules, since that
-        // fixture dates its shows from the system clock.
-        private static final Instant VENUE_LIMITS_NOW = Instant.parse("2026-01-01T00:00:00Z");
+        // The class's "now": the shared service reads it and the fixtures are dated from it, so every
+        // show they schedule is ahead of it. The tests of a specific moment build their own service.
+        private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
+        private static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+        private static final LocalDateTime NOW_UTC = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
 
         private ProductionCompany company;
         private InventoryZone zone;
@@ -136,10 +138,9 @@ class EventManagementServiceTest {
                 eventSalesHistoryPort = mock(EventSalesHistoryPort.class);
                 userRepository = mock(UserRepository.class);
                 eventPublisher = mock(ApplicationEventPublisher.class);
-                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
+                membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), FIXED_CLOCK);
 
-                // The fixtures below are dated relative to the real clock, so the shared service reads it.
-                eventService = serviceWith(Clock.systemUTC());
+                eventService = serviceWith(FIXED_CLOCK);
 
                 company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
                                 COMPANY_1_DESCRIPTION, 4.5);
@@ -154,8 +155,8 @@ class EventManagementServiceTest {
                                 COMPANY_ID,
                                 EventStatus.SCHEDULED,
                                 venueMap,
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(10),
-                                                LocalDateTime.now().plusDays(10).plusHours(2))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(10),
+                                                NOW_UTC.plusDays(10).plusHours(2))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null,
                                 new DiscountPolicy(0));
@@ -197,11 +198,11 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                ReceiptLine line = new ReceiptLine(1, 100.0, EVENT_ID, 1, "A1", java.time.LocalDateTime.now());
-                OrderReceipt realReceipt = OrderReceipt.forMember(99, OWNER_ID, 100.0, List.of(line), LocalDateTime.now());
+                ReceiptLine line = new ReceiptLine(1, 100.0, EVENT_ID, 1, "A1", NOW_UTC);
+                OrderReceipt realReceipt = OrderReceipt.forMember(99, OWNER_ID, 100.0, List.of(line), NOW_UTC);
                 realReceipt.addTransaction(
                                 TransactionRecord.paymentCharge(42, "test-gateway", 100.0, "ILS",
-                                                java.time.LocalDateTime.now()));
+                                                NOW_UTC));
 
                 return realReceipt;
         }
@@ -319,8 +320,8 @@ class EventManagementServiceTest {
                 Event draftEvent = new Event(
                                 EVENT_ID, "Concert", 4.5, List.of("Artist1"), EventCategory.CONCERT, COMPANY_ID,
                                 EventStatus.DRAFT, venueMap,
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(10),
-                                                LocalDateTime.now().plusDays(10).plusHours(2))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(10),
+                                                NOW_UTC.plusDays(10).plusHours(2))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -507,8 +508,8 @@ class EventManagementServiceTest {
                 Event draftNoVenue = new Event(
                                 EVENT_ID, "Draft Concert", 4.5, List.of("Artist1"),
                                 EventCategory.MUSIC, COMPANY_ID, EventStatus.DRAFT, null,
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(10),
-                                                LocalDateTime.now().plusDays(10).plusHours(2))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(10),
+                                                NOW_UTC.plusDays(10).plusHours(2))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -725,8 +726,8 @@ class EventManagementServiceTest {
                 Event onSaleEvent = new Event(
                                 EVENT_ID, "Concert", 4.5, List.of("Artist1"),
                                 EventCategory.CONCERT, COMPANY_ID, EventStatus.ON_SALE, venueMap,
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(10),
-                                                LocalDateTime.now().plusDays(10).plusHours(2))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(10),
+                                                NOW_UTC.plusDays(10).plusHours(2))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -756,8 +757,8 @@ class EventManagementServiceTest {
                 Event draftEvent = new Event(
                                 EVENT_ID, "Draft Concert", 4.5, List.of("Artist1"),
                                 EventCategory.CONCERT, COMPANY_ID, EventStatus.DRAFT, venueMap,
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(10),
-                                                LocalDateTime.now().plusDays(10).plusHours(2))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(10),
+                                                NOW_UTC.plusDays(10).plusHours(2))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -808,7 +809,7 @@ class EventManagementServiceTest {
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
 
-                LocalDateTime newStart = LocalDateTime.now().plusDays(30);
+                LocalDateTime newStart = NOW_UTC.plusDays(30);
                 LocalDateTime newEnd = newStart.plusHours(3);
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null,
@@ -825,8 +826,8 @@ class EventManagementServiceTest {
                 Event describedEvent = new Event(
                                 EVENT_ID, "Concert", "The headline show of the year", 4.5, List.of("Artist1"),
                                 EventCategory.CONCERT, COMPANY_ID, EventStatus.SCHEDULED, venueMap,
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(10),
-                                                LocalDateTime.now().plusDays(10).plusHours(2))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(10),
+                                                NOW_UTC.plusDays(10).plusHours(2))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null, new DiscountPolicy(0));
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -1662,7 +1663,7 @@ class EventManagementServiceTest {
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
-                return serviceWith(Clock.fixed(VENUE_LIMITS_NOW, ZoneOffset.UTC), limits);
+                return serviceWith(FIXED_CLOCK, limits);
         }
 
         private VenueMapConfigDTO venueConfig(int gridRows, int gridCols, VenueMapConfigDTO.ZoneConfigDTO... zones) {

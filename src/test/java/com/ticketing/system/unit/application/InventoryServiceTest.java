@@ -222,7 +222,7 @@ class InventoryServiceTest {
     @Test
     void GivenAnExistingAndAMissingEvent_WhenPriceTicket_ThenDelegatesToDiscountPolicyAndFailsWhenMissing() {
         Event event = mock(Event.class);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.of(2027, 7, 15, 17, 0);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.calculatePriceforoneticket(2, 40.0, now)).thenReturn(36.0);
 

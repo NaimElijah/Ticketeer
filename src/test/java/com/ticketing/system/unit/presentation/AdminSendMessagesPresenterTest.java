@@ -33,6 +33,8 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 class AdminSendMessagesPresenterTest {
 
+    private static final LocalDateTime SENT_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private static final String TOKEN = "jwt-token";
 
     private MessagingService messaging;
@@ -50,8 +52,8 @@ class AdminSendMessagesPresenterTest {
     private static ConversationDTO outreach(String id, int memberId, String subject, String body) {
         return new ConversationDTO(
             id, "DIRECT", "OPEN", 1, "ADMIN", memberId, "MEMBER",
-            subject, LocalDateTime.now(), LocalDateTime.now(), 0,
-            List.of(new MessageDTO("m-" + id, 1, "ADMIN", body, LocalDateTime.now(), false)),
+            subject, SENT_AT, SENT_AT, 0,
+            List.of(new MessageDTO("m-" + id, 1, "ADMIN", body, SENT_AT, false)),
             "TicketHub Support", "member" + memberId);
     }
 

@@ -3,6 +3,7 @@ package com.ticketing.system.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -62,6 +63,7 @@ class SeatedReservationJpaTest {
     @Autowired private SystemAdminService systemAdminService;
     @Autowired private EventCompletionSweeper eventCompletionSweeper;
     @Autowired private EventRepository eventRepository;
+    @Autowired private Clock clock;
 
     @Test
     void GivenAPublishedSeatedEventUnderJpa_WhenMemberReservesTwoFreeSeats_ThenSucceedsAndOneSeatStaysAvailable() {
@@ -92,7 +94,7 @@ class SeatedReservationJpaTest {
 
         // The dev @Scheduled completion sweep runs ~60s after boot, before a buyer reserves. A
         // future-dated event must survive it (only events whose last show has ended get COMPLETED).
-        eventCompletionSweeper.completeFinishedEvents(java.time.Clock.systemUTC().instant());
+        eventCompletionSweeper.completeFinishedEvents(clock.instant());
 
         assertEquals(EventStatus.ON_SALE, eventRepository.findById(eventId).getStatus(),
                 "a future-dated event must NOT be auto-completed by the sweeper");
@@ -119,7 +121,7 @@ class SeatedReservationJpaTest {
         EventDetailDTO ev = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Seated Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(10), LocalDateTime.now(clock).plusDays(10).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(ev.eventId());

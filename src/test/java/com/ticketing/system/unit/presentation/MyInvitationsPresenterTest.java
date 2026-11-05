@@ -28,6 +28,8 @@ import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 
 class MyInvitationsPresenterTest {
 
+    private static final LocalDateTime INVITED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private static final String TOKEN = "jwt-token";
 
     private CompanyManagementService service;
@@ -42,7 +44,7 @@ class MyInvitationsPresenterTest {
     private static InvitationDTO invitation(int companyId, String role, String status) {
         return new InvitationDTO(
             String.valueOf(companyId), companyId, "Acme", role, "dana",
-            List.of("VIEW_SALES"), status, LocalDateTime.now());
+            List.of("VIEW_SALES"), status, INVITED_AT);
     }
 
     // -- load -----------------------------------------------------------------

@@ -240,8 +240,8 @@ abstract class IActiveOrderRepositoryContractTest {
     void GivenMemberCartWithStandingAndSeatedItems_WhenSave_ThenPersistsCartItems() {
         // A member cart with items survives save/reload (the "cart survives a restart" acceptance).
         ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
-        cart.addStandingReservation(1, 10, 2, 50.0, java.time.LocalDateTime.now());          // 2 standing
-        cart.addSeatedReservation(1, 11, java.util.List.of("A1"), 75.0, java.time.LocalDateTime.now()); // 1 seated
+        cart.addStandingReservation(1, 10, 2, 50.0, NOW);          // 2 standing
+        cart.addSeatedReservation(1, 11, java.util.List.of("A1"), 75.0, NOW); // 1 seated
         repo.save(cart);
 
         ActiveOrder found = repo.getByUserId(5);

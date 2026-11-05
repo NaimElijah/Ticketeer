@@ -30,6 +30,8 @@ import com.ticketing.system.shared.exception.CompanyNotFoundException;
 
 class NewInquiryPresenterTest {
 
+    private static final LocalDateTime STARTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private static final String TOKEN = "jwt-token";
 
     private MessagingService messaging;
@@ -83,7 +85,7 @@ class NewInquiryPresenterTest {
     void GivenTheServiceStartsAConversation_WhenSubmit_ThenReturnsConversationIdAndTargetsCompany() {
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "INQUIRY", "OPEN", 1, "MEMBER", 5, "COMPANY",
-            "Parking?", LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Parking?", STARTED_AT, STARTED_AT, 0, List.of(),
             "alice", "Acme");
         when(messaging.startConversation(eq(TOKEN), any())).thenReturn(conv);
 

@@ -27,6 +27,8 @@ import com.ticketing.system.messaging.domain.ParticipantType;
  */
 abstract class IConversationRepositoryContractTest {
 
+    private static final LocalDateTime STARTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     protected abstract ConversationRepository newRepository();
 
     private ConversationRepository repo;
@@ -39,7 +41,7 @@ abstract class IConversationRepositoryContractTest {
     /** INQUIRY: member (initiator) -> company (counterparty), first message from the member. */
     private Conversation inquiry(int memberId, int companyId, String subject, String firstBody) {
         return Conversation.start(ConversationType.INQUIRY, memberId, ParticipantType.MEMBER,
-                companyId, ParticipantType.COMPANY, subject, firstBody, LocalDateTime.now());
+                companyId, ParticipantType.COMPANY, subject, firstBody, STARTED_AT);
     }
 
     private Set<String> ids(List<Conversation> cs) {
@@ -93,7 +95,7 @@ abstract class IConversationRepositoryContractTest {
     @Test
     void GivenAConversationWithAReply_WhenSave_ThenPersistsMessagesInOrderWithReadState() {
         Conversation c = inquiry(5, 10, "Help", "first");
-        c.addMessage(10, ParticipantType.COMPANY, "reply", LocalDateTime.now());
+        c.addMessage(10, ParticipantType.COMPANY, "reply", STARTED_AT);
         repo.save(c);
 
         Conversation found = repo.findById(c.getConversationId()).orElseThrow();

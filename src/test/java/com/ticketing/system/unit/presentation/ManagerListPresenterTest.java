@@ -35,6 +35,8 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 class ManagerListPresenterTest {
 
+    private static final LocalDateTime APPOINTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private static final String TOKEN = "jwt-token";
 
     private CompanyManagementService service;
@@ -71,10 +73,10 @@ class ManagerListPresenterTest {
         ProductionCompanyDTO company = new ProductionCompanyDTO(7, "Acme", "desc", "ACTIVE", 1);
         AppointmentInfoDTO manager = new AppointmentInfoDTO(
             "10", 7, "Acme", 2, "carol", 1, "Manager", "ACTIVE",
-            List.of("VIEW_SALES"), LocalDateTime.now());
+            List.of("VIEW_SALES"), APPOINTED_AT);
         AppointmentInfoDTO pending = new AppointmentInfoDTO(
             "11", 7, "Acme", 3, "yossi", 1, "Manager", "PENDING",
-            List.of("MANAGE_INVENTORY"), LocalDateTime.now());
+            List.of("MANAGE_INVENTORY"), APPOINTED_AT);
 
         when(service.findOwnedCompanies(TOKEN)).thenReturn(List.of(company));
         when(service.listManagers(TOKEN, 7)).thenReturn(List.of(manager));

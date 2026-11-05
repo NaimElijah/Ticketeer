@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -77,6 +78,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
     @Autowired private ProductionCompanyRepository companyRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private SystemAdminService systemAdminService;
+    @Autowired private Clock clock;
 
     /** Reservations/checkout require the trading market open; the test profile boots closed. */
     @BeforeEach
@@ -176,7 +178,7 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
         EventDetailDTO ev = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, name, "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(10), LocalDateTime.now(clock).plusDays(10).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(ev.eventId());

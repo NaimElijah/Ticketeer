@@ -11,21 +11,23 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ReceiptLineTest extends BaseDomainTest {
 
+    private static final LocalDateTime AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     @Test
     void GivenAReceiptLine_WhenGetTicketId_ThenReturnsCorrectId() {
-        ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, LocalDateTime.now()));
+        ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, AT));
         assertEquals(100, line.getTicketId());
     }
 
     @Test
     void GivenAReceiptLine_WhenGetEventId_ThenReturnsCorrectEventId() {
-        ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, LocalDateTime.now()));
+        ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, AT));
         assertEquals(10, line.getEventId());
     }
 
     @Test
     void GivenAReceiptLine_WhenGetPriceAtReservation_ThenReturnsCorrectPrice() {
-        ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, LocalDateTime.now()));
+        ReceiptLine line = track(new ReceiptLine(100, 50.0, 10, 1, null, AT));
         assertEquals(50.0, line.getPriceAtReservation());
     }
 
@@ -37,7 +39,7 @@ class ReceiptLineTest extends BaseDomainTest {
                 10,
                 5,
                 null,
-                LocalDateTime.now()));
+                AT));
 
         assertEquals(100, line.getTicketId());
         assertEquals(10, line.getEventId());
@@ -53,7 +55,7 @@ class ReceiptLineTest extends BaseDomainTest {
                 10,
                 7,
                 "B14",
-                LocalDateTime.now()));
+                AT));
 
         assertEquals(101, line.getTicketId());
         assertEquals(10, line.getEventId());
@@ -69,7 +71,7 @@ class ReceiptLineTest extends BaseDomainTest {
                 10,
                 7,
                 "   ",
-                LocalDateTime.now()));
+                AT));
     }
 
 }

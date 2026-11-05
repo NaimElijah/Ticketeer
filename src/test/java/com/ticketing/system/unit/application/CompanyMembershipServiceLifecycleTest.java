@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +29,8 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
  */
 class CompanyMembershipServiceLifecycleTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
+
     private static final int USER_ID = 2;
     private static final int OWNER_ID = 1;
     private static final int COMPANY_ID = 100;
@@ -37,7 +41,7 @@ class CompanyMembershipServiceLifecycleTest {
 
     @BeforeEach
     void setUp() {
-        membership = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
+        membership = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), FIXED_CLOCK);
         defaultPermissions = new ArrayList<>();
         defaultPermissions.add(Permission.CONFIGURE_VENUE);
         defaultPermissions.add(Permission.MANAGE_INVENTORY);

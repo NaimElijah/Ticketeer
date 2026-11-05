@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -86,6 +87,7 @@ class EventCancellationAcceptanceTest {
     @Autowired private TicketRepository ticketRepository;
     @Autowired private CompanyAnalyticsService companyAnalyticsService;
     @Autowired private SystemAnalyticsService systemAnalyticsService;
+    @Autowired private Clock clock;
 
     @MockitoSpyBean
     private PaymentGateway paymentGateway;
@@ -224,7 +226,7 @@ class EventCancellationAcceptanceTest {
     private Fixture newStandingEvent(AuthTokenDTO owner) {
         int companyId = companyService.registerCompany(
                 owner.token(), new CompanyRegistrationDTO("CancelCo" + SEQ.incrementAndGet(), "desc")).companyId();
-        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime start = LocalDateTime.now(clock).plusDays(10);
         EventDetailDTO event = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Cancelled Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"), List.of(new ShowDate(start, start.plusHours(3))), ZoneId.of("Asia/Jerusalem"), null));

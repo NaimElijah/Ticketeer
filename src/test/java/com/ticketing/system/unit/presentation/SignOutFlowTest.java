@@ -32,6 +32,8 @@ import org.mockito.InOrder;
 
 class SignOutFlowTest {
 
+    private static final Instant GUEST_SESSION_CREATED_AT = Instant.parse("2027-07-15T17:00:00Z");
+
     private AuthenticationService authenticationService;
     private SignOutFlow signOutFlow;
     private LogCapture logs;
@@ -42,7 +44,7 @@ class SignOutFlowTest {
         signOutFlow = new SignOutFlow(authenticationService, new FreshGuestSession(authenticationService,
                 new UnreadAlertsSendBack(mock(INotificationService.class))));
         when(authenticationService.startGuestSession())
-            .thenReturn(new GuestSessionDTO("fresh-sid", Instant.now()));
+            .thenReturn(new GuestSessionDTO("fresh-sid", GUEST_SESSION_CREATED_AT));
     }
 
     @AfterEach

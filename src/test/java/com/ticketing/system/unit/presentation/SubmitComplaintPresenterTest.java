@@ -27,6 +27,8 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 class SubmitComplaintPresenterTest {
 
+    private static final LocalDateTime SUBMITTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private static final String TOKEN = "jwt-token";
 
     private MessagingService service;
@@ -42,7 +44,7 @@ class SubmitComplaintPresenterTest {
         return new ConversationDTO(
             id, "COMPLAINT", "OPEN",
             1, "MEMBER", 0, "ADMIN_GROUP",
-            "Refund delay", LocalDateTime.now(), LocalDateTime.now(),
+            "Refund delay", SUBMITTED_AT, SUBMITTED_AT,
             0, List.of(), "alice", "TicketHub Support");
     }
 

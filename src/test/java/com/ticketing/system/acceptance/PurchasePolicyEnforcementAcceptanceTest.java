@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -68,6 +69,7 @@ class PurchasePolicyEnforcementAcceptanceTest {
     @Autowired private CheckoutService checkoutService;
     @Autowired private CatalogService catalogService;
     @Autowired private SystemAdminService systemAdminService;
+    @Autowired private Clock clock;
 
     private static final AtomicInteger SEQ = new AtomicInteger(0);
 
@@ -138,7 +140,7 @@ class PurchasePolicyEnforcementAcceptanceTest {
         EventDetailDTO event = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Policy Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(10), LocalDateTime.now(clock).plusDays(10).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(event.eventId());

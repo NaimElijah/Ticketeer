@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -75,6 +76,8 @@ class CompanyAcceptanceTest {
 
         @Autowired
         private OrderReceiptRepository orderReceiptRepository;
+        @Autowired
+        private Clock clock;
 
         private AuthTokenDTO registerAndLoginMember(String name) {
                 String sid = authService.startGuestSession().sessionId();
@@ -126,8 +129,8 @@ class CompanyAcceptanceTest {
                                 4.5,
                                 new Location("Test Venue", "Test City"),
                                 List.of(new ShowDate(
-                                                LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(30))),
+                                                LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(30))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null);
                 EventDetailDTO event = eventManagementService.addEvent(owner.token(), eventRequest);
@@ -186,7 +189,7 @@ class CompanyAcceptanceTest {
                 companyId, "Empty Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.0,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
@@ -205,7 +208,7 @@ class CompanyAcceptanceTest {
                 companyId, "Sales Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
@@ -213,8 +216,8 @@ class CompanyAcceptanceTest {
         int receiptId = orderReceiptRepository.nextId();
         OrderReceipt receipt = OrderReceipt.forMember(
                 receiptId, owner.userId(), 80.0,
-                List.of(new ReceiptLine(1, 80.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now());
+                List.of(new ReceiptLine(1, 80.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock));
         orderReceiptRepository.save(receipt);
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
@@ -233,19 +236,19 @@ class CompanyAcceptanceTest {
                 companyId, "Multi Sales Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Haifa"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
         int eventId = Integer.parseInt(event.eventId());
         orderReceiptRepository.save(OrderReceipt.forMember(
                 orderReceiptRepository.nextId(), owner.userId(), 50.0,
-                List.of(new ReceiptLine(1, 50.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now()));
+                List.of(new ReceiptLine(1, 50.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock)));
         orderReceiptRepository.save(OrderReceipt.forMember(
                 orderReceiptRepository.nextId(), owner.userId(), 30.0,
-                List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now()));
+                List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock)));
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
@@ -262,7 +265,7 @@ class CompanyAcceptanceTest {
                 companyId, "Refund Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Jerusalem"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
@@ -270,8 +273,8 @@ class CompanyAcceptanceTest {
         int receiptId = orderReceiptRepository.nextId();
         OrderReceipt receipt = OrderReceipt.forMember(
                 receiptId, owner.userId(), 60.0,
-                List.of(new ReceiptLine(1, 60.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now());
+                List.of(new ReceiptLine(1, 60.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock));
         receipt.markRefunded();
         orderReceiptRepository.save(receipt);
 
@@ -300,7 +303,7 @@ class CompanyAcceptanceTest {
                 orderReceiptRepository.nextId(), buyer.userId(), 300.0,
                 List.of(new ReceiptLine(1, 100.0, eventId, 1, null, purchasedAt),
                         new ReceiptLine(2, 200.0, otherEventId, 1, null, purchasedAt)),
-                LocalDateTime.now(),
+                purchasedAt,
                 List.of(TransactionRecord.paymentCharge(4242, "test-gateway", 300.0, "ILS", purchasedAt),
                         TransactionRecord.ticketIssuance("ISS-4242", "test-issuer", purchasedAt))));
 
@@ -318,7 +321,7 @@ class CompanyAcceptanceTest {
                 companyId, name, "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         return Integer.parseInt(event.eventId());
@@ -519,8 +522,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Summer Festival", "desc", List.of("DJ Max"),
                                 EventCategory.FESTIVAL, 4.5,
                                 new Location("Germany", "Berlin"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(4))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(4))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -551,8 +554,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Manager View Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("France", "Paris"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -574,8 +577,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Private Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Spain", "Madrid"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -598,8 +601,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Original Name", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Italy", "Rome"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -620,8 +623,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Category Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Japan", "Tokyo"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -642,8 +645,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Old Name", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Brazil", "Rio"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -671,8 +674,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Restricted Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("UK", "London"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -693,12 +696,12 @@ class CompanyAcceptanceTest {
                                 companyId, "Full Edit Event", "original desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Italy", "Rome"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
-                LocalDateTime newStart = LocalDateTime.now().plusDays(20);
+                LocalDateTime newStart = LocalDateTime.now(clock).plusDays(20);
                 eventManagementService.editEventDetails(owner.token(), new EventUpdateDTO(
                                 created.eventId(), "Full Edit Renamed", "updated desc", "THEATER",
                                 new LocationDTO("France", "Paris"),

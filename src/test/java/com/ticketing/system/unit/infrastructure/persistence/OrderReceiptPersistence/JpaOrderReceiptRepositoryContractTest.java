@@ -35,6 +35,8 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 @Import(JpaOrderReceiptRepository.class)
 class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContractTest {
 
+    private static final LocalDateTime AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     @Autowired
     private JpaOrderReceiptRepository repository;
 
@@ -63,8 +65,8 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void GivenReceiptRefundedBeforeLineStateExisted_WhenLoaded_ThenItCountsAsFullyRefunded() {
         repository.save(OrderReceipt.forMember(1, 7, 100.0, List.of(
-                new ReceiptLine(10, 50.0, 5, 1, "A1", LocalDateTime.now()),
-                new ReceiptLine(11, 50.0, 6, 1, "A2", LocalDateTime.now())), LocalDateTime.now()));
+                new ReceiptLine(10, 50.0, 5, 1, "A1", AT),
+                new ReceiptLine(11, 50.0, 6, 1, "A2", AT)), AT));
         jdbc.update("update receipts set is_refunded = true where receipt_id = 1");
         jdbc.update("update receipt_lines set refund_state = 'NONE' where receipt_id = 1");
 
@@ -84,12 +86,11 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void GivenPartlyRefundedRowWithTheOrderFlagSet_WhenLoaded_ThenItIsPartlyRefundedAndItsOtherEventCanBeClaimed() {
-        LocalDateTime at = LocalDateTime.now();
         OrderReceipt partly = OrderReceipt.forMember(2, 7, 100.0, List.of(
-                new ReceiptLine(20, 50.0, 5, 1, "B1", at),
-                new ReceiptLine(21, 50.0, 6, 1, "B2", at)), LocalDateTime.now());
+                new ReceiptLine(20, 50.0, 5, 1, "B1", AT),
+                new ReceiptLine(21, 50.0, 6, 1, "B2", AT)), AT);
         partly.claimRefundForEvent(5);
-        partly.completeEventRefund(5, TransactionRecord.refund("refund-5", "WSEP", 50.0, "ILS", at));
+        partly.completeEventRefund(5, TransactionRecord.refund("refund-5", "WSEP", 50.0, "ILS", AT));
         repository.save(partly);
         jdbc.update("update receipts set is_refunded = true where receipt_id = 2");
 

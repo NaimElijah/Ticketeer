@@ -66,7 +66,7 @@ class MemberAccountServiceTest {
     private static OrderReceipt memberReceipt(int receiptId, int userId) {
         LocalDateTime t = LocalDateTime.of(2026, 6, 1, 12, 0);
         ReceiptLine line = new ReceiptLine(101, 150.00, 2, 1, "15", t);
-        return OrderReceipt.forMember(receiptId, userId, 150.00, List.of(line), LocalDateTime.now());
+        return OrderReceipt.forMember(receiptId, userId, 150.00, List.of(line), t);
     }
 
     @Test
@@ -125,7 +125,7 @@ class MemberAccountServiceTest {
     void GivenGuestReceipt_WhenViewMyReceipt_ThenUnauthorizedThrown() {
         LocalDateTime t = LocalDateTime.of(2026, 6, 1, 12, 0);
         ReceiptLine line = new ReceiptLine(101, 150.00, 2, 1, "15", t);
-        OrderReceipt guestReceipt = OrderReceipt.forGuest("g@example.com", "guest-sess-1", RECEIPT_ID, 150.00, List.of(line), LocalDateTime.now());
+        OrderReceipt guestReceipt = OrderReceipt.forGuest("g@example.com", "guest-sess-1", RECEIPT_ID, 150.00, List.of(line), t);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(Optional.of(guestReceipt));

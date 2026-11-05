@@ -31,6 +31,8 @@ import com.ticketing.system.sales.domain.TransactionRecord.TransactionType;
  */
 abstract class IOrderReceiptRepositoryContractTest {
 
+    private static final LocalDateTime AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     protected abstract OrderReceiptRepository newRepository();
 
     private OrderReceiptRepository repo;
@@ -41,11 +43,11 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     private ReceiptLine line(int ticketId, int eventId) {
-        return new ReceiptLine(ticketId, 50.0, eventId, 1, "A1", LocalDateTime.now());
+        return new ReceiptLine(ticketId, 50.0, eventId, 1, "A1", AT);
     }
 
     private OrderReceipt member(int receiptId, int userId, int eventId) {
-        return OrderReceipt.forMember(receiptId, userId, 50.0, List.of(line(receiptId * 10, eventId)), LocalDateTime.now());
+        return OrderReceipt.forMember(receiptId, userId, 50.0, List.of(line(receiptId * 10, eventId)), AT);
     }
 
     private OrderReceipt memberAt(int receiptId, LocalDateTime purchasedAt) {
@@ -76,7 +78,7 @@ abstract class IOrderReceiptRepositoryContractTest {
 
     @Test
     void GivenASavedGuestReceipt_WhenFindByOrderReceiptId_ThenReturnsTheGuestReceipt() {
-        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 2, 50.0, List.of(line(20, 5)), LocalDateTime.now()));
+        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 2, 50.0, List.of(line(20, 5)), AT));
 
         OrderReceipt found = repo.findByOrderReceiptId(2).orElseThrow();
         assertTrue(found.isGuestReceipt());
@@ -90,8 +92,8 @@ abstract class IOrderReceiptRepositoryContractTest {
 
     @Test
     void GivenAReceiptWithLinesAndATransaction_WhenSavedAndReloaded_ThenPersistsReceiptLinesAndTransactions() {
-        OrderReceipt r = OrderReceipt.forMember(1, 7, 100.0, List.of(line(10, 5), line(11, 5)), LocalDateTime.now());
-        r.addTransaction(TransactionRecord.paymentCharge(999, "WSEP", 100.0, "ILS", LocalDateTime.now()));
+        OrderReceipt r = OrderReceipt.forMember(1, 7, 100.0, List.of(line(10, 5), line(11, 5)), AT);
+        r.addTransaction(TransactionRecord.paymentCharge(999, "WSEP", 100.0, "ILS", AT));
         repo.save(r);
 
         OrderReceipt found = repo.findByOrderReceiptId(1).orElseThrow();
@@ -107,9 +109,9 @@ abstract class IOrderReceiptRepositoryContractTest {
 
     @Test
     void GivenLinesInEveryRefundState_WhenSavedAndReloaded_ThenEachLineKeepsItsState() {
-        OrderReceipt r = OrderReceipt.forMember(1, 7, 150.0, List.of(line(10, 5), line(11, 6), line(12, 8)), LocalDateTime.now());
+        OrderReceipt r = OrderReceipt.forMember(1, 7, 150.0, List.of(line(10, 5), line(11, 6), line(12, 8)), AT);
         r.claimRefundForEvent(5);
-        r.completeEventRefund(5, TransactionRecord.refund("refund-1", "WSEP", 50.0, "ILS", LocalDateTime.now()));
+        r.completeEventRefund(5, TransactionRecord.refund("refund-1", "WSEP", 50.0, "ILS", AT));
         r.claimRefundForEvent(6);
         repo.save(r);
 
@@ -126,7 +128,7 @@ abstract class IOrderReceiptRepositoryContractTest {
         repo.save(member(1, 7, 5));
         repo.save(member(2, 7, 6));
         repo.save(member(3, 9, 5));
-        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 4, 50.0, List.of(line(40, 5)), LocalDateTime.now()));
+        repo.save(OrderReceipt.forGuest("g@example.com", "sess-1", 4, 50.0, List.of(line(40, 5)), AT));
 
         assertEquals(Set.of(1, 2), ids(repo.findByHolderUserId(7)));
         assertTrue(repo.findByHolderUserId(123).isEmpty());

@@ -49,7 +49,7 @@ class SupportInboxPresenterTest {
             initiatorType.equals("MEMBER") ? 1 : 0, initiatorType,
             initiatorType.equals("MEMBER") ? 0 : 1,
             initiatorType.equals("MEMBER") ? "ADMIN_GROUP" : "MEMBER",
-            "Subject " + id, LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Subject " + id, LAST_MESSAGE_AT, LAST_MESSAGE_AT, 0, List.of(),
             "alice", "TicketHub Support");
     }
 

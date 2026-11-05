@@ -44,7 +44,7 @@ class AdminInboxPresenterTest {
     private static ConversationDTO direct(String id) {
         return new ConversationDTO(
             id, "DIRECT", "OPEN", 1, "ADMIN", 7, "MEMBER",
-            "Heads up", LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Heads up", LAST_MESSAGE_AT, LAST_MESSAGE_AT, 0, List.of(),
             "TicketHub Support", "alice");
     }
 
