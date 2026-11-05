@@ -13,7 +13,9 @@ import org.junit.jupiter.api.Test;
 class DefaultLocaleTest {
 
     private static final Locale TURKISH = Locale.forLanguageTag("tr-TR");
-    // A format locale unlike any JVM default, so a reset to the default shows.
+    // Display and format locales unlike any JVM default and unlike each other, so a category reset to the
+    // default, or to the other category, shows.
+    private static final Locale FINNISH_DISPLAY = Locale.forLanguageTag("fi-FI");
     private static final Locale ICELANDIC_FORMAT = Locale.forLanguageTag("is-IS");
 
     private Locale defaultBefore;
@@ -25,6 +27,7 @@ class DefaultLocaleTest {
         defaultBefore = Locale.getDefault();
         displayBefore = Locale.getDefault(Locale.Category.DISPLAY);
         formatBefore = Locale.getDefault(Locale.Category.FORMAT);
+        Locale.setDefault(Locale.Category.DISPLAY, FINNISH_DISPLAY);
         Locale.setDefault(Locale.Category.FORMAT, ICELANDIC_FORMAT);
     }
 
@@ -36,12 +39,13 @@ class DefaultLocaleTest {
     }
 
     @Test
-    void GivenAFormatLocaleUnlikeTheDefault_WhenACallRunsUnderAnotherLocale_ThenEachCategoryIsPutBack() {
+    void GivenDisplayAndFormatLocalesUnlikeTheDefault_WhenACallRunsUnderAnotherLocale_ThenEachCategoryIsPutBack() {
         Locale formatInside = DefaultLocale.callUnder(TURKISH, () -> Locale.getDefault(Locale.Category.FORMAT));
 
         assertEquals(TURKISH, formatInside, "the call runs with the locale in every category");
         assertEquals(defaultBefore, Locale.getDefault());
-        assertEquals(displayBefore, Locale.getDefault(Locale.Category.DISPLAY));
+        assertEquals(FINNISH_DISPLAY, Locale.getDefault(Locale.Category.DISPLAY),
+            "the display category must come back as it was, not follow the default");
         assertEquals(ICELANDIC_FORMAT, Locale.getDefault(Locale.Category.FORMAT),
             "the format category must come back as it was, not follow the default");
     }
@@ -53,6 +57,7 @@ class DefaultLocaleTest {
         }));
 
         assertEquals(defaultBefore, Locale.getDefault());
+        assertEquals(FINNISH_DISPLAY, Locale.getDefault(Locale.Category.DISPLAY));
         assertEquals(ICELANDIC_FORMAT, Locale.getDefault(Locale.Category.FORMAT));
     }
 }
