@@ -303,6 +303,21 @@ class A11yFixtureTest {
     }
 
     @Test
+    void GivenAHandlerThatHidesItsContainer_WhenAClickBubbles_ThenTheHiddenContainerGetsNoClick() {
+        AtomicInteger containerClicks = new AtomicInteger();
+        Div container = new Div();
+        container.getElement().addEventListener("click", e -> containerClicks.incrementAndGet());
+        Span row = new Span("Remove");
+        row.getElement().addEventListener("click", e -> container.setVisible(false));
+        container.add(row);
+        page.add(container);
+
+        A11y.fireBubbling(row.getElement(), page.getElement(), "click");
+
+        assertEquals(0, containerClicks.get(), "Flow drops the click for a container the row's handler hid");
+    }
+
+    @Test
     void GivenAButtonInAClosedPopover_WhenClicked_ThenTheClickFails() {
         AtomicInteger clicks = new AtomicInteger();
         NativeButton apply = new NativeButton("Apply", e -> clicks.incrementAndGet());

@@ -436,6 +436,10 @@ final class A11y {
      */
     static void fire(Element e, String type) {
         requireActionable(e, type);
+        dispatch(e, type);
+    }
+
+    private static void dispatch(Element e, String type) {
         JsonObject data = Json.createObject();
         listenerExpressions(e, type).forEach(x -> data.put(x, true));
         e.getNode().getFeature(ElementListenerMap.class).fireEvent(new DomEvent(e, type, data));
@@ -507,13 +511,32 @@ final class A11y {
         return showing.isEmpty() ? "nothing" : describe(showing.get(showing.size() - 1));
     }
 
-    /** Fires {@code type} on {@code e} and each ancestor up to {@code root}, as a bubbling event reaches them. */
+    /**
+     * Fires {@code type} on {@code e} and each ancestor up to {@code root}, as a bubbling event reaches them. An
+     * ancestor that a handler below it hid, or that is disabled, gets nothing: Flow drops the event for it.
+     *
+     * @throws AssertionError when the browser does not render {@code e} or it is disabled, as no visitor's
+     *     click or key press reaches it then
+     */
     static void fireBubbling(Element e, Element root, String type) {
+        requireActionable(e, type);
         for (Element a = e; a != null; a = a.getParent()) {
-            fire(a, type);
+            if (flowDelivers(a)) {
+                dispatch(a, type);
+            }
             if (a.equals(root)) {
                 return;
             }
         }
+    }
+
+    // Flow hands a client event to an element only while it and every ancestor is visible and it is enabled.
+    private static boolean flowDelivers(Element e) {
+        for (Element a = e; a != null; a = a.getParent()) {
+            if (!a.isVisible()) {
+                return false;
+            }
+        }
+        return !disabled(e);
     }
 }
