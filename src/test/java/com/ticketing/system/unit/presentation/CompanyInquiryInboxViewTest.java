@@ -140,8 +140,9 @@ class CompanyInquiryInboxViewTest {
         assertEquals(List.of(), harness.toasts());
     }
 
-    // Picks the option in the Status chip's menu, then presses its Apply button, as the reader does.
+    // Opens the Status chip's menu, picks the option, then presses its Apply button, as the reader does.
     private static void applyStatusFilter(CompanyInquiryInboxView view, String option) {
+        ViewHarness.openPopoverHolding(menuButton(view, option).getElement());
         click(menuButton(view, option));
         click(menuButton(view, "Apply"));
     }

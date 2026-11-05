@@ -277,6 +277,7 @@ class FocusAfterRebuildTest {
     void GivenAFilterChip_WhenTheUserTogglesAnOption_ThenFocusStaysOnThatOption() {
         LkFilterChip chip = attached(new LkFilterChip("Status", List.of("Open", "Closed")));
         Element open = option(chip, "Open");
+        ViewHarness.openPopoverHolding(open);
 
         List<Element> focused = harness.focusCallsDuring(() -> A11y.activate(open));
 
@@ -295,6 +296,7 @@ class FocusAfterRebuildTest {
     void GivenAFilterChipWithAnOptionTicked_WhenTheUserClearsIt_ThenFocusMovesToTheFirstOption() {
         LkFilterChip chip = attached(new LkFilterChip("Status", List.of("Open", "Closed"), false, List.of("Open")));
         Element clear = namedStartingWith(chip, "Clear");
+        ViewHarness.openPopoverHolding(clear);
 
         assertFocusMovesTo(chip, () -> A11y.activate(clear),
             t -> "Open".equals(A11y.name(t)) && "checkbox".equals(A11y.role(t)),
@@ -776,7 +778,9 @@ class FocusAfterRebuildTest {
     }
 
     private static void choose(Component root, String label) {
-        A11y.activate(option(root, label));
+        Element option = option(root, label);
+        ViewHarness.openPopoverHolding(option);
+        A11y.activate(option);
     }
 
     private static AdminInboxPresenter adminInboxPresenter() {

@@ -14,6 +14,9 @@ import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.HasValue;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
+import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.DomEvent;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.internal.nodefeature.ElementListenerMap;
@@ -150,26 +153,19 @@ final class A11y {
         return FOCUSABLE_TAGS.contains(e.getTag()) || ("a".equals(e.getTag()) && e.hasAttribute("href"));
     }
 
-    /** {@code true} when the element and every ancestor up to {@code root} is visible, and it is focusable. */
+    /** {@code true} when the browser renders the element and every ancestor up to {@code root}, and it is focusable. */
     static boolean inTabOrder(Element e, Element root) {
-        for (Element a = e; a != null; a = a.getParent()) {
-            if (!a.isVisible()) {
-                return false;
-            }
-            if (a.equals(root)) {
-                break;
-            }
-        }
-        return focusable(e);
+        return unrendered(e, root).isEmpty() && focusable(e);
     }
 
     /**
      * The nearest of {@code e} and its ancestors, up to {@code root} or else to the top, that the browser does
-     * not render, as it is set invisible.
+     * not render: one set invisible, or a closed popover or dialog. A closed overlay keeps its content
+     * attached on the server, but the browser shows none of it until it opens.
      */
     static Optional<Element> unrendered(Element e, Element root) {
         for (Element a = e; a != null; a = a.getParent()) {
-            if (!a.isVisible()) {
+            if (!a.isVisible() || a.getComponent().filter(A11y::isClosedOverlay).isPresent()) {
                 return Optional.of(a);
             }
             if (a.equals(root)) {
@@ -177,6 +173,12 @@ final class A11y {
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean isClosedOverlay(Component c) {
+        return c instanceof Popover popover && !popover.isOpened()
+            || c instanceof Dialog dialog && !dialog.isOpened()
+            || c instanceof ConfirmDialog confirm && !confirm.isOpened();
     }
 
     static boolean disabled(Element e) {
@@ -451,19 +453,21 @@ final class A11y {
     }
 
     /**
-     * Fails unless a visitor could {@code action} {@code e}: it and every ancestor is visible, and it is
-     * enabled. Flow hands a component event to its listeners whatever the component's state, while the
-     * browser never sends a click on a hidden or disabled control, so a test without this check would prove
-     * a control works that no visitor can use.
+     * Fails unless a visitor could {@code action} {@code e}: the browser renders it and every ancestor (none
+     * is hidden or a closed popover or dialog), and it is enabled. Flow hands a component event to its
+     * listeners whatever the component's state, while the browser never sends a click on a control it does
+     * not show or that is disabled, so a test without this check would prove a control works that no visitor
+     * can use.
      *
-     * @throws AssertionError naming the hidden element or the disabled state
+     * @throws AssertionError naming the hidden element, the closed overlay or the disabled state
      */
     static void requireActionable(Element e, String action) {
-        for (Element a = e; a != null; a = a.getParent()) {
-            if (!a.isVisible()) {
-                throw new AssertionError("cannot " + action + " " + describe(e) + ": "
-                    + (a.equals(e) ? "it is hidden" : "it sits in hidden " + describe(a)));
-            }
+        Optional<Element> unrendered = unrendered(e, null);
+        if (unrendered.isPresent()) {
+            Element a = unrendered.get();
+            String state = a.isVisible() ? "closed" : "hidden";
+            throw new AssertionError("cannot " + action + " " + describe(e) + ": "
+                + (a.equals(e) ? "it is " + state : "it sits in " + state + " " + describe(a)));
         }
         if (disabled(e)) {
             throw new AssertionError("cannot " + action + " " + describe(e) + ": it is disabled");

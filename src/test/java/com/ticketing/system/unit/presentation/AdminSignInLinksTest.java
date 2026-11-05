@@ -53,6 +53,7 @@ class AdminSignInLinksTest {
             .findFirst()
             .orElseThrow(() -> new AssertionError("the admin menu has no Sign Out"));
 
+        ViewHarness.openPopoverHolding(signOut.getElement());
         click(signOut);
 
         verify(signOutFlow).execute();

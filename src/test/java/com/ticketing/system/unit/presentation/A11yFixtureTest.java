@@ -12,10 +12,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.Element;
 
 /**
@@ -24,8 +26,9 @@ import com.vaadin.flow.dom.Element;
  * keyboard cannot press is no button. Without these, a focus test passes on a call the browser ignores,
  * and a button test passes on a span that only listens for clicks.
  *
- * <p>They also click and read only what shows (#189): a click or an activation fails on a hidden or disabled
- * control, which no visitor can use, and text under a hidden element is not shown text.
+ * <p>They also click and read only what shows (#189): a click, an activation or a key press fails on a hidden
+ * or disabled control, or one in a closed popover or dialog, which no visitor can use; a focus call on one does
+ * not count; and text under a hidden element is not shown text.
  */
 class A11yFixtureTest {
 
@@ -289,6 +292,65 @@ class A11yFixtureTest {
     }
 
     @Test
+    void GivenAButtonInAClosedPopover_WhenClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton apply = new NativeButton("Apply", e -> clicks.incrementAndGet());
+        page.add(popover(new NativeButton("Filters"), apply));
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(apply),
+            "a closed popover keeps its content on the server, but the browser shows none of it");
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+    }
+
+    @Test
+    void GivenAPopoverOpenedThroughItsTrigger_WhenAButtonInItIsClicked_ThenItsListenerRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton apply = new NativeButton("Apply", e -> clicks.incrementAndGet());
+        page.add(popover(new NativeButton("Filters"), apply));
+
+        ViewHarness.openPopoverHolding(apply.getElement());
+        ViewHarness.click(apply);
+
+        assertEquals(1, clicks.get(), "a click on a button in an open popover must reach its listener");
+    }
+
+    @Test
+    void GivenAPopoverWhoseTriggerIsDisabled_WhenOpenedThroughIt_ThenTheOpeningFails() {
+        NativeButton trigger = new NativeButton("Filters");
+        trigger.setEnabled(false);
+        NativeButton apply = new NativeButton("Apply");
+        Popover popover = popover(trigger, apply);
+        page.add(popover);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.openPopoverHolding(apply.getElement()),
+            "no visitor can open a popover through a trigger the browser does not let them click");
+        assertFalse(popover.isOpened());
+    }
+
+    @Test
+    void GivenAButtonInAClosedDialog_WhenClicked_ThenTheClickFails() {
+        NativeButton confirm = new NativeButton("Confirm", e -> { });
+        Dialog dialog = new Dialog(confirm);
+        page.add(dialog);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(confirm),
+            "the browser shows nothing of a dialog that is not open");
+    }
+
+    @Test
+    void GivenAButtonInAnOpenDialog_WhenClicked_ThenItsListenerRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton confirm = new NativeButton("Confirm", e -> clicks.incrementAndGet());
+        Dialog dialog = new Dialog(confirm);
+        page.add(dialog);
+        dialog.setOpened(true);
+
+        ViewHarness.click(confirm);
+
+        assertEquals(1, clicks.get(), "a click on a button in an open dialog must reach its listener");
+    }
+
+    @Test
     void GivenAHiddenElementWithAClickListener_WhenDomClicked_ThenTheClickFails() {
         Div card = new Div();
         card.getElement().addEventListener("click", e -> { });
@@ -328,6 +390,17 @@ class A11yFixtureTest {
         page.add(card);
 
         assertThrows(AssertionError.class, () -> A11y.activate(card.getElement()));
+    }
+
+    // A popover the trigger opens on a click, as the kit's LkPopover builds one; the trigger sits on the page
+    // beside it.
+    private Popover popover(NativeButton trigger, NativeButton content) {
+        Popover popover = new Popover();
+        popover.add(content);
+        popover.setTarget(trigger);
+        popover.setOpenOnClick(true);
+        page.add(trigger);
+        return popover;
     }
 
     // ---- #189: text under a hidden element is not shown ----

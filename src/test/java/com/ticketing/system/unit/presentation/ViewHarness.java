@@ -36,6 +36,7 @@ import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.internal.PendingJavaScriptInvocation;
 import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.DomEvent;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.function.DeploymentConfiguration;
@@ -380,6 +381,45 @@ final class ViewHarness implements AutoCloseable {
         A11y.requireActionable(element, "click");
         element.getNode().getFeature(ElementListenerMap.class)
             .fireEvent(new DomEvent(element, "click", Json.createObject()));
+    }
+
+    /**
+     * Opens the popover holding {@code element} as a visitor does, by clicking its trigger, so a test can then
+     * reach what the popover shows. The browser opens a popover set to open on a click, and a server-side
+     * click does not, so such a popover is opened directly once its trigger proves to be one a visitor could
+     * click; any other trigger is clicked, and its listener must open the popover. An open popover is left as
+     * it is.
+     *
+     * @throws AssertionError when no popover holds {@code element}, it has no trigger or no visitor could
+     *     click it, or the click leaves the popover closed
+     */
+    static void openPopoverHolding(Element element) {
+        Popover popover = popoverHolding(element);
+        if (popover.isOpened()) {
+            return;
+        }
+        Component trigger = popover.getTarget();
+        if (trigger == null) {
+            throw new AssertionError(A11y.describe(element) + " sits in a popover with no trigger to open it");
+        }
+        if (popover.isOpenOnClick()) {
+            A11y.requireActionable(trigger.getElement(), "click");
+            popover.open();
+        } else {
+            click(trigger);
+        }
+        if (!popover.isOpened()) {
+            throw new AssertionError("clicking " + A11y.describe(trigger.getElement()) + " left its popover closed");
+        }
+    }
+
+    private static Popover popoverHolding(Element element) {
+        for (Element a = element; a != null; a = a.getParent()) {
+            if (a.getComponent().orElse(null) instanceof Popover popover) {
+                return popover;
+            }
+        }
+        throw new AssertionError("no popover holds " + A11y.describe(element));
     }
 
     /** {@code true} when {@code component} and every ancestor is visible. */
