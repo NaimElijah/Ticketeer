@@ -15,6 +15,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
+import com.ticketing.system.testutil.DefaultLocale;
 
 public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
 
@@ -56,15 +57,9 @@ public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
     void GivenATurkishDefaultLocale_WhenSearchingForAnUppercaseTerm_ThenItMatchesIgnoringCase() {
         EventRepository repo = newRepository();
         repo.save(buildEvent(1, "Title Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
-        Locale defaultLocale = Locale.getDefault();
-        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
-        try {
-            List<Event> found = repo.searchAll(new CatalogSearchFiltersDTO(
-                    "TITLE", null, null, null, null, null, null, null, null, null, null, null, null));
+        List<Event> found = DefaultLocale.callUnder(Locale.forLanguageTag("tr-TR"), () -> repo.searchAll(
+                new CatalogSearchFiltersDTO("TITLE", null, null, null, null, null, null, null, null, null, null, null, null)));
 
-            assertEquals(List.of(1), found.stream().map(Event::getId).toList());
-        } finally {
-            Locale.setDefault(defaultLocale);
-        }
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
     }
 }

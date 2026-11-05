@@ -27,6 +27,7 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.testutil.DefaultLocale;
 
 /**
  * A scenario's enum values are read the same whatever the JVM's default locale: under Turkish rules an
@@ -59,7 +60,7 @@ class ScenarioOpsLocaleTest {
     Path dir;
 
     private final ScenarioRunnerFixture fixture = new ScenarioRunnerFixture();
-    private Locale originalLocale;
+    private DefaultLocale.Swap turkish;
 
     @BeforeEach
     void everyStepPassesUnderATurkishDefaultLocale() {
@@ -75,13 +76,12 @@ class ScenarioOpsLocaleTest {
                 new LoginDTO(new AuthTokenDTO(OWNER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, OWNER_ID, "alice"), null, List.of()));
         when(fixture.companyManagementService.registerCompany(eq(OWNER_TOKEN), any())).thenReturn(
                 new ProductionCompanyDTO(COMPANY_ID, COMPANY_NAME, COMPANY_NAME, COMPANY_STATUS, OWNER_ID));
-        originalLocale = Locale.getDefault();
-        Locale.setDefault(Locale.forLanguageTag("tr"));
+        turkish = DefaultLocale.swapTo(Locale.forLanguageTag("tr"));
     }
 
     @AfterEach
     void restoreTheDefaultLocale() {
-        Locale.setDefault(originalLocale);
+        turkish.close();
     }
 
     @Test
