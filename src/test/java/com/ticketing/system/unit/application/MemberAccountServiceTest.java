@@ -92,7 +92,7 @@ class MemberAccountServiceTest {
         Mockito.when(authenticationService.validateToken(INVALID_TOKEN)).thenReturn(false);
 
         assertThatThrownBy(() -> service.viewMyReceipt(INVALID_TOKEN, RECEIPT_ID))
-                .isInstanceOf(InvalidTokenException.class);
+                .isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByOrderReceiptId(Mockito.anyInt());
     }
@@ -165,7 +165,7 @@ class MemberAccountServiceTest {
         Mockito.when(authenticationService.validateToken("  ")).thenReturn(false);
 
         assertThatThrownBy(() -> service.viewMyHistory(memberAuth("  ", USER_ID)))
-                .isInstanceOf(InvalidTokenException.class);
+                .isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(Mockito.anyInt());
     }
@@ -241,7 +241,7 @@ class MemberAccountServiceTest {
     // As viewMyReceipt refuses a null token: a missing credential is an invalid one.
     @Test
     void GivenNullAuthToken_WhenViewMyHistory_ThenInvalidTokenThrown() {
-        assertThatThrownBy(() -> service.viewMyHistory(null)).isInstanceOf(InvalidTokenException.class);
+        assertThatThrownBy(() -> service.viewMyHistory(null)).isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(Mockito.anyInt());
     }

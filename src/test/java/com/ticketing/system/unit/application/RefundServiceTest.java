@@ -173,7 +173,7 @@ class RefundServiceTest {
         Mockito.when(authenticationService.validateToken(INVALID_TOKEN)).thenReturn(false);
 
         assertThatThrownBy(() -> service.requestRefund(INVALID_TOKEN, ORDER_ID, "x"))
-                .isInstanceOf(InvalidTokenException.class);
+                .isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(paymentGateway, Mockito.never()).refund(Mockito.anyInt(), Mockito.anyDouble());
     }
