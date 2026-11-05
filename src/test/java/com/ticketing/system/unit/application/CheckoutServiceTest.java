@@ -67,6 +67,7 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.shared.exception.TicketIssuerUnreachableException;
 import com.ticketing.system.sales.domain.ActiveOrder;
@@ -660,56 +661,37 @@ void GivenMultipleTicketsButIssuerReturnsLessBarcodes_WhenCheckout_ThenClearCart
         verify(mockOrderReceiptRepo, never()).save(any());
     }
 
-   @Test
-void GivenPaymentRefundFails_WhenCheckout_ThenClearCartReturnTicketsToStockAndThrowRefundException() {
-    ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
-    String orderKey = activeOrder.getOrderKey();
-    InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
-    zone.reserve(InventorySelection.standing(1, orderKey));
+    // A refund that fails after a charge is the one state that needs an operator: the buyer paid and holds
+    // nothing. It must not replace the checkout's own failure, and its ERROR line must name the transaction.
+    @Test
+    void GivenRefundFailsAfterIssuanceFailure_WhenCheckout_ThenTheIssuanceFailureIsTheCauseAndAnErrorNamesTheTransaction() {
+        StandingZone zone = arrangeMemberStandingCart();
+        when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(
+                new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", 100.0, CURRENCY, NOW));
+        when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class)))
+                .thenThrow(new TicketIssuanceFailedException("rejected by the issuer"));
+        doThrow(new RefundFailedException(PAYMENT_TRANSACTION_ID, "declined by the gateway"))
+                .when(mockPaymentGateway).refund(PAYMENT_TRANSACTION_ID, 100.0);
 
-    activeOrder.addStandingReservation(
-            EVENT_ID_1,
-            ZONE_ID_1,
-            1,
-            100.0,
-            NOW
-    );
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-    PaymentResultDTO paymentResult = new PaymentResultDTO(
-            PAYMENT_TRANSACTION_ID,
-            "gateway",
-            100.0,
-            "ILS",
-            NOW
-    );
-
-    when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
-
-    when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(createRealEventWithZone(EVENT_ID_1, zone));
-
-    when(mockPaymentGateway.charge(any(PaymentRequestDTO.class)))
-            .thenReturn(paymentResult);
-
-    when(mockTicketIssuer.issue(any(IssuanceRequestDTO.class)))
-            .thenReturn(null);
-
-    doThrow(new RuntimeException("refund failed"))
-            .when(mockPaymentGateway)
-            .refund(PAYMENT_TRANSACTION_ID, 100.0);
-
-    assertThrows(RuntimeException.class, () ->
-            checkoutService.checkoutMember(
-                    VALID_TOKEN,
-                    IDEMPOTENCY_KEY,
-                    CURRENCY,
-                    PAYMENT_METHOD_TOKEN
-            )
-    );
-
-    assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
-    assertEquals(5, zone.getAvailableAmount());
-    assertEquals(0, zone.getReservedAmount());
-}
+            assertInstanceOf(TicketIssuanceFailedException.class, failure.getCause(),
+                    "a failed refund must not replace the checkout's own failure, but the cause was "
+                            + failure.getCause());
+            verify(mockPaymentGateway).refund(PAYMENT_TRANSACTION_ID, 100.0);
+            List<String> errors = logs.messagesAt(Level.ERROR);
+            assertTrue(errors.stream().anyMatch(message -> message.contains("Refund failed")
+                            && message.contains("transactionId=" + PAYMENT_TRANSACTION_ID)),
+                    "the failed refund must be logged at ERROR naming the transaction, but ERROR carried " + errors);
+            assertTrue(logs.throwableClassNamesAt(Level.ERROR).contains(RefundFailedException.class.getName()),
+                    "the ERROR line must carry the refund's own failure");
+        }
+        assertTrue(mockActiveOrderRepo.getByUserId(USER_ID).isEmpty(), "the rollback must clear the cart");
+        assertEquals(5, zone.getAvailableAmount());
+        assertEquals(0, zone.getReservedAmount());
+    }
     @Test
 void GivenTicketFromDifferentEventDoesNotExist_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
     ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
