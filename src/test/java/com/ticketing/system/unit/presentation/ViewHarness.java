@@ -233,8 +233,9 @@ final class ViewHarness implements AutoCloseable {
     /**
      * The element of every focus call queued so far, in order: the element parameter a script calls
      * {@code $N.focus(} on, as a component's {@code focus()} and {@code callJsFunction("focus")} do. A call
-     * counts only when its element can take focus when the call is sent (visible, enabled, and natively
-     * focusable or carrying a {@code tabindex}): the browser ignores focus on anything else. A call made on a
+     * counts only when its element can take focus when the call is sent (rendered, with no hidden ancestor and
+     * not inside a closed popover or dialog; enabled; and natively focusable or carrying a {@code tabindex}):
+     * the browser ignores focus on anything else. A call made on a
      * component that was detached before the response is dropped, as the browser never sees it, and a
      * script that focuses an element it looks up itself, such as the skip link's click handler, is no
      * focus call.
@@ -367,10 +368,11 @@ final class ViewHarness implements AutoCloseable {
     }
 
     /**
-     * Fires a click on {@code component} whether or not it shows or is enabled. No request can do this: Flow
-     * drops a client event aimed at a hidden control, and at a disabled one unless its listener opts in with
-     * {@code DisabledUpdateMode.ALWAYS}. Only for a test that pins a view's own guard behind such a control, so
-     * the guard still holds if that ever changes.
+     * Fires a click on {@code component} whether or not it shows or is enabled. For a hidden or disabled
+     * control no request can do this: Flow drops a client event aimed at a hidden control, and at a disabled
+     * one unless its listener opts in with {@code DisabledUpdateMode.ALWAYS}. It does not check whether a
+     * popover or dialog is open. Only for a test that pins a view's own guard behind such a control, so the
+     * guard still holds if that ever changes.
      */
     static void forceClick(Component component) {
         ComponentUtil.fireEvent(component, new ClickEvent<>(component));
