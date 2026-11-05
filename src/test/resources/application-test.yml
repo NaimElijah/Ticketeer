@@ -14,7 +14,18 @@ spring:
 jwt:
   secret: test-only-secret-do-not-use-anywhere-else-must-be-at-least-256-bits-long
 
-# Session TTLs — test values keep absolute time short for fast tests.
+# The test profile's own session lengths. A SESSION_MEMBER_TTL_MINUTES or SESSION_GUEST_IDLE_TIMEOUT_MINUTES
+# variable in the shell still overrides them: Spring binds an environment variable named after a property
+# above any profile file.
 session:
   member-ttl-minutes: 60
   guest-idle-timeout-minutes: 10
+
+# The hold on a reserved ticket, in minutes, that the suite assumes. Set here so the
+# TICKET_RESERVATION_DURATION variable that application.yml reads cannot reach a test.
+constants:
+  ticket-reservation-duration: 10
+
+# Not pinned, because a pin here would not hold: PLATFORM_ADMIN_PASSWORD, PLATFORM_TIME_ZONE and
+# AUTH_LOCKOUT_MAX_ATTEMPTS bind straight to platform.admin.password, platform.time-zone and
+# auth.lockout.max-attempts, above this file. Unset them before running the suite (#189).
