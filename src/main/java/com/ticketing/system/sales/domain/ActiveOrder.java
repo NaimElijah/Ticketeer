@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.CheckoutInProgressException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 
 import jakarta.persistence.CollectionTable;
@@ -566,15 +567,14 @@ public class ActiveOrder implements InvariantChecked {
      *
      * @param now the current UTC wall time, against which each line's hold is checked
      * @return {@code true}; every refusal throws instead
-     * @throws IllegalStateException if the order is already in checkout
+     * @throws CheckoutInProgressException if the order is already frozen in checkout, by a running attempt or an
+     *     interrupted one
      * @throws InvalidStateTransitionException if the order is empty or a line's hold has run out
      */
     public boolean validateCanCheckout(LocalDateTime now) {
         synchronized (itemsLock) {
-            // Stays an IllegalStateException: SecondCheckoutAttemptJpaTest pins it as the cause of a second
-            // attempt's failure, and retyping it is tracked as NaimElijah/Ticketeer#240.
             if (status == ActiveOrderStatus.CHECKOUT_IN_PROGRESS) {
-                throw new IllegalStateException("Order is already being checked out");
+                throw new CheckoutInProgressException();
             }
 
             if (items.isEmpty()) {

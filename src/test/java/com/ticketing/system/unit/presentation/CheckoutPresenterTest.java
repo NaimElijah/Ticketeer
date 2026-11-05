@@ -184,6 +184,24 @@ class CheckoutPresenterTest {
     }
 
     @Test
+    void GivenCheckoutRefusesACartAlreadyInCheckout_WhenPay_ThenTheBuyerReadsItIsAlreadyBeingPaidFor() {
+        ActiveOrder cartInCheckout = ActiveOrder.forMember(CART_OWNER_ID, "member-sid", CART_CREATED_AT);
+        cartInCheckout.addStandingReservation(1, 1, 1, 50.0, CART_CREATED_AT);
+        cartInCheckout.markCheckoutInProgress();
+        RuntimeException refusal = assertThrows(RuntimeException.class,
+                () -> cartInCheckout.validateCanCheckout(CART_CREATED_AT),
+                "precondition: the domain refuses a cart already in checkout");
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Checkout failed, tickets returned to stock", refusal));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        CheckoutPresenter.PayOutcome.Failure failure = assertInstanceOf(CheckoutPresenter.PayOutcome.Failure.class,
+                outcome, "a second Pay must read as a failure with its own reason, but was: " + outcome);
+        assertEquals("This order is already being paid for", failure.reason());
+    }
+
+    @Test
     void GivenCheckoutRefusesACartWhoseHoldRanOut_WhenPay_ThenOrderExpired() {
         ActiveOrder expiredCart = ActiveOrder.forMember(CART_OWNER_ID, "member-sid", CART_CREATED_AT);
         expiredCart.addStandingReservation(1, 1, 1, 50.0, CART_CREATED_AT);

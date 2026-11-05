@@ -56,6 +56,7 @@ import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.exception.CheckoutInProgressException;
 
 /**
  * UC-15 / UC-16, the 3-phase checkout (#185): an order frozen as CHECKOUT_IN_PROGRESS belongs to the
@@ -351,7 +352,7 @@ class SecondCheckoutAttemptJpaTest {
     private static void assertFailedBecauseTheOrderWasInCheckout(Throwable failure) {
         assertNotNull(failure, "the attempt must fail, but it completed");
         assertEquals(CHECKOUT_FAILED, failure.getMessage(), "the checkout failure wrapper");
-        assertInstanceOf(IllegalStateException.class, failure.getCause(),
+        assertInstanceOf(CheckoutInProgressException.class, failure.getCause(),
                 "the attempt fails on the order already being in checkout, but the cause was " + failure.getCause());
     }
 

@@ -60,6 +60,7 @@ import com.ticketing.system.sales.application.port.out.TicketIssuer;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.AuthenticationFailedException;
+import com.ticketing.system.shared.exception.CheckoutInProgressException;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.ExternalServiceUnavailableException;
@@ -3004,6 +3005,24 @@ private AtomicBoolean trackReceiptSave() {
                     checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
             assertLoggedAtWarnNotError(logs, PaymentGatewayException.class);
+        }
+    }
+
+    // A second Pay on a cart another attempt is checking out is an ordinary refusal: no operator, no charge
+    // (NaimElijah/Ticketeer#240).
+    @Test
+    void GivenACartAlreadyInCheckout_WhenCheckoutMember_ThenRefusedAsCheckoutInProgressAtWarnAndNothingCharged() {
+        arrangeMemberStandingCart();
+        mockActiveOrderRepo.getByUserId(USER_ID).markCheckoutInProgress();
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(CheckoutInProgressException.class, failure.getCause(),
+                    "the second attempt must be refused as already in checkout, but the cause was " + failure.getCause());
+            assertLoggedAtWarnNotError(logs, CheckoutInProgressException.class);
+            verify(mockPaymentGateway, never()).charge(any());
         }
     }
 
