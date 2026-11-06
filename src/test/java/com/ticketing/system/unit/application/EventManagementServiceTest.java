@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -53,6 +54,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
@@ -212,20 +214,28 @@ class EventManagementServiceTest {
                 return realReceipt;
         }
 
+        // SessionManager answers false only for a null or blank token; a revoked one makes it throw.
         @Test
-        public void GivenInvalidToken_WhenCancelEventAndRefund_ThenThrowException() {
-                when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
+        public void GivenABlankToken_WhenCancelEventAndRefund_ThenRefusedAsAnInvalidTokenAndNothingLocked() {
+                when(sessionManager.validateToken(" ")).thenReturn(false);
 
-                assertThrows(RuntimeException.class, () -> eventService.cancelEventAndRefund(INVALID_TOKEN, EVENT_ID));
+                assertThrowsExactly(InvalidTokenException.class, () -> eventService.cancelEventAndRefund(" ", EVENT_ID));
+
+                verify(mockEventRepo, never()).lockForUpdate(anyInt());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
-        public void GivenEventDoesNotExist_WhenCancelEventAndRefund_ThenThrowException() {
+        public void GivenEventDoesNotExist_WhenCancelEventAndRefund_ThenRefusedAsNotFoundAndNothingPublished() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockEventRepo.findById(EVENT_ID)).thenThrow(RuntimeException.class);
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class, () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
+                assertThrowsExactly(EventNotFoundException.class,
+                                () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
+
+                verify(mockEventRepo).unlock(EVENT_ID);
+                verifyNoInteractions(eventPublisher);
         }
 
         // #20: cancelling an already-cancelled event republishes the cancellation so the sales side
