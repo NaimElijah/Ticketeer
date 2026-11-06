@@ -7,18 +7,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.net.ConnectException;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
@@ -37,6 +44,7 @@ import com.ticketing.system.shared.external.WsepCommunicationException;
 import com.ticketing.system.shared.external.WsepHttpClient;
 import com.ticketing.system.sales.adapter.out.wsep.WsepPaymentGateway;
 import com.ticketing.system.testutil.LoopbackHttpServer;
+import com.ticketing.system.testutil.LoopbackHttpServer.RecordedRequest;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -157,6 +165,62 @@ class WsepPaymentGatewayTest {
         assertThrows(RefundOutcomeUnknownException.class, () -> gateway.refund(54321, 100.0));
     }
 
+    // ... while a connect timeout, like a refused connection, means the request never left. It is an
+    // HttpTimeoutException too, so it must be told apart from the read timeout above.
+    @Test
+    void GivenConnectTimesOut_WhenRefund_ThenGatewayUnreachable() {
+        when(http.post(any())).thenThrow(new WsepCommunicationException("connect timed out",
+                new HttpConnectTimeoutException("HTTP connect timed out")));
+
+        assertThrows(RefundGatewayUnreachableException.class, () -> gateway.refund(54321, 100.0));
+    }
+
+    // WSEP refunds the whole charge by its transaction id, so the request carries the action and that id only.
+    @Test
+    void GivenARefund_WhenRefund_ThenSendsTheRefundActionAndTransactionId() {
+        try (LoopbackHttpServer server = LoopbackHttpServer.start()) {
+            server.respondWith(200, "1");
+
+            realGateway(server).refund(54321, 100.0);
+
+            assertEquals(List.of("action_type=refund&transaction_id=54321"),
+                    server.requests().stream().map(RecordedRequest::body).toList(),
+                    "a refund must be one request naming the refund action and the charge's transaction id");
+        }
+    }
+
+    @ParameterizedTest(name = "transaction id {0}")
+    @ValueSource(ints = {0, -1})
+    void GivenNonPositiveTransactionId_WhenRefund_ThenRefundFailedWithoutAnyCall(int transactionId) {
+        RefundFailedException failure = assertThrows(RefundFailedException.class,
+                () -> gateway.refund(transactionId, 100.0));
+
+        assertEquals(RefundFailedException.class, failure.getClass(),
+                "no charge has a non-positive id, so the refund is refused outright, not reported as unreachable"
+                        + " or of unknown outcome");
+        verifyNoInteractions(http);
+    }
+
+    static Stream<Arguments> cardsWithoutANumber() {
+        return Stream.of(
+                Arguments.of(Named.of("no card", null)),
+                Arguments.of(Named.of("no card number", new CardDetailsDTO(null, CVV, 11, 2031, "Jane Holder"))),
+                Arguments.of(Named.of("an empty card number", new CardDetailsDTO("", CVV, 11, 2031, "Jane Holder"))),
+                Arguments.of(Named.of("a blank card number", new CardDetailsDTO("   ", CVV, 11, 2031, "Jane Holder"))));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("cardsWithoutANumber")
+    void GivenNoCard_WhenCharge_ThenPaymentGatewayExceptionWithoutAnyCall(CardDetailsDTO card) {
+        PaymentRequestDTO request = new PaymentRequestDTO("idem-1", 100.0, "USD", card, 42, null);
+
+        PaymentGatewayException failure = assertThrows(PaymentGatewayException.class, () -> gateway.charge(request));
+
+        assertEquals(PaymentGatewayException.class, failure.getClass(),
+                "a charge with no card number is refused outright, not reported as an unreachable gateway");
+        verifyNoInteractions(http);
+    }
+
     // ADR-001: a non-2xx answer came from the far side of the wire, possibly after WSEP reversed the
     // charge, so the refund's outcome is unknown. It is not a verdict: only a 2xx "-1" is a rejection.
     @ParameterizedTest(name = "HTTP {0}")
@@ -164,10 +228,7 @@ class WsepPaymentGatewayTest {
     void GivenWsepAnswersANon2xxStatus_WhenRefund_ThenOutcomeUnknownNotRejected(int status) {
         try (LoopbackHttpServer server = LoopbackHttpServer.start()) {
             server.respondWith(status, "Internal Server Error");
-            WsepPaymentGateway realGateway = new WsepPaymentGateway(
-                    new WsepHttpClient(new WsepProperties(
-                            server.baseUrl(), REQUEST_TIMEOUT_SECONDS, SINGLE_ATTEMPT, NO_BACKOFF_MS)),
-                    Clock.fixed(T0, ZoneOffset.UTC));
+            WsepPaymentGateway realGateway = realGateway(server);
 
             assertThrows(RefundOutcomeUnknownException.class, () -> realGateway.refund(54321, 100.0),
                     "HTTP " + status + " may follow a reversed charge, so it must not read as a rejected refund");
@@ -233,16 +294,21 @@ class WsepPaymentGatewayTest {
     void GivenWsepAnswersHttp500_WhenRefund_ThenTheFailureNamesThePaymentTransactionNotAnOrder() {
         try (LoopbackHttpServer server = LoopbackHttpServer.start()) {
             server.respondWith(500, "Internal Server Error");
-            WsepPaymentGateway realGateway = new WsepPaymentGateway(
-                    new WsepHttpClient(new WsepProperties(
-                            server.baseUrl(), REQUEST_TIMEOUT_SECONDS, SINGLE_ATTEMPT, NO_BACKOFF_MS)),
-                    Clock.fixed(T0, ZoneOffset.UTC));
+            WsepPaymentGateway realGateway = realGateway(server);
 
             RefundOutcomeUnknownException failure = assertThrows(RefundOutcomeUnknownException.class,
                     () -> realGateway.refund(PAYMENT_TRANSACTION_ID, 100.0));
 
             assertNamesThePaymentTransaction(failure);
         }
+    }
+
+    // A gateway on the real client, against the loopback server: one attempt, no backoff.
+    private static WsepPaymentGateway realGateway(LoopbackHttpServer server) {
+        return new WsepPaymentGateway(
+                new WsepHttpClient(new WsepProperties(
+                        server.baseUrl(), REQUEST_TIMEOUT_SECONDS, SINGLE_ATTEMPT, NO_BACKOFF_MS)),
+                Clock.fixed(T0, ZoneOffset.UTC));
     }
 
     private static void assertNamesThePaymentTransaction(RefundFailedException failure) {
