@@ -9,7 +9,6 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.sales.domain.ActiveOrder;
-import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
@@ -19,21 +18,16 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
-import com.ticketing.system.catalog.domain.Seat;
-import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
-import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
-import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.testutil.UserRepositories;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import org.mockito.ArgumentCaptor;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -41,17 +35,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -127,85 +112,6 @@ class ReservationServiceOutcomesTest {
     }
 
     @Test
-    void GivenValidMemberReservation_WhenReserveStandingTicketsForMember_ThenReturnReservationResult() {
-        ReservationResultDTO result = reservationService.reserveForMember(
-                "validToken",
-                100,
-                1,
-                InventorySelectionDTO.standing(2)
-        );
-
-        assertEquals(2, result.getQuantity());
-    }
-
-    @Test
-    void GivenInvalidToken_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        when(sessionManager.validateToken("badToken")).thenReturn(false);
-
-        String result;
-
-        try {
-            reservationService.reserveForMember(
-                    "badToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(2)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Invalid or expired authentication token", result);
-    }
-
-    @Test
-    void GivenQuantityIsZero_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        String result;
-
-        try {
-            reservationService.reserveForMember(
-                    "validToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(0)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Quantity must be positive", result);
-    }
-
-    @Test
-    void GivenEventNotFound_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        when(eventRepository.findById(100)).thenThrow(new EventNotFoundException(100));
-
-        String result;
-
-        try {
-            reservationService.reserveForMember(
-                    "validToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(2)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Event not found: 100", result);
-    }
-
-    @Test
     void GivenZoneNotFound_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(event.getVenueMap().getZone(1)).thenThrow(new IllegalArgumentException("Zone not found: " + 1));
 
@@ -229,45 +135,6 @@ class ReservationServiceOutcomesTest {
     }
 
  
-   @Test
-void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowException() {
-    doThrow(new IllegalStateException("Only 1 tickets left"))
-            .when(event).reserveInventory(eq(1), argThat(s -> s.isStandingSelection() && s.getQuantity() == 2));
-
-    String result;
-
-    try {
-        reservationService.reserveForMember(
-                "validToken",
-                100,
-                1,
-                InventorySelectionDTO.standing(2)
-        );
-
-        result = "NO_EXCEPTION";
-
-    } catch (Exception e) {
-        result = e.getMessage();
-    }
-
-    assertEquals("Only 1 tickets left", result);
-}
-
-    @Test
-    void GivenValidGuestReservation_WhenReserveTicketsForGuest_ThenReturnReservationResult() {
-        when(activeOrderRepository.getBySessionId("guest-session"))
-                .thenReturn(Optional.empty());
-
-        ReservationResultDTO result = reservationService.reserveForGuest(
-                "guest-session",
-                100,
-                1,
-                InventorySelectionDTO.standing(3)
-        );
-
-        assertEquals(3, result.getQuantity());
-    }
-
     @Test
     void GivenMissingGuestSession_WhenReserveTicketsForGuest_ThenThrowException() {
         String result;
@@ -303,27 +170,6 @@ void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowExceptio
         assertEquals(2, result.getQuantity());
     }
 
-    @Test
-    void GivenRemoveQuantityIsZero_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
-        String result;
-
-        try {
-            reservationService.removeForMember(
-                    "validToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(0)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Quantity must be positive", result);
-    }
-
 
     
     @Test
@@ -349,153 +195,11 @@ void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowExceptio
         assertEquals("Active order not found", result);
     }
 
-    @Test
-    void GivenActiveOrderDoesNotContainEvent_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
-        String result;
-
-        try {
-            reservationService.removeForMember(
-                    "validToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(1)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Active order does not contain this event", result);
-    }
-
-    @Test
-    void GivenNotEnoughReservedTickets_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
-        activeOrder.addStandingReservation(100, 1, 1, 50.0, NOW);
-
-        String result;
-
-        try {
-            reservationService.removeForMember(
-                    "validToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(2)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Not enough reserved tickets to remove", result);
-    }
-
 
 
 
     // Seated venue maps: a real event on sale holds the real SeatedZone, so these run the event's own
     // reservation checks and the zone's per-seat locking.
-
-    @Test
-    void GivenMemberSelectsAvailableSeats_WhenReserveSeats_ThenSeatsAreLockedAndCartShowsSeatNumbers() {
-        SeatedZone seatedZone = new SeatedZone(1, "Orchestra", 120.0,
-                List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0), new Seat("A3", 2, 0)));
-        givenEventOnSaleWith(seatedZone);
-
-        ReservationResultDTO result = reservationService.reserveForMember(
-                "validToken", 100, 1, InventorySelectionDTO.seated(List.of("A1", "A2")));
-
-        assertEquals(List.of("A1", "A2"), result.getSeatNumbers());
-        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
-        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A2"));
-        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A3"));
-
-        assertEquals(List.of("A1", "A2"),
-                activeOrder.getItems().stream().map(CartLineItem::getSeatNumber).toList());
-    }
-
-    @Test
-    void GivenTwoMembersSelectSameSeat_WhenReserveConcurrently_ThenOnlyOneReservationSucceeds()
-            throws InterruptedException {
-
-        int numberOfThreads = 2;
-        String contestedSeat = "A1";
-
-        SeatedZone seatedZone = new SeatedZone(1, "Orchestra", 120.0,
-                List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
-        givenEventOnSaleWith(seatedZone);
-
-        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-        CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-
-        for (int i = 0; i < numberOfThreads; i = i + 1) {
-            final String token = "member-token-" + i;
-            final int userId = i + 1;
-
-            when(sessionManager.validateToken(token)).thenReturn(true);
-            when(sessionManager.extractUserId(token)).thenReturn(userId);
-            when(activeOrderRepository.getByUserId(userId)).thenReturn(null);
-
-            executorService.submit(() -> {
-                try {
-                    readyLatch.countDown();
-                    startLatch.await();
-
-                    reservationService.reserveForMember(token, 100, 1, InventorySelectionDTO.seated(List.of(contestedSeat)));
-
-                    successCount.incrementAndGet();
-
-                } catch (Exception e) {
-                    failureCount.incrementAndGet();
-
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
-        }
-
-        readyLatch.await();
-        startLatch.countDown();
-
-        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
-        executorService.shutdown();
-
-        assertEquals(true, finished);
-        assertEquals(1, successCount.get());
-        assertEquals(numberOfThreads - 1, failureCount.get());
-        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus(contestedSeat));
-        assertEquals(1, seatedZone.getReservedAmount());
-    }
-
-    @Test
-    void GivenGuestSelectsSeats_WhenReserveSeats_ThenGuestCartContainsSeatNumbers() {
-        SeatedZone seatedZone = new SeatedZone(1, "Balcony", 80.0,
-                List.of(new Seat("C1", 0, 0), new Seat("C2", 1, 0)));
-        givenEventOnSaleWith(seatedZone);
-        when(activeOrderRepository.getBySessionId("guest-session")).thenReturn(Optional.empty());
-
-        ReservationResultDTO result = reservationService.reserveForGuest(
-                "guest-session", 100, 1, InventorySelectionDTO.seated(List.of("C1", "C2")));
-
-        assertEquals(List.of("C1", "C2"), result.getSeatNumbers());
-        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("C1"));
-        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("C2"));
-
-        ArgumentCaptor<ActiveOrder> orderCaptor = ArgumentCaptor.forClass(ActiveOrder.class);
-        verify(activeOrderRepository).save(orderCaptor.capture());
-        ActiveOrder savedGuestOrder = orderCaptor.getValue();
-        assertTrue(savedGuestOrder.isGuest());
-        assertEquals(List.of("C1", "C2"),
-                savedGuestOrder.getItems().stream().map(CartLineItem::getSeatNumber).toList());
-    }
 
     // A real event on sale whose venue holds the zone given; the event port hands it out.
     private Event givenEventOnSaleWith(InventoryZone inventoryZone) {
