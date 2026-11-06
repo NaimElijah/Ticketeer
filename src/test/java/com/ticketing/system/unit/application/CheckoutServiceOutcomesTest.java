@@ -21,7 +21,9 @@ import com.ticketing.system.catalog.domain.*;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepository;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -172,6 +175,54 @@ class CheckoutServiceOutcomesTest {
     when(user.getAge()).thenReturn(72);
 
     when(userRepository.getUserById(USER_ID)).thenReturn(user);
+    }
+
+    // The member's real cart, holding one standing place of a real ON_SALE event: a cart nothing but the
+    // input under test can refuse. Returns the place's zone, of five places at 100.
+    private StandingZone givenAMemberCartHoldingOnePlace() {
+        StandingZone zone = new StandingZone(ZONE_ID_1, "Floor", 5, 100.0);
+        when(eventRepository.findById(EVENT_ID_1)).thenReturn(aRealEvent(EVENT_ID_1, zone));
+        holdOnePlace(givenTheMembersCart(), EVENT_ID_1, zone);
+        return zone;
+    }
+
+    // The member's empty real cart, as the order repository returns it.
+    private ActiveOrder givenTheMembersCart() {
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
+        return cart;
+    }
+
+    // Puts one standing place of the zone in the cart, held in the zone under the cart's order key.
+    private static void holdOnePlace(ActiveOrder cart, int eventId, StandingZone zone) {
+        cart.addStandingReservation(eventId, zone.getId(), 1, zone.getprice(), NOW);
+        zone.reserve(InventorySelection.standing(1, cart.getOrderKey()));
+    }
+
+    // An ON_SALE event of the given zones, ten days after NOW, with no purchase policy and no discount.
+    private static Event aRealEvent(int eventId, InventoryZone... zones) {
+        LocalDateTime showStart = NOW.plusDays(10);
+        return new Event(eventId, "Concert", 4.5, List.of("Artist"), EventCategory.CONCERT, 100,
+                EventStatus.ON_SALE, new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(zones)),
+                List.of(new ShowDate(showStart, showStart.plusHours(2))), ZoneId.of("Asia/Jerusalem"),
+                new NoPurchasePolicy(), new DiscountPolicy(0));
+    }
+
+    // checkoutMember wraps every refusal in its generic checkout failure, so the reason is the cause: a bare
+    // check of the wrapper's message passes on any later failure too. The gateway was never asked.
+    private void assertRefusedBeforeAnyCharge(RuntimeException failure, Class<? extends Throwable> reason,
+            String message) {
+        Throwable cause = failure.getCause();
+        assertInstanceOf(reason, cause, "the refusal must carry its own reason, but the cause was " + cause);
+        assertEquals(message, cause.getMessage(), "the refusal's reason");
+        verify(paymentGateway, never()).charge(any());
+    }
+
+    // A refusal of the request itself comes before the cart is read, so the cart and its hold are untouched.
+    private void assertTheCartStillHoldsItsPlace(StandingZone zone) {
+        assertEquals(1, activeOrderRepository.getByUserId(USER_ID).getItems().size(),
+                "a refused request must leave the cart's line");
+        assertEquals(1, zone.getReservedAmount(), "a refused request must leave the place held");
     }
 
     private CartLineItem item(int eventId, int zoneId, double price) {
@@ -320,21 +371,15 @@ class CheckoutServiceOutcomesTest {
     }
 
     @Test
-    void GivenNullToken_WhenCheckout_ThenThrowException() {
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(null, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
+    void GivenBlankToken_WhenCheckoutMember_ThenRefusedAsAMissingTokenAndNothingCharged() {
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(" ", IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-    @Test
-    void GivenBlankToken_WhenCheckout_ThenThrowException() {
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(" ", IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class,
+                "Invalid authentication token: Missing authentication token");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
@@ -360,140 +405,108 @@ class CheckoutServiceOutcomesTest {
     }
 
     @Test
-    void GivenMissingIdempotencyKey_WhenCheckout_ThenThrowException() {
+    void GivenMissingIdempotencyKey_WhenCheckoutMember_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         validSession();
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, null, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, null, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class, "Missing idempotency key");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
-    void GivenBlankIdempotencyKey_WhenCheckout_ThenThrowException() {
+    void GivenBlankIdempotencyKey_WhenCheckoutMember_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         validSession();
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, " ", CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, " ", CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class, "Missing idempotency key");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
-    void GivenMissingCurrency_WhenCheckout_ThenThrowException() {
+    void GivenMissingCurrency_WhenCheckoutMember_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         validSession();
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, null, PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, null, PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class, "Missing currency");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
-    void GivenBlankCurrency_WhenCheckout_ThenThrowException() {
+    void GivenBlankCurrency_WhenCheckoutMember_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         validSession();
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, " ", PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, " ", PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class, "Missing currency");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
-    void GivenMissingPaymentMethodToken_WhenCheckout_ThenThrowException() {
+    void GivenMissingCard_WhenCheckoutMember_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         validSession();
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, null)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, null));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class, "Missing card details");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
-    void GivenBlankCard_WhenCheckout_ThenThrowException() {
+    void GivenBlankCardNumber_WhenCheckoutMember_ThenRefusedAsAnIllegalArgumentAndNothingCharged() {
         validSession();
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY,
-                        new CardDetailsDTO(" ", "123", 12, 2030, "X"))
-        );
+                        new CardDetailsDTO(" ", "123", 12, 2030, "X")));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, IllegalArgumentException.class, "Missing card details");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
+    // An event deleted after its place was held: nothing is charged, and the rollback still clears the cart,
+    // since a deleted event holds nothing to release.
     @Test
-    void GivenUserHasNoActiveOrder_WhenCheckout_ThenThrowException() {
+    void GivenTheCartsEventNoLongerExists_WhenCheckoutMember_ThenRefusedAsEventNotFoundAndNothingCharged() {
         validSession();
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
-    void GivenActiveOrderCannotCheckout_WhenCheckout_ThenThrowException() {
-        validSession();
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), false);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
-    void GivenActiveOrderIsEmpty_WhenCheckout_ThenThrowException() {
-        validSession();
-        ActiveOrder order = order(List.of(), false);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
-    void GivenEventDoesNotExist_WhenCheckout_ThenThrowException() {
-        validSession();
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
+        givenAMemberCartHoldingOnePlace();
         when(eventRepository.findById(EVENT_ID_1)).thenThrow(new EventNotFoundException(EVENT_ID_1));
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, EventNotFoundException.class, "Event not found: " + EVENT_ID_1);
+        assertTrue(activeOrderRepository.getByUserId(USER_ID).isEmpty(), "the rollback must clear the cart");
     }
 
+    // One of the cart's two events was deleted: nothing is charged, and the other event's place goes back.
     @Test
-    void GivenOneEventFromOrderDoesNotExist_WhenCheckout_ThenThrowException() {
+    void GivenOneOfTheCartsEventsNoLongerExists_WhenCheckoutMember_ThenRefusedAsEventNotFoundAndNothingCharged() {
         validSession();
-        ActiveOrder order = order(List.of(
-                item(EVENT_ID_1, ZONE_ID_1, 10.0),
-                item(EVENT_ID_2, ZONE_ID_1, 20.0)
-        ), true);
-
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
+        StandingZone kept = givenAMemberCartHoldingOnePlace();
+        StandingZone ofTheDeletedEvent = new StandingZone(ZONE_ID_2, "Balcony", 5, 100.0);
+        holdOnePlace(activeOrderRepository.getByUserId(USER_ID), EVENT_ID_2, ofTheDeletedEvent);
         when(eventRepository.findById(EVENT_ID_2)).thenThrow(new EventNotFoundException(EVENT_ID_2));
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, EventNotFoundException.class, "Event not found: " + EVENT_ID_2);
+        assertEquals(5, kept.getAvailableAmount(), "the existing event's place must be back in stock");
+        assertEquals(0, kept.getReservedAmount());
     }
 
     @Test
