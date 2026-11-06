@@ -309,7 +309,7 @@ class CheckoutServiceTest {
 
     //////////////////////////////////////////////////////////added test for expired order with multiple tickets scenario after check1
 @Test
-void GivenExpiredOrderWithMultipleTickets_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
+void GivenACartWithOneExpiredLine_WhenCheckout_ThenRefusedAndEveryHoldReleased() {
     ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone1 = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
@@ -324,7 +324,7 @@ void GivenExpiredOrderWithMultipleTickets_WhenCheckout_ThenClearCartAndReturnTic
     when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
     when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(createRealEventWithZones(EVENT_ID_1, zone1, zone2));
 
-    assertThrows(RuntimeException.class, () ->
+    RuntimeException failure = assertThrows(RuntimeException.class, () ->
             checkoutService.checkoutMember(
                     VALID_TOKEN,
                     IDEMPOTENCY_KEY,
@@ -333,6 +333,7 @@ void GivenExpiredOrderWithMultipleTickets_WhenCheckout_ThenClearCartAndReturnTic
             )
     );
 
+    assertRefusedBeforeAnyCharge(failure, InvalidStateTransitionException.class);
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_2, NOW));
 
@@ -345,7 +346,7 @@ void GivenExpiredOrderWithMultipleTickets_WhenCheckout_ThenClearCartAndReturnTic
 
 
     @Test
-void GivenOrderCannotCheckout_WhenCheckout_ThenClearCartAndReturnTicketsToStock() {
+void GivenMemberCartWhoseHoldHasRunOut_WhenCheckout_ThenTheHoldIsReleasedAndTheCartCleared() {
     ActiveOrder activeOrder = new ActiveOrder(USER_ID, NOW);
     String orderKey = activeOrder.getOrderKey();
     InventoryZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
@@ -362,7 +363,7 @@ void GivenOrderCannotCheckout_WhenCheckout_ThenClearCartAndReturnTicketsToStock(
     when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(activeOrder);
     when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(createRealEventWithZone(EVENT_ID_1, zone));
 
-    assertThrows(RuntimeException.class, () ->
+    RuntimeException failure = assertThrows(RuntimeException.class, () ->
             checkoutService.checkoutMember(
                     VALID_TOKEN,
                     IDEMPOTENCY_KEY,
@@ -371,6 +372,7 @@ void GivenOrderCannotCheckout_WhenCheckout_ThenClearCartAndReturnTicketsToStock(
             )
     );
 
+    assertRefusedBeforeAnyCharge(failure, InvalidStateTransitionException.class);
     assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
     assertEquals(5, zone.getAvailableAmount());
     assertEquals(0, zone.getReservedAmount());
@@ -2438,23 +2440,24 @@ private AtomicBoolean trackReceiptSave() {
     }
 
     @Test
-    void GivenGuestOrderCannotCheckout_WhenGuestCheckout_ThenThrowExceptionAndReturnTicketsToStock() {
+    void GivenAGuestCartWhoseHoldHasRunOut_WhenGuestCheckout_ThenRefusedAndTheHoldIsReleased() {
         givenValidGuestSession();
 
         StandingZone zone = new StandingZone(ZONE_ID_1, "VIP", 5, 100.0);
 
         ActiveOrder activeOrder = ActiveOrder.forGuest(VALID_GUEST_SID, NOW);
-        activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, NOW.minusMinutes(20));
+        activeOrder.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 100.0, aHoldStartThatHasRunOut());
         zone.reserve(InventorySelection.standing(1, activeOrder.getOrderKey()));
 
         when(mockActiveOrderRepo.getBySessionId(VALID_GUEST_SID)).thenReturn(Optional.of(activeOrder));
         when(mockEventRepo.findById(EVENT_ID_1)).thenAnswer(inv ->
                 createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy()));
 
-        assertThrows(RuntimeException.class, () ->
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutGuest(VALID_GUEST_SID, GUEST_EMAIL, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN, BUYER_AGE)
         );
 
+        assertRefusedBeforeAnyCharge(failure, InvalidStateTransitionException.class);
         assertEquals(0, activeOrder.countTickets(EVENT_ID_1, ZONE_ID_1, NOW));
         assertEquals(5, zone.getAvailableAmount());
         assertEquals(0, zone.getReservedAmount());
