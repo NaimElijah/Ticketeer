@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -10,7 +11,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,32 +19,24 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.shared.dto.AppointmentResponseDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
-import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
 import com.ticketing.system.shared.dto.GridPlacementDTO;
-import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
-import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.shared.dto.OwnerAppointmentRequestDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
-import com.ticketing.system.shared.dto.VenueMapDTO;
 import com.ticketing.system.shared.dto.ZoneDetailDTO;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.service.AuthenticationService;
-import com.ticketing.system.catalog.application.service.CatalogService;
-import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
-import com.ticketing.system.sales.application.service.ReservationService;
-import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.Location;
@@ -60,8 +52,10 @@ import com.ticketing.system.organization.domain.Permission;
  * <ul>
  *   <li>the chain is recorded (founder, owner, manager-with-the-granted-permission);</li>
  *   <li>u3 CAN edit an event's layout (configure venue map) but CANNOT manage purchase policies;</li>
- *   <li>a published event that has a sold ticket is locked against layout changes — sold tickets
- *       can never be orphaned by a reconfiguration.</li>
+ *   <li>a published event is locked against layout changes by its status: only a DRAFT or SCHEDULED
+ *       event's map may change, so tickets on sale are never orphaned by a reconfiguration. The guard
+ *       against a map with reserved or sold places is behind that one: a place can be held only while
+ *       the event is on sale, and no event goes back to DRAFT or SCHEDULED.</li>
  * </ul>
  */
 @SpringBootTest
@@ -72,24 +66,9 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
     @Autowired private CompanyManagementService companyService;
     @Autowired private CompanyMembershipService companyMembershipService;
     @Autowired private EventManagementService eventManagementService;
-    @Autowired private ReservationService reservationService;
-    @Autowired private CheckoutService checkoutService;
-    @Autowired private CatalogService catalogService;
     @Autowired private ProductionCompanyRepository companyRepository;
     @Autowired private UserRepository userRepository;
-    @Autowired private SystemAdminService systemAdminService;
     @Autowired private Clock clock;
-
-    /** Reservations/checkout require the trading market open; the test profile boots closed. */
-    @BeforeEach
-    void ensureMarketOpen() {
-        if (systemAdminService.isMarketOpen()) {
-            return;
-        }
-        systemAdminService.initializePlatform(); // idempotent — no-op if already initialized
-        AuthTokenDTO admin = authService.signInAsAdmin("admin", "admin");
-        systemAdminService.openMarket(new MarketControlRequestDTO("OPEN", "eval acceptance setup", admin.token()));
-    }
 
     @Test
     void GivenFounderAppointsOwnerAppointsManager_WhenCheckingRolesAndPermissions_ThenChainAndGrantedPermissionsHold() {
@@ -127,26 +106,22 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
     }
 
     @Test
-    void GivenPublishedEventWithSoldTicket_WhenLayoutChangeAttempted_ThenBlocked() {
+    void GivenAnOnSaleEvent_WhenLayoutChangeAttempted_ThenRefusedByStatusAndTheMapIsUnchanged() {
         Chain c = buildChain();
-        int eventId = createScheduledStandingEvent(c.u1, c.companyId, "Sold Event", 100, 50.0);
+        int eventId = createScheduledStandingEvent(c.u1, c.companyId, "Published Event", 100, 50.0);
         eventManagementService.publishEvent(c.u1.token(), c.companyId, eventId);
 
-        // A buyer purchases one ticket -> the event now has sold inventory.
-        AuthTokenDTO buyer = registerAndLogin("layoutBuyer");
-        int zoneId = standingZone(c.u1.token(), eventId).getId();
-        reservationService.reserveForMember(buyer.token(), eventId, zoneId, InventorySelectionDTO.standing(1));
-        checkoutService.checkoutMember(buyer.token(), "idem-layout-" + c.u3Id, "ILS", card());
-
-        // Reconfiguring the layout of a live event with a sold ticket is refused — the sale is protected.
         ZoneConfigDTO replacement = new ZoneConfigDTO("Replacement", false, 10, null, 50.0,
                 new GridPlacementDTO(1, 1, 1, 1));
-        RuntimeException ex = assertThrows(RuntimeException.class,
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
                 () -> eventManagementService.configureVenueMap(c.u3.token(), c.companyId,
                         new VenueMapConfigDTO(String.valueOf(eventId), "Hacked Arena", 1, 1, List.of(replacement))));
-        String msg = String.valueOf(rootMessage(ex));
-        assertTrue(msg.contains("reserved or sold") || msg.contains("DRAFT or SCHEDULED"),
-                "a layout change to an event with sold tickets must be blocked; got: " + msg);
+
+        assertEquals("Inventory can only be edited while event is DRAFT or SCHEDULED", refused.getMessage());
+        ZoneDetailDTO zone = producerStandingZone(c.u1.token(), eventId);
+        assertAll("the published event keeps its map",
+                () -> assertEquals("Standing", zone.name()),
+                () -> assertEquals(100, zone.capacity()));
     }
 
     // ---- chain construction --------------------------------------------
@@ -196,22 +171,11 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
                 .findFirst().orElseThrow();
     }
 
-    private com.ticketing.system.shared.dto.InventoryZoneDTO standingZone(String token, int eventId) {
-        VenueMapDTO map = catalogService.getEventVenueMap(token, eventId);
-        return map.inventoryZones().stream()
-                .filter(z -> "STANDING".equals(z.getZoneType()))
-                .findFirst().orElseThrow();
-    }
-
     private AuthTokenDTO registerAndLogin(String baseName) {
         String name = baseName + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
         String sid = authService.startGuestSession().sessionId();
         authService.register(new RegisterRequestDTO(name, name + "@test.com", "Password1", sid, 30));
         return authService.login(new LoginRequestDTO(name, "Password1", sid)).authToken();
-    }
-
-    private static CardDetailsDTO card() {
-        return new CardDetailsDTO("4111111111111111", "123", 12, 2030, "Demo Buyer");
     }
 
     private static void assertMissingPermission(Executable action, String permissionName) {
