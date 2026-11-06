@@ -222,6 +222,7 @@ public class ReservationServiceTest {
                 "a refused removal must leave the cart's lines in place");
         verify(activeOrderRepository, never()).save(any());
         verify(eventRepository, never()).save(any());
+        verify(activeOrderRepository).unlock("user:" + USER_ID);
     }
 
     @Test
@@ -394,6 +395,8 @@ public class ReservationServiceTest {
         assertEquals(0, lastTicket.getReservedAmount());
         assertTrue(cart.isEmpty(), "a refused reservation must add no cart line");
         verify(activeOrderRepository, never()).save(any());
+        // A refusal still releases the cart's lock, or the buyer's next call waits on it.
+        verify(activeOrderRepository).unlock("user:" + USER_ID);
     }
 
     @Test
@@ -946,6 +949,7 @@ public class ReservationServiceTest {
 
         assertEquals(new TicketReservationSucceededNotice(USER_ID, EVENT_ID, ZONE_ID, QUANTITY),
                 publishedNotice(TicketReservationSucceededNotice.class));
+        verify(activeOrderRepository).unlock("user:" + USER_ID);
     }
 
     // ---------------------------------------------------------------------
@@ -1205,6 +1209,7 @@ public class ReservationServiceTest {
         assertEquals(QUANTITY - 1, vip.getReservedAmount());
         assertEquals(QUANTITY - 1, cart.getItems().size());
         verify(activeOrderRepository).save(cart);
+        verify(activeOrderRepository).unlock("sess:" + sessionId);
     }
 
     // ---------------------------------------------------------------------
