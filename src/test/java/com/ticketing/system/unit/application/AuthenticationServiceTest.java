@@ -22,6 +22,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
@@ -68,6 +69,7 @@ import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.identity.application.port.out.CartRestorationPort;
@@ -108,6 +110,7 @@ class AuthenticationServiceTest {
     private SessionManager mockSessionManager;
     private SessionRepository mockSessionRepo;
     private AdminRepository mockAdminRepo;
+    private ISystemMetrics mockMetrics;
     private Clock fixedClock;
     private AuthenticationService service;
     private NotificationDispatchService mockNotification;
@@ -122,6 +125,7 @@ class AuthenticationServiceTest {
         mockCartRestorationPort = mock(CartRestorationPort.class);
         mockSessionRepo = mock(SessionRepository.class);
         mockAdminRepo = mock(AdminRepository.class);
+        mockMetrics = mock(ISystemMetrics.class);
         fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
         // The service may hash a throwaway secret when it is built (its dummy hash for unknown
         // usernames), so the mock answers with a hash and forgets that call: each test sees only the
@@ -129,7 +133,7 @@ class AuthenticationServiceTest {
         when(mockHasher.hash(any())).thenReturn(HASH_FROM_THE_HASHER);
         service = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
-                mockSessionRepo, mock(ISystemMetrics.class),
+                mockSessionRepo, mockMetrics,
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
                 IDENTITY, TestTransactions.recordingManager());
@@ -186,18 +190,21 @@ class AuthenticationServiceTest {
 
         service.endGuestSession("guest-1");
         verify(mockSessionRepo, times(1)).delete("guest-1");
+        verify(mockMetrics).record(MetricType.VISITOR_EXIT);
     }
 
     @Test
     void GivenNullSessionId_WhenEndGuestSession_ThenIsNoOpDeletingNothing() {
         service.endGuestSession(null);
         verify(mockSessionRepo, never()).delete(any());
+        verifyNoInteractions(mockMetrics);
     }
 
     @Test
     void GivenBlankSessionId_WhenEndGuestSession_ThenIsNoOpDeletingNothing() {
         service.endGuestSession("   ");
         verify(mockSessionRepo, never()).delete(any());
+        verifyNoInteractions(mockMetrics);
     }
 
     // ----------------------------------------------------------------------
@@ -633,7 +640,7 @@ class AuthenticationServiceTest {
         when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("ISSUED_TOKEN");
         when(mockSessionManager.extractExpiration("ISSUED_TOKEN")).thenReturn(9999L);
         when(mockCartRestorationPort.restoreActiveOrder(7)).thenReturn(null);
-        when(mockNotification.deliverPending(7)).thenReturn(null);
+        when(mockNotification.deliverPending(7)).thenReturn(List.of());
 
         LoginDTO loginResult = service.login(new LoginRequestDTO("alice", "Password1", "guest-1"));
         AuthTokenDTO result = loginResult.authToken();
@@ -690,8 +697,6 @@ class AuthenticationServiceTest {
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 77);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
         when(mockHasher.matches("wrong", "STORED_HASH")).thenReturn(false);
-        when(mockCartRestorationPort.restoreActiveOrder(7)).thenReturn(null);
-        when(mockNotification.deliverPending(7)).thenReturn(null);
 
         assertThrows(AuthenticationFailedException.class,
                 () -> service.login(new LoginRequestDTO("alice", "wrong", "guest-1")));
@@ -711,14 +716,18 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void GivenInvalidCredentials_WhenLogin_ThenRejected() {
-        mockValidGuestSession("guest-1");
+    void GivenInvalidCredentials_WhenLogin_ThenTheGuestSessionIsLeftAsItWasAndNoCartIsMerged() {
+        Session guest = mockValidGuestSession("guest-1");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 89);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
         when(mockHasher.matches("badpass", "STORED_HASH")).thenReturn(false);
 
         assertThrows(AuthenticationFailedException.class,
                 () -> service.login(new LoginRequestDTO("alice", "badpass", "guest-1")));
+
+        assertTrue(guest.isGuest(), "a refused login must not promote the guest session");
+        verify(mockSessionRepo, never()).save(any());
+        verifyNoInteractions(mockCartRestorationPort, mockNotification);
     }
 
     // ----------------------------------------------------------------------
@@ -809,7 +818,8 @@ class AuthenticationServiceTest {
         service.logout(new LogoutRequestDTO("SOME_TOKEN"));
 
         verify(mockSessionManager).invalidate("SOME_TOKEN");
-        verify(mockSessionManager, never()).tryExtractUserId(any());
+        verifyNoMoreInteractions(mockSessionManager);
+        verifyNoInteractions(mockSessionRepo);
     }
 
     // #187: a logout whose revocation failed leaves the session, and so the token, live; it must not
@@ -826,10 +836,23 @@ class AuthenticationServiceTest {
         assertSame(storeFailure, thrown, "logout must let the session store's own failure out unchanged");
     }
 
+    // Runs on the real session manager: a token that does not parse names no session, so it revokes none.
     @Test
-    void GivenAGarbageToken_WhenLogout_ThenDoesNotThrowAndDelegatesToSessionManagerInvalidate() {
-        service.logout(new LogoutRequestDTO("not-a-real-token"));
-        verify(mockSessionManager).invalidate("not-a-real-token");
+    void GivenAGarbageToken_WhenLogout_ThenDoesNotThrowAndAnotherMembersSessionStaysLive() {
+        MemorySessionRepository sessions = new MemorySessionRepository(fixedClock);
+        JwtSessionManager realSessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET),
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), sessions, fixedClock);
+        AuthenticationService serviceOnRealSessions = new AuthenticationService(
+                mockUserRepo, mockHasher, realSessionManager, mockCartRestorationPort, mockNotification,
+                sessions, mock(ISystemMetrics.class),
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
+                IDENTITY, TestTransactions.recordingManager());
+        String liveMemberToken = realSessionManager.generateToken(7, "alice");
+
+        assertDoesNotThrow(() -> serviceOnRealSessions.logout(new LogoutRequestDTO("not-a-real-token")));
+
+        assertTrue(realSessionManager.validateToken(liveMemberToken), "a garbage token must revoke no session");
     }
 
     // ----------------------------------------------------------------------

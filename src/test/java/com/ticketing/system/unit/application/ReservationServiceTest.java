@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -117,7 +118,6 @@ public class ReservationServiceTest {
         marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
         // Every guest path accepts only the raw id of a live guest session (#185, ADR-012 decision 4).
-        when(sessionManager.validateCredential(startsWith(LIVE_GUEST_SESSION_PREFIX))).thenReturn(true);
         when(sessionManager.validateGuestSession(startsWith(LIVE_GUEST_SESSION_PREFIX))).thenReturn(true);
 
         // Catalog owns inventory mutation behind InventoryCommandPort. The REAL InventoryService runs over
@@ -150,16 +150,20 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenValidRequest_WhenRemoveReservedStandingSpots_ThenReturnReservationResult() {
+    void GivenAMemberCartHoldingTwo_WhenRemoveBothForMember_ThenTheHoldsGoBackToStockAndTheCartIsSavedEmpty() {
         givenSignedInMember();
         StandingZone vip = standingZoneOf(10);
         givenEventOnSaleWith(vip);
-        givenMemberCartHolding(vip, QUANTITY);
+        ActiveOrder cart = givenMemberCartHolding(vip, QUANTITY);
 
         ReservationResultDTO result = reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
 
-        assertEquals(EVENT_ID, result.getEventId());
+        assertEquals(QUANTITY, result.getQuantity());
+        assertEquals(0, vip.getReservedAmount(), "the removed tickets must go back to stock");
+        assertEquals(10, vip.getAvailableAmount());
+        assertTrue(cart.isEmpty(), "the removed tickets must leave the cart");
+        verify(activeOrderRepository).save(cart);
     }
 
     @Test
@@ -168,12 +172,18 @@ public class ReservationServiceTest {
                 InventorySelectionDTO.standing(QUANTITY)));
     }
 
+    // The real session manager answers false only for a blank token, which is refused before it is asked,
+    // and throws for any other it rejects. This guards the service's own check of the answer.
     @Test
-    void GivenInvalidToken_WhenRemoveReservedStandingSpots_ThenThrowException() {
+    void GivenTheSessionManagerAnswersFalseForAToken_WhenRemoveForMember_ThenRefusedAsInvalidAndNothingIsTouched() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
 
-        assertThrows(IllegalStateException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals("Invalid or expired authentication token", refused.getMessage());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
     }
 
     @Test
@@ -290,15 +300,20 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenValidMemberRequest_WhenReserveStandingTicketsForMember_ThenReturnReservationResult() {
-        givenSignedInMember();
-        givenEventOnSaleWith(standingZoneOf(10));
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
+    void GivenAMemberWithAnEmptyCart_WhenReserveTwoForMember_ThenTheZoneHoldsThemAndTheCartIsSavedWithTwoLines() {
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = memberWithEmptyCart();
 
         ReservationResultDTO result = reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
 
-        assertEquals(EVENT_ID, result.getEventId());
+        assertEquals(QUANTITY, result.getQuantity());
+        assertEquals(QUANTITY, vip.getReservedAmount());
+        assertSame(cart, savedCart());
+        assertEquals(Collections.nCopies(QUANTITY, PRICE),
+                cart.getItems().stream().map(CartLineItem::getPriceAtReservation).toList(),
+                "each line must record the zone's price");
     }
 
     @Test
@@ -308,20 +323,29 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenInvalidToken_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
+    void GivenARevokedToken_WhenReserveForMember_ThenTheSessionManagersRefusalPropagatesAndNothingIsTouched() {
+        InvalidTokenException revoked = new InvalidTokenException("revoked");
+        when(sessionManager.validateToken(VALID_TOKEN)).thenThrow(revoked);
 
-        assertThrows(IllegalStateException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+        assertSame(revoked, assertThrows(InvalidTokenException.class,
+                () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY))));
+
+        verifyNoInteractions(activeOrderRepository, eventRepository);
     }
 
+    // A member's token names a positive user id; this guards the service's own check of the id.
     @Test
-    void GivenInvalidUserId_WhenReserveStandingTicketsForMember_ThenThrowException() {
+    void GivenATokenNamingNoPositiveUserId_WhenReserveForMember_ThenRefusedAsAnInvalidBuyerAndNothingIsTouched() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(0);
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals("Invalid buyer id", refused.getMessage());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
     }
 
     @Test
@@ -373,29 +397,36 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNoActiveOrder_WhenReserveStandingTicketsForMember_ThenCreateNewOrderAndReturnResult() {
+    void GivenAMemberWithNoCart_WhenReserveForMember_ThenANewCartOfTheMemberIsSavedHoldingTheTickets() {
         givenSignedInMember();
-        givenEventOnSaleWith(standingZoneOf(10));
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
 
-        ReservationResultDTO result = reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
-                InventorySelectionDTO.standing(QUANTITY));
+        reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY));
 
-        assertEquals(EVENT_ID, result.getEventId());
+        ActiveOrder created = savedCart();
+        assertTrue(created.isMember());
+        assertEquals(USER_ID, created.getUserId());
+        assertEquals(QUANTITY, created.getItems().size());
+        assertEquals(QUANTITY, vip.getReservedAmount());
     }
 
     @Test
-    void GivenValidGuestRequest_WhenReserveStandingTicketsForGuest_ThenReturnReservationResult() {
+    void GivenAGuestWithAnEmptyCart_WhenReserveTwoForGuest_ThenTheZoneHoldsThemAndTheCartIsSavedWithTwoLines() {
         String sessionId = "guest-session";
-
-        givenEventOnSaleWith(standingZoneOf(10));
-        when(activeOrderRepository.getBySessionId(sessionId))
-                .thenReturn(Optional.of(ActiveOrder.forGuest(sessionId, NOW)));
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = ActiveOrder.forGuest(sessionId, NOW);
+        when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(cart));
 
         ReservationResultDTO result = reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
 
-        assertEquals(EVENT_ID, result.getEventId());
+        assertEquals(QUANTITY, result.getQuantity());
+        assertEquals(QUANTITY, vip.getReservedAmount());
+        assertSame(cart, savedCart());
+        assertEquals(QUANTITY, cart.getItems().size());
     }
 
     @Test
@@ -482,20 +513,23 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNoActiveOrder_WhenReserveStandingTicketsForGuest_ThenCreateNewOrderAndReturnResult() {
+    void GivenAGuestWithNoCart_WhenReserveForGuest_ThenANewCartForTheGuestsSessionIsSavedHoldingTheTickets() {
         String sessionId = "guest-session";
-
-        givenEventOnSaleWith(standingZoneOf(10));
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.empty());
 
-        ReservationResultDTO result = reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
-                InventorySelectionDTO.standing(QUANTITY));
+        reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY));
 
-        assertEquals(EVENT_ID, result.getEventId());
+        ActiveOrder created = savedCart();
+        assertTrue(created.isGuest());
+        assertEquals(sessionId, created.getSessionId());
+        assertEquals(QUANTITY, created.getItems().size());
+        assertEquals(QUANTITY, vip.getReservedAmount());
     }
 
     @Test
-    void GivenManyGuestsReserveSameZoneConcurrently_WhenReserveStandingTicketsForGuest_ThenDoNotOverReserve()
+    void GivenManyGuestsReserveSameZoneConcurrently_WhenReserveForGuest_ThenDoNotOverReserve()
             throws InterruptedException {
         int capacity = 5;
         int numberOfThreads = 20;
@@ -505,53 +539,27 @@ public class ReservationServiceTest {
 
         givenEventOnSaleWith(realZone);
 
-        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-        CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-
+        List<Runnable> attempts = new ArrayList<>();
         for (int i = 0; i < numberOfThreads; i = i + 1) {
             final String sessionId = "guest-session-" + i;
 
             when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.empty());
 
-            executorService.submit(() -> {
-                try {
-                    readyLatch.countDown();
-                    startLatch.await();
-
-                    reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
-                            InventorySelectionDTO.standing(quantityPerRequest));
-
-                    successCount.incrementAndGet();
-
-                } catch (Exception e) {
-                    failureCount.incrementAndGet();
-
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
+            attempts.add(() -> reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
+                    InventorySelectionDTO.standing(quantityPerRequest)));
         }
 
-        readyLatch.await();
-        startLatch.countDown();
+        RaceOutcome outcome = raceAll(attempts);
 
-        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
-        executorService.shutdown();
-
-        assertEquals(true, finished);
-        assertEquals(capacity, successCount.get());
-        assertEquals(numberOfThreads - capacity, failureCount.get());
+        assertEquals(List.of(), outcome.unexpected(), "only a refusal may end an attempt that loses the race");
+        assertEquals(capacity, outcome.successes());
+        assertEquals(numberOfThreads - capacity, outcome.refusals());
         assertEquals(0, realZone.getAvailableAmount());
         assertEquals(capacity, realZone.getReservedAmount());
     }
 
     @Test
-    void GivenManyMembersReserveSameZoneConcurrently_WhenReserveStandingTicketsForMember_ThenDoNotOverReserve()
+    void GivenManyMembersReserveSameZoneConcurrently_WhenReserveForMember_ThenDoNotOverReserve()
             throws InterruptedException {
 
         int capacity = 5;
@@ -562,14 +570,7 @@ public class ReservationServiceTest {
 
         givenEventOnSaleWith(realZone);
 
-        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-        CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-
+        List<Runnable> attempts = new ArrayList<>();
         for (int i = 0; i < numberOfThreads; i = i + 1) {
             final String token = "valid-token-" + i;
             final int userId = i + 1;
@@ -578,40 +579,21 @@ public class ReservationServiceTest {
             when(sessionManager.extractUserId(token)).thenReturn(userId);
             when(activeOrderRepository.getByUserId(userId)).thenReturn(null);
 
-            executorService.submit(() -> {
-                try {
-                    readyLatch.countDown();
-                    startLatch.await();
-
-                    reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
-                            InventorySelectionDTO.standing(quantityPerRequest));
-
-                    successCount.incrementAndGet();
-
-                } catch (Exception e) {
-                    failureCount.incrementAndGet();
-
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
+            attempts.add(() -> reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
+                    InventorySelectionDTO.standing(quantityPerRequest)));
         }
 
-        readyLatch.await();
-        startLatch.countDown();
+        RaceOutcome outcome = raceAll(attempts);
 
-        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
-        executorService.shutdown();
-
-        assertEquals(true, finished);
-        assertEquals(capacity, successCount.get());
-        assertEquals(numberOfThreads - capacity, failureCount.get());
+        assertEquals(List.of(), outcome.unexpected(), "only a refusal may end an attempt that loses the race");
+        assertEquals(capacity, outcome.successes());
+        assertEquals(numberOfThreads - capacity, outcome.refusals());
         assertEquals(0, realZone.getAvailableAmount());
         assertEquals(capacity, realZone.getReservedAmount());
     }
 
     @Test
-    void GivenManyThreadsRemoveReservedStandingSpotsForMemberConcurrently_WhenRemoveReservedStandingSpots_ThenDoNotOverRelease()
+    void GivenManyThreadsRemovingFromOneMembersCartConcurrently_WhenRemoveForMember_ThenDoNotOverRelease()
             throws InterruptedException {
 
         int initialReservedTickets = 5;
@@ -635,43 +617,17 @@ public class ReservationServiceTest {
         givenEventOnSaleWith(realZone);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realActiveOrder);
 
-        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-        CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-
+        List<Runnable> attempts = new ArrayList<>();
         for (int i = 0; i < numberOfThreads; i = i + 1) {
-            executorService.submit(() -> {
-                try {
-                    readyLatch.countDown();
-                    startLatch.await();
-
-                    reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
-                            InventorySelectionDTO.standing(quantityPerRemove));
-
-                    successCount.incrementAndGet();
-
-                } catch (Exception e) {
-                    failureCount.incrementAndGet();
-
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
+            attempts.add(() -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                    InventorySelectionDTO.standing(quantityPerRemove)));
         }
 
-        readyLatch.await();
-        startLatch.countDown();
+        RaceOutcome outcome = raceAll(attempts);
 
-        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
-        executorService.shutdown();
-
-        assertEquals(true, finished);
-        assertEquals(initialReservedTickets, successCount.get());
-        assertEquals(numberOfThreads - initialReservedTickets, failureCount.get());
+        assertEquals(List.of(), outcome.unexpected(), "only a refusal may end an attempt that loses the race");
+        assertEquals(initialReservedTickets, outcome.successes());
+        assertEquals(numberOfThreads - initialReservedTickets, outcome.refusals());
         assertEquals(0, realActiveOrder.countTickets(EVENT_ID, ZONE_ID, NOW));
         assertEquals(0, realZone.getReservedAmount());
         assertEquals(capacity, realZone.getAvailableAmount());
@@ -683,7 +639,7 @@ public class ReservationServiceTest {
     // zone's own locks stand between the buyers — as in the standing tests above.
 
     @Test
-    void GivenManyMembersSelectSameSeatConcurrently_WhenReserveSeatsForMember_ThenOnlyOneSucceeds()
+    void GivenManyMembersSelectSameSeatConcurrently_WhenReserveForMember_ThenOnlyOneSucceeds()
             throws InterruptedException {
 
         int numberOfThreads = 20;
@@ -695,14 +651,7 @@ public class ReservationServiceTest {
 
         givenEventOnSaleWith(realZone);
 
-        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-        CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-
+        List<Runnable> attempts = new ArrayList<>();
         for (int i = 0; i < numberOfThreads; i = i + 1) {
             final String token = "valid-token-" + i;
             final int userId = i + 1;
@@ -711,40 +660,21 @@ public class ReservationServiceTest {
             when(sessionManager.extractUserId(token)).thenReturn(userId);
             when(activeOrderRepository.getByUserId(userId)).thenReturn(null);
 
-            executorService.submit(() -> {
-                try {
-                    readyLatch.countDown();
-                    startLatch.await();
-
-                    reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
-                            InventorySelectionDTO.seated(List.of(contestedSeat)));
-
-                    successCount.incrementAndGet();
-
-                } catch (Exception e) {
-                    failureCount.incrementAndGet();
-
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
+            attempts.add(() -> reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
+                    InventorySelectionDTO.seated(List.of(contestedSeat))));
         }
 
-        readyLatch.await();
-        startLatch.countDown();
+        RaceOutcome outcome = raceAll(attempts);
 
-        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
-        executorService.shutdown();
-
-        assertEquals(true, finished);
-        assertEquals(1, successCount.get());
-        assertEquals(numberOfThreads - 1, failureCount.get());
+        assertEquals(List.of(), outcome.unexpected(), "only a refusal may end an attempt that loses the race");
+        assertEquals(1, outcome.successes());
+        assertEquals(numberOfThreads - 1, outcome.refusals());
         assertEquals(SeatStatus.RESERVED, realZone.getSeatStatus(contestedSeat));
         assertEquals(1, realZone.getReservedAmount());
     }
 
     @Test
-    void GivenManyGuestsSelectSameSeatConcurrently_WhenReserveSeatsForGuest_ThenOnlyOneSucceeds()
+    void GivenManyGuestsSelectSameSeatConcurrently_WhenReserveForGuest_ThenOnlyOneSucceeds()
             throws InterruptedException {
 
         int numberOfThreads = 20;
@@ -756,53 +686,27 @@ public class ReservationServiceTest {
 
         givenEventOnSaleWith(realZone);
 
-        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-        CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-
+        List<Runnable> attempts = new ArrayList<>();
         for (int i = 0; i < numberOfThreads; i = i + 1) {
             final String sessionId = "guest-session-" + i;
 
             when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.empty());
 
-            executorService.submit(() -> {
-                try {
-                    readyLatch.countDown();
-                    startLatch.await();
-
-                    reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
-                            InventorySelectionDTO.seated(List.of(contestedSeat)));
-
-                    successCount.incrementAndGet();
-
-                } catch (Exception e) {
-                    failureCount.incrementAndGet();
-
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
+            attempts.add(() -> reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
+                    InventorySelectionDTO.seated(List.of(contestedSeat))));
         }
 
-        readyLatch.await();
-        startLatch.countDown();
+        RaceOutcome outcome = raceAll(attempts);
 
-        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
-        executorService.shutdown();
-
-        assertEquals(true, finished);
-        assertEquals(1, successCount.get());
-        assertEquals(numberOfThreads - 1, failureCount.get());
+        assertEquals(List.of(), outcome.unexpected(), "only a refusal may end an attempt that loses the race");
+        assertEquals(1, outcome.successes());
+        assertEquals(numberOfThreads - 1, outcome.refusals());
         assertEquals(SeatStatus.RESERVED, realZone.getSeatStatus(contestedSeat));
         assertEquals(1, realZone.getReservedAmount());
     }
 
     @Test
-    void GivenManyThreadsReserveDistinctSeatsConcurrently_WhenReserveSeatsForMember_ThenAllSucceed()
+    void GivenManyThreadsReserveDistinctSeatsConcurrently_WhenReserveForMember_ThenAllSucceed()
             throws InterruptedException {
 
         int numberOfThreads = 20;
@@ -815,14 +719,7 @@ public class ReservationServiceTest {
 
         givenEventOnSaleWith(realZone);
 
-        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-        CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(numberOfThreads);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-
+        List<Runnable> attempts = new ArrayList<>();
         for (int i = 0; i < numberOfThreads; i = i + 1) {
             final String token = "valid-token-" + i;
             final int userId = i + 1;
@@ -832,34 +729,15 @@ public class ReservationServiceTest {
             when(sessionManager.extractUserId(token)).thenReturn(userId);
             when(activeOrderRepository.getByUserId(userId)).thenReturn(null);
 
-            executorService.submit(() -> {
-                try {
-                    readyLatch.countDown();
-                    startLatch.await();
-
-                    reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
-                            InventorySelectionDTO.seated(List.of(seatLabel)));
-
-                    successCount.incrementAndGet();
-
-                } catch (Exception e) {
-                    failureCount.incrementAndGet();
-
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
+            attempts.add(() -> reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
+                    InventorySelectionDTO.seated(List.of(seatLabel))));
         }
 
-        readyLatch.await();
-        startLatch.countDown();
+        RaceOutcome outcome = raceAll(attempts);
 
-        boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
-        executorService.shutdown();
-
-        assertEquals(true, finished);
-        assertEquals(numberOfThreads, successCount.get());
-        assertEquals(0, failureCount.get());
+        assertEquals(List.of(), outcome.unexpected(), "only a refusal may end an attempt that loses the race");
+        assertEquals(numberOfThreads, outcome.successes());
+        assertEquals(0, outcome.refusals());
         assertEquals(numberOfThreads, realZone.getReservedAmount());
         assertEquals(0, realZone.getAvailableAmount());
     }
@@ -1067,15 +945,15 @@ public class ReservationServiceTest {
     @Test
     void GivenValidCartNearExpiry_WhenRenewReservationsForMemberCheckout_ThenTimersResetToFullWindow() {
         ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(9));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, aHoldStartWithOneMinuteLeft());
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         givenEventOnSaleWith(standingZoneOf(10));
 
         ActiveOrderDTO dto = reservationService.renewReservationsForMemberCheckout(USER_ID);
 
-        assertNotNull(dto);
-        assertTrue(dto.remainingSecondsBeforeExpiry() > 590,
-                "timers should be reset close to the full 10-minute window");
+        assertEquals(CartLineItem.getExpirationLimit().toSeconds(), dto.remainingSecondsBeforeExpiry(),
+                "every hold must restart at the clock, with the full window ahead of it");
+        assertEquals(List.of(NOW, NOW), realOrder.getItems().stream().map(CartLineItem::getAddedAt).toList());
         verify(activeOrderRepository).lockForUpdate("user:" + USER_ID);
         verify(activeOrderRepository).unlock("user:" + USER_ID);
         verify(activeOrderRepository).save(realOrder);
@@ -1084,7 +962,7 @@ public class ReservationServiceTest {
     @Test
     void GivenExpiredItem_WhenRenewReservationsForMemberCheckout_ThenTimersNotResetAndNotSaved() {
         ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(20));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, aHoldStartThatHasRunOut());
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         givenEventOnSaleWith(standingZoneOf(10));
 
@@ -1098,14 +976,15 @@ public class ReservationServiceTest {
     @Test
     void GivenCheckoutInProgress_WhenRenewReservationsForMemberCheckout_ThenTimersNotResetAndNotSaved() {
         ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, aHoldStartWithOneMinuteLeft());
         realOrder.markCheckoutInProgress();
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
         givenEventOnSaleWith(standingZoneOf(10));
 
         ActiveOrderDTO dto = reservationService.renewReservationsForMemberCheckout(USER_ID);
 
-        assertTrue(dto.remainingSecondsBeforeExpiry() < 120, "in-checkout cart timers must be left untouched");
+        assertEquals(Duration.ofMinutes(1).toSeconds(), dto.remainingSecondsBeforeExpiry(),
+                "in-checkout cart timers must be left untouched");
         verify(activeOrderRepository, never()).save(any());
     }
 
@@ -1124,14 +1003,14 @@ public class ReservationServiceTest {
     void GivenValidGuestCartNearExpiry_WhenRenewReservationsForGuestCheckout_ThenTimersResetToFullWindow() {
         String sessionId = "guest-session";
         ActiveOrder realOrder = ActiveOrder.forGuest(sessionId, NOW);
-        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
+        realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, aHoldStartWithOneMinuteLeft());
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(realOrder));
         givenEventOnSaleWith(standingZoneOf(10));
 
         ActiveOrderDTO dto = reservationService.renewReservationsForGuestCheckout(sessionId);
 
-        assertNotNull(dto);
-        assertTrue(dto.remainingSecondsBeforeExpiry() > 590);
+        assertEquals(CartLineItem.getExpirationLimit().toSeconds(), dto.remainingSecondsBeforeExpiry(),
+                "every hold must restart at the clock, with the full window ahead of it");
         verify(activeOrderRepository).lockForUpdate("sess:" + sessionId);
         verify(activeOrderRepository).unlock("sess:" + sessionId);
         verify(activeOrderRepository).save(realOrder);
@@ -1454,7 +1333,7 @@ public class ReservationServiceTest {
     @Test
     void GivenGuestCart_WhenRenewReservationsForGuestCheckout_ThenNoLogEventCarriesTheSessionId() {
         ActiveOrder guestCart = ActiveOrder.forGuest(LOGGED_GUEST_SID, NOW);
-        guestCart.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
+        guestCart.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, aHoldStartWithOneMinuteLeft());
         when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.of(guestCart));
         givenEventOnSaleWith(standingZoneOf(10));
         logs = LogCapture.of(ReservationService.class);
@@ -1615,6 +1494,15 @@ public class ReservationServiceTest {
                 Clock.fixed(T0, ZoneOffset.UTC));
     }
 
+    // The configured hold is a static set at startup, so hold starts are read from it, not hard-coded.
+    private static LocalDateTime aHoldStartWithOneMinuteLeft() {
+        return NOW.minus(CartLineItem.getExpirationLimit()).plusMinutes(1);
+    }
+
+    private static LocalDateTime aHoldStartThatHasRunOut() {
+        return NOW.minus(CartLineItem.getExpirationLimit()).minusMinutes(1);
+    }
+
     // A selection of no tickets. The DTO's factory refuses one, so this uses the constructor, which a
     // caller can still reach, to get past the factory to the service's own quantity check.
     private static InventorySelectionDTO zeroQuantitySelection() {
@@ -1688,6 +1576,54 @@ public class ReservationServiceTest {
         List<String> carrying = logs.eventsContaining(failure);
         assertTrue(carrying.stream().anyMatch(line -> line.startsWith("WARN ")),
                 "expected a WARN from ReservationService carrying '" + failure + "'; events carrying it: " + carrying);
+    }
+
+    // How long a race may take to get ready, and then to finish, before the test fails. A run that stalls
+    // fails either way, so the bound only has to be generous for a slow CI runner.
+    private static final long RACE_AWAIT_SECONDS = 20;
+
+    /** What a race of simultaneous attempts came to. */
+    private record RaceOutcome(int successes, int refusals, List<Throwable> unexpected) { }
+
+    // Starts every attempt at once and waits for all of them. A lost race ends in one of the refusals this
+    // path throws: the zone's or the event's IllegalStateException (no stock left, the seat is taken, the
+    // event sold out) or the cart's IllegalArgumentException (it no longer holds the line). Anything else,
+    // a NullPointerException say, is collected as unexpected rather than counted as a lost race.
+    private static RaceOutcome raceAll(List<Runnable> attempts) throws InterruptedException {
+        ExecutorService pool = Executors.newFixedThreadPool(attempts.size());
+        CountDownLatch ready = new CountDownLatch(attempts.size());
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(attempts.size());
+        AtomicInteger successes = new AtomicInteger();
+        AtomicInteger refusals = new AtomicInteger();
+        ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
+        try {
+            for (Runnable attempt : attempts) {
+                pool.submit(() -> {
+                    try {
+                        ready.countDown();
+                        if (!start.await(RACE_AWAIT_SECONDS, TimeUnit.SECONDS)) {
+                            unexpected.add(new AssertionError("the race was never started"));
+                            return;
+                        }
+                        attempt.run();
+                        successes.incrementAndGet();
+                    } catch (IllegalStateException | IllegalArgumentException refusal) {
+                        refusals.incrementAndGet();
+                    } catch (Throwable t) {
+                        unexpected.add(t);
+                    } finally {
+                        done.countDown();
+                    }
+                });
+            }
+            assertTrue(ready.await(RACE_AWAIT_SECONDS, TimeUnit.SECONDS), "the attempts did not all get ready in time");
+            start.countDown();
+            assertTrue(done.await(RACE_AWAIT_SECONDS, TimeUnit.SECONDS), "the attempts did not all finish in time");
+        } finally {
+            pool.shutdownNow();
+        }
+        return new RaceOutcome(successes.get(), refusals.get(), List.copyOf(unexpected));
     }
 
     // helper test methods:
