@@ -12,9 +12,11 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -51,6 +53,8 @@ import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.StandingZone;
@@ -254,6 +258,7 @@ class EventManagementServiceTest {
                 eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
 
                 assertTrue(event.getStatus() == EventStatus.CANCELED);
+                verify(mockEventRepo).save(event);
         }
 
         // Catalog now owns only the cancellation + hand-off: on a successful cancel it must publish an
@@ -266,6 +271,86 @@ class EventManagementServiceTest {
                 eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID);
 
                 verify(eventPublisher).publishEvent(new EventCancelledEvent(EVENT_ID, "Concert"));
+        }
+
+        // A cancel refunds every buyer, so only a member holding MANAGE_INVENTORY may start one.
+        @Test
+        public void GivenManagerWithoutManageInventory_WhenCancelEventAndRefund_ThenMissingPermissionAndNothingRefunded() {
+                when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
+                when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+
+                UnauthorizedActionException refused = assertThrows(UnauthorizedActionException.class,
+                                () -> eventService.cancelEventAndRefund(MANAGER_TOKEN, EVENT_ID));
+
+                assertTrue(refused.getMessage().contains("Missing permission: MANAGE_INVENTORY"), refused.getMessage());
+                assertEquals(EventStatus.SCHEDULED, event.getStatus());
+                verify(mockEventRepo, never()).save(any());
+                verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        public void GivenNonMember_WhenCancelEventAndRefund_ThenMissingPermissionAndNothingRefunded() {
+                User stranger = new User(99, "Stranger", "stranger@test.com", "hashedpw", 25);
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(99);
+                when(userRepository.getUserById(99)).thenReturn(stranger);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+
+                UnauthorizedActionException refused = assertThrows(UnauthorizedActionException.class,
+                                () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
+
+                assertTrue(refused.getMessage().contains("Missing permission: MANAGE_INVENTORY"), refused.getMessage());
+                assertEquals(EventStatus.SCHEDULED, event.getStatus());
+                verify(mockEventRepo, never()).save(any());
+                verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        public void GivenCompletedEvent_WhenCancelEventAndRefund_ThenRefusedAndNothingRefunded() {
+                setupStateBasedHappyPath();
+                Event completed = new Event(EVENT_ID, "Concert", 4.5, List.of("Artist1"), EventCategory.CONCERT,
+                                COMPANY_ID, EventStatus.COMPLETED, venueMap,
+                                List.of(new ShowDate(NOW_UTC.minusDays(2), NOW_UTC.minusDays(2).plusHours(2))),
+                                ZoneId.of("Asia/Jerusalem"), null, new DiscountPolicy(0));
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(completed);
+
+                IllegalStateException refused = assertThrows(IllegalStateException.class,
+                                () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
+
+                assertEquals("Cannot cancel a completed event", refused.getMessage());
+                assertEquals(EventStatus.COMPLETED, completed.getStatus());
+                verify(mockEventRepo, never()).save(any());
+                verifyNoInteractions(eventPublisher);
+        }
+
+        // The cancel is not one transaction with the refunds: the CANCELED state is saved before the sales side
+        // refunds, so a refund failure leaves the event cancelled, and cancelling again resumes the refunds (#20).
+        @Test
+        public void GivenTheRefundsFail_WhenCancelEventAndRefund_ThenTheFailurePropagatesAfterTheCanceledEventWasSaved() {
+                setupStateBasedHappyPath();
+                RefundFailedException refundsFailed = new RefundFailedException(List.of(ORDER_RECEIPT_ID), "declined");
+                doThrow(refundsFailed).when(eventPublisher).publishEvent(any(EventCancelledEvent.class));
+
+                RefundFailedException thrown = assertThrows(RefundFailedException.class,
+                                () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
+
+                assertSame(refundsFailed, thrown);
+                assertEquals(EventStatus.CANCELED, event.getStatus());
+                verify(mockEventRepo).save(event);
+        }
+
+        @Test
+        public void GivenTheRefundsFail_WhenCancelEventAndRefund_ThenTheEventLockIsReleased() {
+                setupStateBasedHappyPath();
+                doThrow(new RefundFailedException(List.of(ORDER_RECEIPT_ID), "declined"))
+                                .when(eventPublisher).publishEvent(any(EventCancelledEvent.class));
+
+                assertThrows(RefundFailedException.class, () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
+
+                verify(mockEventRepo).lockForUpdate(EVENT_ID);
+                verify(mockEventRepo).unlock(EVENT_ID);
         }
 
         // -- UC-19: owner publishes event (SCHEDULED -> ON_SALE) -------------
@@ -663,6 +748,7 @@ class EventManagementServiceTest {
                 eventService.cancelEventAndRefund(MANAGE_INVENTORY_TOKEN, EVENT_ID);
 
                 assertEquals(EventStatus.CANCELED, event.getStatus());
+                verify(mockEventRepo).save(event);
         }
 
         @Test

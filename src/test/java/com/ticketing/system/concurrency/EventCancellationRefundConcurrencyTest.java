@@ -3,14 +3,18 @@ package com.ticketing.system.concurrency;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -31,8 +35,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -52,6 +58,9 @@ import com.ticketing.system.sales.domain.TicketStatus;
 import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.shared.dto.RefundResultDTO;
 import com.ticketing.system.shared.exception.RefundFailedException;
+import com.ticketing.system.testutil.LogCapture;
+
+import ch.qos.logback.classic.Level;
 
 /**
  * Event-cancellation refunds are resumable and exactly-once (#20, ADR-001), proved on the real JPA
@@ -80,7 +89,8 @@ class EventCancellationRefundConcurrencyTest {
 
     @Autowired private ApplicationEventPublisher publisher;
     @Autowired private OrderReceiptRepository orderReceiptRepository;
-    @Autowired private TicketRepository ticketRepository;
+    // Spied on only to make one record step fail; every other call reaches the real repository.
+    @MockitoSpyBean private TicketRepository ticketRepository;
     @Autowired private SpringDataOrderReceiptRepository receiptData;
     @Autowired private SpringDataTicketRepository ticketData;
     @Autowired private EventCancellationRefundService refundService;
@@ -222,6 +232,39 @@ class EventCancellationRefundConcurrencyTest {
         }
     }
 
+    // ADR-001: once the gateway has refunded a receipt, a record step that fails must leave its claim PENDING, so
+    // no later run refunds it again; the run stops there. The record rolls back, which only a real database shows.
+    @Test
+    void GivenARefundThatCannotBeRecorded_WhenCancellationIsReplayed_ThenTheReceiptStaysPendingAndIsNeverRefundedAgain() {
+        int unrecorded = RECEIPT_IDS[0];
+        int unrecordedCharge = CHARGE_BASE + unrecorded;
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("database unreachable");
+        doThrow(storeDown).when(ticketRepository).save(argThat(ticket -> ticket.getOrderReceiptId() == unrecorded));
+
+        Throwable failure;
+        try (LogCapture logs = LogCapture.of(EventCancellationRefundService.class)) {
+            failure = assertThrows(DataAccessResourceFailureException.class, this::publishCancellation);
+            assertTrue(logs.messagesAt(Level.ERROR).stream().anyMatch(
+                    message -> message.contains("Receipt " + unrecorded) && message.contains("could not be recorded")),
+                    "an operator must learn which receipt needs manual recovery: " + logs.messagesAt(Level.ERROR));
+        }
+
+        assertSame(storeDown, failure, "the record failure itself stops the run");
+        assertEquals(LineRefundState.PENDING, committedRefundStateOf(unrecorded),
+                "the record rolled back, so the committed claim stays");
+        assertEquals(List.of(TicketStatus.PAID), ticketRepository.findByOrderReceiptId(unrecorded).stream()
+                .map(Ticket::getStatus).toList(), "the record rolled back, so the ticket stays sold");
+        assertEquals(Map.of(unrecordedCharge, 1), countsOf(refundsByCharge), "the run stops at the failed record");
+
+        RefundFailedException stillPending = assertThrows(RefundFailedException.class, this::publishCancellation);
+
+        assertTrue(isOnlyStillPending(stillPending)
+                && stillPending.getMessage().contains("still pending: [" + unrecorded + "]"), stillPending.getMessage());
+        assertEquals(Map.of(unrecordedCharge, 1, CHARGE_BASE + RECEIPT_IDS[1], 1, CHARGE_BASE + RECEIPT_IDS[2], 1),
+                countsOf(refundsByCharge), "the replay refunds the others once, and the unrecorded receipt never again");
+        assertEquals(LineRefundState.PENDING, committedRefundStateOf(unrecorded));
+    }
+
     // Review finding 5 on #129: even when a caller wraps the run in its own transaction, each claim must
     // commit before the gateway call, or a concurrent run could claim the same lines and V3-TX-02 breaks.
     @Test
@@ -239,6 +282,12 @@ class EventCancellationRefundConcurrencyTest {
 
         assertEquals(List.of(LineRefundState.PENDING, LineRefundState.PENDING, LineRefundState.PENDING),
                 committedStatesDuringGatewayCalls);
+    }
+
+    private static Map<Integer, Integer> countsOf(Map<Integer, AtomicInteger> counters) {
+        Map<Integer, Integer> counts = new HashMap<>();
+        counters.forEach((key, counter) -> counts.put(key, counter.get()));
+        return counts;
     }
 
     /** Reads the receipt's line state in a separate transaction, so it sees only committed data. */
