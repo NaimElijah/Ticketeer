@@ -37,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import ch.qos.logback.classic.Level;
@@ -3112,6 +3113,32 @@ private AtomicBoolean trackReceiptSave() {
         }
         when(mockTicketIssuer.issue(any())).thenReturn(
                 new IssuanceResultDTO(ISSUANCE_TRANSACTION_ID, "issuer", NOW, barcodes));
+    }
+
+    // The gateway's charged amount crosses a trust boundary. One that is no finite, non-negative sum fails the
+    // purchase (NaN compares false with everything, so it slipped past the mismatch check), and checkout sends
+    // it to no refund: it logs the transaction for an operator to reconcile instead.
+    @ParameterizedTest
+    @ValueSource(doubles = {Double.NaN, Double.POSITIVE_INFINITY, -100.0})
+    void GivenGatewayReportsAChargeThatIsNoValidSum_WhenCheckout_ThenPurchaseFailsAndNoRefundIsSent(double charged) {
+        arrangeMemberStandingCart();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        when(mockPaymentGateway.charge(any())).thenReturn(
+                new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", charged, CURRENCY, NOW));
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            assertInstanceOf(PaymentGatewayException.class, failure.getCause(),
+                    "a charge of " + charged + " must fail the purchase, but the cause was " + failure.getCause());
+            verify(mockTicketIssuer, never()).issue(any());
+            verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+            List<String> errors = logs.messagesAt(Level.ERROR);
+            assertTrue(errors.stream().anyMatch(message -> message.contains("transactionId=" + PAYMENT_TRANSACTION_ID)
+                            && message.contains("reconcil")),
+                    "the unrefunded transaction must be logged at ERROR for an operator, but ERROR carried " + errors);
+        }
     }
 
     // An operator reconciling a failed refund needs the sum the buyer is owed: what the gateway took, which an
