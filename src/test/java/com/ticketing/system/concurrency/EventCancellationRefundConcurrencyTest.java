@@ -1,22 +1,29 @@
 package com.ticketing.system.concurrency;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +74,8 @@ class EventCancellationRefundConcurrencyTest {
     private static final int CONCURRENT_RUNS = 6;
     // How long a worker waits for the start signal: one that never gets it ends instead of waiting forever.
     private static final int FIRE_TIMEOUT_SECONDS = 10;
+    // Bounds every wait of the held-claim test, so a run that never arrives fails it instead of hanging it.
+    private static final long AWAIT_SECONDS = 20;
     private static final LocalDateTime WHEN = LocalDateTime.of(2026, 6, 1, 12, 0);
 
     @Autowired private ApplicationEventPublisher publisher;
@@ -176,6 +185,43 @@ class EventCancellationRefundConcurrencyTest {
         assertEachReceiptRefundedExactlyOnce();
     }
 
+    // The replays above may run one after another, each finding the others' receipts already refunded. Here
+    // the second run starts while the first is in the gateway with the first receipt's claim committed.
+    @Test
+    void GivenARunHoldingAClaimInTheGateway_WhenASecondRunStarts_ThenItSkipsTheReceiptAndReportsItPending()
+            throws Exception {
+        int heldReceipt = RECEIPT_IDS[0];
+        int heldCharge = CHARGE_BASE + heldReceipt;
+        CountDownLatch firstInGateway = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        holdTheFirstRefundOf(heldCharge, firstInGateway, releaseFirst);
+        ExecutorService firstRunner = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> firstRun = firstRunner.submit(this::publishCancellation);
+            awaitOrFail(firstInGateway, "arrangement: the first run reaches the gateway with receipt " + heldReceipt);
+
+            Throwable secondRunFailure = failureOf(() -> {
+                publishCancellation();
+                return null;
+            });
+            int heldChargeRefundsByTheSecondRun = refundsByCharge.get(heldCharge).get() - 1;
+            releaseFirst.countDown();
+            Throwable firstRunFailure = failureOf(() -> firstRun.get(AWAIT_SECONDS, TimeUnit.SECONDS));
+
+            RefundFailedException reported = assertInstanceOf(RefundFailedException.class, secondRunFailure,
+                    "the second run must not report the event refunded while a receipt's refund is in flight");
+            assertTrue(isOnlyStillPending(reported)
+                    && reported.getMessage().contains("still pending: [" + heldReceipt + "]"),
+                    "the second run reports only the held receipt, as still pending: " + reported.getMessage());
+            assertEquals(0, heldChargeRefundsByTheSecondRun, "the second run skips the claimed receipt");
+            assertNull(firstRunFailure, "the first run completes the refund it claimed");
+            assertEachReceiptRefundedExactlyOnce();
+        } finally {
+            releaseFirst.countDown();
+            firstRunner.shutdownNow();
+        }
+    }
+
     // Review finding 5 on #129: even when a caller wraps the run in its own transaction, each claim must
     // commit before the gateway call, or a concurrent run could claim the same lines and V3-TX-02 breaks.
     @Test
@@ -201,6 +247,43 @@ class EventCancellationRefundConcurrencyTest {
         separate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         return separate.execute(status -> orderReceiptRepository.findByOrderReceiptId(receiptId).orElseThrow()
                 .getReceiptLines().get(0).getRefundState());
+    }
+
+    /**
+     * Makes the gateway hold the first refund of {@code heldCharge} until {@code release} opens, signalling
+     * {@code inGateway} once it is held. Every refund answers validly and is counted in {@link #refundsByCharge}
+     * as it arrives.
+     */
+    private void holdTheFirstRefundOf(int heldCharge, CountDownLatch inGateway, CountDownLatch release) {
+        AtomicBoolean holding = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            int chargeId = invocation.getArgument(0);
+            refundsByCharge.computeIfAbsent(chargeId, id -> new AtomicInteger()).incrementAndGet();
+            if (chargeId == heldCharge && holding.getAndSet(false)) {
+                inGateway.countDown();
+                awaitOrFail(release, "the test releases the held refund");
+            }
+            return new RefundResultDTO("refund-" + chargeId, String.valueOf(chargeId), invocation.getArgument(1),
+                    WHEN, List.of(), List.of());
+        }).when(paymentGateway).refund(anyInt(), anyDouble());
+    }
+
+    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
+    private static Throwable failureOf(Callable<?> call) {
+        try {
+            call.call();
+            return null;
+        } catch (ExecutionException e) {
+            return e.getCause();
+        } catch (Exception e) {
+            return e;
+        }
+    }
+
+    private static void awaitOrFail(CountDownLatch latch, String what) throws InterruptedException {
+        if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
+            throw new IllegalStateException(what + ", but it never did");
+        }
     }
 
     /** Whether a run's failure reports only receipts still pending under another run's claim, none declined. */
