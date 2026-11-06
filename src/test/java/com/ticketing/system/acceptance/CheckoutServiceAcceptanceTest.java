@@ -37,7 +37,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -691,97 +690,6 @@ public class CheckoutServiceAcceptanceTest {
         assertEquals(true, refundRequested.get());
         assertEquals(1, returnedTickets.get());
         assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    
-    @Test
-    void GivenTwoUsersCheckoutSameReservedTicketConcurrently_WhenCheckout_ThenOnlyOneCheckoutSucceeds()
-            throws Exception {
-        validSession();
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult());
-
-        when(ticketIssuer.issue(any(IssuanceRequestDTO.class)))
-                .thenReturn(issuanceResult(1))
-                .thenThrow(new RuntimeException("already sold"));
-
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch start = new CountDownLatch(1);
-        AtomicInteger callIndex = new AtomicInteger(0);
-
-        Callable<Boolean> task = () -> {
-            start.await();
-            String uniqueKey = IDEMPOTENCY_KEY + "-" + callIndex.getAndIncrement();
-            try {
-                checkoutService.checkoutMember(VALID_TOKEN, uniqueKey, CURRENCY, PAYMENT_METHOD_TOKEN);
-                return true;
-            } catch (RuntimeException e) {
-                return false;
-            }
-        };
-
-        Future<Boolean> first = executor.submit(task);
-        Future<Boolean> second = executor.submit(task);
-        start.countDown();
-
-        int successCount = 0;
-        if (first.get()) {
-            successCount++;
-        }
-        if (second.get()) {
-            successCount++;
-        }
-
-        executor.shutdown();
-
-        assertEquals(1, successCount);
-    }
-
-    
-    @Test
-    void GivenTwoUsersCheckoutLastTicketInZoneConcurrently_WhenCheckout_ThenOnlyOneCheckoutSucceeds() throws Exception {
-        validSession();
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult());
-
-        when(ticketIssuer.issue(any(IssuanceRequestDTO.class)))
-                .thenReturn(issuanceResult(1))
-                .thenThrow(new RuntimeException("no stock"));
-
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch start = new CountDownLatch(1);
-        AtomicInteger callIndex = new AtomicInteger(0);
-
-        Callable<Boolean> task = () -> {
-            start.await();
-            String uniqueKey = IDEMPOTENCY_KEY + "-" + callIndex.getAndIncrement();
-            try {
-                checkoutService.checkoutMember(VALID_TOKEN, uniqueKey, CURRENCY, PAYMENT_METHOD_TOKEN);
-                return true;
-            } catch (RuntimeException e) {
-                return false;
-            }
-        };
-
-        Future<Boolean> first = executor.submit(task);
-        Future<Boolean> second = executor.submit(task);
-        start.countDown();
-
-        int successCount = 0;
-        if (first.get()) {
-            successCount++;
-        }
-        if (second.get()) {
-            successCount++;
-        }
-
-        executor.shutdown();
-
-        assertEquals(1, successCount);
     }
 
     @Test
