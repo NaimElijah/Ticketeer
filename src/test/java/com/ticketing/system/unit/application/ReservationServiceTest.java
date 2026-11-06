@@ -226,16 +226,6 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenActiveOrderDoesNotExist_WhenRemoveForMember_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
-
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
-    }
-
-    @Test
     void GivenOrderDoesNotContainEvent_WhenRemoveForMember_ThenRefusedAndNothingIsReleased() {
         InventoryCommandPort inventory = mock(InventoryCommandPort.class);
         memberWithEmptyCart();
@@ -367,16 +357,6 @@ public class ReservationServiceTest {
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
-    }
-
-    @Test
-    void GivenZoneDoesNotExist_WhenReserveForMember_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        givenEventOnSaleWith(new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE));
-
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
     }
 

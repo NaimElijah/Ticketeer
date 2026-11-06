@@ -169,22 +169,6 @@ class PurchasePolicyEnforcementAcceptanceTest {
         assertEquals(3, zoneOf(f).getReservedAmount(), "the zone holds only the first three");
     }
 
-    @Test
-    void GivenMinTwoPolicy_WhenBuyerChecksOutOne_ThenRejectedWithClearReason() {
-        Fixture f = newPolicyEvent(2, 4);
-        AuthTokenDTO buyer = registerAndLogin("polBuyer");
-
-        // MIN is deferred at reserve (cart still being built) — one ticket reserves fine …
-        reservationService.reserveForMember(
-                buyer.token(), f.eventId, f.zoneId, InventorySelectionDTO.standing(1));
-
-        // … but fails at checkout, and the buyer must see the specific reason.
-        assertPolicyViolation(
-                () -> checkoutService.checkoutMember(
-                        buyer.token(), "idem-" + SEQ.incrementAndGet(), "ILS", card()),
-                "at least 2");
-    }
-
     // II.2.8, all or nothing: the refused checkout records no purchase, returns the hold to stock and
     // empties the cart. That it charges nothing is CheckoutServiceTest's, whose gateway is a mock
     // (GivenQuantityBelowMinTicketsPolicy_WhenCheckout_ThenThrowExceptionAndPaymentNotCharged).
@@ -192,6 +176,7 @@ class PurchasePolicyEnforcementAcceptanceTest {
     void GivenMinTwoPolicy_WhenBuyerChecksOutOne_ThenNothingIsBoughtAndTheHoldIsReleased() {
         Fixture f = newPolicyEvent(2, 4);
         AuthTokenDTO buyer = registerAndLogin("polBuyer");
+        // MIN is deferred at reserve, while the cart is still being built, so one ticket reserves fine.
         reservationService.reserveForMember(
                 buyer.token(), f.eventId, f.zoneId, InventorySelectionDTO.standing(1));
 
