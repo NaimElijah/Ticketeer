@@ -24,6 +24,8 @@ import com.ticketing.system.sales.adapter.out.persistence.MemoryActiveOrderRepos
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -72,13 +74,15 @@ class CheckoutServiceOutcomesTest {
     private ProductionCompanyRepository companyRepository;
 
     private static final String VALID_TOKEN = "valid-token";
-    private static final String INVALID_TOKEN = "invalid-token";
+    private static final String REVOKED_TOKEN = "revoked-token";
+    private static final String EXPIRED_TOKEN = "expired-token";
     private static final String IDEMPOTENCY_KEY = "idem-123";
     private static final String CURRENCY = "ILS";
     private static final CardDetailsDTO PAYMENT_METHOD_TOKEN =
             new CardDetailsDTO("4111111111111234", "123", 12, 2030, "Test Holder");
 
     private static final int USER_ID = 1;
+    private static final int PAYMENT_TRANSACTION_ID = 123;
     private static final int EVENT_ID_1 = 10;
     private static final int EVENT_ID_2 = 20;
     private static final int ZONE_ID_1 = 100;
@@ -292,7 +296,7 @@ class CheckoutServiceOutcomesTest {
     private void validPaymentAndIssuance(int ticketCount) {
         when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenAnswer(invocation -> {
             PaymentRequestDTO request = invocation.getArgument(0);
-            return new PaymentResultDTO(123, "MockGateway", request.amount(), CURRENCY, NOW);
+            return new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "MockGateway", request.amount(), CURRENCY, NOW);
         });
         when(ticketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(issuanceResult(ticketCount));
     }
@@ -382,26 +386,31 @@ class CheckoutServiceOutcomesTest {
         assertTheCartStillHoldsItsPlace(zone);
     }
 
+    // The session manager refuses a token by throwing, as JwtSessionManager does for a revoked session; it
+    // answers false only for a null or blank token.
     @Test
-    void GivenInvalidToken_WhenCheckout_ThenThrowException() {
-        when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
+    void GivenARevokedToken_WhenCheckoutMember_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
+        when(sessionManager.validateToken(REVOKED_TOKEN)).thenThrow(new InvalidTokenException("session not found"));
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(INVALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(REVOKED_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class,
+                "Invalid authentication token: session not found");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
-    void GivenExpiredToken_WhenCheckout_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
+    void GivenAnExpiredToken_WhenCheckoutMember_ThenRefusedAsAnExpiredSessionAndNothingCharged() {
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
+        when(sessionManager.validateToken(EXPIRED_TOKEN)).thenThrow(new SessionExpiredException());
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(EXPIRED_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertRefusedBeforeAnyCharge(failure, SessionExpiredException.class, "Session expired; please re-authenticate");
+        assertTheCartStillHoldsItsPlace(zone);
     }
 
     @Test
@@ -510,80 +519,6 @@ class CheckoutServiceOutcomesTest {
     }
 
     @Test
-    void GivenPaymentGatewayFails_WhenCheckout_ThenThrowExceptionAndReturnTicketsToStock() {
-        validSession();
-        AtomicInteger returnedTickets = trackReturnedTickets(event1, ZONE_ID_1);
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(null);
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals(1, returnedTickets.get());
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
-    void GivenPaymentGatewayThrowsException_WhenCheckout_ThenThrowExceptionAndReturnTicketsToStock() {
-        validSession();
-        AtomicInteger returnedTickets = trackReturnedTickets(event1, ZONE_ID_1);
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenThrow(new RuntimeException("payment failed"));
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals(1, returnedTickets.get());
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
-    void GivenTicketIssuerReturnsNull_WhenCheckout_ThenThrowExceptionAndRefundPaymentAndReturnTicketsToStock() {
-        validSession();
-        AtomicBoolean refundRequested = trackRefund();
-        AtomicInteger returnedTickets = trackReturnedTickets(event1, ZONE_ID_1);
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult());
-        when(ticketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(null);
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals(true, refundRequested.get());
-        assertEquals(1, returnedTickets.get());
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
-    void GivenTicketIssuerReturnsEmptyBarcodes_WhenCheckout_ThenThrowExceptionAndRefundPaymentAndReturnTicketsToStock() {
-        validSession();
-        AtomicBoolean refundRequested = trackRefund();
-        AtomicInteger returnedTickets = trackReturnedTickets(event1, ZONE_ID_1);
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult());
-        when(ticketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(issuanceResult(0));
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals(true, refundRequested.get());
-        assertEquals(1, returnedTickets.get());
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
     void GivenTicketIssuerReturnsLessBarcodesThanItems_WhenCheckout_ThenThrowExceptionAndRefundPaymentAndReturnTicketsToStock() {
         validSession();
         AtomicBoolean refundRequested = trackRefund();
@@ -607,24 +542,27 @@ class CheckoutServiceOutcomesTest {
         assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
     }
 
+    // TicketIssuer refuses by throwing TicketIssuanceFailedException. The buyer was charged, so the charge is
+    // refunded in full, nothing is saved, and the place goes back to stock (II.2.8, business rule 4).
     @Test
-    void GivenTicketIssuerThrowsException_WhenCheckout_ThenThrowExceptionAndRefundPaymentAndReturnTicketsToStock() {
+    void GivenTheIssuerRefusesAfterTheCharge_WhenCheckoutMember_ThenTheChargeIsRefundedAndThePlaceReturned() {
         validSession();
-        AtomicBoolean refundRequested = trackRefund();
-        AtomicInteger returnedTickets = trackReturnedTickets(event1, ZONE_ID_1);
+        StandingZone zone = givenAMemberCartHoldingOnePlace();
+        validPaymentAndIssuance(1);
+        when(ticketIssuer.issue(any(IssuanceRequestDTO.class)))
+                .thenThrow(new TicketIssuanceFailedException("rejected by the issuer"));
 
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult());
-        when(ticketIssuer.issue(any(IssuanceRequestDTO.class))).thenThrow(new RuntimeException("issuer failed"));
+        RuntimeException failure = assertThrows(RuntimeException.class, () ->
+                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals(true, refundRequested.get());
-        assertEquals(1, returnedTickets.get());
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
+        assertInstanceOf(TicketIssuanceFailedException.class, failure.getCause(),
+                "the checkout must fail on the issuer's refusal, but the cause was " + failure.getCause());
+        verify(paymentGateway).refund(PAYMENT_TRANSACTION_ID, 100.0);
+        verify(ticketRepository, never()).save(any());
+        verify(orderReceiptRepository, never()).save(any());
+        assertTrue(activeOrderRepository.getByUserId(USER_ID).isEmpty(), "the rollback must clear the cart");
+        assertEquals(5, zone.getAvailableAmount(), "the held place must be back in stock");
+        assertEquals(0, zone.getReservedAmount());
     }
 
     @Test
