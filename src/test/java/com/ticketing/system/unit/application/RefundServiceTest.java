@@ -51,6 +51,7 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryOrderReceiptRepository;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.Tickets;
 
 import ch.qos.logback.classic.Level;
 
@@ -245,6 +246,92 @@ class RefundServiceTest {
 
         assertThat(receipt.isFullyRefunded()).isFalse();
         Mockito.verify(orderReceiptRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verifyNoInteractions(ticketRepository, inventoryPort);
+    }
+
+    // A guest's order has no member holder, so no member token can claim its refund.
+    @Test
+    void GivenAGuestsOrder_WhenAMemberRequestsItsRefund_ThenUnauthorizedAndTheGatewayIsNotCalled() {
+        OrderReceipt guestReceipt = OrderReceipt.forGuest("guest@example.com", "guest-session", ORDER_ID, TOTAL,
+                List.of(new ReceiptLine(101, TOTAL, 2, 1, "15", WHEN)), WHEN,
+                List.of(TransactionRecord.paymentCharge(PAYMENT_TX, "stub", TOTAL, "ILS", WHEN)));
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(guestReceipt));
+
+        assertThatThrownBy(() -> service.requestRefund(VALID_TOKEN, ORDER_ID, "x"))
+                .isExactlyInstanceOf(UnauthorizedActionException.class);
+
+        Mockito.verify(paymentGateway, Mockito.never()).refund(Mockito.anyInt(), Mockito.anyDouble());
+        Mockito.verify(orderReceiptRepository, Mockito.never()).save(Mockito.any());
+        assertThat(guestReceipt.hasRefundedOrPendingLines()).as("the guest's order is untouched").isFalse();
+        Mockito.verifyNoInteractions(ticketRepository, inventoryPort);
+    }
+
+    @Test
+    void GivenAPaidOrderWithoutACharge_WhenRequestRefund_ThenRefundFailedAndTheGatewayIsNotCalled() {
+        OrderReceipt uncharged = OrderReceipt.forMember(ORDER_ID, USER_ID, TOTAL,
+                List.of(new ReceiptLine(101, TOTAL, 2, 1, "15", WHEN)), WHEN);
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(uncharged));
+
+        assertThatThrownBy(() -> service.requestRefund(VALID_TOKEN, ORDER_ID, "x"))
+                .isExactlyInstanceOf(RefundFailedException.class)
+                .hasMessageContaining("receipt does not contain a payment transaction");
+
+        Mockito.verify(paymentGateway, Mockito.never()).refund(Mockito.anyInt(), Mockito.anyDouble());
+        Mockito.verify(orderReceiptRepository, Mockito.never()).save(Mockito.any());
+        assertThat(uncharged.hasRefundedOrPendingLines()).as("nothing is recorded as refunded").isFalse();
+        Mockito.verifyNoInteractions(ticketRepository, inventoryPort);
+    }
+
+    // A ticket that was never sold, such as one stored RESERVED, is voided with the order, and its place is
+    // not handed back to stock: only a sold place is.
+    @Test
+    void GivenAReservedTicketOnTheOrder_WhenRequestRefund_ThenItIsVoidedAndOnlyTheSoldSeatReturnsToStock() {
+        OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
+        Ticket sold = seatedTicket();
+        Ticket reserved = Tickets.storedAs(TicketStatus.RESERVED, EVENT_ID, ZONE_ID, ORDER_ID, "B2", TOTAL, 504,
+                "barcode-4");
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(receipt));
+        Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(gatewayResult());
+        Mockito.when(paymentGateway.getId()).thenReturn("stub");
+        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(sold, reserved));
+
+        service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
+
+        assertThat(reserved.getStatus()).isEqualTo(TicketStatus.VOIDED);
+        Mockito.verify(ticketRepository).save(reserved);
+        assertThat(sold.getStatus()).isEqualTo(TicketStatus.REFUNDED);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<InventoryLineDTO>> linesCaptor = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(inventoryPort).returnSoldToStock(linesCaptor.capture());
+        assertThat(linesCaptor.getValue())
+                .as("only the sold seat goes back to stock")
+                .containsExactly(new InventoryLineDTO(EVENT_ID, ZONE_ID, "A9"));
+    }
+
+    @Test
+    void GivenAStandingPaidOrder_WhenRequestRefund_ThenItsPlaceReturnsToStockWithoutASeat() {
+        OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(receipt));
+        Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(gatewayResult());
+        Mockito.when(paymentGateway.getId()).thenReturn("stub");
+        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(ticket));
+
+        service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<InventoryLineDTO>> linesCaptor = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(inventoryPort).returnSoldToStock(linesCaptor.capture());
+        assertThat(linesCaptor.getValue())
+                .as("a standing place is one unit of its zone, named by no seat")
+                .containsExactly(new InventoryLineDTO(EVENT_ID, ZONE_ID, null));
     }
 
     // X1 regression: two concurrent refund requests for the same order must not both reach the gateway.
