@@ -3114,6 +3114,29 @@ private AtomicBoolean trackReceiptSave() {
                 new IssuanceResultDTO(ISSUANCE_TRANSACTION_ID, "issuer", NOW, barcodes));
     }
 
+    // An operator reconciling a failed refund needs the sum the buyer is owed: what the gateway took, which an
+    // amount mismatch makes differ from the order's total.
+    @Test
+    void GivenRefundFailsAfterAnAmountMismatch_WhenCheckout_ThenTheErrorNamesTheChargedAmount() {
+        arrangeMemberStandingCart();
+        double charged = 120.0;
+        when(mockPaymentGateway.charge(any())).thenReturn(
+                new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", charged, CURRENCY, NOW));
+        doThrow(new RefundFailedException(PAYMENT_TRANSACTION_ID, "declined by the gateway"))
+                .when(mockPaymentGateway).refund(PAYMENT_TRANSACTION_ID, charged);
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            assertThrows(RuntimeException.class, () ->
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+
+            List<String> errors = logs.messagesAt(Level.ERROR);
+            assertTrue(errors.stream().anyMatch(message -> message.contains("Refund failed")
+                            && message.contains("transactionId=" + PAYMENT_TRANSACTION_ID)
+                            && message.contains("amount=" + charged)),
+                    "the failed refund's ERROR line must name the charged amount, but ERROR carried " + errors);
+        }
+    }
+
     // A race lost on every Phase 3 attempt is an expected outcome under load, not an operator's problem.
     @Test
     void GivenPhase3LosesEveryVersionRace_WhenCheckoutMember_ThenTheFailureIsLoggedAtWarnWithTheException() {
