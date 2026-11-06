@@ -13,6 +13,8 @@ import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.PolicyViolationException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.sales.domain.ActiveOrder;
@@ -73,6 +75,7 @@ import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 
@@ -101,6 +104,8 @@ public class ReservationServiceTest {
     private static final double PRICE = 100.0;
     // A zone of the event that is not ZONE_ID, for a venue without the zone a request names.
     private static final int OTHER_ZONE_ID = 6;
+    // An event a cart line still names after the event was deleted.
+    private static final int DELETED_EVENT_ID = 11;
 
     @BeforeEach
     void setUp() {
@@ -1141,6 +1146,253 @@ public class ReservationServiceTest {
         verify(activeOrderRepository).save(realOrder);
     }
 
+    // ---------------------------------------------------------------------
+    // Abandoning a cart releases every hold it has, then deletes it
+    // ---------------------------------------------------------------------
+
+    @Test
+    void GivenACartHoldingStandingAndSeatedTickets_WhenAbandonActiveOrder_ThenEveryHoldIsReleasedAndTheCartDeleted() {
+        StandingZone vip = standingZoneOf(10);
+        SeatedZone stalls = stallsWithSeatsA1AndA2();
+        givenEventOnSaleWith(vip, stalls);
+        ActiveOrder cart = givenMemberCartHolding(vip, QUANTITY);
+        holdSeatsFor(cart, stalls, List.of("A1"));
+
+        reservationService.abandonActiveOrder(BuyerContextDTO.member(USER_ID));
+
+        assertEquals(0, vip.getReservedAmount(), "the cart's standing holds must go back to stock");
+        assertEquals(10, vip.getAvailableAmount());
+        assertEquals(SeatStatus.AVAILABLE, stalls.getSeatStatus("A1"), "the cart's seat must go back to stock");
+        verify(activeOrderRepository).delete(cart);
+        verify(activeOrderRepository).unlock("user:" + USER_ID);
+    }
+
+    @Test
+    void GivenACartInCheckout_WhenAbandonActiveOrder_ThenRefusedAndItsHoldsAndLinesAreKept() {
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = givenMemberCartHolding(vip, QUANTITY);
+        cart.markCheckoutInProgress();
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> reservationService.abandonActiveOrder(BuyerContextDTO.member(USER_ID)));
+
+        assertEquals("Cannot abandon active order while checkout is in progress", refused.getMessage());
+        assertEquals(QUANTITY, vip.getReservedAmount(), "a cart being paid for must keep its holds");
+        assertEquals(QUANTITY, cart.getItems().size());
+        verify(activeOrderRepository, never()).delete(any());
+        verify(activeOrderRepository).unlock("user:" + USER_ID);
+    }
+
+    @Test
+    void GivenACartWhoseFirstLineIsOfADeletedEvent_WhenAbandonActiveOrder_ThenTheOtherHoldsAreReleasedAndTheCartDeleted() {
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        cart.addStandingReservation(DELETED_EVENT_ID, ZONE_ID, 1, PRICE, NOW);
+        cart.addStandingReservation(EVENT_ID, ZONE_ID, QUANTITY, PRICE, NOW);
+        vip.reserve(InventorySelection.standing(QUANTITY, cart.getOrderKey()));
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
+        when(eventRepository.findById(DELETED_EVENT_ID)).thenThrow(new EventNotFoundException(DELETED_EVENT_ID));
+
+        assertDoesNotThrow(() -> reservationService.abandonActiveOrder(BuyerContextDTO.member(USER_ID)));
+
+        assertEquals(0, vip.getReservedAmount(), "a release that fails must not stop the lines after it");
+        verify(activeOrderRepository).delete(cart);
+    }
+
+    // ---------------------------------------------------------------------
+    // A removal whose cart save fails after the release puts the hold and the line back
+    // ---------------------------------------------------------------------
+
+    @Test
+    void GivenTheCartSaveFailsAfterTheRelease_WhenRemoveSeatForMember_ThenTheSeatIsHeldAgainAndItsLineReAdded() {
+        SeatedZone stalls = new SeatedZone(ZONE_ID, "Stalls", PRICE, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
+        givenEventOnSaleWith(stalls);
+        ActiveOrder cart = memberWithEmptyCart();
+        cart.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2"), PRICE, NOW);
+        stalls.reserve(InventorySelection.seated(List.of("A1", "A2"), cart.getOrderKey()));
+        DataAccessResourceFailureException saveFailure = new DataAccessResourceFailureException("cart store down");
+        doThrow(saveFailure).doNothing().when(activeOrderRepository).save(cart);
+
+        assertSame(saveFailure, assertThrows(DataAccessResourceFailureException.class,
+                () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.seated(List.of("A2")))));
+
+        assertEquals(SeatStatus.RESERVED, stalls.getSeatStatus("A2"), "the released seat must be held again");
+        assertEquals(cart.getOrderKey(), stalls.getSeatByLabel("A2").getReservedByOrderKey());
+        assertEquals(NOW.plus(CartLineItem.getExpirationLimit()), stalls.getSeatByLabel("A2").getReservedUntil(),
+                "the restored hold runs a full hold from the clock");
+        assertEquals(List.of("A1", "A2"),
+                cart.getItems().stream().map(CartLineItem::getSeatNumber).sorted().toList(),
+                "the removed line must be back in the cart");
+        verify(activeOrderRepository, times(2)).save(cart);
+    }
+
+    // ---------------------------------------------------------------------
+    // The purchase policy's maximum counts what the cart already holds for the event
+    // ---------------------------------------------------------------------
+
+    private static final int MAX_TICKETS_PER_BUYER = 4;
+    private static final int HELD_BEFORE = 2;
+
+    @Test
+    void GivenTwoTicketsHeldUnderAMaxOfFour_WhenReserveThreeMoreForMember_ThenRefusedByThePolicyAndNothingMoreIsHeld() {
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWithPolicy(new MaxTicketsPurchasePolicy(MAX_TICKETS_PER_BUYER), vip);
+        givenSignedInMember();
+        ActiveOrder cart = givenMemberCartHolding(vip, HELD_BEFORE);
+
+        assertThrows(PolicyViolationException.class, () -> reservationService.reserveForMember(VALID_TOKEN,
+                EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(MAX_TICKETS_PER_BUYER - HELD_BEFORE + 1)),
+                "splitting a purchase must not get past the maximum");
+
+        assertEquals(HELD_BEFORE, vip.getReservedAmount());
+        assertEquals(HELD_BEFORE, cart.getItems().size());
+        verify(activeOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void GivenTwoTicketsHeldUnderAMaxOfFour_WhenReserveTwoMoreForMember_ThenAllFourAreHeld() {
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWithPolicy(new MaxTicketsPurchasePolicy(MAX_TICKETS_PER_BUYER), vip);
+        givenSignedInMember();
+        ActiveOrder cart = givenMemberCartHolding(vip, HELD_BEFORE);
+
+        reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                InventorySelectionDTO.standing(MAX_TICKETS_PER_BUYER - HELD_BEFORE));
+
+        assertEquals(MAX_TICKETS_PER_BUYER, vip.getReservedAmount());
+        assertEquals(MAX_TICKETS_PER_BUYER, cart.getItems().size());
+        verify(activeOrderRepository).save(cart);
+    }
+
+    // ---------------------------------------------------------------------
+    // removeLine routes a member token to the member's cart and anything else to a guest's
+    // ---------------------------------------------------------------------
+
+    private static final String MEMBER_JWT = "header.payload.signature";
+
+    @Test
+    void GivenAMemberToken_WhenRemoveLine_ThenTheLineLeavesTheMembersCart() {
+        when(sessionManager.validateToken(MEMBER_JWT)).thenReturn(true);
+        when(sessionManager.extractUserId(MEMBER_JWT)).thenReturn(USER_ID);
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = givenMemberCartHolding(vip, QUANTITY);
+
+        reservationService.removeLine(MEMBER_JWT, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(1));
+
+        assertEquals(QUANTITY - 1, cart.getItems().size());
+        assertEquals(QUANTITY - 1, vip.getReservedAmount());
+        verify(activeOrderRepository, never()).getBySessionId(any());
+    }
+
+    @Test
+    void GivenAGuestSessionId_WhenRemoveLine_ThenTheLineLeavesTheGuestsCart() {
+        String sessionId = "guest-session";
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = givenGuestCartHolding(sessionId, vip, QUANTITY);
+
+        reservationService.removeLine(sessionId, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(1));
+
+        assertEquals(QUANTITY - 1, cart.getItems().size());
+        assertEquals(QUANTITY - 1, vip.getReservedAmount());
+        verify(sessionManager, never()).validateToken(any());
+    }
+
+    @Test
+    void GivenARevokedMemberToken_WhenRemoveLine_ThenTheRefusalPropagatesAndNoGuestCartIsTried() {
+        InvalidTokenException revoked = new InvalidTokenException("revoked");
+        when(sessionManager.validateToken(MEMBER_JWT)).thenThrow(revoked);
+
+        assertSame(revoked, assertThrows(InvalidTokenException.class,
+                () -> reservationService.removeLine(MEMBER_JWT, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(1))));
+
+        verifyNoInteractions(activeOrderRepository, eventRepository);
+    }
+
+    @Test
+    void GivenAGuestCartHoldingTwo_WhenRemoveOneForGuest_ThenOneHoldIsReleasedAndOneLineRemoved() {
+        String sessionId = "guest-session";
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = givenGuestCartHolding(sessionId, vip, QUANTITY);
+
+        reservationService.removeForGuest(sessionId, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(1));
+
+        assertEquals(QUANTITY - 1, vip.getReservedAmount());
+        assertEquals(QUANTITY - 1, cart.getItems().size());
+        verify(activeOrderRepository).save(cart);
+    }
+
+    // ---------------------------------------------------------------------
+    // The closed market stops new holds for every buyer, and never stops a removal (UC-32 / I.2.1)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void GivenMarketClosed_WhenReserveForGuest_ThenMarketNotOpenAndNothingIsHeld() {
+        when(marketGate.isOpen()).thenReturn(false);
+
+        assertThrows(MarketNotOpenException.class, () -> reservationService.reserveForGuest("guest-session",
+                EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+
+        verifyNoInteractions(activeOrderRepository, eventRepository);
+    }
+
+    @Test
+    void GivenMarketClosed_WhenRemoveForMember_ThenTheLineIsStillRemovedAndItsHoldReleased() {
+        when(marketGate.isOpen()).thenReturn(false);
+        givenSignedInMember();
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = givenMemberCartHolding(vip, QUANTITY);
+
+        reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY));
+
+        assertTrue(cart.isEmpty(), "a closed market must not keep a buyer from emptying their cart");
+        assertEquals(0, vip.getReservedAmount());
+    }
+
+    // ---------------------------------------------------------------------
+    // Request arguments, and a cart line whose event is gone
+    // ---------------------------------------------------------------------
+
+    @Test
+    void GivenAZeroEventId_WhenReserveForMember_ThenRefusedBeforeTheCartIsTouched() {
+        givenSignedInMember();
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(VALID_TOKEN, 0, ZONE_ID, InventorySelectionDTO.standing(1)));
+
+        assertEquals("eventId must be positive", refused.getMessage());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
+    }
+
+    @Test
+    void GivenAZeroZoneId_WhenReserveForMember_ThenRefusedBeforeTheCartIsTouched() {
+        givenSignedInMember();
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, 0, InventorySelectionDTO.standing(1)));
+
+        assertEquals("zoneId must be positive", refused.getMessage());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
+    }
+
+    @Test
+    void GivenACartLineOfADeletedEvent_WhenRestoreActiveOrder_ThenTheLineIsNamedUnknownEvent() {
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        cart.addStandingReservation(DELETED_EVENT_ID, ZONE_ID, 1, PRICE, NOW);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
+        when(eventRepository.findById(DELETED_EVENT_ID)).thenThrow(new EventNotFoundException(DELETED_EVENT_ID));
+
+        ActiveOrderDTO restored = reservationService.restoreActiveOrder(USER_ID);
+
+        assertEquals(List.of("Unknown Event"), restored.lines().stream().map(ActiveOrderDTO.CartLineDTO::eventName).toList());
+    }
+
     // --- A guest's session id is the guest's credential, so no log line carries it (#185) ---
 
     private static final String LOGGED_GUEST_SID = LIVE_GUEST_SESSION_PREFIX + "-9e2a41c7-not-for-logs";
@@ -1395,12 +1647,35 @@ public class ReservationServiceTest {
         return new StandingZone(ZONE_ID, "VIP", capacity, PRICE);
     }
 
-    // A real event on sale whose venue holds the one zone given; the event port hands it out.
-    private Event givenEventOnSaleWith(InventoryZone inventoryZone) {
-        Event onSale = createEventWithZone(inventoryZone);
+    // A real event on sale whose venue holds the zones given; the event port hands it out.
+    private Event givenEventOnSaleWith(InventoryZone... inventoryZones) {
+        return givenEventOnSaleWithPolicy(acceptingPurchasePolicy(), inventoryZones);
+    }
+
+    private Event givenEventOnSaleWithPolicy(PurchasePolicy purchasePolicy, InventoryZone... inventoryZones) {
+        Event onSale = createEventWithPolicyAndZones(purchasePolicy, inventoryZones);
         onSale.transitionToOnSale();
         when(eventRepository.findById(EVENT_ID)).thenReturn(onSale);
         return onSale;
+    }
+
+    // Seats A1 and A2, in the zone OTHER_ZONE_ID, so it can sit beside the standing zone ZONE_ID.
+    private static SeatedZone stallsWithSeatsA1AndA2() {
+        return new SeatedZone(OTHER_ZONE_ID, "Stalls", PRICE, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
+    }
+
+    private void holdSeatsFor(ActiveOrder cart, SeatedZone seated, List<String> seats) {
+        cart.addSeatedReservation(EVENT_ID, seated.getId(), seats, PRICE, NOW);
+        seated.reserve(InventorySelection.seated(seats, cart.getOrderKey()));
+    }
+
+    // A live guest's real cart, holding `quantity` standing tickets of the zone, which holds them for it.
+    private ActiveOrder givenGuestCartHolding(String sessionId, StandingZone standing, int quantity) {
+        ActiveOrder cart = ActiveOrder.forGuest(sessionId, NOW);
+        cart.addStandingReservation(EVENT_ID, ZONE_ID, quantity, PRICE, NOW);
+        standing.reserve(InventorySelection.standing(quantity, cart.getOrderKey()));
+        when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(cart));
+        return cart;
     }
 
     // The member's real cart, holding `quantity` standing tickets of the zone, which holds them for it.
@@ -1446,6 +1721,10 @@ public class ReservationServiceTest {
     }
 
     private Event createEventWithZone(InventoryZone inventoryZone) {
+        return createEventWithPolicyAndZones(acceptingPurchasePolicy(), inventoryZone);
+    }
+
+    private Event createEventWithPolicyAndZones(PurchasePolicy purchasePolicy, InventoryZone... inventoryZones) {
         return new Event(
                 EVENT_ID,
                 "Concert",
@@ -1454,10 +1733,10 @@ public class ReservationServiceTest {
                 EventCategory.CONCERT,
                 100,
                 EventStatus.SCHEDULED,
-                new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(inventoryZone)),
+                new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(inventoryZones)),
                 List.of(new ShowDate(NOW.plusDays(10), NOW.plusDays(10).plusHours(2))),
                 ZoneId.of("Asia/Jerusalem"),
-                acceptingPurchasePolicy(),
+                purchasePolicy,
                 noDiscountPolicy());
     }
 }
