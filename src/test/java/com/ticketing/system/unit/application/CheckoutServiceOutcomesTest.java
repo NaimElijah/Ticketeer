@@ -1,4 +1,5 @@
-package com.ticketing.system.acceptance;
+package com.ticketing.system.unit.application;
+
 import org.springframework.context.ApplicationEventPublisher;
 import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.shared.event.PurchaseCompletedNotice;
@@ -11,11 +12,7 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 
 import com.ticketing.system.shared.dto.*;
-import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
-import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.CheckoutService;
-import com.ticketing.system.organization.application.service.CompanyManagementService;
-import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.application.service.InventoryService;
 import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.sales.domain.*;
@@ -30,7 +27,6 @@ import com.ticketing.system.testutil.TestTransactions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -45,7 +41,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-public class CheckoutServiceAcceptanceTest {
+/**
+ * {@link CheckoutService}'s checkout (UC-10, II.2.8) through its public methods, with its outbound ports
+ * doubled: what a buyer is left with when checkout refuses before any charge, rolls back after one, or
+ * completes. A plain unit suite, so it lives here rather than under {@code acceptance/}, whose classes boot
+ * Spring (NaimElijah/Ticketeer#189); {@link CheckoutServiceTest} holds the service's other unit tests.
+ */
+class CheckoutServiceOutcomesTest {
 
     // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
@@ -64,30 +66,7 @@ public class CheckoutServiceAcceptanceTest {
     private CheckoutService checkoutService;
     private MarketGate marketGate;
 
-    @Autowired private AuthenticationService authService;
-    @Autowired private CompanyManagementService companyService;
-    @Autowired private EventManagementService eventManagementService;
     private ProductionCompanyRepository companyRepository;
-    @Autowired private EventRepository eventRepository1;
-    @Autowired private TicketRepository ticketRepository1;
-    @Autowired private OrderReceiptRepository orderReceiptRepository1;
-
-
-    private AuthTokenDTO registerAndLoginMember(String name) {
-    String sid = authService.startGuestSession().sessionId();
-
-    authService.register(new RegisterRequestDTO(
-            name,
-            name + "@test.com",
-            "Password1",
-            sid,
-            72
-    ));
-
-    return authService
-            .login(new LoginRequestDTO(name, "Password1", sid))
-            .authToken();
-    }
 
     private static final String VALID_TOKEN = "valid-token";
     private static final String INVALID_TOKEN = "invalid-token";
@@ -473,19 +452,6 @@ public class CheckoutServiceAcceptanceTest {
     }
 
     @Test
-    void GivenActiveOrderIsExpired_WhenCheckout_ThenThrowException() {
-        validSession();
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), false);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals("Checkout failed, tickets returned to stock", exception.getMessage());
-    }
-
-    @Test
     void GivenActiveOrderIsEmpty_WhenCheckout_ThenThrowException() {
         validSession();
         ActiveOrder order = order(List.of(), false);
@@ -693,23 +659,6 @@ public class CheckoutServiceAcceptanceTest {
     }
 
     @Test
-    void GivenCheckoutFailsAfterPaymentSucceeded_WhenCheckout_ThenRefundIsRequested() {
-        validSession();
-        AtomicBoolean refundRequested = trackRefund();
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenReturn(paymentResult());
-        when(ticketIssuer.issue(any(IssuanceRequestDTO.class))).thenReturn(null);
-
-        assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals(true, refundRequested.get());
-    }
-
-    @Test
     void GivenCheckoutFailsBeforePayment_WhenCheckout_ThenRefundIsNotRequested() {
         validSession();
         AtomicBoolean refundRequested = trackRefund();
@@ -722,22 +671,6 @@ public class CheckoutServiceAcceptanceTest {
         );
 
         assertEquals(false, refundRequested.get());
-    }
-
-    @Test
-    void GivenCheckoutFails_WhenCheckout_ThenTicketsAreReturnedToStock() {
-        validSession();
-        AtomicInteger returnedTickets = trackReturnedTickets(event1, ZONE_ID_1);
-
-        ActiveOrder order = order(List.of(item(EVENT_ID_1, ZONE_ID_1, 10.0)), true);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(order);
-        when(paymentGateway.charge(any(PaymentRequestDTO.class))).thenThrow(new RuntimeException("payment failed"));
-
-        assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertEquals(1, returnedTickets.get());
     }
 
     @Test
@@ -911,11 +844,6 @@ public class CheckoutServiceAcceptanceTest {
 
         verify(activeOrderRepository).delete(order);
     }
-
-
-
-
-    // more acceptance tests:
 
     @Test
     @Disabled("Enable after seated reservation flow is wired end-to-end")
