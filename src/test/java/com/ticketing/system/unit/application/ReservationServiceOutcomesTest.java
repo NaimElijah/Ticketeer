@@ -11,15 +11,21 @@ import com.ticketing.system.sales.application.port.out.MarketGate;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
+import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
+import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.application.service.InventoryService;
-import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
+import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
+import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.testutil.UserRepositories;
@@ -32,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -43,18 +50,26 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-public class ReservationServiceOutcomesTest {
+/**
+ * {@link ReservationService}'s reserve and remove (UC-9, II.2.5, II.2.7) through its public methods, with its
+ * outbound ports doubled and the real {@link InventoryService} beneath it: what the buyer's cart and the zone
+ * hold after each call. A plain unit suite, so it lives here rather than under {@code acceptance/}, whose
+ * classes boot Spring (NaimElijah/Ticketeer#189); {@link ReservationServiceTest} holds the service's other unit
+ * tests.
+ */
+class ReservationServiceOutcomesTest {
 
     // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
     // The age of every member these tests reserve for; no event here has an age policy.
     private static final int MEMBER_AGE = 30;
+    private static final int EVENT_ID = 100;
+    private static final int COMPANY_ID = 100;
 
     private ReservationService reservationService;
 
@@ -238,29 +253,6 @@ void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowExceptio
     assertEquals("Only 1 tickets left", result);
 }
 
-    // @Test
-    // void GivenUserAlreadyHasReservationForEvent_WhenreserveStandingTicketsForMember_ThenThrowException() {
-    //     activeOrder.addStandingReservation(100, 1, 1, 50.0, NOW);
-
-    //     String result;
-
-    //     try {
-    //         reservationService.reserveStandingTicketsForMember(
-    //                 "validToken",
-    //                 100,
-    //                 1,
-    //                 2
-    //         );
-
-    //         result = "NO_EXCEPTION";
-
-    //     } catch (Exception e) {
-    //         result = e.getMessage();
-    //     }
-
-    //     assertEquals("User already has an active order for this event", result);
-    // }
-
     @Test
     void GivenValidGuestReservation_WhenReserveTicketsForGuest_ThenReturnReservationResult() {
         when(activeOrderRepository.getBySessionId("guest-session"))
@@ -404,21 +396,14 @@ void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowExceptio
 
 
 
-    // more acceptance tests: seated venue maps
-
-    // A real SeatedZone wired into the deep-stub event lets these exercise the actual per-seat
-    // locking; no dedicated test-data builder is required.
+    // Seated venue maps: a real event on sale holds the real SeatedZone, so these run the event's own
+    // reservation checks and the zone's per-seat locking.
 
     @Test
     void GivenMemberSelectsAvailableSeats_WhenReserveSeats_ThenSeatsAreLockedAndCartShowsSeatNumbers() {
         SeatedZone seatedZone = new SeatedZone(1, "Orchestra", 120.0,
                 List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0), new Seat("A3", 2, 0)));
-        when(event.getVenueMap().getZone(1)).thenReturn(seatedZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            seatedZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(1), any(InventorySelection.class));
+        givenEventOnSaleWith(seatedZone);
 
         ReservationResultDTO result = reservationService.reserveForMember(
                 "validToken", 100, 1, InventorySelectionDTO.seated(List.of("A1", "A2")));
@@ -441,12 +426,7 @@ void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowExceptio
 
         SeatedZone seatedZone = new SeatedZone(1, "Orchestra", 120.0,
                 List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
-        when(event.getVenueMap().getZone(1)).thenReturn(seatedZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            seatedZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(1), any(InventorySelection.class));
+        givenEventOnSaleWith(seatedZone);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
@@ -499,12 +479,7 @@ void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowExceptio
     void GivenGuestSelectsSeats_WhenReserveSeats_ThenGuestCartContainsSeatNumbers() {
         SeatedZone seatedZone = new SeatedZone(1, "Balcony", 80.0,
                 List.of(new Seat("C1", 0, 0), new Seat("C2", 1, 0)));
-        when(event.getVenueMap().getZone(1)).thenReturn(seatedZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            seatedZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(1), any(InventorySelection.class));
+        givenEventOnSaleWith(seatedZone);
         when(activeOrderRepository.getBySessionId("guest-session")).thenReturn(Optional.empty());
 
         ReservationResultDTO result = reservationService.reserveForGuest(
@@ -520,5 +495,16 @@ void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowExceptio
         assertTrue(savedGuestOrder.isGuest());
         assertEquals(List.of("C1", "C2"),
                 savedGuestOrder.getItems().stream().map(CartLineItem::getSeatNumber).toList());
+    }
+
+    // A real event on sale whose venue holds the zone given; the event port hands it out.
+    private Event givenEventOnSaleWith(InventoryZone inventoryZone) {
+        Event onSale = new Event(EVENT_ID, "Concert", 4.5, List.of("Artist"), EventCategory.CONCERT, COMPANY_ID,
+                EventStatus.SCHEDULED, new VenueMap(1, new Location("Israel", "Tel Aviv"), List.of(inventoryZone)),
+                List.of(new ShowDate(NOW.plusDays(10), NOW.plusDays(10).plusHours(2))), ZoneId.of("Asia/Jerusalem"),
+                new NoPurchasePolicy(), new DiscountPolicy(0));
+        onSale.transitionToOnSale();
+        when(eventRepository.findById(EVENT_ID)).thenReturn(onSale);
+        return onSale;
     }
 }
