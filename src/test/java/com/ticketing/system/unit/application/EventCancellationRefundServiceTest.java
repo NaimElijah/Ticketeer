@@ -430,9 +430,9 @@ class EventCancellationRefundServiceTest {
 
     // ---- tickets --------------------------------------------------------
 
-    // A closed ticket (refunded or voided) is left as it is: it is not refunded or voided again. No code path
-    // closes a ticket on a line that is not yet refunded (a member refund refunds the whole receipt first, and a
-    // run flips tickets and lines in one transaction), so this pins a guard against inconsistent data.
+    // A closed ticket (refunded or voided) is left as it is: it is not refunded or voided again. A ticket ends up
+    // closed on a line not yet refunded when a receipt's refund was declined and its claim released: the run
+    // carries on, and voidUnsoldTickets voids that receipt's unsold tickets before a later run claims it.
     @Test
     void GivenClosedTicketsOnTheReceipt_WhenRefundCancelledEvent_ThenTheyAreLeftAsTheyAre() {
         OrderReceipt receipt = paidReceipt(1, 7, 50.0, 30.0, 20.0);
