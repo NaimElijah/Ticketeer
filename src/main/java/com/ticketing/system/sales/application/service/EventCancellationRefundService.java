@@ -45,9 +45,11 @@ import lombok.extern.slf4j.Slf4j;
  * A gateway that declines, or that the request never reached, moved no money: the claim is released
  * so calling this again retries it. A decline is specific to one receipt, so the run carries on with
  * the others and reports every declined receipt at the end; an unreachable gateway stops the run.
- * When the gateway may have refunded without a usable answer, when a claim cannot be released, or when
- * a gateway refund cannot be recorded, the run stops and the lines stay PENDING; they are never
- * refunded twice, and that receipt needs manual recovery.
+ * When the gateway may have refunded without a usable answer, or when a gateway refund cannot be
+ * recorded, the run stops and the lines stay PENDING; they are never refunded twice, and that receipt
+ * needs manual recovery. A claim that cannot be released after a gateway failure also leaves its lines
+ * PENDING for manual recovery, logged at ERROR, but the run then carries on or stops as that failure
+ * would: on after a decline, stopped by an unreachable gateway.
  */
 @Service
 @Slf4j
