@@ -6,10 +6,12 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -22,8 +24,10 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
 
+import com.ticketing.system.sales.application.event.OrderExpiredEvent;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
@@ -174,6 +178,56 @@ class SessionAndOrderSweeperTest {
         verify(orderRepo).delete(expiredCart);
         verify(event).releaseInventory(eq(20), argThat(s -> s.isStandingSelection() && s.getQuantity() == 3));
         verify(eventRepo).save(event);
+    }
+
+    // The expiry notice tells the owner's open checkout views (CheckoutPresenter.onOrderExpired), which find
+    // a member by user id and a guest by session id.
+    @Test
+    void GivenAMembersCartWithExpiredItems_WhenSweepExpiredOrders_ThenPublishesOrderExpiredForThatMember() {
+        ActiveOrder expiredCart = new ActiveOrder(5, NOW);
+        expiredCart.addStandingReservation(2, 20, 1, 30.0, NOW.minusMinutes(30));
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(expiredCart));
+        when(eventRepo.findById(2)).thenReturn(mock(Event.class));
+
+        sweeper.sweepExpiredOrders(T0);
+
+        verify(eventPublisher).publishEvent(new OrderExpiredEvent(5, null));
+        verifyNoMoreInteractions(eventPublisher);
+    }
+
+    @Test
+    void GivenAGuestsCartWithExpiredItems_WhenSweepExpiredOrders_ThenPublishesOrderExpiredForThatGuestsSession() {
+        ActiveOrder expiredCart = ActiveOrder.forGuest("sid-expired", NOW);
+        expiredCart.addStandingReservation(2, 20, 1, 30.0, NOW.minusMinutes(30));
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(expiredCart));
+        when(eventRepo.findById(2)).thenReturn(mock(Event.class));
+
+        sweeper.sweepExpiredOrders(T0);
+
+        verify(eventPublisher).publishEvent(new OrderExpiredEvent(0, "sid-expired"));
+        verifyNoMoreInteractions(eventPublisher);
+    }
+
+    // The deadlock guard: the order lock first, then the events by ascending id, as reservation and checkout
+    // take them, released in reverse. The cart lists the higher event id first, so only a sort puts 1 first.
+    @Test
+    void GivenCartOverTwoEvents_WhenSweepExpiredOrders_ThenLocksTheOrderThenEventsInIdOrderAndUnlocksInReverse() {
+        ActiveOrder cart = new ActiveOrder(5, NOW);
+        cart.addStandingReservation(2, 20, 1, 30.0, NOW.minusMinutes(30));
+        cart.addStandingReservation(1, 10, 1, 30.0, NOW.minusMinutes(30));
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
+        when(eventRepo.findById(1)).thenReturn(mock(Event.class));
+        when(eventRepo.findById(2)).thenReturn(mock(Event.class));
+
+        sweeper.sweepExpiredOrders(T0);
+
+        InOrder locks = inOrder(orderRepo, eventRepo);
+        locks.verify(orderRepo).lockForUpdate("user:5");
+        locks.verify(eventRepo).lockForUpdate(1);
+        locks.verify(eventRepo).lockForUpdate(2);
+        locks.verify(eventRepo).unlock(2);
+        locks.verify(eventRepo).unlock(1);
+        locks.verify(orderRepo).unlock("user:5");
     }
 
     // The scan may list a cart whose hold has not run out at the sweeper's clock (a stale scan, or a
