@@ -909,6 +909,7 @@ public class ReservationServiceTest {
                         new Seat("A2", 1, 0),
                         new Seat("A3", 2, 0)));
         Event realEvent = createEventWithZone(seatedZone);
+        realEvent.transitionToOnSale();
         ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
         seatedZone.reserve(InventorySelection.seated(List.of("A1", "A2", "A3"), realOrder.getOrderKey()));
 
