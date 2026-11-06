@@ -16,10 +16,11 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.application.service.InventoryService;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
-import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
+import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.testutil.TestTransactions;
@@ -27,7 +28,6 @@ import com.ticketing.system.testutil.UserRepositories;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
 
 import java.time.Clock;
 import java.time.Instant;
@@ -37,6 +37,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
@@ -44,7 +45,7 @@ import static org.mockito.Mockito.*;
  * outbound ports doubled and the real {@link InventoryService} beneath it: what the buyer's cart and the zone
  * hold after each call. A plain unit suite, so it lives here rather than under {@code acceptance/}, whose
  * classes boot Spring (NaimElijah/Ticketeer#189); {@link ReservationServiceTest} holds the service's other unit
- * tests.
+ * tests, and these are the outcomes it does not already check.
  */
 class ReservationServiceOutcomesTest {
 
@@ -55,151 +56,108 @@ class ReservationServiceOutcomesTest {
     private static final int MEMBER_AGE = 30;
     private static final int EVENT_ID = 100;
     private static final int COMPANY_ID = 100;
+    private static final int ZONE_ID = 1;
+    // A zone of the event that is not ZONE_ID, for a venue without the zone a request names.
+    private static final int OTHER_ZONE_ID = 2;
+    private static final int USER_ID = 1;
+    private static final String MEMBER_TOKEN = "validToken";
+    private static final double PRICE = 50.0;
 
     private ReservationService reservationService;
 
     private EventRepository eventRepository;
     private ActiveOrderRepository activeOrderRepository;
     private SessionManager sessionManager;
-    private ApplicationEventPublisher eventPublisher;
-
-    private Event event;
-    private InventoryZone zone;
-    private ActiveOrder activeOrder;
 
     @BeforeEach
     void setUp() {
         eventRepository = mock(EventRepository.class);
         activeOrderRepository = mock(ActiveOrderRepository.class);
         sessionManager = mock(SessionManager.class);
-        eventPublisher = mock(ApplicationEventPublisher.class);
 
         MarketGate marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
 
-        // Catalog owns inventory mutation behind InventoryCommandPort; wire the real InventoryService
-        // onto the same mock event store so the existing event/zone stubs drive behaviour a layer down.
+        // Catalog owns inventory mutation behind InventoryCommandPort. The REAL InventoryService runs over
+        // the mock event port, which hands out real events, so every reservation reaches a real zone.
         InventoryService inventoryService = new InventoryService(
                 eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.recordingManager());
         reservationService = new ReservationService(
                 inventoryService,
                 activeOrderRepository,
                 sessionManager,
-                eventPublisher,
+                mock(ApplicationEventPublisher.class),
                 UserRepositories.everyMemberExistsAged(MEMBER_AGE),
                 marketGate,
                 mock(ISystemMetrics.class),
                 Clock.fixed(T0, ZoneOffset.UTC)
         );
 
-        event = mock(Event.class, RETURNS_DEEP_STUBS);
-        zone = mock(InventoryZone.class);
-        activeOrder = new ActiveOrder(1, NOW);
+        when(sessionManager.validateToken(MEMBER_TOKEN)).thenReturn(true);
+        when(sessionManager.extractUserId(MEMBER_TOKEN)).thenReturn(USER_ID);
+    }
 
-        when(sessionManager.validateToken("validToken")).thenReturn(true);
-        when(sessionManager.extractUserId("validToken")).thenReturn(1);
-        // "guest-session" names a live guest session; reserveForGuest accepts only those (#185).
-        when(sessionManager.validateCredential("guest-session")).thenReturn(true);
-        when(sessionManager.validateGuestSession("guest-session")).thenReturn(true);
+    // The venue map refuses an unknown zone without naming it; the inventory service names it, so the
+    // buyer's refusal says which zone was not found.
+    @Test
+    void GivenAZoneTheEventDoesNotHave_WhenReserveForMember_ThenRefusedNamingTheZoneAndNothingIsHeldOrSaved() {
+        StandingZone balcony = new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE);
+        givenEventOnSaleWith(balcony);
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
 
-        when(eventRepository.findById(100)).thenReturn(event);
-        when(event.getVenueMap().getZone(1)).thenReturn(zone);
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(MEMBER_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(2)));
 
-        when(zone.getAvailableAmount()).thenReturn(10);
-        when(zone.getprice()).thenReturn(50.0);
-
-        when(activeOrderRepository.getByUserId(1)).thenReturn(activeOrder);
+        assertEquals("Zone not found: " + ZONE_ID, refused.getMessage());
+        assertEquals(0, balcony.getReservedAmount(), "a refused reservation must hold nothing");
+        assertTrue(cart.isEmpty(), "a refused reservation must add no cart line");
+        verify(activeOrderRepository, never()).save(any());
+        verify(eventRepository, never()).save(any());
     }
 
     @Test
-    void GivenZoneNotFound_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        when(event.getVenueMap().getZone(1)).thenThrow(new IllegalArgumentException("Zone not found: " + 1));
+    void GivenAnEmptySessionId_WhenReserveForGuest_ThenRefusedAsMissingAndNothingIsTouched() {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForGuest("", EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(3)));
 
-        String result;
-
-        try {
-            reservationService.reserveForMember(
-                    "validToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(2)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Zone not found: 1", result);
-    }
-
- 
-    @Test
-    void GivenMissingGuestSession_WhenReserveTicketsForGuest_ThenThrowException() {
-        String result;
-
-        try {
-            reservationService.reserveForGuest(
-                    "",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(3)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Missing session ID", result);
+        assertEquals("Missing session ID", refused.getMessage());
+        verify(sessionManager, never()).validateGuestSession(any());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
     }
 
     @Test
-    void GivenValidReservedTickets_WhenRemoveReservedStandingSpotsForMember_ThenReturnReservationResult() {
-        activeOrder.addStandingReservation(100, 1, 3, 50.0, NOW);
+    void GivenAMemberHoldingThree_WhenRemoveTwoForMember_ThenOneStaysHeldAndInTheCart() {
+        StandingZone vip = new StandingZone(ZONE_ID, "VIP", 10, PRICE);
+        givenEventOnSaleWith(vip);
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        cart.addStandingReservation(EVENT_ID, ZONE_ID, 3, PRICE, NOW);
+        vip.reserve(InventorySelection.standing(3, cart.getOrderKey()));
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
 
-        ReservationResultDTO result = reservationService.removeForMember(
-                "validToken",
-                100,
-                1,
-                InventorySelectionDTO.standing(2)
-        );
+        ReservationResultDTO result = reservationService.removeForMember(MEMBER_TOKEN, EVENT_ID, ZONE_ID,
+                InventorySelectionDTO.standing(2));
 
         assertEquals(2, result.getQuantity());
+        assertEquals(1, vip.getReservedAmount(), "the zone must still hold the one ticket left in the cart");
+        assertEquals(9, vip.getAvailableAmount(), "the two removed tickets must go back to stock");
+        assertEquals(1, cart.getItems().size(), "one line must stay in the cart");
+        verify(activeOrderRepository).save(cart);
     }
 
-
-    
     @Test
-    void GivenNoActiveOrder_WhenRemoveReservedStandingSpotsForMember_ThenThrowException() {
-        when(activeOrderRepository.getByUserId(1)).thenReturn(null);
+    void GivenAMemberWithNoCart_WhenRemoveForMember_ThenRefusedAsNotFoundAndNothingIsReleased() {
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
 
-        String result;
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.removeForMember(MEMBER_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(1)));
 
-        try {
-            reservationService.removeForMember(
-                    "validToken",
-                    100,
-                    1,
-                    InventorySelectionDTO.standing(1)
-            );
-
-            result = "NO_EXCEPTION";
-
-        } catch (Exception e) {
-            result = e.getMessage();
-        }
-
-        assertEquals("Active order not found", result);
+        assertEquals("Active order not found", refused.getMessage());
+        verifyNoInteractions(eventRepository);
+        verify(activeOrderRepository, never()).save(any());
     }
-
-
-
-
-    // Seated venue maps: a real event on sale holds the real SeatedZone, so these run the event's own
-    // reservation checks and the zone's per-seat locking.
 
     // A real event on sale whose venue holds the zone given; the event port hands it out.
     private Event givenEventOnSaleWith(InventoryZone inventoryZone) {
