@@ -163,7 +163,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenMissingToken_WhenRemoveReservedStandingSpots_ThenThrowException() {
+    void GivenMissingToken_WhenRemoveForMember_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(null, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
@@ -188,7 +188,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenEventDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
+    void GivenEventDoesNotExist_WhenRemoveForMember_ThenThrowException() {
         // The member's cart holds the line, so the removal reaches the event lookup.
         memberWithReservedStandingTickets();
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
@@ -215,7 +215,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenActiveOrderDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
+    void GivenActiveOrderDoesNotExist_WhenRemoveForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
@@ -255,7 +255,7 @@ public class ReservationServiceTest {
     // Each reserved seat records when its hold runs out: the configured hold after the clock, the
     // same instant the cart line expires at (#74; it used to be a hard-coded 10 minutes from the JVM clock).
     @Test
-    void GivenConfiguredHoldOfSevenMinutes_WhenSeatsReserved_ThenEachSeatIsHeldUntilTheClockPlusSeven() {
+    void GivenConfiguredHoldOfSevenMinutes_WhenReserveForMember_ThenEachSeatIsHeldUntilTheClockPlusSeven() {
         Duration configuredHold = CartLineItem.getExpirationLimit();
         CartLineItem.setExpirationLimit(Duration.ofMinutes(7));
         try {
@@ -276,7 +276,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenFixedClock_WhenReserve_ThenTheLineIsAddedAtTheClockAndExpiresOneHoldLater() {
+    void GivenFixedClock_WhenReserveForMember_ThenTheLineIsAddedAtTheClockAndExpiresOneHoldLater() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         givenEventOnSaleWith(standingZoneOf(10));
@@ -302,7 +302,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenMissingToken_WhenReserveStandingTicketsForMember_ThenThrowException() {
+    void GivenMissingToken_WhenReserveForMember_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(null, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
@@ -336,7 +336,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenEventDoesNotExist_WhenReserveStandingTicketsForMember_ThenThrowException() {
+    void GivenEventDoesNotExist_WhenReserveForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
@@ -346,7 +346,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenZoneDoesNotExist_WhenReserveStandingTicketsForMember_ThenThrowException() {
+    void GivenZoneDoesNotExist_WhenReserveForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         givenEventOnSaleWith(new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE));
@@ -420,13 +420,13 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenMissingSessionId_WhenReserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenMissingSessionId_WhenReserveForGuest_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest(null, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
 
     @Test
-    void GivenBlankSessionId_WhenReserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenBlankSessionId_WhenReserveForGuest_ThenThrowException() {
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest("   ", EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY)));
     }
@@ -443,7 +443,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenEventDoesNotExist_WhenReserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenEventDoesNotExist_WhenReserveForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
@@ -453,7 +453,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenZoneDoesNotExist_WhenReserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenZoneDoesNotExist_WhenReserveForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
         givenEventOnSaleWith(new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE));
@@ -871,7 +871,7 @@ public class ReservationServiceTest {
     // SessionAndOrderSweeperTest.GivenExpiredCartInCheckoutProgress_WhenSweepExpiredOrders_ThenDoNotReleaseOrDelete.
 
     @Test
-    void GivenValidMemberSeatSelection_WhenReserveSeatsForMember_ThenSeatsReservedAndCartContainsSeatNumbers() {
+    void GivenValidMemberSeatSelection_WhenReserveForMember_ThenSeatsReservedAndCartContainsSeatNumbers() {
         SeatedZone seatedZone = new SeatedZone(
                 ZONE_ID,
                 "Orchestra",
@@ -910,7 +910,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenValidGuestSeatSelection_WhenReserveSeatsForGuest_ThenSeatsReservedAndGuestCartSaved() {
+    void GivenValidGuestSeatSelection_WhenReserveForGuest_ThenSeatsReservedAndGuestCartSaved() {
         String sessionId = "guest-session-1";
 
         SeatedZone seatedZone = new SeatedZone(
@@ -948,7 +948,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenStandingZone_WhenReserveSeatsForMember_ThenThrowsException() {
+    void GivenASeatSelectionForAStandingZone_WhenReserveForMember_ThenThrowsException() {
         StandingZone standingZone = new StandingZone(ZONE_ID, "General Admission", 10, 50.0);
         Event realEvent = createEventWithZone(standingZone);
 
@@ -966,7 +966,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenSeatedZone_WhenReserveStandingTicketsForMemberWithQuantityOnly_ThenThrowsException() {
+    void GivenAQuantityOnlySelectionForASeatedZone_WhenReserveForMember_ThenThrowsException() {
         SeatedZone seatedZone = new SeatedZone(
                 ZONE_ID,
                 "Orchestra",
@@ -988,7 +988,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenCartSaveFails_WhenReserveSeatsForMember_ThenReservedSeatsAreRolledBack() {
+    void GivenCartSaveFails_WhenReserveForMember_ThenReservedSeatsAreRolledBack() {
         SeatedZone seatedZone = new SeatedZone(
                 ZONE_ID,
                 "Orchestra",
@@ -1012,7 +1012,7 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenReservedSeatsInCart_WhenRemoveReservedSeats_ThenExactSeatsReleasedAndRemovedFromCart() {
+    void GivenReservedSeatsInCart_WhenRemoveForMember_ThenExactSeatsReleasedAndRemovedFromCart() {
         SeatedZone seatedZone = new SeatedZone(
                 ZONE_ID,
                 "Orchestra",

@@ -312,7 +312,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void GivenSuccessfulRegistration_WhenCheckSession_ThenStillGuest() {
+    void GivenAGuestSession_WhenRegister_ThenItStaysAGuestAndNoTokenIsIssued() {
         Session guest = mockValidGuestSession("guest-1");
         when(mockUserRepo.existsByUsername(any())).thenReturn(false);
         when(mockUserRepo.findByEmail(any())).thenReturn(Optional.empty());
