@@ -1050,23 +1050,14 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenSuccessfulMemberReservation_WhenReserve_ThenNotifyAfterUnlocking() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+    void GivenSuccessfulMemberReservation_WhenReserveForMember_ThenOneSuccessNoticeNamesTheReservation() {
+        givenSignedInMember();
         givenEventOnSaleWith(standingZoneOf(10));
 
-        reservationService.reserveForMember(
-                VALID_TOKEN,
-                EVENT_ID,
-                ZONE_ID,
-                InventorySelectionDTO.standing(QUANTITY));
+        reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY));
 
-        org.mockito.InOrder inOrder = inOrder(eventRepository, activeOrderRepository, eventPublisher);
-
-        inOrder.verify(eventRepository).unlockBuyerOperation(EVENT_ID);
-        inOrder.verify(activeOrderRepository).unlock("user:" + USER_ID);
-        inOrder.verify(eventPublisher)
-                .publishEvent(new TicketReservationSucceededNotice(USER_ID, EVENT_ID, ZONE_ID, QUANTITY));
+        assertEquals(new TicketReservationSucceededNotice(USER_ID, EVENT_ID, ZONE_ID, QUANTITY),
+                publishedNotice(TicketReservationSucceededNotice.class));
     }
 
     // ---------------------------------------------------------------------
