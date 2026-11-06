@@ -1,4 +1,4 @@
-package com.ticketing.system.acceptance;
+package com.ticketing.system.unit.application;
 
 import com.ticketing.system.testutil.CompanyRepositories;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
@@ -48,7 +48,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-public class ReservationAcceptanceTests {
+public class ReservationServiceOutcomesTest {
 
     // Holds are stamped and judged at this instant, as UTC wall time from the injected clock (ADR-008).
     private static final Instant T0 = Instant.parse("2027-07-15T17:00:00Z");
