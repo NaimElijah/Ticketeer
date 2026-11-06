@@ -29,7 +29,6 @@ import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.testutil.TestTransactions;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -560,17 +559,5 @@ class CheckoutServiceOutcomesTest {
 
         assertTrue(cart.isEmpty(), "the bought lines must leave the cart");
         verify(activeOrderRepository).delete(cart);
-    }
-
-    @Test
-    @Disabled("Enable after seated reservation flow is wired end-to-end")
-    void GivenReservedSeatedTickets_WhenCheckoutSucceeds_ThenTicketsHaveSeatNumbersAndSeatsBecomeSold() {
-        
-    }
-
-    @Test
-    @Disabled("Enable after checkout rollback supports seated zones")
-    void GivenSeatedCheckoutPaymentSucceedsButIssuanceFails_WhenCheckout_ThenSeatsReturnToAvailable() {
-        
     }
 }
