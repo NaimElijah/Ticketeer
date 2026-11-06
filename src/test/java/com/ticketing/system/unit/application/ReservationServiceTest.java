@@ -43,9 +43,7 @@ import jakarta.persistence.PersistenceException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -53,6 +51,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.mockito.ArgumentCaptor;
@@ -65,7 +64,6 @@ import com.ticketing.system.testutil.UserRepositories;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.CartLineItem;
-import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -88,10 +86,6 @@ public class ReservationServiceTest {
 
     private ReservationService reservationService;
 
-    private Event event;
-    private InventoryZone zone;
-    private ActiveOrder activeOrder;
-
     private final String VALID_TOKEN = "valid-token";
     private final int USER_ID = 1;
     private final int EVENT_ID = 10;
@@ -104,6 +98,9 @@ public class ReservationServiceTest {
     private static final String LIVE_GUEST_SESSION_PREFIX = "guest-session";
     // The age of every member these tests reserve for; no event here has an age policy.
     private static final int MEMBER_AGE = 30;
+    private static final double PRICE = 100.0;
+    // A zone of the event that is not ZONE_ID, for a venue without the zone a request names.
+    private static final int OTHER_ZONE_ID = 6;
 
     @BeforeEach
     void setUp() {
@@ -112,20 +109,14 @@ public class ReservationServiceTest {
         sessionManager = mock(SessionManager.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
 
-        event = mock(Event.class, RETURNS_DEEP_STUBS);
-        zone = mock(InventoryZone.class);
-        activeOrder = mock(ActiveOrder.class);
-
         marketGate = mock(MarketGate.class);
         when(marketGate.isOpen()).thenReturn(true);
         // Every guest path accepts only the raw id of a live guest session (#185, ADR-012 decision 4).
         when(sessionManager.validateCredential(startsWith(LIVE_GUEST_SESSION_PREFIX))).thenReturn(true);
         when(sessionManager.validateGuestSession(startsWith(LIVE_GUEST_SESSION_PREFIX))).thenReturn(true);
 
-        // Catalog now owns inventory mutation behind InventoryCommandPort. We wire the REAL
-        // InventoryService onto the SAME mock event store (and a mock company port for policy), so every
-        // existing event/zone/eventRepository stub still drives behaviour one layer down — preserving the
-        // seat-status integration assertions and verify(eventRepository)... checks with no rewrite.
+        // Catalog owns inventory mutation behind InventoryCommandPort. The REAL InventoryService runs over
+        // the mock event port, which hands out real events, so every reservation reaches a real zone.
         InventoryService inventoryService = new InventoryService(
                 eventRepository, CompanyRepositories.everyCompanyWithoutAPolicy(), TestTransactions.recordingManager());
         reservationService = new ReservationService(
@@ -155,13 +146,10 @@ public class ReservationServiceTest {
 
     @Test
     void GivenValidRequest_WhenRemoveReservedStandingSpots_ThenReturnReservationResult() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(true);
-        when(activeOrder.countTickets(eq(EVENT_ID), eq(ZONE_ID), any())).thenReturn(QUANTITY);
+        givenSignedInMember();
+        StandingZone vip = standingZoneOf(10);
+        givenEventOnSaleWith(vip);
+        givenMemberCartHolding(vip, QUANTITY);
 
         ReservationResultDTO result = reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
@@ -194,10 +182,8 @@ public class ReservationServiceTest {
 
     @Test
     void GivenEventDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         // The member's cart holds the line, so the removal reaches the event lookup.
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
+        memberWithReservedStandingTickets();
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThrows(EventNotFoundException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
@@ -208,8 +194,7 @@ public class ReservationServiceTest {
     void GivenZoneDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(null);
+        givenEventOnSaleWith(new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE));
 
         assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -219,8 +204,6 @@ public class ReservationServiceTest {
     void GivenActiveOrderDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
 
         assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
@@ -231,13 +214,7 @@ public class ReservationServiceTest {
     void GivenOrderDoesNotContainEvent_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-
-        doThrow(new IllegalArgumentException("Active order does not contain this event"))
-                .when(activeOrder)
-                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), anyInt(), anyList());
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -249,13 +226,9 @@ public class ReservationServiceTest {
     void GivenNotEnoughReservedTickets_WhenRemoveReservedStandingSpots_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-
-        doThrow(new IllegalArgumentException("Not enough reserved tickets to remove"))
-                .when(activeOrder)
-                .validateContainsReservation(eq(EVENT_ID), eq(ZONE_ID), anyInt(), anyList());
+        ActiveOrder cartHoldingOne = new ActiveOrder(USER_ID, NOW);
+        cartHoldingOne.addStandingReservation(EVENT_ID, ZONE_ID, 1, PRICE, NOW);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cartHoldingOne);
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -274,12 +247,7 @@ public class ReservationServiceTest {
                     List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
             when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
             when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-            when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-            when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(stalls);
-            when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-            when(activeOrder.getOrderKey()).thenReturn("user:" + USER_ID);
-            doAnswer(inv -> stalls.reserve(inv.getArgument(1)))
-                    .when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+            givenEventOnSaleWith(stalls);
 
             reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                     InventorySelectionDTO.seated(List.of("A1", "A2")));
@@ -295,29 +263,21 @@ public class ReservationServiceTest {
     void GivenFixedClock_WhenReserve_ThenTheLineIsAddedAtTheClockAndExpiresOneHoldLater() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-        when(zone.getAvailableAmount()).thenReturn(10);
+        givenEventOnSaleWith(standingZoneOf(10));
 
         ReservationResultDTO result = reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
 
-        verify(activeOrder).addStandingReservation(eq(EVENT_ID), eq(ZONE_ID), eq(QUANTITY), anyDouble(), eq(NOW));
+        assertEquals(Collections.nCopies(QUANTITY, NOW), savedCart().getItems().stream().map(CartLineItem::getAddedAt).toList(),
+                "each of the " + QUANTITY + " lines must be added at the clock");
         assertEquals(NOW.plus(CartLineItem.getExpirationLimit()), result.getReservationExpiresAt());
     }
 
     @Test
     void GivenValidMemberRequest_WhenReserveStandingTicketsForMember_ThenReturnReservationResult() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-
-        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
-        when(zone.getAvailableAmount()).thenReturn(10);
-        when(zone.getprice()).thenReturn(100.0);
+        givenSignedInMember();
+        givenEventOnSaleWith(standingZoneOf(10));
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
 
         ReservationResultDTO result = reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
@@ -371,9 +331,7 @@ public class ReservationServiceTest {
     void GivenZoneDoesNotExist_WhenReserveStandingTicketsForMember_ThenThrowException() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID))
-                .thenThrow(new IllegalArgumentException("Zone not found: " + ZONE_ID));
+        givenEventOnSaleWith(new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE));
 
         assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
                 ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
@@ -381,16 +339,9 @@ public class ReservationServiceTest {
 
     @Test
     void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-
-        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
-
-        doThrow(new IllegalStateException("remaining 1 tickets available"))
-                .when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+        givenSignedInMember();
+        givenEventOnSaleWith(standingZoneOf(1));
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
 
         assertThrows(IllegalStateException.class,
                 () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
@@ -399,14 +350,9 @@ public class ReservationServiceTest {
 
     @Test
     void GivenNoActiveOrder_WhenReserveStandingTicketsForMember_ThenCreateNewOrderAndReturnResult() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
+        givenSignedInMember();
+        givenEventOnSaleWith(standingZoneOf(10));
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
-
-        when(zone.getAvailableAmount()).thenReturn(10);
-        when(zone.getprice()).thenReturn(100.0);
 
         ReservationResultDTO result = reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
@@ -418,13 +364,9 @@ public class ReservationServiceTest {
     void GivenValidGuestRequest_WhenReserveStandingTicketsForGuest_ThenReturnReservationResult() {
         String sessionId = "guest-session";
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(activeOrder));
-
-        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
-        when(zone.getAvailableAmount()).thenReturn(10);
-        when(zone.getprice()).thenReturn(100.0);
+        givenEventOnSaleWith(standingZoneOf(10));
+        when(activeOrderRepository.getBySessionId(sessionId))
+                .thenReturn(Optional.of(ActiveOrder.forGuest(sessionId, NOW)));
 
         ReservationResultDTO result = reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
@@ -487,9 +429,7 @@ public class ReservationServiceTest {
     void GivenZoneDoesNotExist_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID))
-                .thenThrow(new IllegalArgumentException("Zone not found: " + ZONE_ID));
+        givenEventOnSaleWith(new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE));
 
         assertThrows(IllegalArgumentException.class,
                 () -> reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
@@ -500,14 +440,10 @@ public class ReservationServiceTest {
     void GivenNotEnoughTickets_WhenReserveStandingTicketsForGuest_ThenThrowException() {
         String sessionId = "guest-session";
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(activeOrder));
+        givenEventOnSaleWith(standingZoneOf(1));
+        when(activeOrderRepository.getBySessionId(sessionId))
+                .thenReturn(Optional.of(ActiveOrder.forGuest(sessionId, NOW)));
 
-        when(activeOrder.hasReservationForEvent(eq(EVENT_ID), any())).thenReturn(false);
-
-        doThrow(new IllegalStateException("remaining 1 tickets available"))
-                .when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
         Exception exception = assertThrows(IllegalStateException.class, () -> reservationService
                 .reserveForGuest(sessionId, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
 
@@ -518,12 +454,8 @@ public class ReservationServiceTest {
     void GivenNoActiveOrder_WhenReserveStandingTicketsForGuest_ThenCreateNewOrderAndReturnResult() {
         String sessionId = "guest-session";
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
+        givenEventOnSaleWith(standingZoneOf(10));
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.empty());
-
-        when(zone.getAvailableAmount()).thenReturn(10);
-        when(zone.getprice()).thenReturn(100.0);
 
         ReservationResultDTO result = reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID,
                 InventorySelectionDTO.standing(QUANTITY));
@@ -540,13 +472,7 @@ public class ReservationServiceTest {
 
         InventoryZone realZone = new StandingZone(ZONE_ID, "VIP", capacity, 100.0);
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(realZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            realZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+        givenEventOnSaleWith(realZone);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
@@ -603,13 +529,7 @@ public class ReservationServiceTest {
 
         InventoryZone realZone = new StandingZone(ZONE_ID, "VIP", capacity, 100.0);
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(realZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            realZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+        givenEventOnSaleWith(realZone);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
@@ -681,13 +601,7 @@ public class ReservationServiceTest {
 
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(realZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            realZone.release(selection);
-            return null;
-        }).when(event).releaseInventory(eq(ZONE_ID), any(InventorySelection.class));
+        givenEventOnSaleWith(realZone);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realActiveOrder);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
@@ -733,11 +647,9 @@ public class ReservationServiceTest {
     }
 
     // ---- Seated-zone concurrency ----------------------------------------
-    // These isolate SeatedZone's per-seat ReentrantLock (the real guarantee against
-    // double-booking) by reserving against a real SeatedZone while the event is a
-    // deep-stub
-    // whose reserveInventory delegates to the zone — same approach as the standing
-    // tests above.
+    // These exercise SeatedZone's per-seat ReentrantLock (the real guarantee against
+    // double-booking): the order and event locks are mock no-ops here, so only the
+    // zone's own locks stand between the buyers — as in the standing tests above.
 
     @Test
     void GivenManyMembersSelectSameSeatConcurrently_WhenReserveSeatsForMember_ThenOnlyOneSucceeds()
@@ -750,13 +662,7 @@ public class ReservationServiceTest {
                 ZONE_ID, "Orchestra", 120.0,
                 List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0), new Seat("A3", 2, 0)));
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(realZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            realZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+        givenEventOnSaleWith(realZone);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
@@ -817,13 +723,7 @@ public class ReservationServiceTest {
                 ZONE_ID, "Orchestra", 120.0,
                 List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0), new Seat("A3", 2, 0)));
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(realZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            realZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+        givenEventOnSaleWith(realZone);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
@@ -882,13 +782,7 @@ public class ReservationServiceTest {
         }
         SeatedZone realZone = new SeatedZone(ZONE_ID, "Orchestra", 120.0, seats);
 
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(realZone);
-        doAnswer(inv -> {
-            InventorySelection selection = inv.getArgument(1);
-            realZone.reserve(selection);
-            return null;
-        }).when(event).reserveInventory(eq(ZONE_ID), any(InventorySelection.class));
+        givenEventOnSaleWith(realZone);
 
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch readyLatch = new CountDownLatch(numberOfThreads);
@@ -1128,13 +1022,7 @@ public class ReservationServiceTest {
     void GivenSuccessfulMemberReservation_WhenReserve_ThenNotifyAfterUnlocking() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
-        when(zone.getprice()).thenReturn(50.0);
-
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-        when(activeOrder.getOrderKey()).thenReturn("order-1");
+        givenEventOnSaleWith(standingZoneOf(10));
 
         reservationService.reserveForMember(
                 VALID_TOKEN,
@@ -1159,7 +1047,7 @@ public class ReservationServiceTest {
         ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(9));
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        givenEventOnSaleWith(standingZoneOf(10));
 
         ActiveOrderDTO dto = reservationService.renewReservationsForMemberCheckout(USER_ID);
 
@@ -1176,7 +1064,7 @@ public class ReservationServiceTest {
         ActiveOrder realOrder = new ActiveOrder(USER_ID, NOW);
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(20));
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        givenEventOnSaleWith(standingZoneOf(10));
 
         ActiveOrderDTO dto = reservationService.renewReservationsForMemberCheckout(USER_ID);
 
@@ -1191,7 +1079,7 @@ public class ReservationServiceTest {
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
         realOrder.markCheckoutInProgress();
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        givenEventOnSaleWith(standingZoneOf(10));
 
         ActiveOrderDTO dto = reservationService.renewReservationsForMemberCheckout(USER_ID);
 
@@ -1216,7 +1104,7 @@ public class ReservationServiceTest {
         ActiveOrder realOrder = ActiveOrder.forGuest(sessionId, NOW);
         realOrder.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
         when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(realOrder));
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        givenEventOnSaleWith(standingZoneOf(10));
 
         ActiveOrderDTO dto = reservationService.renewReservationsForGuestCheckout(sessionId);
 
@@ -1242,11 +1130,8 @@ public class ReservationServiceTest {
 
     @Test
     void GivenGuestWithoutCart_WhenReserveForGuest_ThenNoLogEventCarriesTheSessionId() {
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
-        when(event.getVenueMap().getZone(ZONE_ID)).thenReturn(zone);
+        givenEventOnSaleWith(standingZoneOf(10));
         when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.empty());
-        when(zone.getAvailableAmount()).thenReturn(10);
-        when(zone.getprice()).thenReturn(100.0);
         logs = LogCapture.of(ReservationService.class);
 
         reservationService.reserveForGuest(LOGGED_GUEST_SID, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY));
@@ -1258,8 +1143,10 @@ public class ReservationServiceTest {
 
     @Test
     void GivenGuestCartInCheckout_WhenReserveForGuest_ThenNoLogEventCarriesTheSessionId() {
-        when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.of(activeOrder));
-        when(activeOrder.isCheckoutInProgress()).thenReturn(true);
+        ActiveOrder guestCartInCheckout = ActiveOrder.forGuest(LOGGED_GUEST_SID, NOW);
+        guestCartInCheckout.addStandingReservation(EVENT_ID, ZONE_ID, 1, PRICE, NOW);
+        guestCartInCheckout.markCheckoutInProgress();
+        when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.of(guestCartInCheckout));
         logs = LogCapture.of(ReservationService.class);
 
         assertThrows(IllegalStateException.class, () -> reservationService.reserveForGuest(LOGGED_GUEST_SID,
@@ -1300,7 +1187,7 @@ public class ReservationServiceTest {
         ActiveOrder guestCart = ActiveOrder.forGuest(LOGGED_GUEST_SID, NOW);
         guestCart.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW.minusMinutes(9));
         when(activeOrderRepository.getBySessionId(LOGGED_GUEST_SID)).thenReturn(Optional.of(guestCart));
-        when(eventRepository.findById(EVENT_ID)).thenReturn(event);
+        givenEventOnSaleWith(standingZoneOf(10));
         logs = LogCapture.of(ReservationService.class);
 
         reservationService.renewReservationsForGuestCheckout(LOGGED_GUEST_SID);
@@ -1317,15 +1204,14 @@ public class ReservationServiceTest {
     private static final String RESERVE_FAILURE = "reserve-failed-after-the-hold-under-test";
     private static final String RELEASE_FAILURE = "release-of-the-hold-failed-under-test";
     private static final String CART_ROLLBACK_FAILURE = "cart-line-rollback-failed-under-test";
-    private static final String ORDER_KEY = "order-key-under-test";
 
     @Test
     void GivenReleaseFailsWhileRollingBackAFailedReserve_WhenReserveForMember_ThenAWarnCarriesTheReleaseFailure() {
         InventoryCommandPort inventory = mock(InventoryCommandPort.class);
         ReservationService service = reservationServiceOver(inventory);
-        memberWithCart();
-        doThrow(new IllegalStateException(RESERVE_FAILURE)).when(activeOrder)
-                .addStandingReservation(anyInt(), anyInt(), anyInt(), anyDouble(), any());
+        ActiveOrder cart = memberWithEmptyCart();
+        // The cart save fails after the hold; the cart rollback's own save succeeds, so only the release fails.
+        doThrow(new IllegalStateException(RESERVE_FAILURE)).doNothing().when(activeOrderRepository).save(cart);
         when(inventory.release(anyInt(), anyInt(), any(), any())).thenThrow(new IllegalStateException(RELEASE_FAILURE));
         logs = LogCapture.of(ReservationService.class);
 
@@ -1333,7 +1219,7 @@ public class ReservationServiceTest {
                 () -> service.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
 
         assertEquals(RESERVE_FAILURE, thrown.getMessage(), "the reserve's own failure must propagate, not the release's");
-        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(ORDER_KEY));
+        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(cart.getOrderKey()));
         assertWarnCarrying(RELEASE_FAILURE);
     }
 
@@ -1341,10 +1227,11 @@ public class ReservationServiceTest {
     void GivenCartRollbackFailsAfterAFailedReserve_WhenReserveForMember_ThenAWarnCarriesTheCartRollbackFailure() {
         InventoryCommandPort inventory = mock(InventoryCommandPort.class);
         ReservationService service = reservationServiceOver(inventory);
-        memberWithCart();
-        doThrow(new IllegalStateException(RESERVE_FAILURE)).when(activeOrderRepository).save(activeOrder);
-        doThrow(new IllegalStateException(CART_ROLLBACK_FAILURE)).when(activeOrder)
-                .removeStandingSpots(EVENT_ID, ZONE_ID, QUANTITY);
+        ActiveOrder cart = memberWithEmptyCart();
+        // The cart save fails after the hold, and so does the save that would undo the cart line.
+        doThrow(new IllegalStateException(RESERVE_FAILURE))
+                .doThrow(new IllegalStateException(CART_ROLLBACK_FAILURE))
+                .when(activeOrderRepository).save(cart);
         logs = LogCapture.of(ReservationService.class);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
@@ -1352,7 +1239,7 @@ public class ReservationServiceTest {
 
         assertEquals(RESERVE_FAILURE, thrown.getMessage(),
                 "the reserve's own failure must propagate, not the cart rollback's");
-        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(ORDER_KEY));
+        verify(inventory).release(eq(EVENT_ID), eq(ZONE_ID), any(), eq(cart.getOrderKey()));
         assertWarnCarrying(CART_ROLLBACK_FAILURE);
     }
 
@@ -1459,11 +1346,44 @@ public class ReservationServiceTest {
                 Clock.fixed(T0, ZoneOffset.UTC));
     }
 
-    private void memberWithCart() {
+    // A signed-in member whose real cart is still empty.
+    private ActiveOrder memberWithEmptyCart() {
+        givenSignedInMember();
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
+        return cart;
+    }
+
+    private void givenSignedInMember() {
         when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(activeOrder);
-        when(activeOrder.getOrderKey()).thenReturn(ORDER_KEY);
+    }
+
+    private StandingZone standingZoneOf(int capacity) {
+        return new StandingZone(ZONE_ID, "VIP", capacity, PRICE);
+    }
+
+    // A real event on sale whose venue holds the one zone given; the event port hands it out.
+    private Event givenEventOnSaleWith(InventoryZone inventoryZone) {
+        Event onSale = createEventWithZone(inventoryZone);
+        onSale.transitionToOnSale();
+        when(eventRepository.findById(EVENT_ID)).thenReturn(onSale);
+        return onSale;
+    }
+
+    // The member's real cart, holding `quantity` standing tickets of the zone, which holds them for it.
+    private ActiveOrder givenMemberCartHolding(StandingZone standing, int quantity) {
+        ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
+        cart.addStandingReservation(EVENT_ID, ZONE_ID, quantity, PRICE, NOW);
+        standing.reserve(InventorySelection.standing(quantity, cart.getOrderKey()));
+        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cart);
+        return cart;
+    }
+
+    private ActiveOrder savedCart() {
+        ArgumentCaptor<ActiveOrder> saved = ArgumentCaptor.forClass(ActiveOrder.class);
+        verify(activeOrderRepository).save(saved.capture());
+        return saved.getValue();
     }
 
     private void assertWarnCarrying(String failure) {
