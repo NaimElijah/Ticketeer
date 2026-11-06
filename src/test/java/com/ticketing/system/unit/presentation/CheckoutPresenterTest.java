@@ -1,10 +1,13 @@
 package com.ticketing.system.unit.presentation;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,12 +20,19 @@ import java.util.OptionalInt;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
@@ -36,9 +46,12 @@ import jakarta.persistence.PersistenceException;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
+import com.ticketing.system.shared.exception.IdempotencyConflictException;
+import com.ticketing.system.shared.exception.InsufficientInventoryException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PaymentGatewayException;
 import com.ticketing.system.shared.exception.PaymentGatewayUnreachableException;
+import com.ticketing.system.shared.exception.PolicyViolationException;
 import com.ticketing.system.shared.exception.TicketIssuanceFailedException;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
@@ -54,16 +67,20 @@ import com.ticketing.system.ui.session.SessionIdentity;
  */
 class CheckoutPresenterTest {
 
+    private ReservationService reservationService;
     private CheckoutService checkoutService;
+    private SessionIdentity identity;
     private CheckoutPresenter presenter;
 
     @BeforeEach
     void setUp() {
-        ReservationService reservationService = mock(ReservationService.class);
+        reservationService = mock(ReservationService.class);
         checkoutService = mock(CheckoutService.class);
-        SessionIdentity identity = mock(SessionIdentity.class);
+        identity = mock(SessionIdentity.class);
         presenter = new CheckoutPresenter(reservationService, checkoutService, identity);
     }
+
+    private static final String CHECKOUT_FAILED = "Checkout failed, tickets returned to stock";
 
     /** Drives the member checkout path, which builds the card and calls checkoutService.checkoutMember(...). */
     private CheckoutPresenter.PayOutcome pay() {
@@ -215,6 +232,158 @@ class CheckoutPresenterTest {
 
         assertInstanceOf(CheckoutPresenter.PayOutcome.OrderExpired.class, outcome,
                 "a cart whose hold ran out must still read as an expired order, but was: " + outcome);
+    }
+
+    // ---- NaimElijah/Ticketeer#189, P4-3: the pay outcomes no test reached ----
+    // Each refusal is the type the backend throws for it, wrapped as CheckoutService wraps a checkout failure.
+
+    @Test
+    void GivenAPolicyViolation_WhenPay_ThenPolicyRejectedWithTheReason() {
+        String reason = "You can buy at most 4 tickets";
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException(CHECKOUT_FAILED, new PolicyViolationException(reason)));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertEquals(new CheckoutPresenter.PayOutcome.PolicyRejected(reason), outcome);
+    }
+
+    @Test
+    void GivenASoldOutCart_WhenPay_ThenSoldOutWithTheReason() {
+        String reason = "Not enough reserved standing tickets to confirm sale";
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException(CHECKOUT_FAILED, new InsufficientInventoryException(reason)));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertEquals(new CheckoutPresenter.PayOutcome.SoldOut(reason), outcome);
+    }
+
+    // A key another buyer already used is an IdempotencyConflictException, a DomainException: it must reach its
+    // own outcome, not the generic failure that would show its message.
+    @Test
+    void GivenADuplicateKey_WhenPay_ThenDuplicateSubmission() {
+        when(checkoutService.checkoutMember(any(), any(), any(), any()))
+                .thenThrow(new RuntimeException(CHECKOUT_FAILED, new IdempotencyConflictException("idem-1")));
+
+        CheckoutPresenter.PayOutcome outcome = pay();
+
+        assertEquals(new CheckoutPresenter.PayOutcome.DuplicateSubmission(), outcome);
+    }
+
+    // ---- NaimElijah/Ticketeer#189, P4-3: what the gateway is sent ----
+    // The form's raw fields become the card: the number without its spaces, the other fields trimmed, and a
+    // "MM / YY" expiry read as the month and a year in this century.
+
+    private static final CheckoutResultDTO PURCHASE = new CheckoutResultDTO(200.0, 7, 123,
+            List.of(new CheckoutResultDTO.IssuedTicketDTO(1, "barcode-1")));
+
+    @Test
+    void GivenAGuest_WhenPayAsGuest_ThenCheckoutGuestGetsTheSessionEmailAgeKeyAndCard() {
+        when(checkoutService.checkoutGuest(any(), any(), any(), any(), any(), anyInt())).thenReturn(PURCHASE);
+
+        CheckoutPresenter.PayOutcome outcome = presenter.payAsGuest(GUEST_SESSION_ID, "guest@example.com", 27,
+                "idem-guest", "4111 1111 1111 1111", "123", "07 / 29", "Guest Holder");
+
+        assertEquals(new CheckoutPresenter.PayOutcome.Success(PURCHASE), outcome);
+        ArgumentCaptor<CardDetailsDTO> card = ArgumentCaptor.forClass(CardDetailsDTO.class);
+        verify(checkoutService).checkoutGuest(eq(GUEST_SESSION_ID), eq("guest@example.com"), eq("idem-guest"),
+                eq("USD"), card.capture(), eq(27));
+        assertCard(card.getValue(), "4111111111111111", "123", 7, 2029, "Guest Holder");
+    }
+
+    @Test
+    void GivenASpacedCardAndAShortExpiry_WhenPayAsMember_ThenTheCardIsParsed() {
+        when(checkoutService.checkoutMember(any(), any(), any(), any())).thenReturn(PURCHASE);
+
+        CheckoutPresenter.PayOutcome outcome = presenter.payAsMember("member-token", "idem-member",
+                " 4111 1111\t1111 1111 ", " 986 ", "12 / 30", "  Jane Holder ");
+
+        assertEquals(new CheckoutPresenter.PayOutcome.Success(PURCHASE), outcome);
+        assertCard(theMemberCard("member-token", "idem-member"), "4111111111111111", "986", 12, 2030, "Jane Holder");
+    }
+
+    @Test
+    void GivenAFourDigitExpiryYear_WhenPayAsMember_ThenTheYearIsKept() {
+        when(checkoutService.checkoutMember(any(), any(), any(), any())).thenReturn(PURCHASE);
+
+        presenter.payAsMember("member-token", "idem-member", "4111111111111111", "986", "09/2031", "Jane Holder");
+
+        assertCard(theMemberCard("member-token", "idem-member"), "4111111111111111", "986", 9, 2031, "Jane Holder");
+    }
+
+    // A malformed expiry is sent as month and year 0, so the gateway, not the presenter, declines it.
+    @ParameterizedTest(name = "expiry \"{0}\"")
+    @NullAndEmptySource
+    @ValueSource(strings = {"ab / cd", "1230", " / "})
+    void GivenAMalformedExpiry_WhenPayAsMember_ThenMonthAndYearAreZero(String expiry) {
+        when(checkoutService.checkoutMember(any(), any(), any(), any())).thenReturn(PURCHASE);
+
+        presenter.payAsMember("member-token", "idem-member", "4111111111111111", "986", expiry, "Jane Holder");
+
+        CardDetailsDTO card = theMemberCard("member-token", "idem-member");
+        assertAll(
+                () -> assertEquals(0, card.expiryMonth(), "the expiry month"),
+                () -> assertEquals(0, card.expiryYear(), "the expiry year"));
+    }
+
+    // The card checkoutMember was called with, for the given token and key, in the presenter's currency.
+    private CardDetailsDTO theMemberCard(String token, String idempotencyKey) {
+        ArgumentCaptor<CardDetailsDTO> card = ArgumentCaptor.forClass(CardDetailsDTO.class);
+        verify(checkoutService).checkoutMember(eq(token), eq(idempotencyKey), eq("USD"), card.capture());
+        return card.getValue();
+    }
+
+    // Field by field: a card's toString masks its number, so a whole-record failure would not show it.
+    private static void assertCard(CardDetailsDTO card, String number, String cvv, int month, int year,
+            String holder) {
+        assertAll(
+                () -> assertEquals(number, card.cardNumber(), "the card number"),
+                () -> assertEquals(cvv, card.cvv(), "the cvv"),
+                () -> assertEquals(month, card.expiryMonth(), "the expiry month"),
+                () -> assertEquals(year, card.expiryYear(), "the expiry year"),
+                () -> assertEquals(holder, card.holderName(), "the holder"));
+    }
+
+    // ---- NaimElijah/Ticketeer#189, P4-3: loadOrder classifies and prices the cart ----
+
+    private static final String VISITOR_CREDENTIAL = "visitor-credential";
+
+    @Test
+    void GivenNoOrder_WhenLoadOrder_ThenEmpty() {
+        when(identity.credential()).thenReturn(VISITOR_CREDENTIAL);
+        when(reservationService.viewMyActiveOrder(VISITOR_CREDENTIAL)).thenReturn(null);
+
+        assertEquals(new CheckoutPresenter.LoadOutcome.Empty(), presenter.loadOrder());
+    }
+
+    @Test
+    void GivenAnOrderWithNoLines_WhenLoadOrder_ThenEmpty() {
+        when(identity.credential()).thenReturn(VISITOR_CREDENTIAL);
+        when(reservationService.viewMyActiveOrder(VISITOR_CREDENTIAL)).thenReturn(anOrderOf(List.of()));
+
+        assertEquals(new CheckoutPresenter.LoadOutcome.Empty(), presenter.loadOrder());
+    }
+
+    // Prices are summed in whole cents: 19.99 is 1999 cents, though 19.99 * 100 in floating point is just under it.
+    @Test
+    void GivenTwoLines_WhenLoadOrder_ThenPricingSumsTheirCents() {
+        ActiveOrderDTO order = anOrderOf(List.of(aLineAt(19.99), aLineAt(0.07)));
+        when(identity.credential()).thenReturn(VISITOR_CREDENTIAL);
+        when(reservationService.viewMyActiveOrder(VISITOR_CREDENTIAL)).thenReturn(order);
+
+        CheckoutPresenter.LoadOutcome outcome = presenter.loadOrder();
+
+        assertEquals(new CheckoutPresenter.LoadOutcome.Loaded(order, new CheckoutPresenter.Pricing(2006, 2006)),
+                outcome);
+    }
+
+    private static ActiveOrderDTO anOrderOf(List<ActiveOrderDTO.CartLineDTO> lines) {
+        return new ActiveOrderDTO(CART_OWNER_ID, null, CART_CREATED_AT, 600, 0.0, lines);
+    }
+
+    private static ActiveOrderDTO.CartLineDTO aLineAt(double price) {
+        return new ActiveOrderDTO.CartLineDTO(1, "Concert", 1, null, price, CART_CREATED_AT);
     }
 
     // ---- UI-B10: resolving the visitor is one action, so the token's liveness is looked up once (#187) ----
