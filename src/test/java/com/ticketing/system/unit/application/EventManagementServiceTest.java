@@ -292,14 +292,16 @@ class EventManagementServiceTest {
 
         @Test
         public void GivenNonMember_WhenCancelEventAndRefund_ThenMissingPermissionAndNothingRefunded() {
-                User stranger = new User(99, "Stranger", "stranger@test.com", "hashedpw", 25);
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(99);
-                when(userRepository.getUserById(99)).thenReturn(stranger);
+                final int strangerId = 99;
+                final String strangerToken = "stranger-token";
+                User stranger = new User(strangerId, "Stranger", "stranger@test.com", "hashedpw", 25);
+                when(sessionManager.validateToken(strangerToken)).thenReturn(true);
+                when(sessionManager.extractUserId(strangerToken)).thenReturn(strangerId);
+                when(userRepository.getUserById(strangerId)).thenReturn(stranger);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
 
                 UnauthorizedActionException refused = assertThrows(UnauthorizedActionException.class,
-                                () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
+                                () -> eventService.cancelEventAndRefund(strangerToken, EVENT_ID));
 
                 assertTrue(refused.getMessage().contains("Missing permission: MANAGE_INVENTORY"), refused.getMessage());
                 assertEquals(EventStatus.SCHEDULED, event.getStatus());
