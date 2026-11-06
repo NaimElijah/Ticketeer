@@ -3141,6 +3141,30 @@ private AtomicBoolean trackReceiptSave() {
         }
     }
 
+    // A free zone's order totals 0, and a charge of 0 is a valid sum, so isValidSum keeps it on purpose: such a
+    // checkout completes, refunds nothing and needs no operator.
+    @Test
+    void GivenAFreeZoneAndAZeroCharge_WhenCheckout_ThenThePurchaseCompletesWithNoRefundAndNoError() {
+        StandingZone zone = new StandingZone(ZONE_ID_1, "FREE", 5, 0.0);
+        Event event = createRealEventWithPolicyAndZone(EVENT_ID_1, zone, new NoPurchasePolicy());
+        ActiveOrder order = new ActiveOrder(USER_ID, NOW);
+        order.addStandingReservation(EVENT_ID_1, ZONE_ID_1, 1, 0.0, NOW);
+        zone.reserve(InventorySelection.standing(1, order.getOrderKey()));
+        when(mockActiveOrderRepo.getByUserId(USER_ID)).thenReturn(order);
+        when(mockEventRepo.findById(EVENT_ID_1)).thenReturn(event);
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+
+        try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
+            CheckoutResultDTO result =
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
+
+            assertEquals(0.0, result.totalCharged());
+            assertEquals(1, result.issuedTickets().size());
+            verify(mockPaymentGateway, never()).refund(anyInt(), anyDouble());
+            assertEquals(List.of(), logs.messagesAt(Level.ERROR), "a free order needs no operator");
+        }
+    }
+
     // An operator reconciling a failed refund needs the sum the buyer is owed: what the gateway took, which an
     // amount mismatch makes differ from the order's total.
     @Test
