@@ -172,12 +172,14 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenInvalidQuantity_WhenRemoveReservedStandingSpots_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+    void GivenAZeroQuantitySelection_WhenRemoveForMember_ThenRefusedBeforeTheCartIsTouched() {
+        givenSignedInMember();
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(0)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, zeroQuantitySelection()));
+
+        assertEquals("Quantity must be positive", refused.getMessage());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
     }
 
     @Test
@@ -191,13 +193,20 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenZoneDoesNotExist_WhenRemoveReservedStandingSpots_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+    void GivenACartLineInAZoneTheEventNoLongerHas_WhenRemoveForMember_ThenZoneNotFoundAndTheCartKeepsTheLine() {
+        // The cart holds the line, so the removal gets past the cart's own check to the zone lookup.
+        memberWithReservedStandingTickets();
         givenEventOnSaleWith(new StandingZone(OTHER_ZONE_ID, "Balcony", 10, PRICE));
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals("Zone not found: " + ZONE_ID, refused.getMessage());
+        assertEquals(QUANTITY, activeOrderRepository.getByUserId(USER_ID).getItems().size(),
+                "a refused removal must leave the cart's lines in place");
+        verify(activeOrderRepository, never()).save(any());
+        verify(eventRepository, never()).save(any());
     }
 
     @Test
@@ -211,29 +220,31 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenOrderDoesNotContainEvent_WhenRemoveReservedStandingSpots_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
+    void GivenOrderDoesNotContainEvent_WhenRemoveForMember_ThenRefusedAndNothingIsReleased() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        memberWithEmptyCart();
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationServiceOver(inventory)
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
 
         assertEquals("Active order does not contain this event", exception.getMessage());
+        verifyNoInteractions(inventory);
+        verify(activeOrderRepository, never()).save(any());
     }
 
     @Test
-    void GivenNotEnoughReservedTickets_WhenRemoveReservedStandingSpots_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
-        ActiveOrder cartHoldingOne = new ActiveOrder(USER_ID, NOW);
+    void GivenNotEnoughReservedTickets_WhenRemoveForMember_ThenRefusedAndNothingIsReleased() {
+        InventoryCommandPort inventory = mock(InventoryCommandPort.class);
+        ActiveOrder cartHoldingOne = memberWithEmptyCart();
         cartHoldingOne.addStandingReservation(EVENT_ID, ZONE_ID, 1, PRICE, NOW);
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(cartHoldingOne);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationService
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> reservationServiceOver(inventory)
                 .removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
 
         assertEquals("Not enough reserved tickets to remove", exception.getMessage());
+        verifyNoInteractions(inventory);
+        assertEquals(1, cartHoldingOne.getItems().size(), "a refused removal must leave the cart's line in place");
+        verify(activeOrderRepository, never()).save(any());
     }
 
     // Each reserved seat records when its hold runs out: the configured hold after the clock, the
@@ -309,12 +320,14 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenInvalidQuantity_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
-        when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+    void GivenAZeroQuantitySelection_WhenReserveForMember_ThenRefusedBeforeTheCartIsTouched() {
+        givenSignedInMember();
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(0)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID, zeroQuantitySelection()));
+
+        assertEquals("Quantity must be positive", refused.getMessage());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
     }
 
     @Test
@@ -338,14 +351,20 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNotEnoughTickets_WhenReserveStandingTicketsForMember_ThenThrowException() {
-        givenSignedInMember();
-        givenEventOnSaleWith(standingZoneOf(1));
-        when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(new ActiveOrder(USER_ID, NOW));
+    void GivenOneTicketLeft_WhenReserveTwoForMember_ThenRefusedAndNothingIsHeldOrSaved() {
+        StandingZone lastTicket = standingZoneOf(1);
+        givenEventOnSaleWith(lastTicket);
+        ActiveOrder cart = memberWithEmptyCart();
 
-        assertThrows(IllegalStateException.class,
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
                 () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
                         InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals("remaining 1 tickets available", refused.getMessage());
+        assertEquals(1, lastTicket.getAvailableAmount());
+        assertEquals(0, lastTicket.getReservedAmount());
+        assertTrue(cart.isEmpty(), "a refused reservation must add no cart line");
+        verify(activeOrderRepository, never()).save(any());
     }
 
     @Test
@@ -408,11 +427,14 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenInvalidQuantity_WhenReserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenAZeroQuantitySelection_WhenReserveForGuest_ThenRefusedBeforeTheCartIsTouched() {
         String sessionId = "guest-session";
 
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForGuest(sessionId, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(0)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForGuest(sessionId, EVENT_ID, ZONE_ID, zeroQuantitySelection()));
+
+        assertEquals("Quantity must be positive", refused.getMessage());
+        verifyNoInteractions(activeOrderRepository, eventRepository);
     }
 
     @Test
@@ -437,17 +459,21 @@ public class ReservationServiceTest {
     }
 
     @Test
-    void GivenNotEnoughTickets_WhenReserveStandingTicketsForGuest_ThenThrowException() {
+    void GivenOneTicketLeft_WhenReserveTwoForGuest_ThenRefusedAndNothingIsHeldOrSaved() {
         String sessionId = "guest-session";
-
-        givenEventOnSaleWith(standingZoneOf(1));
-        when(activeOrderRepository.getBySessionId(sessionId))
-                .thenReturn(Optional.of(ActiveOrder.forGuest(sessionId, NOW)));
+        StandingZone lastTicket = standingZoneOf(1);
+        givenEventOnSaleWith(lastTicket);
+        ActiveOrder cart = ActiveOrder.forGuest(sessionId, NOW);
+        when(activeOrderRepository.getBySessionId(sessionId)).thenReturn(Optional.of(cart));
 
         Exception exception = assertThrows(IllegalStateException.class, () -> reservationService
                 .reserveForGuest(sessionId, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(QUANTITY)));
 
         assertEquals("remaining 1 tickets available", exception.getMessage());
+        assertEquals(1, lastTicket.getAvailableAmount());
+        assertEquals(0, lastTicket.getReservedAmount());
+        assertTrue(cart.isEmpty(), "a refused reservation must add no cart line");
+        verify(activeOrderRepository, never()).save(any());
     }
 
     @Test
@@ -1344,6 +1370,12 @@ public class ReservationServiceTest {
         return new ReservationService(inventory, activeOrderRepository, sessionManager, eventPublisher,
                 UserRepositories.everyMemberExistsAged(MEMBER_AGE), marketGate, mock(ISystemMetrics.class),
                 Clock.fixed(T0, ZoneOffset.UTC));
+    }
+
+    // A selection of no tickets. The DTO's factory refuses one, so this uses the constructor, which a
+    // caller can still reach, to get past the factory to the service's own quantity check.
+    private static InventorySelectionDTO zeroQuantitySelection() {
+        return new InventorySelectionDTO(0, List.of());
     }
 
     // A signed-in member whose real cart is still empty.
