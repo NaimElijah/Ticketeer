@@ -1597,7 +1597,10 @@ public class ReservationServiceTest {
     // Starts every attempt at once and waits for all of them. A lost race ends in one of the refusals this
     // path throws: the zone's or the event's IllegalStateException (no stock left, the seat is taken, the
     // event sold out) or the cart's IllegalArgumentException (it no longer holds the line). Anything else,
-    // a NullPointerException say, is collected as unexpected rather than counted as a lost race.
+    // a NullPointerException say, is collected as unexpected rather than counted as a lost race. The attempts
+    // start together but nothing holds them inside the critical section, so these races catch a missing lock
+    // only when the threads happen to overlap; ReservationConcurrencyTest's snapshot races are the
+    // deterministic ones.
     private static RaceOutcome raceAll(List<Runnable> attempts) throws InterruptedException {
         ExecutorService pool = Executors.newFixedThreadPool(attempts.size());
         CountDownLatch ready = new CountDownLatch(attempts.size());

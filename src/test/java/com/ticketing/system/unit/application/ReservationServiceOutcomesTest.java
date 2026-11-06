@@ -45,7 +45,7 @@ import static org.mockito.Mockito.*;
  * outbound ports doubled and the real {@link InventoryService} beneath it: what the buyer's cart and the zone
  * hold after each call. A plain unit suite, so it lives here rather than under {@code acceptance/}, whose
  * classes boot Spring (NaimElijah/Ticketeer#189); {@link ReservationServiceTest} holds the service's other unit
- * tests, and these are the outcomes it does not already check.
+ * tests. Two of these overlap a test there, with stronger checks on what the cart and the zone hold afterwards.
  */
 class ReservationServiceOutcomesTest {
 
