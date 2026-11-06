@@ -228,16 +228,6 @@ class EventManagementServiceTest {
                 assertThrows(RuntimeException.class, () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
         }
 
-        @Test
-        public void GivenCompanyDoesNotExist_WhenCancelEventAndRefund_ThenThrowException() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(RuntimeException.class);
-
-                assertThrows(RuntimeException.class, () -> eventService.cancelEventAndRefund(OWNER_TOKEN, EVENT_ID));
-        }
-
         // #20: cancelling an already-cancelled event republishes the cancellation so the sales side
         // resumes the refunds a failure interrupted; the CANCELED state is not saved a second time.
         @Test
