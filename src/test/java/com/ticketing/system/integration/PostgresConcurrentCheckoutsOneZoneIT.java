@@ -1,5 +1,6 @@
 package com.ticketing.system.integration;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
@@ -35,10 +36,12 @@ import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.integration.SeatedShowFixture.Show;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.support.PostgresContainers;
 
 /**
@@ -75,6 +78,7 @@ class PostgresConcurrentCheckoutsOneZoneIT {
     @Autowired private SystemAdminService systemAdminService;
     @Autowired private ReservationService reservationService;
     @Autowired private CheckoutService checkoutService;
+    @Autowired private OrderReceiptRepository orderReceiptRepository;
     @Autowired private Clock clock;
 
     // The catalog port, spied on only to hold each checkout in Phase 3 until both have reached it.
@@ -106,6 +110,7 @@ class PostgresConcurrentCheckoutsOneZoneIT {
 
         assertEquals(List.of(), failures, "both seats were free, so both purchases must succeed");
         assertEquals(SeatedShowFixture.SEATS.size() - BUYERS, fixture.availableSeats(show));
+        assertBothSalesRecorded(show);
     }
 
     // A standing sale moves the zone's own reserved and sold counts, so the two sales write one row.
@@ -125,6 +130,18 @@ class PostgresConcurrentCheckoutsOneZoneIT {
 
         assertEquals(List.of(), failures, "the zone had room for both, so both purchases must succeed");
         assertEquals(STANDING_CAPACITY - BUYERS, fixture.availableSeats(show));
+        assertBothSalesRecorded(show);
+    }
+
+    // Available counts a held place and a sold one alike, so it cannot tell a lost sale from a recorded one: a
+    // sale whose confirm was lost leaves its place held by an order no cart has (NaimElijah/Ticketeer#189).
+    private void assertBothSalesRecorded(Show show) {
+        InventoryZoneDTO zone = fixture.zoneOf(show);
+        assertAll(
+                () -> assertEquals(BUYERS, zone.getSoldAmount(), "each purchase must sell its place"),
+                () -> assertEquals(0, zone.getReservedAmount(), "no place may stay held"),
+                () -> assertEquals(BUYERS, orderReceiptRepository.findByEventId(show.eventId()).size(),
+                        "each purchase must leave its receipt"));
     }
 
     // Only the first Phase 3 of each checkout waits, so a retried Phase 3 runs straight through.

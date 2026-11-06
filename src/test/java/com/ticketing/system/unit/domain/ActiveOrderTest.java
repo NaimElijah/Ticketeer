@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.shared.exception.CheckoutInProgressException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.sales.domain.CartLineItem;
 
@@ -53,6 +54,19 @@ class ActiveOrderTest extends BaseDomainTest {
                 NOW.minus(CartLineItem.getExpirationLimit()).minusMinutes(1));
 
         assertThrows(InvalidStateTransitionException.class, () -> order.validateCanCheckout(NOW));
+    }
+
+    // UC-10: checking out an order already frozen in checkout (a member paying from a second device, or an
+    // interrupted attempt) is an ordinary refusal the buyer reads, not an internal error (NaimElijah/Ticketeer#240).
+    @Test
+    void GivenOrderAlreadyInCheckout_WhenValidateCanCheckout_ThenRefusedAsCheckoutInProgress() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW);
+        order.markCheckoutInProgress();
+
+        CheckoutInProgressException refusal =
+                assertThrows(CheckoutInProgressException.class, () -> order.validateCanCheckout(NOW));
+        assertEquals("This order is already being paid for", refusal.getMessage());
     }
 
     @Test
