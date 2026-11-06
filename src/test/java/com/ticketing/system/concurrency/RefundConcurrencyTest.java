@@ -62,6 +62,8 @@ class RefundConcurrencyTest {
     private static final int PAYMENT_TX = 5000;
     private static final double TOTAL = 100.0;
     private static final LocalDateTime WHEN = LocalDateTime.of(2026, 6, 1, 12, 0);
+    // What RefundService tells a request that finds the receipt already refunded.
+    private static final String ALREADY_REFUNDED = "Order " + RECEIPT_ID + " has already been refunded";
 
     @Autowired
     private RefundService refundService;
@@ -121,8 +123,15 @@ class RefundConcurrencyTest {
                         }
                         refundService.requestRefund(buyerToken, RECEIPT_ID, "double-click");
                         refunded.incrementAndGet();
-                    } catch (BusinessRuleViolationException alreadyDone) {
-                        alreadyRefunded.incrementAndGet(); // the loser saw is_refunded=true and bailed
+                    } catch (BusinessRuleViolationException refused) {
+                        // A loser finds the receipt refunded, after waiting on the row lock if it overlapped
+                        // the winner, and bails. That is the only BusinessRuleViolationException this path
+                        // throws for a valid owner's receipt; any other is not the lost race.
+                        if (ALREADY_REFUNDED.equals(refused.getMessage())) {
+                            alreadyRefunded.incrementAndGet();
+                        } else {
+                            unexpected.add(refused);
+                        }
                     } catch (Throwable t) {
                         unexpected.add(t);
                     } finally {

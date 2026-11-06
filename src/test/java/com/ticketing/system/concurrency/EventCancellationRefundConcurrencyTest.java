@@ -144,8 +144,15 @@ class EventCancellationRefundConcurrencyTest {
                             throw new IllegalStateException("the race was never started");
                         }
                         publishCancellation();
-                    } catch (RefundFailedException stillPending) {
-                        reportedStillPending.incrementAndGet(); // skipped a receipt another run had claimed
+                    } catch (RefundFailedException refused) {
+                        // A run that skipped a receipt another run had claimed reports it still pending.
+                        // The gateway here never declines, never fails and always answers validly, so a
+                        // decline, an unknown outcome or an unreachable gateway is not the lost race.
+                        if (isOnlyStillPending(refused)) {
+                            reportedStillPending.incrementAndGet();
+                        } else {
+                            unexpected.add(refused);
+                        }
                     } catch (Throwable t) {
                         unexpected.add(t);
                     } finally {
@@ -194,6 +201,12 @@ class EventCancellationRefundConcurrencyTest {
         separate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         return separate.execute(status -> orderReceiptRepository.findByOrderReceiptId(receiptId).orElseThrow()
                 .getReceiptLines().get(0).getRefundState());
+    }
+
+    /** Whether a run's failure reports only receipts still pending under another run's claim, none declined. */
+    private static boolean isOnlyStillPending(RefundFailedException failure) {
+        return failure.getClass() == RefundFailedException.class
+                && failure.getMessage().contains("(declined: [], still pending: [");
     }
 
     private void publishCancellation() {
