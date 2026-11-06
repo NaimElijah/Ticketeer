@@ -97,8 +97,10 @@ public class EventCancellationRefundService {
      *                                            and calling this again resumes with the rest
      * @throws RefundFailedException              naming every receipt whose refund was declined, that
      *                                            has no payment charge, or whose refund is still pending
-     *                                            under another run's claim, after the others were
-     *                                            refunded; calling this again retries the declined ones
+     *                                            (under another run's claim, or a claim of this run that
+     *                                            could not be released), after the others were refunded;
+     *                                            calling this again retries the declined ones whose claim
+     *                                            was released
      */
     public void refundCancelledEvent(int eventId, String eventName) {
         Set<Integer> notifiedHolders = new HashSet<>();
@@ -120,9 +122,9 @@ public class EventCancellationRefundService {
         }
         voidUnsoldTickets(eventId);
 
-        // Every claim this run made is resolved by now, so a PENDING line left on the event belongs to
-        // another run still in flight, or to a claim a crash stranded. Either way the event is not fully
-        // refunded, and the owner must not be told it is.
+        // A PENDING line left on the event now belongs to another run still in flight, to a claim of this
+        // run whose release failed (logged at ERROR above), or to a claim a crash stranded. Either way the
+        // event is not fully refunded, and the owner must not be told it is.
         List<Integer> pendingReceiptIds = orderReceiptRepository.findByEventId(eventId).stream()
                 .filter(receipt -> receipt.hasPendingRefundFor(eventId))
                 .map(OrderReceipt::getId)
