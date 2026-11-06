@@ -4,6 +4,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -418,6 +419,37 @@ class AdminAndMemberSessionAcceptanceTest {
                         + "guest session, but failed with " + failure + " caused by " + failure.getCause());
         assertTrue(orderReceiptRepository.findByHolderUserId(member.userId()).isEmpty(), "nothing is bought");
         assertEquals(heldLines, cartOf(member).getItems().size(), "the member's cart is still held");
+    }
+
+    // The member's cart is found by the member's session id, so a guest checkout that took that id would
+    // buy the member's cart as a guest's.
+    @Test
+    void GivenALiveMembersSessionId_WhenCheckoutGuest_ThenSessionExpiredAndNothingIsBought() {
+        MemberWithCartOnItsSession member = memberWhoseCartIsBoundToTheirSessionId();
+        int heldLines = cartOf(member.auth()).getItems().size();
+        int eventId = cartOf(member.auth()).getItems().get(0).geteventId();
+
+        RuntimeException failure = assertThrows(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                member.sessionId(), member.auth().username() + "@test.com", nextIdempotencyKey(), CURRENCY, CARD,
+                MEMBER_AGE));
+
+        assertInstanceOf(SessionExpiredException.class, failure.getCause(),
+                "a member session's raw id is not a guest credential, so guest checkout must fail as for an expired "
+                        + "guest session, but failed with " + failure + " caused by " + failure.getCause());
+        assertTrue(orderReceiptRepository.findByEventId(eventId).isEmpty(), "nothing is bought");
+        assertEquals(heldLines, cartOf(member.auth()).getItems().size(), "the member's cart is still held");
+    }
+
+    @Test
+    void GivenALiveMembersSessionId_WhenRemoveForGuest_ThenSessionExpiredAndTheMembersCartIsUnchanged() {
+        MemberWithCartOnItsSession member = memberWhoseCartIsBoundToTheirSessionId();
+        CartLineItem heldLine = cartOf(member.auth()).getItems().get(0);
+        int heldLines = cartOf(member.auth()).getItems().size();
+
+        assertThrows(SessionExpiredException.class, () -> reservationService.removeForGuest(member.sessionId(),
+                heldLine.geteventId(), heldLine.getzoneId(), InventorySelectionDTO.standing(1)),
+                "a member session's raw id must not remove from the member's cart as a guest");
+        assertEquals(heldLines, cartOf(member.auth()).getItems().size(), "the member's cart is unchanged");
     }
 
     @Test

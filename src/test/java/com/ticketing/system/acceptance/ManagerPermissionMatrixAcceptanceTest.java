@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -16,9 +17,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.shared.dto.AppointmentResponseDTO;
+import com.ticketing.system.shared.dto.AppointmentRevokeDTO;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
+import com.ticketing.system.shared.dto.ConversationDTO;
+import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
@@ -27,11 +31,16 @@ import com.ticketing.system.shared.dto.GridPlacementDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.organization.application.dto.ManagerAppointmentRequestDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.SendMessageRequestDTO;
+import com.ticketing.system.shared.dto.StartConversationRequestDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
+import com.ticketing.system.shared.exception.InvalidParticipantException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.service.AuthenticationService;
+import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.catalog.domain.EventCategory;
@@ -47,7 +56,10 @@ import com.ticketing.system.organization.domain.Permission;
  *   <li>{@code MANAGE_INVENTORY} — edit metadata, change status, create events; NOT venue/policies.</li>
  *   <li>{@code CONFIGURE_VENUE} — edit the venue map; NOT event metadata/status/policies.</li>
  *   <li>{@code EDIT_POLICIES} — edit company + event purchase policies; NOT event/venue.</li>
+ *   <li>{@code RESPOND_TO_INQUIRIES} — reply to a member's inquiry for the company; a manager without it
+ *       is no participant of the inquiry.</li>
  * </ul>
+ * A revoked manager keeps none of the permissions they held.
  * Guards the re-gating of the event-management service methods from CONFIGURE_VENUE to the
  * intended permission.
  */
@@ -58,6 +70,7 @@ class ManagerPermissionMatrixAcceptanceTest {
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
     @Autowired private EventManagementService eventManagementService;
+    @Autowired private MessagingService messagingService;
     @Autowired private Clock clock;
 
     @Test
@@ -123,7 +136,57 @@ class ManagerPermissionMatrixAcceptanceTest {
                 "CONFIGURE_VENUE");
     }
 
+    @Test
+    void GivenAManagerWithRespondToInquiries_WhenReplyingToAnInquiry_ThenTheReplyIsAddedForTheCompany() {
+        Fixture f = setup("inq");
+        AuthTokenDTO m = appointManagerWith(f, "inqMgr", Permission.RESPOND_TO_INQUIRIES);
+        AuthTokenDTO member = registerAndLogin("inquirer");
+        ConversationDTO inquiry = inquiryTo(f, member);
+
+        messagingService.sendMessage(m.token(), new SendMessageRequestDTO(inquiry.conversationId(), 0, null, REPLY));
+
+        List<MessageDTO> messages = messagingService.viewConversation(member.token(), inquiry.conversationId())
+                .messages();
+        assertEquals(2, messages.size(), "the member's question and the manager's reply");
+        MessageDTO reply = messages.get(1);
+        assertEquals(REPLY, reply.body());
+        assertEquals("COMPANY", reply.senderType(), "the manager replies for the company");
+        assertEquals(f.companyId, reply.senderId());
+    }
+
+    @Test
+    void GivenAManagerWithoutRespondToInquiries_WhenReplyingToAnInquiry_ThenRefusedAsNoParticipantAndNoMessageIsAdded() {
+        Fixture f = setup("noInq");
+        AuthTokenDTO m = appointManagerWith(f, "noInqMgr", Permission.MANAGE_INVENTORY);
+        AuthTokenDTO member = registerAndLogin("inquirer");
+        ConversationDTO inquiry = inquiryTo(f, member);
+
+        assertThrows(InvalidParticipantException.class, () -> messagingService.sendMessage(m.token(),
+                new SendMessageRequestDTO(inquiry.conversationId(), 0, null, REPLY)));
+
+        assertEquals(1, messagingService.viewConversation(member.token(), inquiry.conversationId())
+                .messages().size(), "the inquiry still holds only the member's question");
+    }
+
+    @Test
+    void GivenARevokedManager_WhenEditEventDetails_ThenMissingPermissionAndTheEventIsUnchanged() {
+        Fixture f = setup("revoked");
+        AuthTokenDTO m = appointManagerWith(f, "revokedMgr", Permission.MANAGE_INVENTORY);
+        companyService.RevokeAppointment(f.owner.token(), new AppointmentRevokeDTO(f.companyId, m.userId()));
+
+        UnauthorizedActionException refused = assertThrows(UnauthorizedActionException.class,
+                () -> eventManagementService.editEventDetails(m.token(), new EventUpdateDTO(
+                        String.valueOf(f.eventId), "Renamed after revocation", null, null, null, null, null)));
+
+        assertEquals("Not authorized to perform action: Missing permission: MANAGE_INVENTORY", refused.getMessage());
+        assertEquals(EVENT_NAME, eventManagementService.getEventDetail(f.owner.token(), f.eventId).name(),
+                "the revoked manager's edit must not reach the event");
+    }
+
     // ---- fixtures & helpers --------------------------------------------
+
+    private static final String EVENT_NAME = "Matrix Event";
+    private static final String REPLY = "Yes, at the north gate.";
 
     private record Fixture(AuthTokenDTO owner, int companyId, int eventId) { }
 
@@ -133,7 +196,7 @@ class ManagerPermissionMatrixAcceptanceTest {
         int companyId = companyService.registerCompany(owner.token(),
                 new CompanyRegistrationDTO("MatrixCo-" + owner.userId(), "desc")).companyId();
         EventDetailDTO ev = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
-                companyId, "Matrix Event", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
+                companyId, EVENT_NAME, "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
                 List.of(new ShowDate(LocalDateTime.now(clock).plusDays(10), LocalDateTime.now(clock).plusDays(10).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
@@ -150,6 +213,11 @@ class ManagerPermissionMatrixAcceptanceTest {
                 new ManagerAppointmentRequestDTO(f.companyId, mgr.userId(), List.of(perms)));
         companyService.respondToAppointment(mgr.token(), new AppointmentResponseDTO(f.companyId, true));
         return mgr;
+    }
+
+    private ConversationDTO inquiryTo(Fixture f, AuthTokenDTO member) {
+        return messagingService.startConversation(member.token(),
+                new StartConversationRequestDTO(f.companyId, "Parking?", "Is there parking near the venue?"));
     }
 
     private static ZoneConfigDTO standingZone(String name, int capacity) {
