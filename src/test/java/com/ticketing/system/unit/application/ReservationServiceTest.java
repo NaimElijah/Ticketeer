@@ -836,8 +836,10 @@ public class ReservationServiceTest {
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
 
         realEvent.transitionToOnSale();
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.seated(List.of("A1"))));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.seated(List.of("A1"))));
+        assertEquals("Standing zone cannot reserve specific seats", refused.getMessage());
 
         assertEquals(10, standingZone.getAvailableAmount());
         verify(activeOrderRepository, never()).save(any());
@@ -858,8 +860,10 @@ public class ReservationServiceTest {
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
 
         realEvent.transitionToOnSale();
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID,
-                ZONE_ID, InventorySelectionDTO.standing(1)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(1)));
+        assertEquals("Seated zone requires selected seat numbers", refused.getMessage());
 
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
         verify(activeOrderRepository, never()).save(any());
@@ -880,11 +884,16 @@ public class ReservationServiceTest {
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(realEvent);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
-        doThrow(new RuntimeException("save failed")).when(activeOrderRepository).save(any(ActiveOrder.class));
+        realEvent.transitionToOnSale();
+        RuntimeException saveFailed = new RuntimeException("save failed");
+        doThrow(saveFailed).when(activeOrderRepository).save(any(ActiveOrder.class));
 
-        assertThrows(RuntimeException.class, () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
-                InventorySelectionDTO.seated(List.of("A1", "A2"))));
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> reservationService.reserveForMember(
+                VALID_TOKEN, EVENT_ID, ZONE_ID, InventorySelectionDTO.seated(List.of("A1", "A2"))));
 
+        assertSame(saveFailed, thrown, "the cart save's own failure must propagate, after the seats were held");
+        // The reserve's save, then the rollback's save of the cart with the line taken back out.
+        verify(activeOrderRepository, times(2)).save(any(ActiveOrder.class));
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A2"));
     }
