@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -2858,21 +2860,37 @@ private AtomicBoolean trackReceiptSave() {
         }
     }
 
-    // A second Pay on a cart another attempt is checking out is an ordinary refusal: no operator, no charge
-    // (NaimElijah/Ticketeer#240).
+    // A second Pay while the first attempt is still paying, as a member paying from a second device sends, is an
+    // ordinary refusal: it charges nothing more, leaves the first attempt to finish, and needs no operator
+    // (NaimElijah/Ticketeer#240). Phase 1 releases the order lock before the payment, so a second checkout made
+    // from inside the charge runs as the second device's would.
     @Test
-    void GivenACartAlreadyInCheckout_WhenCheckoutMember_ThenRefusedAsCheckoutInProgressAtWarnAndNothingCharged() {
+    void GivenAFirstAttemptStillPaying_WhenASecondCheckoutRuns_ThenItIsRefusedAsCheckoutInProgressWithNoErrorLogged() {
         arrangeMemberStandingCart();
-        mockActiveOrderRepo.getByUserId(USER_ID).markCheckoutInProgress();
+        givenSuccessfulPaymentAndIssuanceWithFlag(1);
+        AtomicReference<RuntimeException> secondPay = new AtomicReference<>();
+        when(mockPaymentGateway.charge(any(PaymentRequestDTO.class))).thenAnswer(invocation -> {
+            try {
+                checkoutService.checkoutMember(VALID_TOKEN, "second-tab-key", CURRENCY, PAYMENT_METHOD_TOKEN);
+            } catch (RuntimeException refused) {
+                secondPay.set(refused);
+            }
+            PaymentRequestDTO request = invocation.getArgument(0);
+            return new PaymentResultDTO(PAYMENT_TRANSACTION_ID, "gateway", request.amount(), CURRENCY, NOW);
+        });
 
         try (LogCapture logs = LogCapture.of(CheckoutService.class)) {
-            RuntimeException failure = assertThrows(RuntimeException.class, () ->
-                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
+            CheckoutResultDTO first =
+                    checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
 
-            assertInstanceOf(CheckoutInProgressException.class, failure.getCause(),
-                    "the second attempt must be refused as already in checkout, but the cause was " + failure.getCause());
+            assertNotNull(secondPay.get(), "the second checkout must be refused, but it went through");
+            assertInstanceOf(CheckoutInProgressException.class, secondPay.get().getCause(),
+                    "the second attempt must be refused as already in checkout, but the cause was "
+                            + secondPay.get().getCause());
+            assertEquals(1, first.issuedTickets().size(), "the first attempt must still complete");
+            verify(mockPaymentGateway, times(1)).charge(any());
+            assertEquals(List.of(), logs.messagesAt(Level.ERROR), "a second Pay must log no ERROR");
             assertLoggedAtWarnNotError(logs, CheckoutInProgressException.class);
-            verify(mockPaymentGateway, never()).charge(any());
         }
     }
 
