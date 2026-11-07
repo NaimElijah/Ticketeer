@@ -43,7 +43,12 @@ public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> 
      */
     ActiveOrder getByUserId(int userId);
 
-    /** Guest-cart lookup, or active-session Member-cart lookup. */
+    /**
+     * Guest-cart lookup: the cart with this session id and no user. A member's cart is never returned, even
+     * when it carries this session id; look it up with {@link #getByUserId(int)}.
+     *
+     * @return the session's guest cart, or empty if it has none; empty for a {@code null} or blank session id
+     */
     Optional<ActiveOrder> getBySessionId(String sessionId);
 
     /** Delete by reference. Idempotent: deleting an unknown cart is a no-op. */

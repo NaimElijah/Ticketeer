@@ -85,7 +85,7 @@ public class MemoryActiveOrderRepository implements ActiveOrderRepository {
             return Optional.empty();
         }
         for (ActiveOrder cart : carts) {
-            if (sessionId.equals(cart.getSessionId())) {
+            if (cart.isGuest() && sessionId.equals(cart.getSessionId())) {
                 return Optional.of(cart);
             }
         }

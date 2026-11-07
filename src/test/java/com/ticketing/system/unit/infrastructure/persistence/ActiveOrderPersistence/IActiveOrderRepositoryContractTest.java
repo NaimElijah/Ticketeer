@@ -72,15 +72,13 @@ abstract class IActiveOrderRepositoryContractTest {
         assertTrue(repo.getBySessionId("ghost-sid").isEmpty());
     }
 
+    // getBySessionId is the guest-cart lookup: a member's cart is found by its user id only, even on the
+    // session it was made in.
     @Test
-    void GivenSavedMemberCartOnTheSession_WhenGetBySessionId_ThenReturnsMemberCart() {
-        // Member cart with active session — same lookup path as Guest.
-        ActiveOrder member = ActiveOrder.forMember(7, "sid-M", NOW);
-        repo.save(member);
+    void GivenOnlyAMemberCartOnTheSession_WhenGetBySessionId_ThenReturnsEmpty() {
+        repo.save(ActiveOrder.forMember(7, "sid-M", NOW));
 
-        Optional<ActiveOrder> found = repo.getBySessionId("sid-M");
-        assertTrue(found.isPresent());
-        assertEquals(7, found.get().getUserId());
+        assertTrue(repo.getBySessionId("sid-M").isEmpty(), "a member cart must not be returned as the session's cart");
     }
 
     @Test
@@ -227,19 +225,32 @@ abstract class IActiveOrderRepositoryContractTest {
                 "the second cart replaced the empty one");
     }
 
+    // A guest cart and a member cart that share a session id stay distinct carts, and the session's cart
+    // is the guest's, whichever was stored first: every caller of getBySessionId is a guest path.
     @Test
-    void GivenGuestAndMemberCartsWithTheSameSessionId_WhenSave_ThenUserIdAndSessionIdLookupsBothFindACart() {
-        // Edge: a Guest cart and a Member cart that happen to share a sessionId
-        // should remain distinct rows (different identities).
+    void GivenAGuestCartThenAMemberCartOnOneSession_WhenGetBySessionId_ThenReturnsTheGuestCart() {
         ActiveOrder guest = ActiveOrder.forGuest("shared-sid", NOW);
         ActiveOrder member = ActiveOrder.forMember(5, "shared-sid", NOW);
         repo.save(guest);
         repo.save(member);
 
-        // Both retrievable.
-        assertNotNull(repo.getByUserId(5));
-        // getBySessionId hits one of them; either is OK for this contract.
-        assertTrue(repo.getBySessionId("shared-sid").isPresent());
+        assertSessionCartIsTheGuestCart(guest, member);
+    }
+
+    @Test
+    void GivenAMemberCartThenAGuestCartOnOneSession_WhenGetBySessionId_ThenReturnsTheGuestCart() {
+        ActiveOrder member = ActiveOrder.forMember(5, "shared-sid", NOW);
+        ActiveOrder guest = ActiveOrder.forGuest("shared-sid", NOW);
+        repo.save(member);
+        repo.save(guest);
+
+        assertSessionCartIsTheGuestCart(guest, member);
+    }
+
+    private void assertSessionCartIsTheGuestCart(ActiveOrder guest, ActiveOrder member) {
+        assertEquals(guest.getOrderKey(), repo.getBySessionId("shared-sid").orElseThrow().getOrderKey(),
+                "the session's cart is its guest cart");
+        assertEquals(member.getOrderKey(), repo.getByUserId(5).getOrderKey(), "the member cart is still stored");
     }
 
     @Test

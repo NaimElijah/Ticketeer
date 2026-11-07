@@ -104,7 +104,7 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
         if (sessionId == null || sessionId.isBlank()) {
             return Optional.empty();
         }
-        return data.findFirstBySessionId(sessionId);
+        return data.findBySessionIdAndUserIdIsNull(sessionId).stream().findFirst();
     }
 
     @Override

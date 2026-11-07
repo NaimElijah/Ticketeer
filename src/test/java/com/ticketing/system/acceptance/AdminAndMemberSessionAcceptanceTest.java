@@ -421,8 +421,8 @@ class AdminAndMemberSessionAcceptanceTest {
         assertEquals(heldLines, cartOf(member).getItems().size(), "the member's cart is still held");
     }
 
-    // The member's cart is found by the member's session id, so a guest checkout that took that id would
-    // buy the member's cart as a guest's.
+    // The member's cart carries the member's session id, so a guest checkout that took that id could reach
+    // the member's cart; the guest gate refuses the id before it does.
     @Test
     void GivenALiveMembersSessionId_WhenCheckoutGuest_ThenSessionExpiredAndNothingIsBought() {
         MemberWithCartOnItsSession member = memberWhoseCartIsBoundToTheirSessionId();
@@ -562,9 +562,10 @@ class AdminAndMemberSessionAcceptanceTest {
         String name = nextName("kind.promoted");
         authService.register(new RegisterRequestDTO(name, name + "@test.com", PASSWORD, sessionId, MEMBER_AGE));
         AuthTokenDTO member = authService.login(new LoginRequestDTO(name, PASSWORD, sessionId)).authToken();
-        ActiveOrder boundCart = activeOrderRepository.getBySessionId(sessionId).orElseThrow();
-        assertEquals(member.userId(), boundCart.getUserId(),
-                "arrangement: the member's cart is found by the member's session id");
+        assertEquals(sessionId, sessionManager.extractSessionId(member.token()),
+                "arrangement: the member's session keeps the guest session's id");
+        assertEquals(sessionId, cartOf(member).getSessionId(),
+                "arrangement: the member's cart carries the member's session id");
         return new MemberWithCartOnItsSession(member, sessionId);
     }
 
