@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
@@ -89,6 +91,66 @@ class NotificationTest extends BaseDomainTest {
         n.markRead();
 
         assertTrue(n.isRead());
+    }
+
+    // ---- the delivery lifecycle's refusals (#189) ----
+
+    @Test
+    void GivenASentNotification_WhenMarkSentAgain_ThenRefusedAndStaysSent() {
+        Notification n = pending();
+        n.markSent();
+
+        assertThrows(IllegalStateException.class, n::markSent);
+
+        assertEquals(NotificationStatus.SENT, n.getStatus());
+    }
+
+    @Test
+    void GivenAReadNotification_WhenMarkSent_ThenRefusedAndStaysRead() {
+        Notification n = pending();
+        n.markRead();
+
+        assertThrows(IllegalStateException.class, n::markSent);
+
+        assertEquals(NotificationStatus.READ, n.getStatus());
+    }
+
+    // A session ending sends a shown, unread notification back to PENDING, to be shown again.
+    @Test
+    void GivenASentNotification_WhenMarkPending_ThenPending() {
+        Notification n = pending();
+        n.markSent();
+
+        n.markPending();
+
+        assertEquals(NotificationStatus.PENDING, n.getStatus());
+    }
+
+    @Test
+    void GivenAPendingNotification_WhenMarkPending_ThenRefusedAndStaysPending() {
+        Notification n = pending();
+
+        assertThrows(IllegalStateException.class, n::markPending);
+
+        assertEquals(NotificationStatus.PENDING, n.getStatus());
+    }
+
+    // A read notification must not come back to the bell.
+    @Test
+    void GivenAReadNotification_WhenMarkPending_ThenRefusedAndStaysRead() {
+        Notification n = pending();
+        n.markRead();
+
+        assertThrows(IllegalStateException.class, n::markPending);
+
+        assertEquals(NotificationStatus.READ, n.getStatus());
+    }
+
+    @ParameterizedTest(name = "recipient={0}")
+    @ValueSource(ints = {0, -1})
+    void GivenARecipientBelowOne_WhenCreated_ThenRefused(int recipient) {
+        assertThrows(IllegalStateException.class, () -> new Notification("n5", recipient,
+                NotificationType.PURCHASE_CONFIRMED, NotificationStatus.PENDING, "Your purchase is confirmed", CREATED));
     }
 
     @Test
