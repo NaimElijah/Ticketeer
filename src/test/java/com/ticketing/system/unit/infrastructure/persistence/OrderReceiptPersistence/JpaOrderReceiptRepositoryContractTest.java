@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
@@ -20,8 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -47,9 +50,9 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContractTest {
 
     private static final LocalDateTime AT = LocalDateTime.of(2027, 7, 15, 17, 0);
-    /** How long the second transaction's write may wait for the row lock before its statement is cancelled. */
+    /** How long the second transaction may wait for the row lock before its statement is cancelled. */
     private static final int LOCKED_WRITE_TIMEOUT_SECONDS = 1;
-    /** An upper bound on that write's whole attempt; never reached when the lock holds. */
+    /** An upper bound on that transaction's whole attempt; never reached when the lock holds. */
     private static final long LOCKED_WRITE_AWAIT_SECONDS = 30;
 
     @Autowired
@@ -90,8 +93,10 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
 
     // Unlike every other Jpa adapter's, this lockForUpdate takes a real row lock (SELECT ... FOR UPDATE,
     // #410) that lasts until the caller's transaction ends, so two refunds of one receipt cannot both reach
-    // the gateway. Meanwhile another transaction's write of the row waits, and its statement times out.
-    // Outside the test transaction, so the receipt is committed and the second connection sees it.
+    // the gateway. Meanwhile another transaction's write of the row waits, and gives up with a
+    // QueryTimeoutException: on H2 at its own lock timeout (error 50200, 2 s by default), on PostgreSQL,
+    // which sets no lock timeout, when the 1 s statement timeout cancels it (SQL state 57014). Outside
+    // the test transaction, so the receipt is committed and the second connection sees it.
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void GivenAReceiptLockedInOneTransaction_WhenAnotherTransactionWritesItMeanwhile_ThenTheWriteWaitsAndTimesOut() {
@@ -109,10 +114,48 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
             ExecutionException failed = assertThrows(ExecutionException.class,
                     () -> otherWrite.get(LOCKED_WRITE_AWAIT_SECONDS, TimeUnit.SECONDS),
                     "the other transaction wrote the receipt while it was locked");
-            assertInstanceOf(DataAccessException.class, failed.getCause());
+            assertInstanceOf(QueryTimeoutException.class, failed.getCause(), "a lock wait that timed out");
         });
 
         assertEquals(50.0, jdbc.queryForObject("select total_price from receipts where receipt_id = 1", Double.class));
+    }
+
+    // A write waits for a shared lock too (PostgreSQL's FOR SHARE), so the case above cannot tell the
+    // exclusive lock that keeps a second refund from the gateway from a shared one: two refunds that each
+    // took a shared lock would both go on. Only a second locker shows it. On H2 a shared lock is a FOR
+    // UPDATE as well (see ADR-015), so only PostgreSQL's run of this case catches PESSIMISTIC_READ.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenAReceiptLockedInOneTransaction_WhenAnotherTransactionLocksItMeanwhile_ThenItWaitsAndTimesOut() {
+        repository.save(receipt(1));
+        TransactionTemplate otherTransaction = new TransactionTemplate(transactionManager);
+        otherTransaction.setTimeout(LOCKED_WRITE_TIMEOUT_SECONDS);
+        ExecutorService otherThread = Executors.newSingleThreadExecutor();
+        try {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                repository.lockForUpdate(1);
+
+                CompletableFuture<Void> otherLock = CompletableFuture.runAsync(
+                        () -> otherTransaction.executeWithoutResult(other -> repository.lockForUpdate(1)),
+                        otherThread);
+
+                ExecutionException failed = assertThrows(ExecutionException.class,
+                        () -> otherLock.get(LOCKED_WRITE_AWAIT_SECONDS, TimeUnit.SECONDS),
+                        "a second transaction took the receipt's lock while the first held it");
+                assertLockWaitTimedOut(failed.getCause());
+            });
+        } finally {
+            otherThread.shutdownNow();
+        }
+    }
+
+    // What the adapter's lock throws once it gives up waiting; any other failure, a missing table or a
+    // lost connection, is not a lock wait. Hibernate translates by database: H2's lock timeout (error
+    // 50200) becomes a PessimisticLockingFailureException, and PostgreSQL's statement cancelled by the
+    // transaction's 1 s timeout (SQL state 57014) a QueryTimeoutException.
+    private static void assertLockWaitTimedOut(Throwable failure) {
+        assertTrue(failure instanceof PessimisticLockingFailureException || failure instanceof QueryTimeoutException,
+                "expected a lock wait that timed out, got " + failure);
     }
 
     // A new adapter instance models a restarted process (#19, as JpaTicketRepositoryContractTest does for
