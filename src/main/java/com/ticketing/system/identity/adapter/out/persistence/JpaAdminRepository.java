@@ -2,10 +2,14 @@ package com.ticketing.system.identity.adapter.out.persistence;
 import java.util.List;
 
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
+import com.ticketing.system.shared.persistence.ConstraintViolations;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
@@ -22,6 +26,9 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
 public class JpaAdminRepository implements AdminRepository {
 
+    /** The unique constraint on {@code admins.username}, in the baseline schema (V1). */
+    private static final String USERNAME_UNIQUE_CONSTRAINT = "uk_admins_username";
+
     private final SpringDataAdminRepository data;
 
     public JpaAdminRepository(SpringDataAdminRepository data) {
@@ -34,9 +41,24 @@ public class JpaAdminRepository implements AdminRepository {
     @Override
     public void unlock(Integer id) { /* no-op */ }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flushes the write, so a username another admin holds fails here, as
+     * {@link DuplicateUsernameException}, rather than at a later flush or at commit, outside the adapter.
+     * Any other integrity violation propagates unchanged.
+     */
     @Override
+    @Transactional
     public void save(Admin admin) {
-        data.save(admin);
+        try {
+            data.saveAndFlush(admin);
+        } catch (DataIntegrityViolationException e) {
+            if (ConstraintViolations.violates(e, USERNAME_UNIQUE_CONSTRAINT)) {
+                throw new DuplicateUsernameException(admin.getUsername());
+            }
+            throw e;
+        }
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.ticketing.system.unit.infrastructure.persistence.AdminPersistence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
@@ -95,6 +97,23 @@ abstract class IAdminRepositoryContractTest {
         assertEquals("admin", reloaded.getUsername(), "only the password hash changes");
         assertTrue(reloaded.isDefault(), "only the password hash changes");
         assertEquals(1, repo.findAll().size(), "the admin is updated, not saved a second time");
+    }
+
+    // One username, one admin, as for users: every adapter refuses, from save itself, an admin whose
+    // username another admin holds. The Jpa adapter flushes the insert so the uk_admins_username
+    // violation surfaces there, and re-types it.
+    @Test
+    void GivenSavedAdmin_WhenAnotherAdminWithTheSameUsernameIsSaved_ThenDuplicateUsernameAndTheFirstIsUnchanged() {
+        repo.save(new Admin(1, "admin", "HASH", true));
+        Admin sameName = new Admin(2, "admin", "OTHER_HASH", false);
+
+        assertThrows(DuplicateUsernameException.class, () -> repo.save(sameName),
+                "a second admin must not be saved under a username another admin holds");
+
+        Admin stored = repo.findByUsername("admin");
+        assertEquals(1, stored.getId(), "the first admin keeps the username");
+        assertEquals("HASH", stored.getPasswordHash(), "the first admin is unchanged");
+        assertTrue(stored.isDefault(), "the first admin is unchanged");
     }
 
     // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
