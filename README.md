@@ -319,7 +319,7 @@ in [SEED.md](SEED.md#scenario-file-format):
 
 ## Testing
 
-About 3,100 test methods, organised by what they boot. Each name reads `Given…_When…_Then…`, and `TestConventionsTest` fails the build on one that doesn't ([ADR-023](docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md)):
+About 3,400 test methods, organised by what they boot. Each name reads `Given…_When…_Then…`, and `TestConventionsTest` fails the build on one that doesn't ([ADR-023](docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md)):
 
 | Layer | Covers | Boots |
 |---|---|---|
