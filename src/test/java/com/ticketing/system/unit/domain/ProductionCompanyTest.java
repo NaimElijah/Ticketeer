@@ -6,9 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +13,6 @@ import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.support.BaseDomainTest;
 
 class ProductionCompanyTest extends BaseDomainTest {
@@ -32,15 +28,11 @@ class ProductionCompanyTest extends BaseDomainTest {
         private static final int TEXT_LIMIT = 255;
 
         private ProductionCompany company;
-        private List<Permission> defaultPermissions;
 
         @BeforeEach
         public void setUp() {
                 company = track(new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
                                 COMPANY_1_DESCRIPTION, COMPANY_1_RATING));
-
-                defaultPermissions = new ArrayList<>();
-                defaultPermissions.add(Permission.MANAGE_INVENTORY);
         }
 
         @Test
@@ -66,13 +58,8 @@ class ProductionCompanyTest extends BaseDomainTest {
         ////////////////////////////////////////////////////////////////// UC-20Tests
 
         @Test
-        public void GivenOwner_WhenValidateManagerOrOwner_ThenDoesNotThrow() {
-                assertTrue(company.getOwnerId() == OWNER_ID);
-        }
-
-        @Test
         public void GivenUserIsOwner_WhenCheckOwner_ThenSucceeds() {
-                assertTrue(company.getOwnerId() == OWNER_ID);
+                assertDoesNotThrow(() -> company.checkowner(OWNER_ID));
         }
 
         @Test
