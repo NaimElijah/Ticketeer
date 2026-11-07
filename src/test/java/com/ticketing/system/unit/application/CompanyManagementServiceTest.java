@@ -1365,6 +1365,27 @@ public class CompanyManagementServiceTest {
                 verifyNoInteractions(eventPublisher);
         }
 
+        // II.4.10: an owner may give up their own appointment, but the Founder may not.
+        @Test
+        public void GivenFounder_WhenRevokeOwnAppointment_ThenRejected() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.RevokeAppointment(OWNER_TOKEN,
+                                                new AppointmentRevokeDTO(COMPANY_ID, OWNER_ID)));
+
+                assertEquals("Not authorized to perform action: revoke the appointment of a company founder",
+                                refused.getMessage());
+                assertTrue(company.isOwner(OWNER_ID));
+                assertTrue(membershipService.isOwnerInCompany(OWNER_ID, COMPANY_ID));
+                verify(mockCompanyRepo, never()).updateCompany(any());
+                verifyNoInteractions(eventPublisher);
+        }
+
         @Test
         public void GivenAManager_WhenAppointOwner_ThenUnauthorizedAndNoOfferMade() {
                 founderAppointedTheTargetAsManager();
