@@ -1200,7 +1200,7 @@ class EventTest extends BaseDomainTest {
 
     // A company with no policy restricts nothing, so the event's own policy alone decides.
     @Test
-    void GivenNoCompanyPolicy_WhenValidateEffectivePolicyOverTheEventLimit_ThenOnlyTheEventLimitIsNamed() {
+    void GivenNoCompanyPolicy_WhenValidateEffectivePolicyOverTheEventLimit_ThenTheEventLimitIsNamed() {
         Event limited = eventWithPolicy(new MaxTicketsPurchasePolicy(TICKET_LIMIT));
 
         String message = effectivePolicyRefusal(limited, null, 30, TICKET_LIMIT + 1);

@@ -1320,7 +1320,7 @@ public class CompanyManagementServiceTest {
         }
 
         @Test
-        public void GivenActiveOwner_WhenReceiveOwnerAppointment_ThenRefusedAndNoOfferMade() {
+        public void GivenActiveOwner_WhenAppointOwner_ThenRefusedAndNoOfferMade() {
                 companyWithCoOwnerWhoInvitedAManager(false);
                 clearInvocations(eventPublisher);
 
@@ -1334,7 +1334,7 @@ public class CompanyManagementServiceTest {
         }
 
         @Test
-        public void GivenPendingOwnerOffer_WhenReceiveOwnerAppointmentAgain_ThenRefusedAndOneOfferStands() {
+        public void GivenPendingOwnerOffer_WhenAppointOwnerAgain_ThenRefusedAndOneOfferStands() {
                 founderAppointedTheTargetAsManager();
                 companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID));
                 clearInvocations(eventPublisher);

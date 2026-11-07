@@ -2,6 +2,7 @@ package com.ticketing.system.unit.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -53,5 +54,6 @@ class AdminTest {
         assertEquals(1, admin.getId());
         assertEquals("admin", admin.getUsername());
         assertEquals(STORED_HASH, admin.getPasswordHash());
+        assertTrue(admin.isDefault());
     }
 }

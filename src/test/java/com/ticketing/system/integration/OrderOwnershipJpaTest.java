@@ -80,10 +80,12 @@ class OrderOwnershipJpaTest {
 
     @Test
     void GivenAnotherBuyersSeat_WhenRemoveForMember_ThenRefusedAndBothOrdersUnchanged() {
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(
-                secondBuyer.token(), show.eventId(), show.zoneId(), seat(FIRST_BUYERS_SEAT)));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.removeForMember(secondBuyer.token(), show.eventId(), show.zoneId(),
+                        seat(FIRST_BUYERS_SEAT)));
 
         assertAll(
+                () -> assertEquals("Active order does not contain seat: " + FIRST_BUYERS_SEAT, refused.getMessage()),
                 () -> assertEquals(List.of(FIRST_BUYERS_SEAT), seatsHeldBy(firstBuyer),
                         "the seat stays in its buyer's order"),
                 () -> assertEquals(List.of(SECOND_BUYERS_SEAT), seatsHeldBy(secondBuyer),

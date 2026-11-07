@@ -113,7 +113,8 @@ class SessionAndOrderSweeperJpaTest {
 
     // UC-13: a member's order survives a disconnect only until its hold runs out; after that it is cancelled
     // and its tickets released, so logging in again finds nothing to resume. What a login should do with an
-    // order whose hold ran out but that no sweep has reached yet is not decided (#189), so the sweep runs first.
+    // order whose hold ran out but that no sweep has reached yet is open question OQ-33 in requirements.md, so
+    // the sweep runs first.
     @Test
     void GivenAMemberOrderWhoseHoldRanOut_WhenSweptAndTheMemberLogsInAgain_ThenNothingIsRestoredAndTheSeatIsInStock() {
         String username = fixture.register("returningMember");

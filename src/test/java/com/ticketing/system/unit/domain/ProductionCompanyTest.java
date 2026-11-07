@@ -48,9 +48,11 @@ class ProductionCompanyTest extends BaseDomainTest {
                 assertFalse(company.getManagers().contains(TARGET_USER_ID));
         }
 
-        // The type decides whether the user reads the rule (ServiceErrors.userMessage): both are DomainExceptions.
+        // The type of each refusal below decides whether the user reads the rule (ServiceErrors.userMessage):
+        // both are DomainExceptions.
+
         @Test
-        public void GivenTargetAlreadyManager_WhenAddManager_ThenThrowException() {
+        public void GivenTargetAlreadyManager_WhenAddManager_ThenBusinessRuleViolation() {
                 company.addManager(TARGET_USER_ID);
 
                 assertThrows(BusinessRuleViolationException.class, () -> company.addManager(TARGET_USER_ID));
@@ -59,7 +61,7 @@ class ProductionCompanyTest extends BaseDomainTest {
         }
 
         @Test
-        public void GivenTargetIsNotManager_WhenRevokeManager_ThenThrowException() {
+        public void GivenTargetIsNotManager_WhenRevokeManager_ThenAppointmentNotFound() {
                 assertThrows(AppointmentNotFoundException.class, () -> company.RevokeAppointment(TARGET_USER_ID));
 
                 assertTrue(company.getManagers().isEmpty());

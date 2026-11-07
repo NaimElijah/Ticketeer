@@ -226,8 +226,8 @@ class SessionTest extends BaseDomainTest {
         assertEquals(5, admin.getUserId());
     }
 
-    // Pins today's behaviour, which Session cites: the domain doesn't validate userId positivity, that is
-    // the User aggregate's job. Whether that is a requirement is not decided (#189).
+    // Session.checkInvariants records the decision this pins: the Session domain stays permissive about
+    // userId values, because their bounds are the User aggregate's concern.
     @Test
     void GivenZeroAndNegativeUserIds_WhenMemberSessionConstructed_ThenDoesNotThrow() {
         Session zero = track(assertDoesNotThrow(() -> new Session("sid-a", 0, T0, T_EXPIRES)));
