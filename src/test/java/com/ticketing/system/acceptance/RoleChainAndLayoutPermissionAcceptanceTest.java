@@ -54,8 +54,8 @@ import com.ticketing.system.organization.domain.Permission;
  *   <li>u3 CAN edit an event's layout (configure venue map) but CANNOT manage purchase policies;</li>
  *   <li>a published event is locked against layout changes by its status: only a DRAFT or SCHEDULED
  *       event's map may change, so tickets on sale are never orphaned by a reconfiguration. The guard
- *       against a map with reserved or sold places is behind that one: a place can be held only while
- *       the event is on sale, and no event goes back to DRAFT or SCHEDULED.</li>
+ *       against a map with reserved or sold places is behind that one: a place can be reserved only
+ *       while the event is on sale, and no event goes back to DRAFT or SCHEDULED.</li>
  * </ul>
  */
 @SpringBootTest
