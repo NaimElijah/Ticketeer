@@ -31,6 +31,7 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.Seat;
@@ -189,8 +190,9 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     }
 
     // The Jpa adapter needs no lock to delete (the Memory adapter refuses without one, MemoryEventRepositoryTest),
-    // and the delete takes the event's whole owned graph with it. It runs outside the test transaction, so
-    // each call commits and the counts read what the database holds.
+    // and the delete takes the event's whole owned graph with it: every table its venue's zones, seats and
+    // standing reservations live in. It runs outside the test transaction, so each call commits and the
+    // counts read what the database holds.
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void GivenTwoEventsWithSeatedVenues_WhenOneIsDeletedWithoutALock_ThenOnlyItsOwnedRowsAreGone() {
@@ -199,8 +201,8 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
 
         repository.delete(1);
 
-        assertEquals(Map.of("events", 1, "venue_maps", 1, "inventory_zones", 2, "seats", 2,
-                        "event_show_dates", 1, "event_artists", 1),
+        assertEquals(Map.of("events", 1, "venue_maps", 1, "inventory_zones", 2, "seated_zone", 1, "seats", 2,
+                        "standing_zone", 1, "standing_zone_reservations", 1, "event_show_dates", 1, "event_artists", 1),
                 rowCounts(), "only event 2's rows stay");
         assertEquals(List.of(2), repository.findAll().stream().map(Event::getId).toList());
     }
@@ -211,7 +213,11 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
                 "events", jdbc.queryForObject("select count(*) from events", Integer.class),
                 "venue_maps", jdbc.queryForObject("select count(*) from venue_maps", Integer.class),
                 "inventory_zones", jdbc.queryForObject("select count(*) from inventory_zones", Integer.class),
+                "seated_zone", jdbc.queryForObject("select count(*) from seated_zone", Integer.class),
                 "seats", jdbc.queryForObject("select count(*) from seats", Integer.class),
+                "standing_zone", jdbc.queryForObject("select count(*) from standing_zone", Integer.class),
+                "standing_zone_reservations",
+                jdbc.queryForObject("select count(*) from standing_zone_reservations", Integer.class),
                 "event_show_dates", jdbc.queryForObject("select count(*) from event_show_dates", Integer.class),
                 "event_artists", jdbc.queryForObject("select count(*) from event_artists", Integer.class));
     }
@@ -220,10 +226,13 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
         return seatedEvent(id, id);
     }
 
+    // The standing zone holds one order's reservation, so the venue fills each table an event owns.
     private static Event seatedEvent(int id, int venueMapId) {
+        StandingZone floor = new StandingZone(2, "Floor", 100, 50.0);
+        floor.reserve(InventorySelection.standing(3, "order-" + id));
         VenueMap venue = new VenueMap(venueMapId, new Location("Belgium", "Brussels"), List.of(
                 new SeatedZone(1, "Stage", 80.0, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0))),
-                new StandingZone(2, "Floor", 100, 50.0)));
+                floor));
         return new Event(id, "Show " + id, 4.5, List.of("Artist A"), EventCategory.MUSIC, 7, EventStatus.CANCELED,
                 venue, List.of(new ShowDate(LocalDateTime.of(2099, 6, 1, 18, 0), LocalDateTime.of(2099, 6, 1, 22, 0))),
                 ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
