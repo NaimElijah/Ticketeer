@@ -50,9 +50,9 @@ class SalesSummaryCalculatorTest {
     }
 
     // #21: on a shared order a company's record holds only its own lines, which another company's
-    // cancellation leaves unrefunded.
+    // cancellation leaves unrefunded, so the calculator sees an order whose lines are all unrefunded.
     @Test
-    void GivenACompanysLinesOfASharedOrderWhoseOtherEventWasRefunded_WhenSummarised_ThenTheyAllCount() {
+    void GivenAnOrderWhoseLinesAreAllUnrefunded_WhenSummarised_ThenTheyAllCount() {
         PurchaseRecordDTO ownLinesOnly = order(ticket(1, "Ours", 70.0, false), ticket(1, "Ours", 30.0, false));
 
         SalesSummaryDTO s = calculator.summarize(List.of(ownLinesOnly));

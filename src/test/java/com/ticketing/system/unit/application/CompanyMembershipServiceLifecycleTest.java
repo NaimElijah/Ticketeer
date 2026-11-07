@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.organization.adapter.out.persistence.MemoryCompanyAppointmentRepository;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
+import com.ticketing.system.organization.domain.AppointmentStatus;
 import com.ticketing.system.organization.domain.CompanyAppointment;
+import com.ticketing.system.organization.domain.CompanyRole;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
@@ -57,16 +59,19 @@ class CompanyMembershipServiceLifecycleTest {
     }
 
     @Test
-    void GivenPendingInvitation_WhenAcceptInvitation_ThenInvitationReturned() {
+    void GivenPendingInvitation_WhenAcceptInvitation_ThenTheNowActiveInvitationIsReturned() {
         membership.receiveManagerAppointment(USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
 
         CompanyAppointment appointment = membership.acceptInvitation(USER_ID, COMPANY_ID);
 
         assertEquals(COMPANY_ID, appointment.getCompanyId());
+        assertEquals(AppointmentStatus.ACTIVE, appointment.getStatus());
+        assertEquals(CompanyRole.Manager, appointment.getRole());
     }
 
+    // The record stays, ACTIVE now, so it is no longer pending rather than removed.
     @Test
-    void GivenPendingInvitation_WhenAcceptInvitation_ThenInvitationRemoved() {
+    void GivenPendingInvitation_WhenAcceptInvitation_ThenItIsNoLongerPending() {
         membership.receiveManagerAppointment(USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
 
         membership.acceptInvitation(USER_ID, COMPANY_ID);
@@ -84,18 +89,19 @@ class CompanyMembershipServiceLifecycleTest {
     }
 
     @Test
-    void GivenPendingInvitation_WhenAcceptInvitation_ThenAppointmentHasCorrectCompanyId() {
+    void GivenPendingInvitation_WhenAcceptInvitation_ThenTheUsersOnlyAppointmentIsActiveInThatCompany() {
         membership.receiveManagerAppointment(USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
 
         membership.acceptInvitation(USER_ID, COMPANY_ID);
 
-        CompanyAppointment appointment = membership.getAllCompanyAppointments(USER_ID).get(0);
-
-        assertEquals(COMPANY_ID, appointment.getCompanyId());
+        List<CompanyAppointment> appointments = membership.getAllCompanyAppointments(USER_ID);
+        assertEquals(1, appointments.size());
+        assertEquals(COMPANY_ID, appointments.get(0).getCompanyId());
+        assertEquals(AppointmentStatus.ACTIVE, appointments.get(0).getStatus());
     }
 
     @Test
-    void GivenPendingInvitation_WhenRejectInvitation_ThenInvitationRemoved() {
+    void GivenPendingInvitation_WhenRejectInvitation_ThenItIsNoLongerPending() {
         membership.receiveManagerAppointment(USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
 
         membership.rejectInvitation(USER_ID, COMPANY_ID);
@@ -103,13 +109,16 @@ class CompanyMembershipServiceLifecycleTest {
         assertNull(membership.getPendingCompanyAppointment(USER_ID, COMPANY_ID));
     }
 
+    // The rejected record stays, so a no-op reject would leave it PENDING, not REJECTED.
     @Test
-    void GivenPendingInvitation_WhenRejectInvitation_ThenNoCompanyAppointmentCreated() {
+    void GivenPendingInvitation_WhenRejectInvitation_ThenTheInvitationIsRejectedAndNothingIsActive() {
         membership.receiveManagerAppointment(USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
 
         membership.rejectInvitation(USER_ID, COMPANY_ID);
 
         assertNull(membership.getActiveCompanyAppointment(USER_ID, COMPANY_ID));
+        assertEquals(List.of(AppointmentStatus.REJECTED), membership.getAllCompanyAppointments(USER_ID).stream()
+                .map(CompanyAppointment::getStatus).toList());
     }
 
     @Test
@@ -137,7 +146,7 @@ class CompanyMembershipServiceLifecycleTest {
     }
 
     @Test
-    void GivenAcceptedAppointment_WhenRevokeManagerAppointment_ThenAppointmentRemoved() {
+    void GivenAcceptedAppointment_WhenRevokeManagerAppointment_ThenItIsNoLongerActive() {
         membership.receiveManagerAppointment(USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
         membership.acceptInvitation(USER_ID, COMPANY_ID);
 

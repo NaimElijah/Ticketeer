@@ -766,8 +766,9 @@ class EventManagementServiceTest {
                 assertEquals(LOCATION, result.location());
         }
 
+        // Any active member may read the detail; this manager holds only CONFIGURE_VENUE.
         @Test
-        void GivenManagerWithPermission_WhenGetEventDetail_ThenReturnsDTOSuccessfully() {
+        void GivenAVenueOnlyManager_WhenGetEventDetail_ThenReturnsDTOSuccessfully() {
                 when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
@@ -892,17 +893,23 @@ class EventManagementServiceTest {
         }
 
         @Test
-        void GivenBothFieldsNull_WhenEditEventDetails_ThenNothingChanges() {
+        void GivenAllFieldsNull_WhenEditEventDetails_ThenNothingChanges() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                String descriptionBefore = event.getDescription();
+                List<ShowDate> showDatesBefore = List.copyOf(event.getShowDates());
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null, null, null));
 
                 assertEquals("Concert", event.getName());
+                assertEquals(descriptionBefore, event.getDescription());
                 assertEquals(EventCategory.CONCERT, event.getCategory());
+                assertEquals(LOCATION, event.getVenueMap().getLocation());
+                assertEquals(JERUSALEM, event.getTimeZone());
+                assertEquals(showDatesBefore, event.getShowDates());
         }
 
         @Test

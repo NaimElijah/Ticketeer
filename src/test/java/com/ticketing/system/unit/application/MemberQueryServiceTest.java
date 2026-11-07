@@ -26,10 +26,18 @@ class MemberQueryServiceTest {
     }
 
     @Test
-    void GivenAnExistingUsername_WhenUsernameExists_ThenDelegatesToRepository() {
+    void GivenAnExistingUsername_WhenUsernameExists_ThenTrue() {
         when(userRepository.existsByUsername("naim.founder")).thenReturn(true);
 
         assertTrue(service.usernameExists("naim.founder"));
+    }
+
+    @Test
+    void GivenAnUnknownUsername_WhenUsernameExists_ThenFalse() {
+        when(userRepository.existsByUsername("naim.founder")).thenReturn(true);
+        when(userRepository.existsByUsername("someone.else")).thenReturn(false);
+
+        assertFalse(service.usernameExists("someone.else"));
     }
 
     @Test

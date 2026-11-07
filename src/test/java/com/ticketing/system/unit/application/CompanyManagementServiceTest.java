@@ -134,7 +134,7 @@ public class CompanyManagementServiceTest {
                 companyService.appointManager(OWNER_TOKEN, new ManagerAppointmentRequestDTO(
                                 COMPANY_ID, TARGET_USER_ID, defaultPermissions));
 
-                assertNotEquals(null, membershipService.getPendingCompanyAppointment(TARGET_USER_ID, COMPANY_ID));
+                assertEquals(List.of("Manager:PENDING:by" + OWNER_ID), appointmentsOfTarget());
         }
 
         @Test

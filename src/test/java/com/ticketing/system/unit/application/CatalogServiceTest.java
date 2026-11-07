@@ -107,7 +107,7 @@ class CatalogServiceTest {
     // UC-7: searchGlobal throws InvalidTokenException for an invalid token
     @Test
     void GivenInvalidToken_WhenSearchGlobal_ThenThrowsInvalidTokenException() {
-        when(mockSessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
         assertThrowsExactly(InvalidTokenException.class,

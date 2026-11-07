@@ -499,25 +499,22 @@ class SystemAdminServiceTest {
         verify(orderReceiptRepository).findGlobal(expectedFilters);
     }
 
+    // An unfiltered record shows what the buyer paid for the order, which need not be the sum of its lines
+    // (a discount, for one): 99 here against lines of 50 and 25.
     @Test
-    void GivenReceiptWithMultipleTickets_WhenViewGlobalHistory_ThenTotalPaidIsSumOfTicketPrices() {
+    void GivenReceiptWithMultipleTickets_WhenViewGlobalHistory_ThenTotalPaidIsTheReceiptTotal() {
         ReceiptLine line1 = new ReceiptLine(1, 50.0, 25, 1, null, PURCHASED_AT);
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", PURCHASED_AT);
-        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 75.0, List.of(line1, line2), PURCHASED_AT);
-        Ticket t1 = new Ticket(1, 1, 11, null, 30.0, 1, "B1");
-        Ticket t2 = new Ticket(1, 1, 11, null, 45.0, 2, "B2");
-        Event event = mock(Event.class);
-        when(event.getName()).thenReturn("Pop Show");
+        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 99.0, List.of(line1, line2), PURCHASED_AT);
 
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt));
-        when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of(t1, t2));
-        when(eventRepository.findById(anyInt())).thenReturn(event);
+        when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
 
         List<PurchaseHistoryDTO> result = service.viewGlobalHistory(ADMIN_TOKEN, filters);
 
         PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
-        assertEquals(75.0, record.totalPaid());
+        assertEquals(99.0, record.totalPaid());
         assertEquals(2, record.tickets().size());
     }
 
