@@ -147,6 +147,59 @@ class ConversationTest extends BaseDomainTest {
         assertFalse(c.involvesParticipant(OUTSIDER_ID, ParticipantType.MEMBER));
     }
 
+    // ---- who takes part, read as id and side together (#189) ----
+
+    // An admin acts for the complaint queue only; a member's thread with a company has no admin side.
+    @Test
+    void GivenAnInquiry_WhenAnAdminAddsAMessage_ThenRefusedAsNoParticipantAndNothingAdded() {
+        Conversation c = inquiry();
+
+        assertThrows(InvalidParticipantException.class,
+                () -> c.addMessage(ADMIN_ID, ParticipantType.ADMIN, "Admin here", REPLIED_AT));
+
+        assertEquals(List.of(sent(MEMBER_ID, ParticipantType.MEMBER, OPENING_BODY, STARTED_AT)), sentByWhomAndWhen(c));
+        assertEquals(ConversationStatus.OPEN, c.getStatus());
+    }
+
+    @Test
+    void GivenTheCompanysIdActingAsAMember_WhenInvolvesParticipant_ThenFalse() {
+        Conversation c = inquiry();
+
+        assertFalse(c.involvesParticipant(COMPANY_ID, ParticipantType.MEMBER),
+                "the company's id on the member side is another person, not the company");
+    }
+
+    @Test
+    void GivenTheMembersIdWithNoSide_WhenInvolvesParticipant_ThenFalse() {
+        Conversation c = inquiry();
+
+        assertFalse(c.involvesParticipant(MEMBER_ID, null));
+    }
+
+    // ---- a closed thread (#189) ----
+
+    @Test
+    void GivenAClosedInquiry_WhenTransitionToResolved_ThenRefusedAndStaysClosed() {
+        Conversation c = inquiry();
+        c.transitionToClosed();
+
+        assertThrows(InvalidStateTransitionException.class, c::transitionToResolved);
+
+        assertEquals(ConversationStatus.CLOSED, c.getStatus());
+    }
+
+    // markReadBy's contract: a closed thread stays readable.
+    @Test
+    void GivenAClosedInquiry_WhenTheCompanyMarksItRead_ThenTheMembersMessageIsRead() {
+        Conversation c = inquiry();
+        c.transitionToClosed();
+
+        c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
+
+        assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
+        assertTrue(c.getMessages().get(0).isRead());
+    }
+
     @Test
     void GivenTheMembersOpeningMessage_WhenTheMemberMarksTheThreadRead_ThenItStaysUnreadForTheCompany() {
         Conversation c = inquiry();                                   // 1 message from the member
