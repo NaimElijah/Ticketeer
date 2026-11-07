@@ -156,6 +156,24 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
                 converter.convertToDatabaseColumn(repository.findById(1).getPurchasePolicy()));
     }
 
+    // The Jpa adapter needs no lock to save a stored event again: @Version guards the write, and the
+    // Memory adapter, which has none, refuses (MemoryEventRepositoryTest). Outside the test transaction
+    // the load is a detached copy, so the change reaches the row only through this save.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenAStoredEvent_WhenLoadedChangedAndSavedWithoutALock_ThenTheChangeIsStored() {
+        repository.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.SCHEDULED, EventCategory.CONCERT));
+        Event loaded = repository.findById(1);
+        loaded.addPlacesToStandingZone(1, 20, 10);
+        loaded.transitionToOnSale();
+
+        repository.save(loaded);
+
+        Event reloaded = repository.findById(1);
+        assertEquals(EventStatus.ON_SALE, reloaded.getStatus());
+        assertEquals(List.of(120), standingCapacities(reloaded));
+    }
+
     // The Jpa adapter needs no lock to delete (the Memory adapter refuses without one, MemoryEventRepositoryTest),
     // and the delete takes the event's whole owned graph with it. It runs outside the test transaction, so
     // each call commits and the counts read what the database holds.

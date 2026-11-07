@@ -151,6 +151,35 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(ZoneId.of("Europe/London"), eventRepo.findById(1).getTimeZone());
     }
 
+    // === save again: a loaded event, changed under its write lock ===
+    // The Memory adapter refuses the save without the lock (MemoryEventRepositoryTest); the Jpa adapter
+    // relies on @Version instead and needs none (JpaEventRepositoryContractTest).
+
+    @Test
+    void GivenASavedScheduledEvent_WhenLoadedChangedAndSavedUnderItsLock_ThenTheStoredEventHasTheChange() {
+        eventRepo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.SCHEDULED, EventCategory.CONCERT));
+
+        eventRepo.lockForUpdate(1);
+        try {
+            Event loaded = eventRepo.findById(1);
+            loaded.addPlacesToStandingZone(1, 20, 10);
+            loaded.transitionToOnSale();
+            eventRepo.save(loaded);
+        } finally {
+            eventRepo.unlock(1);
+        }
+
+        Event reloaded = eventRepo.findById(1);
+        assertEquals(EventStatus.ON_SALE, reloaded.getStatus());
+        assertEquals(List.of(120), standingCapacities(reloaded));
+        assertEquals(1, eventRepo.findAll().size(), "the event is updated, not stored a second time");
+    }
+
+    protected static List<Integer> standingCapacities(Event event) {
+        return event.getVenueMap().getInventoryZones().stream()
+                .map(z -> ((StandingZone) z).getCapacity()).toList();
+    }
+
     // === delete: a CANCELED event is removed for good ===
     // Under the event's write lock, which the Memory adapter requires (MemoryEventRepositoryTest) and the
     // Jpa adapter ignores.
