@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,6 +29,12 @@ class EventTimeZoneMigrationTest {
         dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:v2-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
         jdbc = new JdbcTemplate(dataSource);
+    }
+
+    // DB_CLOSE_DELAY=-1 would otherwise keep each test's database alive for the rest of the fork.
+    @AfterEach
+    void dropDatabase() {
+        jdbc.execute("SHUTDOWN");
     }
 
     @Test

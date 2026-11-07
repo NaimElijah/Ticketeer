@@ -1,7 +1,6 @@
 package com.ticketing.system.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.SQLException;
@@ -9,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -46,6 +46,12 @@ class ReceiptLineRefundStateMigrationTest {
         dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:v6-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
         jdbc = new JdbcTemplate(dataSource);
+    }
+
+    // DB_CLOSE_DELAY=-1 would otherwise keep each test's database alive for the rest of the fork.
+    @AfterEach
+    void dropDatabase() {
+        jdbc.execute("SHUTDOWN");
     }
 
     @Test
@@ -86,8 +92,12 @@ class ReceiptLineRefundStateMigrationTest {
         migrateTo("latest");
         jdbc.update(INSERT_RECEIPT, RECEIPT_ID, PURCHASED);
 
-        assertThatCode(() -> jdbc.update(INSERT_LINE, RECEIPT_ID, NEW_TICKET_ID, PURCHASED, "NONE"))
-                .doesNotThrowAnyException();
+        jdbc.update(INSERT_LINE, RECEIPT_ID, NEW_TICKET_ID, PURCHASED, "NONE");
+
+        assertThat(jdbc.queryForList("select refund_state from receipt_lines where receipt_id = ?", String.class,
+                        RECEIPT_ID))
+                .as("the line, read back with its state")
+                .containsExactly("NONE");
     }
 
     private void migrateTo(String target) {

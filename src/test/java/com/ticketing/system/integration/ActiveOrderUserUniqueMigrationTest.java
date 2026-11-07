@@ -1,6 +1,6 @@
 package com.ticketing.system.integration;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.SQLException;
@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,6 +40,12 @@ class ActiveOrderUserUniqueMigrationTest {
         jdbc = new JdbcTemplate(dataSource);
     }
 
+    // DB_CLOSE_DELAY=-1 would otherwise keep each test's database alive for the rest of the fork.
+    @AfterEach
+    void dropDatabase() {
+        jdbc.execute("SHUTDOWN");
+    }
+
     // H2 names the index behind the constraint (PUBLIC.UK_..._INDEX_n), so the name is matched by
     // containment, ignoring case, as ConstraintViolations does.
     @Test
@@ -60,10 +67,13 @@ class ActiveOrderUserUniqueMigrationTest {
     void GivenV7Applied_WhenTwoGuestCartsAreInserted_ThenBothAreStored() {
         migrateTo("latest");
 
-        assertThatCode(() -> {
-            jdbc.update(INSERT_CART, "guest-a", null, "sid-a", CREATED);
-            jdbc.update(INSERT_CART, "guest-b", null, "sid-b", CREATED);
-        }).doesNotThrowAnyException();
+        jdbc.update(INSERT_CART, "guest-a", null, "sid-a", CREATED);
+        jdbc.update(INSERT_CART, "guest-b", null, "sid-b", CREATED);
+
+        assertThat(jdbc.queryForList("select order_key from active_orders where user_id is null order by order_key",
+                        String.class))
+                .as("both guest carts, read back")
+                .containsExactly("guest-a", "guest-b");
     }
 
     // Two carts of one member, written by the race V7 closes, fail the migration, and Flyway stops the boot.

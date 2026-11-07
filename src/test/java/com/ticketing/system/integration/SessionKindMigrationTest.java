@@ -1,7 +1,6 @@
 package com.ticketing.system.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.SQLException;
@@ -11,6 +10,7 @@ import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -51,6 +51,12 @@ class SessionKindMigrationTest {
         dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:v3-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
         jdbc = new JdbcTemplate(dataSource);
+    }
+
+    // DB_CLOSE_DELAY=-1 would otherwise keep each test's database alive for the rest of the fork.
+    @AfterEach
+    void dropDatabase() {
+        jdbc.execute("SHUTDOWN");
     }
 
     @Test
@@ -103,10 +109,13 @@ class SessionKindMigrationTest {
     void GivenV3Applied_WhenAGuestRowAndAMemberRowOfTheRightShapeAreInserted_ThenBothAreStored() {
         migrateTo("latest");
 
-        assertThatCode(() -> {
-            jdbc.update(INSERT_SESSION, GUEST_SID, null, "GUEST", CREATED, EXPIRES, CREATED);
-            jdbc.update(INSERT_SESSION, SIGNED_IN_SID, USER_ID, "MEMBER", CREATED, EXPIRES, CREATED);
-        }).doesNotThrowAnyException();
+        jdbc.update(INSERT_SESSION, GUEST_SID, null, "GUEST", CREATED, EXPIRES, CREATED);
+        jdbc.update(INSERT_SESSION, SIGNED_IN_SID, USER_ID, "MEMBER", CREATED, EXPIRES, CREATED);
+
+        assertThat(jdbc.queryForList("select session_id || ':' || kind from sessions order by session_id",
+                        String.class))
+                .as("both rows, read back with their kinds")
+                .containsExactly(GUEST_SID + ":GUEST", SIGNED_IN_SID + ":MEMBER");
     }
 
     // V4 adds uk_users_username. A duplicate written before it (by the registration race V4 closes)
