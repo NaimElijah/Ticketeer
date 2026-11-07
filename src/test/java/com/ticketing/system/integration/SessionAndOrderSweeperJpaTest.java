@@ -42,6 +42,9 @@ import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
+import com.ticketing.system.shared.dto.LoginDTO;
+import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.LogoutRequestDTO;
 
 /**
  * UC-2, the cart-expiry sweep, on the Jpa adapters over H2. {@code SessionAndOrderSweeperTest} drives the
@@ -106,6 +109,28 @@ class SessionAndOrderSweeperJpaTest {
                         "the expired hold must be back in stock"),
                 () -> assertEquals(0, fixture.zoneOf(show).getReservedAmount(), "no seat may stay held"),
                 () -> assertNull(activeOrderRepository.getByUserId(member.userId()), "the expired cart must be gone"));
+    }
+
+    // UC-13: a member's order survives a disconnect only until its hold runs out; after that it is cancelled
+    // and its tickets released, so logging in again finds nothing to resume. What a login should do with an
+    // order whose hold ran out but that no sweep has reached yet is not decided (#189), so the sweep runs first.
+    @Test
+    void GivenAMemberOrderWhoseHoldRanOut_WhenSweptAndTheMemberLogsInAgain_ThenNothingIsRestoredAndTheSeatIsInStock() {
+        String username = fixture.register("returningMember");
+        AuthTokenDTO firstVisit = fixture.login(username);
+        reservationService.reserveForMember(firstVisit.token(), show.eventId(), show.zoneId(), seat(FIRST_SEAT));
+        authService.logout(new LogoutRequestDTO(firstVisit.token()));
+        letTheHoldsRunOut(firstVisit);
+        sweeper.sweep();
+
+        LoginDTO secondVisit = authService.login(new LoginRequestDTO(username, SeatedShowFixture.PASSWORD,
+                authService.startGuestSession().sessionId()));
+
+        assertAll(
+                () -> assertNull(secondVisit.activeOrder(), "the login must not resume the cancelled order"),
+                () -> assertNull(activeOrderRepository.getByUserId(firstVisit.userId()), "the order must be gone"),
+                () -> assertEquals(SeatedShowFixture.SEATS.size(), fixture.availableSeats(show),
+                        "the cancelled order's seat must be back in stock"));
     }
 
     @Test
