@@ -592,6 +592,26 @@ class SystemAdminServiceTest {
         verify(orderReceiptRepository).findGlobal(expected);
     }
 
+    // Requested events that are none of the company's leave an empty event filter, which matches nothing. Read
+    // as no event filter at all, it would list every company's orders.
+    @Test
+    void GivenCompanyFilterWithNoMatchingEvent_WhenViewGlobalHistory_ThenNoRecords() {
+        ReceiptLine otherCompanysLine = new ReceiptLine(1, 100.0, 99, 1, null, PURCHASED_AT);
+        OrderReceipt otherCompanysOrder = OrderReceipt.forMember(11, 1, 100.0, List.of(otherCompanysLine),
+                PURCHASED_AT);
+        when(eventRepository.findIdsByCompany(3)).thenReturn(List.of(10, 11));
+        GlobalHistoryFiltersDTO noEvent = new GlobalHistoryFiltersDTO(null, null, List.of(), null, null);
+        when(orderReceiptRepository.findGlobal(noEvent)).thenReturn(List.of());
+        when(orderReceiptRepository.findGlobal(new GlobalHistoryFiltersDTO(null, null, null, null, null)))
+                .thenReturn(List.of(otherCompanysOrder));
+
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = service.viewGlobalHistory(ADMIN_TOKEN,
+                new GlobalHistoryFiltersDTO(null, 3, List.of(99), null, null)).get(0).records();
+
+        assertEquals(List.of(), records);
+        verify(orderReceiptRepository).findGlobal(noEvent);
+    }
+
     // A receipt the query returns for one of its lines can still hold no line of the selected events once
     // they are mapped, and then it is no record of theirs.
     @Test
