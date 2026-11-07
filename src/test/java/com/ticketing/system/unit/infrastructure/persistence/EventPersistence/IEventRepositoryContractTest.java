@@ -508,6 +508,32 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(2, result.size());
     }
 
+    // === searchONSALE — the buyer's catalogue search (UC-7) ===
+
+    @Test
+    void GivenAnEventInEachStatus_WhenSearchONSALEWithNoFilters_ThenOnlyTheOnSaleEventIsReturned() {
+        EventStatus[] statuses = EventStatus.values();
+        for (int i = 0; i < statuses.length; i++) {
+            eventRepo.save(buildEvent(i + 1, statuses[i].name() + " Show", 4.5, 10, statuses[i], EventCategory.CONCERT));
+        }
+
+        List<Event> found = eventRepo.searchONSALE(CatalogSearchFiltersDTO.empty());
+
+        assertEquals(List.of(EventStatus.ON_SALE.name() + " Show"), found.stream().map(Event::getName).toList());
+    }
+
+    @Test
+    void GivenOnSaleAndDraftEventsOfOneName_WhenSearchONSALEByThatName_ThenOnlyTheMatchingOnSaleEventIsReturned() {
+        eventRepo.save(buildEvent(1, "Jazz Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "Jazz Brunch", 4.5, 10, EventStatus.DRAFT, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(3, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> found = eventRepo.searchONSALE(new CatalogSearchFiltersDTO(
+                "Jazz", null, null, null, null, null, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
     // === searchByCompanyAll — company scope (all statuses) + filters ===
 
     @Test
