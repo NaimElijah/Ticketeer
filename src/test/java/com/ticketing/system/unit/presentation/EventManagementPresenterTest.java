@@ -44,6 +44,14 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.dto.EventUpdateDTO;
 import com.ticketing.system.shared.dto.LocationDTO;
 import jakarta.persistence.PersistenceException;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.ticketing.system.catalog.domain.ShowDate;
 
 /**
  * Unit tests for {@link EventManagementPresenter#create}. The create flow assembles an
@@ -489,5 +497,109 @@ class EventManagementPresenterTest {
         assertEquals(new EventManagementPresenter.CreateOutcome.NotAuthenticated(),
                 createWith(null, futureStart(), futureEnd()));
         verify(eventService, never()).addEvent(anyString(), any());
+    }
+
+    // ---- what the create form refuses before any service call, and what it sends (#189) ----
+
+    /** The create form's fields, valid until a test changes one. */
+    private static final class Form {
+        private String name = "Gala Night";
+        private String category = EventCategory.COMEDY.name();
+        private String country = "Israel";
+        private String city = "Tel Aviv";
+        private LocalDateTime starts = futureStart();
+        private LocalDateTime ends = futureEnd();
+        private List<String> artists = List.of("Headliner");
+        private Double rating = 4.5;
+    }
+
+    private EventManagementPresenter.CreateOutcome create(Form form) {
+        return presenter.create(TOKEN, null, form.name, "A great show", form.category, form.country, form.city,
+                form.starts, form.ends, JERUSALEM, form.artists, form.rating);
+    }
+
+    private static Arguments refused(String field, Consumer<Form> change, String reason) {
+        return Arguments.of(field, change, reason);
+    }
+
+    static Stream<Arguments> refusedForms() {
+        return Stream.of(
+            refused("a blank title", f -> f.name = "   ", "An event title is required."),
+            refused("no title", f -> f.name = null, "An event title is required."),
+            refused("a blank category", f -> f.category = " ", "A category is required."),
+            refused("a blank country", f -> f.country = "", "A country and a city are required."),
+            refused("a blank city", f -> f.city = "  ", "A country and a city are required."),
+            refused("no start", f -> f.starts = null, "A start and an end time are required."),
+            refused("no end", f -> f.ends = null, "A start and an end time are required."),
+            refused("no artists", f -> f.artists = null, "At least one artist is required."),
+            refused("an empty artist list", f -> f.artists = List.of(), "At least one artist is required."),
+            refused("a NaN rating", f -> f.rating = Double.NaN, "Rating must be between 0 and 5."),
+            refused("an infinite rating", f -> f.rating = Double.POSITIVE_INFINITY, "Rating must be between 0 and 5."),
+            refused("a negative infinite rating", f -> f.rating = Double.NEGATIVE_INFINITY, "Rating must be between 0 and 5."),
+            refused("a rating just below 0", f -> f.rating = -0.1, "Rating must be between 0 and 5."),
+            refused("a rating just above 5", f -> f.rating = 5.1, "Rating must be between 0 and 5."));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("refusedForms")
+    void GivenAFormWithAMissingOrBadField_WhenCreate_ThenInvalidInputWithItsReasonAndNoServiceCall(
+            String field, Consumer<Form> change, String reason) {
+        Form form = new Form();
+        change.accept(form);
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.InvalidInput(reason), create(form), field);
+        verifyNoInteractions(companyService, eventService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {0.0, 5.0})
+    void GivenARatingOnABound_WhenCreate_ThenTheEventIsCreatedWithThatRating(double rating) {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("5"));
+        Form form = new Form();
+        form.rating = rating;
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.Success("5"), create(form));
+
+        ArgumentCaptor<EventCreationDTO> request = ArgumentCaptor.forClass(EventCreationDTO.class);
+        verify(eventService).addEvent(eq(TOKEN), request.capture());
+        assertEquals(rating, request.getValue().rating());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, 60})
+    void GivenAnEndNotAfterTheStart_WhenCreate_ThenInvalidInputAndNothingCreated(long minutesBeforeTheStart) {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        Form form = new Form();
+        form.ends = form.starts.minusMinutes(minutesBeforeTheStart);
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.InvalidInput("End time must be after start time"),
+                create(form));
+        verify(eventService, never()).addEvent(anyString(), any());
+    }
+
+    @Test
+    void GivenAValidForm_WhenCreate_ThenTheRequestCarriesEveryFieldAsEntered() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(3)));
+        when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("5"));
+
+        create(new Form());
+
+        ArgumentCaptor<EventCreationDTO> captured = ArgumentCaptor.forClass(EventCreationDTO.class);
+        verify(eventService).addEvent(eq(TOKEN), captured.capture());
+        EventCreationDTO request = captured.getValue();
+        assertEquals(3, request.companyId());
+        assertEquals("Gala Night", request.name());
+        assertEquals("A great show", request.description());
+        assertEquals(List.of("Headliner"), request.artistsNames());
+        assertEquals(EventCategory.COMEDY, request.category());
+        assertEquals(4.5, request.rating());
+        assertEquals(new Location("Israel", "Tel Aviv"), request.location());
+        assertEquals(1, request.showDates().size(), "one show date");
+        ShowDate show = request.showDates().get(0);
+        assertEquals(futureStart(), show.getStartTime());
+        assertEquals(futureEnd(), show.getEndTime());
+        assertEquals(JERUSALEM, request.timeZone());
+        assertNull(request.purchasePolicy(), "a new event inherits its company's purchase policy");
     }
 }
