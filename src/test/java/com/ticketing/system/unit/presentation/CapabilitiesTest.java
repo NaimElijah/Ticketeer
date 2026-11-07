@@ -19,7 +19,6 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import com.vaadin.flow.internal.CurrentInstance;
 import com.vaadin.flow.server.VaadinRequest;
 
-import java.lang.reflect.Method;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -43,8 +42,8 @@ import static org.mockito.Mockito.when;
 /**
  * Checks for the capability resolver. The guest checks run with no VaadinSession at all; the
  * signed-in checks install a map-backed session ({@link MapBackedVaadinSession}) and a mocked
- * {@link CompanyManagementService} behind {@link CompanyManagementBridge}. The marker / annotation
- * wiring is exercised by VaadinSmokeTest's view-construction pass.
+ * {@link CompanyManagementService} behind {@link CompanyManagementBridge}. {@code AuthBootstrapTest} covers the
+ * {@code @RequireCapability} gate that reads these capabilities.
  */
 class CapabilitiesTest {
 
@@ -79,8 +78,8 @@ class CapabilitiesTest {
     }
 
     // ---- manager permission → capability mapping (the workspace gating matrix) ----
-    // capabilitiesFromPermissions is private static; we reflectively exercise the pure mapping so the
-    // matrix is pinned without faking a VaadinSession (which forCurrentUser would require).
+    // Read through forCurrentUser, as the gate reads them: what a manager of the current company holds
+    // beyond a member of no company and the workspace itself (capsFor).
 
     @Test
     void GivenEveryManagerPermission_WhenCapabilitiesFromPermissions_ThenEachGrantsTheReadOnlyEventsHub() {
@@ -245,15 +244,19 @@ class CapabilitiesTest {
         AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID, "member"));
     }
 
-    @SuppressWarnings("unchecked")
-    private static Set<Capability> capsFor(Permission... permissions) {
-        try {
-            Method m = Capabilities.class.getDeclaredMethod("capabilitiesFromPermissions", List.class);
-            m.setAccessible(true);
-            return (Set<Capability>) m.invoke(null, List.of(permissions));
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("could not invoke Capabilities.capabilitiesFromPermissions", e);
+    // What a manager holding these permissions gets for the current company, read through the public resolver.
+    private Set<Capability> capsFor(Permission... permissions) {
+        if (service == null) {
+            signInAsMember();
         }
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of());
+        Set<Capability> memberOfNoCompany = Capabilities.forCurrentUser();
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of(new UserCompanyDTO(COMPANY_ID, "Acme", "desc",
+            "", MembershipRole.MANAGER, "ACTIVE", 1, 0, List.of(permissions))));
+        Set<Capability> granted = EnumSet.copyOf(Capabilities.forCurrentUser());
+        granted.removeAll(memberOfNoCompany);
+        assertTrue(granted.remove(Capability.OWNER_WORKSPACE), "a manager of the current company holds the workspace");
+        return granted;
     }
 
     // ---- an expired member token gets the dead-token fallback (#187) ----

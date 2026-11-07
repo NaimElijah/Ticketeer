@@ -6,16 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -36,7 +35,6 @@ import com.vaadin.flow.server.VaadinSession;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 class AdminLoginPresenterTest {
@@ -68,11 +66,10 @@ class AdminLoginPresenterTest {
     private static final String LOCKED_REASON = "locked for 15 minutes";
 
     @Test
-    void GivenAMemberSignedInBefore_WhenSignIn_ThenTheirAlertsAreSentBackTheBellClearedThenTheAdminStored() {
+    void GivenAMemberSignedInBefore_WhenSignIn_ThenTheirAlertsAreSentBackTheBellIsEmptyAndTheAdminIsStored() {
         AuthSession.storeAuth(new AuthTokenDTO("member-jwt", 0L, MEMBER_ID, "member", false));
         NotificationSession.store(List.of(new NotificationDTO("n-1", "DIRECT_MESSAGE", "SENT", "hi",
                 LocalDateTime.of(2027, 7, 15, 17, 0))));
-        VaadinSession session = VaadinSession.getCurrent();
 
         presenter.signIn(ADMIN_AUTH);
 
@@ -80,11 +77,23 @@ class AdminLoginPresenterTest {
         assertEquals(List.of(), NotificationSession.getAll(), "the member's alerts must leave the bell");
         assertTrue(AuthSession.isAdmin());
         assertEquals(ADMIN_AUTH.token(), AuthSession.token());
-        // The bell is emptied (the inbox attribute set to null) before the admin's token is stored. The
-        // bell itself lives on its UI, not on the session (UI-B8), so it is not a session write.
-        InOrder order = inOrder(session);
-        order.verify(session, times(1)).setAttribute(anyString(), isNull());
-        order.verify(session).setAttribute(anyString(), eq(ADMIN_AUTH.token()));
+    }
+
+    // The bell is emptied before the admin's token is stored, so the session never pairs the admin's token
+    // with the member's alerts. The bell itself lives on its UI, not on the session (UI-B8).
+    @Test
+    void GivenAMemberSignedInBefore_WhenSignIn_ThenTheBellIsAlreadyEmptyWhenTheAdminTokenIsStored() {
+        AuthSession.storeAuth(new AuthTokenDTO("member-jwt", 0L, MEMBER_ID, "member", false));
+        NotificationSession.store(List.of(new NotificationDTO("n-1", "DIRECT_MESSAGE", "SENT", "hi",
+                LocalDateTime.of(2027, 7, 15, 17, 0))));
+        List<List<NotificationDTO>> bellWhenTheAdminTokenIsStored = new ArrayList<>();
+        doAnswer(call -> bellWhenTheAdminTokenIsStored.add(NotificationSession.getAll()))
+                .when(VaadinSession.getCurrent()).setAttribute(anyString(), eq(ADMIN_AUTH.token()));
+
+        presenter.signIn(ADMIN_AUTH);
+
+        assertEquals(List.of(List.of()), bellWhenTheAdminTokenIsStored,
+                "the admin's token is stored once, onto an empty bell");
     }
 
     // The kept order confirmation belongs to one visitor and one visit (#187): a sign-in starts another.
