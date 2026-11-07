@@ -93,7 +93,6 @@ class ReservationServiceOutcomesTest {
                 Clock.fixed(T0, ZoneOffset.UTC)
         );
 
-        when(sessionManager.validateToken(MEMBER_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(MEMBER_TOKEN)).thenReturn(USER_ID);
     }
 

@@ -88,18 +88,25 @@ class SessionTest extends BaseDomainTest {
 
     @Test
     void GivenAMemberSession_WhenPromoted_ThenRejectsAlreadyMember() {
-        Session s = new Session("sid", 5, T0, T_EXPIRES);
+        Session s = track(new Session("sid", 5, T0, T_EXPIRES));
 
         assertThrows(IllegalStateException.class,
                 () -> s.promoteTo(7, T_EXPIRES.plusSeconds(60)));
+
+        assertEquals(5, s.getUserId(), "a refused promotion must not hand the row to another member");
+        assertEquals(T_EXPIRES, s.getExpiresAt());
     }
 
     @Test
     void GivenAGuestSession_WhenPromotedWithNullExpiry_ThenRejects() {
-        Session s = new Session("sid", null, T0, T_EXPIRES);
+        Session s = track(new Session("sid", null, T0, T_EXPIRES));
 
         assertThrows(IllegalArgumentException.class,
                 () -> s.promoteTo(7, null));
+
+        assertTrue(s.isGuest(), "a refused promotion leaves the row a guest row");
+        assertNull(s.getUserId());
+        assertEquals(T_EXPIRES, s.getExpiresAt());
     }
 
     @Test
@@ -181,6 +188,7 @@ class SessionTest extends BaseDomainTest {
         assertEquals(SessionKind.ADMIN, admin.getKind());
         assertEquals(5, admin.getUserId());
         assertFalse(admin.isGuest(), "a guest row is exactly a row without a user id");
+        assertFalse(admin.isMember(), "an admin row is not a member's, though it names a user id");
         assertEquals(T0, admin.getCreatedAt());
         assertEquals(T_EXPIRES, admin.getExpiresAt());
     }
@@ -218,10 +226,16 @@ class SessionTest extends BaseDomainTest {
         assertEquals(5, admin.getUserId());
     }
 
+    // Session.checkInvariants records the decision this pins: the Session domain stays permissive about
+    // userId values, because their bounds are the User aggregate's concern.
     @Test
     void GivenZeroAndNegativeUserIds_WhenMemberSessionConstructed_ThenDoesNotThrow() {
-        // Domain doesn't validate userId positivity — that's the User aggregate's job.
-        assertDoesNotThrow(() -> new Session("sid-a", 0, T0, T_EXPIRES));
-        assertDoesNotThrow(() -> new Session("sid-b", -1, T0, T_EXPIRES));
+        Session zero = track(assertDoesNotThrow(() -> new Session("sid-a", 0, T0, T_EXPIRES)));
+        Session negative = track(assertDoesNotThrow(() -> new Session("sid-b", -1, T0, T_EXPIRES)));
+
+        assertEquals(0, zero.getUserId());
+        assertEquals(SessionKind.MEMBER, zero.getKind());
+        assertEquals(-1, negative.getUserId());
+        assertEquals(SessionKind.MEMBER, negative.getKind());
     }
 }

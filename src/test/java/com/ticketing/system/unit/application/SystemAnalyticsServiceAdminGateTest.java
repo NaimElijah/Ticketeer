@@ -1,7 +1,7 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -25,10 +25,13 @@ import com.ticketing.system.identity.config.SessionProperties;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
+import com.ticketing.system.organization.domain.CompanyStatus;
+import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.shared.dto.AdminOverviewDTO;
 import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
-import com.ticketing.system.shared.exception.DomainException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 
@@ -53,7 +56,7 @@ class SystemAnalyticsServiceAdminGateTest {
             "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
     private static final int SHARED_ID = 1;
     private static final long TOTAL_VISITORS = 12L;
-    private static final int ACTIVE_COMPANIES = 0;
+    private static final int ACTIVE_COMPANIES = 1;
 
     private JwtSessionManager sessionManager;
     private SystemAnalyticsService service;
@@ -70,7 +73,8 @@ class SystemAnalyticsServiceAdminGateTest {
         OrderReceiptRepository orderReceiptRepository = mock(OrderReceiptRepository.class);
         when(orderReceiptRepository.findGlobal(any())).thenReturn(List.of());
         ProductionCompanyRepository companyRepository = mock(ProductionCompanyRepository.class);
-        when(companyRepository.findActive()).thenReturn(List.of());
+        when(companyRepository.findActive()).thenReturn(List.of(new ProductionCompany(7, 2, "Acme Live",
+                CompanyStatus.ACTIVE, "A production company", 4.0)));
         EventRepository eventRepository = mock(EventRepository.class);
         when(eventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of());
         ConversationRepository conversationRepository = mock(ConversationRepository.class);
@@ -85,13 +89,13 @@ class SystemAnalyticsServiceAdminGateTest {
     void GivenMemberToken_WhenComputeAnalytics_ThenRejected() {
         String memberToken = sessionManager.generateToken(SHARED_ID, "member");
 
-        assertThrows(DomainException.class, () -> service.computeAnalytics(memberToken),
+        assertThrowsExactly(InvalidTokenException.class, () -> service.computeAnalytics(memberToken),
                 "a member token must not read the platform analytics");
     }
 
     @Test
     void GivenNoToken_WhenComputeAnalytics_ThenRejected() {
-        assertThrows(DomainException.class, () -> service.computeAnalytics(null));
+        assertThrowsExactly(UnauthorizedActionException.class, () -> service.computeAnalytics(null));
     }
 
     @Test
@@ -107,13 +111,13 @@ class SystemAnalyticsServiceAdminGateTest {
     void GivenMemberToken_WhenAdminOverview_ThenRejected() {
         String memberToken = sessionManager.generateToken(SHARED_ID, "member");
 
-        assertThrows(DomainException.class, () -> service.adminOverview(memberToken),
+        assertThrowsExactly(InvalidTokenException.class, () -> service.adminOverview(memberToken),
                 "a member token must not read the admin overview");
     }
 
     @Test
     void GivenNoToken_WhenAdminOverview_ThenRejected() {
-        assertThrows(DomainException.class, () -> service.adminOverview(null));
+        assertThrowsExactly(UnauthorizedActionException.class, () -> service.adminOverview(null));
     }
 
     @Test

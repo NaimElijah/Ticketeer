@@ -1,6 +1,8 @@
 package com.ticketing.system.unit.domain;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -8,7 +10,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.support.BaseDomainTest;
@@ -16,7 +21,10 @@ import com.ticketing.system.support.BaseDomainTest;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
+import com.ticketing.system.sales.domain.ActiveOrderStatus;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.exception.CheckoutInProgressException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -27,10 +35,27 @@ class ActiveOrderTest extends BaseDomainTest {
 
     // The hold is judged against this instant, as UTC wall time from the injected clock (ADR-008).
     private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
+    private static final Duration ONE_MINUTE = Duration.ofMinutes(1);
 
-    private final int USER_ID = 1;
-    private final int EVENT_ID = 10;
-    private final int ZONE_ID = 5;
+    // The hold length is process-wide state that any Spring context sets from configuration
+    // (ReservationHoldConfig), so every time below is read from it rather than assuming ten minutes.
+    private static Duration hold() {
+        return CartLineItem.getExpirationLimit();
+    }
+
+    // Added when one minute of the hold is left at NOW.
+    private static LocalDateTime nearExpiry() {
+        return NOW.minus(hold()).plus(ONE_MINUTE);
+    }
+
+    // Added so long ago that the hold ran out a minute before NOW.
+    private static LocalDateTime pastTheHold() {
+        return NOW.minus(hold()).minus(ONE_MINUTE);
+    }
+
+    private static final int USER_ID = 1;
+    private static final int EVENT_ID = 10;
+    private static final int ZONE_ID = 5;
 
     @Test
     @Disabled("V1: addReservation appends CartLineItem (UC-5)")
@@ -50,8 +75,7 @@ class ActiveOrderTest extends BaseDomainTest {
     @Test
     void GivenOrderWhoseHoldHasRunOut_WhenValidateCanCheckout_ThenRefusedAsAnInvalidStateTransition() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0,
-                NOW.minus(CartLineItem.getExpirationLimit()).minusMinutes(1));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, pastTheHold());
 
         assertThrows(InvalidStateTransitionException.class, () -> order.validateCanCheckout(NOW));
     }
@@ -94,6 +118,11 @@ class ActiveOrderTest extends BaseDomainTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
+        // Each spot is a line of its own, so the removal that takes the fifth spot also takes the event's last
+        // line, and every later remover is refused by the event check before the count check is reached.
+        // That refusal is the only expected one; anything else is a race the order lost.
+        String eventGone = "Active order does not contain this event";
+        ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
         try {
             for (int i = 0; i < numberOfThreads; i = i + 1) {
@@ -106,8 +135,15 @@ class ActiveOrderTest extends BaseDomainTest {
 
                         successCount.incrementAndGet();
 
-                    } catch (Exception e) {
-                        failureCount.incrementAndGet();
+                    } catch (IllegalArgumentException e) {
+                        if (eventGone.equals(e.getMessage())) {
+                            failureCount.incrementAndGet();
+                        } else {
+                            unexpected.add(e);
+                        }
+
+                    } catch (Throwable e) {
+                        unexpected.add(e);
 
                     } finally {
                         doneLatch.countDown();
@@ -115,12 +151,13 @@ class ActiveOrderTest extends BaseDomainTest {
                 });
             }
 
-            readyLatch.await();
+            assertTrue(readyLatch.await(5, TimeUnit.SECONDS), "every remover must be ready within 5 s");
             startLatch.countDown();
 
             boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
 
             assertEquals(true, finished);
+            assertEquals(List.of(), List.copyOf(unexpected), "no remover may fail other than by the refusal");
             assertEquals(initialTickets, successCount.get());
             assertEquals(numberOfThreads - initialTickets, failureCount.get());
             assertEquals(0, realActiveOrder.countTickets(EVENT_ID, ZONE_ID, NOW));
@@ -222,8 +259,19 @@ class ActiveOrderTest extends BaseDomainTest {
 
         List<CartLineItem> returned = order.ReturnToStock();
 
-        assertEquals(4, returned.size());
+        assertEquals(List.of(
+                        EVENT_ID + "/" + ZONE_ID + "/standing",
+                        EVENT_ID + "/" + ZONE_ID + "/standing",
+                        EVENT_ID + "/" + (ZONE_ID + 1) + "/A1",
+                        EVENT_ID + "/" + (ZONE_ID + 1) + "/A2"),
+                returned.stream().map(ActiveOrderTest::eventZoneAndPlace).toList(),
+                "exactly the lines the order held go back to stock");
         assertTrue(order.isEmpty());
+    }
+
+    private static String eventZoneAndPlace(CartLineItem line) {
+        return line.geteventId() + "/" + line.getzoneId() + "/"
+                + (line.getSeatNumber() == null ? "standing" : line.getSeatNumber());
     }
 
     @Test
@@ -245,7 +293,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenDuplicateSeatNumbers_WhenRemoveSeats_ThenThrowsAndCartUnchanged() {
-        ActiveOrder order = new ActiveOrder(1, NOW);
+        ActiveOrder order = track(new ActiveOrder(1, NOW));
         order.addSeatedReservation(10, 2, List.of("A1", "A2"), 100, NOW);
 
         assertThrows(IllegalArgumentException.class,
@@ -259,21 +307,17 @@ class ActiveOrderTest extends BaseDomainTest {
     void GivenItemsNearExpiry_WhenRenewReservationTimers_ThenAllTimersResetToFullWindow() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
-        // Added 9 minutes ago -> ~1 minute left on the 10-minute window.
-        LocalDateTime nineMinutesAgo = NOW.minusMinutes(9);
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, nineMinutesAgo);
-        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1"), 120.0, nineMinutesAgo);
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, nearExpiry());
+        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1"), 120.0, nearExpiry());
 
-        assertTrue(order.getRemainingTime(NOW).getSeconds() < 120,
-                "precondition: cart should be near expiry before renewal");
+        assertEquals(ONE_MINUTE, order.getRemainingTime(NOW), "precondition: one minute of the hold is left");
 
         order.renewReservationTimers(NOW);
 
-        // Every line item now has a fresh ~10-minute window.
-        assertTrue(order.getRemainingTime(NOW).getSeconds() > 590,
-                "all timers should be reset close to the full 10-minute window");
+        assertEquals(hold(), order.getRemainingTime(NOW), "the whole hold starts again at NOW");
         for (CartLineItem item : order.getItems()) {
-            assertTrue(item.getRemainingTime(NOW).getSeconds() > 590);
+            assertEquals(NOW, item.getAddedAt());
+            assertEquals(hold(), item.getRemainingTime(NOW));
             assertFalse(item.isExpired(NOW));
         }
     }
@@ -290,16 +334,14 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenLineItem_WhenRenew_ThenAddedAtUpdatedAndTimerFresh() {
-        LocalDateTime nineMinutesAgo = NOW.minusMinutes(9);
-        CartLineItem item = new CartLineItem(EVENT_ID, ZONE_ID, "A7", 120.0, nineMinutesAgo);
+        CartLineItem item = new CartLineItem(EVENT_ID, ZONE_ID, "A7", 120.0, nearExpiry());
 
-        assertTrue(item.getRemainingTime(NOW).getSeconds() < 120);
+        assertEquals(ONE_MINUTE, item.getRemainingTime(NOW), "precondition: one minute of the hold is left");
 
-        LocalDateTime now = NOW;
-        item.renew(now);
+        item.renew(NOW);
 
-        assertEquals(now, item.getAddedAt());
-        assertTrue(item.getRemainingTime(NOW).getSeconds() > 590);
+        assertEquals(NOW, item.getAddedAt());
+        assertEquals(hold(), item.getRemainingTime(NOW));
     }
 
     // R1: a buyer must be able to manually remove an EXPIRED standing line (previously the !isExpired
@@ -307,7 +349,7 @@ class ActiveOrderTest extends BaseDomainTest {
     @Test
     void GivenExpiredStandingLine_WhenRemoveStandingSpots_ThenLineRemoved() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(30));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, pastTheHold());
 
         // Precondition: the lines are genuinely expired.
         assertTrue(order.getItems().get(0).isExpired(NOW));
@@ -322,8 +364,7 @@ class ActiveOrderTest extends BaseDomainTest {
     @Test
     void GivenExpiredSeatedLine_WhenRemoveSeats_ThenSeatRemoved() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
-        order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2"), 120.0,
-                NOW.minusMinutes(30));
+        order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2"), 120.0, pastTheHold());
 
         assertTrue(order.getItems().get(0).isExpired(NOW));
 
@@ -362,6 +403,124 @@ class ActiveOrderTest extends BaseDomainTest {
 
         assertTrue(cart.isMember(), "the promoted cart must be a member cart");
         assertEquals(USER_ID, cart.getUserId());
+    }
+
+    // ---- who owns a cart, and what a cart refuses (#189) ----
+
+    private static final int OTHER_USER_ID = 2;
+
+    // Crosses users: a login must never take over another member's cart.
+    @Test
+    void GivenMemberCart_WhenAttachToADifferentUser_ThenRefusedAndStaysWithItsOwner() {
+        ActiveOrder cart = track(ActiveOrder.forMember(USER_ID, GUEST_SESSION_ID, NOW));
+
+        assertThrows(IllegalStateException.class, () -> cart.attachToUser(OTHER_USER_ID));
+
+        assertEquals(USER_ID, cart.getUserId());
+    }
+
+    @Test
+    void GivenTwoSpots_WhenRemoveThree_ThenRefusedAndBothKept() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW);
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> order.removeStandingSpots(EVENT_ID, ZONE_ID, 3));
+
+        assertEquals("Not enough reserved tickets to remove", refused.getMessage());
+        assertEquals(2, order.countTickets(EVENT_ID, ZONE_ID, NOW));
+    }
+
+    @Test
+    void GivenLiveSeat_WhenAddedAgain_ThenRefusedAndTheCartKeepsOneLine() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1"), 120.0, NOW);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1"), 120.0, NOW));
+
+        assertEquals(List.of("A1"), order.getItems().stream().map(CartLineItem::getSeatNumber).toList());
+    }
+
+    // A seat whose hold ran out is free again, so the buyer may take it once more before the sweeper runs.
+    @Test
+    void GivenExpiredSeat_WhenAddedAgain_ThenAdded() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1"), 120.0, pastTheHold());
+
+        order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1"), 120.0, NOW);
+
+        assertEquals(List.of(pastTheHold(), NOW), order.getItems().stream().map(CartLineItem::getAddedAt).toList());
+    }
+
+    static Stream<Named<Consumer<ActiveOrder>>> mutators() {
+        return Stream.of(
+                Named.<Consumer<ActiveOrder>>of("addStandingReservation",
+                        order -> order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW)),
+                Named.<Consumer<ActiveOrder>>of("addSeatedReservation",
+                        order -> order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("B1"), 120.0, NOW)),
+                Named.<Consumer<ActiveOrder>>of("removeStandingSpots",
+                        order -> order.removeStandingSpots(EVENT_ID, ZONE_ID, 1)),
+                Named.<Consumer<ActiveOrder>>of("removeSeats",
+                        order -> order.removeSeats(EVENT_ID, ZONE_ID + 1, List.of("A1"))),
+                Named.<Consumer<ActiveOrder>>of("clear", ActiveOrder::clear));
+    }
+
+    // Phase 1 freezes the order, so Phase 3 sells exactly what Phase 2 charged for.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("mutators")
+    void GivenCheckoutInProgress_WhenTheOrderIsChanged_ThenRefusedAndItsLinesKept(Consumer<ActiveOrder> change) {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW);
+        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1"), 120.0, NOW);
+        List<String> before = order.getItems().stream().map(ActiveOrderTest::eventZoneAndPlace).toList();
+        order.markCheckoutInProgress();
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> change.accept(order));
+
+        assertEquals("Cannot modify active order while checkout is in progress", refused.getMessage());
+        assertEquals(before, order.getItems().stream().map(ActiveOrderTest::eventZoneAndPlace).toList());
+    }
+
+    @Test
+    void GivenOrderNotInCheckout_WhenCancelCheckoutInProgress_ThenRefusedAndStaysPreCheckout() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+
+        assertThrows(IllegalStateException.class, order::cancelCheckoutInProgress);
+
+        assertEquals(ActiveOrderStatus.PRE_CHECKOUT, order.getStatus());
+    }
+
+    @Test
+    void GivenOrderInCheckout_WhenCancelCheckoutInProgress_ThenItCanBeChangedAgain() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW);
+        order.markCheckoutInProgress();
+
+        order.cancelCheckoutInProgress();
+
+        assertEquals(ActiveOrderStatus.PRE_CHECKOUT, order.getStatus());
+        order.removeStandingSpots(EVENT_ID, ZONE_ID, 1);
+        assertTrue(order.isEmpty());
+    }
+
+    @Test
+    void GivenOrderWhoseHoldsAreLive_WhenValidateCanCheckout_ThenAccepted() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, nearExpiry());
+
+        assertDoesNotThrow(() -> order.validateCanCheckout(NOW));
+    }
+
+    // The order is as old as its oldest hold: the countdown shows the time until the first line expires.
+    @Test
+    void GivenLinesAddedAtDifferentTimes_WhenGetRemainingTime_ThenTheTimeLeftOnTheOldestHold() {
+        ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW);
+        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1"), 120.0, nearExpiry());
+        order.addStandingReservation(EVENT_ID, ZONE_ID + 2, 1, 50.0, NOW.minusSeconds(30));
+
+        assertEquals(ONE_MINUTE, order.getRemainingTime(NOW));
     }
 
     private static void assertAttachRefused(ActiveOrder cart, int userId) {

@@ -574,10 +574,8 @@ public class CheckoutService {
             throw new InvalidTokenException("Missing authentication token");
         }
 
-        if (!sessionManager.validateToken(token)) {
-            throw new AuthenticationFailedException();
-        }
-
+        // extractUserId throws for an invalid, revoked or expired token, or one not a member's, so no separate
+        // validateToken call is needed.
         int userId = sessionManager.extractUserId(token);
         if (userId <= 0) {
             throw new AuthenticationFailedException();
@@ -646,9 +644,7 @@ public class CheckoutService {
             throw new EntityNotFoundException("Active order not found");
         }
 
-        if (!order.validateCanCheckout(LocalDateTime.now(clock))) {
-            throw new InvalidStateTransitionException("Order cannot checkout");
-        }
+        order.validateCanCheckout(LocalDateTime.now(clock));
     }
 
     // We extract the unique event IDs from the list of cart line items and sort

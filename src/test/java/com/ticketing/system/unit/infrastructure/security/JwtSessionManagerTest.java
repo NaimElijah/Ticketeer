@@ -531,6 +531,17 @@ class JwtSessionManagerTest {
                 "a role claim that does not match the row's kind must not validate");
     }
 
+    // Reservation and checkout read the user id without calling validateToken first, so each refusal of
+    // validateToken must hold on extractUserId too.
+    @Test
+    void GivenAdminRoleOnAMemberSessionRow_WhenExtractUserId_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(MEMBER_ID, sidOf(memberToken), ROLE_ADMIN);
+
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractUserId(token),
+                "a role claim that does not match the row's kind must yield no user id");
+    }
+
     @Test
     void GivenAdminRoleOnAMemberSessionRow_WhenIsAdminToken_ThenFalse() {
         String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
@@ -558,13 +569,30 @@ class JwtSessionManagerTest {
                 "an admin session row must not yield a member user id");
     }
 
+    // A guest row has no user id, so the subject check would refuse the token too: only the message shows
+    // that the guest check is the one that refused it.
+    private static final String NAMES_A_GUEST_SESSION = "Invalid authentication token: token names a guest session";
+
     @Test
     void GivenJwtNamingAGuestSessionRow_WhenValidate_ThenThrowsInvalidToken() {
         boundSessions.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
         String token = signedToken(MEMBER_ID, GUEST_SID, ROLE_MEMBER);
 
-        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
-                "a guest session's credential is its raw id, never a JWT");
+        InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                () -> boundManager.validateToken(token), "a guest session's credential is its raw id, never a JWT");
+
+        assertEquals(NAMES_A_GUEST_SESSION, refused.getMessage());
+    }
+
+    @Test
+    void GivenJwtNamingAGuestSessionRow_WhenExtractUserId_ThenThrowsInvalidToken() {
+        boundSessions.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+        String token = signedToken(MEMBER_ID, GUEST_SID, ROLE_MEMBER);
+
+        InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                () -> boundManager.extractUserId(token), "a guest session's credential is its raw id, never a JWT");
+
+        assertEquals(NAMES_A_GUEST_SESSION, refused.getMessage());
     }
 
     @Test
@@ -577,6 +605,16 @@ class JwtSessionManagerTest {
 
         assertThrows(SessionExpiredException.class, () -> boundManager.validateToken(token),
                 "a token whose session row has expired must be rejected as expired");
+    }
+
+    @Test
+    void GivenJwtWhoseSessionRowHasExpired_WhenExtractUserId_ThenSessionExpired() {
+        boundSessions.save(new Session(MEMBER_SID, MEMBER_ID, T0.minus(Duration.ofHours(2)),
+                T0.minus(Duration.ofHours(1))));
+        String token = signedToken(MEMBER_ID, MEMBER_SID, ROLE_MEMBER);
+
+        assertThrowsExactly(SessionExpiredException.class, () -> boundManager.extractUserId(token),
+                "a token whose session row has expired must yield no user id");
     }
 
     @Test

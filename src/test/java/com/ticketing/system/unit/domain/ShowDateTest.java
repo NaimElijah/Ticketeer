@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -29,9 +30,21 @@ class ShowDateTest {
         assertEquals("End time must be after start time", ex.getMessage());
     }
 
+    // A show that ends as it starts lasts no time at all.
+    @Test
+    void GivenEndEqualToStart_WhenConstructed_ThenThrowsIllegalArgument() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> new ShowDate(START, START));
+        assertEquals("End time must be after start time", ex.getMessage());
+    }
+
     @Test
     void GivenNoStart_WhenConstructed_ThenThrowsIllegalState() {
         assertThrows(IllegalStateException.class, () -> new ShowDate(null, END));
+    }
+
+    @Test
+    void GivenNoEnd_WhenConstructed_ThenThrowsIllegalState() {
+        assertThrows(IllegalStateException.class, () -> new ShowDate(START, null));
     }
 
     @Test
@@ -48,6 +61,8 @@ class ShowDateTest {
         ShowDate show = new ShowDate(START, END);
 
         assertEquals(Instant.parse("2027-07-15T20:00:00Z"), show.startsAt(ZoneId.of("UTC")));
+        assertEquals(show.startsAt(ZoneId.of("Asia/Jerusalem")).plus(Duration.ofHours(3)),
+                show.startsAt(ZoneId.of("UTC")));
     }
 
     @Test

@@ -574,12 +574,11 @@ public class ActiveOrder implements InvariantChecked {
      * Checks the order can be checked out at {@code now}: not already in checkout, not empty, no hold run out.
      *
      * @param now the current UTC wall time, against which each line's hold is checked
-     * @return {@code true}; every refusal throws instead
      * @throws CheckoutInProgressException if the order is already frozen in checkout, by a running attempt or an
      *     interrupted one
      * @throws InvalidStateTransitionException if the order is empty or a line's hold has run out
      */
-    public boolean validateCanCheckout(LocalDateTime now) {
+    public void validateCanCheckout(LocalDateTime now) {
         synchronized (itemsLock) {
             if (status == ActiveOrderStatus.CHECKOUT_IN_PROGRESS) {
                 throw new CheckoutInProgressException();
@@ -594,8 +593,6 @@ public class ActiveOrder implements InvariantChecked {
                     throw new InvalidStateTransitionException("Cannot checkout because one or more tickets expired");
                 }
             }
-
-            return true;
         }
     }
 

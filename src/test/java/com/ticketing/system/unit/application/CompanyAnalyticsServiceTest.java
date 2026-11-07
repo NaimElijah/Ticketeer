@@ -178,6 +178,24 @@ class CompanyAnalyticsServiceTest {
         assertEquals(20.0, stats.revenue30d());
     }
 
+    // The window's start is inclusive: a sale exactly thirty days before the clock counts, one a second
+    // earlier does not.
+    @Test
+    void GivenSalesAtAndJustBeforeTheThirtyDayCutoff_WhenDashboard_ThenOnlyTheOneAtTheCutoffCounts() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt justBefore = OrderReceipt.forMember(1, BUYER_ID, 50.0, List.of(line(1, 50.0, EVENT_A)),
+                NOW.minusDays(30).minusSeconds(1));
+        OrderReceipt atTheCutoff = OrderReceipt.forMember(2, BUYER_ID, 20.0, List.of(line(2, 20.0, EVENT_A)),
+                NOW.minusDays(30));
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(justBefore, atTheCutoff));
+
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
+
+        assertEquals(1, stats.ticketsSold30d());
+        assertEquals(20.0, stats.revenue30d());
+    }
+
     @Test
     void GivenSalesInquiriesAndEventsOfTheCompany_WhenDashboard_ThenAggregatesLiveCountersForTheCompany() {
         givenOwner();
@@ -437,7 +455,8 @@ class CompanyAnalyticsServiceTest {
 
         PurchaseHistoryDTO result = service.salesHistory(TARGET_TOKEN, COMPANY_ID);
 
-        assertEquals(1, result.records().size());
+        assertEquals(List.of(1), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(40.0, result.records().get(0).totalPaid());
     }
 
     // ─── salesHistory unit tests ──────────────────────────────────────────────────
@@ -476,7 +495,8 @@ class CompanyAnalyticsServiceTest {
 
         PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
-        assertEquals(2, result.records().size());
+        assertEquals(List.of(1, 2), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(List.of(50.0, 30.0), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::totalPaid).toList());
     }
 
     @Test

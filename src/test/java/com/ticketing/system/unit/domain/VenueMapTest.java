@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
@@ -75,8 +77,61 @@ public class VenueMapTest extends BaseDomainTest {
         VenueMap map = mapWithZones(zoneA, zoneB);
 
         map.placeZoneOnGrid(1, 1, 1, 2, 2);
-        // B's rectangle (rows 1-2, cols 1-2) overlaps A's (rows 1-2, cols 1-2)
+        // B's rectangle (rows 2-3, cols 2-3) overlaps A's (rows 1-2, cols 1-2) in the cell at row 2, col 2
         assertThrows(IllegalStateException.class, () -> map.placeZoneOnGrid(2, 2, 2, 2, 2));
+    }
+
+    // ---- the grid's edges (#189) ----
+
+    @Test
+    void GivenPlacementPastTheLastColumn_WhenPlaceZoneOnGrid_ThenRefusedAndNotPlaced() {
+        VenueMap map = mapWithZones(new StandingZone(1, "A", 10, 50));
+
+        // col 3 + colSpan 2 - 1 = 4 > gridCols(3)
+        IllegalArgumentException refused =
+                assertThrows(IllegalArgumentException.class, () -> map.placeZoneOnGrid(1, 1, 3, 1, 2));
+
+        assertEquals("Zone placement exceeds the 3x3 venue grid", refused.getMessage());
+        assertFalse(map.getZone(1).hasGridPlacement());
+    }
+
+    @Test
+    void GivenPlacementEndingInTheLastCorner_WhenPlaceZoneOnGrid_ThenPlaced() {
+        VenueMap map = mapWithZones(new StandingZone(1, "A", 10, 50));
+
+        map.placeZoneOnGrid(1, 2, 2, 2, 2);
+
+        InventoryZone placed = map.getZone(1);
+        assertEquals(List.of(2, 2, 2, 2),
+                List.of(placed.getGridRow(), placed.getGridCol(), placed.getGridRowSpan(), placed.getGridColSpan()));
+    }
+
+    // Moving a zone must not count its old cells as taken.
+    @Test
+    void GivenAPlacedZone_WhenPlacedAgainOverItsOwnCells_ThenMoved() {
+        VenueMap map = mapWithZones(new StandingZone(1, "A", 10, 50));
+        map.placeZoneOnGrid(1, 1, 1, 2, 2);
+
+        map.placeZoneOnGrid(1, 2, 2, 2, 2);
+
+        assertEquals(2, map.getZone(1).getGridRow());
+        assertEquals(2, map.getZone(1).getGridCol());
+    }
+
+    @ParameterizedTest(name = "{0}x{1}")
+    @CsvSource({"0, 3", "3, 0"})
+    void GivenAGridOfNoRowsOrNoColumns_WhenAVenueMapIsConstructed_ThenItIsRefused(int rows, int cols) {
+        List<InventoryZone> zones = List.of(new StandingZone(1, "Floor", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> new VenueMap(1, LOCATION, zones, rows, cols));
+    }
+
+    @Test
+    void GivenAOneByOneGrid_WhenAVenueMapIsConstructed_ThenItIsAccepted() {
+        VenueMap map = track(new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 10, 50)), 1, 1));
+
+        assertEquals(1, map.getGridRows());
+        assertEquals(1, map.getGridCols());
     }
 
     @Test
@@ -138,7 +193,7 @@ public class VenueMapTest extends BaseDomainTest {
 
     @Test
     void GivenAVenueMap_WhenItsLocationIsSetToNull_ThenItIsRefusedAndKeepsItsLocation() {
-        VenueMap map = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 10, 50)));
+        VenueMap map = track(new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 10, 50))));
 
         assertThrows(IllegalArgumentException.class, () -> map.setLocation(null));
 

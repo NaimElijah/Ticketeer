@@ -40,6 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import jakarta.persistence.PersistenceException;
@@ -107,6 +110,8 @@ public class ReservationServiceTest {
     private static final int OTHER_ZONE_ID = 6;
     // An event a cart line still names after the event was deleted.
     private static final int DELETED_EVENT_ID = 11;
+    private static final String BLANK_TOKEN = "  ";
+    private static final String MISSING_TOKEN = "Missing authentication token";
 
     @BeforeEach
     void setUp() {
@@ -140,7 +145,6 @@ public class ReservationServiceTest {
 
     @Test
     void GivenMarketClosed_WhenReserveForMember_ThenThrows() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(marketGate.isOpen()).thenReturn(false);
 
@@ -166,24 +170,17 @@ public class ReservationServiceTest {
         verify(activeOrderRepository).save(cart);
     }
 
-    @Test
-    void GivenMissingToken_WhenRemoveForMember_ThenThrowException() {
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(null, EVENT_ID, ZONE_ID,
-                InventorySelectionDTO.standing(QUANTITY)));
-    }
-
-    // The real session manager answers false only for a blank token, which is refused before it is asked,
-    // and throws for any other it rejects. This guards the service's own check of the answer.
-    @Test
-    void GivenTheSessionManagerAnswersFalseForAToken_WhenRemoveForMember_ThenRefusedAsInvalidAndNothingIsTouched() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
-
-        IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> reservationService.removeForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
+    // A blank token is refused by the service's own check: nothing else stops it before the session manager.
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {BLANK_TOKEN})
+    void GivenMissingOrBlankToken_WhenRemoveForMember_ThenRefusedAndNothingIsTouched(String token) {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.removeForMember(token, EVENT_ID, ZONE_ID,
                         InventorySelectionDTO.standing(QUANTITY)));
 
-        assertEquals("Invalid or expired authentication token", refused.getMessage());
-        verifyNoInteractions(activeOrderRepository, eventRepository);
+        assertEquals(MISSING_TOKEN, refused.getMessage());
+        verifyNoInteractions(sessionManager, activeOrderRepository, eventRepository);
     }
 
     @Test
@@ -262,7 +259,6 @@ public class ReservationServiceTest {
         try {
             SeatedZone stalls = new SeatedZone(ZONE_ID, "Stalls", 100.0,
                     List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
-            when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
             when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
             givenEventOnSaleWith(stalls);
 
@@ -278,7 +274,6 @@ public class ReservationServiceTest {
 
     @Test
     void GivenFixedClock_WhenReserveForMember_ThenTheLineIsAddedAtTheClockAndExpiresOneHoldLater() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         givenEventOnSaleWith(standingZoneOf(10));
 
@@ -307,16 +302,22 @@ public class ReservationServiceTest {
                 "each line must record the zone's price");
     }
 
-    @Test
-    void GivenMissingToken_WhenReserveForMember_ThenThrowException() {
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(null, EVENT_ID, ZONE_ID,
-                InventorySelectionDTO.standing(QUANTITY)));
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {BLANK_TOKEN})
+    void GivenMissingOrBlankToken_WhenReserveForMember_ThenRefusedAndNothingIsTouched(String token) {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(MISSING_TOKEN, refused.getMessage());
+        verifyNoInteractions(sessionManager, activeOrderRepository, eventRepository);
     }
 
     @Test
     void GivenARevokedToken_WhenReserveForMember_ThenTheSessionManagersRefusalPropagatesAndNothingIsTouched() {
         InvalidTokenException revoked = new InvalidTokenException("revoked");
-        when(sessionManager.validateToken(VALID_TOKEN)).thenThrow(revoked);
+        when(sessionManager.extractUserId(VALID_TOKEN)).thenThrow(revoked);
 
         assertSame(revoked, assertThrows(InvalidTokenException.class,
                 () -> reservationService.reserveForMember(VALID_TOKEN, EVENT_ID, ZONE_ID,
@@ -328,7 +329,6 @@ public class ReservationServiceTest {
     // A member's token names a positive user id; this guards the service's own check of the id.
     @Test
     void GivenATokenNamingNoPositiveUserId_WhenReserveForMember_ThenRefusedAsAnInvalidBuyerAndNothingIsTouched() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(0);
 
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
@@ -352,7 +352,6 @@ public class ReservationServiceTest {
 
     @Test
     void GivenEventDoesNotExist_WhenReserveForMember_ThenThrowException() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
@@ -558,7 +557,6 @@ public class ReservationServiceTest {
             final String token = "valid-token-" + i;
             final int userId = i + 1;
 
-            when(sessionManager.validateToken(token)).thenReturn(true);
             when(sessionManager.extractUserId(token)).thenReturn(userId);
             when(activeOrderRepository.getByUserId(userId)).thenReturn(null);
 
@@ -595,7 +593,6 @@ public class ReservationServiceTest {
                 100.0,
                 NOW);
 
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         givenEventOnSaleWith(realZone);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realActiveOrder);
@@ -639,7 +636,6 @@ public class ReservationServiceTest {
             final String token = "valid-token-" + i;
             final int userId = i + 1;
 
-            when(sessionManager.validateToken(token)).thenReturn(true);
             when(sessionManager.extractUserId(token)).thenReturn(userId);
             when(activeOrderRepository.getByUserId(userId)).thenReturn(null);
 
@@ -708,7 +704,6 @@ public class ReservationServiceTest {
             final int userId = i + 1;
             final String seatLabel = "A" + (i + 1);
 
-            when(sessionManager.validateToken(token)).thenReturn(true);
             when(sessionManager.extractUserId(token)).thenReturn(userId);
             when(activeOrderRepository.getByUserId(userId)).thenReturn(null);
 
@@ -743,7 +738,6 @@ public class ReservationServiceTest {
                         new Seat("A3", 2, 0)));
         Event realEvent = createEventWithZone(seatedZone);
 
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(realEvent);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
@@ -813,7 +807,6 @@ public class ReservationServiceTest {
         StandingZone standingZone = new StandingZone(ZONE_ID, "General Admission", 10, 50.0);
         Event realEvent = createEventWithZone(standingZone);
 
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(realEvent);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
@@ -837,7 +830,6 @@ public class ReservationServiceTest {
                 List.of(new Seat("A1", 0, 0)));
         Event realEvent = createEventWithZone(seatedZone);
 
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(realEvent);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
@@ -863,7 +855,6 @@ public class ReservationServiceTest {
                         new Seat("A2", 1, 0)));
         Event realEvent = createEventWithZone(seatedZone);
 
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(realEvent);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
@@ -898,7 +889,6 @@ public class ReservationServiceTest {
 
         realOrder.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2", "A3"), 120.0, NOW);
 
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(eventRepository.findById(EVENT_ID)).thenReturn(realEvent);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(realOrder);
@@ -1139,7 +1129,6 @@ public class ReservationServiceTest {
 
     @Test
     void GivenAMemberToken_WhenRemoveLine_ThenTheLineLeavesTheMembersCart() {
-        when(sessionManager.validateToken(MEMBER_JWT)).thenReturn(true);
         when(sessionManager.extractUserId(MEMBER_JWT)).thenReturn(USER_ID);
         StandingZone vip = standingZoneOf(10);
         givenEventOnSaleWith(vip);
@@ -1163,13 +1152,13 @@ public class ReservationServiceTest {
 
         assertEquals(QUANTITY - 1, cart.getItems().size());
         assertEquals(QUANTITY - 1, vip.getReservedAmount());
-        verify(sessionManager, never()).validateToken(any());
+        verify(sessionManager, never()).extractUserId(any());
     }
 
     @Test
     void GivenARevokedMemberToken_WhenRemoveLine_ThenTheRefusalPropagatesAndNoGuestCartIsTried() {
         InvalidTokenException revoked = new InvalidTokenException("revoked");
-        when(sessionManager.validateToken(MEMBER_JWT)).thenThrow(revoked);
+        when(sessionManager.extractUserId(MEMBER_JWT)).thenThrow(revoked);
 
         assertSame(revoked, assertThrows(InvalidTokenException.class,
                 () -> reservationService.removeLine(MEMBER_JWT, EVENT_ID, ZONE_ID, InventorySelectionDTO.standing(1))));
@@ -1460,13 +1449,11 @@ public class ReservationServiceTest {
 
     // A member with no cart yet: the service creates a real ActiveOrder for them.
     private void memberWithoutCart() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         when(activeOrderRepository.getByUserId(USER_ID)).thenReturn(null);
     }
 
     private void memberWithReservedStandingTickets() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         ActiveOrder cart = new ActiveOrder(USER_ID, NOW);
         cart.addStandingReservation(EVENT_ID, ZONE_ID, QUANTITY, 50.0, NOW);
@@ -1513,7 +1500,6 @@ public class ReservationServiceTest {
     }
 
     private void givenSignedInMember() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
     }
 

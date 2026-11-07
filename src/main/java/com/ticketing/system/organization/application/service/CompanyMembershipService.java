@@ -122,7 +122,7 @@ public class CompanyMembershipService {
     @Transactional
     public void receiveOwnerAppointment(int userId, int companyId, int appointerId) {
         if (getPendingCompanyAppointment(userId, companyId) != null) {
-            throw new BusinessRuleViolationException("User already has an pending appointment in this company");
+            throw new BusinessRuleViolationException("User already has a pending appointment in this company");
         }
         CompanyAppointment activeAppointment = getActiveCompanyAppointment(userId, companyId); // current active role, if any
         if (activeAppointment != null && activeAppointment.getRole() == CompanyRole.Owner) {

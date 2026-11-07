@@ -3,6 +3,8 @@ package com.ticketing.system.unit.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,6 +14,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -20,11 +23,12 @@ import java.util.Locale;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -36,6 +40,7 @@ import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.organization.adapter.out.persistence.MemoryProductionCompanyRepository;
 import com.ticketing.system.catalog.adapter.out.persistence.MemoryEventRepository;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
@@ -48,6 +53,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.VenueMap;
+import com.ticketing.system.shared.exception.CompanyClosedException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.domain.TextLimits;
@@ -83,16 +89,6 @@ class CatalogServiceTest {
                 mockCompanyRepository);
     }
 
-    @Test
-    @Disabled("UC-3: browseEventCatalog returns active events from active companies")
-    void GivenActiveCompanies_WhenBrowse_ThenReturnsActiveEvents() {
-    }
-
-    @Test
-    @Disabled("UC-3: events from closed companies excluded")
-    void GivenClosedCompany_WhenBrowse_ThenEventsExcluded() {
-    }
-
     // -------------------------------------------------------------------------
     // UC-7: searchGlobal
     // -------------------------------------------------------------------------
@@ -100,21 +96,26 @@ class CatalogServiceTest {
     // UC-7: searchGlobal throws InvalidTokenException for an invalid token
     @Test
     void GivenInvalidToken_WhenSearchGlobal_ThenThrowsInvalidTokenException() {
-        when(mockSessionManager.validateToken(VALID_TOKEN)).thenReturn(false);
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(false);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
         assertThrowsExactly(InvalidTokenException.class,
                 () -> catalogService.searchGlobal(VALID_TOKEN, filters));
     }
 
-    // UC-7: searchGlobal propagates InvalidTokenException from the credential check
+    // validateCredential answers false for any bad credential and throws only when the session store
+    // fails (SessionManager), and an unreachable store is not an invalid credential.
     @Test
-    void GivenTheCredentialCheckThrowsInvalidToken_WhenSearchGlobal_ThenPropagatesInvalidTokenException() {
-        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
+    void GivenTheSessionStoreFails_WhenSearchGlobal_ThenTheStoreFailurePropagatesAndNothingIsSearched() {
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("session store down");
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(storeDown);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrowsExactly(InvalidTokenException.class,
+        DataAccessResourceFailureException thrown = assertThrowsExactly(DataAccessResourceFailureException.class,
                 () -> catalogService.searchGlobal(VALID_TOKEN, filters));
+
+        assertSame(storeDown, thrown);
+        verify(mockEventRepository, never()).searchONSALE(any());
     }
 
     // UC-7: searchGlobal returns all matching events when no company-rating filters
@@ -134,7 +135,7 @@ class CatalogServiceTest {
 
         List<EventSummaryDTO> results = catalogService.searchGlobal(VALID_TOKEN, filters);
 
-        assertEquals(2, results.size());
+        assertEquals(List.of("Event 1", "Event 2"), results.stream().map(EventSummaryDTO::name).toList());
     }
 
     // UC-7: searchGlobal excludes events whose company rating is below
@@ -219,14 +220,17 @@ class CatalogServiceTest {
                 () -> catalogService.searchByCompany(VALID_TOKEN, 10, filters));
     }
 
-    // UC-7: searchByCompany propagates InvalidTokenException from the credential check
     @Test
-    void GivenTheCredentialCheckThrowsInvalidToken_WhenSearchByCompany_ThenPropagatesInvalidTokenException() {
-        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
+    void GivenTheSessionStoreFails_WhenSearchByCompany_ThenTheStoreFailurePropagatesAndNothingIsSearched() {
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("session store down");
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(storeDown);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrowsExactly(InvalidTokenException.class,
+        DataAccessResourceFailureException thrown = assertThrowsExactly(DataAccessResourceFailureException.class,
                 () -> catalogService.searchByCompany(VALID_TOKEN, 10, filters));
+
+        assertSame(storeDown, thrown);
+        verify(mockEventRepository, never()).searchONSALE(any());
     }
 
     // UC-7: searchByCompany returns only events belonging to the requested company
@@ -263,7 +267,13 @@ class CatalogServiceTest {
 
         List<EventSummaryDTO> results = catalogService.searchByCompany(VALID_TOKEN, 10, filters);
 
-        assertEquals(1, results.size());
+        assertEquals(List.of(1), results.stream().map(EventSummaryDTO::eventId).toList());
+        // The service filters company ratings itself only in searchGlobal, so here the proof is that the
+        // query never receives them.
+        ArgumentCaptor<CatalogSearchFiltersDTO> queried = ArgumentCaptor.forClass(CatalogSearchFiltersDTO.class);
+        verify(mockEventRepository).searchONSALE(queried.capture());
+        assertNull(queried.getValue().minCompanyRating(), "the company-rating bound reached the query");
+        assertNull(queried.getValue().maxCompanyRating(), "the company-rating bound reached the query");
     }
 
     // UC-7: searchByCompany returns an empty list when no events match the given
@@ -1171,5 +1181,184 @@ class CatalogServiceTest {
 
     private static <T> T underTurkishLocale(java.util.function.Supplier<T> call) {
         return DefaultLocale.callUnder(Locale.forLanguageTag("tr-TR"), call);
+    }
+
+    // ---- filter ranges, closed companies, and what an inactive company's event looks like to a buyer ----
+
+    private static final LocalDate RANGE_DAY = LocalDate.of(2030, 6, 1);
+
+    // An inverted range can match nothing, so it is refused before the query rather than answered empty.
+    static Stream<Arguments> invertedRanges() {
+        return Stream.of(
+                Arguments.of(new CatalogSearchFiltersDTO(null, null, null, null, 80.0, 50.0,
+                        null, null, null, null, null, null, null), "min price must be <= max price"),
+                Arguments.of(new CatalogSearchFiltersDTO(null, null, null, null, null, null,
+                        null, null, null, 4.0, 3.0, null, null), "min event rating must be <= max event rating"),
+                Arguments.of(new CatalogSearchFiltersDTO(null, null, null, null, null, null,
+                        null, null, null, null, null, 4.0, 3.0), "min company rating must be <= max company rating"),
+                Arguments.of(new CatalogSearchFiltersDTO(null, null, null, null, null, null,
+                        RANGE_DAY.plusDays(1), RANGE_DAY, null, null, null, null, null),
+                        "fromDate must be before or equal to toDate"));
+    }
+
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("invertedRanges")
+    void GivenAnInvertedRange_WhenSearchGlobal_ThenIllegalArgumentAndNothingSearched(
+            CatalogSearchFiltersDTO filters, String expectedMessage) {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+
+        IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                () -> catalogService.searchGlobal(VALID_TOKEN, filters));
+
+        assertEquals(expectedMessage, refused.getMessage());
+        verify(mockEventRepository, never()).searchONSALE(any());
+    }
+
+    // The company-rating range is validated before searchByCompany drops it, so it is refused there too.
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("invertedRanges")
+    void GivenAnInvertedRange_WhenSearchByCompany_ThenIllegalArgumentAndNothingSearched(
+            CatalogSearchFiltersDTO filters, String expectedMessage) {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        when(mockCompanyRepository.getCompanyById(OWNER_COMPANY_ID)).thenReturn(company(OWNER_COMPANY_ID,
+                CompanyStatus.ACTIVE));
+
+        IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                () -> catalogService.searchByCompany(VALID_TOKEN, OWNER_COMPANY_ID, filters));
+
+        assertEquals(expectedMessage, refused.getMessage());
+        verify(mockEventRepository, never()).searchONSALE(any());
+    }
+
+    // A bound equal to the other is a one-point range, not an inverted one.
+    static Stream<CatalogSearchFiltersDTO> onePointRanges() {
+        return Stream.of(
+                new CatalogSearchFiltersDTO(null, null, null, null, 50.0, 50.0,
+                        null, null, null, null, null, null, null),
+                new CatalogSearchFiltersDTO(null, null, null, null, null, null,
+                        null, null, null, 4.0, 4.0, null, null),
+                new CatalogSearchFiltersDTO(null, null, null, null, null, null,
+                        null, null, null, null, null, 4.0, 4.0),
+                new CatalogSearchFiltersDTO(null, null, null, null, null, null,
+                        RANGE_DAY, RANGE_DAY, null, null, null, null, null));
+    }
+
+    @ParameterizedTest
+    @MethodSource("onePointRanges")
+    void GivenAOnePointRange_WhenSearchGlobal_ThenTheSearchRuns(CatalogSearchFiltersDTO filters) {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        when(mockEventRepository.searchONSALE(filters)).thenReturn(List.of());
+
+        assertEquals(List.of(), catalogService.searchGlobal(VALID_TOKEN, filters));
+        verify(mockEventRepository).searchONSALE(filters);
+    }
+
+    @Test
+    void GivenClosedCompany_WhenSearchByCompany_ThenCompanyClosedAndNothingSearched() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        when(mockCompanyRepository.getCompanyById(OWNER_COMPANY_ID)).thenReturn(company(OWNER_COMPANY_ID,
+                CompanyStatus.INACTIVE));
+
+        CompanyClosedException refused = assertThrowsExactly(CompanyClosedException.class,
+                () -> catalogService.searchByCompany(VALID_TOKEN, OWNER_COMPANY_ID, emptyFilters()));
+
+        assertEquals("Company " + OWNER_COMPANY_ID + " is closed", refused.getMessage());
+        verify(mockEventRepository, never()).searchONSALE(any());
+    }
+
+    private static final int CLOSED_COMPANY_ID = 20;
+
+    @Test
+    void GivenEventOfInactiveCompany_WhenSearchGlobal_ThenExcluded() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        MemoryEventRepository events = new MemoryEventRepository();
+        events.save(realEvent(1, OWNER_COMPANY_ID, "Open company's show", EventStatus.ON_SALE));
+        events.save(realEvent(2, CLOSED_COMPANY_ID, "Closed company's show", EventStatus.ON_SALE));
+        CatalogService catalog = new CatalogService(mockSessionManager, events,
+                companies(company(OWNER_COMPANY_ID, CompanyStatus.ACTIVE), company(CLOSED_COMPANY_ID,
+                        CompanyStatus.INACTIVE)));
+
+        List<EventSummaryDTO> results = catalog.searchGlobal(VALID_TOKEN, emptyFilters());
+
+        assertEquals(List.of(1), results.stream().map(EventSummaryDTO::eventId).toList());
+    }
+
+    @Test
+    void GivenOnSaleEventOfInactiveCompany_WhenBrowse_ThenExcluded() {
+        MemoryEventRepository events = new MemoryEventRepository();
+        events.save(realEvent(1, OWNER_COMPANY_ID, "Open company's show", EventStatus.ON_SALE));
+        events.save(realEvent(2, OWNER_COMPANY_ID, "Open company's later show", EventStatus.SCHEDULED));
+        events.save(realEvent(3, CLOSED_COMPANY_ID, "Closed company's show", EventStatus.ON_SALE));
+        CatalogService catalog = new CatalogService(mockSessionManager, events,
+                companies(company(OWNER_COMPANY_ID, CompanyStatus.ACTIVE), company(CLOSED_COMPANY_ID,
+                        CompanyStatus.INACTIVE)));
+
+        List<EventSummaryDTO> results = catalog.browseEventCatalog();
+
+        assertEquals(List.of(1), results.stream().map(EventSummaryDTO::eventId).toList(),
+                "browse lists only ON_SALE events of active companies");
+    }
+
+    // ---- top-bar search: one row per artist and venue, and the three kinds take turns ----
+
+    private Event rockEvent(int id, String name, String artist) {
+        return new Event(id, name, 4.0, List.of(artist), EventCategory.CONCERT, OWNER_COMPANY_ID,
+                EventStatus.ON_SALE,
+                new VenueMap(id, new Location("Rockland", "Rockville"), List.of(new StandingZone(1, "Floor", 100, 50))),
+                List.of(new ShowDate(HIDDEN_SHOW_START, HIDDEN_SHOW_START.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), null, new DiscountPolicy(0));
+    }
+
+    private void twoRockNightsOfOneBandAtOneVenue() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        when(mockCompanyRepository.getCompanyById(OWNER_COMPANY_ID)).thenReturn(company(OWNER_COMPANY_ID,
+                CompanyStatus.ACTIVE));
+        Event first = rockEvent(1, "Rock Night One", "Rock Band");
+        Event second = rockEvent(2, "Rock Night Two", "ROCK BAND");
+        when(mockEventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(first, second));
+    }
+
+    private static List<String> typedTitles(List<SearchResultDTO> results) {
+        return results.stream().map(r -> r.type() + " " + r.title() + " #" + r.eventId()).toList();
+    }
+
+    @Test
+    void GivenMatchesOfEveryKind_WhenSearch_ThenTheKindsTakeTurnsAndEachArtistAndVenueAppearsOnce() {
+        twoRockNightsOfOneBandAtOneVenue();
+
+        List<SearchResultDTO> results = catalogService.search(VALID_TOKEN, "rock", 8);
+
+        assertEquals(List.of("EVENT Rock Night One #1", "ARTIST Rock Band #1", "VENUE Rockville, Rockland #1",
+                "EVENT Rock Night Two #2"), typedTitles(results),
+                "an artist or venue matched by case only is one row, pointing at its first event");
+    }
+
+    @Test
+    void GivenMoreMatchesThanTheLimit_WhenSearch_ThenEachKindGetsATurnBeforeAnyGetsASecond() {
+        twoRockNightsOfOneBandAtOneVenue();
+
+        List<SearchResultDTO> results = catalogService.search(VALID_TOKEN, "rock", 3);
+
+        assertEquals(List.of("EVENT Rock Night One #1", "ARTIST Rock Band #1", "VENUE Rockville, Rockland #1"),
+                typedTitles(results));
+    }
+
+    private static ProductionCompany company(int companyId, CompanyStatus status) {
+        return new ProductionCompany(companyId, 1, "Company " + companyId, status, "A production company", 4.0);
+    }
+
+    private static MemoryProductionCompanyRepository companies(ProductionCompany... stored) {
+        MemoryProductionCompanyRepository companies = new MemoryProductionCompanyRepository();
+        for (ProductionCompany company : stored) {
+            companies.save(company);
+        }
+        return companies;
+    }
+
+    private static Event realEvent(int id, int companyId, String name, EventStatus status) {
+        return new Event(id, name, 4.0, List.of("Artist " + id), EventCategory.CONCERT, companyId, status,
+                new VenueMap(id, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50))),
+                List.of(new ShowDate(HIDDEN_SHOW_START, HIDDEN_SHOW_START.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), null, new DiscountPolicy(0));
     }
 }

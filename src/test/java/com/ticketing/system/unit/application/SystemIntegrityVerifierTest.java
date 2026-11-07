@@ -32,6 +32,7 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
@@ -172,6 +173,25 @@ class SystemIntegrityVerifierTest {
         assertDoesNotThrow(verifier::verify);
     }
 
+    @Test
+    void GivenZoneSoldExactlyToCapacity_WhenVerify_ThenPasses() {   // constraint #12 — the edge
+        when(eventRepository.findAll()).thenReturn(List.of(eventWithSoldUnits(100))); // sold 100 == capacity 100
+
+        assertDoesNotThrow(verifier::verify);
+    }
+
+    // Reserved units are committed too, so a zone sold to capacity cannot also hold a reservation.
+    @Test
+    void GivenZoneSoldToCapacityWithOneUnitReserved_WhenVerify_ThenOversoldBySoldPlusReserved() {
+        when(eventRepository.findAll()).thenReturn(List.of(eventWithUnits(100, 1)));
+
+        SystemIntegrityViolationException violation = assertThrows(SystemIntegrityViolationException.class,
+                verifier::verify);
+
+        assertTrue(violation.getMessage().contains("event 1 has an oversold zone: sold+reserved=101 > capacity=100"),
+                violation.getMessage());
+    }
+
     // ---- helpers ----
 
     private static ActiveOrder orderFor(int userId, String orderKey, int eventId) {
@@ -188,7 +208,15 @@ class SystemIntegrityVerifierTest {
     // resist mocking; instead the zone's soldAmount is corrupted directly to simulate an oversold DB row
     // (the domain API never lets sold exceed capacity, which is the whole point of the boot scan).
     private static Event eventWithSoldUnits(int sold) {
+        return eventWithUnits(sold, 0);
+    }
+
+    // The reservation goes through the zone's API while it is still legal; the sold count is then forced.
+    private static Event eventWithUnits(int sold, int reserved) {
         InventoryZone zone = new StandingZone(1, "Floor", 100, 50);
+        if (reserved > 0) {
+            zone.reserve(InventorySelection.standing(reserved, "held-order"));
+        }
         if (sold > 0) {
             setPrivateInt(zone, "soldAmount", sold);
         }

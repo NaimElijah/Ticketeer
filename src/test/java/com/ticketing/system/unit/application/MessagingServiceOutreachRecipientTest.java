@@ -45,6 +45,7 @@ class MessagingServiceOutreachRecipientTest {
     private static final String ADMIN_TOKEN = "admin-tok";
     private static final int ADMIN_ID = 1;
     private static final int MEMBER_ID = 10;
+    private static final int OTHER_MEMBER_ID = 11;
     private static final int MEMBER_AGE = 30;
     private static final int NO_SUCH_MEMBER_ID = 999;
     // Member ids are minted from 1; 0 is the group sentinel and never a member.
@@ -67,6 +68,7 @@ class MessagingServiceOutreachRecipientTest {
         when(admins.findById(ADMIN_ID)).thenReturn(new Admin(ADMIN_ID, "admin", "unused-password-hash", true));
         MemoryUserRepository users = new MemoryUserRepository();
         users.save(new User(MEMBER_ID, "member", "member@example.test", "unused-password-hash", MEMBER_AGE));
+        users.save(new User(OTHER_MEMBER_ID, "other", "other@example.test", "unused-password-hash", MEMBER_AGE));
         service = new MessagingService(conversations, sessions, admins, users,
                 new MemoryProductionCompanyRepository(), mock(CompanyMembershipService.class),
                 eventPublisher, Clock.fixed(NOW, ZoneOffset.UTC));
@@ -92,11 +94,11 @@ class MessagingServiceOutreachRecipientTest {
 
     @Test
     void GivenOnlyExistingMembers_WhenAnAdminSendsOutreach_ThenEachGetsAConversation() {
-        service.sendOutreach(ADMIN_TOKEN, outreachTo(List.of(MEMBER_ID)));
+        service.sendOutreach(ADMIN_TOKEN, outreachTo(List.of(MEMBER_ID, OTHER_MEMBER_ID)));
 
-        List<Conversation> sent = conversations.findByType(ConversationType.DIRECT);
-        assertEquals(1, sent.size());
-        assertEquals(MEMBER_ID, sent.get(0).getCounterpartyId());
+        List<Integer> recipients = conversations.findByType(ConversationType.DIRECT).stream()
+                .map(Conversation::getCounterpartyId).sorted().toList();
+        assertEquals(List.of(MEMBER_ID, OTHER_MEMBER_ID), recipients, "one conversation for each recipient");
     }
 
     private void assertNothingSent() {

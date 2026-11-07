@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,9 +14,9 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
-import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.support.BaseDomainTest;
 
 class ProductionCompanyTest extends BaseDomainTest {
@@ -32,15 +32,11 @@ class ProductionCompanyTest extends BaseDomainTest {
         private static final int TEXT_LIMIT = 255;
 
         private ProductionCompany company;
-        private List<Permission> defaultPermissions;
 
         @BeforeEach
         public void setUp() {
                 company = track(new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE,
                                 COMPANY_1_DESCRIPTION, COMPANY_1_RATING));
-
-                defaultPermissions = new ArrayList<>();
-                defaultPermissions.add(Permission.MANAGE_INVENTORY);
         }
 
         @Test
@@ -52,27 +48,41 @@ class ProductionCompanyTest extends BaseDomainTest {
                 assertFalse(company.getManagers().contains(TARGET_USER_ID));
         }
 
+        // The type of each refusal below decides whether the user reads the rule (ServiceErrors.userMessage):
+        // both are DomainExceptions.
+
         @Test
-        public void GivenTargetAlreadyManager_WhenAddManager_ThenThrowException() {
+        public void GivenTargetAlreadyManager_WhenAddManager_ThenBusinessRuleViolation() {
                 company.addManager(TARGET_USER_ID);
-                assertThrows(RuntimeException.class, () -> company.addManager(TARGET_USER_ID));
+
+                assertThrows(BusinessRuleViolationException.class, () -> company.addManager(TARGET_USER_ID));
+
+                assertEquals(List.of(TARGET_USER_ID), company.getManagers());
         }
 
         @Test
-        public void GivenTargetIsNotManager_WhenRevokeManager_ThenThrowException() {
-                assertThrows(RuntimeException.class, () -> company.RevokeAppointment(TARGET_USER_ID));
+        public void GivenTargetIsNotManager_WhenRevokeManager_ThenAppointmentNotFound() {
+                assertThrows(AppointmentNotFoundException.class, () -> company.RevokeAppointment(TARGET_USER_ID));
+
+                assertTrue(company.getManagers().isEmpty());
+                assertTrue(company.isOwner(OWNER_ID));
+        }
+
+        // Business rule 6: the Founder is always an owner, so the company always has one.
+        @Test
+        public void GivenFounder_WhenRevokeAppointment_ThenRefusedAndTheFounderStaysAnOwner() {
+                IllegalStateException refused = assertThrowsExactly(IllegalStateException.class,
+                                () -> company.RevokeAppointment(OWNER_ID));
+
+                assertEquals("The founder cannot be revoked", refused.getMessage());
+                assertEquals(List.of(OWNER_ID), company.getOwnerIds());
         }
 
         ////////////////////////////////////////////////////////////////// UC-20Tests
 
         @Test
-        public void GivenOwner_WhenValidateManagerOrOwner_ThenDoesNotThrow() {
-                assertTrue(company.getOwnerId() == OWNER_ID);
-        }
-
-        @Test
         public void GivenUserIsOwner_WhenCheckOwner_ThenSucceeds() {
-                assertTrue(company.getOwnerId() == OWNER_ID);
+                assertDoesNotThrow(() -> company.checkowner(OWNER_ID));
         }
 
         @Test

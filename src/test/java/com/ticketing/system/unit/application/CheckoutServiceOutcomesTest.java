@@ -134,7 +134,6 @@ class CheckoutServiceOutcomesTest {
     }
 
     private void validSession() {
-        when(sessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         User user = mock(User.class);
     when(user.getUserId()).thenReturn(USER_ID);
@@ -254,7 +253,7 @@ class CheckoutServiceOutcomesTest {
     @Test
     void GivenARevokedToken_WhenCheckoutMember_ThenRefusedAsAnInvalidTokenAndNothingCharged() {
         StandingZone zone = givenAMemberCartHoldingOnePlace();
-        when(sessionManager.validateToken(REVOKED_TOKEN)).thenThrow(new InvalidTokenException("session not found"));
+        when(sessionManager.extractUserId(REVOKED_TOKEN)).thenThrow(new InvalidTokenException("session not found"));
 
         RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(REVOKED_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));
@@ -267,7 +266,7 @@ class CheckoutServiceOutcomesTest {
     @Test
     void GivenAnExpiredToken_WhenCheckoutMember_ThenRefusedAsAnExpiredSessionAndNothingCharged() {
         StandingZone zone = givenAMemberCartHoldingOnePlace();
-        when(sessionManager.validateToken(EXPIRED_TOKEN)).thenThrow(new SessionExpiredException());
+        when(sessionManager.extractUserId(EXPIRED_TOKEN)).thenThrow(new SessionExpiredException());
 
         RuntimeException failure = assertThrows(RuntimeException.class, () ->
                 checkoutService.checkoutMember(EXPIRED_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN));

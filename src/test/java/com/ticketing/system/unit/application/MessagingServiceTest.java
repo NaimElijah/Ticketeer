@@ -8,9 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -204,9 +206,13 @@ class MessagingServiceTest {
     @Test
     void GivenAnInquiry_WhenSendMessageByNonParticipant_ThenRejected() {
         ConversationDTO created = service.startConversation(MEMBER_TOKEN, inquiryReq());
+        clearInvocations(eventPublisher);
+
         assertThrows(InvalidParticipantException.class,
                 () -> service.sendMessage(OUTSIDER_TOKEN,
                         new SendMessageRequestDTO(created.conversationId(), 0, null, "hi")));
+
+        assertUnchangedAndUnannounced(created.conversationId(), 1, ConversationStatus.OPEN);
     }
 
     // --- submitComplaint (II.3.3) ---
@@ -309,10 +315,14 @@ class MessagingServiceTest {
         service.respondToComplaint(ADMIN_TOKEN, new RespondToComplaintRequestDTO(
                 complaint.conversationId(), ADMIN_ID, "Resolved now", "RESOLVED"));
 
+        clearInvocations(eventPublisher);
+
         // A second admin response is rejected — the complaint is already resolved (one-shot).
         assertThrows(ConversationClosedException.class,
                 () -> service.respondToComplaint(ADMIN_TOKEN, new RespondToComplaintRequestDTO(
                         complaint.conversationId(), ADMIN_ID, "again", "RESOLVED")));
+
+        assertUnchangedAndUnannounced(complaint.conversationId(), 2, ConversationStatus.RESOLVED);
     }
 
     @Test
@@ -321,9 +331,21 @@ class MessagingServiceTest {
         ConversationDTO complaint = service.submitComplaint(MEMBER_TOKEN,
                 new SubmitComplaintRequestDTO(MEMBER_ID, "Refund", "Where is it?", null));
 
+        clearInvocations(eventPublisher);
+
         assertThrows(BusinessRuleViolationException.class,
                 () -> service.sendMessage(MEMBER_TOKEN,
                         new SendMessageRequestDTO(complaint.conversationId(), 0, null, "any update?")));
+
+        assertUnchangedAndUnannounced(complaint.conversationId(), 1, ConversationStatus.OPEN);
+    }
+
+    // A refused write stores nothing and tells no one.
+    private void assertUnchangedAndUnannounced(String conversationId, int messages, ConversationStatus status) {
+        Conversation stored = conversationRepository.findById(conversationId).orElseThrow();
+        assertEquals(messages, stored.getMessages().size(), "the refused message must not be stored");
+        assertEquals(status, stored.getStatus());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -400,7 +422,7 @@ class MessagingServiceTest {
 
         List<ConversationDTO> sent = service.viewSentOutreach(ADMIN_TOKEN);
 
-        assertEquals(2, sent.size());
+        assertEquals(List.of(MEMBER_ID, MEMBER2_ID), sent.stream().map(ConversationDTO::counterpartyId).sorted().toList());
         assertTrue(sent.stream().allMatch(c -> "DIRECT".equals(c.type())));
     }
 

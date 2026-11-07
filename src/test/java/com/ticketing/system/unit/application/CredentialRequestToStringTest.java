@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,6 +34,9 @@ class CredentialRequestToStringTest {
     private static final String RAW_PASSWORD = "S3cret-Passw0rd-under-test";
     private static final String GUEST_SESSION_ID = "6d1e0b3a-guest-session-under-test";
     private static final String EMAIL = "alice.under.test@example.com";
+    private static final String CARD_NUMBER = "4000 0000 0000 4242";
+    private static final String CARD_LAST_FOUR = CARD_NUMBER.substring(CARD_NUMBER.length() - 4);
+    private static final String CVV = "123";
 
     @Test
     void GivenLoginRequest_WhenToString_ThenThePasswordIsAbsent() {
@@ -189,8 +193,25 @@ class CredentialRequestToStringTest {
     void GivenCardDetails_WhenToString_ThenTheMaskedLastFourDigitsAreStillShown() {
         String rendered = cardDetails().toString();
 
-        assertTrue(rendered.contains("**** **** **** 4242"),
+        assertTrue(rendered.contains("**** **** **** " + CARD_LAST_FOUR),
                 "CardDetailsDTO.toString() dropped the masked last four digits: " + rendered);
+    }
+
+    // The mask stars every group but the last, so the last four are the only digits the text may show. A
+    // check for the first group alone would pass a mask that hid only that group.
+    @Test
+    void GivenCardDetails_WhenToString_ThenTheFullCardNumberIsAbsent() {
+        String rendered = cardDetails().toString();
+
+        assertEquals(CARD_LAST_FOUR, rendered.replaceAll("\\D", ""),
+                "CardDetailsDTO.toString() must show no card digit but the last four: " + rendered);
+    }
+
+    @Test
+    void GivenCardDetails_WhenToString_ThenTheCvvIsAbsent() {
+        String rendered = cardDetails().toString();
+
+        assertFalse(rendered.contains(CVV), "CardDetailsDTO.toString() exposed the cvv: " + rendered);
     }
 
     @Test
@@ -262,6 +283,6 @@ class CredentialRequestToStringTest {
     // The last four digits, 4242, share no digit pair with the expiry, so a masked card number
     // cannot be mistaken for it.
     private static CardDetailsDTO cardDetails() {
-        return new CardDetailsDTO("4000 0000 0000 4242", "123", EXPIRY_MONTH, EXPIRY_YEAR, HOLDER_NAME);
+        return new CardDetailsDTO(CARD_NUMBER, CVV, EXPIRY_MONTH, EXPIRY_YEAR, HOLDER_NAME);
     }
 }

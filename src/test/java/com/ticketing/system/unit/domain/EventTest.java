@@ -12,9 +12,15 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -34,6 +40,7 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.support.BaseDomainTest;
 
 import java.time.LocalDateTime;
@@ -47,7 +54,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 // Unit tests for the Event aggregate (Event + VenueMap + InventoryZone + ShowDate + policies).
 class EventTest extends BaseDomainTest {
 
-    private final int COMPANY_ID = 100;
+    private static final int COMPANY_ID = 100;
     private final int EVENT_ID = 10;
     private final int ZONE_ID = 5;
     private final Location LOCATION = new Location("Belgium", "Brussels");
@@ -103,6 +110,81 @@ class EventTest extends BaseDomainTest {
 
         assertEquals("Cannot reconfigure venue map while tickets are reserved or sold", refused.getMessage());
         assertSame(before, event.getVenueMap());
+    }
+
+    // ---- only the owning company changes an event's layout (#189) ----
+
+    private static final int OTHER_COMPANY_ID = COMPANY_ID + 1;
+
+    @Test
+    void GivenOtherCompany_WhenConfigureVenueMap_ThenUnauthorizedAndMapKept() {
+        VenueMap before = event.getVenueMap();
+        VenueMap replacement = new VenueMap(2, LOCATION, List.of(new StandingZone(ZONE_ID + 1, "Replacement", 10, 100)));
+
+        assertThrows(UnauthorizedActionException.class, () -> event.configureVenueMap(replacement, OTHER_COMPANY_ID));
+
+        assertSame(before, event.getVenueMap());
+    }
+
+    @Test
+    void GivenNoMap_WhenConfigureVenueMap_ThenRefusedAndMapKept() {
+        VenueMap before = event.getVenueMap();
+
+        assertThrows(IllegalArgumentException.class, () -> event.configureVenueMap(null, COMPANY_ID));
+
+        assertSame(before, event.getVenueMap());
+    }
+
+    // Each layout edit an owner can make, made on a SCHEDULED event with a standing zone (1) and a seated one (2).
+    static Stream<Named<Consumer<Event>>> layoutEditsByAnotherCompany() {
+        return Stream.of(
+                Named.<Consumer<Event>>of("addStandingZone", e -> e.addStandingZone("Late", 5, 10.0, OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("addSeatedZone",
+                        e -> e.addSeatedZone("Late", 10.0, List.of(new Seat("C1", 0, 0)), OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("removeInventoryZone", e -> e.removeInventoryZone(1, OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("addPlacesToStandingZone",
+                        e -> e.addPlacesToStandingZone(1, 5, OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("removePlacesFromStandingZone",
+                        e -> e.removePlacesFromStandingZone(1, 5, OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("addSeatsToSeatedZone",
+                        e -> e.addSeatsToSeatedZone(2, List.of(new Seat("B2", 1, 0)), OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("removeSeatsFromSeatedZone",
+                        e -> e.removeSeatsFromSeatedZone(2, List.of("B1"), OTHER_COMPANY_ID)));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("layoutEditsByAnotherCompany")
+    void GivenAnotherCompany_WhenItEditsTheLayout_ThenUnauthorizedAndTheLayoutIsUnchanged(Consumer<Event> edit) {
+        StandingZone standing = track(new StandingZone(1, "General", 100, 50));
+        SeatedZone seated = track(new SeatedZone(2, "Balcony", 80, List.of(new Seat("B1", 0, 0))));
+        Event e = createEventWithZones(List.of(standing, seated));
+
+        assertThrows(UnauthorizedActionException.class, () -> edit.accept(e));
+
+        assertEquals(List.of(1, 2), zoneIds(e));
+        assertEquals(100, standing.getCapacity());
+        assertEquals(1, seated.getCapacity());
+    }
+
+    // ---- rating bounds (#189): a finite value in [0, 5] ----
+
+    @ParameterizedTest(name = "rating={0}")
+    @ValueSource(doubles = {0.0, 5.0})
+    void GivenRatingAtEitherBound_WhenConstructed_ThenAccepted(double rating) {
+        Event e = track(new Event(EVENT_ID, "Concert", rating, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
+                EventStatus.SCHEDULED, new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100))),
+                List.of(FIXED_SHOW), JERUSALEM, null, new DiscountPolicy(0)));
+
+        assertEquals(rating, e.getRating());
+    }
+
+    @ParameterizedTest(name = "rating={0}")
+    @ValueSource(doubles = {-0.1, 5.1, Double.NaN, Double.POSITIVE_INFINITY})
+    void GivenRatingOutsideZeroToFive_WhenConstructed_ThenThrowsIllegalState(double rating) {
+        assertThrows(IllegalStateException.class, () -> new Event(EVENT_ID, "Concert", rating, ARTISTS,
+                EventCategory.CONCERT, COMPANY_ID, EventStatus.SCHEDULED,
+                new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100))),
+                List.of(FIXED_SHOW), JERUSALEM, null, new DiscountPolicy(0)));
     }
 
     // Construction-time invariant enforcement (issue #303): a freshly-constructed
@@ -183,8 +265,8 @@ class EventTest extends BaseDomainTest {
         assertEquals(1, z.getAvailableAmount());
     }
 
-    // UC-19 — editDetails applies all five updatable fields while DRAFT or
-    // SCHEDULED.
+    // UC-19 — editDetails applies its updatable fields while DRAFT or SCHEDULED. The time zone is left
+    // null here: GivenNewTimeZone_WhenEditDetails_ThenTheEventIsInThatZone covers it.
     @Test
     void GivenScheduledEvent_WhenEditDetailsAllFields_ThenAllApplied() {
         ShowDate newShow = new ShowDate(JERUSALEM_1930_WALL_TIME.plusDays(40),
@@ -217,8 +299,13 @@ class EventTest extends BaseDomainTest {
     // schedule alone).
     @Test
     void GivenEmptyShowDates_WhenEditDetails_ThenThrowsIllegalArgument() {
+        List<ShowDate> before = event.getShowDates();
+
         assertThrows(IllegalArgumentException.class, () -> event.editDetails(
-                null, null, null, null, null, List.of(), JERUSALEM_1930));
+                "Renamed", null, null, null, null, List.of(), JERUSALEM_1930));
+
+        assertEquals(before, event.getShowDates());
+        assertEquals("Concert", event.getName(), "nothing in a refused edit is applied");
     }
 
     @Test
@@ -299,28 +386,17 @@ class EventTest extends BaseDomainTest {
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A2"));
     }
 
+    // Reservation does not consult a purchase policy; the policy is checked by validateEffectivePolicy.
     @Test
-    void GivenPurchasePolicyRejectsQuantity_WhenReserveInventory_ThenThrowsException() {
+    void GivenScheduledEvent_WhenReserveInventory_ThenRefusedAsNotOnSaleAndNothingReserved() {
         StandingZone standingZone = track(new StandingZone(1, "General Admission", 10, 50.0));
+        Event event = createEventWithZones(List.of(standingZone));
 
-        PurchasePolicy rejectingPolicy = new NoPurchasePolicy();
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> event.reserveInventory(1, InventorySelection.standing(1)));
 
-        Event event = track(new Event(
-                EVENT_ID,
-                "Concert",
-                4.5,
-                ARTISTS,
-                EventCategory.CONCERT,
-                COMPANY_ID,
-                EventStatus.SCHEDULED,
-                new VenueMap(1, LOCATION, List.of(standingZone)),
-                List.of(new ShowDate(JERUSALEM_1930_WALL_TIME.plusDays(15), JERUSALEM_1930_WALL_TIME.plusDays(15).plusHours(2))),
-                ZoneId.of("Asia/Jerusalem"),
-                rejectingPolicy,
-                noDiscountPolicy()));
-
-        assertThrows(IllegalStateException.class, () -> event.reserveInventory(1, InventorySelection.standing(1)));
-
+        assertEquals("Cannot reserve tickets for an event that is not on sale", refused.getMessage());
+        assertEquals(EventStatus.SCHEDULED, event.getStatus());
         assertEquals(10, standingZone.getAvailableAmount());
         assertEquals(0, standingZone.getReservedAmount());
     }
@@ -372,18 +448,37 @@ class EventTest extends BaseDomainTest {
         assertEquals("VIP", event.getVenueMap().getZone(2).getName());
     }
 
+    // Only a DRAFT or SCHEDULED event's zones may be removed, and only an ON_SALE one takes reservations, so
+    // the zone is reserved on directly: the status guard would otherwise refuse first (#189).
     @Test
-    void GivenReservedInventoryInZone_WhenRemoveZone_ThenThrowsException() {
-        StandingZone zone = track(new StandingZone(1, "General", 100, 50));
-        Event event = createEventWithZones(List.of(zone));
+    void GivenAScheduledEventWhoseZoneHoldsAPlace_WhenRemoveThatZone_ThenRefusedAndTheZoneStays() {
+        StandingZone held = track(new StandingZone(1, "General", 100, 50));
+        StandingZone other = track(new StandingZone(2, "VIP", 20, 150));
+        Event event = createEventWithZones(List.of(held, other));
+        held.reserve(InventorySelection.standing(5, "order-1"));
 
-        event.transitionToOnSale();
-        event.reserveInventory(1, InventorySelection.standing(5));
+        IllegalStateException refused =
+                assertThrows(IllegalStateException.class, () -> event.removeInventoryZone(1, COMPANY_ID));
 
-        assertThrows(IllegalStateException.class, () -> event.removeInventoryZone(1, COMPANY_ID));
+        assertEquals("Cannot remove zone 1 because it has reserved or sold inventory", refused.getMessage());
+        assertEquals(List.of(1, 2), zoneIds(event));
+        assertEquals(5, held.getReservedAmount());
+    }
 
-        assertEquals(100, zone.getCapacity());
-        assertEquals(5, zone.getReservedAmount());
+    @Test
+    void GivenAScheduledEventWhoseZoneHasSoldAPlace_WhenRemoveThatZone_ThenRefusedAndTheZoneStays() {
+        StandingZone sold = track(new StandingZone(1, "General", 100, 50));
+        StandingZone other = track(new StandingZone(2, "VIP", 20, 150));
+        Event event = createEventWithZones(List.of(sold, other));
+        sold.reserve(InventorySelection.standing(1, "order-1"));
+        sold.confirmSale(InventorySelection.standing(1, "order-1"));
+
+        IllegalStateException refused =
+                assertThrows(IllegalStateException.class, () -> event.removeInventoryZone(1, COMPANY_ID));
+
+        assertEquals("Cannot remove zone 1 because it has reserved or sold inventory", refused.getMessage());
+        assertEquals(List.of(1, 2), zoneIds(event));
+        assertEquals(1, sold.getSoldAmount());
     }
 
     @Test
@@ -437,7 +532,10 @@ class EventTest extends BaseDomainTest {
         StandingZone existingZone = track(new StandingZone(1, "General", 100, 50));
         Event event = createEventWithZones(List.of(existingZone));
 
-        assertThrows(RuntimeException.class, () -> event.addStandingZone("Wrong Company Zone", 50, 90.0, 999));
+        assertThrows(UnauthorizedActionException.class,
+                () -> event.addStandingZone("Wrong Company Zone", 50, 90.0, 999));
+
+        assertEquals(List.of(1), zoneIds(event));
     }
 
     @Test
@@ -804,6 +902,43 @@ class EventTest extends BaseDomainTest {
         assertThrows(IllegalStateException.class, event::transitionToCompleted);
     }
 
+    // -- no way back out of a terminal state, and no way back to SCHEDULED once on sale --
+
+    // A cancelled event has been refunded; it must not go on sale again.
+    @Test
+    void GivenCanceledEvent_WhenTransitionToOnSale_ThenRefusedAndStaysCanceled() {
+        Event event = createEventWithZones(List.of(track(new StandingZone(1, "General", 5, 50.0))));
+        event.transitionToCanceled("called off");
+
+        assertThrows(InvalidStateTransitionException.class, event::transitionToOnSale);
+
+        assertEquals(EventStatus.CANCELED, event.getStatus());
+    }
+
+    @Test
+    void GivenCompletedEvent_WhenTransitionToCanceled_ThenRefusedAndStaysCompleted() {
+        Event event = createEventWithZones(List.of(track(new StandingZone(1, "General", 5, 50.0))));
+        event.transitionToOnSale();
+        event.transitionToCompleted();
+
+        IllegalStateException refused =
+                assertThrows(IllegalStateException.class, () -> event.transitionToCanceled("too late"));
+
+        assertEquals("Cannot cancel a completed event", refused.getMessage());
+        assertEquals(EventStatus.COMPLETED, event.getStatus());
+    }
+
+    // Back in SCHEDULED its layout could be edited again while tickets are held or sold.
+    @Test
+    void GivenOnSaleEvent_WhenTransitionToScheduled_ThenRefusedAndStaysOnSale() {
+        Event event = createEventWithZones(List.of(track(new StandingZone(1, "General", 5, 50.0))));
+        event.transitionToOnSale();
+
+        assertThrows(InvalidStateTransitionException.class, event::transitionToScheduled);
+
+        assertEquals(EventStatus.ON_SALE, event.getStatus());
+    }
+
     // test helper functions:
 
     private Event eventWithText(String name, String description, List<String> artists) {
@@ -844,18 +979,7 @@ class EventTest extends BaseDomainTest {
     }
 
     private DiscountPolicy noDiscountPolicy() {
-        return new DiscountPolicy(0) {
-            @Override
-            public double calculate(int quantity, Double priceAtOneTicketReservation, LocalDateTime now) {
-                return quantity * priceAtOneTicketReservation;
-            }
-
-            @Override
-            public double calculatePriceforoneticket(int quantity, Double priceAtOneTicketReservation,
-                    LocalDateTime now) {
-                return priceAtOneTicketReservation;
-            }
-        };
+        return new DiscountPolicy(0);
     }
 
     // -- DRAFT -> SCHEDULED transition (issue #305) -----------------------
@@ -1063,6 +1187,34 @@ class EventTest extends BaseDomainTest {
         assertTrue(message.contains("at most " + GROUP_LIMIT + " tickets"),
                 "the OR's other broken side must be named: " + message);
         assertFalse(message.contains(AGE_RULE), "the age rule the buyer met must not be named: " + message);
+    }
+
+    @Test
+    void GivenAnAdultWithinTheLimitOfBothPolicies_WhenValidateEffectivePolicy_ThenAccepted() {
+        Event limited = eventWithPolicy(new MaxTicketsPurchasePolicy(TICKET_LIMIT));
+        PurchaseContext checkout = new PurchaseContext(1, 30, limited.getId(), limited.getCompanyId(), TICKET_LIMIT,
+                PurchaseStage.CHECKOUT);
+
+        assertDoesNotThrow(() -> limited.validateEffectivePolicy(new AgePurchasePolicy(MINIMUM_AGE), checkout));
+    }
+
+    // A company with no policy restricts nothing, so the event's own policy alone decides.
+    @Test
+    void GivenNoCompanyPolicy_WhenValidateEffectivePolicyOverTheEventLimit_ThenTheEventLimitIsNamed() {
+        Event limited = eventWithPolicy(new MaxTicketsPurchasePolicy(TICKET_LIMIT));
+
+        String message = effectivePolicyRefusal(limited, null, 30, TICKET_LIMIT + 1);
+
+        assertTrue(message.contains(TICKET_LIMIT_RULE), "the broken ticket limit must be named: " + message);
+    }
+
+    @Test
+    void GivenNoCompanyPolicy_WhenValidateEffectivePolicyWithinTheEventLimit_ThenAccepted() {
+        Event limited = eventWithPolicy(new MaxTicketsPurchasePolicy(TICKET_LIMIT));
+        PurchaseContext checkout = new PurchaseContext(1, 30, limited.getId(), limited.getCompanyId(), TICKET_LIMIT,
+                PurchaseStage.CHECKOUT);
+
+        assertDoesNotThrow(() -> limited.validateEffectivePolicy(null, checkout));
     }
 
     private Event eventWithPolicy(PurchasePolicy eventPolicy) {

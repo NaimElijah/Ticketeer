@@ -12,6 +12,7 @@ import com.ticketing.system.notifications.adapter.in.event.NotificationEventList
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.ticketing.system.notifications.application.port.in.OutreachRecipient;
 import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
+import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.OutreachSentNotice;
 
 /**
@@ -30,6 +31,14 @@ class NotificationEventListenerTest {
         listener.on(new ManagerAppointmentPendingNotice(7, 100, "Acme"));
 
         verify(notificationService).notifyManagerAppointmentPending(7, 100, "Acme");
+        verifyNoMoreInteractions(notificationService);
+    }
+
+    @Test
+    void GivenManagerRevokedNotice_WhenOn_ThenTheRevokedMemberIsNotified() {
+        listener.on(new ManagerRevokedNotice(7, 100, "Acme"));
+
+        verify(notificationService).notifyManagerRevoked(7, 100, "Acme");
         verifyNoMoreInteractions(notificationService);
     }
 

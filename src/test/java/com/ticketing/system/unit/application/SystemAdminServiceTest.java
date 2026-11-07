@@ -51,7 +51,6 @@ import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
-import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -136,7 +135,10 @@ class SystemAdminServiceTest {
     void GivenAllServicesReachableAndAdminExists_WhenInitializePlatform_ThenSucceeds() {
         when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
-        assertDoesNotThrow(svc::initializePlatform);
+
+        svc.initializePlatform();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -184,7 +186,10 @@ class SystemAdminServiceTest {
         doThrow(new RuntimeException("duplicate key value violates unique constraint \"admins_pkey\""))
                 .when(adminRepository).save(any(Admin.class));
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
-        assertDoesNotThrow(svc::initializePlatform);
+
+        svc.initializePlatform();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -204,12 +209,23 @@ class SystemAdminServiceTest {
         assertThrows(SystemIntegrityViolationException.class, svc::initializePlatform);
     }
 
+    // A second init is a no-op: no second probe, admin save or integrity scan.
     @Test
     void GivenAlreadyInitialized_WhenInitializePlatformAgain_ThenDoesNotThrow() {
         when(adminRepository.existsAny()).thenReturn(true);
-        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
         svc.initializePlatform();
+        clearInvocations(gateway, issuer, adminRepository, integrityVerifier);
+
         assertDoesNotThrow(svc::initializePlatform);
+
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+        verify(adminRepository, never()).save(any(Admin.class));
+        verify(integrityVerifier, never()).verify();
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     // --- UC-32: market lifecycle (open / close / view) ---
@@ -392,11 +408,17 @@ class SystemAdminServiceTest {
         assertEquals("CLOSED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
+    // An admin exists, so the self-heal gets as far as the WSEP probe and fails there, not on the admin check.
     @Test
     void GivenNoReachableServices_WhenEnsureMarketOpen_ThenNeverThrowsAndStaysClosed() {
+        when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(), List.of());
-        assertDoesNotThrow(svc::ensureMarketOpen);            // self-heal must never throw out to its caller
+
+        boolean probed = svc.ensureMarketOpen();               // self-heal must never throw out to its caller
+
+        assertTrue(probed, "the self-heal must have reached the WSEP probe");
         assertFalse(svc.isMarketOpen());
+        assertEquals("UNINITIALIZED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -432,13 +454,10 @@ class SystemAdminServiceTest {
         ReceiptLine line1 = new ReceiptLine(1, 25.0, 25, 1, null, PURCHASED_AT);
         OrderReceipt receipt = OrderReceipt.forMember(11, 1, price, List.of(line1), PURCHASED_AT);
         Ticket ticket = new Ticket(1, 1, 11, null, price, ticketId, "BARCODE");
-        Event event = mock(Event.class);
-        when(event.getName()).thenReturn("Rock Night");
 
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(1, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt));
         when(ticketRepository.findByOrderReceiptId(receipt.getId())).thenReturn(List.of(ticket));
-        when(eventRepository.findById(1)).thenReturn(event);
 
         List<PurchaseHistoryDTO> result = service.viewGlobalHistory(ADMIN_TOKEN, filters);
 
@@ -460,29 +479,28 @@ class SystemAdminServiceTest {
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", PURCHASED_AT);
         OrderReceipt receipt1 = OrderReceipt.forMember(11, 1, 50.0, List.of(line1), PURCHASED_AT);
         OrderReceipt receipt2 = OrderReceipt.forMember(12, 2, 75.0, List.of(line2), PURCHASED_AT);
-        Event event = mock(Event.class);
-        when(event.getName()).thenReturn("Jazz Night");
 
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt1, receipt2));
         when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
-        when(eventRepository.findById(anyInt())).thenReturn(event);
 
         List<PurchaseHistoryDTO> result = service.viewGlobalHistory(ADMIN_TOKEN, filters);
 
         assertEquals(1, result.size());
-        assertEquals(2, result.get(0).records().size());
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = result.get(0).records();
+        assertEquals(List.of(11, 12), records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(List.of(50.0, 75.0), records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::totalPaid).toList());
     }
 
     @Test
-    void GivenFilters_WhenViewGlobalHistory_ThenFiltersPassedToRepository() {
+    void GivenCompanyAndEventFilters_WhenViewGlobalHistory_ThenOnlyTheCompanysRequestedEventsReachTheRepository() {
+        // Event 99 is not one of company 3's events, so the intersection drops it.
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(
-                7, 3, List.of(10, 11),
+                7, 3, List.of(10, 99),
                 LocalDate.of(2026, 1, 1),
                 LocalDate.of(2026, 12, 31));
-        // normalizeGlobalHistoryFilters resolves companyId → null and intersects eventIds
         GlobalHistoryFiltersDTO expectedFilters = new GlobalHistoryFiltersDTO(
-                7, null, List.of(10, 11),
+                7, null, List.of(10),
                 LocalDate.of(2026, 1, 1),
                 LocalDate.of(2026, 12, 31));
         when(eventRepository.findIdsByCompany(3)).thenReturn(List.of(10, 11));
@@ -493,25 +511,22 @@ class SystemAdminServiceTest {
         verify(orderReceiptRepository).findGlobal(expectedFilters);
     }
 
+    // An unfiltered record shows what the buyer paid for the order, which need not be the sum of its lines
+    // (a discount, for one): 60 here against lines of 50 and 25.
     @Test
-    void GivenReceiptWithMultipleTickets_WhenViewGlobalHistory_ThenTotalPaidIsSumOfTicketPrices() {
+    void GivenReceiptWithMultipleTickets_WhenViewGlobalHistory_ThenTotalPaidIsTheReceiptTotal() {
         ReceiptLine line1 = new ReceiptLine(1, 50.0, 25, 1, null, PURCHASED_AT);
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", PURCHASED_AT);
-        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 75.0, List.of(line1, line2), PURCHASED_AT);
-        Ticket t1 = new Ticket(1, 1, 11, null, 30.0, 1, "B1");
-        Ticket t2 = new Ticket(1, 1, 11, null, 45.0, 2, "B2");
-        Event event = mock(Event.class);
-        when(event.getName()).thenReturn("Pop Show");
+        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 60.0, List.of(line1, line2), PURCHASED_AT);
 
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt));
-        when(ticketRepository.findByOrderReceiptId(1)).thenReturn(List.of(t1, t2));
-        when(eventRepository.findById(anyInt())).thenReturn(event);
+        when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
 
         List<PurchaseHistoryDTO> result = service.viewGlobalHistory(ADMIN_TOKEN, filters);
 
         PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
-        assertEquals(75.0, record.totalPaid());
+        assertEquals(60.0, record.totalPaid());
         assertEquals(2, record.tickets().size());
     }
 
@@ -535,7 +550,136 @@ class SystemAdminServiceTest {
                 service.viewGlobalHistory(ADMIN_TOKEN, filters).get(0).records().get(0);
 
         assertEquals(1, record.tickets().size());
-        assertEquals(2, record.transactions().size());
+        assertEquals(100.0, record.totalPaid(), "a filtered record totals only the selected event's lines");
+        assertEquals(List.of("42", "ISS-42"), record.transactions().stream()
+                .map(PurchaseHistoryDTO.TransactionRecordDTO::externalTransactionId).toList(),
+                "the whole order's payment and issuance, though one line is filtered out");
+    }
+
+    // ---- governance failure paths with no test before #189 ----
+
+    @Test
+    void GivenFromDateAfterToDate_WhenViewGlobalHistory_ThenIllegalArgumentAndNothingQueried() {
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null,
+                LocalDate.of(2026, 2, 2), LocalDate.of(2026, 2, 1));
+
+        IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                () -> service.viewGlobalHistory(ADMIN_TOKEN, filters));
+
+        assertEquals("fromDate must be before or equal to toDate", refused.getMessage());
+        verify(orderReceiptRepository, never()).findGlobal(any());
+    }
+
+    @Test
+    void GivenFromDateEqualToToDate_WhenViewGlobalHistory_ThenThatDayIsQueried() {
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null,
+                LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 1));
+        when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of());
+
+        service.viewGlobalHistory(ADMIN_TOKEN, filters);
+
+        verify(orderReceiptRepository).findGlobal(filters);
+    }
+
+    @Test
+    void GivenCompanyFilterWithoutEventIds_WhenViewGlobalHistory_ThenAllTheCompanysEventsAreQueried() {
+        when(eventRepository.findIdsByCompany(3)).thenReturn(List.of(10, 11));
+        GlobalHistoryFiltersDTO expected = new GlobalHistoryFiltersDTO(null, null, List.of(10, 11), null, null);
+        when(orderReceiptRepository.findGlobal(expected)).thenReturn(List.of());
+
+        service.viewGlobalHistory(ADMIN_TOKEN, new GlobalHistoryFiltersDTO(null, 3, null, null, null));
+
+        verify(orderReceiptRepository).findGlobal(expected);
+    }
+
+    // Requested events that are none of the company's leave an empty event filter, which matches nothing. Read
+    // as no event filter at all, it would list every company's orders.
+    @Test
+    void GivenCompanyFilterWithNoMatchingEvent_WhenViewGlobalHistory_ThenNoRecords() {
+        ReceiptLine otherCompanysLine = new ReceiptLine(1, 100.0, 99, 1, null, PURCHASED_AT);
+        OrderReceipt otherCompanysOrder = OrderReceipt.forMember(11, 1, 100.0, List.of(otherCompanysLine),
+                PURCHASED_AT);
+        when(eventRepository.findIdsByCompany(3)).thenReturn(List.of(10, 11));
+        GlobalHistoryFiltersDTO noEvent = new GlobalHistoryFiltersDTO(null, null, List.of(), null, null);
+        when(orderReceiptRepository.findGlobal(noEvent)).thenReturn(List.of());
+        when(orderReceiptRepository.findGlobal(new GlobalHistoryFiltersDTO(null, null, null, null, null)))
+                .thenReturn(List.of(otherCompanysOrder));
+
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = service.viewGlobalHistory(ADMIN_TOKEN,
+                new GlobalHistoryFiltersDTO(null, 3, List.of(99), null, null)).get(0).records();
+
+        assertEquals(List.of(), records);
+        verify(orderReceiptRepository).findGlobal(noEvent);
+    }
+
+    // A receipt the query returns for one of its lines can still hold no line of the selected events once
+    // they are mapped, and then it is no record of theirs.
+    @Test
+    void GivenAReceiptWithNoLineOfTheSelectedEvent_WhenViewGlobalHistory_ThenItIsLeftOut() {
+        ReceiptLine selected = new ReceiptLine(1, 100.0, 25, 1, null, PURCHASED_AT);
+        ReceiptLine other = new ReceiptLine(2, 200.0, 3, 1, "A2", PURCHASED_AT);
+        OrderReceipt withTheEvent = OrderReceipt.forMember(11, 1, 100.0, List.of(selected), PURCHASED_AT);
+        OrderReceipt withoutIt = OrderReceipt.forMember(12, 2, 200.0, List.of(other), PURCHASED_AT);
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, List.of(25), null, null);
+        when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(withTheEvent, withoutIt));
+        when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
+
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = service.viewGlobalHistory(ADMIN_TOKEN, filters).get(0).records();
+
+        assertEquals(List.of(11), records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+    }
+
+    @Test
+    void GivenCorruptStateFoundAtOpen_WhenOpenMarket_ThenIntegrityViolationAndStaysReady() {
+        SystemAdminService svc = readyService();
+        doThrow(new SystemIntegrityViolationException("active company 7 has no owner")).when(integrityVerifier).verify();
+
+        assertThrowsExactly(SystemIntegrityViolationException.class, () -> svc.openMarket(openRequest()));
+
+        assertFalse(svc.isMarketOpen());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
+    }
+
+    // One reachable service of each kind is the quorum (I.1.2, I.1.3), whatever the others answer.
+    @Test
+    void GivenTwoPaymentGatewaysOneDown_WhenInitializePlatform_ThenReadyAndPaymentReportedReachable() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway down = mock(PaymentGateway.class);
+        when(down.verifyConnection()).thenReturn(false);
+        SystemAdminService svc = serviceWith(List.of(down, reachablePayment()), List.of(reachableIssuer()));
+
+        svc.initializePlatform();
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+        assertEquals("READY", state.currentStatus());
+        assertTrue(state.paymentGatewayHealthy());
+    }
+
+    // A probe that throws counts as unreachable rather than failing the init.
+    @Test
+    void GivenAPaymentProbeThatThrowsBesideAReachableOne_WhenInitializePlatform_ThenReady() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway throwing = mock(PaymentGateway.class);
+        when(throwing.verifyConnection()).thenThrow(new IllegalStateException("handshake timed out"));
+        SystemAdminService svc = serviceWith(List.of(throwing, reachablePayment()), List.of(reachableIssuer()));
+
+        svc.initializePlatform();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
+    }
+
+    @Test
+    void GivenOnlyAPaymentProbeThatThrows_WhenInitializePlatform_ThenNoReachablePaymentServiceAndUninitialized() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway throwing = mock(PaymentGateway.class);
+        when(throwing.verifyConnection()).thenThrow(new IllegalStateException("handshake timed out"));
+        SystemAdminService svc = serviceWith(List.of(throwing), List.of(reachableIssuer()));
+
+        ExternalServiceUnavailableException refused = assertThrowsExactly(ExternalServiceUnavailableException.class,
+                svc::initializePlatform);
+
+        assertEquals("Required external service unavailable: no reachable payment service", refused.getMessage());
+        assertEquals("UNINITIALIZED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
 

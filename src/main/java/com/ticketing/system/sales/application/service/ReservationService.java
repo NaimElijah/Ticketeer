@@ -414,11 +414,8 @@ public class ReservationService {
             throw new IllegalArgumentException("Missing authentication token");
         }
 
-        if (!iSessionManager.validateToken(token)) {
-            log.warn("Request rejected: invalid or expired token");
-            throw new IllegalStateException("Invalid or expired authentication token");
-        }
-
+        // extractUserId throws for an invalid, revoked or expired token, or one not a member's, so no separate
+        // validateToken call is needed.
         int userId = iSessionManager.extractUserId(token);
 
         if (userId <= 0) {

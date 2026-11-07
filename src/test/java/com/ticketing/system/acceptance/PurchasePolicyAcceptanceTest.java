@@ -9,6 +9,7 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
@@ -169,10 +170,16 @@ class PurchasePolicyAcceptanceTest {
                 eventManagementService.getEventPurchasePolicy("bad-token", companyId, eventId));
     }
 
+    // The company is looked up before membership or the event, so a company that does not exist is refused
+    // as such. EventManagementServiceTest covers the refusal of another company's event.
     @Test
-    void GivenWrongCompanyId_WhenGetEventPolicy_ThenThrows() {
-        assertThrows(RuntimeException.class, () ->
-                eventManagementService.getEventPurchasePolicy(token, companyId + 9999, eventId));
+    void GivenUnknownCompanyId_WhenGetEventPolicy_ThenCompanyNotFound() {
+        int unknownCompanyId = companyId + 9999;
+
+        CompanyNotFoundException refused = assertThrowsExactly(CompanyNotFoundException.class, () ->
+                eventManagementService.getEventPurchasePolicy(token, unknownCompanyId, eventId));
+
+        assertEquals("ProductionCompany not found: " + unknownCompanyId, refused.getMessage());
     }
 
 

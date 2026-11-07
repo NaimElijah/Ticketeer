@@ -2,6 +2,7 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import org.springframework.context.ApplicationEventPublisher;
@@ -51,6 +53,7 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -90,6 +93,7 @@ import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDtoMapper;
 import com.ticketing.system.testutil.DefaultLocale;
 
 class EventManagementServiceTest {
@@ -422,6 +426,234 @@ class EventManagementServiceTest {
                 assertEquals(EventStatus.DRAFT, draftEvent.getStatus());
         }
 
+        // -- deleteEvent: only a cancelled event with no sales history, by a MANAGE_INVENTORY member --
+
+        private void givenOwnerSignedIn() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+        }
+
+        private void givenOwnerSignedInAndEventStored() {
+                givenOwnerSignedIn();
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+        }
+
+        @Test
+        void GivenCanceledEventWithoutSalesHistory_WhenDeleteEvent_ThenDeletedAndUnlocked() {
+                givenOwnerSignedInAndEventStored();
+                event.transitionToCanceled("cancelled");
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(false);
+
+                eventService.deleteEvent(OWNER_TOKEN, EVENT_ID);
+
+                verify(mockEventRepo).delete(EVENT_ID);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // Receipts and tickets reference the event by id with no cascade, so deleting it would orphan them.
+        @Test
+        void GivenCanceledEventWithSalesHistory_WhenDeleteEvent_ThenRefusedAndNotDeleted() {
+                givenOwnerSignedInAndEventStored();
+                event.transitionToCanceled("cancelled");
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(true);
+
+                BusinessRuleViolationException refused = assertThrowsExactly(BusinessRuleViolationException.class,
+                                () -> eventService.deleteEvent(OWNER_TOKEN, EVENT_ID));
+
+                assertEquals("Can't delete an event with sales history", refused.getMessage());
+                verify(mockEventRepo, never()).delete(anyInt());
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        @Test
+        void GivenScheduledEvent_WhenDeleteEvent_ThenInvalidStateTransitionAndNotDeleted() {
+                givenOwnerSignedInAndEventStored();
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(false);
+
+                InvalidStateTransitionException refused = assertThrowsExactly(InvalidStateTransitionException.class,
+                                () -> eventService.deleteEvent(OWNER_TOKEN, EVENT_ID));
+
+                assertEquals("Only CANCELED events can be deleted", refused.getMessage());
+                assertEquals(EventStatus.SCHEDULED, event.getStatus());
+                verify(mockEventRepo, never()).delete(anyInt());
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        @Test
+        void GivenManagerWithoutManageInventory_WhenDeleteEvent_ThenUnauthorizedAndNotDeleted() {
+                when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
+                when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                event.transitionToCanceled("cancelled");
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(false);
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.deleteEvent(MANAGER_TOKEN, EVENT_ID));
+
+                assertEquals("Not authorized to perform action: Missing permission: MANAGE_INVENTORY",
+                                refused.getMessage());
+                verify(mockEventRepo, never()).delete(anyInt());
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // -- an owner of one company acting on another company's event, naming their own company --
+        // Each passes the permission check on the caller's own company, so only the event-ownership check
+        // stands between them and the other company's event.
+
+        private static final int OTHER_COMPANY_ID = 200;
+        private static final int OTHER_EVENT_ID = 20;
+        private static final String NOT_THIS_COMPANYS_EVENT =
+                        "Not authorized to perform action: act on an event that does not belong to this company";
+
+        private Event storedEventOfAnotherCompany() {
+                Event other = new Event(OTHER_EVENT_ID, "Other company's concert", 4.0, List.of("Artist2"),
+                                EventCategory.CONCERT, OTHER_COMPANY_ID, EventStatus.SCHEDULED,
+                                new VenueMap(2, LOCATION, List.of(new StandingZone(ZONE_ID, "Floor", 10, 80))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(12), NOW_UTC.plusDays(12).plusHours(2))),
+                                JERUSALEM, new AgePurchasePolicy(18), new DiscountPolicy(0));
+                givenOwnerSignedIn();
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.findById(OTHER_EVENT_ID)).thenReturn(other);
+                return other;
+        }
+
+        @Test
+        void GivenEventOfAnotherCompany_WhenSetEventPolicies_ThenUnauthorizedAndThePolicyUnchanged() {
+                Event other = storedEventOfAnotherCompany();
+                PurchasePolicyDTO replacement = PurchasePolicyDtoMapper.toDto(new MaxTicketsPurchasePolicy(2));
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.setEventPolicies(OWNER_TOKEN,
+                                                new EventPolicyConfigDTO(COMPANY_ID, OTHER_EVENT_ID, replacement)));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+                assertEquals(new AgePurchasePolicy(18), other.getPurchasePolicy());
+                verify(mockEventRepo, never()).save(any());
+                verify(mockEventRepo).unlock(OTHER_EVENT_ID);
+        }
+
+        @Test
+        void GivenEventOfAnotherCompany_WhenConfigureVenueMap_ThenUnauthorizedAndTheMapUnchanged() {
+                Event other = storedEventOfAnotherCompany();
+                VenueMap mapBefore = other.getVenueMap();
+                VenueMapConfigDTO config = new VenueMapConfigDTO(String.valueOf(OTHER_EVENT_ID), "Taken over", 3, 3,
+                                List.of(standingZone("Replacement", 5)));
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+                assertSame(mapBefore, other.getVenueMap());
+                assertEquals(List.of("Floor"), zoneNames(other));
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        // Event.addStandingZone refuses a foreign company too, but with its own message: the service check
+        // is the one that answers.
+        @Test
+        void GivenEventOfAnotherCompany_WhenAddInventoryZone_ThenUnauthorizedAndNoZoneAdded() {
+                Event other = storedEventOfAnotherCompany();
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.addInventoryZone(OWNER_TOKEN, COMPANY_ID, OTHER_EVENT_ID,
+                                                standingZone("Annexed", 5)));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+                assertEquals(List.of("Floor"), zoneNames(other));
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        @Test
+        void GivenEventOfAnotherCompany_WhenGetEventPurchasePolicy_ThenUnauthorized() {
+                storedEventOfAnotherCompany();
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.getEventPurchasePolicy(OWNER_TOKEN, COMPANY_ID, OTHER_EVENT_ID));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+        }
+
+        private static List<String> zoneNames(Event event) {
+                return event.getVenueMap().getInventoryZones().stream().map(InventoryZone::getName).toList();
+        }
+
+        // -- removing seats from a seated zone, and the manual status change that must not cancel --
+
+        private int ownerAddsSeatedZoneA1ToA4() {
+                givenOwnerSignedIn();
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                int seatedZoneId = eventService.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", 4));
+                clearInvocations(mockEventRepo);
+                return seatedZoneId;
+        }
+
+        private List<String> seatLabelsOf(int zoneId) {
+                return ((SeatedZone) event.getVenueMap().getZone(zoneId)).getSeats().stream()
+                                .map(Seat::getLabel).sorted().toList();
+        }
+
+        @Test
+        void GivenSeatedZone_WhenRemoveSeatsFromSeatedZone_ThenOnlyThoseSeatsAreGoneAndSaved() {
+                int seatedZoneId = ownerAddsSeatedZoneA1ToA4();
+
+                eventService.removeSeatsFromSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                List.of("A2", "A3"));
+
+                assertEquals(List.of("A1", "A4"), seatLabelsOf(seatedZoneId));
+                verify(mockEventRepo).save(event);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // Every label is checked before any seat goes, so one unknown label removes nothing.
+        @Test
+        void GivenAnUnknownSeatLabel_WhenRemoveSeatsFromSeatedZone_ThenRefusedAndNoSeatRemoved() {
+                int seatedZoneId = ownerAddsSeatedZoneA1ToA4();
+
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> eventService.removeSeatsFromSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                                seatedZoneId, List.of("A1", "Z9")));
+
+                assertEquals("Seat not found in zone: Z9", refused.getMessage());
+                assertEquals(List.of("A1", "A2", "A3", "A4"), seatLabelsOf(seatedZoneId));
+                verify(mockEventRepo, never()).save(any());
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        @Test
+        void GivenSeatedZone_WhenRemoveSeatRowFromSeatedZone_ThenTheRowIsGoneAndSaved() {
+                int seatedZoneId = ownerAddsSeatedZoneA1ToA4();
+                eventService.addSeatRowToSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                "B", 1, 3, 0.0, 1.0, 10.0);
+                clearInvocations(mockEventRepo);
+
+                eventService.removeSeatRowFromSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                List.of("B1", "B2", "B3"));
+
+                assertEquals(List.of("A1", "A2", "A3", "A4"), seatLabelsOf(seatedZoneId));
+                verify(mockEventRepo).save(event);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // A cancel must go through cancelEventAndRefund, which hands the refunds to sales; a manual
+        // status change to CANCELED would cancel with no refund at all.
+        @Test
+        void GivenOwner_WhenChangeEventStatusToCanceled_ThenRefusedAndTheEventIsNotCancelled() {
+                givenOwnerSignedInAndEventStored();
+
+                InvalidStateTransitionException refused = assertThrowsExactly(InvalidStateTransitionException.class,
+                                () -> eventService.changeEventStatus(OWNER_TOKEN, EVENT_ID, EventStatus.CANCELED));
+
+                assertEquals("Cannot manually set status to CANCELED", refused.getMessage());
+                assertEquals(EventStatus.SCHEDULED, event.getStatus());
+                verify(mockEventRepo, never()).save(any());
+                verifyNoInteractions(eventPublisher);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
         // new test
         @Test
         void GivenSeatedVenueConfig_WhenConfigureVenueMap_ThenSeatCoordinatesArePreserved() {
@@ -481,6 +713,19 @@ class EventManagementServiceTest {
                 assertEquals(ZoneOffset.UTC, created.timeZone());
         }
 
+        // Business rule 7: an event created without a purchase policy imposes no restriction, and gives no discount.
+        @Test
+        void GivenNewEvent_WhenAddEvent_ThenNoPurchaseRestrictionAndNoDiscount() {
+                stubOwnerCanAddEvents();
+
+                eventService.addEvent(OWNER_TOKEN, creationRequest(NOW_UTC.plusDays(10), ZoneOffset.UTC));
+
+                ArgumentCaptor<Event> saved = ArgumentCaptor.forClass(Event.class);
+                verify(mockEventRepo).save(saved.capture());
+                assertInstanceOf(NoPurchasePolicy.class, saved.getValue().getPurchasePolicy());
+                assertEquals(0.0, saved.getValue().getDiscountPolicy().getDiscountPercentage());
+        }
+
         @Test
         void GivenPastShowInUpdate_WhenEditEventDetails_ThenRejectedAndNotSaved() {
                 stubOwnerCanAddEvents();
@@ -495,9 +740,7 @@ class EventManagementServiceTest {
         }
 
         private void stubOwnerCanAddEvents() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                givenOwnerSignedIn();
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockEventRepo.nextId()).thenReturn(EVENT_ID + 1);
                 when(mockEventRepo.nextVenueMapId()).thenReturn(2);
@@ -546,8 +789,9 @@ class EventManagementServiceTest {
                 assertEquals(LOCATION, result.location());
         }
 
+        // Any active member may read the detail; this manager holds only CONFIGURE_VENUE.
         @Test
-        void GivenManagerWithPermission_WhenGetEventDetail_ThenReturnsDTOSuccessfully() {
+        void GivenAVenueOnlyManager_WhenGetEventDetail_ThenReturnsDTOSuccessfully() {
                 when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
@@ -568,13 +812,14 @@ class EventManagementServiceTest {
                                 () -> eventService.getEventDetail(INVALID_TOKEN, EVENT_ID));
         }
 
+        // The port throws EventNotFoundException for a missing id (EventRepository.findById).
         @Test
-        void GivenEventNotFound_WhenGetEventDetail_ThenThrows() {
+        void GivenEventNotFound_WhenGetEventDetail_ThenEventNotFound() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new RuntimeException("Event not found"));
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class,
+                assertThrowsExactly(EventNotFoundException.class,
                                 () -> eventService.getEventDetail(OWNER_TOKEN, EVENT_ID));
         }
 
@@ -628,6 +873,7 @@ class EventManagementServiceTest {
                                                 null));
 
                 assertEquals("New Concert Name", event.getName());
+                verify(mockEventRepo).save(event);
         }
 
         @Test
@@ -654,6 +900,7 @@ class EventManagementServiceTest {
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "MUSIC", null, null, null));
 
                 assertEquals(EventCategory.MUSIC, event.getCategory());
+                verify(mockEventRepo).save(event);
         }
 
         // Under a Turkish default locale "music".toUpperCase() is "MUS\u0130C", with a dotted capital I,
@@ -671,17 +918,23 @@ class EventManagementServiceTest {
         }
 
         @Test
-        void GivenBothFieldsNull_WhenEditEventDetails_ThenNothingChanges() {
+        void GivenAllFieldsNull_WhenEditEventDetails_ThenNothingChanges() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                String descriptionBefore = event.getDescription();
+                List<ShowDate> showDatesBefore = List.copyOf(event.getShowDates());
 
                 eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, null, null, null, null));
 
                 assertEquals("Concert", event.getName());
+                assertEquals(descriptionBefore, event.getDescription());
                 assertEquals(EventCategory.CONCERT, event.getCategory());
+                assertEquals(LOCATION, event.getVenueMap().getLocation());
+                assertEquals(JERUSALEM, event.getTimeZone());
+                assertEquals(showDatesBefore, event.getShowDates());
         }
 
         @Test
@@ -725,6 +978,7 @@ class EventManagementServiceTest {
                 eventService.changeEventStatus(MANAGE_INVENTORY_TOKEN, EVENT_ID, EventStatus.ON_SALE);
 
                 assertEquals(EventStatus.ON_SALE, event.getStatus());
+                verify(mockEventRepo).save(event);
         }
 
         @Test
@@ -774,13 +1028,15 @@ class EventManagementServiceTest {
         }
 
         @Test
-        void GivenEventNotFound_WhenEditEventDetails_ThenThrows() {
+        void GivenEventNotFound_WhenEditEventDetails_ThenEventNotFoundAndNothingSaved() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new RuntimeException("Event not found"));
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
+                assertThrowsExactly(EventNotFoundException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null, null)));
+                verify(mockEventRepo, never()).save(any());
+                verify(mockEventRepo).unlock(EVENT_ID);
         }
 
         @Test
@@ -1814,6 +2070,7 @@ class EventManagementServiceTest {
                 eventService.setEventPolicies(OWNER_TOKEN, new EventPolicyConfigDTO(COMPANY_ID, EVENT_ID, read));
 
                 assertEquals(stored, event.getPurchasePolicy(), "read as " + read);
+                verify(mockEventRepo).save(event);
         }
 
         @Test
