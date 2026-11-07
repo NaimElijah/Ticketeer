@@ -9,10 +9,14 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.function.Supplier;
 import java.util.List;
+import java.util.Map;
+
+import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -37,6 +41,7 @@ import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
 import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicyJsonConverter;
@@ -65,6 +70,9 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private DataSource dataSource;
 
     @BeforeEach
     void cleanTable() {
@@ -146,6 +154,43 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
         PurchasePolicyJsonConverter converter = new PurchasePolicyJsonConverter();
         assertEquals(converter.convertToDatabaseColumn(either),
                 converter.convertToDatabaseColumn(repository.findById(1).getPurchasePolicy()));
+    }
+
+    // The Jpa adapter needs no lock to delete (the Memory adapter refuses without one, MemoryEventRepositoryTest),
+    // and the delete takes the event's whole owned graph with it. It runs outside the test transaction, so
+    // each call commits and the counts read what the database holds.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenTwoEventsWithSeatedVenues_WhenOneIsDeletedWithoutALock_ThenOnlyItsOwnedRowsAreGone() {
+        repository.save(seatedEvent(1));
+        repository.save(seatedEvent(2));
+
+        repository.delete(1);
+
+        assertEquals(Map.of("events", 1, "venue_maps", 1, "inventory_zones", 2, "seats", 2,
+                        "event_show_dates", 1, "event_artists", 1),
+                rowCounts(), "only event 2's rows stay");
+        assertEquals(List.of(2), repository.findAll().stream().map(Event::getId).toList());
+    }
+
+    private Map<String, Integer> rowCounts() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        return Map.of(
+                "events", jdbc.queryForObject("select count(*) from events", Integer.class),
+                "venue_maps", jdbc.queryForObject("select count(*) from venue_maps", Integer.class),
+                "inventory_zones", jdbc.queryForObject("select count(*) from inventory_zones", Integer.class),
+                "seats", jdbc.queryForObject("select count(*) from seats", Integer.class),
+                "event_show_dates", jdbc.queryForObject("select count(*) from event_show_dates", Integer.class),
+                "event_artists", jdbc.queryForObject("select count(*) from event_artists", Integer.class));
+    }
+
+    private static Event seatedEvent(int id) {
+        VenueMap venue = new VenueMap(id, new Location("Belgium", "Brussels"), List.of(
+                new SeatedZone(1, "Stage", 80.0, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0))),
+                new StandingZone(2, "Floor", 100, 50.0)));
+        return new Event(id, "Show " + id, 4.5, List.of("Artist A"), EventCategory.MUSIC, 7, EventStatus.CANCELED,
+                venue, List.of(new ShowDate(LocalDateTime.of(2099, 6, 1, 18, 0), LocalDateTime.of(2099, 6, 1, 22, 0))),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 
     @Test

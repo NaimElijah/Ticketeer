@@ -151,6 +151,40 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(ZoneId.of("Europe/London"), eventRepo.findById(1).getTimeZone());
     }
 
+    // === delete: a CANCELED event is removed for good ===
+    // Under the event's write lock, which the Memory adapter requires (MemoryEventRepositoryTest) and the
+    // Jpa adapter ignores.
+
+    @Test
+    void GivenTwoSavedEvents_WhenOneIsDeletedUnderItsLock_ThenOnlyThatEventIsGone() {
+        eventRepo.save(buildEvent(1, "Gone", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "Kept", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
+
+        eventRepo.lockForUpdate(1);
+        try {
+            eventRepo.delete(1);
+        } finally {
+            eventRepo.unlock(1);
+        }
+
+        assertThrows(EventNotFoundException.class, () -> eventRepo.findById(1));
+        assertEquals(List.of(2), eventRepo.findAll().stream().map(Event::getId).toList());
+    }
+
+    @Test
+    void GivenNoSuchEvent_WhenDelete_ThenTheStoredEventsStay() {
+        eventRepo.save(buildEvent(1, "Kept", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
+
+        eventRepo.lockForUpdate(999);
+        try {
+            eventRepo.delete(999);
+        } finally {
+            eventRepo.unlock(999);
+        }
+
+        assertEquals(List.of(1), eventRepo.findAll().stream().map(Event::getId).toList());
+    }
+
     // === findByCompanyId ===
 
     @Test
