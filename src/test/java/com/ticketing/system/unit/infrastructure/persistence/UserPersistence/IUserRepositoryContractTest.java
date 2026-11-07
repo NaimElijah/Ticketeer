@@ -68,6 +68,29 @@ abstract class IUserRepositoryContractTest {
         assertFalse(repo.findByEmail("ghost@example.com").isPresent());
     }
 
+    // A null key matches no user, as it matches no admin, company or session: the lookups answer
+    // "none" rather than throw, with a user stored so an adapter that compares each one is exercised.
+    @Test
+    void GivenASavedUser_WhenFindByUsernameNull_ThenReturnsEmpty() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.findByUsername(null).isPresent());
+    }
+
+    @Test
+    void GivenASavedUser_WhenFindByEmailNull_ThenReturnsEmpty() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.findByEmail(null).isPresent());
+    }
+
+    @Test
+    void GivenASavedUser_WhenExistsByUsernameNull_ThenFalse() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.existsByUsername(null));
+    }
+
     @Test
     void GivenARepositoryBeforeAndAfterASave_WhenExistsByUsername_ThenFalseWhenMissingTrueWhenSaved() {
         assertFalse(repo.existsByUsername("alice"));

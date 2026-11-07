@@ -12,13 +12,25 @@ public interface UserRepository extends IRepository<User, Integer> {
     /** @throws com.ticketing.system.shared.exception.UserNotFoundException if no user with that id exists */
     User getUserById(int targetId);
 
-    /** By-username lookup. Used by UC-11 (uniqueness check) and UC-12 (login). */
+    /**
+     * By-username lookup. Used by UC-11 (uniqueness check) and UC-12 (login).
+     *
+     * @return the user holding {@code username}, or empty if none does; empty for a {@code null} username
+     */
     Optional<User> findByUsername(String username);
 
-    /** By-email lookup. Used by UC-11 as a secondary uniqueness check. */
+    /**
+     * By-email lookup. Used by UC-11 as a secondary uniqueness check.
+     *
+     * @return the user holding {@code email}, or empty if none does; empty for a {@code null} email
+     */
     Optional<User> findByEmail(String email);
 
-    /** Fast existence check used during UC-11 registration validation. */
+    /**
+     * Fast existence check used during UC-11 registration validation.
+     *
+     * @return whether a user holds {@code username}; {@code false} for a {@code null} username
+     */
     boolean existsByUsername(String username);
 
     /** All registered users. Backs admin broadcast-to-all-members (messaging II.6.3.2). */
