@@ -2,6 +2,7 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import org.springframework.context.ApplicationEventPublisher;
@@ -699,6 +701,19 @@ class EventManagementServiceTest {
                                 OWNER_TOKEN, creationRequest(LocalDateTime.of(2027, 7, 15, 19, 0), ZoneOffset.UTC));
 
                 assertEquals(ZoneOffset.UTC, created.timeZone());
+        }
+
+        // Business rule 7: an event created without a purchase policy imposes no restriction, and gives no discount.
+        @Test
+        void GivenNewEvent_WhenAddEvent_ThenNoPurchaseRestrictionAndNoDiscount() {
+                stubOwnerCanAddEvents();
+
+                eventService.addEvent(OWNER_TOKEN, creationRequest(NOW_UTC.plusDays(10), ZoneOffset.UTC));
+
+                ArgumentCaptor<Event> saved = ArgumentCaptor.forClass(Event.class);
+                verify(mockEventRepo).save(saved.capture());
+                assertInstanceOf(NoPurchasePolicy.class, saved.getValue().getPurchasePolicy());
+                assertEquals(0.0, saved.getValue().getDiscountPolicy().getDiscountPercentage());
         }
 
         @Test
