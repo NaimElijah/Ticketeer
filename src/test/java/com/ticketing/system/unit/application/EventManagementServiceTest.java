@@ -91,6 +91,7 @@ import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.dto.PurchasePolicyDtoMapper;
 import com.ticketing.system.testutil.DefaultLocale;
 
 class EventManagementServiceTest {
@@ -489,6 +490,79 @@ class EventManagementServiceTest {
                                 refused.getMessage());
                 verify(mockEventRepo, never()).delete(anyInt());
                 verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // -- an owner of one company acting on another company's event, naming their own company --
+        // Each passes the permission check on the caller's own company, so only the event-ownership check
+        // stands between them and the other company's event.
+
+        private static final int OTHER_COMPANY_ID = 200;
+        private static final int OTHER_EVENT_ID = 20;
+        private static final String NOT_THIS_COMPANYS_EVENT =
+                        "Not authorized to perform action: act on an event that does not belong to this company";
+
+        private Event storedEventOfAnotherCompany() {
+                Event other = new Event(OTHER_EVENT_ID, "Other company's concert", 4.0, List.of("Artist2"),
+                                EventCategory.CONCERT, OTHER_COMPANY_ID, EventStatus.SCHEDULED,
+                                new VenueMap(2, LOCATION, List.of(new StandingZone(ZONE_ID, "Floor", 10, 80))),
+                                List.of(new ShowDate(NOW_UTC.plusDays(12), NOW_UTC.plusDays(12).plusHours(2))),
+                                JERUSALEM, new AgePurchasePolicy(18), new DiscountPolicy(0));
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.findById(OTHER_EVENT_ID)).thenReturn(other);
+                return other;
+        }
+
+        @Test
+        void GivenEventOfAnotherCompany_WhenSetEventPolicies_ThenUnauthorizedAndThePolicyUnchanged() {
+                Event other = storedEventOfAnotherCompany();
+                PurchasePolicyDTO replacement = PurchasePolicyDtoMapper.toDto(new MaxTicketsPurchasePolicy(2));
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.setEventPolicies(OWNER_TOKEN,
+                                                new EventPolicyConfigDTO(COMPANY_ID, OTHER_EVENT_ID, replacement)));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+                assertEquals(new AgePurchasePolicy(18), other.getPurchasePolicy());
+                verify(mockEventRepo, never()).save(any());
+                verify(mockEventRepo).unlock(OTHER_EVENT_ID);
+        }
+
+        @Test
+        void GivenEventOfAnotherCompany_WhenConfigureVenueMap_ThenUnauthorizedAndTheMapUnchanged() {
+                Event other = storedEventOfAnotherCompany();
+                VenueMap mapBefore = other.getVenueMap();
+                VenueMapConfigDTO config = new VenueMapConfigDTO(String.valueOf(OTHER_EVENT_ID), "Taken over", 3, 3,
+                                List.of(standingZone("Replacement", 5)));
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+                assertSame(mapBefore, other.getVenueMap());
+                assertEquals(List.of("Floor"), zoneNames(other));
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        // Event.addStandingZone refuses a foreign company too, but with its own message: the service check
+        // is the one that answers.
+        @Test
+        void GivenEventOfAnotherCompany_WhenAddInventoryZone_ThenUnauthorizedAndNoZoneAdded() {
+                Event other = storedEventOfAnotherCompany();
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.addInventoryZone(OWNER_TOKEN, COMPANY_ID, OTHER_EVENT_ID,
+                                                standingZone("Annexed", 5)));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+                assertEquals(List.of("Floor"), zoneNames(other));
+                verify(mockEventRepo, never()).save(any());
+        }
+
+        private static List<String> zoneNames(Event event) {
+                return event.getVenueMap().getInventoryZones().stream().map(InventoryZone::getName).toList();
         }
 
         // new test
