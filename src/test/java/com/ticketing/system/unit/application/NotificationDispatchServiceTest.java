@@ -130,6 +130,27 @@ class NotificationDispatchServiceTest {
         assertEquals("SENT", result.get(1).status());
     }
 
+    // Only the in-memory push adapter exists today, and it always succeeds, so this branch is reachable
+    // only through the port: a refused push leaves the notification pending for the next delivery.
+    @Test
+    void GivenTheFirstOfTwoPushesFails_WhenDeliverPending_ThenItStaysPendingUnsavedAndOnlyTheSecondIsReturned() {
+        int userId = 42;
+        Notification refused = new Notification("notif-1", userId, NotificationType.PURCHASE_CONFIRMED,
+                NotificationStatus.PENDING, "Your purchase has been confirmed", CREATED_AT);
+        Notification pushed = new Notification("notif-2", userId, NotificationType.EVENT_SOLD_OUT,
+                NotificationStatus.PENDING, "An event you're interested in is sold out", CREATED_AT);
+        when(mockRepo.findByRecipientAndStatus(userId, NotificationStatus.PENDING)).thenReturn(List.of(refused, pushed));
+        when(mockPushService.send(userId, refused)).thenReturn(false);
+        when(mockPushService.send(userId, pushed)).thenReturn(true);
+
+        List<NotificationDTO> result = service.deliverPending(userId);
+
+        assertEquals(List.of("notif-2"), result.stream().map(NotificationDTO::notificationId).toList());
+        assertEquals(NotificationStatus.PENDING, refused.getStatus());
+        verify(mockRepo, never()).save(refused);
+        verify(mockRepo).save(pushed);
+    }
+
     /* UC-37: no pending notifications is no-op */
     @Test
     void GivenNoPending_WhenDeliverPending_ThenNoop() {
