@@ -1,89 +1,8 @@
 package com.ticketing.system.unit.presentation;
 
-import com.ticketing.system.sales.config.ReservationHoldProperties;
-import com.ticketing.system.ui.components.company.EditPermissionsDialog;
-import com.ticketing.system.ui.components.kit.LkBadge;
-import com.ticketing.system.ui.components.kit.LkBtn;
-import com.ticketing.system.ui.components.kit.LkCard;
-import com.ticketing.system.ui.components.kit.LkConfirm;
-import com.ticketing.system.ui.components.kit.LkIcon;
-import com.ticketing.system.ui.components.kit.LkSearchPanel;
-import com.ticketing.system.ui.components.kit.LkSideNav;
-import com.ticketing.system.ui.components.kit.LkTextRows;
-import com.ticketing.system.ui.components.venue.VkQuantitySelector;
-import com.ticketing.system.ui.components.venue.VkSeat;
-import com.ticketing.system.ui.components.venue.VkSeatLegend;
-import com.ticketing.system.ui.components.venue.VkSeatedZonePicker;
-import com.ticketing.system.ui.components.venue.VkStandingZone;
-import com.ticketing.system.ui.components.Toasts;
-import com.ticketing.system.ui.layouts.WorkspaceLayout;
-import com.ticketing.system.ui.layouts.MainLayout;
-import com.ticketing.system.ui.support.DisplayTime;
-import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
-import com.ticketing.system.ui.views.admin.AdminComplaintRespondView;
-import com.ticketing.system.ui.views.admin.AdminDashboardView;
-import com.ticketing.system.ui.views.admin.AdminInboxView;
-import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
-import com.ticketing.system.ui.views.admin.GlobalHistoryView;
-import com.ticketing.system.ui.views.admin.OrganizationalTreeView;
-import com.ticketing.system.ui.views.admin.SystemAnalyticsView;
-import com.ticketing.system.ui.views.catalog.BrowseEventsView;
-import com.ticketing.system.ui.views.catalog.EventDetailsView;
-import com.ticketing.system.ui.presenters.admin.AdminDashboardPresenter;
-import com.ticketing.system.ui.presenters.admin.GlobalHistoryPresenter;
-import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
-import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
-import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
-import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
-import com.ticketing.system.ui.session.SessionIdentity;
-import com.ticketing.system.ui.views.company.CompanyInquiryInboxView;
-import com.ticketing.system.ui.views.company.CompanyInquiryRespondView;
-import com.ticketing.system.ui.views.company.EventManagementView;
-import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
-import com.ticketing.system.ui.views.company.ManagerListView;
-import com.ticketing.system.ui.views.company.OwnerDashboardView;
-import com.ticketing.system.ui.views.account.MyAccountView;
-import com.ticketing.system.ui.views.account.MyInvitationsView;
-import com.ticketing.system.ui.views.account.ReceiptView;
-import com.ticketing.system.ui.views.account.SupportInboxView;
-import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
-import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
-import com.ticketing.system.ui.presenters.account.RefundPresenter;
-import com.ticketing.system.ui.views.landing.LandingView;
-import com.ticketing.system.ui.views.messaging.NewInquiryView;
-import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
-import com.ticketing.system.ui.presenters.company.ManagerListPresenter;
-import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
-import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
-import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
-import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
-import com.ticketing.system.ui.presenters.messaging.CompanyInquiryInboxPresenter;
-import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
-import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
-import com.ticketing.system.ui.presenters.landing.LandingPresenter;
-import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
-import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
-import com.ticketing.system.shared.dto.AdminOverviewDTO;
-import com.ticketing.system.shared.dto.CompanyDashboardDTO;
-import com.ticketing.system.shared.dto.MarketStateDTO;
-import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
-import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
-import com.ticketing.system.shared.dto.ConversationDTO;
-import com.ticketing.system.shared.dto.MessageDTO;
-import com.ticketing.system.shared.dto.MyCompanyDTO;
-import com.ticketing.system.shared.persistence.PersistenceProfiles;
-import com.vaadin.flow.dom.Element;
-import com.vaadin.flow.router.Route;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContext;
-import org.springframework.test.context.ActiveProfiles;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static com.ticketing.system.unit.presentation.ViewHarness.find;
+import static com.ticketing.system.unit.presentation.ViewHarness.text;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,60 +11,70 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.reporting.application.service.SalesSummaryCalculator;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO;
+import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.PurchaseRecordDTO;
+import com.ticketing.system.shared.dto.MarketStateDTO;
+import com.ticketing.system.shared.dto.SystemAnalyticsDTO;
+import com.ticketing.system.ui.components.kit.LkSearchPanel;
+import com.ticketing.system.ui.components.kit.LkSideNav;
+import com.ticketing.system.ui.components.kit.LkStatusDot;
+import com.ticketing.system.ui.layouts.WorkspaceLayout;
+import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
+import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
+import com.ticketing.system.ui.presenters.account.RefundPresenter;
+import com.ticketing.system.ui.presenters.admin.GlobalHistoryPresenter;
+import com.ticketing.system.ui.presenters.admin.OrgTreePresenter;
+import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
+import com.ticketing.system.ui.presenters.company.ManagerListPresenter;
+import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayTime;
+import com.ticketing.system.ui.views.account.MyAccountView;
+import com.ticketing.system.ui.views.account.MyInvitationsView;
+import com.ticketing.system.ui.views.admin.AdminDashboardView;
+import com.ticketing.system.ui.views.admin.GlobalHistoryView;
+import com.ticketing.system.ui.views.admin.OrganizationalTreeView;
+import com.ticketing.system.ui.views.admin.SystemAnalyticsView;
+import com.ticketing.system.ui.views.catalog.BrowseEventsView;
+import com.ticketing.system.ui.views.company.ManagerListView;
+import com.vaadin.flow.dom.Element;
+import com.vaadin.flow.router.Route;
+
 /**
- * Smoke tests for the V2 Presentation layer.
+ * Views built without Spring and read for what they show, and the package every view must live in.
  *
- * <p>Lightweight checks — boots the Spring context but does not render any
- * view. Verifies:
- *
- * <ul>
- *   <li>Vaadin Flow classes are on the classpath</li>
- *   <li>{@link MainLayout} and {@link WorkspaceLayout} are well-formed</li>
- *   <li>Representative buyer + owner + platform-admin views construct
- *       without throwing (catches kit-API misuse)</li>
- *   <li>Custom kit components instantiate without throwing</li>
- *   <li>{@link Toasts} utility is reachable</li>
- * </ul>
- *
- * <p>Rendering tests are intentionally out of scope — the V2 spec exempts UI
- * tests ("בדיקות אינן נדרשות עבור ממשק המשתמש"). Business behavior is
- * exercised by the application-layer acceptance tests instead.
+ * <p>Until #189 this class booted a Spring context, for little more than {@link DisplayTime}, which
+ * {@link InboxViewHarness#displayTime()} gives, and most of its tests only asserted that classes load and that
+ * constructors do not throw, which behaviour tests already prove.
  */
-@SpringBootTest
-@ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class VaadinSmokeTest {
 
-    @Autowired
-    private ApplicationContext context;
+    private final DisplayTime displayTime = InboxViewHarness.displayTime();
+    private ViewHarness harness;
 
-    @Autowired
-    private Clock clock;
-
-    @Test
-    void GivenVaadinAutoConfiguration_WhenSpringContextBoots_ThenContextLoads() {
-        // Reaching this method means @SpringBootTest succeeded. If Vaadin's
-        // auto-configuration were broken or the starter were missing, context
-        // load would have thrown.
-        assertNotNull(context, "Spring context did not load");
+    @BeforeEach
+    void setUp() {
+        harness = new ViewHarness();
     }
 
-    @Test
-    void GivenTheTestClasspath_WhenVaadinClassesAreLoadedByName_ThenDoesNotThrow() {
-        assertDoesNotThrow(() -> Class.forName("com.vaadin.flow.spring.SpringServlet"),
-            "Vaadin SpringServlet class not on classpath");
-        assertDoesNotThrow(() -> Class.forName("com.vaadin.flow.server.VaadinService"),
-            "Vaadin VaadinService class not on classpath");
-        assertDoesNotThrow(() -> Class.forName("com.vaadin.flow.component.UI"),
-            "Vaadin UI class not on classpath");
-        assertDoesNotThrow(() -> Class.forName("com.vaadin.flow.component.applayout.AppLayout"),
-            "Vaadin AppLayout class not on classpath (needed by MainLayout / WorkspaceLayout)");
+    @AfterEach
+    void tearDown() {
+        harness.close();
     }
+
+    // ---- the package Vaadin routes ----
 
     @Test
     void GivenBrowseEventsAndAdminDashboardViews_WhenPackageNameRead_ThenTheyLiveUnderTheUiPackage() {
@@ -160,17 +89,7 @@ class VaadinSmokeTest {
             "AdminDashboardView must live under com.ticketing.system.ui");
     }
 
-    @Test
-    void GivenMainAndWorkspaceLayouts_WhenClassesAreReferenced_ThenAreLoadable() {
-        // We can't instantiate the layouts here — they build RouterLinks in
-        // their constructors and RouterLink calls VaadinService.getCurrent()
-        // which is null outside a real UI context. So just verify the
-        // classes load cleanly (proves imports + compilation are fine).
-        // Actual layout rendering is verified by booting the app and
-        // navigating to a route in a browser.
-        assertNotNull(MainLayout.class, "MainLayout class did not load");
-        assertNotNull(WorkspaceLayout.class, "WorkspaceLayout class did not load");
-    }
+    // ---- the workspace drawer ----
 
     @Test
     void GivenTheWorkspaceDrawerItems_WhenTheirRoutesAreRead_ThenTargetsAreNavigableWithoutParameters() throws Exception {
@@ -208,55 +127,7 @@ class VaadinSmokeTest {
         }
     }
 
-    @Test
-    void GivenPresentersFromTheContext_WhenCoreViewsConstructed_ThenDoesNotThrow() {
-        // Spot-check one MainLayout view and one WorkspaceLayout view as a
-        // cheap canary for kit-API breakage. Both now take an injected
-        // presenter, so resolve it from the Spring context.
-        assertDoesNotThrow(
-            () -> new BrowseEventsView(context.getBean(BrowseEventsPresenter.class),
-                context.getBean(SessionIdentity.class), context.getBean(DisplayTime.class)),
-            "BrowseEventsView (root route) failed to construct");
-        assertDoesNotThrow(
-            () -> new GlobalHistoryView(context.getBean(GlobalHistoryPresenter.class), context.getBean(DisplayTime.class)),
-            "GlobalHistoryView (admin route) failed to construct");
-    }
-
-    @Test
-    void GivenABareMockPresenter_WhenEventDetailsViewConstructed_ThenDoesNotThrow() {
-        // Buyer event page wired to a presenter (#272). The constructor only builds the
-        // bodyHolder shell — load + page build happen in beforeEnter — so bare mocks exercise
-        // the construction path (a canary for kit-API breakage at wiring time).
-        EventDetailsPresenter presenter = mock(EventDetailsPresenter.class);
-        SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new EventDetailsView(presenter, sessionIdentity,
-                context.getBean(ReservationHoldProperties.class)),
-            "EventDetailsView failed to construct");
-    }
-
-    @Test
-    void GivenBareMockPresenters_WhenReceiptViewConstructed_ThenDoesNotThrow() {
-        // Member receipt page wired to presenters (#276 + refund #284). The constructor only adds
-        // the bodyHolder shell — load + render happen in beforeEnter — so bare mocks exercise the
-        // construction path.
-        ReceiptPresenter presenter = mock(ReceiptPresenter.class);
-        RefundPresenter refundPresenter = mock(RefundPresenter.class);
-        SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new ReceiptView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),
-            "ReceiptView failed to construct");
-    }
-
-    @Test
-    void GivenAnEmptyPurchaseHistory_WhenMyAccountViewConstructed_ThenDoesNotThrow() {
-        // Member account page (#284 refund affordance). It builds in the constructor, so the
-        // presenter must return a (here empty) history; bare mocks for the rest.
-        MyAccountPresenter presenter = mock(MyAccountPresenter.class);
-        when(presenter.loadHistory()).thenReturn(new MyAccountPresenter.Outcome.Success(new PurchaseHistoryDTO(List.of())));
-        RefundPresenter refundPresenter = mock(RefundPresenter.class);
-        SessionIdentity sessionIdentity = mock(SessionIdentity.class);
-        assertDoesNotThrow(() -> new MyAccountView(presenter, refundPresenter, sessionIdentity, context.getBean(DisplayTime.class)),
-            "MyAccountView failed to construct");
-    }
+    // ---- what a view shows for its presenter's outcome ----
 
     // #192: a failed history load is shown as an error, never as "no orders yet".
     @Test
@@ -265,7 +136,7 @@ class VaadinSmokeTest {
         when(presenter.loadHistory()).thenReturn(new MyAccountPresenter.Outcome.Failure("database unreachable"));
 
         MyAccountView view = new MyAccountView(presenter, mock(RefundPresenter.class), mock(SessionIdentity.class),
-                context.getBean(DisplayTime.class));
+                displayTime);
 
         String text = view.getElement().getTextRecursively();
         assertTrue(text.contains("Could not load your orders and tickets: database unreachable"),
@@ -278,57 +149,59 @@ class VaadinSmokeTest {
                 "a failed load shows no order or ticket counts, so no \"0 orders\"");
     }
 
-    private static boolean hasDescendantWithClass(Element element, String className) {
-        return element.getClassList().contains(className)
-                || element.getChildren().anyMatch(child -> hasDescendantWithClass(child, className));
-    }
-
     @Test
-    void GivenANotAuthenticatedOrgTreeOutcome_WhenOrganizationalTreeViewConstructed_ThenDoesNotThrow() {
+    void GivenANotAuthenticatedOrgTreeOutcome_WhenOrganizationalTreeViewIsBuilt_ThenItAsksTheAdminToSignInAgain() {
         OrgTreePresenter orgTreePresenter = mock(OrgTreePresenter.class);
         when(orgTreePresenter.load(any(), any(), anyBoolean())).thenReturn(new OrgTreePresenter.Outcome.NotAuthenticated());
-        assertDoesNotThrow(() -> new OrganizationalTreeView(orgTreePresenter),
-            "OrganizationalTreeView failed to construct");
+
+        String shown = text(new OrganizationalTreeView(orgTreePresenter));
+
+        assertTrue(shown.contains("Your session has expired — please sign in again."), "expected the banner in: " + shown);
     }
 
     @Test
-    void GivenAnOverviewLoaded_WhenAdminDashboardViewConstructed_ThenDoesNotThrow() {
-        // Admin workspace landing wired to a presenter (#279). The constructor runs an initial
-        // load() to build the KPI row, so the mock presenter returns a success outcome.
-        AdminDashboardPresenter presenter = mock(AdminDashboardPresenter.class);
-        when(presenter.load()).thenReturn(
-            new AdminDashboardPresenter.Outcome.Success(new AdminOverviewDTO(0, 0, 0, 0.0)));
-        // Its tool tiles are links (#188), which ask the router for their URL when built, as a running
-        // app always can; the harness supplies the UI and a router that answers every route.
-        try (ViewHarness ignored = new ViewHarness()) {
-            assertDoesNotThrow(() -> new AdminDashboardView(presenter),
-                "AdminDashboardView failed to construct");
-        }
-    }
+    void GivenAnEmptyRoster_WhenManagerListViewIsBuilt_ThenItNamesTheCompanyAndShowsNoManagerRow() {
+        ManagerListPresenter presenter = mock(ManagerListPresenter.class);
+        when(presenter.loadRoster(any())).thenReturn(
+            new ManagerListPresenter.Outcome.Success("Acme", List.of(), List.of()));
 
-    // A fixed instant for the market state's recorded times (ADR-008): the view only formats them.
-    private static final LocalDateTime MARKET_STATE_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
-    // The inbox views age a thread's times on the application's clock, so its stamps come from that clock.
-    private LocalDateTime threadAt() {
-        return LocalDateTime.now(clock);
+        ManagerListView view = new ManagerListView(presenter, displayTime);
+
+        String shown = text(view);
+        assertTrue(shown.contains("Roster and permissions for Acme."), "expected the company's roster in: " + shown);
+        assertTrue(shown.contains("Active Managers") && shown.contains("Pending Invitations"),
+            "expected both rosters' headings in: " + shown);
+        assertEquals(List.of(), find(view, LkStatusDot.class), "an empty roster shows no manager's status");
     }
 
     @Test
-    void GivenMarketAndAnalyticsLoaded_WhenSystemAnalyticsViewConstructed_ThenDoesNotThrow() {
-        // System Analytics dashboard wired to a presenter (UC-46 / #43, #279). The constructor
-        // runs an initial load(), so the mock presenter returns a success outcome to exercise the
-        // market-card + KPI-stat build path without a UI context.
-        SystemAnalyticsPresenter presenter = mock(SystemAnalyticsPresenter.class);
-        MarketStateDTO market = new MarketStateDTO(
-            "OPEN", MARKET_STATE_AT, MARKET_STATE_AT, true, true, MARKET_STATE_AT, true);
-        SystemAnalyticsDTO analytics = new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
-        when(presenter.load()).thenReturn(
-            new SystemAnalyticsPresenter.Outcome.Success(market, analytics));
-        assertDoesNotThrow(() -> new SystemAnalyticsView(presenter, context.getBean(DisplayTime.class)),
-            "SystemAnalyticsView failed to construct");
+    void GivenNoInvitations_WhenMyInvitationsViewIsBuilt_ThenItSaysThereAreNone() {
+        MyInvitationsPresenter presenter = mock(MyInvitationsPresenter.class);
+        when(presenter.load(any())).thenReturn(
+            new MyInvitationsPresenter.Outcome.Success(List.of(), List.of()));
+
+        String shown = text(new MyInvitationsView(presenter, displayTime));
+
+        assertTrue(shown.contains("You have no pending invitations right now."), "expected the empty state in: " + shown);
+        assertFalse(shown.contains("History"), "no invitation history to show: " + shown);
     }
 
-    // ---- The dashboard's WSEP line reports the last probe and its time (#187 review follow-up 1) ----
+    @Test
+    void GivenOneOrderOnThePlatform_WhenGlobalHistoryViewIsBuilt_ThenItShowsTheOrdersBuyer() {
+        ViewHarness.signInAdmin();
+        SystemAdminService admin = mock(SystemAdminService.class);
+        PurchaseRecordDTO order = new PurchaseRecordDTO(7, 42, null, LocalDateTime.of(2027, 7, 15, 17, 0), 150.00,
+            PurchaseHistoryDTO.RefundStatus.NONE, List.of(), List.of(), "dana");
+        when(admin.viewGlobalHistory(any(), any())).thenReturn(List.of(new PurchaseHistoryDTO(List.of(order))));
+
+        String shown = text(new GlobalHistoryView(new GlobalHistoryPresenter(admin, new SalesSummaryCalculator()),
+            displayTime));
+
+        assertTrue(shown.contains("dana"), "expected the order's buyer in: " + shown);
+        assertFalse(shown.contains("No orders match"), "a loaded order is no empty state: " + shown);
+    }
+
+    // ---- the dashboard's WSEP line reports the last probe and its time (#187 review follow-up 1) ----
 
     private static final LocalDateTime LAST_CHECK = LocalDateTime.of(2027, 7, 15, 17, 0, 5);
     private static final DateTimeFormatter CHECK_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", Locale.US);
@@ -337,7 +210,7 @@ class VaadinSmokeTest {
     void GivenBothServicesAnsweredTheLastProbe_WhenSystemAnalyticsViewIsBuilt_ThenItSaysReachableAndWhen() {
         String text = analyticsViewText(new MarketStateDTO("OPEN", null, null, true, true, LAST_CHECK, true));
 
-        String checkedAt = context.getBean(DisplayTime.class).format(LAST_CHECK, CHECK_FMT);
+        String checkedAt = displayTime.format(LAST_CHECK, CHECK_FMT);
         assertTrue(text.contains("Payment gateway: reachable · Ticket issuer: reachable (at last check, " + checkedAt + ")"),
             "expected both reachable with the check time in: " + text);
     }
@@ -359,249 +232,24 @@ class VaadinSmokeTest {
         assertFalse(text.contains("unreachable"), "an unchecked service is not reported down: " + text);
     }
 
+    // ---- the live top-bar search panel (#281) ----
+
+    @Test
+    void GivenRecentSearches_WhenTheLiveSearchPanelOpens_ThenItListsThem() {
+        String shown = text(new LkSearchPanel(List.of("Coldplay", "Adele"), query -> List.of()));
+
+        assertTrue(shown.contains("Coldplay") && shown.contains("Adele"), "expected the recent searches in: " + shown);
+    }
+
     private String analyticsViewText(MarketStateDTO market) {
         SystemAnalyticsPresenter presenter = mock(SystemAnalyticsPresenter.class);
         SystemAnalyticsDTO analytics = new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
         when(presenter.load()).thenReturn(new SystemAnalyticsPresenter.Outcome.Success(market, analytics));
-        return new SystemAnalyticsView(presenter, context.getBean(DisplayTime.class)).getElement().getTextRecursively();
+        return new SystemAnalyticsView(presenter, displayTime).getElement().getTextRecursively();
     }
 
-    @Test
-    void GivenABareMockPresenter_WhenEventManagementViewConstructed_ThenDoesNotThrow() {
-        // Owner create/edit-event screen (route owner/events/:eventId). The constructor builds the
-        // whole form (incl. the create-mode Artists field and the side column) but doesn't invoke the
-        // presenter — load/create happen on beforeEnter/click — so a bare mock exercises construction.
-        EventManagementPresenter presenter = mock(EventManagementPresenter.class);
-        assertDoesNotThrow(() -> new EventManagementView(presenter),
-            "EventManagementView failed to construct");
-    }
-
-    @Test
-    void GivenAnEmptyRoster_WhenManagerListViewConstructed_ThenDoesNotThrow() {
-        // Owner-workspace view wired to a presenter (#264). A mock presenter
-        // returning an empty success roster exercises the grid-building path
-        // without a UI context — a canary for kit-API breakage.
-        ManagerListPresenter presenter = mock(ManagerListPresenter.class);
-        when(presenter.loadRoster(any())).thenReturn(
-            new ManagerListPresenter.Outcome.Success("Acme", List.of(), List.of()));
-        assertDoesNotThrow(() -> new ManagerListView(presenter, context.getBean(DisplayTime.class)),
-            "ManagerListView failed to construct");
-    }
-
-    @Test
-    void GivenNoInvitations_WhenMyInvitationsViewConstructed_ThenDoesNotThrow() {
-        // Member account view wired to a presenter (#275). A mock presenter
-        // returning an empty success outcome exercises the grid-building path
-        // without a UI context — a canary for kit-API breakage.
-        MyInvitationsPresenter presenter = mock(MyInvitationsPresenter.class);
-        when(presenter.load(any())).thenReturn(
-            new MyInvitationsPresenter.Outcome.Success(List.of(), List.of()));
-        assertDoesNotThrow(() -> new MyInvitationsView(presenter, context.getBean(DisplayTime.class)),
-            "MyInvitationsView failed to construct");
-    }
-
-    @Test
-    void GivenOneCompanyLoaded_WhenOwnerDashboardViewConstructed_ThenDoesNotThrow() {
-        // Owner-workspace hub wired to a presenter (#292). A mock presenter returning a
-        // single-company success outcome exercises the stat-tile + tile-grid build path
-        // without a UI context.
-        OwnerDashboardPresenter presenter = mock(OwnerDashboardPresenter.class);
-        MyCompanyDTO company = new MyCompanyDTO(1, "Acme", "Founder");
-        when(presenter.loadFor(any(), any())).thenReturn(
-            new OwnerDashboardPresenter.Outcome.Success(
-                List.of(company), company, new CompanyDashboardDTO(0, 0, 0.0, 0, 4.5)));
-        assertDoesNotThrow(() -> new OwnerDashboardView(presenter),
-            "OwnerDashboardView failed to construct");
-    }
-
-    @Test
-    void GivenEmptyPosterRows_WhenLandingViewConstructed_ThenDoesNotThrow() {
-        // Public landing root wired to a presenter (#285). A mock presenter returning an
-        // empty success outcome exercises the poster-row build path without a UI context.
-        LandingPresenter presenter = mock(LandingPresenter.class);
-        when(presenter.load()).thenReturn(
-            new LandingPresenter.Outcome.Success(List.of(), List.of()));
-        assertDoesNotThrow(() -> new LandingView(presenter),
-            "LandingView failed to construct");
-    }
-
-    @Test
-    void GivenABareMockPresenter_WhenSubmitComplaintViewConstructed_ThenDoesNotThrow() {
-        // Messaging view wired to a presenter (#267). Construction doesn't invoke
-        // submit(), so a bare mock presenter is enough to exercise the form-build
-        // path without a UI context — a canary for kit-API breakage.
-        SubmitComplaintPresenter presenter = mock(SubmitComplaintPresenter.class);
-        assertDoesNotThrow(() -> new SubmitComplaintView(presenter),
-            "SubmitComplaintView failed to construct");
-    }
-
-    @Test
-    void GivenOneConversationLoaded_WhenSupportInboxViewConstructed_ThenDoesNotThrow() {
-        // Member Support inbox wired to a presenter (#277). A mock presenter
-        // returning one conversation with one message exercises the master-list +
-        // thread + reply-bar build path without a UI context.
-        SupportInboxPresenter presenter = mock(SupportInboxPresenter.class);
-        ConversationDTO conv = new ConversationDTO(
-            "conv-1", "COMPLAINT", "OPEN", 1, "MEMBER", 0, "ADMIN_GROUP",
-            "Refund delay", threadAt(), threadAt(), 0,
-            List.of(new MessageDTO("m-1", 1, "MEMBER", "Where's my refund?",
-                threadAt(), false)),
-            "alice", "TicketHub Support");
-        when(presenter.load(any())).thenReturn(
-            new SupportInboxPresenter.Outcome.Success(List.of(conv)));
-        assertDoesNotThrow(() -> new SupportInboxView(presenter, context.getBean(DisplayTime.class)),
-            "SupportInboxView failed to construct");
-    }
-
-    @Test
-    void GivenOneCompanyAndOneInquiryLoaded_WhenCompanyInquiryInboxViewConstructed_ThenDoesNotThrow() {
-        // Company member-inquiry inbox wired to a presenter (#268). A mock presenter returning
-        // one company + one inquiry with one message exercises the status-filter + master-list +
-        // thread + reply-bar build path without a UI context.
-        CompanyInquiryInboxPresenter presenter = mock(CompanyInquiryInboxPresenter.class);
-        MyCompanyDTO company = new MyCompanyDTO(7, "Acme", "Founder");
-        ConversationDTO conv = new ConversationDTO(
-            "conv-1", "INQUIRY", "OPEN", 1, "MEMBER", 7, "COMPANY",
-            "Wheelchair access", threadAt(), threadAt(), 0,
-            List.of(new MessageDTO("m-1", 1, "MEMBER", "Is there step-free access?",
-                threadAt(), false)),
-            "alice", "Acme");
-        when(presenter.loadFor(any(), any())).thenReturn(
-            new CompanyInquiryInboxPresenter.Outcome.Success(List.of(company), company, List.of(conv)));
-        assertDoesNotThrow(() -> new CompanyInquiryInboxView(presenter, context.getBean(DisplayTime.class)),
-            "CompanyInquiryInboxView failed to construct");
-    }
-
-    @Test
-    void GivenOneComplaintLoaded_WhenAdminComplaintQueueViewConstructed_ThenDoesNotThrow() {
-        // Admin complaint queue wired to a presenter (#269). A mock presenter returning one
-        // complaint with one message exercises the status-filter + master-list + thread +
-        // reply-bar build path without a UI context.
-        AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
-        ConversationDTO conv = new ConversationDTO(
-            "conv-1", "COMPLAINT", "OPEN", 1, "MEMBER", 0, "ADMIN_GROUP",
-            "Charged twice", threadAt(), threadAt(), 0,
-            List.of(new MessageDTO("m-1", 1, "MEMBER", "My card was charged twice.",
-                threadAt(), false)),
-            "alice", "TicketHub Support");
-        when(presenter.load(any(), any())).thenReturn(
-            new AdminComplaintQueuePresenter.Outcome.Success(List.of(conv)));
-        assertDoesNotThrow(() -> new AdminComplaintQueueView(presenter, context.getBean(DisplayTime.class)),
-            "AdminComplaintQueueView failed to construct");
-    }
-
-    @Test
-    void GivenOneDirectConversationLoaded_WhenAdminInboxViewConstructed_ThenDoesNotThrow() {
-        // Admin outreach inbox wired to a presenter. A mock presenter returning one DIRECT conversation
-        // with a message exercises the master-list + thread + reply-bar + close build path.
-        AdminInboxPresenter presenter = mock(AdminInboxPresenter.class);
-        ConversationDTO conv = new ConversationDTO(
-            "conv-1", "DIRECT", "OPEN", 1, "ADMIN", 7, "MEMBER",
-            "Heads up", threadAt(), threadAt(), 0,
-            List.of(new MessageDTO("m-1", 1, "ADMIN", "hi alice", threadAt(), false)),
-            "TicketHub Support", "alice");
-        when(presenter.load(any())).thenReturn(
-            new AdminInboxPresenter.Outcome.Success(List.of(conv)));
-        assertDoesNotThrow(() -> new AdminInboxView(presenter, context.getBean(DisplayTime.class)),
-            "AdminInboxView failed to construct");
-    }
-
-    @Test
-    void GivenOneSentRowLoaded_WhenAdminSendMessagesViewConstructed_ThenDoesNotThrow() {
-        // Admin "Send Messages" outreach wired to a presenter (II.6.3.2). A mock presenter returning
-        // one sent row exercises the composer + recipient picker + history-grid build path without a
-        // UI context.
-        AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
-        AdminSendMessagesPresenter.SentOutreach row = new AdminSendMessagesPresenter.SentOutreach(
-            threadAt(), "Maintenance window", 82481);
-        when(presenter.load(any())).thenReturn(
-            new AdminSendMessagesPresenter.Outcome.Success(List.of(row)));
-        assertDoesNotThrow(() -> new AdminSendMessagesView(presenter, context.getBean(DisplayTime.class)),
-            "AdminSendMessagesView failed to construct");
-    }
-
-    @Test
-    void GivenABareMockPresenter_WhenNewInquiryViewConstructed_ThenDoesNotThrow() {
-        // Member "New inquiry" composer (II.3.10). The constructor builds the form shell; company
-        // search + submit happen on interaction, so a bare mock presenter exercises construction.
-        NewInquiryPresenter presenter = mock(NewInquiryPresenter.class);
-        assertDoesNotThrow(() -> new NewInquiryView(presenter),
-            "NewInquiryView failed to construct");
-    }
-
-    @Test
-    void GivenABareMockPresenter_WhenAdminComplaintRespondViewConstructed_ThenDoesNotThrow() {
-        // Admin complaint respond page. The constructor only adds the content shell (load happens in
-        // beforeEnter), so a bare mock presenter exercises construction.
-        AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
-        assertDoesNotThrow(() -> new AdminComplaintRespondView(presenter, context.getBean(DisplayTime.class)),
-            "AdminComplaintRespondView failed to construct");
-    }
-
-    @Test
-    void GivenABareMockPresenter_WhenCompanyInquiryRespondViewConstructed_ThenDoesNotThrow() {
-        // Company inquiry respond page. The constructor only adds the content shell (load happens in
-        // beforeEnter), so a bare mock presenter exercises construction.
-        CompanyInquiryInboxPresenter presenter = mock(CompanyInquiryInboxPresenter.class);
-        assertDoesNotThrow(() -> new CompanyInquiryRespondView(presenter, context.getBean(DisplayTime.class)),
-            "CompanyInquiryRespondView failed to construct");
-    }
-
-    @Test
-    void GivenRevokeAndEditPermissionsArguments_WhenManagerActionDialogsConstructed_ThenDoesNotThrow() {
-        // V2-CADMIN-03 dialogs — build path only (open() needs a UI context).
-        assertDoesNotThrow(() -> new LkConfirm("Revoke manager", "Remove Carol?",
-                LkConfirm.Severity.danger)
-                .confirmText("Revoke"),
-            "LkConfirm failed to construct");
-        assertDoesNotThrow(() -> new EditPermissionsDialog(
-                "carol", "Manager", List.of("VIEW_SALES"), names -> { }),
-            "EditPermissionsDialog failed to construct");
-    }
-
-    @Test
-    void GivenValidArguments_WhenKitComponentsConstructed_ThenDoesNotThrow() {
-        // Generic kit primitives — these underpin every view.
-        assertDoesNotThrow(() -> new LkIcon("ticket"),    "LkIcon failed");
-        assertDoesNotThrow(() -> new LkBtn("Sign in"),    "LkBtn failed");
-        assertDoesNotThrow(() -> new LkCard("Card"),      "LkCard failed");
-        assertDoesNotThrow(() -> new LkBadge("OK"),       "LkBadge failed");
-        // Repeatable add-row text input (event-creation Artists field).
-        assertDoesNotThrow(() -> {
-            LkTextRows rows = new LkTextRows("Artists", "+ Add artist").placeholder("e.g. The Beatles");
-            rows.setValues(List.of("The Beatles", "Pink Floyd"));
-            rows.readOnly(true);
-        }, "LkTextRows failed");
-        // Live top-bar search panel (#281) — debounced input + search-fn callback, no DI needed.
-        assertDoesNotThrow(() -> new LkSearchPanel(List.of("Coldplay"), q -> List.of()),
-            "live LkSearchPanel failed");
-        // Domain components used by the venue / seat picker views.
-        assertDoesNotThrow(() -> new VkSeat(VkSeat.State.free, "1"), "VkSeat failed");
-        assertDoesNotThrow(VkSeatLegend::new,             "VkSeatLegend failed");
-        assertDoesNotThrow(() -> {
-            VkSeat seat = new VkSeat(VkSeat.State.free, "1");
-            seat.setState(VkSeat.State.mine);
-            seat.setState(VkSeat.State.sold);
-            seat.setState(VkSeat.State.free);
-        }, "VkSeat.setState failed");
-        assertDoesNotThrow(() -> new VkSeatedZonePicker(List.of(), null),
-            "VkSeatedZonePicker (empty) failed");
-        assertDoesNotThrow(() -> new VkSeatedZonePicker(
-                List.of(new VkSeatedZonePicker.SeatModel("A1", 0, 0, VkSeat.State.free),
-                        new VkSeatedZonePicker.SeatModel("A2", 32, 0, VkSeat.State.held)),
-                null), "VkSeatedZonePicker (with seats) failed");
-        assertDoesNotThrow(() -> new VkQuantitySelector(100, 9000, null),
-            "VkQuantitySelector (positive available) failed");
-        assertDoesNotThrow(() -> new VkQuantitySelector(0, 9000, null),
-            "VkQuantitySelector (sold out) failed");
-        assertDoesNotThrow(() -> new VkStandingZone("GA", 12, 3, 100, "$45"),
-            "VkStandingZone failed");
-    }
-
-    @Test
-    void GivenTheToastsUtility_WhenClassIsReferenced_ThenIsLoadable() {
-        // Just checking the class loads — we can't invoke Notification.show
-        // outside a UI context.
-        assertNotNull(Toasts.class);
+    private static boolean hasDescendantWithClass(Element element, String className) {
+        return element.getClassList().contains(className)
+                || element.getChildren().anyMatch(child -> hasDescendantWithClass(child, className));
     }
 }
