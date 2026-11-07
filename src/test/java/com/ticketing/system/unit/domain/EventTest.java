@@ -361,18 +361,37 @@ class EventTest extends BaseDomainTest {
         assertEquals("VIP", event.getVenueMap().getZone(2).getName());
     }
 
+    // Only a DRAFT or SCHEDULED event's zones may be removed, and only an ON_SALE one takes reservations, so
+    // the zone is reserved on directly: the status guard would otherwise refuse first (#189).
     @Test
-    void GivenReservedInventoryInZone_WhenRemoveZone_ThenThrowsException() {
-        StandingZone zone = track(new StandingZone(1, "General", 100, 50));
-        Event event = createEventWithZones(List.of(zone));
+    void GivenAScheduledEventWhoseZoneHoldsAPlace_WhenRemoveThatZone_ThenRefusedAndTheZoneStays() {
+        StandingZone held = track(new StandingZone(1, "General", 100, 50));
+        StandingZone other = track(new StandingZone(2, "VIP", 20, 150));
+        Event event = createEventWithZones(List.of(held, other));
+        held.reserve(InventorySelection.standing(5, "order-1"));
 
-        event.transitionToOnSale();
-        event.reserveInventory(1, InventorySelection.standing(5));
+        IllegalStateException refused =
+                assertThrows(IllegalStateException.class, () -> event.removeInventoryZone(1, COMPANY_ID));
 
-        assertThrows(IllegalStateException.class, () -> event.removeInventoryZone(1, COMPANY_ID));
+        assertEquals("Cannot remove zone 1 because it has reserved or sold inventory", refused.getMessage());
+        assertEquals(List.of(1, 2), zoneIds(event));
+        assertEquals(5, held.getReservedAmount());
+    }
 
-        assertEquals(100, zone.getCapacity());
-        assertEquals(5, zone.getReservedAmount());
+    @Test
+    void GivenAScheduledEventWhoseZoneHasSoldAPlace_WhenRemoveThatZone_ThenRefusedAndTheZoneStays() {
+        StandingZone sold = track(new StandingZone(1, "General", 100, 50));
+        StandingZone other = track(new StandingZone(2, "VIP", 20, 150));
+        Event event = createEventWithZones(List.of(sold, other));
+        sold.reserve(InventorySelection.standing(1, "order-1"));
+        sold.confirmSale(InventorySelection.standing(1, "order-1"));
+
+        IllegalStateException refused =
+                assertThrows(IllegalStateException.class, () -> event.removeInventoryZone(1, COMPANY_ID));
+
+        assertEquals("Cannot remove zone 1 because it has reserved or sold inventory", refused.getMessage());
+        assertEquals(List.of(1, 2), zoneIds(event));
+        assertEquals(1, sold.getSoldAmount());
     }
 
     @Test
