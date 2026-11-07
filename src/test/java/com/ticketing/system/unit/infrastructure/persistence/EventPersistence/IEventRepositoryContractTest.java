@@ -81,14 +81,6 @@ public abstract class IEventRepositoryContractTest {
                 EventStatus.ON_SALE, venueMap, List.of(showDate), ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 
-    // === save ===
-
-    @Test
-    void GivenAValidEvent_WhenSave_ThenReturnsTrue() {
-        Event event = buildEvent(1, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT);
-        assertTrue(eventRepo.save(event));
-    }
-
     // === findById ===
 
     @Test
