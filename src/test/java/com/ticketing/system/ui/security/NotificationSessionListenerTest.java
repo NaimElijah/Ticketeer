@@ -3,6 +3,7 @@ package com.ticketing.system.ui.security;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import ch.qos.logback.classic.Level;
@@ -76,6 +78,33 @@ class NotificationSessionListenerTest {
         verify(notificationService, never()).revertSentToPending(anyInt());
     }
 
+    // The session's attributes are read under its lock, as Vaadin requires off a request thread, and an early
+    // return must still unlock it, or every later request on the session blocks.
+    @Test
+    void GivenSignedInAdminSession_WhenDestroyed_ThenTheSessionIsLockedThenUnlocked() {
+        VaadinSession adminSession = sessionSignedInAs(
+                new AuthTokenDTO("admin-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "admin", true));
+
+        destroyListener.sessionDestroy(destroyEventFor(adminSession));
+
+        InOrder order = inOrder(adminSession);
+        order.verify(adminSession).lock();
+        order.verify(adminSession).unlock();
+    }
+
+    @Test
+    void GivenSignedInMemberSession_WhenDestroyed_ThenTheSendBackRunsBetweenTheLockAndTheUnlock() {
+        VaadinSession memberSession = sessionSignedInAs(
+                new AuthTokenDTO("member-jwt", TOKEN_EXPIRY_EPOCH_MILLIS, SHARED_ID, "member"));
+
+        destroyListener.sessionDestroy(destroyEventFor(memberSession));
+
+        InOrder order = inOrder(memberSession, notificationService);
+        order.verify(memberSession).lock();
+        order.verify(notificationService).revertSentToPending(SHARED_ID);
+        order.verify(memberSession).unlock();
+    }
+
     @Test
     void GivenSignedInMemberSession_WhenDestroyed_ThenTheMembersSentNotificationsAreReverted() {
         VaadinSession memberSession = sessionSignedInAs(
@@ -97,6 +126,7 @@ class NotificationSessionListenerTest {
         destroyListener.sessionDestroy(destroyEventFor(signedOut));
 
         verify(notificationService, never()).revertSentToPending(anyInt());
+        verify(signedOut).unlock();
     }
 
     // Nothing above a session-destroy callback can handle a failure, so the WARN is all that is left of
