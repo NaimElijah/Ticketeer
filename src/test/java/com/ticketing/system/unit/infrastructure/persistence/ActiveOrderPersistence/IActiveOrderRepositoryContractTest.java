@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -98,10 +99,15 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void GivenUnknownOrNullCart_WhenDelete_ThenDoesNotThrow() {
-        ActiveOrder cart = ActiveOrder.forMember(99, "sid-Z", NOW);
-        assertDoesNotThrow(() -> repo.delete(cart));
+    void GivenUnknownOrNullCart_WhenDelete_ThenDoesNotThrowAndTheStoredCartStays() {
+        ActiveOrder stored = ActiveOrder.forMember(5, "sid-A", NOW);
+        repo.save(stored);
+        ActiveOrder unknown = ActiveOrder.forMember(99, "sid-Z", NOW);
+
+        assertDoesNotThrow(() -> repo.delete(unknown));
         assertDoesNotThrow(() -> repo.delete(null));
+
+        assertEquals(List.of(stored.getOrderKey()), repo.findAll().stream().map(ActiveOrder::getOrderKey).toList());
     }
 
     @Test
