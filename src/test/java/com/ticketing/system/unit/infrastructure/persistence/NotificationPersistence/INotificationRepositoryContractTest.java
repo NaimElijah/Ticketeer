@@ -134,8 +134,9 @@ abstract class INotificationRepositoryContractTest {
         assertTrue(repo.findById("n1").getData().isEmpty());
     }
 
-    // The JPA table holds the type under a check constraint that a migration must widen for each new
-    // constant (ADR-007); reading back through a query flushes the insert, so a missing value fails here.
+    // The JPA table holds the status under a check constraint too (ck_notifications_status), which a
+    // migration must widen for each new constant (ADR-007); the query by status flushes the insert, so a
+    // missing value fails here.
     @ParameterizedTest
     @EnumSource(NotificationStatus.class)
     void GivenANotificationInEachStatus_WhenSaved_ThenItIsFoundByThatStatus(NotificationStatus status) {
@@ -144,6 +145,8 @@ abstract class INotificationRepositoryContractTest {
         assertEquals(Set.of("n1"), ids(repo.findByRecipientAndStatus(5, status)));
     }
 
+    // The JPA table holds the type under a check constraint that a migration must widen for each new
+    // constant (ADR-007); reading back through a query flushes the insert, so a missing value fails here.
     @ParameterizedTest
     @EnumSource(NotificationType.class)
     void GivenANotificationOfEachType_WhenSaved_ThenItIsFoundWithThatType(NotificationType type) {
