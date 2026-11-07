@@ -84,8 +84,8 @@ public class RegisterView extends LkAuthCard {
         email.setWidthFull();
 
         IntegerField age = new IntegerField("Age");
-        age.setMin(1);
-        age.setMax(120);
+        age.setMin(RegisterPresenter.MIN_AGE);
+        age.setMax(RegisterPresenter.MAX_AGE);
         age.setStepButtonsVisible(true);
         age.setRequiredIndicatorVisible(true);
         age.setWidthFull();

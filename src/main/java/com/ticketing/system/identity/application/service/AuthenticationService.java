@@ -93,6 +93,15 @@ public class AuthenticationService {
     private static final int MIN_PASSWORD_LENGTH = 8;
 
     /**
+     * The youngest age {@link #register} accepts. Public so the registration form asks for the same range.
+     * {@code User}'s invariant refuses only a negative age, so a stored age outside the range still loads.
+     */
+    public static final int MIN_AGE = 1;
+
+    /** The oldest age {@link #register} accepts. Public so the registration form asks for the same range. */
+    public static final int MAX_AGE = 120;
+
+    /**
      * The characters a username may hold, as a regular-expression character class: ASCII letters,
      * digits, dot, underscore and hyphen (business rule 1). {@link #register} refuses a name holding
      * any other. Public so the registration form's live check uses the same class. It carries no
@@ -328,7 +337,8 @@ public class AuthenticationService {
      * @throws ReservedUsernameException   username is reserved ({@link #isUsernameReserved}), padded
      *                                     or not
      * @throws IllegalArgumentException    username is blank, or holds a character outside
-     *                                     {@link #USERNAME_CHARACTERS}, whitespace included
+     *                                     {@link #USERNAME_CHARACTERS}, whitespace included; or age is
+     *                                     below {@value #MIN_AGE} or above {@value #MAX_AGE}
      * @throws DuplicateUsernameException  username already taken, including by a registration that
      *                                     committed after this one's check
      * @throws DuplicateEmailException     email already registered
@@ -343,6 +353,7 @@ public class AuthenticationService {
             throw new ReservedUsernameException(request.username());
         }
         validateUsername(request.username());
+        validateAge(request.age());
 
         // 2. Guest session must exist and still be a Guest.
         Session session = requireActiveGuestSession(request.guestSessionId());
@@ -359,7 +370,6 @@ public class AuthenticationService {
         // 4. Create user.
         String hashed = passwordHasher.hash(request.rawPassword());
         User user = new User(userRepository.nextId(), request.username(), request.email(), hashed, request.age());
-        // throws IllegalArgumentException("Age cannot be negative") if age < 0.
         userRepository.save(user);
 
         // 5. Session stays Guest — just touch the activity timestamp.
@@ -381,6 +391,13 @@ public class AuthenticationService {
         if (!USERNAME_PATTERN.matcher(username).matches()) {
             throw new IllegalArgumentException(
                     "Username may contain only the letters A-Z and a-z, digits, '.', '_' and '-'");
+        }
+    }
+
+    // The message names the range, not the age given, which is personal data (SLR.2).
+    private static void validateAge(int age) {
+        if (age < MIN_AGE || age > MAX_AGE) {
+            throw new IllegalArgumentException("Age must be from " + MIN_AGE + " to " + MAX_AGE);
         }
     }
 
