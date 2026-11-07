@@ -165,6 +165,25 @@ abstract class IActiveOrderRepositoryContractTest {
         assertEquals(1, kept.getItems().size());
     }
 
+    // The guest twin of the member case above. A database key on the guest session (#224) must not break
+    // it: the replaced cart's row has to be gone before the new cart's row is written.
+    @Test
+    void GivenAnotherGuestCartOfTheSessionHoldingNothing_WhenSavingANewGuestCart_ThenTheSecondCartWins() {
+        repo.save(ActiveOrder.forGuest("sid-G", NOW));
+
+        ActiveOrder second = ActiveOrder.forGuest("sid-G", NOW);
+        repo.lockForUpdate("sess:sid-G");
+        try {
+            repo.save(second);
+        } finally {
+            repo.unlock("sess:sid-G");
+        }
+
+        assertEquals(1, repo.findAll().size(), "the session keeps one cart");
+        assertEquals(second.getOrderKey(), repo.getBySessionId("sid-G").orElseThrow().getOrderKey(),
+                "the second cart replaced the empty one");
+    }
+
     @Test
     void GivenGuestAndMemberCartsWithTheSameSessionId_WhenSave_ThenUserIdAndSessionIdLookupsBothFindACart() {
         // Edge: a Guest cart and a Member cart that happen to share a sessionId
