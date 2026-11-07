@@ -162,7 +162,7 @@ public class SystemAnalyticsView extends LkPage {
         String status = market.currentStatus();
         statusBadge.setText(status);
         statusBadge.tone(toneFor(status));
-        marketDetail.setText(String.format(
+        marketDetail.setText(String.format(DisplayLocale.PAGE,
             "%s · Default admin: %s%s",
             servicesText(market),
             market.defaultAdminPresent() ? "present" : "missing",
@@ -174,7 +174,7 @@ public class SystemAnalyticsView extends LkPage {
         if (market.lastProbedAt() == null) {
             return "Payment gateway and ticket issuer: not checked yet";
         }
-        return String.format("Payment gateway: %s · Ticket issuer: %s (at last check, %s)",
+        return String.format(DisplayLocale.PAGE, "Payment gateway: %s · Ticket issuer: %s (at last check, %s)",
             reachability(market.paymentGatewayHealthy()),
             reachability(market.ticketIssuerHealthy()),
             displayTime.format(market.lastProbedAt(), CHECKED_FMT));
@@ -207,7 +207,7 @@ public class SystemAnalyticsView extends LkPage {
     }
 
     private static String rate(double v) {
-        return String.format("%.2f", v);
+        return String.format(DisplayLocale.PAGE, "%.2f", v);
     }
 
     @Override

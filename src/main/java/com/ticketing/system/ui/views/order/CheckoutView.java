@@ -22,6 +22,7 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.OrderSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.DetachEvent;
@@ -597,6 +598,6 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         }
         long abs = Math.abs(cents);
         String sign = cents < 0 ? "-" : "";
-        return sign + "$" + (abs / 100) + "." + String.format("%02d", abs % 100);
+        return sign + "$" + (abs / 100) + "." + String.format(DisplayLocale.PAGE, "%02d", abs % 100);
     }
 }

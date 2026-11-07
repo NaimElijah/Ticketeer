@@ -25,6 +25,7 @@ import com.ticketing.system.ui.presenters.company.VenueMapPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -300,7 +301,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     }
 
     private static String pct(double v) {
-        return String.format(Locale.US, "%.2f%%", v);
+        return String.format(DisplayLocale.PAGE, "%.2f%%", v);
     }
 
     private void selectZoneByVisualId(String visualId) {

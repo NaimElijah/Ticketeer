@@ -225,7 +225,7 @@ public class GlobalHistoryView extends LkPage {
     }
 
     private static String money(double amount) {
-        return String.format("$%,.2f", amount);
+        return String.format(DisplayLocale.PAGE, "$%,.2f", amount);
     }
 
     private static String orElse(String value, String fallback) {

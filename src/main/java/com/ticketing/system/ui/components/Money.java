@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.components;
 
+import com.ticketing.system.ui.support.DisplayLocale;
 
 public final class Money {
 
@@ -11,6 +12,6 @@ public final class Money {
 
     public static String format(long cents) {
         long abs = Math.abs(cents);
-        return (cents < 0 ? "-" : "") + "$" + (abs / 100) + "." + String.format("%02d", abs % 100);
+        return (cents < 0 ? "-" : "") + "$" + (abs / 100) + "." + String.format(DisplayLocale.PAGE, "%02d", abs % 100);
     }
 }

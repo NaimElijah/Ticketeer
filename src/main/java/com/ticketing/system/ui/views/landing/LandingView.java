@@ -151,7 +151,7 @@ public class LandingView extends LkPage {
     }
 
     private static String priceLabel(EventSummaryDTO e) {
-        return e.minPrice() > 0 ? String.format("From $%,.2f", e.minPrice()) : "—";
+        return e.minPrice() > 0 ? String.format(DisplayLocale.PAGE, "From $%,.2f", e.minPrice()) : "—";
     }
 
     // ---- category quick-pick grid ----

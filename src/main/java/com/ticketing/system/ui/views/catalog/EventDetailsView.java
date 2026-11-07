@@ -452,7 +452,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
     }
 
     private static String pct(double v) {
-        return String.format(Locale.US, "%.2f%%", v);
+        return String.format(DisplayLocale.PAGE, "%.2f%%", v);
     }
 
     private static String escape(String s) {

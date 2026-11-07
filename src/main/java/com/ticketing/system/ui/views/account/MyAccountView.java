@@ -309,7 +309,7 @@ public class MyAccountView extends LkPage {
     }
 
     private static String money(double amount) {
-        return String.format("$%,.2f", amount);
+        return String.format(DisplayLocale.PAGE, "$%,.2f", amount);
     }
 
     // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).

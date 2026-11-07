@@ -256,7 +256,7 @@ public class AdminSendMessagesView extends LkPage {
         switch (presenter.send(AuthSession.token(), subject.getValue(), body.getValue(),
                 ids, audience == Audience.ALL_MEMBERS, audience == Audience.ALL_PRODUCERS)) {
             case AdminSendMessagesPresenter.ActionOutcome.Success ok -> {
-                Toasts.success("Sent to " + String.format("%,d", ok.recipientCount()) + " recipient(s).");
+                Toasts.success("Sent to " + String.format(DisplayLocale.PAGE, "%,d", ok.recipientCount()) + " recipient(s).");
                 clearComposer();
                 reloadHistory();
             }
@@ -326,7 +326,7 @@ public class AdminSendMessagesView extends LkPage {
             Span subj = new Span(a.subject() == null ? "" : a.subject());
             subj.getStyle().set("font-weight", "600");
             row.put("subj", subj);
-            row.put("rec", String.format("%,d", a.recipientCount()));
+            row.put("rec", String.format(DisplayLocale.PAGE, "%,d", a.recipientCount()));
             grid.row(row);
         }
 

@@ -12,6 +12,7 @@ import com.ticketing.system.ui.layouts.PlatformAdminLayout;
 import com.ticketing.system.ui.presenters.admin.AdminDashboardPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.router.PageTitle;
@@ -42,15 +43,15 @@ public class AdminDashboardView extends LkPage {
         switch (presenter.load()) {
             case AdminDashboardPresenter.Outcome.Success ok -> {
                 AdminOverviewDTO o = ok.overview();
-                LkStat complaints = new LkStat("Open complaints", String.format("%,d", o.openComplaints()));
+                LkStat complaints = new LkStat("Open complaints", String.format(DisplayLocale.PAGE, "%,d", o.openComplaints()));
                 if (o.openComplaints() > 0) {
                     complaints.delta("needs attention", LkStat.Tone.warn);
                 }
                 row.add(
-                    new LkStat("Active companies",        String.format("%,d", o.activeCompanies())),
-                    new LkStat("Live events",             String.format("%,d", o.liveEvents())),
+                    new LkStat("Active companies",        String.format(DisplayLocale.PAGE, "%,d", o.activeCompanies())),
+                    new LkStat("Live events",             String.format(DisplayLocale.PAGE, "%,d", o.liveEvents())),
                     complaints,
-                    new LkStat("Platform revenue · 30d",  "$" + String.format("%,.0f", o.revenue30d()))
+                    new LkStat("Platform revenue · 30d",  "$" + String.format(DisplayLocale.PAGE, "%,.0f", o.revenue30d()))
                 );
             }
             case AdminDashboardPresenter.Outcome.Failure fail -> {
