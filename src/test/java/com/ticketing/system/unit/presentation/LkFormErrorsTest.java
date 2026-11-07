@@ -3,6 +3,7 @@ package com.ticketing.system.unit.presentation;
 import static com.ticketing.system.unit.presentation.ViewHarness.button;
 import static com.ticketing.system.unit.presentation.ViewHarness.click;
 import static com.ticketing.system.unit.presentation.ViewHarness.field;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,12 +16,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.ui.components.kit.LkFormErrors;
+import com.ticketing.system.ui.components.kit.LkTextLimit;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.auth.RegisterView;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
+import com.vaadin.flow.component.textfield.TextField;
 
 /**
  * A refusal {@link LkFormErrors} put on a field gives way to the field's own validation once the user edits
@@ -35,6 +38,8 @@ class LkFormErrorsTest {
     // ---- review C1: a refusal gives way to the field's own validation (#188) ----
 
     private static final String ENTER_AGE = "Enter your age.";
+    private static final String ENTER_NAME = "Enter a name.";
+    private static final int NAME_LIMIT = 5;
     private static final String ENTER_EMAIL = "Enter your email address.";
     private static final int MIN_AGE = 1;
     private static final int MAX_AGE = 120;
@@ -102,6 +107,27 @@ class LkFormErrorsTest {
 
         assertTrue(email.isInvalid(), "clearing the last submit's refusals must not unmark an address that is still "
             + "malformed by the field's own rule");
+    }
+
+    // ---- a message another check set ----
+
+    // LkFormErrors' contract: clear() leaves a field whose message changed since its refusal, here the text
+    // limit's, which still holds for the text (#189).
+    @Test
+    void GivenARefusedFieldNowOverItsTextLimit_WhenTheNextSubmitClearsTheRefusals_ThenTheLimitsErrorStays() {
+        TextField name = new TextField("Name");
+        LkTextLimit.apply(name, NAME_LIMIT);
+        LkFormErrors errors = new LkFormErrors();
+        errors.reject(name, ENTER_NAME);
+        name.setValue("x".repeat(NAME_LIMIT + 1));
+        String limitError = name.getErrorMessage();
+        assertTrue(name.isInvalid() && limitError != null && !limitError.isBlank() && !ENTER_NAME.equals(limitError),
+            "precondition: the text limit flags the name with its own message, not \"" + limitError + "\"");
+
+        errors.clear();
+
+        assertTrue(name.isInvalid(), "the name is still over its limit");
+        assertEquals(limitError, name.getErrorMessage(), "the limit's message must stay");
     }
 
     // ---- a value that corrects the field ----
