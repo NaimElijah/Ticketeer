@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -63,6 +64,16 @@ class ProductionCompanyTest extends BaseDomainTest {
 
                 assertTrue(company.getManagers().isEmpty());
                 assertTrue(company.isOwner(OWNER_ID));
+        }
+
+        // Business rule 6: the Founder is always an owner, so the company always has one.
+        @Test
+        public void GivenFounder_WhenRevokeAppointment_ThenRefusedAndTheFounderStaysAnOwner() {
+                IllegalStateException refused = assertThrowsExactly(IllegalStateException.class,
+                                () -> company.RevokeAppointment(OWNER_ID));
+
+                assertEquals("The founder cannot be revoked", refused.getMessage());
+                assertEquals(List.of(OWNER_ID), company.getOwnerIds());
         }
 
         ////////////////////////////////////////////////////////////////// UC-20Tests
