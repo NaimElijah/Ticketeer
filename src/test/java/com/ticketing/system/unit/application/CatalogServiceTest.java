@@ -3,6 +3,7 @@ package com.ticketing.system.unit.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -107,14 +109,19 @@ class CatalogServiceTest {
                 () -> catalogService.searchGlobal(VALID_TOKEN, filters));
     }
 
-    // UC-7: searchGlobal propagates InvalidTokenException from the credential check
+    // validateCredential answers false for any bad credential and throws only when the session store
+    // fails (SessionManager), and an unreachable store is not an invalid credential.
     @Test
-    void GivenTheCredentialCheckThrowsInvalidToken_WhenSearchGlobal_ThenPropagatesInvalidTokenException() {
-        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
+    void GivenTheSessionStoreFails_WhenSearchGlobal_ThenTheStoreFailurePropagatesAndNothingIsSearched() {
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("session store down");
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(storeDown);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrowsExactly(InvalidTokenException.class,
+        DataAccessResourceFailureException thrown = assertThrowsExactly(DataAccessResourceFailureException.class,
                 () -> catalogService.searchGlobal(VALID_TOKEN, filters));
+
+        assertSame(storeDown, thrown);
+        verify(mockEventRepository, never()).searchONSALE(any());
     }
 
     // UC-7: searchGlobal returns all matching events when no company-rating filters
@@ -219,14 +226,17 @@ class CatalogServiceTest {
                 () -> catalogService.searchByCompany(VALID_TOKEN, 10, filters));
     }
 
-    // UC-7: searchByCompany propagates InvalidTokenException from the credential check
     @Test
-    void GivenTheCredentialCheckThrowsInvalidToken_WhenSearchByCompany_ThenPropagatesInvalidTokenException() {
-        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(new InvalidTokenException());
+    void GivenTheSessionStoreFails_WhenSearchByCompany_ThenTheStoreFailurePropagatesAndNothingIsSearched() {
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("session store down");
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenThrow(storeDown);
         CatalogSearchFiltersDTO filters = emptyFilters();
 
-        assertThrowsExactly(InvalidTokenException.class,
+        DataAccessResourceFailureException thrown = assertThrowsExactly(DataAccessResourceFailureException.class,
                 () -> catalogService.searchByCompany(VALID_TOKEN, 10, filters));
+
+        assertSame(storeDown, thrown);
+        verify(mockEventRepository, never()).searchONSALE(any());
     }
 
     // UC-7: searchByCompany returns only events belonging to the requested company

@@ -711,13 +711,14 @@ class EventManagementServiceTest {
                                 () -> eventService.getEventDetail(INVALID_TOKEN, EVENT_ID));
         }
 
+        // The port throws EventNotFoundException for a missing id (EventRepository.findById).
         @Test
-        void GivenEventNotFound_WhenGetEventDetail_ThenThrows() {
+        void GivenEventNotFound_WhenGetEventDetail_ThenEventNotFound() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new RuntimeException("Event not found"));
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class,
+                assertThrowsExactly(EventNotFoundException.class,
                                 () -> eventService.getEventDetail(OWNER_TOKEN, EVENT_ID));
         }
 
@@ -917,13 +918,15 @@ class EventManagementServiceTest {
         }
 
         @Test
-        void GivenEventNotFound_WhenEditEventDetails_ThenThrows() {
+        void GivenEventNotFound_WhenEditEventDetails_ThenEventNotFoundAndNothingSaved() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new RuntimeException("Event not found"));
+                when(mockEventRepo.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
-                assertThrows(RuntimeException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
+                assertThrowsExactly(EventNotFoundException.class, () -> eventService.editEventDetails(OWNER_TOKEN,
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), "New Name", null, null, null, null, null)));
+                verify(mockEventRepo, never()).save(any());
+                verify(mockEventRepo).unlock(EVENT_ID);
         }
 
         @Test
