@@ -54,6 +54,18 @@ class PurchaseStagePolicyTest {
                 "an of-age member is allowed at reserve");
         assertFalse(age.isSatisfiedBy(ctx(16, 1, PurchaseStage.CHECKOUT)),
                 "an under-age member is rejected at checkout");
+        assertTrue(age.isSatisfiedBy(ctx(20, 1, PurchaseStage.CHECKOUT)),
+                "an of-age member is allowed at checkout");
+    }
+
+    // "At least 18": a buyer who turned 18 qualifies.
+    @Test
+    void GivenABuyerExactlyAtTheMinimumAge_WhenIsSatisfiedBy_ThenTrueAtBothStages() {
+        AgePurchasePolicy age = new AgePurchasePolicy(18);
+
+        assertTrue(age.isSatisfiedBy(ctx(18, 1, PurchaseStage.RESERVE)));
+        assertTrue(age.isSatisfiedBy(ctx(18, 1, PurchaseStage.CHECKOUT)));
+        assertFalse(age.isSatisfiedBy(ctx(17, 1, PurchaseStage.CHECKOUT)), "one year short is refused");
     }
 
     @Test
