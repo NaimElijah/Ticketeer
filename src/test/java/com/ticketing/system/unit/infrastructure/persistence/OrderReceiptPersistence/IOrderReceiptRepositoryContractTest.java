@@ -123,6 +123,25 @@ abstract class IOrderReceiptRepositoryContractTest {
         assertFalse(found.isFullyRefunded());
     }
 
+    // An event cancellation loads the receipt, refunds that event's lines and saves it again. Inherited, so
+    // the Jpa subclass loads a detached copy and the change reaches the tables only through this save.
+    @Test
+    void GivenASavedReceipt_WhenLoadedRefundedForOneEventAndSavedAgain_ThenTheStoredReceiptHasTheRefund() {
+        repo.save(OrderReceipt.forMember(1, 7, 100.0, List.of(line(10, 5), line(11, 6)), AT));
+
+        OrderReceipt loaded = repo.findByOrderReceiptId(1).orElseThrow();
+        loaded.claimRefundForEvent(5);
+        loaded.completeEventRefund(5, TransactionRecord.refund("refund-5", "WSEP", 50.0, "ILS", AT));
+        repo.save(loaded);
+
+        OrderReceipt reloaded = repo.findByOrderReceiptId(1).orElseThrow();
+        assertEquals(Map.of(10, LineRefundState.REFUNDED, 11, LineRefundState.NONE), reloaded.getReceiptLines().stream()
+                .collect(Collectors.toMap(ReceiptLine::getTicketId, ReceiptLine::getRefundState)));
+        assertEquals(List.of("refund-5"), reloaded.getTransactionRecords().stream()
+                .map(TransactionRecord::getExternalTransactionId).toList());
+        assertEquals(Set.of(1), ids(repo.findGlobal(null)), "the receipt is updated, not stored a second time");
+    }
+
     @Test
     void GivenMemberAndGuestReceipts_WhenFindByHolderUserId_ThenReturnsMemberReceiptsForThatBuyer() {
         repo.save(member(1, 7, 5));
@@ -170,6 +189,41 @@ abstract class IOrderReceiptRepositoryContractTest {
 
         assertEquals(Set.of(1), ids(repo.findGlobal(new GlobalHistoryFiltersDTO(
                 null, null, null, LocalDate.of(2026, 10, 30), LocalDate.of(2026, 10, 30)))));
+    }
+
+    // The start date covers its whole day too, from its first instant.
+    @Test
+    void GivenAPurchaseAtTheMidnightThatStartsTheFromDate_WhenFindGlobalFromThatDate_ThenItIsIncluded() {
+        repo.save(memberAt(1, LocalDateTime.of(2026, 10, 30, 0, 0)));
+
+        assertEquals(Set.of(1), ids(repo.findGlobal(new GlobalHistoryFiltersDTO(
+                null, null, null, LocalDate.of(2026, 10, 30), null))));
+    }
+
+    @Test
+    void GivenAPurchaseInTheLastMicrosecondBeforeTheFromDate_WhenFindGlobalFromThatDate_ThenItIsExcluded() {
+        repo.save(memberAt(1, LocalDateTime.of(2026, 10, 29, 23, 59, 59, 999_999_000)));
+
+        assertTrue(repo.findGlobal(new GlobalHistoryFiltersDTO(
+                null, null, null, LocalDate.of(2026, 10, 30), null)).isEmpty());
+    }
+
+    // Every filter given at once narrows by all of them: each other receipt fails exactly one.
+    @Test
+    void GivenReceiptsThatEachMissOneFilter_WhenFindGlobalWithBuyerEventAndDates_ThenOnlyTheReceiptMatchingAllIsReturned() {
+        LocalDateTime inRange = LocalDateTime.of(2026, 10, 30, 12, 0);
+        repo.save(receipt(1, 7, 5, inRange));
+        repo.save(receipt(2, 9, 5, inRange));
+        repo.save(receipt(3, 7, 6, inRange));
+        repo.save(receipt(4, 7, 5, inRange.plusDays(2)));
+
+        assertEquals(Set.of(1), ids(repo.findGlobal(new GlobalHistoryFiltersDTO(
+                7, null, List.of(5), LocalDate.of(2026, 10, 30), LocalDate.of(2026, 10, 31)))));
+    }
+
+    private OrderReceipt receipt(int receiptId, int userId, int eventId, LocalDateTime purchasedAt) {
+        return OrderReceipt.forMember(receiptId, userId, 50.0,
+                List.of(new ReceiptLine(receiptId * 10, 50.0, eventId, 1, "A1", purchasedAt)), purchasedAt);
     }
 
     @Test
