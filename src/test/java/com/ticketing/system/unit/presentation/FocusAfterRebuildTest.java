@@ -341,7 +341,8 @@ class FocusAfterRebuildTest {
         assertFocusMovesTo(view, () -> {
             A11y.activate(revoke);
             assertTrue(harness.confirmOpenDialog(), "revoking asks for confirmation first");
-        }, t -> "heading".equals(A11y.role(t)), "revoking the last manager", "the roster's heading");
+        }, t -> "heading".equals(A11y.role(t)) && "Active Managers".equals(A11y.name(t)), "revoking the last manager",
+            "the roster's heading, \"Active Managers\"");
     }
 
     // ---- LkTextRows ----

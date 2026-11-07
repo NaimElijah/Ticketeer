@@ -9,6 +9,7 @@ import static com.ticketing.system.unit.presentation.InboxViewHarness.rows;
 import static com.ticketing.system.unit.presentation.InboxViewHarness.thread;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
@@ -94,6 +95,9 @@ class CompanyInquiryInboxViewTest {
         applyStatusFilter(view, "Open");
 
         assertEquals(1, rows(view).size());
+        String current = rows(view).get(0).getElement().getAttribute("aria-current");
+        assertTrue(current != null && !current.isBlank() && !"false".equals(current),
+            "the thread left must be the one shown as selected");
         verify(presenter, never()).open(any(), any(), any());
     }
 

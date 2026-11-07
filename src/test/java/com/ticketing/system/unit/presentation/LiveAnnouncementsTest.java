@@ -257,7 +257,7 @@ class LiveAnnouncementsTest {
 
         field(view, TextField.class, "Search members").setValue("al");
 
-        assertAnnouncedByAnExistingRegion(view, regionsBefore, Pattern.compile("\\b2\\b"),
+        assertAnnouncedByAnExistingRegion(view, regionsBefore, Pattern.compile("\\b2 members found\\b"),
             "the number of members found");
     }
 

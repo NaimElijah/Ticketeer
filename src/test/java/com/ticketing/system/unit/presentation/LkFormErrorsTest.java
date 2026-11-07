@@ -55,7 +55,7 @@ class LkFormErrorsTest {
     // ---- a value that breaks the field's own constraint ----
 
     @Test
-    void GivenARefusedAgeField_WhenTheUserEntersAnAgeAboveItsMaximum_ThenItShowsItsOwnErrorNotTheRefusal() {
+    void GivenARefusedAgeField_WhenTheUserEntersAnAgeAboveItsMaximum_ThenItIsInvalidAndTheRefusalIsGone() {
         IntegerField age = ageField();
         new LkFormErrors().reject(age, ENTER_AGE);
 
@@ -63,7 +63,7 @@ class LkFormErrorsTest {
 
         assertTrue(age.isInvalid(), "an age above " + MAX_AGE + " breaks the field's own range");
         assertNotEquals(ENTER_AGE, age.getErrorMessage(), "the field now holds an age, so it must not still say \""
-            + ENTER_AGE + "\"; it must show its own error for the range");
+            + ENTER_AGE + "\"");
     }
 
     @Test
@@ -80,7 +80,7 @@ class LkFormErrorsTest {
     }
 
     @Test
-    void GivenARefusedEmailField_WhenTheUserEntersAMalformedAddress_ThenItShowsItsOwnErrorNotTheRefusal() {
+    void GivenARefusedEmailField_WhenTheUserEntersAMalformedAddress_ThenItIsInvalidAndTheRefusalIsGone() {
         EmailField email = new EmailField("Email");
         new LkFormErrors().reject(email, ENTER_EMAIL);
 
@@ -88,7 +88,7 @@ class LkFormErrorsTest {
 
         assertTrue(email.isInvalid(), "\"bob@\" breaks the email field's own format");
         assertNotEquals(ENTER_EMAIL, email.getErrorMessage(), "the field now holds an address, so it must not still "
-            + "say \"" + ENTER_EMAIL + "\"; it must show its own error for the format");
+            + "say \"" + ENTER_EMAIL + "\"");
     }
 
     @Test
@@ -121,7 +121,7 @@ class LkFormErrorsTest {
     // ---- through RegisterView ----
 
     @Test
-    void GivenRegistrationRefusedForAnEmptyAge_WhenTheUserEntersAnAgeAboveTheMaximum_ThenTheAgeShowsItsOwnError() {
+    void GivenRegistrationRefusedForAnEmptyAge_WhenTheUserEntersAnAgeAboveTheMaximum_ThenTheAgeIsInvalidAndTheRefusalIsGone() {
         UsernameAvailabilityPresenter availability = mock(UsernameAvailabilityPresenter.class);
         when(availability.check(any())).thenReturn(new UsernameAvailabilityPresenter.Outcome.Available());
         RegisterView view = new RegisterView(mock(RegisterPresenter.class), availability, mock(SessionIdentity.class));

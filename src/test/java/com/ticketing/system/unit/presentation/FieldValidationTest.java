@@ -433,7 +433,7 @@ class FieldValidationTest {
     // ---- VenueMapEditorView ----
 
     @Test
-    void GivenAnEmptyZoneName_WhenTheOwnerAppliesTheZone_ThenTheZoneNameIsInvalidAndFocused() {
+    void GivenThePresenterRefusesTheZoneName_WhenTheOwnerAppliesTheZone_ThenTheZoneNameIsInvalidAndFocused() {
         VenueMapEditorView view = venueEditor(new VenueMapPresenter.ZoneOutcome.InvalidName());
 
         click(button(view, "Apply Zone"));
@@ -442,7 +442,7 @@ class FieldValidationTest {
     }
 
     @Test
-    void GivenAnInvalidPrice_WhenTheOwnerAppliesTheZone_ThenThePriceIsInvalidAndFocused() {
+    void GivenThePresenterRefusesThePrice_WhenTheOwnerAppliesTheZone_ThenThePriceIsInvalidAndFocused() {
         VenueMapEditorView view = venueEditor(new VenueMapPresenter.ZoneOutcome.InvalidPrice());
 
         click(button(view, "Apply Zone"));

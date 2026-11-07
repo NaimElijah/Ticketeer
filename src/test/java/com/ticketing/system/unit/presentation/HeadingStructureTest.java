@@ -141,6 +141,7 @@ class HeadingStructureTest {
         view.beforeEnter(routeTo("eventId", "5"));
 
         assertOneH1(view);
+        assertEquals(List.of("Coldplay"), h1Texts(view), "the event page's h1 names the event");
     }
 
     @Test
@@ -200,11 +201,15 @@ class HeadingStructureTest {
 
     // ---- helpers ---------------------------------------------------------------------------------
 
-    private static void assertOneH1(Component page) {
-        List<String> h1s = A11y.elements(page).stream()
+    private static List<String> h1Texts(Component page) {
+        return A11y.elements(page).stream()
             .filter(e -> isHeading(e) && level(e) == 1 && e.isVisible())
             .map(A11y::text)
             .toList();
+    }
+
+    private static void assertOneH1(Component page) {
+        List<String> h1s = h1Texts(page);
         assertEquals(1, h1s.size(), "the page must have exactly one h1 naming it; it has: " + h1s
             + " among headings " + A11y.elements(page).stream().filter(HeadingStructureTest::isHeading)
                 .map(e -> "h" + level(e) + " \"" + A11y.text(e) + "\"").toList());

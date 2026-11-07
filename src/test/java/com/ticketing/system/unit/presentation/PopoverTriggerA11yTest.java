@@ -152,6 +152,10 @@ class PopoverTriggerA11yTest {
         String popup = trigger.getAttribute("aria-haspopup");
         assertTrue(popup != null && !popup.isBlank() && !"false".equals(popup),
             "the trigger must say it opens a popup (aria-haspopup): " + A11y.describe(trigger));
+        List<Popover> popovers = ViewHarness.find(field, Popover.class);
+        assertEquals(1, popovers.size(), "the field must have one popover");
+        assertEquals(trigger, popovers.get(0).getTarget().getElement(), "the popover must open from the trigger");
+        assertTrue(popovers.get(0).isOpenOnClick(), "the trigger's click must open the popover");
     }
 
     // The trigger is what takes focus outside the popover's overlay.

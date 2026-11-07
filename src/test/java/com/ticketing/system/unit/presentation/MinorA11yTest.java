@@ -186,8 +186,7 @@ class MinorA11yTest {
         meter.update("abcdefgh");
 
         Element bar = strengthBar(meter);
-        String valueText = bar.getAttribute("aria-valuetext");
-        assertTrue(valueText != null && !valueText.isBlank(),
+        assertEquals(PasswordStrength.of("abcdefgh").label(), bar.getAttribute("aria-valuetext"),
             "the bar must say its tier in words (aria-valuetext), not only a fraction: " + A11y.describe(bar));
     }
 
@@ -675,7 +674,7 @@ class MinorA11yTest {
     // ---- ReceiptView refund badges ----
 
     @Test
-    void GivenAPartlyRefundedReceipt_WhenItRenders_ThenTheRefundStatusSaysPartlyNotThreeTicks() {
+    void GivenAPartlyRefundedReceipt_WhenItRenders_ThenTheRefundStatusSaysPartly() {
         MemberAccountService accountService = mock(MemberAccountService.class);
         when(accountService.viewMyReceipt(MEMBER_TOKEN, ORDER_ID)).thenReturn(receipt(RefundStatus.PARTIAL));
         SessionIdentity identity = mock(SessionIdentity.class);
@@ -728,6 +727,7 @@ class MinorA11yTest {
         ViewHarness.signInAdmin();
         AdminSendMessagesView view = sendMessagesView();
 
+        List<Element> groups = new ArrayList<>();
         for (String choice : List.of("All members", "All producers")) {
             Element control = A11y.elements(view, e -> choice.equals(A11y.name(e)) && !A11y.role(e).isEmpty())
                 .stream()
@@ -740,7 +740,10 @@ class MinorA11yTest {
                 "\"" + choice + "\" must sit in a radio group (role=radiogroup or a RadioButtonGroup): "
                     + A11y.describe(control)));
             assertFalse(groupName(group).isBlank(), "the radio group must be named: " + A11y.describe(group));
+            groups.add(group);
         }
+        // Two radios in two groups can both be on, which is the defect the radios fix.
+        assertEquals(groups.get(0), groups.get(1), "\"All members\" and \"All producers\" must share one group");
     }
 
     // ---- assertions ------------------------------------------------------------------------------
