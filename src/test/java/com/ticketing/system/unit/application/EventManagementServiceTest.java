@@ -850,6 +850,7 @@ class EventManagementServiceTest {
                                                 null));
 
                 assertEquals("New Concert Name", event.getName());
+                verify(mockEventRepo).save(event);
         }
 
         @Test
@@ -876,6 +877,7 @@ class EventManagementServiceTest {
                                 new EventUpdateDTO(String.valueOf(EVENT_ID), null, null, "MUSIC", null, null, null));
 
                 assertEquals(EventCategory.MUSIC, event.getCategory());
+                verify(mockEventRepo).save(event);
         }
 
         // Under a Turkish default locale "music".toUpperCase() is "MUS\u0130C", with a dotted capital I,
@@ -953,6 +955,7 @@ class EventManagementServiceTest {
                 eventService.changeEventStatus(MANAGE_INVENTORY_TOKEN, EVENT_ID, EventStatus.ON_SALE);
 
                 assertEquals(EventStatus.ON_SALE, event.getStatus());
+                verify(mockEventRepo).save(event);
         }
 
         @Test
@@ -2044,6 +2047,7 @@ class EventManagementServiceTest {
                 eventService.setEventPolicies(OWNER_TOKEN, new EventPolicyConfigDTO(COMPANY_ID, EVENT_ID, read));
 
                 assertEquals(stored, event.getPurchasePolicy(), "read as " + read);
+                verify(mockEventRepo).save(event);
         }
 
         @Test

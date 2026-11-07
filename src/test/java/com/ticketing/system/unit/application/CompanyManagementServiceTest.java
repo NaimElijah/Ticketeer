@@ -192,6 +192,7 @@ public class CompanyManagementServiceTest {
                 companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
 
                 assertTrue(company.getManagers().contains(TARGET_USER_ID));
+                verify(mockCompanyRepo).updateCompany(company);
         }
 
         @Test
@@ -1720,6 +1721,7 @@ public class CompanyManagementServiceTest {
                 companyService.setCompanyPolicies(OWNER_TOKEN, new CompanyPolicyConfigDTO(COMPANY_ID, read, List.of()));
 
                 assertEquals(stored, company.getPurchasePolicy(), "read as " + read);
+                verify(mockCompanyRepo).save(company);
         }
 
         @Test
