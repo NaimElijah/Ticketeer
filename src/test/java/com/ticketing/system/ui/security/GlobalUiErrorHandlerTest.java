@@ -2,6 +2,7 @@ package com.ticketing.system.ui.security;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -97,7 +98,9 @@ class GlobalUiErrorHandlerTest {
 
     @Test
     void GivenNoCurrentUi_WhenAnErrorReachesTheSessionsHandler_ThenItIsLoggedAndNothingThrows() throws Exception {
+        UI.setCurrent(null);
         ErrorHandler handler = sessionErrorHandler();
+        assertNull(UI.getCurrent(), "precondition: no UI is current");
 
         assertDoesNotThrow(() -> handler.error(new ErrorEvent(new IllegalStateException("boom"))));
 
