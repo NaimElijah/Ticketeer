@@ -93,6 +93,8 @@ class FieldOwnRuleMessagesTest {
     private static final String MALFORMED_EMAIL = "bob@";
     private static final String RESERVED_USERNAME = "admin";
     private static final String PASSWORD = "Secret-pw-123";
+    private static final String UNMATCHED_SEARCH = "zzz";
+    private static final String CHOOSE_COMPANY = "Please choose a production company.";
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
     private static final String GUEST_SESSION = "guest-1";
     // What the complaint presenter allows in the details, well above anything these tests type.
@@ -396,6 +398,24 @@ class FieldOwnRuleMessagesTest {
         typeThenEmpty(field);
 
         assertSaysWhatIsWrong(field, label);
+    }
+
+    // The search box validates nothing itself, but a refusal hands it back to its required rule on its next edit.
+    @Test
+    void GivenASearchWithNoCompanyPickedWasRefused_WhenTheSearchIsCleared_ThenItSaysToChooseACompany() {
+        ViewHarness.signInMember();
+        NewInquiryPresenter presenter = mock(NewInquiryPresenter.class);
+        when(presenter.searchCompanies(anyString())).thenReturn(new NewInquiryPresenter.SearchOutcome.Success(List.of()));
+        NewInquiryView view = new NewInquiryView(presenter);
+        harness.attach(view);
+        TextField search = field(view, TextField.class, "Production company");
+        search.setValue(UNMATCHED_SEARCH);
+        click(button(view, "Submit Inquiry"));
+        assertEquals(CHOOSE_COMPANY, search.getErrorMessage(), "the search with no company picked must be refused first");
+
+        search.clear();
+
+        assertSays(search, CHOOSE_COMPANY, "a cleared search with no company picked");
     }
 
     // ---- SubmitComplaintView ----

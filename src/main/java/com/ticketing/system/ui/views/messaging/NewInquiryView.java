@@ -96,6 +96,9 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
         // The box holds a search, not the answer: the chosen company is held apart and the box is cleared
         // once one is picked, so its own required check would flag a valid form. This view checks it.
         companySearch.setManualValidation(true);
+        // A refusal still hands the box back to that required check on its next edit (LkFormErrors), and an
+        // empty box there means no company is picked yet, so the check names the choice (#189).
+        LkFieldRules.sayWhenEmpty(companySearch, CHOOSE_COMPANY);
         companySearch.setWidthFull();
         companySearch.setClearButtonVisible(true);
         companySearch.setValueChangeMode(ValueChangeMode.LAZY);
