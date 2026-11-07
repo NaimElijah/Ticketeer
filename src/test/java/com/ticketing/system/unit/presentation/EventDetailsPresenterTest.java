@@ -171,4 +171,18 @@ class EventDetailsPresenterTest {
         assertEquals(new EventDetailsPresenter.Outcome.Failure("Your session has expired - please refresh and try again."),
                 presenter.load(CRED, EVENT_ID));
     }
+
+    // ---- the organizer's rating is best-effort (#189) ----
+
+    @Test
+    void GivenTheCompanyRatingFails_WhenLoad_ThenThePageStillLoadsWithNoRating() {
+        EventDetailDTO detail = detail();
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenReturn(detail);
+        VenueMapDTO map = venueMap();
+        when(catalogService.getEventVenueMap(CRED, EVENT_ID)).thenReturn(map);
+        when(catalogService.companyRating(10)).thenThrow(new PersistenceException("could not prepare statement"));
+
+        assertEquals(new EventDetailsPresenter.Outcome.Success(detail, map.inventoryZones(), 4, 4, null),
+                presenter.load(CRED, EVENT_ID));
+    }
 }

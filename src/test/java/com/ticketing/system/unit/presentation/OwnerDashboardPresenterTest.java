@@ -161,4 +161,25 @@ class OwnerDashboardPresenterTest {
 
         assertInstanceOf(OwnerDashboardPresenter.Outcome.NotAuthenticated.class, presenter.loadFor(TOKEN, null));
     }
+
+    // ---- the dashboard call itself refuses the token; an id the caller is not in (#189) ----
+
+    @Test
+    void GivenATokenRevokedBetweenTheCompaniesAndTheDashboard_WhenLoadFor_ThenNotAuthenticated() {
+        when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder")));
+        when(companyAnalyticsService.dashboard(TOKEN, 7)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new OwnerDashboardPresenter.Outcome.NotAuthenticated(), presenter.loadFor(TOKEN, null));
+    }
+
+    @Test
+    void GivenACompanyIdTheCallerIsNotIn_WhenLoadFor_ThenTheFirstCompanyIsSelected() {
+        MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Founder");
+        MyCompanyDTO second = new MyCompanyDTO(9, "Globex", "Manager");
+        when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first, second));
+        when(companyAnalyticsService.dashboard(TOKEN, 7)).thenReturn(stats());
+
+        assertEquals(new OwnerDashboardPresenter.Outcome.Success(List.of(first, second), first, stats()),
+            presenter.loadFor(TOKEN, 99));
+    }
 }

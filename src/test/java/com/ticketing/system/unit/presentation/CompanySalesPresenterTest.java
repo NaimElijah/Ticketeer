@@ -21,6 +21,11 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.company.CompanySalesPresenter;
 import com.ticketing.system.shared.exception.SessionExpiredException;
+import jakarta.persistence.PersistenceException;
+import com.ticketing.system.ui.support.ServiceErrors;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 
 class CompanySalesPresenterTest {
 
@@ -94,5 +99,47 @@ class CompanySalesPresenterTest {
         when(companyManagementService.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
 
         assertInstanceOf(CompanySalesPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN, null));
+    }
+
+    // ---- which company's sales, and a failure with no rule behind it (#189) ----
+
+    @Test
+    void GivenACallerInNoCompany_WhenLoad_ThenNoCompanyAndNoSalesRead() {
+        when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of());
+
+        assertEquals(new CompanySalesPresenter.Outcome.NoCompany(), presenter.load(TOKEN, null));
+        verify(companyAnalyticsService, never()).salesHistory(anyString(), anyInt());
+    }
+
+    @Test
+    void GivenTwoCompaniesAndNoSelection_WhenLoad_ThenTheFirstCompanysSales() {
+        PurchaseHistoryDTO sales = new PurchaseHistoryDTO(List.of());
+        when(companyManagementService.findMyCompanies(TOKEN))
+            .thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder"), new MyCompanyDTO(9, "Globex", "Manager")));
+        when(companyAnalyticsService.salesHistory(TOKEN, 7)).thenReturn(sales);
+
+        assertEquals(new CompanySalesPresenter.Outcome.Success("Acme", sales), presenter.load(TOKEN, null));
+    }
+
+    @Test
+    void GivenASelectionTheCallerIsNotIn_WhenLoad_ThenTheFirstCompanysSales() {
+        PurchaseHistoryDTO sales = new PurchaseHistoryDTO(List.of());
+        when(companyManagementService.findMyCompanies(TOKEN))
+            .thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder"), new MyCompanyDTO(9, "Globex", "Manager")));
+        when(companyAnalyticsService.salesHistory(TOKEN, 7)).thenReturn(sales);
+
+        assertEquals(new CompanySalesPresenter.Outcome.Success("Acme", sales), presenter.load(TOKEN, 99));
+        verify(companyAnalyticsService, never()).salesHistory(TOKEN, 99);
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenLoad_ThenFailureCarriesTheGenericText() {
+        when(companyManagementService.findMyCompanies(TOKEN))
+            .thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder")));
+        when(companyAnalyticsService.salesHistory(TOKEN, 7))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select * from order_receipts]"));
+
+        assertEquals(new CompanySalesPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.load(TOKEN, null));
     }
 }
