@@ -574,7 +574,8 @@ public class CheckoutService {
             throw new InvalidTokenException("Missing authentication token");
         }
 
-        // Refuses, by throwing, every token validateToken would: invalid, revoked, expired or not a member's.
+        // extractUserId throws for an invalid, revoked or expired token, or one not a member's, so no separate
+        // validateToken call is needed.
         int userId = sessionManager.extractUserId(token);
         if (userId <= 0) {
             throw new AuthenticationFailedException();
