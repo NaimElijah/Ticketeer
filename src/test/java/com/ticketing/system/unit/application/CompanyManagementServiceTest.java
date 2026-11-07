@@ -1249,6 +1249,93 @@ public class CompanyManagementServiceTest {
                 return node.appointedByThisUser().stream().map(OrganizationalTreeNodeDTO::userId).toList();
         }
 
+        // ---- a manager promoted to owner (UC-23 over UC-24) ------------------------------------
+        // A manager may hold a pending owner offer; accepting it from the manager's own appointer swaps the
+        // manager appointment for an owner one. Any other offer, or a second one, is refused.
+
+        private ProductionCompany founderAppointedTheTargetAsManager() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(CO_OWNER_ID, "coOwner", CO_OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "manager", TARGET_TOKEN);
+                companyService.appointManager(OWNER_TOKEN,
+                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions));
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+                return company;
+        }
+
+        private List<String> appointmentsOfTarget() {
+                return membershipService.getAllCompanyAppointments(TARGET_USER_ID).stream()
+                                .map(a -> a.getRole() + ":" + a.getStatus() + ":by" + a.getInviterId())
+                                .sorted().toList();
+        }
+
+        @Test
+        public void GivenActiveManagerWithOwnerOfferFromSameAppointer_WhenAccept_ThenOwnerAndManagerAppointmentRevoked() {
+                ProductionCompany company = founderAppointedTheTargetAsManager();
+                companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID));
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+
+                assertEquals(List.of("Manager:REVOKED:by" + OWNER_ID, "Owner:ACTIVE:by" + OWNER_ID), appointmentsOfTarget(),
+                                "exactly one active appointment, the owner one");
+                assertTrue(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID));
+                assertTrue(company.isOwner(TARGET_USER_ID));
+                assertFalse(company.getManagers().contains(TARGET_USER_ID), "a promoted manager leaves the manager list");
+        }
+
+        @Test
+        public void GivenOwnerOfferFromDifferentAppointer_WhenAccept_ThenRefusedAndStillAManager() {
+                ProductionCompany company = founderAppointedTheTargetAsManager();
+                companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, CO_OWNER_ID));
+                companyService.respondToAppointment(CO_OWNER_TOKEN, new AppointmentResponseDTO(COMPANY_ID, true));
+                companyService.appointOwner(CO_OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID));
+
+                BusinessRuleViolationException refused = assertThrowsExactly(BusinessRuleViolationException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                                new AppointmentResponseDTO(COMPANY_ID, true)));
+
+                assertEquals("Cannot accept owner appointment while a manager appointment from a DIFFERENT appointer "
+                                + "is active; revoke the manager appointment first", refused.getMessage());
+                assertEquals(List.of("Manager:ACTIVE:by" + OWNER_ID, "Owner:PENDING:by" + CO_OWNER_ID),
+                                appointmentsOfTarget(), "still the founder's manager, the offer still pending");
+                assertFalse(company.isOwner(TARGET_USER_ID));
+                assertTrue(company.getManagers().contains(TARGET_USER_ID));
+        }
+
+        @Test
+        public void GivenActiveOwner_WhenReceiveOwnerAppointment_ThenRefusedAndNoOfferMade() {
+                companyWithCoOwnerWhoInvitedAManager(false);
+                clearInvocations(eventPublisher);
+
+                BusinessRuleViolationException refused = assertThrowsExactly(BusinessRuleViolationException.class,
+                                () -> companyService.appointOwner(OWNER_TOKEN,
+                                                new OwnerAppointmentRequestDTO(COMPANY_ID, CO_OWNER_ID)));
+
+                assertEquals("User already has an active Owner appointment in this company", refused.getMessage());
+                assertNull(membershipService.getPendingCompanyAppointment(CO_OWNER_ID, COMPANY_ID));
+                verifyNoInteractions(eventPublisher);
+        }
+
+        // The message's grammar ("an pending") is production text, pinned as it stands.
+        @Test
+        public void GivenPendingOwnerOffer_WhenReceiveOwnerAppointmentAgain_ThenRefusedAndOneOfferStands() {
+                founderAppointedTheTargetAsManager();
+                companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID));
+                clearInvocations(eventPublisher);
+
+                BusinessRuleViolationException refused = assertThrowsExactly(BusinessRuleViolationException.class,
+                                () -> companyService.appointOwner(OWNER_TOKEN,
+                                                new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID)));
+
+                assertEquals("User already has an pending appointment in this company", refused.getMessage());
+                assertEquals(List.of("Manager:ACTIVE:by" + OWNER_ID, "Owner:PENDING:by" + OWNER_ID), appointmentsOfTarget());
+                verifyNoInteractions(eventPublisher);
+        }
+
         // ---- a manager invitation is a pending offer, not a role change (#187) ----------------
         // The invitee's role changes only when they accept, so the invitation must not tell them it
         // already has; the acceptance tells them once.
