@@ -12,9 +12,15 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
@@ -104,6 +110,81 @@ class EventTest extends BaseDomainTest {
 
         assertEquals("Cannot reconfigure venue map while tickets are reserved or sold", refused.getMessage());
         assertSame(before, event.getVenueMap());
+    }
+
+    // ---- only the owning company changes an event's layout (#189) ----
+
+    private final int OTHER_COMPANY_ID = COMPANY_ID + 1;
+
+    @Test
+    void GivenOtherCompany_WhenConfigureVenueMap_ThenUnauthorizedAndMapKept() {
+        VenueMap before = event.getVenueMap();
+        VenueMap replacement = new VenueMap(2, LOCATION, List.of(new StandingZone(ZONE_ID + 1, "Replacement", 10, 100)));
+
+        assertThrows(UnauthorizedActionException.class, () -> event.configureVenueMap(replacement, OTHER_COMPANY_ID));
+
+        assertSame(before, event.getVenueMap());
+    }
+
+    @Test
+    void GivenNoMap_WhenConfigureVenueMap_ThenRefusedAndMapKept() {
+        VenueMap before = event.getVenueMap();
+
+        assertThrows(IllegalArgumentException.class, () -> event.configureVenueMap(null, COMPANY_ID));
+
+        assertSame(before, event.getVenueMap());
+    }
+
+    // Each layout edit an owner can make, made on a SCHEDULED event with a standing zone (1) and a seated one (2).
+    static Stream<Named<Consumer<Event>>> layoutEditsByAnotherCompany() {
+        int other = 101; // not COMPANY_ID, which is 100
+        return Stream.of(
+                Named.<Consumer<Event>>of("addStandingZone", e -> e.addStandingZone("Late", 5, 10.0, other)),
+                Named.<Consumer<Event>>of("addSeatedZone",
+                        e -> e.addSeatedZone("Late", 10.0, List.of(new Seat("C1", 0, 0)), other)),
+                Named.<Consumer<Event>>of("removeInventoryZone", e -> e.removeInventoryZone(1, other)),
+                Named.<Consumer<Event>>of("addPlacesToStandingZone", e -> e.addPlacesToStandingZone(1, 5, other)),
+                Named.<Consumer<Event>>of("removePlacesFromStandingZone",
+                        e -> e.removePlacesFromStandingZone(1, 5, other)),
+                Named.<Consumer<Event>>of("addSeatsToSeatedZone",
+                        e -> e.addSeatsToSeatedZone(2, List.of(new Seat("B2", 1, 0)), other)),
+                Named.<Consumer<Event>>of("removeSeatsFromSeatedZone",
+                        e -> e.removeSeatsFromSeatedZone(2, List.of("B1"), other)));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("layoutEditsByAnotherCompany")
+    void GivenAnotherCompany_WhenItEditsTheLayout_ThenUnauthorizedAndTheLayoutIsUnchanged(Consumer<Event> edit) {
+        StandingZone standing = track(new StandingZone(1, "General", 100, 50));
+        SeatedZone seated = track(new SeatedZone(2, "Balcony", 80, List.of(new Seat("B1", 0, 0))));
+        Event e = createEventWithZones(List.of(standing, seated));
+
+        assertThrows(UnauthorizedActionException.class, () -> edit.accept(e));
+
+        assertEquals(List.of(1, 2), zoneIds(e));
+        assertEquals(100, standing.getCapacity());
+        assertEquals(1, seated.getCapacity());
+    }
+
+    // ---- rating bounds (#189): a finite value in [0, 5] ----
+
+    @ParameterizedTest(name = "rating={0}")
+    @ValueSource(doubles = {0.0, 5.0})
+    void GivenRatingAtEitherBound_WhenConstructed_ThenAccepted(double rating) {
+        Event e = track(new Event(EVENT_ID, "Concert", rating, ARTISTS, EventCategory.CONCERT, COMPANY_ID,
+                EventStatus.SCHEDULED, new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100))),
+                List.of(FIXED_SHOW), JERUSALEM, null, new DiscountPolicy(0)));
+
+        assertEquals(rating, e.getRating());
+    }
+
+    @ParameterizedTest(name = "rating={0}")
+    @ValueSource(doubles = {-0.1, 5.1, Double.NaN, Double.POSITIVE_INFINITY})
+    void GivenRatingOutsideZeroToFive_WhenConstructed_ThenThrowsIllegalState(double rating) {
+        assertThrows(IllegalStateException.class, () -> new Event(EVENT_ID, "Concert", rating, ARTISTS,
+                EventCategory.CONCERT, COMPANY_ID, EventStatus.SCHEDULED,
+                new VenueMap(1, LOCATION, List.of(new StandingZone(ZONE_ID, "VIP", 10, 100))),
+                List.of(FIXED_SHOW), JERUSALEM, null, new DiscountPolicy(0)));
     }
 
     // Construction-time invariant enforcement (issue #303): a freshly-constructed
@@ -1106,6 +1187,34 @@ class EventTest extends BaseDomainTest {
         assertTrue(message.contains("at most " + GROUP_LIMIT + " tickets"),
                 "the OR's other broken side must be named: " + message);
         assertFalse(message.contains(AGE_RULE), "the age rule the buyer met must not be named: " + message);
+    }
+
+    @Test
+    void GivenAnAdultWithinTheLimitOfBothPolicies_WhenValidateEffectivePolicy_ThenAccepted() {
+        Event limited = eventWithPolicy(new MaxTicketsPurchasePolicy(TICKET_LIMIT));
+        PurchaseContext checkout = new PurchaseContext(1, 30, limited.getId(), limited.getCompanyId(), TICKET_LIMIT,
+                PurchaseStage.CHECKOUT);
+
+        assertDoesNotThrow(() -> limited.validateEffectivePolicy(new AgePurchasePolicy(MINIMUM_AGE), checkout));
+    }
+
+    // A company with no policy restricts nothing, so the event's own policy alone decides.
+    @Test
+    void GivenNoCompanyPolicy_WhenValidateEffectivePolicyOverTheEventLimit_ThenOnlyTheEventLimitIsNamed() {
+        Event limited = eventWithPolicy(new MaxTicketsPurchasePolicy(TICKET_LIMIT));
+
+        String message = effectivePolicyRefusal(limited, null, 30, TICKET_LIMIT + 1);
+
+        assertTrue(message.contains(TICKET_LIMIT_RULE), "the broken ticket limit must be named: " + message);
+    }
+
+    @Test
+    void GivenNoCompanyPolicy_WhenValidateEffectivePolicyWithinTheEventLimit_ThenAccepted() {
+        Event limited = eventWithPolicy(new MaxTicketsPurchasePolicy(TICKET_LIMIT));
+        PurchaseContext checkout = new PurchaseContext(1, 30, limited.getId(), limited.getCompanyId(), TICKET_LIMIT,
+                PurchaseStage.CHECKOUT);
+
+        assertDoesNotThrow(() -> limited.validateEffectivePolicy(null, checkout));
     }
 
     private Event eventWithPolicy(PurchasePolicy eventPolicy) {
