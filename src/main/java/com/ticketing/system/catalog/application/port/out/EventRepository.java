@@ -89,10 +89,18 @@ public interface EventRepository extends IRepository<Event, Integer> {
     List<Event> searchByCompanyAll(int companyId, CatalogSearchFiltersDTO filters);
     
 
-    // Permanently removes a CANCELED event from the store.
+    /**
+     * Permanently removes a CANCELED event from the store, with everything it owns. An id the store does not
+     * hold changes nothing.
+     */
     void delete(int eventId);
 
+    /**
+     * Mints a new event id, greater than any this method returned before, a previous boot's included. So while
+     * every event's id comes from here, a new event never reuses a stored one's.
+     */
     int nextId();
 
+    /** Mints a new venue map id, on the same terms as {@link #nextId()}. */
     int nextVenueMapId();
 }
