@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.infrastructure.persistence.EventPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -51,6 +53,9 @@ public abstract class IEventRepositoryContractTest {
     private static final LocalDateTime FUTURE_START = LocalDateTime.of(2099, 6, 1, 18, 0);
     private static final LocalDateTime FUTURE_END = LocalDateTime.of(2099, 6, 1, 22, 0);
     private static final Location LOCATION = new Location("Belgium", "Brussels");
+    // The two companies the null-filter searches store events for.
+    private static final int NULL_FILTER_COMPANY_ID = 10;
+    private static final int NULL_FILTER_OTHER_COMPANY_ID = 20;
 
     @BeforeEach
     void setUp() {
@@ -683,6 +688,51 @@ public abstract class IEventRepositoryContractTest {
 
         assertEquals(1, result.size());
         assertEquals(1, result.get(0).getId());
+    }
+
+    // ---- a null filter is no filter ----
+    // Each search takes a null filter as CatalogSearchFiltersDTO.empty(), as OrderReceiptRepository.findGlobal
+    // does: the same events come back, not an exception.
+
+    @Test
+    void GivenEventsInEachStatusForTwoCompanies_WhenSearchAllWithANullFilter_ThenReturnsWhatTheEmptyFilterReturns() {
+        saveAnEventInEachStatusForEachCompany();
+
+        assertSameEvents(eventRepo.searchAll(CatalogSearchFiltersDTO.empty()), eventRepo.searchAll(null));
+    }
+
+    @Test
+    void GivenEventsInEachStatusForTwoCompanies_WhenSearchONSALEWithANullFilter_ThenReturnsWhatTheEmptyFilterReturns() {
+        saveAnEventInEachStatusForEachCompany();
+
+        assertSameEvents(eventRepo.searchONSALE(CatalogSearchFiltersDTO.empty()), eventRepo.searchONSALE(null));
+    }
+
+    @Test
+    void GivenEventsInEachStatusForTwoCompanies_WhenSearchByCompanyAllWithANullFilter_ThenReturnsWhatTheEmptyFilterReturns() {
+        saveAnEventInEachStatusForEachCompany();
+
+        assertSameEvents(eventRepo.searchByCompanyAll(NULL_FILTER_COMPANY_ID, CatalogSearchFiltersDTO.empty()),
+                eventRepo.searchByCompanyAll(NULL_FILTER_COMPANY_ID, null));
+    }
+
+    private void saveAnEventInEachStatusForEachCompany() {
+        EventStatus[] statuses = EventStatus.values();
+        for (int i = 0; i < statuses.length; i++) {
+            eventRepo.save(buildEvent(i + 1, statuses[i].name() + " Show", 4.5, NULL_FILTER_COMPANY_ID,
+                    statuses[i], EventCategory.CONCERT));
+            eventRepo.save(buildEvent(statuses.length + i + 1, statuses[i].name() + " Other Show", 4.5,
+                    NULL_FILTER_OTHER_COMPANY_ID, statuses[i], EventCategory.CONCERT));
+        }
+    }
+
+    private static void assertSameEvents(List<Event> withTheEmptyFilter, List<Event> withANullFilter) {
+        assertFalse(withTheEmptyFilter.isEmpty(), "the empty filter must find some of the stored events");
+        assertEquals(idsOf(withTheEmptyFilter), idsOf(withANullFilter));
+    }
+
+    private static Set<Integer> idsOf(List<Event> events) {
+        return events.stream().map(Event::getId).collect(Collectors.toSet());
     }
 
     // ---- search terms match as literal text, not as LIKE patterns (#187) ----

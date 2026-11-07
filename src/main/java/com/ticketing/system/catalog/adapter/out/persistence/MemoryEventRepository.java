@@ -173,9 +173,13 @@ public class MemoryEventRepository implements EventRepository {
 
     /*
      * A helper method to apply the various search filters to an event and return a boolean indicating
-     * whether the event matches the filters; used in the search() implementation above.
+     * whether the event matches the filters; used in the search() implementation above. A null filter
+     * matches every event, as the port requires.
      */
     private boolean matchesSearch(Event event, CatalogSearchFiltersDTO filters) {
+        if (filters == null) {
+            return true;
+        }
         // eventName — case-insensitive substring match on event name.
         if (filters.eventName() != null &&
                 !event.getName().toLowerCase(Locale.ROOT).contains(filters.eventName().toLowerCase(Locale.ROOT))) {

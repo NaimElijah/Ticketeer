@@ -63,11 +63,29 @@ public interface EventRepository extends IRepository<Event, Integer> {
     // #372 — full enumeration for the boot-time integrity scan (sellable <= inventory).
     List<Event> findAll();
 
-    // search across all events (filters from DTO).
+    /**
+     * Searches every event, in any status.
+     *
+     * @param filters the filters to narrow by; {@code null} means no filter, as {@link CatalogSearchFiltersDTO#empty()}
+     * @return the events matching every given filter, in no particular order
+     */
     List<Event> searchAll(CatalogSearchFiltersDTO filters);
-    // UC-7 — search across all events that are ON_SALE (filters from DTO).
+
+    /**
+     * Searches the events that are {@code ON_SALE}: the buyer's catalogue search (UC-7).
+     *
+     * @param filters the filters to narrow by; {@code null} means no filter, as {@link CatalogSearchFiltersDTO#empty()}
+     * @return the {@code ON_SALE} events matching every given filter, in no particular order
+     */
     List<Event> searchONSALE(CatalogSearchFiltersDTO filters);
-    // Owner event list — a single company's events (all statuses), narrowed by the DTO filters.
+
+    /**
+     * Searches one company's events, in any status: the owner's event list.
+     *
+     * @param companyId the company whose events to search
+     * @param filters   the filters to narrow by; {@code null} means no filter, as {@link CatalogSearchFiltersDTO#empty()}
+     * @return that company's events matching every given filter, in no particular order
+     */
     List<Event> searchByCompanyAll(int companyId, CatalogSearchFiltersDTO filters);
     
 
