@@ -228,10 +228,13 @@ class ReservationConcurrencyTest {
 
         ExecutorService pool = Executors.newFixedThreadPool(SNAPSHOT_HOLDERS);
         try {
-            List<Future<?>> reservations = new ArrayList<>();
+            // Minted before the workers start, so the session writes are not part of the race.
+            List<String> guestSessionIds = new ArrayList<>();
             for (int i = 0; i < SNAPSHOT_HOLDERS; i++) {
-                // Minted before the workers start, so the session writes are not part of the race.
-                String guestSessionId = authenticationService.startGuestSession().sessionId();
+                guestSessionIds.add(authenticationService.startGuestSession().sessionId());
+            }
+            List<Future<?>> reservations = new ArrayList<>();
+            for (String guestSessionId : guestSessionIds) {
                 reservations.add(pool.submit(
                         () -> reservationService.reserveForGuest(guestSessionId, eventId, zoneId, selection)));
             }
