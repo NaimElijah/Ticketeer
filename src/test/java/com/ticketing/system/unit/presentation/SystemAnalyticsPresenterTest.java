@@ -138,7 +138,6 @@ class SystemAnalyticsPresenterTest {
         MarketNotOpenException refusal = new MarketNotOpenException("platform not initialized");
         when(adminService.openMarket(any())).thenThrow(refusal);
 
-
         assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Rejected(refusal.getMessage()),
                 presenter.openMarket(TOKEN, "go"));
     }
