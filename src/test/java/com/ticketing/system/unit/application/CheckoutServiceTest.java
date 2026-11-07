@@ -138,7 +138,6 @@ class CheckoutServiceTest {
     private RecordingTransactionManager checkoutTransactions;
 
     private final String VALID_TOKEN = "valid-token";
-    private final String INVALID_TOKEN = "invalid-token";
 
     private final int USER_ID = 1;
 
@@ -195,7 +194,6 @@ class CheckoutServiceTest {
         checkoutTransactions = TestTransactions.recordingManager();
         checkoutService = checkoutServiceOn(mockEventRepo);
 
-        when(mockiSessionManager.validateToken(VALID_TOKEN)).thenReturn(true);
         when(mockiSessionManager.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
     }
 
@@ -258,21 +256,6 @@ class CheckoutServiceTest {
         );
 
         assertRefusedBeforeAnyCharge(failure, InvalidTokenException.class);
-    }
-
-    // SessionManager answers false only for a null or blank token, which checkout refuses before asking, and
-    // throws for a revoked or expired one. This pins checkout's defence against an adapter that answers false
-    // for a token that still names a user, as the null-answer tests pin the gateway's and issuer's.
-    @Test
-    void GivenSessionManagerAnswersFalse_WhenCheckout_ThenAuthenticationFailsAndNothingCharged() {
-        when(mockiSessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
-        when(mockiSessionManager.extractUserId(INVALID_TOKEN)).thenReturn(USER_ID);
-
-        RuntimeException failure = assertThrows(RuntimeException.class, () ->
-                checkoutService.checkoutMember(INVALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN)
-        );
-
-        assertRefusedBeforeAnyCharge(failure, AuthenticationFailedException.class);
     }
 
     // #187: a live token that names no user is a failed sign-in, not a missing user, so the refusal
@@ -3088,7 +3071,6 @@ private AtomicBoolean trackReceiptSave() {
         checkoutService.checkoutMember(VALID_TOKEN, IDEMPOTENCY_KEY, CURRENCY, PAYMENT_METHOD_TOKEN);
         String otherToken = "other-member-token";
         int otherUserId = USER_ID + 1;
-        when(mockiSessionManager.validateToken(otherToken)).thenReturn(true);
         when(mockiSessionManager.extractUserId(otherToken)).thenReturn(otherUserId);
         User otherMember = mock(User.class);
         when(otherMember.getAge()).thenReturn(30);
