@@ -425,13 +425,13 @@ class A11yFixtureTest {
         AtomicInteger clicks = new AtomicInteger();
         NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
         Div view = new Div(button);
+        assertFalse(view.getUI().isPresent(), "precondition: the view is on no page");
 
         AssertionError refused = assertThrows(AssertionError.class, () -> ViewHarness.click(button),
             "a view the router never attached shows nothing, so no visitor can click it");
 
         assertEquals(0, clicks.get(), "a refused click must not reach the listener");
         assertTrue(refused.getMessage().contains("attached to no UI"), "the failure must say why: " + refused);
-        assertFalse(view.getUI().isPresent(), "precondition: the view is on no page");
     }
 
     @Test
@@ -448,8 +448,10 @@ class A11yFixtureTest {
         assertEquals(1, clicks.get(), "only the click made while it showed reaches the listener");
     }
 
+    // Disabled as in GivenADisabledButton_WhenForceClicked_ThenItsListenerRuns, which a forced click reaches, so
+    // being on no page is the one difference and the reason the click fails.
     @Test
-    void GivenADisabledButtonOnNoPage_WhenForceClicked_ThenTheClickFails() {
+    void GivenAButtonOnNoPage_WhenForceClicked_ThenTheClickFails() {
         AtomicInteger clicks = new AtomicInteger();
         NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
         button.setEnabled(false);
