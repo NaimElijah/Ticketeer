@@ -188,6 +188,7 @@ class SessionTest extends BaseDomainTest {
         assertEquals(SessionKind.ADMIN, admin.getKind());
         assertEquals(5, admin.getUserId());
         assertFalse(admin.isGuest(), "a guest row is exactly a row without a user id");
+        assertFalse(admin.isMember(), "an admin row is not a member's, though it names a user id");
         assertEquals(T0, admin.getCreatedAt());
         assertEquals(T_EXPIRES, admin.getExpiresAt());
     }
