@@ -164,6 +164,10 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
                 ZoneId.of("Asia/Jerusalem"),
                 policy, new DiscountPolicy(0));
         repository.save(event);
+        // This test runs in the test transaction: without the flush and clear, findById would hand back
+        // the instance built above from the persistence context, and no row would be read.
+        entityManager.flush();
+        entityManager.clear();
 
         Event found = repository.findById(eventId);
         assertEquals(2, found.getVenueMap().getInventoryZones().size());
