@@ -56,6 +56,21 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
         return repository;
     }
 
+    // A new adapter instance models a restarted process (#19, as JpaTicketRepositoryContractTest does for
+    // tickets): the id sequence must resume above the rows a previous boot persisted, not start at 1.
+    @Test
+    void GivenReceiptsPersistedByAPreviousBoot_WhenAFreshAdapterMintsAnId_ThenItIsAboveTheExistingMax() {
+        data.saveAllAndFlush(List.of(receipt(1), receipt(2), receipt(3)));
+
+        int id = new JpaOrderReceiptRepository(data).nextId();
+
+        assertTrue(id > 3, "receipt id after a restart: " + id);
+    }
+
+    private static OrderReceipt receipt(int id) {
+        return OrderReceipt.forMember(id, 7, 50.0, List.of(new ReceiptLine(id * 10, 50.0, 5, 1, "A1", AT)), AT);
+    }
+
     // Review finding 4 on #129: a row written before refund state moved onto the lines (#20) records a
     // refund only in the order-level flag. Since V6 (#175) its lines read NONE from their rows, the
     // shape the raw SQL below writes. Only a database that predates the line state can hold one, so
