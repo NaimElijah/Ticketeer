@@ -3,6 +3,7 @@ package com.ticketing.system.ui.support;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -12,6 +13,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import com.ticketing.system.shared.config.PlatformTimeProperties;
 
@@ -104,6 +107,45 @@ class DisplayTimeTest {
     void GivenMidnightInJerusalem_WhenToRecorded_ThenThePreviousDayAt2100Utc() {
         assertThat(displayTime.toRecorded(LocalDateTime.of(2026, 7, 16, 0, 0)))
                 .isEqualTo(LocalDateTime.of(2026, 7, 15, 21, 0));
+    }
+
+    // ---- #189: each unit's edges, and Jerusalem in winter (IST, UTC+2) ----
+
+    @ParameterizedTest(name = "{0} ago reads {1}")
+    @CsvSource({
+        "PT59S, now", "PT1M, 1m", "PT59M59S, 59m", "PT1H, 1h", "PT23H59M, 23h", "PT24H, 1d",
+        "P6DT23H, 6d", "P7D, 1w", "P13DT23H, 1w", "P14D, 2w"})
+    void GivenAnAgeAtAUnitsEdge_WhenAgeShort_ThenItReadsInTheLargestWholeUnit(String age, String shown) {
+        assertThat(displayTime.ageShort(NOW_RECORDED.minus(Duration.parse(age)))).isEqualTo(shown);
+    }
+
+    @ParameterizedTest(name = "{0} ago reads {1}")
+    @CsvSource({
+        "PT23H59M, today", "P1D, yesterday", "P2D, 2 days ago", "P6DT23H, 6 days ago", "P7D, 1 week ago",
+        "P8D, 1 week ago", "P14D, 2 weeks ago"})
+    void GivenAnAgeAtADaysEdge_WhenAgeInDays_ThenItReadsInWholeDaysOrWeeks(String age, String shown) {
+        assertThat(displayTime.ageInDays(NOW_RECORDED.minus(Duration.parse(age)))).isEqualTo(shown);
+    }
+
+    @ParameterizedTest(name = "{0} ago reads {1}")
+    @CsvSource({
+        "PT59S, Just now", "PT1M, 1m", "PT59M, 59m", "PT1H, 1h", "PT23H59M, 23h", "P2D, 2d"})
+    void GivenAnAgeAtAUnitsEdge_WhenAgeForNotification_ThenItReadsInTheLargestWholeUnit(String age, String shown) {
+        assertThat(displayTime.ageForNotification(NOW_RECORDED.minus(Duration.parse(age)))).isEqualTo(shown);
+    }
+
+    @Test
+    void GivenPurchaseRecordedAt1700UtcInWinter_WhenFormatted_ThenShownAt1900InJerusalem() {
+        String shown = displayTime.format(LocalDateTime.of(2026, 1, 15, 17, 0),
+                DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.ENGLISH));
+
+        assertThat(shown).isEqualTo("15 Jan 2026 · 19:00");
+    }
+
+    @Test
+    void GivenMidnightInJerusalemInWinter_WhenToRecorded_ThenThePreviousDayAt2200Utc() {
+        assertThat(displayTime.toRecorded(LocalDateTime.of(2026, 1, 16, 0, 0)))
+                .isEqualTo(LocalDateTime.of(2026, 1, 15, 22, 0));
     }
 
     @Test
