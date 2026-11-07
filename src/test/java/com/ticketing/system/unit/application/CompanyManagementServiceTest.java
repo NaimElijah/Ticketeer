@@ -1503,11 +1503,15 @@ public class CompanyManagementServiceTest {
         @Test
         public void GivenAMemberToken_WhenAdminViewOrgTree_ThenInvalidTokenAndNoCompanyRead() {
                 givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                // SessionManager's contract: an admin reader refuses a member token by throwing; only a
+                // blank token answers false.
+                InvalidTokenException memberTokenRefused = new InvalidTokenException("session not found");
+                when(sessionManager.validateAdminToken(OWNER_TOKEN)).thenThrow(memberTokenRefused);
 
                 InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
                                 () -> companyService.adminViewOrgTree(OWNER_TOKEN, COMPANY_ID));
 
-                assertEquals("Invalid authentication token: Admin privileges required", refused.getMessage());
+                assertSame(memberTokenRefused, refused);
                 verifyNoInteractions(mockCompanyRepo);
         }
 
