@@ -36,6 +36,7 @@ class PostgresDriverSettingsTest {
                     HikariDataSource pool = context.getBean(HikariDataSource.class);
                     assertThat(pool.getDataSourceProperties().getProperty("socketTimeout")).isEqualTo(seconds);
                     assertThat(pool.getDataSourceProperties().getProperty("tcpKeepAlive")).isEqualTo("true");
+                    assertThat(pool.getDataSourceProperties().getProperty("logServerErrorDetail")).isEqualTo("false");
                 });
     }
 
