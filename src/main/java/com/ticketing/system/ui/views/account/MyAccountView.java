@@ -21,6 +21,7 @@ import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.security.Capability;
@@ -40,7 +41,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @Route(value = "my-account", layout = MainLayout.class)
@@ -54,8 +54,8 @@ public class MyAccountView extends LkPage {
     private static final String REQUEST_REFUND = "Request Refund";
     private static final String ORDER_PREFIX = "order #";
     private static final String SEAT_SEPARATOR = ", seat ";
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
-    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy", DisplayLocale.PAGE);
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", DisplayLocale.PAGE);
 
     private final MyAccountPresenter presenter;
     private final RefundPresenter refundPresenter;

@@ -18,6 +18,7 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
@@ -624,7 +625,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         return wrap;
     }
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM", DisplayLocale.PAGE);
 
     private static EventRow toRow(EventSummaryDTO dto) {
         LocalDateTime start = (dto.showDates() == null || dto.showDates().isEmpty())

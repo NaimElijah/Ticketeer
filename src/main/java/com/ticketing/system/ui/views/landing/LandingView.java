@@ -9,6 +9,7 @@ import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.views.catalog.EventDetailsView;
 import com.vaadin.flow.component.Component;
@@ -40,7 +41,7 @@ import java.util.Objects;
 public class LandingView extends LkPage {
 
     private static final DateTimeFormatter DATE_FMT =
-        DateTimeFormatter.ofPattern("d MMM · HH:mm zzz", Locale.ENGLISH);
+        DateTimeFormatter.ofPattern("d MMM · HH:mm zzz", DisplayLocale.PAGE);
 
     // A colour family BzPoster does not know, so it draws its neutral gradient.
     private static final String NEUTRAL_POSTER_GRADIENT = "";

@@ -25,6 +25,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.company.CompanySalesView;
 import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
@@ -48,7 +49,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -65,7 +65,7 @@ public class CompanyEventListView extends LkPage {
 
     /** Human-readable start date + time, e.g. "Jul 19, 2026 · 5:41 PM" (no ISO "T"/seconds gibberish). */
     private static final DateTimeFormatter DATE_TIME_FMT =
-            DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a zzz", Locale.US);
+            DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a zzz", DisplayLocale.PAGE);
 
     private final CompanyEventListPresenter presenter;
     private final DisplayTime displayTime;

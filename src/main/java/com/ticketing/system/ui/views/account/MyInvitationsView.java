@@ -16,6 +16,7 @@ import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
@@ -40,7 +41,7 @@ import java.util.stream.Collectors;
 public class MyInvitationsView extends LkPage {
 
     private static final String OWNER_ROLE = "Owner";
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.ENGLISH);
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM uuuu", DisplayLocale.PAGE);
 
     private final MyInvitationsPresenter presenter;
     private final DisplayTime displayTime;

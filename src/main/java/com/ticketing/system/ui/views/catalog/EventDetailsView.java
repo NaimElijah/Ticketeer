@@ -20,6 +20,7 @@ import com.ticketing.system.ui.components.venue.VkVenueMap;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.vaadin.flow.component.Component;
@@ -46,7 +47,7 @@ import java.util.Locale;
 public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT =
-            DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm zzz", Locale.US);
+            DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm zzz", DisplayLocale.PAGE);
     private static final String CHOOSE_TICKETS = "Choose Tickets";
     private static final String ORGANIZER_RATING = "Organizer rating";
 

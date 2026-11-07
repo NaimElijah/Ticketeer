@@ -21,6 +21,7 @@ import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter.S
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
@@ -53,7 +54,7 @@ import java.util.Map;
 @RequireCapability(Capability.BROADCAST_ANNOUNCEMENT)
 public class AdminSendMessagesView extends LkPage {
 
-    private static final DateTimeFormatter SENT_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
+    private static final DateTimeFormatter SENT_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", DisplayLocale.PAGE);
     private static final String NO_RECIPIENT = "Add at least one recipient, or pick all members / all producers.";
     private static final String RECIPIENTS = "Recipients";
     private static final String SEARCH_MEMBERS = "Search members";
