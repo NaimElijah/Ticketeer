@@ -37,6 +37,8 @@ class CredentialRequestToStringTest {
     private static final String CARD_NUMBER = "4000 0000 0000 4242";
     private static final String CARD_LAST_FOUR = CARD_NUMBER.substring(CARD_NUMBER.length() - 4);
     private static final String CVV = "123";
+    // No digit of it appears in anything else a register request's toString may show.
+    private static final int AGE = 47;
 
     @Test
     void GivenLoginRequest_WhenToString_ThenThePasswordIsAbsent() {
@@ -60,6 +62,17 @@ class CredentialRequestToStringTest {
         assertFalse(rendered.contains(GUEST_SESSION_ID),
                 "RegisterRequestDTO.toString() exposed the guest session id: " + rendered);
         assertFalse(rendered.contains(EMAIL), "RegisterRequestDTO.toString() exposed the email: " + rendered);
+    }
+
+    // #189: the age is personal data too, which AuthenticationService.validateAge keeps out of its message.
+    @Test
+    void GivenRegisterRequest_WhenToString_ThenTheAgeIsAbsent() {
+        RegisterRequestDTO request = new RegisterRequestDTO("alice", EMAIL, RAW_PASSWORD, GUEST_SESSION_ID, AGE);
+
+        String rendered = request.toString();
+
+        assertFalse(rendered.contains(String.valueOf(AGE)),
+                "RegisterRequestDTO.toString() exposed the age: " + rendered);
     }
 
     // #187: the published-language records below carry a session token or a guest session id, and a
