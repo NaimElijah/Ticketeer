@@ -4,6 +4,7 @@ import static com.ticketing.system.unit.presentation.ViewHarness.field;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -24,8 +25,10 @@ import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
+import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.views.admin.AdminComplaintRespondView;
 import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
@@ -35,6 +38,7 @@ import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
+import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.router.AfterNavigationEvent;
 
 /**
@@ -212,6 +216,24 @@ class FieldOwnRuleMessagesTest {
         typeThenEmpty(field);
 
         assertSaysWhatIsWrong(field, label);
+    }
+
+    // ---- AdminComplaintRespondView ----
+
+    @Test
+    void GivenTheComplaintResponsePage_WhenTheResponseIsEmptied_ThenItSaysWhatToWrite() {
+        ViewHarness.signInAdmin();
+        AdminComplaintQueuePresenter presenter = mock(AdminComplaintQueuePresenter.class);
+        when(presenter.loadOne(any(), anyString())).thenReturn(new AdminComplaintQueuePresenter.SingleOutcome.Success(
+            InboxViewHarness.thread("c1", "COMPLAINT", "ADMIN_GROUP")));
+        AdminComplaintRespondView view = new AdminComplaintRespondView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
+        view.beforeEnter(routeTo("id", "c1"));
+        TextArea reply = field(view, TextArea.class, "Your response");
+
+        typeThenEmpty(reply);
+
+        assertSaysWhatIsWrong(reply, "an emptied response");
     }
 
     // ---- shared ----
