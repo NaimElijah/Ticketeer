@@ -196,9 +196,8 @@ class LkFormErrorsTest {
         age.setValue(AGE_OVER_MAX);
 
         assertTrue(age.isInvalid(), "an age above the field's maximum is invalid by its own rule");
-        String message = age.getErrorMessage();
-        assertTrue(message != null && !message.isBlank(),
-            "an invalid age must say what is wrong with it; its message is \"" + message + "\"");
+        assertEquals("Enter an age from " + RegisterPresenter.MIN_AGE + " to " + RegisterPresenter.MAX_AGE + ".",
+            age.getErrorMessage(), "an invalid age must say what its range rule says");
     }
 
     @Test
@@ -210,9 +209,8 @@ class LkFormErrorsTest {
         email.setValue("bob@");
 
         assertTrue(email.isInvalid(), "\"bob@\" breaks the email field's own format");
-        String message = email.getErrorMessage();
-        assertTrue(message != null && !message.isBlank(),
-            "an invalid email must say what is wrong with it; its message is \"" + message + "\"");
+        assertEquals("Enter an email address like you@email.com.", email.getErrorMessage(),
+            "an invalid email must say what its format rule says");
     }
 
     private RegisterView registerView() {

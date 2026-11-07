@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
@@ -84,7 +85,8 @@ import com.vaadin.flow.router.AfterNavigationEvent;
  * A field that its own rule (required, a range, a length, a format) marks invalid says what is wrong (#189,
  * WCAG 3.3.1). A Vaadin field validates itself on every change, and without i18n text for the rule it breaks
  * it turns red with a blank message. Each test attaches the page, gives one field a value its own rule refuses,
- * and checks that the field is invalid and says why.
+ * and checks that the field is invalid and says what that rule says, word for word, so a message wired to the
+ * wrong rule fails too.
  */
 class FieldOwnRuleMessagesTest {
 
@@ -97,11 +99,21 @@ class FieldOwnRuleMessagesTest {
     private static final String PASSWORD = "Secret-pw-123";
     private static final String UNMATCHED_SEARCH = "zzz";
     private static final String CHOOSE_COMPANY = "Please choose a production company.";
+    private static final String ENTER_EMAIL = "Enter your email address.";
+    private static final String ENTER_AGE = "Enter your age.";
+    private static final String REGISTER_AGE_RANGE =
+        "Enter an age from " + RegisterPresenter.MIN_AGE + " to " + RegisterPresenter.MAX_AGE + ".";
+    private static final String GUEST_AGE_RANGE = "Enter an age from 1 to 120.";
+    private static final String GUEST_EMAIL_FORMAT = "Enter an email address like you@example.com.";
+    private static final String RATING_RANGE = "Enter a rating from 0 to 5.";
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
     private static final String GUEST_SESSION = "guest-1";
     // What the complaint presenter allows in the details, well above anything these tests type.
     private static final int COMPLAINT_DETAILS_LIMIT = 1000;
     private static final String RATING = "Rating (0–5)";
+    // Inside the price and rating filters' bounds, but off their steps of 10 and 0.5.
+    private static final int PRICE_OFF_STEP = 15;
+    private static final double RATING_OFF_STEP = 2.3;
     private static final VenueLimitsProperties VENUE_LIMITS = new VenueLimitsProperties(12, 49_500, 1_000_000, 100_000);
     private static final LocalDate START_DATE = LocalDate.of(2027, 8, 10);
 
@@ -120,13 +132,15 @@ class FieldOwnRuleMessagesTest {
     // ---- RegisterView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Password", "Confirm password"})
-    void GivenTheRegisterPage_WhenARequiredTextFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Password         | Enter a password.",
+        "Confirm password | Enter your password again."})
+    void GivenTheRegisterPage_WhenARequiredTextFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         Component field = field(registerPage(), Component.class, label);
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     @Test
@@ -135,7 +149,7 @@ class FieldOwnRuleMessagesTest {
 
         typeThenEmpty(email);
 
-        assertSaysWhatIsWrong(email, "Email");
+        assertSays(email, ENTER_EMAIL, "Email");
     }
 
     @Test
@@ -144,7 +158,8 @@ class FieldOwnRuleMessagesTest {
 
         email.setValue(EMAIL_OF_255_CHARACTERS);
 
-        assertSaysWhatIsWrong(email, "an email of 255 characters");
+        assertSays(email, "Enter at most " + RegisterPresenter.MAX_EMAIL_LENGTH + " characters.",
+            "an email of 255 characters");
     }
 
     @Test
@@ -153,7 +168,7 @@ class FieldOwnRuleMessagesTest {
 
         age.setValue(RegisterPresenter.MIN_AGE - 1);
 
-        assertSaysWhatIsWrong(age, "an age below the minimum");
+        assertSays(age, REGISTER_AGE_RANGE, "an age below the minimum");
     }
 
     @Test
@@ -163,7 +178,7 @@ class FieldOwnRuleMessagesTest {
 
         age.clear();
 
-        assertSaysWhatIsWrong(age, "an emptied age");
+        assertSays(age, ENTER_AGE, "an emptied age");
     }
 
     // The refusal's message is one the view set, so the next edit hands the field back to its required rule.
@@ -223,13 +238,17 @@ class FieldOwnRuleMessagesTest {
     // ---- CheckoutView, as a guest ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Cardholder name", "Card number", "Expiry", "CVC"})
-    void GivenTheGuestCheckout_WhenARequiredCardFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Cardholder name | Enter the name on the card.",
+        "Card number     | Enter the card number.",
+        "Expiry          | Enter the expiry date, as MM / YY.",
+        "CVC             | Enter the security code."})
+    void GivenTheGuestCheckout_WhenARequiredCardFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         Component field = field(guestCheckout(), Component.class, label);
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     @Test
@@ -238,7 +257,7 @@ class FieldOwnRuleMessagesTest {
 
         typeThenEmpty(email);
 
-        assertSaysWhatIsWrong(email, "an emptied guest email");
+        assertSays(email, ENTER_EMAIL, "an emptied guest email");
     }
 
     @Test
@@ -247,7 +266,7 @@ class FieldOwnRuleMessagesTest {
 
         email.setValue(MALFORMED_EMAIL);
 
-        assertSaysWhatIsWrong(email, "\"" + MALFORMED_EMAIL + "\"");
+        assertSays(email, GUEST_EMAIL_FORMAT, "\"" + MALFORMED_EMAIL + "\"");
     }
 
     @ParameterizedTest
@@ -257,7 +276,7 @@ class FieldOwnRuleMessagesTest {
 
         field.setValue(age);
 
-        assertSaysWhatIsWrong(field, "an age of " + age);
+        assertSays(field, GUEST_AGE_RANGE, "an age of " + age);
     }
 
     @Test
@@ -267,7 +286,7 @@ class FieldOwnRuleMessagesTest {
 
         field.clear();
 
-        assertSaysWhatIsWrong(field, "an emptied guest age");
+        assertSays(field, ENTER_AGE, "an emptied guest age");
     }
 
     // The second Pay hands the refused email back to its rule before any edit has validated it, then stops at
@@ -289,7 +308,7 @@ class FieldOwnRuleMessagesTest {
 
         email.setValue(MALFORMED_EMAIL);
 
-        assertSays(email, "Enter an email address like you@example.com.", "\"" + MALFORMED_EMAIL + "\"");
+        assertSays(email, GUEST_EMAIL_FORMAT, "\"" + MALFORMED_EMAIL + "\"");
     }
 
     private static void fillCard(CheckoutView view) {
@@ -324,29 +343,33 @@ class FieldOwnRuleMessagesTest {
     // ---- LoginView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Username", "Password"})
-    void GivenTheSignInPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Username | Enter your username.",
+        "Password | Enter your password."})
+    void GivenTheSignInPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         LoginView view = new LoginView(mock(LoginPresenter.class), mock(SessionIdentity.class));
         harness.attach(view);
         Component field = field(view, Component.class, label);
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     // ---- AdminLoginView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Admin username", "Password"})
-    void GivenTheAdminSignInPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Admin username | Enter your admin username.",
+        "Password       | Enter your password."})
+    void GivenTheAdminSignInPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         AdminLoginView view = new AdminLoginView(mock(AdminLoginPresenter.class));
         harness.attach(view);
         Component field = field(view, Component.class, label);
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     // ---- AdminComplaintRespondView ----
@@ -364,14 +387,16 @@ class FieldOwnRuleMessagesTest {
 
         typeThenEmpty(reply);
 
-        assertSaysWhatIsWrong(reply, "an emptied response");
+        assertSays(reply, "Please write a response.", "an emptied response");
     }
 
     // ---- AdminSendMessagesView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Subject", "Body"})
-    void GivenTheSendMessagesPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Subject | Enter a subject.",
+        "Body    | Write the message."})
+    void GivenTheSendMessagesPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         ViewHarness.signInAdmin();
         AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
         when(presenter.load(any())).thenReturn(new AdminSendMessagesPresenter.Outcome.Success(List.of()));
@@ -381,21 +406,24 @@ class FieldOwnRuleMessagesTest {
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     // ---- CompanyRegistrationView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Company name", "Description"})
-    void GivenTheCompanyRegistrationPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Company name | Please fill in a company name.",
+        "Description  | Please provide a company description."})
+    void GivenTheCompanyRegistrationPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label,
+                                                                                          String message) {
         CompanyRegistrationView view = new CompanyRegistrationView(mock(CompanyRegistrationPresenter.class));
         harness.attach(view);
         Component field = field(view, Component.class, label);
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     // ---- ManagerInvitationView ----
@@ -408,7 +436,7 @@ class FieldOwnRuleMessagesTest {
 
         typeThenEmpty(invitee);
 
-        assertSaysWhatIsWrong(invitee, "an emptied invitee");
+        assertSays(invitee, "Enter a username or email to invite.", "an emptied invitee");
     }
 
     // ---- OwnerAppointmentView ----
@@ -421,21 +449,23 @@ class FieldOwnRuleMessagesTest {
 
         typeThenEmpty(invitee);
 
-        assertSaysWhatIsWrong(invitee, "an emptied invitee");
+        assertSays(invitee, "Enter a username or email to appoint.", "an emptied invitee");
     }
 
     // ---- NewInquiryView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Title", "Description"})
-    void GivenTheNewInquiryPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Title       | Enter a title.",
+        "Description | Enter a description."})
+    void GivenTheNewInquiryPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         NewInquiryView view = new NewInquiryView(mock(NewInquiryPresenter.class));
         harness.attach(view);
         Component field = field(view, Component.class, label);
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     // The search box validates nothing itself, but a refusal hands it back to its required rule on its next edit.
@@ -459,8 +489,10 @@ class FieldOwnRuleMessagesTest {
     // ---- SubmitComplaintView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Subject", "Details"})
-    void GivenTheComplaintPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Subject | Enter a subject.",
+        "Details | Describe what happened."})
+    void GivenTheComplaintPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         SubmitComplaintPresenter presenter = mock(SubmitComplaintPresenter.class);
         when(presenter.maxDetailsLength(any())).thenReturn(COMPLAINT_DETAILS_LIMIT);
         SubmitComplaintView view = new SubmitComplaintView(presenter);
@@ -469,19 +501,22 @@ class FieldOwnRuleMessagesTest {
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     // ---- EventManagementView, create mode ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Title", "Country", "City"})
-    void GivenTheCreateEventPage_WhenARequiredTextFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Title   | Please enter a title.",
+        "Country | Enter the country.",
+        "City    | Enter the city."})
+    void GivenTheCreateEventPage_WhenARequiredTextFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         Component field = field(createEventPage(), Component.class, label);
 
         typeThenEmpty(field);
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     @Test
@@ -492,7 +527,7 @@ class FieldOwnRuleMessagesTest {
 
         category.clear();
 
-        assertSaysWhatIsWrong(category, "a cleared category");
+        assertSays(category, "Please choose a category.", "a cleared category");
     }
 
     @Test
@@ -502,18 +537,20 @@ class FieldOwnRuleMessagesTest {
 
         timeZone.clear();
 
-        assertSaysWhatIsWrong(timeZone, "a cleared time zone");
+        assertSays(timeZone, "Please choose the venue's time zone.", "a cleared time zone");
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"Starts", "Ends"})
-    void GivenTheCreateEventPage_WhenAShowTimeIsCleared_ThenItSaysWhatToSet(String label) {
+    @CsvSource(delimiter = '|', value = {
+        "Starts | Set the start time.",
+        "Ends   | Set the end time."})
+    void GivenTheCreateEventPage_WhenAShowTimeIsCleared_ThenItSaysWhatToSet(String label, String message) {
         DateTimePicker picker = field(createEventPage(), DateTimePicker.class, label);
         picker.setValue(LocalDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC).plusDays(30));
 
         picker.clear();
 
-        assertSaysWhatIsWrong(picker, label);
+        assertSays(picker, message, label);
     }
 
     @ParameterizedTest
@@ -523,7 +560,7 @@ class FieldOwnRuleMessagesTest {
 
         rating.setValue(value);
 
-        assertSaysWhatIsWrong(rating, "a rating of " + value);
+        assertSays(rating, RATING_RANGE, "a rating of " + value);
     }
 
     @Test
@@ -533,7 +570,7 @@ class FieldOwnRuleMessagesTest {
 
         rating.clear();
 
-        assertSaysWhatIsWrong(rating, "an emptied rating");
+        assertSays(rating, "Please set a rating (0–5).", "an emptied rating");
     }
 
     private EventManagementView createEventPage() {
@@ -549,13 +586,15 @@ class FieldOwnRuleMessagesTest {
     // ---- VenueMapEditorView ----
 
     @ParameterizedTest
-    @ValueSource(strings = {"Zone name", "Price"})
-    void GivenTheVenueEditor_WhenARequiredZoneFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+    @CsvSource(delimiter = '|', quoteCharacter = '"', value = {
+        "Zone name | Zone name is required.",
+        "Price     | Enter the zone's price."})
+    void GivenTheVenueEditor_WhenARequiredZoneFieldIsEmptied_ThenItSaysWhatToEnter(String label, String message) {
         TextField field = field(venueEditor(), TextField.class, label);
 
         field.clear();
 
-        assertSaysWhatIsWrong(field, label);
+        assertSays(field, message, label);
     }
 
     @ParameterizedTest
@@ -566,7 +605,7 @@ class FieldOwnRuleMessagesTest {
 
         field.setValue(field.getMin() - 1);
 
-        assertSaysWhatIsWrong(field, label + " below its minimum");
+        assertSays(field, placementRange(field), label + " below its minimum");
     }
 
     @ParameterizedTest
@@ -577,7 +616,7 @@ class FieldOwnRuleMessagesTest {
 
         field.setValue(field.getMax() + 1);
 
-        assertSaysWhatIsWrong(field, label + " above its maximum");
+        assertSays(field, placementRange(field), label + " above its maximum");
     }
 
     // A placement field's maximum follows the canvas, so its message must name the new one.
@@ -591,9 +630,12 @@ class FieldOwnRuleMessagesTest {
 
         gridRow.setValue(grown + 1);
 
-        assertSaysWhatIsWrong(gridRow, "a grid row past the grown canvas");
-        assertTrue(gridRow.getErrorMessage().contains(String.valueOf(grown)),
-            "the message must name the new maximum, " + grown + ": " + gridRow.getErrorMessage());
+        assertSays(gridRow, "Enter a number from 1 to " + grown + ".", "a grid row past the grown canvas");
+    }
+
+    // What a venue editor number says outside its bounds, which the field holds.
+    private static String placementRange(IntegerField field) {
+        return "Enter a number from " + field.getMin() + " to " + field.getMax() + ".";
     }
 
     private VenueMapEditorView venueEditor() {
@@ -604,25 +646,44 @@ class FieldOwnRuleMessagesTest {
 
     // ---- BrowseEventsView: the filters ----
 
-    // Below the minimum, above the maximum, and off the step of 10.
+    // Below the minimum and above the maximum, each on the step of 10.
     @ParameterizedTest
-    @ValueSource(ints = {-10, 1010, 15})
-    void GivenTheBrowsePage_WhenAPriceBoundBreaksItsRule_ThenItSaysWhatIsWrong(int price) {
+    @ValueSource(ints = {-10, 1010})
+    void GivenTheBrowsePage_WhenAPriceBoundIsOutsideItsRange_ThenItSaysTheRange(int price) {
         for (IntegerField bound : bounds(browsePage(), IntegerField.class, 2)) {
             bound.setValue(price);
 
-            assertSaysWhatIsWrong(bound, "a price bound of " + price);
+            assertSays(bound, "Enter a price from " + bound.getMin() + " to " + bound.getMax() + ".",
+                "a price bound of " + price);
         }
     }
 
-    // Below the minimum, above the maximum, and off the step of 0.5.
+    @Test
+    void GivenTheBrowsePage_WhenAPriceBoundIsOffItsStep_ThenItSaysTheStep() {
+        for (IntegerField bound : bounds(browsePage(), IntegerField.class, 2)) {
+            bound.setValue(PRICE_OFF_STEP);
+
+            assertSays(bound, CatalogFilterSupport.PRICE_OFF_STEP, "a price bound of " + PRICE_OFF_STEP);
+        }
+    }
+
+    // Below the minimum and above the maximum, each on the step of 0.5.
     @ParameterizedTest
-    @ValueSource(doubles = {-0.5, 5.5, 2.3})
-    void GivenTheBrowsePage_WhenARatingBoundBreaksItsRule_ThenItSaysWhatIsWrong(double rating) {
+    @ValueSource(doubles = {-0.5, 5.5})
+    void GivenTheBrowsePage_WhenARatingBoundIsOutsideItsRange_ThenItSaysTheRange(double rating) {
         for (NumberField bound : bounds(browsePage(), NumberField.class, 4)) {
             bound.setValue(rating);
 
-            assertSaysWhatIsWrong(bound, "a rating bound of " + rating);
+            assertSays(bound, CatalogFilterSupport.RATING_OUT_OF_RANGE, "a rating bound of " + rating);
+        }
+    }
+
+    @Test
+    void GivenTheBrowsePage_WhenARatingBoundIsOffItsStep_ThenItSaysTheStep() {
+        for (NumberField bound : bounds(browsePage(), NumberField.class, 4)) {
+            bound.setValue(RATING_OFF_STEP);
+
+            assertSays(bound, CatalogFilterSupport.RATING_OFF_STEP, "a rating bound of " + RATING_OFF_STEP);
         }
     }
 
@@ -634,7 +695,7 @@ class FieldOwnRuleMessagesTest {
 
         end.setValue(START_DATE.minusDays(1));
 
-        assertSaysWhatIsWrong(end, "an end date before the start date");
+        assertSays(end, CatalogFilterSupport.END_BEFORE_START, "an end date before the start date");
     }
 
     @Test
@@ -645,7 +706,7 @@ class FieldOwnRuleMessagesTest {
 
         start.setValue(START_DATE.plusDays(1));
 
-        assertSaysWhatIsWrong(start, "a start date after the end date");
+        assertSays(start, CatalogFilterSupport.START_AFTER_END, "a start date after the end date");
     }
 
     private BrowseEventsView browsePage() {
@@ -675,25 +736,42 @@ class FieldOwnRuleMessagesTest {
 
     // ---- CompanyEventListView: the filters ----
 
-    // Below the minimum and off the step of 10; the list's price bounds have no maximum.
-    @ParameterizedTest
-    @ValueSource(ints = {-10, 15})
-    void GivenTheCompanyEventList_WhenAPriceBoundBreaksItsRule_ThenItSaysWhatIsWrong(int price) {
+    // One step of 10 below the minimum; the list's price bounds have no maximum.
+    @Test
+    void GivenTheCompanyEventList_WhenAPriceBoundIsBelowItsMinimum_ThenItSaysTheMinimum() {
         for (IntegerField bound : bounds(companyEventList(), IntegerField.class, 2)) {
-            bound.setValue(price);
+            bound.setValue(bound.getMin() - CatalogFilterSupport.PRICE_STEP);
 
-            assertSaysWhatIsWrong(bound, "a price bound of " + price);
+            assertSays(bound, "Enter a price of " + bound.getMin() + " or more.", "a price bound below its minimum");
         }
     }
 
-    // Below the minimum, above the maximum, and off the step of 0.5.
+    @Test
+    void GivenTheCompanyEventList_WhenAPriceBoundIsOffItsStep_ThenItSaysTheStep() {
+        for (IntegerField bound : bounds(companyEventList(), IntegerField.class, 2)) {
+            bound.setValue(PRICE_OFF_STEP);
+
+            assertSays(bound, CatalogFilterSupport.PRICE_OFF_STEP, "a price bound of " + PRICE_OFF_STEP);
+        }
+    }
+
+    // Below the minimum and above the maximum, each on the step of 0.5.
     @ParameterizedTest
-    @ValueSource(doubles = {-0.5, 5.5, 2.3})
-    void GivenTheCompanyEventList_WhenARatingBoundBreaksItsRule_ThenItSaysWhatIsWrong(double rating) {
+    @ValueSource(doubles = {-0.5, 5.5})
+    void GivenTheCompanyEventList_WhenARatingBoundIsOutsideItsRange_ThenItSaysTheRange(double rating) {
         for (NumberField bound : bounds(companyEventList(), NumberField.class, 2)) {
             bound.setValue(rating);
 
-            assertSaysWhatIsWrong(bound, "a rating bound of " + rating);
+            assertSays(bound, CatalogFilterSupport.RATING_OUT_OF_RANGE, "a rating bound of " + rating);
+        }
+    }
+
+    @Test
+    void GivenTheCompanyEventList_WhenARatingBoundIsOffItsStep_ThenItSaysTheStep() {
+        for (NumberField bound : bounds(companyEventList(), NumberField.class, 2)) {
+            bound.setValue(RATING_OFF_STEP);
+
+            assertSays(bound, CatalogFilterSupport.RATING_OFF_STEP, "a rating bound of " + RATING_OFF_STEP);
         }
     }
 
@@ -705,7 +783,7 @@ class FieldOwnRuleMessagesTest {
 
         end.setValue(START_DATE.minusDays(1));
 
-        assertSaysWhatIsWrong(end, "an end date before the start date");
+        assertSays(end, CatalogFilterSupport.END_BEFORE_START, "an end date before the start date");
     }
 
     @Test
@@ -716,7 +794,7 @@ class FieldOwnRuleMessagesTest {
 
         start.setValue(START_DATE.plusDays(1));
 
-        assertSaysWhatIsWrong(start, "a start date after the end date");
+        assertSays(start, CatalogFilterSupport.START_AFTER_END, "a start date after the end date");
     }
 
     private CompanyEventListView companyEventList() {
@@ -736,14 +814,6 @@ class FieldOwnRuleMessagesTest {
         HasValue<?, String> text = (HasValue<?, String>) field;
         text.setValue(TYPED);
         text.clear();
-    }
-
-    private static void assertSaysWhatIsWrong(Component component, String what) {
-        HasValidationProperties field = (HasValidationProperties) component;
-        assertTrue(field.isInvalid(), what + " must be invalid by the field's own rule");
-        String message = field.getErrorMessage();
-        assertTrue(message != null && !message.isBlank(),
-            what + " must say what is wrong; its message is \"" + message + "\"");
     }
 
     private static void assertSays(Component component, String message, String what) {
