@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -249,11 +251,13 @@ abstract class IActiveOrderRepositoryContractTest {
 
     @Test
     void GivenMemberAndGuestCarts_WhenFindAll_ThenReturnsEveryCart() {
-        repo.save(ActiveOrder.forMember(5, "sid-M", NOW));
-        repo.save(ActiveOrder.forGuest("sid-G", NOW));
+        ActiveOrder member = ActiveOrder.forMember(5, "sid-M", NOW);
+        ActiveOrder guest = ActiveOrder.forGuest("sid-G", NOW);
+        repo.save(member);
+        repo.save(guest);
 
-        java.util.List<ActiveOrder> all = repo.findAll();
-        assertEquals(2, all.size());
+        assertEquals(Set.of(member.getOrderKey(), guest.getOrderKey()),
+                repo.findAll().stream().map(ActiveOrder::getOrderKey).collect(Collectors.toSet()));
     }
 
     @Test
