@@ -15,7 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -191,21 +193,50 @@ class PolicyEditorA11yTest {
         return script.substring(from, to < 0 ? script.length() : to);
     }
 
-    // The drawing code makes its element a keyboard button itself, or calls a helper that does.
+    // The drawing code makes its element a keyboard button itself, or calls a helper that does. Only that code
+    // is read, the helper's own body and not the whole script, and Enter, Space and the click's server action
+    // must sit in its keydown handler, since a comment or another listener naming them presses nothing (#189).
     private static void assertKeyboardButton(String script, String drawing, String what) {
-        List<String> helpers = keyboardButtonHelpers(script);
-        boolean viaHelper = helpers.stream().anyMatch(name -> Pattern.compile("\\b" + name + "\\s*\\(").matcher(drawing).find()
-            && !drawing.contains("function " + name));
-        String code = viaHelper ? script : drawing;
+        Map<String, String> helpers = keyboardButtonHelpers(script);
+        String code = helpers.entrySet().stream()
+            .filter(helper -> Pattern.compile("\\b" + helper.getKey() + "\\s*\\(").matcher(drawing).find()
+                && !drawing.contains("function " + helper.getKey()))
+            .map(Map.Entry::getValue)
+            .findFirst()
+            .orElse(drawing);
         List<String> missing = new ArrayList<>();
         check(code, ROLE_BUTTON, "role=button", missing);
         check(code, TABINDEX_ZERO, "tabindex=0", missing);
         check(code, ARIA_LABEL, "an aria-label", missing);
-        check(code, KEYDOWN, "a keydown listener", missing);
-        check(code, ENTER, "Enter", missing);
-        check(code, SPACE, "Space", missing);
-        check(code, NODE_ACTION, "the click's server action", missing);
+        String keydown = keydownHandler(code);
+        if (keydown.isEmpty()) {
+            missing.add("a keydown listener");
+        }
+        check(keydown, ENTER, "Enter in its keydown listener", missing);
+        check(keydown, SPACE, "Space in its keydown listener", missing);
+        check(keydown, serverAction(script), "the click's server action in its keydown listener", missing);
         assertTrue(missing.isEmpty(), what + " must be a keyboard button; the script gives it no " + missing);
+    }
+
+    // The body of the first keydown handler in {@code code}, "" when it has none.
+    private static String keydownHandler(String code) {
+        Matcher keydown = KEYDOWN.matcher(code);
+        if (!keydown.find()) {
+            return "";
+        }
+        int open = code.indexOf('{', keydown.end());
+        return open < 0 ? "" : code.substring(open, closingBrace(code, open));
+    }
+
+    // A call of onNodeAction, or of a function of the script that calls it.
+    private static Pattern serverAction(String script) {
+        List<String> names = new ArrayList<>(List.of("onNodeAction"));
+        functionBodies(script).forEach((name, body) -> {
+            if (NODE_ACTION.matcher(body).find()) {
+                names.add(name);
+            }
+        });
+        return Pattern.compile("\\b(" + String.join("|", names) + ")\\s*\\(");
     }
 
     private static void check(String code, Pattern pattern, String what, List<String> missing) {
@@ -214,22 +245,29 @@ class PolicyEditorA11yTest {
         }
     }
 
-    // Named functions whose body sets role=button and listens for keydown.
-    private static List<String> keyboardButtonHelpers(String script) {
-        List<String> helpers = new ArrayList<>();
+    // Named functions whose body sets role=button and listens for keydown, with their bodies.
+    private static Map<String, String> keyboardButtonHelpers(String script) {
+        Map<String, String> helpers = new LinkedHashMap<>();
+        functionBodies(script).forEach((name, body) -> {
+            if (ROLE_BUTTON.matcher(body).find() && KEYDOWN.matcher(body).find()) {
+                helpers.put(name, body);
+            }
+        });
+        return helpers;
+    }
+
+    // Every named function of the script, with its body.
+    private static Map<String, String> functionBodies(String script) {
+        Map<String, String> bodies = new LinkedHashMap<>();
         Matcher m = FUNCTION_DECLARATION.matcher(script);
         while (m.find()) {
             String name = m.group(1) != null ? m.group(1) : m.group(2);
             int open = script.indexOf('{', m.end());
-            if (open < 0) {
-                continue;
-            }
-            String body = script.substring(open, closingBrace(script, open));
-            if (ROLE_BUTTON.matcher(body).find() && KEYDOWN.matcher(body).find()) {
-                helpers.add(name);
+            if (open >= 0) {
+                bodies.put(name, script.substring(open, closingBrace(script, open)));
             }
         }
-        return helpers;
+        return bodies;
     }
 
     private static int closingBrace(String script, int open) {
