@@ -105,6 +105,19 @@ class SeatAndZoneStateTest {
             "a deselected seat's name must say it is free: " + A11y.describe(seat.getElement()));
     }
 
+    // The other half of the rule below: a seat a buyer can pick must stay reachable and available (#189).
+    @Test
+    void GivenFreeAndSelectedSeats_WhenTheyRender_ThenEachIsATabStopAvailableToAssistiveTechnology() {
+        for (VkSeat.State state : List.of(VkSeat.State.free, VkSeat.State.mine)) {
+            Element seat = new VkSeat(state, "7").getElement();
+
+            assertTrue(A11y.focusable(seat), "a " + state + " seat can be picked, so it is a Tab stop: "
+                + A11y.describe(seat));
+            assertFalse(A11y.disabledForAt(seat), "a " + state + " seat can be picked, so it is not said to be "
+                + "unavailable: " + A11y.describe(seat));
+        }
+    }
+
     @Test
     void GivenHeldAndSoldSeats_WhenTheyRender_ThenTheyAreDisabledForAssistiveTechnology() {
         for (VkSeat.State state : List.of(VkSeat.State.held, VkSeat.State.sold)) {

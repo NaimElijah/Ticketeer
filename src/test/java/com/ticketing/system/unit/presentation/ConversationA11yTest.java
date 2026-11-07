@@ -100,6 +100,9 @@ class ConversationA11yTest {
         String name = A11y.name(rows(view).get(1).getElement());
         assertTrue(Pattern.compile("(?i)\\bclosed\\b").matcher(name).find(),
             "a closed thread must say \"Closed\" in its row, not only be dimmed; the row is named \"" + name + "\"");
+        String open = A11y.name(rows(view).get(0).getElement());
+        assertFalse(Pattern.compile("(?i)\\bclosed\\b").matcher(open).find(),
+            "an open thread must not say \"Closed\"; its row is named \"" + open + "\"");
     }
 
     // ---- MdThread ----

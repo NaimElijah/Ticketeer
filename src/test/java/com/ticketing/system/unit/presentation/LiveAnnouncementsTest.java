@@ -177,6 +177,29 @@ class LiveAnnouncementsTest {
         assertAriaDisabledNotDisabled(increase.getElement(), "Increase once the maximum is reached");
     }
 
+    // The other half of the two rules above: a step that is open is not said to be unavailable (#189).
+    @Test
+    void GivenAQuantityBelowItsMaximum_WhenTheSelectorRenders_ThenIncreaseIsNotAriaDisabled() {
+        VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+
+        Element increase = stepButtons(selector).get(1).getElement();
+        assertFalse(A11y.disabledForAt(increase), "Increase below the maximum must be available: "
+            + A11y.describe(increase));
+    }
+
+    @Test
+    void GivenTheQuantityIncreasedAboveItsMinimum_WhenTheSelectorRefreshes_ThenDecreaseIsNotAriaDisabled() {
+        VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+        harness.attach(selector);
+
+        click(stepButtons(selector).get(1));
+
+        Element decrease = stepButtons(selector).get(0).getElement();
+        assertEquals(2, selector.getQuantity());
+        assertFalse(A11y.disabledForAt(decrease), "Decrease above the minimum must be available: "
+            + A11y.describe(decrease));
+    }
+
     // Kept: a button left focusable at the limit must still not step past it.
     @Test
     void GivenTheQuantityAtItsMinimum_WhenDecreaseIsActivated_ThenTheQuantityStaysAtOne() {
