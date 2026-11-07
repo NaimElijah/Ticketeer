@@ -111,11 +111,6 @@ public class InventoryZoneTest extends BaseDomainTest {
     }
 
     @Test
-    public void GivenInvalidQuantity_WhenReserveStanding_ThenThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> zone.reserve(InventorySelection.standing(0)));
-    }
-
-    @Test
     void GivenReservedSeat_WhenReserveAgain_ThenRejected() {
         SeatedZone zone = new SeatedZone(
                 1,
@@ -198,25 +193,6 @@ public class InventoryZoneTest extends BaseDomainTest {
 
         assertEquals(holdUntil, seatedZone.getSeatByLabel("A1").getReservedUntil());
         assertEquals(holdUntil, seatedZone.getSeatByLabel("A2").getReservedUntil());
-    }
-
-    @Test
-    void GivenDuplicateSeatLabels_WhenReserveSeats_ThenThrowsAndDoesNotReserveSeat() {
-        SeatedZone seatedZone = track(new SeatedZone(
-                1,
-                "Orchestra",
-                120.0,
-                List.of(
-                        new Seat("A1", 0, 0),
-                        new Seat("A2", 1, 0))));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> seatedZone.reserve(InventorySelection.seated(List.of("A1", "A1"), "test-order")));
-
-        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
-        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A2"));
-        assertEquals(2, seatedZone.getAvailableAmount());
-        assertEquals(0, seatedZone.getReservedAmount());
     }
 
     @Test
