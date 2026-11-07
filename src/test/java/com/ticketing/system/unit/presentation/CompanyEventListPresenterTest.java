@@ -376,8 +376,8 @@ class CompanyEventListPresenterTest {
     void GivenCompanyEventsWithARepeatedCountry_WhenCountries_ThenReturnsThemDistinctAndSorted() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
         when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(List.of(
-                eventAt(1, "Israel", "Tel Aviv"),
                 eventAt(2, "USA", "New York"),
+                eventAt(1, "Israel", "Tel Aviv"),
                 eventAt(3, "Israel", "Haifa")));
 
         assertEquals(new ListOutcome.Loaded<>(List.of("Israel", "USA")), presenter.countries(TOKEN, null));
@@ -439,5 +439,42 @@ class CompanyEventListPresenterTest {
 
         assertInstanceOf(CompanyEventListPresenter.Outcome.NotAuthenticated.class,
                 presenter.load(TOKEN, null, CatalogSearchFiltersDTO.empty()));
+    }
+
+    // ---- which company's events the list shows when none of the caller's companies is selected (#189) ----
+
+    private static final int OTHER_COMPANY_ID = 43;
+    private static final int UNKNOWN_COMPANY_ID = 99;
+
+    @Test
+    void GivenTwoCompaniesAndNoSelection_WhenLoad_ThenTheFirstCompanysEventsAreListed() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID), company(OTHER_COMPANY_ID)));
+        List<EventDetailDTO> events = List.of(event(EVENT_ID, "Gala Night"));
+        when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(events);
+
+        assertEquals(new CompanyEventListPresenter.Outcome.Success(events),
+                presenter.load(TOKEN, null, CatalogSearchFiltersDTO.empty()));
+        verify(eventService, never()).listEventsForCompany(anyString(), eq(OTHER_COMPANY_ID), any());
+    }
+
+    @Test
+    void GivenASelectionTheCallerIsNotIn_WhenLoad_ThenTheFirstCompanysEventsAreListed() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID), company(OTHER_COMPANY_ID)));
+        List<EventDetailDTO> events = List.of(event(EVENT_ID, "Gala Night"));
+        when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(events);
+
+        assertEquals(new CompanyEventListPresenter.Outcome.Success(events),
+                presenter.load(TOKEN, UNKNOWN_COMPANY_ID, CatalogSearchFiltersDTO.empty()));
+        verify(eventService, never()).listEventsForCompany(anyString(), eq(UNKNOWN_COMPANY_ID), any());
+    }
+
+    @Test
+    void GivenTheSecondCompanySelected_WhenLoad_ThenItsEventsAreListed() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID), company(OTHER_COMPANY_ID)));
+        List<EventDetailDTO> events = List.of(event(EVENT_ID, "Gala Night"));
+        when(eventService.listEventsForCompany(eq(TOKEN), eq(OTHER_COMPANY_ID), any())).thenReturn(events);
+
+        assertEquals(new CompanyEventListPresenter.Outcome.Success(events),
+                presenter.load(TOKEN, OTHER_COMPANY_ID, CatalogSearchFiltersDTO.empty()));
     }
 }

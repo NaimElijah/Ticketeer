@@ -27,7 +27,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -46,12 +45,6 @@ import static org.mockito.Mockito.when;
  * {@code @RequireCapability} gate that reads these capabilities.
  */
 class CapabilitiesTest {
-
-    @Test
-    void GivenNoVaadinSession_WhenForCurrentUser_ThenTheResolverIsCallableAndReturnsNonNull() {
-        Set<Capability> caps = Capabilities.forCurrentUser();
-        assertNotNull(caps, "Capabilities.forCurrentUser() must never return null");
-    }
 
     @Test
     void GivenNoVaadinSession_WhenForCurrentUser_ThenGuestBaseIncludesCatalogButNotCheckoutOrWorkspaces() {
@@ -104,10 +97,8 @@ class CapabilitiesTest {
     @Test
     void GivenManageInventory_WhenCapabilitiesFromPermissions_ThenItOwnsTheFullEventLifecycleIncludingCancel() {
         Set<Capability> caps = capsFor(Permission.MANAGE_INVENTORY);
-        assertTrue(caps.contains(Capability.VIEW_COMPANY_EVENTS));
-        assertTrue(caps.contains(Capability.EDIT_COMPANY_EVENTS));
-        assertTrue(caps.contains(Capability.CANCEL_EVENT),
-            "MANAGE_INVENTORY grants cancel+refund as part of the event lifecycle");
+        assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT),
+            caps, "MANAGE_INVENTORY grants the event lifecycle, cancel+refund included, and nothing more");
     }
 
     @Test
@@ -122,10 +113,10 @@ class CapabilitiesTest {
     @Test
     void GivenCombinedPermissions_WhenCapabilitiesFromPermissions_ThenGrantTheUnionOfTheirCapabilities() {
         Set<Capability> caps = capsFor(Permission.VIEW_SALES, Permission.MANAGE_INVENTORY);
-        assertTrue(caps.containsAll(EnumSet.of(
+        assertEquals(EnumSet.of(
             Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES,
-            Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT)),
-            "a manager holding both permissions gets the union of their capabilities");
+            Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT), caps,
+            "a manager holding both permissions gets the union of their capabilities, and nothing more");
     }
 
     // ---- resolution for a signed-in session: memberships are read with the member's own token ----
