@@ -159,6 +159,35 @@ class MemberAccountServiceTest {
                 .isSameAs(failure);
     }
 
+    // The tickets and the catalog are read per receipt; either store failing must reach the caller, as the
+    // receipt store's does, rather than leave a record half-rendered.
+    @Test
+    void GivenTheTicketStoreFails_WhenViewMyHistory_ThenTheFailurePropagates() {
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("ticket store down");
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of(memberReceipt(RECEIPT_ID, USER_ID)));
+        Mockito.when(ticketRepository.findByOrderReceiptId(RECEIPT_ID)).thenThrow(failure);
+
+        Throwable thrown = catchThrowable(() -> service.viewMyHistory(memberAuth(VALID_TOKEN, USER_ID)));
+
+        assertThat(thrown).isSameAs(failure);
+    }
+
+    @Test
+    void GivenTheCatalogStoreFails_WhenViewMyHistory_ThenTheFailurePropagates() {
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("catalog store down");
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of(memberReceipt(RECEIPT_ID, USER_ID)));
+        Mockito.when(ticketRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(List.of());
+        Mockito.when(eventDisplayPort.describeEvent(Mockito.anyInt())).thenThrow(failure);
+
+        Throwable thrown = catchThrowable(() -> service.viewMyHistory(memberAuth(VALID_TOKEN, USER_ID)));
+
+        assertThat(thrown).isSameAs(failure);
+    }
+
     // The session port answers false only for a null or blank token; viewMyReceipt then throws InvalidTokenException.
     @Test
     void GivenBlankToken_WhenViewMyHistory_ThenInvalidTokenThrown() {

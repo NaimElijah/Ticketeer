@@ -80,6 +80,29 @@ class SalesSummaryCalculatorTest {
         assertEquals(Optional.of("Big"), calculator.summarize(List.of(a, b)).topEvent());
     }
 
+    @Test
+    void GivenNoOrders_WhenSummarised_ThenEveryFigureIsZeroAndThereIsNoTopEvent() {
+        SalesSummaryDTO s = calculator.summarize(List.of());
+
+        assertEquals(0.0, s.revenue());
+        assertEquals(0, s.ticketsSold());
+        assertEquals(0.0, s.avgOrderValue());
+        assertEquals(Optional.empty(), s.topEvent());
+        assertEquals(0, s.refundedOrders());
+    }
+
+    // A line whose event name did not resolve still sold, but cannot be named as the top event.
+    @Test
+    void GivenTheBiggestLineHasNoEventName_WhenSummarised_ThenItCountsAsSoldButTheTopEventIsTheNamedOne() {
+        PurchaseRecordDTO mixed = order(ticket(1, null, 500.0, false), ticket(2, "Named", 100.0, false));
+
+        SalesSummaryDTO s = calculator.summarize(List.of(mixed));
+
+        assertEquals(600.0, s.revenue());
+        assertEquals(2, s.ticketsSold());
+        assertEquals(Optional.of("Named"), s.topEvent());
+    }
+
     // ---- helpers --------------------------------------------------------
 
     private static PurchaseRecordDTO order(TicketRecordDTO... tickets) {

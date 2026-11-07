@@ -194,6 +194,20 @@ class CredentialRequestToStringTest {
     }
 
     @Test
+    void GivenCardDetails_WhenToString_ThenTheFullCardNumberIsAbsent() {
+        String rendered = cardDetails().toString();
+
+        assertFalse(rendered.contains("4000"), "CardDetailsDTO.toString() exposed the card number: " + rendered);
+    }
+
+    @Test
+    void GivenCardDetails_WhenToString_ThenTheCvvIsAbsent() {
+        String rendered = cardDetails().toString();
+
+        assertFalse(rendered.contains("123"), "CardDetailsDTO.toString() exposed the cvv: " + rendered);
+    }
+
+    @Test
     void GivenGuestPaymentRequest_WhenToString_ThenTheIdempotencyKeyIsStillShown() {
         PaymentRequestDTO request = new PaymentRequestDTO("idem-under-test", 100.0, "USD", cardDetails(), null, EMAIL);
 
