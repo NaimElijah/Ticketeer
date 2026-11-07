@@ -24,10 +24,10 @@ import com.ticketing.system.identity.domain.User;
  * the user (task #20) — they persist through the separate {@code CompanyAppointmentRepository}.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code User}'s
- * {@code @Version} optimistic lock. {@code save}/{@code updateUser} both delegate to Spring Data
- * (insert fresh / update loaded under {@code @Version}); {@code save} also flushes, so the
- * {@code uk_users_username} and {@code uk_users_email} constraints are checked inside the adapter.
- * Both are {@code @Transactional} so the adapter is self-sufficient before the service layer gains
+ * {@code @Version} optimistic lock. {@code save} delegates to Spring Data (insert fresh / update
+ * loaded under {@code @Version}) and flushes, so the {@code uk_users_username} and
+ * {@code uk_users_email} constraints are checked inside the adapter. {@code save} and {@code delete}
+ * are {@code @Transactional} so the adapter is self-sufficient before the service layer gains
  * transactions (#359).
  *
  * <p>{@link #nextId()} keeps the assigned-id design (the service mints the id, then constructs the
@@ -95,12 +95,6 @@ public class JpaUserRepository implements UserRepository {
             }
             throw e;
         }
-    }
-
-    @Override
-    @Transactional
-    public void updateUser(User targetUser) {
-        data.save(targetUser);
     }
 
     @Override

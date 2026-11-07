@@ -9,10 +9,14 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.function.Supplier;
 import java.util.List;
+import java.util.Map;
+
+import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -27,6 +31,7 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.Seat;
@@ -37,6 +42,7 @@ import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.shared.domain.policy.AgePurchasePolicy;
 import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicyJsonConverter;
@@ -65,6 +71,9 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private DataSource dataSource;
 
     @BeforeEach
     void cleanTable() {
@@ -148,6 +157,87 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
                 converter.convertToDatabaseColumn(repository.findById(1).getPurchasePolicy()));
     }
 
+    // A new adapter instance models a restarted process (#19, as JpaTicketRepositoryContractTest does for
+    // tickets): both id sequences must resume above the rows a previous boot persisted, not start at 1.
+    @Test
+    void GivenEventsPersistedByAPreviousBoot_WhenAFreshAdapterMintsIds_ThenEachIsAboveItsExistingMax() {
+        data.saveAllAndFlush(List.of(seatedEvent(1, 7), seatedEvent(2, 8), seatedEvent(3, 9)));
+
+        JpaEventRepository afterRestart = new JpaEventRepository(data);
+
+        int eventId = afterRestart.nextId();
+        int venueMapId = afterRestart.nextVenueMapId();
+        assertTrue(eventId > 3, "event id after a restart: " + eventId);
+        assertTrue(venueMapId > 9, "venue map id after a restart: " + venueMapId);
+    }
+
+    // The Jpa adapter needs no lock to save a stored event again: @Version guards the write, and the
+    // Memory adapter, which has none, refuses (MemoryEventRepositoryTest). Outside the test transaction
+    // the load is a detached copy, so the change reaches the row only through this save.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenAStoredEvent_WhenLoadedChangedAndSavedWithoutALock_ThenTheChangeIsStored() {
+        repository.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.SCHEDULED, EventCategory.CONCERT));
+        Event loaded = repository.findById(1);
+        loaded.addPlacesToStandingZone(1, 20, 10);
+        loaded.transitionToOnSale();
+
+        repository.save(loaded);
+
+        Event reloaded = repository.findById(1);
+        assertEquals(EventStatus.ON_SALE, reloaded.getStatus());
+        assertEquals(List.of(120), standingCapacities(reloaded));
+    }
+
+    // The Jpa adapter needs no lock to delete (the Memory adapter refuses without one, MemoryEventRepositoryTest),
+    // and the delete takes the event's whole owned graph with it: every table its venue's zones, seats and
+    // standing reservations live in. It runs outside the test transaction, so each call commits and the
+    // counts read what the database holds.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenTwoEventsWithSeatedVenues_WhenOneIsDeletedWithoutALock_ThenOnlyItsOwnedRowsAreGone() {
+        repository.save(seatedEvent(1));
+        repository.save(seatedEvent(2));
+
+        repository.delete(1);
+
+        assertEquals(Map.of("events", 1, "venue_maps", 1, "inventory_zones", 2, "seated_zone", 1, "seats", 2,
+                        "standing_zone", 1, "standing_zone_reservations", 1, "event_show_dates", 1, "event_artists", 1),
+                rowCounts(), "only event 2's rows stay");
+        assertEquals(List.of(2), repository.findAll().stream().map(Event::getId).toList());
+    }
+
+    private Map<String, Integer> rowCounts() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        return Map.of(
+                "events", jdbc.queryForObject("select count(*) from events", Integer.class),
+                "venue_maps", jdbc.queryForObject("select count(*) from venue_maps", Integer.class),
+                "inventory_zones", jdbc.queryForObject("select count(*) from inventory_zones", Integer.class),
+                "seated_zone", jdbc.queryForObject("select count(*) from seated_zone", Integer.class),
+                "seats", jdbc.queryForObject("select count(*) from seats", Integer.class),
+                "standing_zone", jdbc.queryForObject("select count(*) from standing_zone", Integer.class),
+                "standing_zone_reservations",
+                jdbc.queryForObject("select count(*) from standing_zone_reservations", Integer.class),
+                "event_show_dates", jdbc.queryForObject("select count(*) from event_show_dates", Integer.class),
+                "event_artists", jdbc.queryForObject("select count(*) from event_artists", Integer.class));
+    }
+
+    private static Event seatedEvent(int id) {
+        return seatedEvent(id, id);
+    }
+
+    // The standing zone holds one order's reservation, so the venue fills each table an event owns.
+    private static Event seatedEvent(int id, int venueMapId) {
+        StandingZone floor = new StandingZone(2, "Floor", 100, 50.0);
+        floor.reserve(InventorySelection.standing(3, "order-" + id));
+        VenueMap venue = new VenueMap(venueMapId, new Location("Belgium", "Brussels"), List.of(
+                new SeatedZone(1, "Stage", 80.0, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0))),
+                floor));
+        return new Event(id, "Show " + id, 4.5, List.of("Artist A"), EventCategory.MUSIC, 7, EventStatus.CANCELED,
+                venue, List.of(new ShowDate(LocalDateTime.of(2099, 6, 1, 18, 0), LocalDateTime.of(2099, 6, 1, 22, 0))),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
+    }
+
     @Test
     void GivenAnEventWithAFullVenueSeatsAndPolicies_WhenSaveAndFindById_ThenReturnsFullVenueWithSeatsAndPolicies() {
         int eventId = repository.nextId();
@@ -164,6 +254,10 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
                 ZoneId.of("Asia/Jerusalem"),
                 policy, new DiscountPolicy(0));
         repository.save(event);
+        // This test runs in the test transaction: without the flush and clear, findById would hand back
+        // the instance built above from the persistence context, and no row would be read.
+        entityManager.flush();
+        entityManager.clear();
 
         Event found = repository.findById(eventId);
         assertEquals(2, found.getVenueMap().getInventoryZones().size());

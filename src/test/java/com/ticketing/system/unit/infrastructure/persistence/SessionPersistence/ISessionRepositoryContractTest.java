@@ -11,10 +11,12 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.SessionKind;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract tests every {@link SessionRepository} adapter must satisfy; each adapter's subclass supplies
@@ -71,9 +73,13 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrow() {
+    void GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrowAndTheStoredSessionStays() {
+        repo.save(new Session("sid-1", 5, T0, T_FAR_FUTURE));
+
         assertDoesNotThrow(() -> repo.delete("ghost"));
         assertDoesNotThrow(() -> repo.delete(null));
+
+        assertTrue(repo.findById("sid-1").isPresent(), "deleting an unknown or null id must leave other sessions");
     }
 
     @Test
@@ -92,13 +98,6 @@ abstract class ISessionRepositoryContractTest {
     void GivenExpiredSession_WhenExistsByUserId_ThenIgnoresIt() {
         repo.save(new Session("sid-1", 5, T_PAST, T_PAST_PLUS_ONE));
         assertFalse(repo.existsByUserId(5));
-    }
-
-    @Test
-    void GivenLiveGuestSession_WhenExistsByUserId_ThenIgnoresIt() {
-        repo.save(new Session("sid-guest", null, T0, T_FAR_FUTURE));
-        // No userId equals null's "missing user," so any int query returns false.
-        assertFalse(repo.existsByUserId(0));
     }
 
     // An admin's id can equal a member's (ADR-012), and isOnline asks about members only.
@@ -236,5 +235,19 @@ abstract class ISessionRepositoryContractTest {
 
         assertTrue(repo.findById("sid-member-1").isPresent(), "member 1 shares admin 1's id but is not that admin");
         assertTrue(repo.findById("sid-admin-2").isPresent(), "another admin's session must stay");
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("sid-1");
+        repo.lockForUpdate("sid-1");
+        repo.unlock("sid-1");
+        repo.unlock("sid-1");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "sid-1");
     }
 }

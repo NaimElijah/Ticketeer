@@ -7,16 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.organization.application.port.out.CompanyAppointmentRepository;
 import com.ticketing.system.organization.domain.AppointmentStatus;
 import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.CompanyRole;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract every {@link CompanyAppointmentRepository} implementation must satisfy. The Memory and JPA
@@ -42,6 +46,10 @@ abstract class ICompanyAppointmentRepositoryContractTest {
     // Helper — mints an id and builds a PENDING manager appointment with the given permissions.
     private CompanyAppointment manager(int companyId, int targetId, int inviterId, List<Permission> permissions) {
         return CompanyAppointment.ManagerAppointment(repo.nextId(), companyId, targetId, inviterId, permissions, INVITED_AT);
+    }
+
+    private static Set<Integer> ids(List<CompanyAppointment> appointments) {
+        return appointments.stream().map(CompanyAppointment::getAppointmentId).collect(Collectors.toSet());
     }
 
     @Test
@@ -72,12 +80,12 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
     @Test
     void GivenAppointmentsOfSeveralUsers_WhenFindByTargetId_ThenReturnsOnlyThatUsersAppointments() {
-        repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
-        repo.save(manager(20, 5, 99, List.of(Permission.VIEW_SALES)));
-        repo.save(manager(10, 6, 99, List.of(Permission.CONFIGURE_VENUE)));
+        CompanyAppointment fiveInTen = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
+        CompanyAppointment fiveInTwenty = repo.save(manager(20, 5, 99, List.of(Permission.VIEW_SALES)));
+        CompanyAppointment sixInTen = repo.save(manager(10, 6, 99, List.of(Permission.CONFIGURE_VENUE)));
 
-        assertEquals(2, repo.findByTargetId(5).size());
-        assertEquals(1, repo.findByTargetId(6).size());
+        assertEquals(Set.of(fiveInTen.getAppointmentId(), fiveInTwenty.getAppointmentId()), ids(repo.findByTargetId(5)));
+        assertEquals(Set.of(sixInTen.getAppointmentId()), ids(repo.findByTargetId(6)));
         assertTrue(repo.findByTargetId(123).isEmpty());
     }
 
@@ -94,12 +102,12 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
     @Test
     void GivenAppointmentsInTwoCompanies_WhenFindByCompanyId_ThenReturnsEveryAppointmentForThatCompany() {
-        repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
-        repo.save(manager(10, 6, 99, List.of(Permission.VIEW_SALES)));
-        repo.save(manager(20, 7, 99, List.of(Permission.CONFIGURE_VENUE)));
+        CompanyAppointment fiveInTen = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
+        CompanyAppointment sixInTen = repo.save(manager(10, 6, 99, List.of(Permission.VIEW_SALES)));
+        CompanyAppointment sevenInTwenty = repo.save(manager(20, 7, 99, List.of(Permission.CONFIGURE_VENUE)));
 
-        assertEquals(2, repo.findByCompanyId(10).size());
-        assertEquals(1, repo.findByCompanyId(20).size());
+        assertEquals(Set.of(fiveInTen.getAppointmentId(), sixInTen.getAppointmentId()), ids(repo.findByCompanyId(10)));
+        assertEquals(Set.of(sevenInTwenty.getAppointmentId()), ids(repo.findByCompanyId(20)));
         assertTrue(repo.findByCompanyId(999).isEmpty());
     }
 
@@ -111,6 +119,41 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
         CompanyAppointment found = repo.findById(appt.getAppointmentId()).orElseThrow();
         assertEquals(AppointmentStatus.ACTIVE, found.getStatus());
+    }
+
+    // The Jpa tables hold role, status and permission under check constraints that a migration must
+    // widen for each new constant (ADR-007). Inherited, so each save commits and a missing value fails here.
+    @Test
+    void GivenAppointmentsInEveryStatusAndRole_WhenSaved_ThenEachKeepsItsStatusAndRole() {
+        CompanyAppointment pending = repo.save(manager(10, 5, 99, List.of(Permission.VIEW_SALES)));
+        CompanyAppointment accepted = manager(10, 6, 99, List.of(Permission.VIEW_SALES));
+        accepted.accept();
+        repo.save(accepted);
+        CompanyAppointment rejected = manager(10, 7, 99, List.of(Permission.VIEW_SALES));
+        rejected.reject();
+        repo.save(rejected);
+        CompanyAppointment revoked = manager(10, 8, 99, List.of(Permission.VIEW_SALES));
+        revoked.accept();
+        revoked.revoke(99);
+        repo.save(revoked);
+        CompanyAppointment owner = repo.save(CompanyAppointment.OwnerAppointment(repo.nextId(), 10, 9, 99, INVITED_AT));
+
+        Map<Integer, String> stored = repo.findByCompanyId(10).stream().collect(Collectors.toMap(
+                CompanyAppointment::getAppointmentId, a -> a.getRole() + " " + a.getStatus()));
+
+        assertEquals(Map.of(
+                pending.getAppointmentId(), "Manager PENDING",
+                accepted.getAppointmentId(), "Manager ACTIVE",
+                rejected.getAppointmentId(), "Manager REJECTED",
+                revoked.getAppointmentId(), "Manager REVOKED",
+                owner.getAppointmentId(), "Owner PENDING"), stored);
+    }
+
+    @Test
+    void GivenAManagerAppointmentWithEveryPermission_WhenSaved_ThenItKeepsThemAll() {
+        CompanyAppointment saved = repo.save(manager(10, 5, 99, List.of(Permission.values())));
+
+        assertEquals(Set.of(Permission.values()), repo.findById(saved.getAppointmentId()).orElseThrow().getPermissions());
     }
 
     @Test
@@ -128,5 +171,19 @@ abstract class ICompanyAppointmentRepositoryContractTest {
         int b = repo.nextId();
         assertNotEquals(a, b);
         assertTrue(b > a);
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate(1);
+        repo.lockForUpdate(1);
+        repo.unlock(1);
+        repo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, 1);
     }
 }

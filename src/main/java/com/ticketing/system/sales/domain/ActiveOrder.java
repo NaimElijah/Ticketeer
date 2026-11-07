@@ -21,6 +21,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
@@ -51,7 +53,8 @@ import jakarta.persistence.Version;
 // protected no-arg ctor lets Hibernate hydrate; the public ctor still enforces the invariants.
 //
 // Identity collapse (one cart per user / per guest session) is enforced in the repository's save,
-// reproducing the in-memory behaviour even though each cart has a distinct orderKey.
+// reproducing the in-memory behaviour even though each cart has a distinct orderKey. In the database,
+// uk_active_orders_user_id (V7) and uk_active_orders_guest_session_id (V10) hold it against concurrent saves.
 @Entity
 @Table(name = "active_orders")
 public class ActiveOrder implements InvariantChecked {
@@ -60,6 +63,11 @@ public class ActiveOrder implements InvariantChecked {
     private Integer userId;
     @Column(name = "session_id")
     private String sessionId;
+    // The column uk_active_orders_guest_session_id keys on (NaimElijah/Ticketeer#224, V10): the session id while this is a guest
+    // cart, null once a member owns it, since a member cart keeps the id of its session and may share it
+    // with that session's guest cart. Persistence-only, so nothing reads it; see deriveGuestSessionKey.
+    @Column(name = "guest_session_id")
+    private String guestSessionId;
     /** Status value: order is being processed by checkout — no new items or concurrent checkouts. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -701,6 +709,17 @@ public class ActiveOrder implements InvariantChecked {
                     lineDTOs
             );
         }
+    }
+
+    // Derived at each write rather than set by the methods that change userId or sessionId, so no path
+    // that changes either one, present or future, can leave the key stale. It also fills the key of a row
+    // that code from before V10 wrote during a rolling deploy, on that row's next write: without
+    // @DynamicUpdate Hibernate writes every column from the entity, so a key set only by those methods
+    // would stay null on such a guest cart for as long as it lived.
+    @PrePersist
+    @PreUpdate
+    private void deriveGuestSessionKey() {
+        guestSessionId = isGuest() ? sessionId : null;
     }
 
     @Override

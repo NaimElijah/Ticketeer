@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -59,6 +61,7 @@ class LoginCartMergeJpaTest {
     @Autowired private ReservationService reservationService;
     @Autowired private ActiveOrderRepository activeOrderRepository;
     @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private JdbcTemplate jdbc;
     @Autowired private Clock clock;
 
     private SeatedShowFixture fixture;
@@ -121,6 +124,33 @@ class LoginCartMergeJpaTest {
                 () -> assertTrue(guestCart.isGuest(), "the guest cart must not be attached to the member"),
                 () -> assertEquals(SeatedShowFixture.SEATS.size() - 2, fixture.availableSeats(show),
                         "both carts' seats must stay held"));
+    }
+
+    // #224: guest_session_id holds one cart per guest session, so only a guest cart may fill it. A cart
+    // the login promoted belongs to the member, and keeping the column would leave it holding the key of
+    // a session it no longer stands for. The precondition keeps the outcome from passing for a cart that
+    // never filled the column at all.
+    @Test
+    void GivenAGuestCartAndAMemberWithNoCart_WhenLogin_ThenThePromotedCartNoLongerHoldsTheGuestSessionKey() {
+        String member = fixture.register("promotedMember");
+        String guestSessionId = authService.startGuestSession().sessionId();
+        reservationService.reserveForGuest(guestSessionId, show.eventId(), show.zoneId(),
+                InventorySelectionDTO.seated(List.of(GUEST_SEAT)));
+        String guestOrderKey = activeOrderRepository.getBySessionId(guestSessionId).orElseThrow().getOrderKey();
+        assertEquals(guestSessionId, guestSessionIdOf(guestOrderKey),
+                "precondition: the guest cart holds its session's guest key before the login");
+
+        int memberId = authService.login(new LoginRequestDTO(member, SeatedShowFixture.PASSWORD, guestSessionId))
+                .authToken().userId();
+
+        assertEquals(memberId, jdbc.queryForObject("select user_id from active_orders where order_key = ?",
+                Integer.class, guestOrderKey), "the login promotes the guest cart to the member's cart");
+        assertNull(guestSessionIdOf(guestOrderKey), "the promoted cart's guest_session_id");
+    }
+
+    private String guestSessionIdOf(String orderKey) {
+        return jdbc.queryForObject("select guest_session_id from active_orders where order_key = ?",
+                String.class, orderKey);
     }
 
     private void reserveSeat(AuthTokenDTO buyer, String seat) {

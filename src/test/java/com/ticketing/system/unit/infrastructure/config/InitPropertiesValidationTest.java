@@ -105,11 +105,14 @@ class InitPropertiesValidationTest {
                         .isEqualTo(List.of("box.office", "support")));
     }
 
+    // An empty list is valid: the default admin's name, bound beside it, is then the only reserved one.
     @Test
-    void GivenEmptyReservedUsernames_WhenContextStarts_ThenBindsBecauseOnlyTheAdminNameIsThenReserved() {
+    void GivenEmptyReservedUsernames_WhenContextStarts_ThenBindsNoNameAndKeepsTheAdminName() {
         runner.withPropertyValues("identity.reserved-usernames=").run(context -> {
             assertThat(context).hasNotFailed();
-            assertThat(context.getBean(IdentityProperties.class).reservedUsernames()).allMatch(String::isBlank);
+            IdentityProperties identity = context.getBean(IdentityProperties.class);
+            assertThat(identity.reservedUsernames()).as("identity.reserved-usernames").isEmpty();
+            assertThat(identity.platformAdminUsername()).as("identity.platform-admin-username").isEqualTo("admin");
         });
     }
 

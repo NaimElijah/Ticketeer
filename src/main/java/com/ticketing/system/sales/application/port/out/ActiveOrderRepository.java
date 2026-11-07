@@ -16,7 +16,8 @@ import com.ticketing.system.shared.IRepository;
  * <li>Member carts are looked up by userId.</li>
  * <li>Guest carts are looked up by sessionId.</li>
  * </ul>
- * Both methods return {@link Optional} to make absence explicit.
+ * {@link #getBySessionId} returns an {@link Optional}; {@link #getByUserId} returns {@code null} when the
+ * member has no cart.
  *
  * <p>The {@link IRepository} contract uses {@link String} as the lock-id type
  * — callers should normalize to {@code "user:" + userId} or {@code "sess:" + sessionId}
@@ -30,9 +31,9 @@ public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> 
      * member's by userId or a guest's by sessionId, is deleted if it holds nothing.
      *
      * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if another cart of the
-     *     same identity still holds lines, or another request stored the member's cart first. Deleting a
-     *     cart that holds lines would leave its seats reserved under an order key no cart holds, so its
-     *     lines must be released first (as the login merge does), or the request retried.
+     *     same identity still holds lines, or another request stored the member's or the guest session's
+     *     cart first. Deleting a cart that holds lines would leave its seats reserved under an order key no
+     *     cart holds, so its lines must be released first (as the login merge does), or the request retried.
      */
     void save(ActiveOrder activeOrder);
 
@@ -43,7 +44,12 @@ public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> 
      */
     ActiveOrder getByUserId(int userId);
 
-    /** Guest-cart lookup, or active-session Member-cart lookup. */
+    /**
+     * Guest-cart lookup: the cart with this session id and no user. A member's cart is never returned, even
+     * when it carries this session id; look it up with {@link #getByUserId(int)}.
+     *
+     * @return the session's guest cart, or empty if it has none; empty for a {@code null} or blank session id
+     */
     Optional<ActiveOrder> getBySessionId(String sessionId);
 
     /** Delete by reference. Idempotent: deleting an unknown cart is a no-op. */

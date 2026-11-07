@@ -1,13 +1,14 @@
 package com.ticketing.system.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -25,6 +26,9 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
  */
 class ReceiptLineRefundStateMigrationTest {
 
+    // The SQLSTATE of a NULL written to a NOT NULL column, in H2 as in the SQL standard.
+    private static final String NOT_NULL_VIOLATION = "23502";
+    private static final String REFUND_STATE_COLUMN = "refund_state";
     private static final LocalDateTime PURCHASED = LocalDateTime.of(2026, 1, 1, 12, 0);
     private static final int RECEIPT_ID = 1;
     private static final int LEGACY_TICKET_ID = 10;
@@ -42,6 +46,12 @@ class ReceiptLineRefundStateMigrationTest {
         dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:v6-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
         jdbc = new JdbcTemplate(dataSource);
+    }
+
+    // DB_CLOSE_DELAY=-1 would otherwise keep each test's database alive for the rest of the fork.
+    @AfterEach
+    void dropDatabase() {
+        jdbc.execute("SHUTDOWN");
     }
 
     @Test
@@ -64,8 +74,15 @@ class ReceiptLineRefundStateMigrationTest {
         jdbc.update(INSERT_RECEIPT, RECEIPT_ID, PURCHASED);
 
         assertThatThrownBy(() -> jdbc.update(INSERT_LINE, RECEIPT_ID, NEW_TICKET_ID, PURCHASED, null))
-                .as("refund_state is NOT NULL")
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .as("%s is NOT NULL", REFUND_STATE_COLUMN)
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .rootCause()
+                .isInstanceOf(SQLException.class)
+                .satisfies(refusal -> assertThat(((SQLException) refusal).getSQLState())
+                        .as("refused as a NULL in a NOT NULL column: %s", refusal.getMessage())
+                        .isEqualTo(NOT_NULL_VIOLATION))
+                .message().as("the database error names the column")
+                .containsIgnoringCase(REFUND_STATE_COLUMN);
     }
 
     // Control for the refusal above: a line with a state inserts, so the refusal comes from the
@@ -75,8 +92,12 @@ class ReceiptLineRefundStateMigrationTest {
         migrateTo("latest");
         jdbc.update(INSERT_RECEIPT, RECEIPT_ID, PURCHASED);
 
-        assertThatCode(() -> jdbc.update(INSERT_LINE, RECEIPT_ID, NEW_TICKET_ID, PURCHASED, "NONE"))
-                .doesNotThrowAnyException();
+        jdbc.update(INSERT_LINE, RECEIPT_ID, NEW_TICKET_ID, PURCHASED, "NONE");
+
+        assertThat(jdbc.queryForList("select refund_state from receipt_lines where receipt_id = ?", String.class,
+                        RECEIPT_ID))
+                .as("the line, read back with its state")
+                .containsExactly("NONE");
     }
 
     private void migrateTo(String target) {

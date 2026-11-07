@@ -32,8 +32,9 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * a guest cart per sessionId, even though each {@link ActiveOrder} carries a distinct orderKey. So a
  * save first entity-deletes any <em>other</em> cart sharing this cart's identity that holds nothing (the
  * entity delete cascades the item collection), refuses if one still holds lines, then persists this
- * one. {@code uk_active_orders_user_id} backs the member side in the database, because the order lock
- * here is a no-op. Writes are {@code @Transactional} so the
+ * one. Because the order lock here is a no-op, the database backs both sides: {@code uk_active_orders_user_id}
+ * the member side, and {@code uk_active_orders_guest_session_id} the guest side, on the column
+ * {@link ActiveOrder} fills only while it has no user (NaimElijah/Ticketeer#224). Writes are {@code @Transactional} so the
  * adapter is self-sufficient before the service layer gains transactions (#359).
  */
 @Repository
@@ -41,6 +42,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 public class JpaActiveOrderRepository implements ActiveOrderRepository {
 
     private static final String USER_CART_UNIQUE_CONSTRAINT = "uk_active_orders_user_id";
+    private static final String GUEST_SESSION_CART_UNIQUE_CONSTRAINT = "uk_active_orders_guest_session_id";
 
     private final SpringDataActiveOrderRepository data;
 
@@ -57,9 +59,10 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
     /**
      * {@inheritDoc}
      *
-     * <p>Flushes, so a member cart another request stored first fails here, on
-     * {@code uk_active_orders_user_id}, as {@link ConcurrentReservationException}, rather than at a later
-     * flush or at commit, outside the adapter. Any other integrity violation propagates unchanged.
+     * <p>Flushes, so a cart of the same buyer that another request stored first fails here as
+     * {@link ConcurrentReservationException}, rather than at a later flush or at commit, outside the
+     * adapter: a member's on {@code uk_active_orders_user_id}, a guest session's on
+     * {@code uk_active_orders_guest_session_id}. Any other integrity violation propagates unchanged.
      */
     @Override
     @Transactional
@@ -79,11 +82,12 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
                 }
             }
             // Hibernate flushes inserts before deletes, so the replaced cart's delete must reach the
-            // database first, or this cart's insert would break uk_active_orders_user_id.
+            // database first, or this cart's insert would break its buyer's unique key.
             data.flush();
             data.saveAndFlush(activeOrder);
         } catch (DataIntegrityViolationException e) {
-            if (ConstraintViolations.violates(e, USER_CART_UNIQUE_CONSTRAINT)) {
+            if (ConstraintViolations.violates(e, USER_CART_UNIQUE_CONSTRAINT)
+                    || ConstraintViolations.violates(e, GUEST_SESSION_CART_UNIQUE_CONSTRAINT)) {
                 throw new ConcurrentReservationException(ActiveOrderSaveRules.ANOTHER_CART_HOLDS_LINES, e);
             }
             throw e;
@@ -100,7 +104,7 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
         if (sessionId == null || sessionId.isBlank()) {
             return Optional.empty();
         }
-        return data.findFirstBySessionId(sessionId);
+        return data.findBySessionIdAndUserIdIsNull(sessionId).stream().findFirst();
     }
 
     @Override

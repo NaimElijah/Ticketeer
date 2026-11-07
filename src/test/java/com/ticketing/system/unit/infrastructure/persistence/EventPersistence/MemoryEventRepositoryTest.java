@@ -51,6 +51,40 @@ public class MemoryEventRepositoryTest extends IEventRepositoryContractTest {
         assertThrows(EventNotFoundException.class, () -> repo.findById(1));
     }
 
+    // === save of a stored event — write-lock enforcement, as for delete ===
+    // The Jpa adapter accepts this save: @Version guards it there (JpaEventRepositoryContractTest). The
+    // change is made on a second instance, because this adapter's findById returns the stored one itself.
+
+    @Test
+    void GivenAStoredEvent_WhenAChangedInstanceIsSavedWithoutItsLock_ThenTheSaveIsRefusedAndTheStoredEventStays() {
+        EventRepository repo = newRepository();
+        repo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.SCHEDULED, EventCategory.CONCERT));
+        Event changed = buildEvent(1, "Rock Night", 4.5, 10, EventStatus.SCHEDULED, EventCategory.CONCERT);
+        changed.transitionToOnSale();
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> repo.save(changed));
+
+        assertEquals("Event 1 must be locked before saving", refused.getMessage());
+        assertEquals(EventStatus.SCHEDULED, repo.findById(1).getStatus());
+    }
+
+    // A buyer operation holds the shared lock and may save the event (a sell-out flip, ADR-015).
+    @Test
+    void GivenAStoredEvent_WhenSavedUnderTheBuyerLock_ThenTheSaveIsAccepted() {
+        EventRepository repo = newRepository();
+        repo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        Event soldOut = buildEvent(1, "Rock Night", 4.5, 10, EventStatus.SOLD_OUT, EventCategory.CONCERT);
+
+        repo.lockForBuyerOperation(1);
+        try {
+            repo.save(soldOut);
+        } finally {
+            repo.unlockBuyerOperation(1);
+        }
+
+        assertEquals(EventStatus.SOLD_OUT, repo.findById(1).getStatus());
+    }
+
     // The Jpa adapter lower-cases a term with Locale.ROOT, so this one must too: under a Turkish default
     // locale "TITLE".toLowerCase() is "tıtle", with a dotless i, and would match nothing.
     @Test

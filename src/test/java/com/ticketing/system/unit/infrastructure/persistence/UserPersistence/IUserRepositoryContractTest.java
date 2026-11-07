@@ -8,15 +8,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 // Contract tests every UserRepository implementation must satisfy. Future JPA-backed
 // adapter will subclass this with its own newRepository() factory; tests are reused.
@@ -64,6 +68,29 @@ abstract class IUserRepositoryContractTest {
         assertFalse(repo.findByEmail("ghost@example.com").isPresent());
     }
 
+    // A null key matches no user, as it matches no admin, company or session: the lookups answer
+    // "none" rather than throw, with a user stored so an adapter that compares each one is exercised.
+    @Test
+    void GivenASavedUser_WhenFindByUsernameNull_ThenReturnsEmpty() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.findByUsername(null).isPresent());
+    }
+
+    @Test
+    void GivenASavedUser_WhenFindByEmailNull_ThenReturnsEmpty() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.findByEmail(null).isPresent());
+    }
+
+    @Test
+    void GivenASavedUser_WhenExistsByUsernameNull_ThenFalse() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.existsByUsername(null));
+    }
+
     @Test
     void GivenARepositoryBeforeAndAfterASave_WhenExistsByUsername_ThenFalseWhenMissingTrueWhenSaved() {
         assertFalse(repo.existsByUsername("alice"));
@@ -95,6 +122,22 @@ abstract class IUserRepositoryContractTest {
     @Test
     void GivenNoSuchUser_WhenGetUserById_ThenThrowsUserNotFound() {
         assertThrows(UserNotFoundException.class, () -> repo.getUserById(9999));
+    }
+
+    // Backs the admin's broadcast to every member (II.6.3.2).
+    @Test
+    void GivenTwoSavedUsers_WhenFindAll_ThenReturnsBoth() {
+        int alice = repo.nextId();
+        repo.save(new User(alice, "alice", "alice@example.com", "HASH", 20));
+        int bob = repo.nextId();
+        repo.save(new User(bob, "bob", "bob@example.com", "HASH", 30));
+
+        assertEquals(Set.of(alice, bob), repo.findAll().stream().map(User::getUserId).collect(Collectors.toSet()));
+    }
+
+    @Test
+    void GivenNoUsers_WhenFindAll_ThenReturnsEmpty() {
+        assertTrue(repo.findAll().isEmpty());
     }
 
     @Test
@@ -140,5 +183,19 @@ abstract class IUserRepositoryContractTest {
 
         assertDoesNotThrow(() -> repo.save(alice), "saving a user again keeps its own username");
         assertTrue(repo.existsByUsername("alice"));
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate(1);
+        repo.lockForUpdate(1);
+        repo.unlock(1);
+        repo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, 1);
     }
 }

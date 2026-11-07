@@ -1,13 +1,15 @@
 package com.ticketing.system.integration;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +22,9 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
  */
 class ActiveOrderUserUniqueMigrationTest {
 
+    private static final String BEFORE_V7 = "6";
+    private static final String V7 = "7";
+    private static final String MEMBER_KEY = "uk_active_orders_user_id";
     private static final LocalDateTime CREATED = LocalDateTime.of(2026, 1, 1, 12, 0);
     private static final int MEMBER_ID = 1;
     private static final String INSERT_CART = "insert into active_orders"
@@ -35,14 +40,26 @@ class ActiveOrderUserUniqueMigrationTest {
         jdbc = new JdbcTemplate(dataSource);
     }
 
+    // DB_CLOSE_DELAY=-1 would otherwise keep each test's database alive for the rest of the fork.
+    @AfterEach
+    void dropDatabase() {
+        jdbc.execute("SHUTDOWN");
+    }
+
+    // H2 names the index behind the constraint (PUBLIC.UK_..._INDEX_n), so the name is matched by
+    // containment, ignoring case, as ConstraintViolations does.
     @Test
-    void GivenV7Applied_WhenASecondCartOfOneMemberIsInserted_ThenTheConstraintRefusesIt() {
+    void GivenV7Applied_WhenASecondCartOfOneMemberIsInserted_ThenTheMemberKeyRefusesIt() {
         migrateTo("latest");
         jdbc.update(INSERT_CART, "first", MEMBER_ID, null, CREATED);
 
         assertThatThrownBy(() -> jdbc.update(INSERT_CART, "second", MEMBER_ID, null, CREATED))
-                .as("uk_active_orders_user_id: one cart per member")
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .as("%s: one cart per member", MEMBER_KEY)
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .rootCause()
+                .isInstanceOf(SQLException.class)
+                .message().as("the database error names the key that refused the cart")
+                .containsIgnoringCase(MEMBER_KEY);
     }
 
     // NULLs are distinct in a unique constraint, so guest carts, which have no user, are not limited.
@@ -50,22 +67,30 @@ class ActiveOrderUserUniqueMigrationTest {
     void GivenV7Applied_WhenTwoGuestCartsAreInserted_ThenBothAreStored() {
         migrateTo("latest");
 
-        assertThatCode(() -> {
-            jdbc.update(INSERT_CART, "guest-a", null, "sid-a", CREATED);
-            jdbc.update(INSERT_CART, "guest-b", null, "sid-b", CREATED);
-        }).doesNotThrowAnyException();
+        jdbc.update(INSERT_CART, "guest-a", null, "sid-a", CREATED);
+        jdbc.update(INSERT_CART, "guest-b", null, "sid-b", CREATED);
+
+        assertThat(jdbc.queryForList("select order_key from active_orders where user_id is null order by order_key",
+                        String.class))
+                .as("both guest carts, read back")
+                .containsExactly("guest-a", "guest-b");
     }
 
     // Two carts of one member, written by the race V7 closes, fail the migration, and Flyway stops the boot.
+    // The target is V7 itself, so no later migration's failure can stand in for its own.
     @Test
-    void GivenTwoCartsOfOneMemberBeforeV7_WhenMigrated_ThenTheMigrationFails() {
-        migrateTo("6");
+    void GivenTwoCartsOfOneMemberBeforeV7_WhenMigratedToV7_ThenTheMigrationFailsOnTheMemberKey() {
+        migrateTo(BEFORE_V7);
         jdbc.update(INSERT_CART, "first", MEMBER_ID, null, CREATED);
         jdbc.update(INSERT_CART, "second", MEMBER_ID, null, CREATED);
 
-        assertThatThrownBy(() -> migrateTo("latest"))
-                .as("V7 cannot add uk_active_orders_user_id over a duplicate")
-                .isInstanceOf(FlywayException.class);
+        assertThatThrownBy(() -> migrateTo(V7))
+                .as("V7 cannot add %s over a duplicate", MEMBER_KEY)
+                .isInstanceOf(FlywayException.class)
+                .rootCause()
+                .isInstanceOf(SQLException.class)
+                .message().as("the database error names the key it could not add")
+                .containsIgnoringCase(MEMBER_KEY);
     }
 
     private void migrateTo(String target) {

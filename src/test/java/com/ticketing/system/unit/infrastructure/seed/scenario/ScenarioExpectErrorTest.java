@@ -1,7 +1,6 @@
 package com.ticketing.system.unit.infrastructure.seed.scenario;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -11,7 +10,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -43,7 +41,6 @@ class ScenarioExpectErrorTest {
             "register alice password123 alice@demo.test 30\nexpect-error login ghost\n";
     private static final String SUPERCLASS_OF_THROWN_TYPE = "RuntimeException";
     private static final String EXPECT_ERROR = "expect-error";
-    private static final String ERROR_ARGUMENT = "error";
     private static final List<String> COMMITTED_SCENARIOS =
             List.of("/scenarios/demo.scenario", "/scenarios/review.scenario");
 
@@ -101,23 +98,19 @@ class ScenarioExpectErrorTest {
                         + ", but no logged event named both");
     }
 
+    // The parser refuses an expect-error without a non-blank error=<Type> and names its line
+    // (ScenarioParserTest), so parsing each committed file is the check. The count keeps the test from
+    // passing on files that hold no expect-error at all.
     @Test
-    void GivenTheCommittedScenarios_WhenParsed_ThenEveryExpectErrorNamesTheExceptionItExpects() throws IOException {
-        List<String> withoutType = new ArrayList<>();
-        int expectations = 0;
+    void GivenTheCommittedScenarios_WhenParsed_ThenEveryExpectErrorNamesTheExceptionItExpects() {
+        long expectations = 0;
         for (String scenario : COMMITTED_SCENARIOS) {
-            for (ScenarioCommand command : new ScenarioParser().parse(read(scenario))) {
-                if (EXPECT_ERROR.equals(command.op())) {
-                    expectations++;
-                    if (command.named(ERROR_ARGUMENT) == null) {
-                        withoutType.add(scenario + ":" + command.line());
-                    }
-                }
-            }
+            List<ScenarioCommand> commands = assertDoesNotThrow(() -> new ScenarioParser().parse(read(scenario)),
+                    scenario + " must parse, and the parser refuses an expect-error that names no exception");
+            expectations += commands.stream().filter(command -> EXPECT_ERROR.equals(command.op())).count();
         }
 
-        assertFalse(expectations == 0, "the committed scenarios hold no expect-error line to check");
-        assertEquals(List.of(), withoutType, "every committed expect-error must name its exception with error=<Type>");
+        assertTrue(expectations > 0, "the committed scenarios hold no expect-error line to check");
     }
 
     // ---- F6: the runner refuses a bare expect-error before any step, whatever seed.fail-fast says (#187) ----

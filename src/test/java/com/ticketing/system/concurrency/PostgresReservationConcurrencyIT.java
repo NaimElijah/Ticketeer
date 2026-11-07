@@ -7,6 +7,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 
 /**
  * Runs {@link ReservationConcurrencyTest} on PostgreSQL, the production database, instead of H2 (ADR-006, #171). The two
@@ -14,6 +15,7 @@ import com.ticketing.system.support.PostgresContainers;
  * prove the race is closed in production.
  */
 @Testcontainers
+@RunsOnPostgres
 @DirtiesContext
 class PostgresReservationConcurrencyIT extends ReservationConcurrencyTest {
 

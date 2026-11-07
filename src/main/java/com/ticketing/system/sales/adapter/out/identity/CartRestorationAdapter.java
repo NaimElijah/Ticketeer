@@ -90,7 +90,7 @@ public class CartRestorationAdapter implements CartRestorationPort {
         activeOrderRepository.lockForUpdate(secondKey); // acquire the second lock
         try {
             Optional<ActiveOrder> guestCart = activeOrderRepository.getBySessionId(sessionId); // look up guest cart
-            if (guestCart.isPresent() && guestCart.get().isGuest()) { // a genuine guest cart to promote
+            if (guestCart.isPresent()) { // the session's guest cart, to promote
                 ActiveOrder replacedMemberCart = activeOrderRepository.getByUserId(userId);
                 if (replacedMemberCart != null) {
                     if (replacedMemberCart.isCheckoutInProgress()) {

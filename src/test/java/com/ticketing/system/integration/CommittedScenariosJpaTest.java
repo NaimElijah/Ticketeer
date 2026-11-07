@@ -70,9 +70,13 @@ class CommittedScenariosJpaTest {
     @Autowired private PlatformTimeProperties platformTime;
     @Value("${spring.datasource.url}") private String datasourceUrl;
 
-    // Under test no runner initialises the platform; the scenario runner opens the market itself.
+    // A boot replays one scenario on an empty database, so each row starts from one: without the wipe, review
+    // would run on demo's users and companies and could pass only because of them. The wipe keeps the admins,
+    // as a seed.mode=reset does. Under test no runner initialises the platform; the scenario runner opens the
+    // market itself.
     @BeforeEach
-    void initialisePlatform() {
+    void startEachScenarioOnAnEmptyDatabase() {
+        repoCleaner.clearAll();
         systemAdminService.initializePlatform();
     }
 

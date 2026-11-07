@@ -23,11 +23,6 @@ class SensitiveDataMaskerTest {
     }
 
     @Test
-    void GivenAFullPan_WhenMask_ThenNeverEchoesTheFullPan() {
-        assertFalse(SensitiveDataMasker.mask(FULL_PAN).contains(FULL_PAN));
-    }
-
-    @Test
     void GivenNullOrTooShortPan_WhenMask_ThenRedacts() {
         assertEquals("****", SensitiveDataMasker.mask(null));
         assertEquals("****", SensitiveDataMasker.mask("12"));

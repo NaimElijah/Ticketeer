@@ -1,14 +1,19 @@
 package com.ticketing.system.unit.infrastructure.persistence.ActiveOrderPersistence;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.LocalDateTime;
+
+import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,8 +45,14 @@ class JpaActiveOrderRepositoryContractTest extends IActiveOrderRepositoryContrac
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private DataSource dataSource;
+
     private static final int MEMBER_ID = 5;
+    private static final int OTHER_MEMBER_ID = 6;
     private static final LocalDateTime CREATED = LocalDateTime.of(2027, 7, 15, 17, 0);
+    private static final String PRE_V10_ORDER_KEY = "pre-v10-guest-cart";
+    private static final String PRE_V10_SESSION_ID = "sid-pre-v10";
 
     @BeforeEach
     void cleanTable() {
@@ -51,6 +62,21 @@ class JpaActiveOrderRepositoryContractTest extends IActiveOrderRepositoryContrac
     @Override
     protected ActiveOrderRepository newRepository() {
         return repository;
+    }
+
+    // This adapter needs no lock to save a stored cart again: @Version guards the write, and the Memory
+    // adapter, which has none, refuses (MemoryActiveOrderRepositoryContractTest). Outside the test
+    // transaction the load is a detached copy, so the new line reaches the table only through this save.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenAStoredCart_WhenLoadedChangedAndSavedWithoutALock_ThenTheChangeIsStored() {
+        repository.save(ActiveOrder.forMember(MEMBER_ID, "sid-A", CREATED));
+        ActiveOrder loaded = repository.getByUserId(MEMBER_ID);
+        loaded.addStandingReservation(1, 10, 1, 50.0, CREATED);
+
+        repository.save(loaded);
+
+        assertEquals(1, repository.getByUserId(MEMBER_ID).getItems().size());
     }
 
     // The login merge loads the guest cart and gives it the member's id inside the login transaction, so
@@ -69,5 +95,36 @@ class JpaActiveOrderRepositoryContractTest extends IActiveOrderRepositoryContrac
                     guestCart.attachToUser(MEMBER_ID);
                     repository.save(guestCart);
                 }));
+    }
+
+    // save re-types only the two buyer keys as a concurrent change; any other integrity violation is not a
+    // race the caller could win by retrying, so it propagates unchanged. A row already holding the new
+    // cart's order key breaks the primary key.
+    @Test
+    void GivenARowHoldingTheNewCartsOrderKey_WhenTheCartIsSaved_ThenTheIntegrityViolationPropagatesUnchanged() {
+        ActiveOrder cart = ActiveOrder.forMember(MEMBER_ID, "sid-A", CREATED);
+        new JdbcTemplate(dataSource).update("insert into active_orders"
+                + " (order_key, user_id, session_id, status, created_at, version) values (?, ?, ?, 'PRE_CHECKOUT', ?, 0)",
+                cart.getOrderKey(), OTHER_MEMBER_ID, "sid-other", CREATED);
+
+        assertThrows(DataIntegrityViolationException.class, () -> repository.save(cart));
+    }
+
+    // V10 header and requirements §1 #8 (#224): a guest cart that code from before V10 wrote during a rolling
+    // deploy has a null guest_session_id, and the key holds it once code from V10 on writes the row again. An
+    // items-only change is that write's least case: the entity's own columns stay as they were.
+    @Test
+    void GivenAGuestCartRowWrittenWithoutItsGuestSessionKey_WhenItGainsALineAndIsSaved_ThenTheKeyIsFilled() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        jdbc.update("insert into active_orders (order_key, user_id, session_id, status, created_at, version)"
+                + " values (?, null, ?, 'PRE_CHECKOUT', ?, 0)", PRE_V10_ORDER_KEY, PRE_V10_SESSION_ID, CREATED);
+
+        ActiveOrder cart = repository.getBySessionId(PRE_V10_SESSION_ID).orElseThrow();
+        cart.addStandingReservation(1, 10, 1, 50.0, CREATED);
+        repository.save(cart);
+
+        assertEquals(PRE_V10_SESSION_ID, jdbc.queryForObject(
+                "select guest_session_id from active_orders where order_key = ?", String.class, PRE_V10_ORDER_KEY),
+                "the rewritten guest cart's guest_session_id");
     }
 }

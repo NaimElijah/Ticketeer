@@ -7,6 +7,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 
 /**
  * Runs {@link CancelDuringCheckoutJpaTest} on PostgreSQL, the production database (ADR-006, #171). There
@@ -14,6 +15,7 @@ import com.ticketing.system.support.PostgresContainers;
  * where H2 takes an exclusive lock and times waits out.
  */
 @Testcontainers
+@RunsOnPostgres
 @DirtiesContext
 class PostgresCancelDuringCheckoutIT extends CancelDuringCheckoutJpaTest {
 

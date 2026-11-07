@@ -298,21 +298,36 @@ class JwtSessionManagerTest {
         assertTrue(manager.isExpired(token));
     }
 
+    // A second member's live token shows each call below revokes nothing it does not name.
     @Test
-    void GivenInvalidatedToken_WhenInvalidateAgain_ThenDoesNotThrow() {
+    void GivenInvalidatedToken_WhenInvalidateAgain_ThenNoOpWithoutThrowing() {
         String token = manager.generateToken(42, "alice");
+        String liveToken = manager.generateToken(OTHER_MEMBER_ID, "bob");
         manager.invalidate(token);
-        manager.invalidate(token);
+
+        assertDoesNotThrow(() -> manager.invalidate(token));
+
+        assertThrowsExactly(InvalidTokenException.class, () -> manager.validateToken(token),
+                "the token stays revoked");
+        assertTrue(manager.validateToken(liveToken), "revoking a revoked token again revokes no other");
     }
 
     @Test
-    void GivenNullToken_WhenInvalidate_ThenDoesNotThrow() {
-        manager.invalidate(null);
+    void GivenNullToken_WhenInvalidate_ThenNoOpWithoutThrowing() {
+        String liveToken = manager.generateToken(MEMBER_ID, "alice");
+
+        assertDoesNotThrow(() -> manager.invalidate(null));
+
+        assertTrue(manager.validateToken(liveToken), "a null token revokes nothing");
     }
 
     @Test
-    void GivenBlankToken_WhenInvalidate_ThenDoesNotThrow() {
-        manager.invalidate("   ");
+    void GivenBlankToken_WhenInvalidate_ThenNoOpWithoutThrowing() {
+        String liveToken = manager.generateToken(MEMBER_ID, "alice");
+
+        assertDoesNotThrow(() -> manager.invalidate("   "));
+
+        assertTrue(manager.validateToken(liveToken), "a blank token revokes nothing");
     }
 
     @Test

@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -21,6 +22,7 @@ import com.ticketing.system.notifications.application.port.out.NotificationRepos
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract every {@link NotificationRepository} implementation must satisfy. The Memory and
@@ -132,6 +134,17 @@ abstract class INotificationRepositoryContractTest {
         assertTrue(repo.findById("n1").getData().isEmpty());
     }
 
+    // The JPA table holds the status under a check constraint too (ck_notifications_status), which a
+    // migration must widen for each new constant (ADR-007). Inherited, so each save commits, and a missing
+    // value fails here.
+    @ParameterizedTest
+    @EnumSource(NotificationStatus.class)
+    void GivenANotificationInEachStatus_WhenSaved_ThenItIsFoundByThatStatus(NotificationStatus status) {
+        repo.save(note("n1", 5, status));
+
+        assertEquals(Set.of("n1"), ids(repo.findByRecipientAndStatus(5, status)));
+    }
+
     // The JPA table holds the type under a check constraint that a migration must widen for each new
     // constant (ADR-007); reading back through a query flushes the insert, so a missing value fails here.
     @ParameterizedTest
@@ -142,5 +155,19 @@ abstract class INotificationRepositoryContractTest {
         List<Notification> found = repo.findByRecipient(5);
         assertEquals(1, found.size());
         assertEquals(type, found.get(0).getType());
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("n1");
+        repo.lockForUpdate("n1");
+        repo.unlock("n1");
+        repo.unlock("n1");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "n1");
     }
 }
