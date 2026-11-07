@@ -146,7 +146,7 @@ class CatalogServiceTest {
 
         List<EventSummaryDTO> results = catalogService.searchGlobal(VALID_TOKEN, filters);
 
-        assertEquals(2, results.size());
+        assertEquals(List.of("Event 1", "Event 2"), results.stream().map(EventSummaryDTO::name).toList());
     }
 
     // UC-7: searchGlobal excludes events whose company rating is below

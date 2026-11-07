@@ -51,7 +51,6 @@ import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
-import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.application.port.in.CatalogEventDisplayPort;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -455,13 +454,10 @@ class SystemAdminServiceTest {
         ReceiptLine line1 = new ReceiptLine(1, 25.0, 25, 1, null, PURCHASED_AT);
         OrderReceipt receipt = OrderReceipt.forMember(11, 1, price, List.of(line1), PURCHASED_AT);
         Ticket ticket = new Ticket(1, 1, 11, null, price, ticketId, "BARCODE");
-        Event event = mock(Event.class);
-        when(event.getName()).thenReturn("Rock Night");
 
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(1, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt));
         when(ticketRepository.findByOrderReceiptId(receipt.getId())).thenReturn(List.of(ticket));
-        when(eventRepository.findById(1)).thenReturn(event);
 
         List<PurchaseHistoryDTO> result = service.viewGlobalHistory(ADMIN_TOKEN, filters);
 
@@ -483,18 +479,17 @@ class SystemAdminServiceTest {
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", PURCHASED_AT);
         OrderReceipt receipt1 = OrderReceipt.forMember(11, 1, 50.0, List.of(line1), PURCHASED_AT);
         OrderReceipt receipt2 = OrderReceipt.forMember(12, 2, 75.0, List.of(line2), PURCHASED_AT);
-        Event event = mock(Event.class);
-        when(event.getName()).thenReturn("Jazz Night");
 
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt1, receipt2));
         when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
-        when(eventRepository.findById(anyInt())).thenReturn(event);
 
         List<PurchaseHistoryDTO> result = service.viewGlobalHistory(ADMIN_TOKEN, filters);
 
         assertEquals(1, result.size());
-        assertEquals(2, result.get(0).records().size());
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = result.get(0).records();
+        assertEquals(List.of(11, 12), records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(List.of(50.0, 75.0), records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::totalPaid).toList());
     }
 
     @Test
@@ -555,7 +550,10 @@ class SystemAdminServiceTest {
                 service.viewGlobalHistory(ADMIN_TOKEN, filters).get(0).records().get(0);
 
         assertEquals(1, record.tickets().size());
-        assertEquals(2, record.transactions().size());
+        assertEquals(100.0, record.totalPaid(), "a filtered record totals only the selected event's lines");
+        assertEquals(List.of("42", "ISS-42"), record.transactions().stream()
+                .map(PurchaseHistoryDTO.TransactionRecordDTO::externalTransactionId).toList(),
+                "the whole order's payment and issuance, though one line is filtered out");
     }
 
     // ---- governance failure paths with no test before #189 ----

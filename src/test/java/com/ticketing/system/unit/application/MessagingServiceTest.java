@@ -400,7 +400,7 @@ class MessagingServiceTest {
 
         List<ConversationDTO> sent = service.viewSentOutreach(ADMIN_TOKEN);
 
-        assertEquals(2, sent.size());
+        assertEquals(List.of(MEMBER_ID, MEMBER2_ID), sent.stream().map(ConversationDTO::counterpartyId).sorted().toList());
         assertTrue(sent.stream().allMatch(c -> "DIRECT".equals(c.type())));
     }
 

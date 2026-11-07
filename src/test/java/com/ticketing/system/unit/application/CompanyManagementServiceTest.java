@@ -841,13 +841,8 @@ public class CompanyManagementServiceTest {
 
                 assertNotNull(result);
                 assertEquals(OWNER_ID, result.userId());
-                assertEquals(2, result.appointedByThisUser().size());
-
-                List<Integer> childIds = result.appointedByThisUser().stream()
-                                .map(OrganizationalTreeNodeDTO::userId)
-                                .toList();
-                assertTrue(childIds.contains(MANAGER1_ID));
-                assertTrue(childIds.contains(MANAGER2_ID));
+                assertEquals(Set.of(MANAGER1_ID, MANAGER2_ID), Set.copyOf(childIds(result)));
+                assertEquals(2, result.appointedByThisUser().size(), "each manager appears once");
                 result.appointedByThisUser().forEach(child -> {
                         assertEquals("Manager", child.role());
                         assertFalse(child.isFounder());

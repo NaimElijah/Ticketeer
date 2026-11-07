@@ -437,7 +437,8 @@ class CompanyAnalyticsServiceTest {
 
         PurchaseHistoryDTO result = service.salesHistory(TARGET_TOKEN, COMPANY_ID);
 
-        assertEquals(1, result.records().size());
+        assertEquals(List.of(1), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(40.0, result.records().get(0).totalPaid());
     }
 
     // ─── salesHistory unit tests ──────────────────────────────────────────────────
@@ -476,7 +477,8 @@ class CompanyAnalyticsServiceTest {
 
         PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
-        assertEquals(2, result.records().size());
+        assertEquals(List.of(1, 2), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(List.of(50.0, 30.0), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::totalPaid).toList());
     }
 
     @Test
