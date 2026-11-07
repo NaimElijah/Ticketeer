@@ -1302,6 +1302,50 @@ class CatalogServiceTest {
                 "browse lists only ON_SALE events of active companies");
     }
 
+    // ---- top-bar search: one row per artist and venue, and the three kinds take turns ----
+
+    private Event rockEvent(int id, String name, String artist) {
+        return new Event(id, name, 4.0, List.of(artist), EventCategory.CONCERT, OWNER_COMPANY_ID,
+                EventStatus.ON_SALE,
+                new VenueMap(id, new Location("Rockland", "Rockville"), List.of(new StandingZone(1, "Floor", 100, 50))),
+                List.of(new ShowDate(HIDDEN_SHOW_START, HIDDEN_SHOW_START.plusHours(2))),
+                ZoneId.of("Asia/Jerusalem"), null, new DiscountPolicy(0));
+    }
+
+    private void twoRockNightsOfOneBandAtOneVenue() {
+        when(mockSessionManager.validateCredential(VALID_TOKEN)).thenReturn(true);
+        when(mockCompanyRepository.getCompanyById(OWNER_COMPANY_ID)).thenReturn(company(OWNER_COMPANY_ID,
+                CompanyStatus.ACTIVE));
+        Event first = rockEvent(1, "Rock Night One", "Rock Band");
+        Event second = rockEvent(2, "Rock Night Two", "ROCK BAND");
+        when(mockEventRepository.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(first, second));
+    }
+
+    private static List<String> typedTitles(List<SearchResultDTO> results) {
+        return results.stream().map(r -> r.type() + " " + r.title() + " #" + r.eventId()).toList();
+    }
+
+    @Test
+    void GivenMatchesOfEveryKind_WhenSearch_ThenTheKindsTakeTurnsAndEachArtistAndVenueAppearsOnce() {
+        twoRockNightsOfOneBandAtOneVenue();
+
+        List<SearchResultDTO> results = catalogService.search(VALID_TOKEN, "rock", 8);
+
+        assertEquals(List.of("EVENT Rock Night One #1", "ARTIST Rock Band #1", "VENUE Rockville, Rockland #1",
+                "EVENT Rock Night Two #2"), typedTitles(results),
+                "an artist or venue matched by case only is one row, pointing at its first event");
+    }
+
+    @Test
+    void GivenMoreMatchesThanTheLimit_WhenSearch_ThenEachKindGetsATurnBeforeAnyGetsASecond() {
+        twoRockNightsOfOneBandAtOneVenue();
+
+        List<SearchResultDTO> results = catalogService.search(VALID_TOKEN, "rock", 3);
+
+        assertEquals(List.of("EVENT Rock Night One #1", "ARTIST Rock Band #1", "VENUE Rockville, Rockland #1"),
+                typedTitles(results));
+    }
+
     private static ProductionCompany company(int companyId, CompanyStatus status) {
         return new ProductionCompany(companyId, 1, "Company " + companyId, status, "A production company", 4.0);
     }
