@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.ActiveOrderStatus;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
@@ -295,6 +296,18 @@ abstract class IActiveOrderRepositoryContractTest {
     @Test
     void GivenNoCarts_WhenFindAll_ThenReturnsEmpty() {
         assertTrue(repo.findAll().isEmpty());
+    }
+
+    // PRE_CHECKOUT is stored by every other case here. The Jpa table holds the status under a check
+    // constraint that a migration must widen for each new constant (ADR-007).
+    @Test
+    void GivenACartFrozenForCheckout_WhenSavedAndFound_ThenItIsStillInCheckout() {
+        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
+        cart.addStandingReservation(1, 10, 1, 50.0, NOW);
+        cart.markCheckoutInProgress();
+        repo.save(cart);
+
+        assertEquals(ActiveOrderStatus.CHECKOUT_IN_PROGRESS, repo.getByUserId(5).getStatus());
     }
 
     @Test
