@@ -75,7 +75,7 @@ class CapabilitiesTest {
     // beyond a member of no company and the workspace itself (capsFor).
 
     @Test
-    void GivenEveryManagerPermission_WhenCapabilitiesFromPermissions_ThenEachGrantsTheReadOnlyEventsHub() {
+    void GivenEveryManagerPermission_WhenForCurrentUser_ThenEachGrantsTheReadOnlyEventsHub() {
         for (Permission p : Permission.values()) {
             assertTrue(capsFor(p).contains(Capability.VIEW_COMPANY_EVENTS),
                 p + " must grant VIEW_COMPANY_EVENTS — every manager lands on the My Events hub");
@@ -83,7 +83,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void GivenEachManagerPermissionExceptManageInventory_WhenCapabilitiesFromPermissions_ThenItGrantsExactlyItsOwnAction() {
+    void GivenEachManagerPermissionExceptManageInventory_WhenForCurrentUser_ThenItGrantsExactlyItsOwnAction() {
         assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES),
             capsFor(Permission.VIEW_SALES));
         assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_PURCHASE_POLICIES),
@@ -95,14 +95,14 @@ class CapabilitiesTest {
     }
 
     @Test
-    void GivenManageInventory_WhenCapabilitiesFromPermissions_ThenItOwnsTheFullEventLifecycleIncludingCancel() {
+    void GivenManageInventory_WhenForCurrentUser_ThenItOwnsTheFullEventLifecycleIncludingCancel() {
         Set<Capability> caps = capsFor(Permission.MANAGE_INVENTORY);
         assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT),
             caps, "MANAGE_INVENTORY grants the event lifecycle, cancel+refund included, and nothing more");
     }
 
     @Test
-    void GivenASalesOnlyManager_WhenCapabilitiesFromPermissions_ThenCannotEditOrCancelEvents() {   // no privilege escalation through the shared hub
+    void GivenASalesOnlyManager_WhenForCurrentUser_ThenCannotEditOrCancelEvents() {   // no privilege escalation through the shared hub
         Set<Capability> caps = capsFor(Permission.VIEW_SALES);
         assertFalse(caps.contains(Capability.EDIT_COMPANY_EVENTS),
             "VIEW_SALES sees My Events but must not edit them");
@@ -111,7 +111,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void GivenCombinedPermissions_WhenCapabilitiesFromPermissions_ThenGrantTheUnionOfTheirCapabilities() {
+    void GivenCombinedPermissions_WhenForCurrentUser_ThenGrantTheUnionOfTheirCapabilities() {
         Set<Capability> caps = capsFor(Permission.VIEW_SALES, Permission.MANAGE_INVENTORY);
         assertEquals(EnumSet.of(
             Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES,
