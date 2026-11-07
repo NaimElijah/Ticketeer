@@ -118,7 +118,10 @@ class ActiveOrderTest extends BaseDomainTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
-        // Only "not enough to remove" is the expected refusal; anything else is a race the order lost.
+        // Each spot is a line of its own, so the removal that takes the fifth spot also takes the event's last
+        // line, and every later remover is refused by the event check before the count check is reached.
+        // That refusal is the only expected one; anything else is a race the order lost.
+        String eventGone = "Active order does not contain this event";
         ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
         try {
@@ -133,7 +136,11 @@ class ActiveOrderTest extends BaseDomainTest {
                         successCount.incrementAndGet();
 
                     } catch (IllegalArgumentException e) {
-                        failureCount.incrementAndGet();
+                        if (eventGone.equals(e.getMessage())) {
+                            failureCount.incrementAndGet();
+                        } else {
+                            unexpected.add(e);
+                        }
 
                     } catch (Throwable e) {
                         unexpected.add(e);

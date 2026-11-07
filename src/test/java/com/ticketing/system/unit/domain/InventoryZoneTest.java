@@ -57,7 +57,9 @@ public class InventoryZoneTest extends BaseDomainTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
-        // Only "not enough left" is the expected refusal; anything else is a race the zone lost.
+        // Each buyer asks for one place, so a buyer is refused only once none is left. That refusal is the only
+        // expected one; anything else, an invariant check's IllegalStateException included, is a race the zone lost.
+        String noneLeft = "remaining 0 tickets available";
         ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
         try {
@@ -72,7 +74,11 @@ public class InventoryZoneTest extends BaseDomainTest {
                         successCount.incrementAndGet();
 
                     } catch (IllegalStateException e) {
-                        failureCount.incrementAndGet();
+                        if (noneLeft.equals(e.getMessage())) {
+                            failureCount.incrementAndGet();
+                        } else {
+                            unexpected.add(e);
+                        }
 
                     } catch (Throwable e) {
                         unexpected.add(e);
@@ -496,7 +502,9 @@ public class InventoryZoneTest extends BaseDomainTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
-        // Only "seat not available" is the expected refusal; anything else is a race the zone lost.
+        // Only the refusal of a seat someone already holds is expected; anything else, an invariant check's
+        // IllegalStateException included, is a race the zone lost.
+        String seatTaken = "Seat A1 is not available (status: " + SeatStatus.RESERVED + ")";
         ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
         try {
@@ -510,7 +518,11 @@ public class InventoryZoneTest extends BaseDomainTest {
                         successCount.incrementAndGet();
 
                     } catch (IllegalStateException e) {
-                        failureCount.incrementAndGet();
+                        if (seatTaken.equals(e.getMessage())) {
+                            failureCount.incrementAndGet();
+                        } else {
+                            unexpected.add(e);
+                        }
 
                     } catch (Throwable e) {
                         unexpected.add(e);
