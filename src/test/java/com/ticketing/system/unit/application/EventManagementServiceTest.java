@@ -51,6 +51,7 @@ import com.ticketing.system.organization.domain.ProductionCompany;
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
@@ -420,6 +421,74 @@ class EventManagementServiceTest {
                 assertThrows(InvalidStateTransitionException.class,
                                 () -> eventService.publishEvent(OWNER_TOKEN, COMPANY_ID, EVENT_ID));
                 assertEquals(EventStatus.DRAFT, draftEvent.getStatus());
+        }
+
+        // -- deleteEvent: only a cancelled event with no sales history, by a MANAGE_INVENTORY member --
+
+        private void givenOwnerSignedInAndEventStored() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+        }
+
+        @Test
+        void GivenCanceledEventWithoutSalesHistory_WhenDeleteEvent_ThenDeletedAndUnlocked() {
+                givenOwnerSignedInAndEventStored();
+                event.transitionToCanceled("cancelled");
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(false);
+
+                eventService.deleteEvent(OWNER_TOKEN, EVENT_ID);
+
+                verify(mockEventRepo).delete(EVENT_ID);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // Receipts and tickets reference the event by id with no cascade, so deleting it would orphan them.
+        @Test
+        void GivenCanceledEventWithSalesHistory_WhenDeleteEvent_ThenRefusedAndNotDeleted() {
+                givenOwnerSignedInAndEventStored();
+                event.transitionToCanceled("cancelled");
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(true);
+
+                BusinessRuleViolationException refused = assertThrowsExactly(BusinessRuleViolationException.class,
+                                () -> eventService.deleteEvent(OWNER_TOKEN, EVENT_ID));
+
+                assertEquals("Can't delete an event with sales history", refused.getMessage());
+                verify(mockEventRepo, never()).delete(anyInt());
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        @Test
+        void GivenScheduledEvent_WhenDeleteEvent_ThenInvalidStateTransitionAndNotDeleted() {
+                givenOwnerSignedInAndEventStored();
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(false);
+
+                InvalidStateTransitionException refused = assertThrowsExactly(InvalidStateTransitionException.class,
+                                () -> eventService.deleteEvent(OWNER_TOKEN, EVENT_ID));
+
+                assertEquals("Only CANCELED events can be deleted", refused.getMessage());
+                assertEquals(EventStatus.SCHEDULED, event.getStatus());
+                verify(mockEventRepo, never()).delete(anyInt());
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        @Test
+        void GivenManagerWithoutManageInventory_WhenDeleteEvent_ThenUnauthorizedAndNotDeleted() {
+                when(sessionManager.validateToken(MANAGER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(MANAGER_TOKEN)).thenReturn(MANAGER_ID);
+                when(userRepository.getUserById(MANAGER_ID)).thenReturn(managerUser);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                event.transitionToCanceled("cancelled");
+                when(eventSalesHistoryPort.hasSalesHistory(EVENT_ID)).thenReturn(false);
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.deleteEvent(MANAGER_TOKEN, EVENT_ID));
+
+                assertEquals("Not authorized to perform action: Missing permission: MANAGE_INVENTORY",
+                                refused.getMessage());
+                verify(mockEventRepo, never()).delete(anyInt());
+                verify(mockEventRepo).unlock(EVENT_ID);
         }
 
         // new test
