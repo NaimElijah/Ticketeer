@@ -55,7 +55,7 @@ public final class RepositoryLockProbe {
      * @throws InterruptedException if the calling thread is interrupted while it waits
      * @throws ExecutionException if {@code lockAndUnlock} throws
      */
-    public static void assertAnotherThreadCan(String what, Runnable lockAndUnlock)
+    private static void assertAnotherThreadCan(String what, Runnable lockAndUnlock)
             throws InterruptedException, ExecutionException {
         ExecutorService other = Executors.newSingleThreadExecutor();
         try {

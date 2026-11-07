@@ -173,9 +173,9 @@ abstract class ICompanyAppointmentRepositoryContractTest {
         assertTrue(b > a);
     }
 
-    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
-    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The Jpa
-    // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
     @Test
     @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {

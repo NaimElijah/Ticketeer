@@ -14,9 +14,9 @@ class MemoryOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryCo
         return new MemoryOrderReceiptRepository();
     }
 
-    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
-    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. Not in the
-    // contract: the Jpa adapter's lock is a row lock and refuses to run outside a transaction
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // Not in the contract: the Jpa adapter's lock is a row lock and refuses to run outside a transaction
     // (JpaOrderReceiptRepositoryContractTest).
     @Test
     @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
