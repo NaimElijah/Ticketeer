@@ -34,6 +34,7 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.shared.exception.PolicyViolationException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.support.BaseDomainTest;
 
 import java.time.LocalDateTime;
@@ -445,7 +446,10 @@ class EventTest extends BaseDomainTest {
         StandingZone existingZone = track(new StandingZone(1, "General", 100, 50));
         Event event = createEventWithZones(List.of(existingZone));
 
-        assertThrows(RuntimeException.class, () -> event.addStandingZone("Wrong Company Zone", 50, 90.0, 999));
+        assertThrows(UnauthorizedActionException.class,
+                () -> event.addStandingZone("Wrong Company Zone", 50, 90.0, 999));
+
+        assertEquals(List.of(1), zoneIds(event));
     }
 
     @Test

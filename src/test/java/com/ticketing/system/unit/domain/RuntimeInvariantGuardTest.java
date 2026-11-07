@@ -66,7 +66,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
 
         // OWNER_ID is the founder/owner — the owner/manager-overlap invariant forbids this.
-        assertThrows(RuntimeException.class, () -> company.addManager(OWNER_ID));
+        assertThrows(IllegalStateException.class, () -> company.addManager(OWNER_ID));
 
         // Validate-before-commit: the failed add rolled back, managers stays empty.
         assertFalse(company.getManagers().contains(OWNER_ID));

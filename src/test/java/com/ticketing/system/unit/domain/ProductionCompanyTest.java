@@ -6,11 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.support.BaseDomainTest;
@@ -44,15 +47,22 @@ class ProductionCompanyTest extends BaseDomainTest {
                 assertFalse(company.getManagers().contains(TARGET_USER_ID));
         }
 
+        // The type decides whether the user reads the rule (ServiceErrors.userMessage): both are DomainExceptions.
         @Test
         public void GivenTargetAlreadyManager_WhenAddManager_ThenThrowException() {
                 company.addManager(TARGET_USER_ID);
-                assertThrows(RuntimeException.class, () -> company.addManager(TARGET_USER_ID));
+
+                assertThrows(BusinessRuleViolationException.class, () -> company.addManager(TARGET_USER_ID));
+
+                assertEquals(List.of(TARGET_USER_ID), company.getManagers());
         }
 
         @Test
         public void GivenTargetIsNotManager_WhenRevokeManager_ThenThrowException() {
-                assertThrows(RuntimeException.class, () -> company.RevokeAppointment(TARGET_USER_ID));
+                assertThrows(AppointmentNotFoundException.class, () -> company.RevokeAppointment(TARGET_USER_ID));
+
+                assertTrue(company.getManagers().isEmpty());
+                assertTrue(company.isOwner(OWNER_ID));
         }
 
         ////////////////////////////////////////////////////////////////// UC-20Tests
