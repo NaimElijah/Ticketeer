@@ -2,6 +2,7 @@ package com.ticketing.system.unit.presentation;
 
 import static com.ticketing.system.unit.presentation.ViewHarness.field;
 import static com.ticketing.system.unit.presentation.ViewHarness.find;
+import static com.ticketing.system.unit.presentation.ViewHarness.linkTo;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,7 +26,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.ZoneType;
 import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
 import com.ticketing.system.organization.application.dto.ProductionCompanyDTO;
@@ -45,11 +48,16 @@ import com.ticketing.system.ui.presenters.company.VenueMapPresenter;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.support.EventCategoryLabels;
+import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
+import com.ticketing.system.ui.views.admin.GlobalHistoryView;
 import com.ticketing.system.ui.views.admin.OrganizationalTreeView;
+import com.ticketing.system.ui.views.catalog.EventDetailsView;
 import com.ticketing.system.ui.views.catalog.SeatPickerView;
+import com.ticketing.system.ui.views.company.CompanySalesView;
 import com.ticketing.system.ui.views.company.EventManagementView;
+import com.ticketing.system.ui.views.company.PurchasePolicyEditorView;
 import com.ticketing.system.ui.views.company.VenueMapEditorView;
 import com.ticketing.system.ui.views.landing.LandingView;
 import com.vaadin.flow.component.Component;
@@ -117,6 +125,17 @@ class ClickOnlyControlsTest {
         control(new LandingView(presenter), "Hamlet");
     }
 
+    // A poster is a link, which the browser follows itself; where it leads is its URL (#189).
+    @Test
+    void GivenAFeaturedEvent_WhenTheLandingRenders_ThenItsPosterLinksToThatEventsPage() {
+        LandingPresenter presenter = mock(LandingPresenter.class);
+        when(presenter.load()).thenReturn(new LandingPresenter.Outcome.Success(List.of(event("Hamlet")), List.of()));
+
+        Element poster = control(new LandingView(presenter), "Hamlet");
+
+        assertEquals(linkTo(EventDetailsView.class, "eventId", String.valueOf(HAMLET_ID)), poster.getAttribute("href"));
+    }
+
     @Test
     void GivenTheLanding_WhenItRenders_ThenEachCategoryCardIsAButtonOrLinkNamedByItsCategory() {
         LandingPresenter presenter = mock(LandingPresenter.class);
@@ -147,16 +166,56 @@ class ClickOnlyControlsTest {
         }
     }
 
+    @Test
+    void GivenTheAdminDashboard_WhenItRenders_ThenEachToolTileLinksToItsOwnTool() {
+        ViewHarness.signInAdmin();
+        AdminDashboardPresenter presenter = mock(AdminDashboardPresenter.class);
+        when(presenter.load()).thenReturn(new AdminDashboardPresenter.Outcome.Failure("overview-down"));
+        AdminDashboardView view = new AdminDashboardView(presenter);
+
+        assertEquals(linkTo(GlobalHistoryView.class), control(view, "Global purchase history").getAttribute("href"));
+        assertEquals(linkTo(OrganizationalTreeView.class), control(view, "Organizational tree").getAttribute("href"));
+        assertEquals(linkTo(AdminSendMessagesView.class), control(view, "Send Messages").getAttribute("href"));
+        assertEquals(linkTo(AdminComplaintQueueView.class), control(view, "Complaint queue").getAttribute("href"));
+    }
+
     // ---- EventManagementView linked editors ----
 
+    // The linked editors show only for a saved event, so the page is entered on one, as the router does (#189).
     @Test
     void GivenTheEventPage_WhenItRenders_ThenEachLinkedEditorRowIsAButtonOrLink() {
-        ViewHarness.signInMember();
-        EventManagementView view = new EventManagementView(mock(EventManagementPresenter.class));
+        EventManagementView view = savedEventPage();
 
         for (String label : List.of("Venue map + zones", "Purchase policies", "Sales for this event")) {
             control(view, label);
         }
+    }
+
+    @Test
+    void GivenASavedEvent_WhenTheOwnerActivatesVenueMap_ThenTheVenueEditorOpensForThatEvent() {
+        EventManagementView view = savedEventPage();
+
+        activate(control(view, "Venue map + zones"));
+
+        assertEquals(List.of("owner/venue/" + SAVED_EVENT_ID), harness.navigations());
+    }
+
+    @Test
+    void GivenASavedEvent_WhenTheOwnerActivatesPurchasePolicies_ThenThePolicyEditorOpens() {
+        EventManagementView view = savedEventPage();
+
+        activate(control(view, "Purchase policies"));
+
+        assertEquals(List.of(PurchasePolicyEditorView.class.getSimpleName()), harness.navigations());
+    }
+
+    @Test
+    void GivenASavedEvent_WhenTheOwnerActivatesSales_ThenTheSalesPageOpens() {
+        EventManagementView view = savedEventPage();
+
+        activate(control(view, "Sales for this event"));
+
+        assertEquals(List.of(CompanySalesView.class.getSimpleName()), harness.navigations());
     }
 
     // ---- ✕ removers ----
@@ -214,6 +273,13 @@ class ClickOnlyControlsTest {
     @Test
     void GivenTheSeatPicker_WhenItRenders_ThenBackToAreasIsALinkOrButton() {
         control(seatPicker(), "Back to areas");
+    }
+
+    @Test
+    void GivenTheSeatPickerOfAnEvent_WhenItRenders_ThenBackToAreasLinksToThatEventsPage() {
+        Element back = control(seatPicker(), "Back to areas");
+
+        assertEquals(linkTo(EventDetailsView.class, "eventId", "5"), back.getAttribute("href"));
     }
 
     // ---- helpers ---------------------------------------------------------------------------------
@@ -278,9 +344,26 @@ class ClickOnlyControlsTest {
         return presenter;
     }
 
+    private static final int HAMLET_ID = 1;
+    private static final int SAVED_EVENT_ID = 5;
+
     private static EventSummaryDTO event(String name) {
-        return new EventSummaryDTO(1, name, "ON_SALE", null, "Acme", EventCategory.THEATER.name(), "Tel Aviv",
+        return new EventSummaryDTO(HAMLET_ID, name, "ON_SALE", null, "Acme", EventCategory.THEATER.name(), "Tel Aviv",
             List.of(), ZoneOffset.UTC, 50.0, 50.0, false, List.of());
+    }
+
+    // The management page of a saved event, entered on its route as the router does.
+    private EventManagementView savedEventPage() {
+        ViewHarness.signInMember();
+        harness.memberships(ViewHarness.founderOf(3, "Acme"));
+        EventManagementPresenter presenter = mock(EventManagementPresenter.class);
+        when(presenter.load(any(), eq(SAVED_EVENT_ID))).thenReturn(new EventManagementPresenter.LoadOutcome.Success(
+            new EventDetailDTO(String.valueOf(SAVED_EVENT_ID), "Coldplay", 4.5, "Live", EventCategory.CONCERT, null,
+                "3", "Acme", EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of("Coldplay"), 50.0)));
+        EventManagementView view = new EventManagementView(presenter);
+        harness.attach(view);
+        view.beforeEnter(routeTo("eventId", String.valueOf(SAVED_EVENT_ID)));
+        return view;
     }
 
     private SeatPickerView seatPicker() {
