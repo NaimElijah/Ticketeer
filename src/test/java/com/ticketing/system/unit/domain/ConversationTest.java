@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +17,7 @@ import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.messaging.domain.ConversationStatus;
 import com.ticketing.system.messaging.domain.ConversationType;
+import com.ticketing.system.messaging.domain.Message;
 import com.ticketing.system.messaging.domain.ParticipantType;
 import com.ticketing.system.support.BaseDomainTest;
 
@@ -32,12 +34,14 @@ class ConversationTest extends BaseDomainTest {
     private static final int SUBJECT_LIMIT = 255;
     private static final LocalDateTime STARTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
     private static final LocalDateTime REPLIED_AT = STARTED_AT.plusMinutes(1);
+    private static final String OPENING_BODY = "Is there parking near the venue?";
+    private static final String REPLY_BODY = "Yes — there is a paid lot nearby.";
 
     private Conversation inquiry() {
         return track(Conversation.start(ConversationType.INQUIRY,
                 MEMBER_ID, ParticipantType.MEMBER,
                 COMPANY_ID, ParticipantType.COMPANY,
-                "Parking?", "Is there parking near the venue?", STARTED_AT));
+                "Parking?", OPENING_BODY, STARTED_AT));
     }
 
     private Conversation complaint() {
@@ -51,16 +55,33 @@ class ConversationTest extends BaseDomainTest {
     void GivenAMemberAndACompany_WhenStart_ThenOpensWithFirstMessage() {
         Conversation c = inquiry();
         assertEquals(ConversationStatus.OPEN, c.getStatus());
-        assertEquals(1, c.getMessages().size());
+        assertEquals(List.of(sent(MEMBER_ID, ParticipantType.MEMBER, OPENING_BODY, STARTED_AT)), sentByWhomAndWhen(c));
         assertEquals(c.getCreatedAt(), c.getLastMessageAt());
     }
 
     @Test
     void GivenAnInquiry_WhenAddMessage_ThenAppendsAndAdvancesLastMessageAt() {
         Conversation c = inquiry();
-        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, "Yes — there is a paid lot nearby.", REPLIED_AT);
-        assertEquals(2, c.getMessages().size());
+        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, REPLY_BODY, REPLIED_AT);
+        assertEquals(List.of(
+                        sent(MEMBER_ID, ParticipantType.MEMBER, OPENING_BODY, STARTED_AT),
+                        sent(COMPANY_ID, ParticipantType.COMPANY, REPLY_BODY, REPLIED_AT)),
+                sentByWhomAndWhen(c));
         assertEquals(REPLIED_AT, c.getLastMessageAt());
+    }
+
+    // A message's sender, side, body and time, which together say who wrote what and when.
+    private record Sent(int senderId, ParticipantType senderType, String body, LocalDateTime sentAt) {
+    }
+
+    private static Sent sent(int senderId, ParticipantType senderType, String body, LocalDateTime sentAt) {
+        return new Sent(senderId, senderType, body, sentAt);
+    }
+
+    private static List<Sent> sentByWhomAndWhen(Conversation c) {
+        return c.getMessages().stream()
+                .map((Message m) -> sent(m.getSenderId(), m.getSenderType(), m.getBody(), m.getSentAt()))
+                .toList();
     }
 
     @Test
@@ -144,15 +165,17 @@ class ConversationTest extends BaseDomainTest {
         assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
     }
 
+    // The company's own reply stays unread for the member however often the company reads the thread.
     @Test
     void GivenAThreadTheCompanyHasRead_WhenItMarksItReadAgain_ThenNothingChanges() {
         Conversation c = inquiry();
+        c.addMessage(COMPANY_ID, ParticipantType.COMPANY, REPLY_BODY, REPLIED_AT);
         c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
 
         c.markReadBy(COMPANY_ID, ParticipantType.COMPANY);
 
         assertEquals(0, c.unreadCountFor(COMPANY_ID, ParticipantType.COMPANY));
-        assertEquals(0, c.unreadCountFor(MEMBER_ID, ParticipantType.MEMBER));
+        assertEquals(1, c.unreadCountFor(MEMBER_ID, ParticipantType.MEMBER));
     }
 
     @Test
@@ -219,7 +242,7 @@ class ConversationTest extends BaseDomainTest {
         Conversation c = inquiry();
         c.transitionToClosed();
         c.transitionToClosed();
-        assertTrue(c.isClosed());
+        assertEquals(ConversationStatus.CLOSED, c.getStatus());
     }
 
     // -- subject length (#186) --------------------------------------------------
