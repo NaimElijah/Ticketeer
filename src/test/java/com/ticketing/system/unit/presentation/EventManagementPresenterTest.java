@@ -36,6 +36,14 @@ import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.anyString;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.dto.EventUpdateDTO;
+import com.ticketing.system.shared.dto.LocationDTO;
+import jakarta.persistence.PersistenceException;
 
 /**
  * Unit tests for {@link EventManagementPresenter#create}. The create flow assembles an
@@ -343,5 +351,143 @@ class EventManagementPresenterTest {
         for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
             assertFalse(reason.contains(operatorText), "the reason shows operator text '" + operatorText + "': " + reason);
         }
+    }
+
+    // ---- load, save and the cancel's other outcomes (#189) ----
+
+    private static final EventUpdateDTO RENAME = new EventUpdateDTO(String.valueOf(EVENT_ID), "Gala Night II", null,
+            null, new LocationDTO("Israel", "Haifa"), null, null);
+
+    @Test
+    void GivenANullToken_WhenLoad_ThenNotAuthenticatedAndNoServiceCall() {
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotAuthenticated(), presenter.load(null, EVENT_ID));
+        verifyNoInteractions(eventService, companyService);
+    }
+
+    @Test
+    void GivenTheEvent_WhenLoad_ThenSuccessCarriesItsDetail() {
+        EventDetailDTO detail = detailWithId(String.valueOf(EVENT_ID));
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenReturn(detail);
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.Success(detail), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenLoad_ThenNotAuthenticated() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotAuthenticated(), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenNotAuthenticated() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotAuthenticated(), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAMissingEvent_WhenLoad_ThenNotFound() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotFound(), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenTheServiceRefusesTheCaller_WhenLoad_ThenFailureCarriesTheRule() {
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view event " + EVENT_ID);
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(refusal);
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.Failure(refusal.getMessage()),
+                presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenLoad_ThenFailureCarriesTheGenericText() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID))
+                .thenThrow(new PersistenceException("could not prepare statement; table [events]"));
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenANullToken_WhenSave_ThenNotAuthenticatedAndNoServiceCall() {
+        assertEquals(new EventManagementPresenter.SaveOutcome.NotAuthenticated(), presenter.save(null, RENAME));
+        verifyNoInteractions(eventService, companyService);
+    }
+
+    @Test
+    void GivenAnEdit_WhenSave_ThenTheServiceGetsItUnchangedAndSuccess() {
+        assertEquals(new EventManagementPresenter.SaveOutcome.Success(), presenter.save(TOKEN, RENAME));
+
+        verify(eventService).editEventDetails(TOKEN, RENAME);
+    }
+
+    @Test
+    void GivenARevokedToken_WhenSave_ThenNotAuthenticated() {
+        doThrow(new InvalidTokenException("revoked")).when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.NotAuthenticated(), presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenSave_ThenNotAuthenticated() {
+        doThrow(new SessionExpiredException()).when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.NotAuthenticated(), presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenTheEventRefusesTheEdit_WhenSave_ThenFailureCarriesTheRule() {
+        BusinessRuleViolationException rule = new BusinessRuleViolationException("An event on sale cannot be renamed.");
+        doThrow(rule).when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.Failure(rule.getMessage()), presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenSave_ThenFailureCarriesTheGenericText() {
+        doThrow(new PersistenceException("could not execute statement [update events set name=?]"))
+                .when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenANullToken_WhenCancel_ThenNotAuthenticatedAndNothingIsCancelled() {
+        assertEquals(new EventManagementPresenter.CancelOutcome.NotAuthenticated(), presenter.cancel(null, EVENT_ID));
+        verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void GivenARevokedToken_WhenCancel_ThenNotAuthenticated() {
+        doThrow(new InvalidTokenException("revoked")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        assertEquals(new EventManagementPresenter.CancelOutcome.NotAuthenticated(), presenter.cancel(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenCancel_ThenNotAuthenticated() {
+        doThrow(new SessionExpiredException()).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        assertEquals(new EventManagementPresenter.CancelOutcome.NotAuthenticated(), presenter.cancel(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenTheCancelAndItsRefundsSucceed_WhenCancel_ThenSuccessAndTheEventIsCancelledOnce() {
+        assertEquals(new EventManagementPresenter.CancelOutcome.Success(), presenter.cancel(TOKEN, EVENT_ID));
+
+        verify(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+    }
+
+    @Test
+    void GivenARevokedTokenWhenListingCompanies_WhenCreate_ThenNotAuthenticatedAndNothingCreated() {
+        when(companyService.findMyCompanies(TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.NotAuthenticated(),
+                createWith(null, futureStart(), futureEnd()));
+        verify(eventService, never()).addEvent(anyString(), any());
     }
 }
