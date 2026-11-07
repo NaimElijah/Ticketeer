@@ -1,6 +1,8 @@
 package com.ticketing.system.integration;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -25,10 +27,18 @@ class PostgresConcurrentFirstReservationIT extends ConcurrentFirstReservationJpa
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES = PostgresContainers.newContainer();
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     // A cart INSERT that does not wait finishes, and its save then releases the held one; one that waits on the
-    // held cart's key entry shows as a lock wait.
+    // held cart's key entry shows as a lock wait. The probe runs inside the held save's transaction, and there
+    // PostgreSQL reads pg_stat_activity's sessions and their query text once, at the first access, and keeps
+    // that copy until the transaction ends; only wait_event_type is read live. Clearing the copy before each
+    // probe lets the query filter see the INSERT the other session started after the first probe.
     @Override
     protected boolean aSessionIsInsideACartInsert() {
-        return count("select count(*) from pg_stat_activity where wait_event_type = 'Lock'") > 0;
+        jdbc.execute("select pg_stat_clear_snapshot()");
+        return count("select count(*) from pg_stat_activity where datname = current_database()"
+                + " and wait_event_type = 'Lock' and query ilike 'insert into active_orders%'") > 0;
     }
 }
