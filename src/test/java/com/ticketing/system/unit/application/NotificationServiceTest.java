@@ -80,6 +80,20 @@ class NotificationServiceTest {
         assertEquals(Map.of("companyId", 100, "companyName", "Acme"), notification.getData());
     }
 
+    @Test
+    void GivenARevokedManager_WhenNotifyManagerRevoked_ThenAManagerRevokedNotificationIsDispatchedToThem() {
+        service.notifyManagerRevoked(7, 100, "Acme");
+
+        ArgumentCaptor<Notification> sent = ArgumentCaptor.forClass(Notification.class);
+        verify(dispatcher).dispatch(sent.capture());
+        Notification notification = sent.getValue();
+        assertEquals(7, notification.getRecipientUserId());
+        assertEquals(NotificationType.MANAGER_REVOKED, notification.getType());
+        assertEquals(NotificationStatus.PENDING, notification.getStatus());
+        assertEquals("Your manager role in company 'Acme' has been revoked.", notification.getMessage());
+        assertEquals(Map.of("companyId", 100, "companyName", "Acme"), notification.getData());
+    }
+
     // ---- An outreach to more recipients than the notification queue holds drops alerts (#187) ----
 
     // Each recipient's notification reads as a single new message would, and goes to the dispatcher on

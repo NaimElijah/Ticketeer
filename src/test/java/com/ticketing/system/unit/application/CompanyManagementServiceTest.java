@@ -58,6 +58,7 @@ import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
+import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
@@ -1206,6 +1207,17 @@ public class CompanyManagementServiceTest {
 
                 assertFalse(company.getManagers().contains(TARGET_USER_ID));
                 assertNull(membershipService.getActiveCompanyAppointment(TARGET_USER_ID, COMPANY_ID));
+        }
+
+        // The revoked manager is told: the notice names them and the company (UC-35, I.5.1).
+        @Test
+        public void GivenCurrentCoOwner_WhenRevokeTheirManager_ThenExactlyTheManagerRevokedNoticeIsPublished() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+                clearInvocations(eventPublisher);
+
+                companyService.RevokeAppointment(CO_OWNER_TOKEN, new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID));
+
+                assertEquals(List.of(new ManagerRevokedNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME)), publishedEvents());
         }
 
         @Test
