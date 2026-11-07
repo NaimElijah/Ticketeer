@@ -812,6 +812,43 @@ class EventTest extends BaseDomainTest {
         assertThrows(IllegalStateException.class, event::transitionToCompleted);
     }
 
+    // -- no way back out of a terminal state, and no way back to SCHEDULED once on sale --
+
+    // A cancelled event has been refunded; it must not go on sale again.
+    @Test
+    void GivenCanceledEvent_WhenTransitionToOnSale_ThenRefusedAndStaysCanceled() {
+        Event event = createEventWithZones(List.of(track(new StandingZone(1, "General", 5, 50.0))));
+        event.transitionToCanceled("called off");
+
+        assertThrows(InvalidStateTransitionException.class, event::transitionToOnSale);
+
+        assertEquals(EventStatus.CANCELED, event.getStatus());
+    }
+
+    @Test
+    void GivenCompletedEvent_WhenTransitionToCanceled_ThenRefusedAndStaysCompleted() {
+        Event event = createEventWithZones(List.of(track(new StandingZone(1, "General", 5, 50.0))));
+        event.transitionToOnSale();
+        event.transitionToCompleted();
+
+        IllegalStateException refused =
+                assertThrows(IllegalStateException.class, () -> event.transitionToCanceled("too late"));
+
+        assertEquals("Cannot cancel a completed event", refused.getMessage());
+        assertEquals(EventStatus.COMPLETED, event.getStatus());
+    }
+
+    // Back in SCHEDULED its layout could be edited again while tickets are held or sold.
+    @Test
+    void GivenOnSaleEvent_WhenTransitionToScheduled_ThenRefusedAndStaysOnSale() {
+        Event event = createEventWithZones(List.of(track(new StandingZone(1, "General", 5, 50.0))));
+        event.transitionToOnSale();
+
+        assertThrows(InvalidStateTransitionException.class, event::transitionToScheduled);
+
+        assertEquals(EventStatus.ON_SALE, event.getStatus());
+    }
+
     // test helper functions:
 
     private Event eventWithText(String name, String description, List<String> artists) {
