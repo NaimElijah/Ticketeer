@@ -9,7 +9,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,9 @@ import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
@@ -115,6 +120,28 @@ public abstract class IEventRepositoryContractTest {
     @Test
     void GivenNoSuchEvent_WhenFindForSale_ThenEventNotFound() {
         assertThrows(EventNotFoundException.class, () -> inSaleTransaction(() -> eventRepo.findForSale(999)));
+    }
+
+    // Inherited, so the Jpa subclass runs it outside a transaction and findById reads the zone and seat rows.
+    @Test
+    void GivenAnEventWithASeatedAndAStandingZone_WhenSavedAndFound_ThenBothZonesComeBackWithTheirSeatsAndCapacity() {
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(
+                new SeatedZone(1, "Stage", 80.0, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0))),
+                new StandingZone(2, "Floor", 100, 50.0)));
+        eventRepo.save(new Event(1, "Seated Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0)));
+
+        VenueMap found = eventRepo.findById(1).getVenueMap();
+
+        SeatedZone seated = (SeatedZone) found.getInventoryZones().stream()
+                .filter(z -> z instanceof SeatedZone).findFirst().orElseThrow();
+        assertEquals(Map.of("A1", SeatStatus.AVAILABLE, "A2", SeatStatus.AVAILABLE),
+                seated.getSeats().stream().collect(Collectors.toMap(Seat::getLabel, Seat::getStatus)));
+        StandingZone standing = (StandingZone) found.getInventoryZones().stream()
+                .filter(z -> z instanceof StandingZone).findFirst().orElseThrow();
+        assertEquals("Floor", standing.getName());
+        assertEquals(100, standing.getCapacity());
     }
 
     @Test
