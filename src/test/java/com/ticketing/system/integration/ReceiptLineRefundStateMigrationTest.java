@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -25,6 +26,9 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
  */
 class ReceiptLineRefundStateMigrationTest {
 
+    // The SQLSTATE of a NULL written to a NOT NULL column, in H2 as in the SQL standard.
+    private static final String NOT_NULL_VIOLATION = "23502";
+    private static final String REFUND_STATE_COLUMN = "refund_state";
     private static final LocalDateTime PURCHASED = LocalDateTime.of(2026, 1, 1, 12, 0);
     private static final int RECEIPT_ID = 1;
     private static final int LEGACY_TICKET_ID = 10;
@@ -64,8 +68,15 @@ class ReceiptLineRefundStateMigrationTest {
         jdbc.update(INSERT_RECEIPT, RECEIPT_ID, PURCHASED);
 
         assertThatThrownBy(() -> jdbc.update(INSERT_LINE, RECEIPT_ID, NEW_TICKET_ID, PURCHASED, null))
-                .as("refund_state is NOT NULL")
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .as("%s is NOT NULL", REFUND_STATE_COLUMN)
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .rootCause()
+                .isInstanceOf(SQLException.class)
+                .satisfies(refusal -> assertThat(((SQLException) refusal).getSQLState())
+                        .as("refused as a NULL in a NOT NULL column: %s", refusal.getMessage())
+                        .isEqualTo(NOT_NULL_VIOLATION))
+                .message().as("the database error names the column")
+                .containsIgnoringCase(REFUND_STATE_COLUMN);
     }
 
     // Control for the refusal above: a line with a state inserts, so the refusal comes from the
