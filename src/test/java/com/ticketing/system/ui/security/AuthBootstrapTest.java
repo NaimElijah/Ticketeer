@@ -3,6 +3,7 @@ package com.ticketing.system.ui.security;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -30,16 +32,20 @@ import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.auth.LoginView;
+import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.MyCompaniesView;
 import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.router.AfterNavigationEvent;
+import com.vaadin.flow.router.AfterNavigationListener;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterListener;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.UIInitEvent;
 import com.vaadin.flow.server.UIInitListener;
 import com.vaadin.flow.server.VaadinService;
+import com.vaadin.flow.server.auth.AnonymousAllowed;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -86,6 +92,7 @@ class AuthBootstrapTest {
 
     private AuthenticationService authenticationService;
     private BeforeEnterListener guard;
+    private AfterNavigationListener afterNavigation;
 
     @BeforeEach
     void setUp() {
@@ -100,11 +107,12 @@ class AuthBootstrapTest {
         FreshGuestSession freshGuestSession = new FreshGuestSession(authenticationService,
                 new UnreadAlertsSendBack(mock(INotificationService.class)));
         SessionIdentity sessionIdentity = new SessionIdentity(authenticationService, freshGuestSession);
-        guard = registeredGuard(new AuthBootstrap(sessionIdentity, authenticationService, freshGuestSession));
+        register(new AuthBootstrap(sessionIdentity, authenticationService, freshGuestSession));
     }
 
     @AfterEach
     void tearDown() {
+        UI.setCurrent(null);
         MapBackedVaadinSession.uninstall();
     }
 
@@ -190,9 +198,101 @@ class AuthBootstrapTest {
         verify(navigation).forwardTo(LoginView.class);
     }
 
+    // ---- #189: the gates' other branches -------------------------------------------------------
+
+    private static final String DENIAL = "You don't have that action in your permissions - contact an owner";
+
+    @AnonymousAllowed private static final class PublicRoute { }
+
+    // No view pairs these today; the guard's last fallback is reached only by such a route.
+    @AnonymousAllowed @RequireCapability(Capability.CHECKOUT) private static final class PublicRouteNeedingCheckout { }
+
+    @Test
+    void GivenGuest_WhenNavigatingToAnAnonymousView_ThenAdmittedOnTheSameGuestSession() {
+        BeforeEnterEvent navigation = navigationTo(PublicRoute.class);
+
+        guard.beforeEnter(navigation);
+
+        verify(navigation, never()).forwardTo(any(Class.class));
+        assertEquals(GUEST_SESSION_ID, GuestSession.sessionId());
+    }
+
+    @Test
+    void GivenMemberWithADeadToken_WhenNavigatingToAnAnonymousView_ThenSignedOutAndAdmitted() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.empty());
+        BeforeEnterEvent navigation = navigationTo(PublicRoute.class);
+
+        guard.beforeEnter(navigation);
+
+        verify(navigation, never()).forwardTo(any(Class.class));
+        assertNull(AuthSession.token(), "the dead member token must be dropped");
+        assertEquals(FRESH_GUEST_SESSION_ID, GuestSession.sessionId(), "the visitor continues as a fresh guest");
+    }
+
+    // Having no company is no missing permission, so the member is sent to register one without a denial.
+    @Test
+    void GivenAMemberOfNoCompany_WhenNavigatingToAWorkspaceRoute_ThenForwardedToCompanyRegistrationWithoutADenial() {
+        ToastRecordingUi ui = new ToastRecordingUi();
+        UI.setCurrent(ui);
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+        bridgeMemberships(List.of());
+        BeforeEnterEvent navigation = navigationTo(EditPurchasePoliciesRoute.class);
+
+        guard.beforeEnter(navigation);
+        afterNavigation.afterNavigation(mock(AfterNavigationEvent.class));
+
+        verify(navigation).forwardTo(CompanyRegistrationView.class);
+        assertEquals(List.of(), ui.toasts());
+    }
+
+    @Test
+    void GivenAManagerWithoutThePermission_WhenTheForwardLands_ThenTheDenialShowsOnce() {
+        ToastRecordingUi ui = new ToastRecordingUi();
+        UI.setCurrent(ui);
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+        bridgeMemberships(List.of(membership(MembershipRole.MANAGER, List.of())));
+        BeforeEnterEvent navigation = navigationTo(EditPurchasePoliciesRoute.class);
+
+        guard.beforeEnter(navigation);
+        assertEquals(List.of(), ui.toasts(), "the denial waits until the forward has landed");
+        afterNavigation.afterNavigation(mock(AfterNavigationEvent.class));
+        afterNavigation.afterNavigation(mock(AfterNavigationEvent.class));
+
+        verify(navigation).forwardTo(OwnerDashboardView.class);
+        assertEquals(List.of(DENIAL), ui.toasts(), "the denial shows once, on the page the forward landed on");
+    }
+
+    @Test
+    void GivenAGuest_WhenAPublicRouteNeedsAMemberCapability_ThenForwardedToMyCompanies() {
+        BeforeEnterEvent navigation = navigationTo(PublicRouteNeedingCheckout.class);
+
+        guard.beforeEnter(navigation);
+
+        verify(navigation).forwardTo(MyCompaniesView.class);
+    }
+
+    // An outage is no dead token: the member stays signed in, and the failure reaches the error handler.
+    @Test
+    void GivenTheSessionStoreIsDown_WhenTheGuardRuns_ThenTheFailurePropagatesAndTheTokenStays() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+        BeforeEnterEvent navigation = navigationTo(MyAccountView.class);
+
+        assertThrows(DataAccessResourceFailureException.class, () -> guard.beforeEnter(navigation));
+
+        verify(navigation, never()).forwardTo(any(Class.class));
+        assertEquals(MEMBER_TOKEN, AuthSession.token(), "an outage must not sign the member out");
+        assertEquals(GUEST_SESSION_ID, GuestSession.sessionId());
+    }
+
     // ---- arrangement -------------------------------------------------------------------------
 
-    private static BeforeEnterListener registeredGuard(AuthBootstrap bootstrap) {
+    // Registers the bootstrap as Vaadin does and keeps the two listeners it adds to a new UI.
+    private void register(AuthBootstrap bootstrap) {
         VaadinService vaadinService = mock(VaadinService.class);
         ServiceInitEvent initEvent = mock(ServiceInitEvent.class);
         when(initEvent.getSource()).thenReturn(vaadinService);
@@ -207,7 +307,10 @@ class AuthBootstrapTest {
 
         ArgumentCaptor<BeforeEnterListener> beforeEnter = ArgumentCaptor.forClass(BeforeEnterListener.class);
         verify(ui).addBeforeEnterListener(beforeEnter.capture());
-        return beforeEnter.getValue();
+        ArgumentCaptor<AfterNavigationListener> landed = ArgumentCaptor.forClass(AfterNavigationListener.class);
+        verify(ui).addAfterNavigationListener(landed.capture());
+        guard = beforeEnter.getValue();
+        afterNavigation = landed.getValue();
     }
 
     private static BeforeEnterEvent navigationTo(Class<?> target) {
