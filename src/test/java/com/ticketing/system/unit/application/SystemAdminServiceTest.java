@@ -512,12 +512,12 @@ class SystemAdminServiceTest {
     }
 
     // An unfiltered record shows what the buyer paid for the order, which need not be the sum of its lines
-    // (a discount, for one): 99 here against lines of 50 and 25.
+    // (a discount, for one): 60 here against lines of 50 and 25.
     @Test
     void GivenReceiptWithMultipleTickets_WhenViewGlobalHistory_ThenTotalPaidIsTheReceiptTotal() {
         ReceiptLine line1 = new ReceiptLine(1, 50.0, 25, 1, null, PURCHASED_AT);
         ReceiptLine line2 = new ReceiptLine(2, 25.0, 3,  1, "A2", PURCHASED_AT);
-        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 99.0, List.of(line1, line2), PURCHASED_AT);
+        OrderReceipt receipt = OrderReceipt.forMember(11, 1, 60.0, List.of(line1, line2), PURCHASED_AT);
 
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null, null, null);
         when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(receipt));
@@ -526,7 +526,7 @@ class SystemAdminServiceTest {
         List<PurchaseHistoryDTO> result = service.viewGlobalHistory(ADMIN_TOKEN, filters);
 
         PurchaseHistoryDTO.PurchaseRecordDTO record = result.get(0).records().get(0);
-        assertEquals(99.0, record.totalPaid());
+        assertEquals(60.0, record.totalPaid());
         assertEquals(2, record.tickets().size());
     }
 
