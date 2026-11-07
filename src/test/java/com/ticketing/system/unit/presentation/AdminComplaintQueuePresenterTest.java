@@ -208,14 +208,6 @@ class AdminComplaintQueuePresenterTest {
     // -- loadOne --------------------------------------------------------------
 
     @Test
-    void GivenANullToken_WhenLoadOne_ThenReturnsNotAuthenticatedWithoutViewingTheConversation() {
-        AdminComplaintQueuePresenter.SingleOutcome outcome = presenter.loadOne(null, "c1");
-
-        assertInstanceOf(AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated.class, outcome);
-        verify(messaging, never()).viewConversation(anyString(), anyString());
-    }
-
-    @Test
     void GivenAnExistingConversation_WhenLoadOne_ThenReturnsConversation() {
         ConversationDTO c = complaint("c1", "OPEN");
         when(messaging.viewConversation(TOKEN, "c1")).thenReturn(c);
@@ -445,7 +437,7 @@ class AdminComplaintQueuePresenterTest {
     // ---- a signed-out respond page touches nothing; a thread or queue that fails to load says why (#189) ----
 
     @Test
-    void GivenANullToken_WhenLoadOne_ThenNothingIsMarkedReadOrViewed() {
+    void GivenANullToken_WhenLoadOne_ThenNotAuthenticatedAndNothingIsViewedOrMarkedRead() {
         assertEquals(new AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(null, "c1"));
 
         verifyNoInteractions(messaging);

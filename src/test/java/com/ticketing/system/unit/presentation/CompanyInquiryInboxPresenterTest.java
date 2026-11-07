@@ -253,14 +253,6 @@ class CompanyInquiryInboxPresenterTest {
     // -- loadOne --------------------------------------------------------------
 
     @Test
-    void GivenANullToken_WhenLoadOne_ThenReturnsNotAuthenticatedWithoutViewingTheConversation() {
-        CompanyInquiryInboxPresenter.SingleOutcome outcome = presenter.loadOne(null, "c1");
-
-        assertInstanceOf(CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated.class, outcome);
-        verify(messaging, never()).viewConversation(anyString(), anyString());
-    }
-
-    @Test
     void GivenAnExistingConversation_WhenLoadOne_ThenReturnsConversation() {
         ConversationDTO inquiry = conversation("c1", "INQUIRY");
         when(messaging.viewConversation(TOKEN, "c1")).thenReturn(inquiry);
@@ -482,7 +474,7 @@ class CompanyInquiryInboxPresenterTest {
     // ---- a signed-out respond page touches nothing; a dead token or a failed read on the second call (#189) ----
 
     @Test
-    void GivenANullToken_WhenLoadOne_ThenNothingIsMarkedReadOrViewed() {
+    void GivenANullToken_WhenLoadOne_ThenNotAuthenticatedAndNothingIsViewedOrMarkedRead() {
         assertEquals(new CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(null, "c1"));
 
         verifyNoInteractions(messaging, companyManagement);
