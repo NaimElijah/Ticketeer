@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -74,6 +75,17 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     @Override
     protected OrderReceiptRepository newRepository() {
         return repository;
+    }
+
+    // The lock is a row lock that lasts until the caller's transaction ends, so it means nothing without
+    // one, and the adapter refuses it there (RefundService takes it inside its transaction). The Memory
+    // adapter's lock needs none (MemoryOrderReceiptRepositoryContractTest).
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenNoTransaction_WhenLockForUpdate_ThenItIsRefused() {
+        repository.save(receipt(1));
+
+        assertThrows(InvalidDataAccessApiUsageException.class, () -> repository.lockForUpdate(1));
     }
 
     // Unlike every other Jpa adapter's, this lockForUpdate takes a real row lock (SELECT ... FOR UPDATE,

@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -35,6 +36,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.testutil.DefaultLocale;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 // Contract tests every EventRepository implementation must satisfy. Future JPA-backed
 // adapter will subclass this with its own newRepository() factory; tests are reused.
@@ -771,5 +773,31 @@ public abstract class IEventRepositoryContractTest {
         return eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 eventName, null, null, null, null, null, null, null, null, null, null, null, null))
                 .stream().map(Event::getName).toList();
+    }
+
+    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
+    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The Jpa
+    // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        eventRepo.lockForUpdate(1);
+        eventRepo.lockForUpdate(1);
+        eventRepo.unlock(1);
+        eventRepo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(eventRepo, 1);
+    }
+
+    // The buyer lock is shared and reentrant too; once released, a lifecycle write can take the write lock.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenABuyerLockTakenTwiceAndReleasedTwice_WhenAnotherThreadTakesTheWriteLock_ThenItGetsIt() throws Exception {
+        eventRepo.lockForBuyerOperation(1);
+        eventRepo.lockForBuyerOperation(1);
+        eventRepo.unlockBuyerOperation(1);
+        eventRepo.unlockBuyerOperation(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(eventRepo, 1);
     }
 }

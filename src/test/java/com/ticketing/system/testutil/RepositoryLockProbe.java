@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -21,6 +20,13 @@ public final class RepositoryLockProbe {
     /** How long the other thread may wait for the lock before the check fails; never reached when it passes. */
     public static final long TIMEOUT_SECONDS = 10;
 
+    /**
+     * A bound for a whole test that uses this probe, longer than {@link #TIMEOUT_SECONDS} so the probe's own
+     * failure message is the one reported. A JUnit {@code @Timeout} on a separate thread uses it, because a
+     * non-reentrant lock would hang the test thread itself.
+     */
+    public static final long TEST_TIMEOUT_SECONDS = 2 * TIMEOUT_SECONDS;
+
     private RepositoryLockProbe() {
     }
 
@@ -35,15 +41,27 @@ public final class RepositoryLockProbe {
      */
     public static <ID> void assertAnotherThreadCanLock(IRepository<?, ID> repository, ID id)
             throws InterruptedException, ExecutionException {
+        assertAnotherThreadCan("take the lock on " + id, () -> {
+            repository.lockForUpdate(id);
+            repository.unlock(id);
+        });
+    }
+
+    /**
+     * Fails unless another thread completes {@code lockAndUnlock} within {@link #TIMEOUT_SECONDS}.
+     *
+     * @param what the lock, for the failure message
+     * @param lockAndUnlock takes and releases the lock
+     * @throws InterruptedException if the calling thread is interrupted while it waits
+     * @throws ExecutionException if {@code lockAndUnlock} throws
+     */
+    public static void assertAnotherThreadCan(String what, Runnable lockAndUnlock)
+            throws InterruptedException, ExecutionException {
         ExecutorService other = Executors.newSingleThreadExecutor();
         try {
-            Future<?> lockedElsewhere = other.submit(() -> {
-                repository.lockForUpdate(id);
-                repository.unlock(id);
-            });
-            lockedElsewhere.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            other.submit(lockAndUnlock).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
-            fail("another thread could not take the lock on " + id + " within " + TIMEOUT_SECONDS
+            fail("another thread could not " + what + " within " + TIMEOUT_SECONDS
                     + " s, so the calling thread still holds it");
         } finally {
             other.shutdownNow();

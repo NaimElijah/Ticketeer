@@ -11,10 +11,12 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract every {@link TicketRepository} implementation must satisfy. The Memory and
@@ -112,5 +114,19 @@ abstract class ITicketRepositoryContractTest {
 
         assertTrue(first > 0);
         assertTrue(second > first);
+    }
+
+    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
+    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The Jpa
+    // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate(1);
+        repo.lockForUpdate(1);
+        repo.unlock(1);
+        repo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, 1);
     }
 }

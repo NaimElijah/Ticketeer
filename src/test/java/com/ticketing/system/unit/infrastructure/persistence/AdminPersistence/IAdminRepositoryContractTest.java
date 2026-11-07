@@ -101,7 +101,7 @@ abstract class IAdminRepositoryContractTest {
     // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The JPA
     // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
     @Test
-    @Timeout(value = RepositoryLockProbe.TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
         repo.lockForUpdate(1);
         repo.lockForUpdate(1);

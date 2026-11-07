@@ -15,12 +15,14 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.ActiveOrderStatus;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 // Contract tests every ActiveOrderRepository implementation must satisfy. Future
 // JPA-backed adapter will subclass this with its own newRepository() factory;
@@ -323,5 +325,19 @@ abstract class IActiveOrderRepositoryContractTest {
         assertEquals(3, found.getItems().size());
         assertTrue(found.getItems().stream()
                 .anyMatch(i -> i.geteventId() == 1 && i.getzoneId() == 11 && "A1".equals(i.getSeatNumber())));
+    }
+
+    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
+    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The Jpa
+    // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("user:5");
+        repo.lockForUpdate("user:5");
+        repo.unlock("user:5");
+        repo.unlock("user:5");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "user:5");
     }
 }

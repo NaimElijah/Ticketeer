@@ -11,10 +11,12 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.identity.application.port.out.SessionRepository;
 import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.identity.domain.SessionKind;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract tests every {@link SessionRepository} adapter must satisfy; each adapter's subclass supplies
@@ -233,5 +235,19 @@ abstract class ISessionRepositoryContractTest {
 
         assertTrue(repo.findById("sid-member-1").isPresent(), "member 1 shares admin 1's id but is not that admin");
         assertTrue(repo.findById("sid-admin-2").isPresent(), "another admin's session must stay");
+    }
+
+    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
+    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The Jpa
+    // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("sid-1");
+        repo.lockForUpdate("sid-1");
+        repo.unlock("sid-1");
+        repo.unlock("sid-1");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "sid-1");
     }
 }

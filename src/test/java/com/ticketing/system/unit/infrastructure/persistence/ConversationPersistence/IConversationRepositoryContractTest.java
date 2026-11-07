@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.messaging.domain.ConversationStatus;
@@ -18,6 +19,7 @@ import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.Message;
 import com.ticketing.system.messaging.domain.ParticipantType;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract every {@link ConversationRepository} implementation must satisfy. The Memory and JPA
@@ -109,5 +111,19 @@ abstract class IConversationRepositoryContractTest {
         found.markReadBy(5, ParticipantType.MEMBER);
         repo.save(found);
         assertTrue(repo.findById(c.getConversationId()).orElseThrow().getMessages().get(1).isRead());
+    }
+
+    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
+    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The Jpa
+    // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("conversation-1");
+        repo.lockForUpdate("conversation-1");
+        repo.unlock("conversation-1");
+        repo.unlock("conversation-1");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "conversation-1");
     }
 }
