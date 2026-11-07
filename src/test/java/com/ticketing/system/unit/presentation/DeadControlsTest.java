@@ -2,6 +2,7 @@ package com.ticketing.system.unit.presentation;
 
 import static com.ticketing.system.unit.presentation.ViewHarness.text;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +38,8 @@ class DeadControlsTest {
 
     // ---- UI-A19: dead controls (#187) ----
 
+    // The sign-in page's submit button: it shows only once the page has rendered.
+    private static final String SIGN_IN = "Sign in";
     private static final Pattern MADE_UP_COUNT = Pattern.compile("\\d+ events");
 
     private ViewHarness harness;
@@ -53,25 +56,25 @@ class DeadControlsTest {
 
     @Test
     void GivenTheSignInPage_WhenItShows_ThenItOffersNoRememberMe() {
-        assertAbsent(loginView(), "Remember me");
+        assertAbsent(loginView(), SIGN_IN, "Remember me");
     }
 
     @Test
     void GivenTheSignInPage_WhenItShows_ThenItOffersNoForgotPassword() {
-        assertAbsent(loginView(), "Forgot password");
+        assertAbsent(loginView(), SIGN_IN, "Forgot password");
     }
 
     @Test
     void GivenTheSignInPage_WhenItShows_ThenItOffersNoGoogleOrAppleSignIn() {
         LoginView view = loginView();
 
-        assertAbsent(view, "Google");
-        assertAbsent(view, "Apple");
+        assertAbsent(view, SIGN_IN, "Google");
+        assertAbsent(view, SIGN_IN, "Apple");
     }
 
     @Test
     void GivenTheRegistrationPage_WhenItShows_ThenItHasNoTermsCheckbox() {
-        assertAbsent(registerView(), "I agree to the Terms");
+        assertAbsent(registerView(), "Create account", "I agree to the Terms");
     }
 
     @Test
@@ -81,7 +84,7 @@ class DeadControlsTest {
         PlatformAdminLayout layout = new PlatformAdminLayout(mock(SignOutFlow.class),
             mock(NotificationBellPresenter.class));
 
-        assertAbsent(layout, "Admin Settings");
+        assertAbsent(layout, "Admin Inbox", "Admin Settings");
     }
 
     @Test
@@ -93,7 +96,7 @@ class DeadControlsTest {
 
         MyProfileView view = new MyProfileView(presenter);
 
-        assertAbsent(view, "Verified");
+        assertAbsent(view, "alice@example.com", "Verified");
     }
 
     @Test
@@ -103,6 +106,7 @@ class DeadControlsTest {
 
         String shown = text(new LandingView(presenter));
 
+        assertTrue(shown.contains("Find your next unforgettable experience."), "the landing did not render: " + shown);
         assertFalse(MADE_UP_COUNT.matcher(shown).find(), "the landing shows made-up event counts: " + shown);
     }
 
@@ -116,8 +120,13 @@ class DeadControlsTest {
             mock(SessionIdentity.class));
     }
 
-    private static void assertAbsent(Component root, String control) {
+    // An absence means something only on a page that rendered, so its anchor must show. A control's label can
+    // live in a property the shown text does not hold (a checkbox's label), so every element's name is read too.
+    private static void assertAbsent(Component root, String anchor, String control) {
         String shown = text(root);
+        assertTrue(shown.contains(anchor), "the page did not render: \"" + anchor + "\" is missing from: " + shown);
         assertFalse(shown.contains(control), "\"" + control + "\" still shows: " + shown);
+        List<String> named = A11y.elements(root).stream().map(A11y::name).filter(name -> name.contains(control)).toList();
+        assertTrue(named.isEmpty(), "\"" + control + "\" still names a control: " + named);
     }
 }
