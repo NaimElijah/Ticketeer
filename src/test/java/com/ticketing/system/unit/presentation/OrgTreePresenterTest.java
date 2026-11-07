@@ -212,7 +212,7 @@ class OrgTreePresenterTest {
 
     @Test
     void GivenAnAdminAndTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
-        when(service.adminListAllCompanies(ADMIN_TOKEN)).thenThrow(new RuntimeException("admin token required"));
+        when(service.adminListAllCompanies(ADMIN_TOKEN)).thenThrow(new RuntimeException("could not execute statement"));
 
         OrgTreePresenter.Outcome.Failure fail =
                 assertInstanceOf(OrgTreePresenter.Outcome.Failure.class,

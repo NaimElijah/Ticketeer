@@ -129,7 +129,7 @@ class MyInvitationsPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenAccept_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("no pending appointment"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(service).respondToAppointment(anyString(), any());
 
         MyInvitationsPresenter.ActionOutcome outcome = presenter.accept(TOKEN, 7);

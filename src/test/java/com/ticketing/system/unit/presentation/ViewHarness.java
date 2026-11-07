@@ -47,6 +47,7 @@ import com.vaadin.flow.internal.nodefeature.ElementListenerMap;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.Location;
 import com.vaadin.flow.router.QueryParameters;
+import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.server.RouteRegistry;
 import com.vaadin.flow.router.Router;
@@ -62,7 +63,8 @@ import elemental.json.Json;
  *
  * <p>On top of that it records navigations instead of routing them, installs a map-backed
  * {@code VaadinSession} for the session holders, and a {@link VaadinService} whose router answers every
- * route with a stub URL, so a view or layout that builds a {@code RouterLink} can be constructed. It can
+ * route with a stub URL, so a view or layout that builds a {@code RouterLink} can be constructed, unless the
+ * link leaves out a mandatory route parameter: then, as in Flow, it has no URL and the link throws. It can
  * also sign a member or an admin in, and make the member a company's founder or manager through
  * {@link CompanyManagementBridge}, which it clears while open and restores on {@link #close()}.
  * Create one per test.
@@ -513,13 +515,18 @@ final class ViewHarness implements AutoCloseable {
             .orElse("");
     }
 
-    // RouterLink asks the current service's router for the URL of its target; every target gets one.
+    // RouterLink asks the current service's router for the URL of its target. As in Flow's registry, a target
+    // whose @Route has a mandatory parameter the link does not give has no URL, so RouterLink.setRoute throws
+    // here as it does in production (the /owner crash); every other target gets a stub URL.
     private static VaadinService stubRouterService() {
-        Answer<Object> urlForEveryTarget = call -> call.getMethod().getReturnType() == Optional.class
+        Answer<Object> registryUrls = call -> "getTargetUrl".equals(call.getMethod().getName())
+            && call.getArguments().length == 2
+            ? stubUrl(call.getArgument(0), call.getArgument(1))
+            : call.getMethod().getReturnType() == Optional.class
             && call.getMethod().getName().toLowerCase().contains("url")
             ? Optional.of("stub")
             : Mockito.RETURNS_DEFAULTS.answer(call);
-        RouteRegistry registry = mock(RouteRegistry.class, urlForEveryTarget);
+        RouteRegistry registry = mock(RouteRegistry.class, registryUrls);
         Router router = mock(Router.class);
         when(router.getRegistry()).thenReturn(registry);
         VaadinService service = mock(VaadinService.class);
@@ -527,6 +534,24 @@ final class ViewHarness implements AutoCloseable {
         // A component that reads the deployment mode when attached (Flow's Label does) finds development mode.
         when(service.getDeploymentConfiguration()).thenReturn(mock(DeploymentConfiguration.class));
         return service;
+    }
+
+    private static Optional<String> stubUrl(Class<?> target, RouteParameters parameters) {
+        Route route = target.getAnnotation(Route.class);
+        if (route == null) {
+            return Optional.of("stub");
+        }
+        for (String segment : route.value().split("/")) {
+            if (!segment.startsWith(":") || segment.endsWith("?") || segment.endsWith("*")) {
+                continue;
+            }
+            // A mandatory segment is ":name", or ":name(regex)" when the template restricts its values.
+            String name = segment.substring(1, segment.contains("(") ? segment.indexOf('(') : segment.length());
+            if (parameters.get(name).isEmpty()) {
+                return Optional.empty();
+            }
+        }
+        return Optional.of("stub");
     }
 
     // Records instead of queueing in the state tree (see InboxViewHarness), and records navigations

@@ -100,7 +100,7 @@ class AdminSendMessagesPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenSend_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("no recipients")).when(messaging).sendOutreach(anyString(), any());
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).sendOutreach(anyString(), any());
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
             presenter.send(TOKEN, "S", "B", List.of(7), false, false);

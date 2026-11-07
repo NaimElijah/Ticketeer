@@ -105,7 +105,7 @@ class NewInquiryPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenSubmit_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("company not found"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).startConversation(anyString(), any());
 
         NewInquiryPresenter.ActionOutcome outcome = presenter.submit(TOKEN, 5, "S", "B");

@@ -214,7 +214,7 @@ class ManagerListPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenEditPermissions_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("only the appointer may edit"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(service).editManagerPermissions(anyString(), any());
 
         ManagerListPresenter.ActionOutcome outcome =
@@ -261,7 +261,7 @@ class ManagerListPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenRevoke_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("Cannot revoke appointment of the founder"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(service).RevokeAppointment(anyString(), any());
 
         ManagerListPresenter.ActionOutcome outcome = presenter.revoke(TOKEN, 7, 2);

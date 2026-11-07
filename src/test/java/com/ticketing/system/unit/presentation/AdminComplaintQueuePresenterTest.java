@@ -148,7 +148,7 @@ class AdminComplaintQueuePresenterTest {
     @Test
     void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(messaging.viewAllComplaints(eq(TOKEN), any()))
-            .thenThrow(new RuntimeException("not an admin"));
+            .thenThrow(new RuntimeException("could not execute statement"));
 
         AdminComplaintQueuePresenter.Outcome outcome = presenter.load(TOKEN, "All");
 
@@ -183,7 +183,7 @@ class AdminComplaintQueuePresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenRespond_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("already resolved"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).respondToComplaint(anyString(), any());
 
         AdminComplaintQueuePresenter.ActionOutcome outcome = presenter.respond(TOKEN, "c1", "late");

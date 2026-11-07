@@ -150,7 +150,7 @@ class SupportInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(service).sendMessage(anyString(), any());
 
         SupportInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "late reply");

@@ -52,9 +52,11 @@ class EventCancelRefundFailureTest {
     // ---- UI-A3: a partial refund failure on cancelling reads as "could not cancel" (#187) ----
 
     private static final int EVENT_ID = 9;
-    // A refund failure's text, as a cancel's outcome carries it.
-    private static final String REFUND_FAILURE =
-        new RefundFailedException(12, "the payment gateway timed out").getMessage();
+    // Why a cancel failed with no refund involved: both presenters read every refund failure as RefundFailed,
+    // never as a failed cancel.
+    private static final String CANCEL_REFUSAL = "You lack the permission to cancel this event.";
+    // What the views put before a failed cancel's reason.
+    private static final String COULD_NOT_CANCEL = "Could not cancel the event";
     // What a toast must say when the event is cancelled but some of its refunds failed.
     private static final String CANCELLED = "event is cancelled";
     // The views' hint that cancelling again retries the failed refunds.
@@ -84,7 +86,8 @@ class EventCancelRefundFailureTest {
 
         cancelFromMyEvents(presenter);
 
-        assertToastShows(REFUND_FAILURE);
+        assertToastShows(COULD_NOT_CANCEL);
+        assertToastShows(CANCEL_REFUSAL);
     }
 
     @Test
@@ -104,7 +107,8 @@ class EventCancelRefundFailureTest {
 
         cancelFromTheEventPage(presenter);
 
-        assertToastShows(REFUND_FAILURE);
+        assertToastShows(COULD_NOT_CANCEL);
+        assertToastShows(CANCEL_REFUSAL);
     }
 
     @Test
@@ -200,7 +204,7 @@ class EventCancelRefundFailureTest {
             .thenReturn(new CompanyEventListPresenter.Outcome.Success(List.of(onSaleEvent())));
         when(presenter.countries(any(), any())).thenReturn(new ListOutcome.Loaded<>(List.of()));
         when(presenter.cancelEvent(any(), anyInt()))
-            .thenReturn(new CompanyEventListPresenter.CancelOutcome.Failure(REFUND_FAILURE));
+            .thenReturn(new CompanyEventListPresenter.CancelOutcome.Failure(CANCEL_REFUSAL));
         return presenter;
     }
 
@@ -209,7 +213,7 @@ class EventCancelRefundFailureTest {
         when(presenter.load(any(), eq(EVENT_ID)))
             .thenReturn(new EventManagementPresenter.LoadOutcome.Success(onSaleEvent()));
         when(presenter.cancel(any(), anyInt()))
-            .thenReturn(new EventManagementPresenter.CancelOutcome.Failure(REFUND_FAILURE));
+            .thenReturn(new EventManagementPresenter.CancelOutcome.Failure(CANCEL_REFUSAL));
         return presenter;
     }
 
@@ -288,5 +292,32 @@ class EventCancelRefundFailureTest {
         List<String> toasts = harness.toasts();
         assertTrue(toasts.stream().anyMatch(toast -> toast.contains(reason)),
             "expected a toast with \"" + reason + "\", got: " + toasts);
+    }
+
+    // ---- a declined refund: the refund service's own summary, and no promise that cancelling again retries ----
+
+    // A plain refund failure can mix declined receipts with pending ones; its own summary says which, so the
+    // toast shows that summary and adds no retry hint of its own (#189).
+    private static final RefundFailedException DECLINED = new RefundFailedException(List.of(12),
+        "not refunded for cancelled event 9 (declined: [12], still pending: [])");
+
+    @Test
+    void GivenADeclinedRefundOfTheCancel_WhenTheOwnerCancelsFromMyEvents_ThenTheToastSaysCancelledWithTheSummaryAndNoRetryHint() {
+        cancelFromMyEvents(realEventListPresenter(eventServiceWhoseRefundsFail(DECLINED)));
+
+        assertToastShows(CANCELLED);
+        assertToastShows(DECLINED.getMessage());
+        assertNoToastShows(RETRY_HINT);
+        assertNoToastShows(COULD_NOT_CANCEL);
+    }
+
+    @Test
+    void GivenADeclinedRefundOfTheCancel_WhenTheOwnerCancelsFromTheEventPage_ThenTheToastSaysCancelledWithTheSummaryAndNoRetryHint() {
+        cancelFromTheEventPage(realEventPagePresenter(eventServiceWhoseRefundsFail(DECLINED)));
+
+        assertToastShows(CANCELLED);
+        assertToastShows(DECLINED.getMessage());
+        assertNoToastShows(RETRY_HINT);
+        assertNoToastShows(COULD_NOT_CANCEL);
     }
 }

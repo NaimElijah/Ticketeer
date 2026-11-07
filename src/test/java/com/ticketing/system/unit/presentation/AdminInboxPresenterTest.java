@@ -110,7 +110,7 @@ class AdminInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed")).when(messaging).sendMessage(anyString(), any());
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).sendMessage(anyString(), any());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "x"));
@@ -145,7 +145,7 @@ class AdminInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenClose_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("already closed")).when(messaging).closeConversation(anyString(), anyString());
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).closeConversation(anyString(), anyString());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.close(TOKEN, "c1"));

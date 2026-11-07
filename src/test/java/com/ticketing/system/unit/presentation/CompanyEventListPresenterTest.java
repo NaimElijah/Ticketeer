@@ -199,7 +199,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenCancelEvent_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("refund failed")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+        doThrow(new RuntimeException("could not execute statement")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         CompanyEventListPresenter.CancelOutcome.Failure fail =
                 assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Failure.class,
@@ -346,7 +346,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenChangeEventStatus_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("invalid transition"))
+        doThrow(new RuntimeException("could not execute statement"))
                 .when(eventService).changeEventStatus(TOKEN, EVENT_ID, EventStatus.ON_SALE);
 
         CompanyEventListPresenter.ActionOutcome.Failure fail =

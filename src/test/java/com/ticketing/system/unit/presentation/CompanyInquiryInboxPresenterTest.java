@@ -189,7 +189,7 @@ class CompanyInquiryInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).sendMessage(anyString(), any());
 
         CompanyInquiryInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "late reply");
@@ -229,7 +229,7 @@ class CompanyInquiryInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenClose_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("already closed"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).closeConversation(anyString(), anyString());
 
         CompanyInquiryInboxPresenter.ActionOutcome outcome = presenter.close(TOKEN, "c1");
