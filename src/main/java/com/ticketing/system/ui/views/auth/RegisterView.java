@@ -4,6 +4,7 @@ import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.auth.PasswordStrengthMeter;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
@@ -41,6 +42,16 @@ public class RegisterView extends LkAuthCard {
     private static final String PASSWORDS_DIFFER = "Passwords don't match.";
     private static final String USERNAME_FORMAT = "3–32 characters · letters, digits, . _ -";
     private static final String AVAILABILITY_UNKNOWN = "Couldn't verify availability right now.";
+    private static final String ENTER_USERNAME = "Enter a username.";
+    private static final String ENTER_EMAIL = "Enter your email address.";
+    private static final String EMAIL_FORMAT = "Enter an email address like you@email.com.";
+    private static final String EMAIL_TOO_LONG = "Enter at most " + RegisterPresenter.MAX_EMAIL_LENGTH + " characters.";
+    private static final String ENTER_AGE = "Enter your age.";
+    private static final String AGE_RANGE =
+        "Enter an age from " + RegisterPresenter.MIN_AGE + " to " + RegisterPresenter.MAX_AGE + ".";
+    private static final String AGE_WHOLE_NUMBER = "Enter your age as a whole number.";
+    private static final String ENTER_PASSWORD = "Enter a password.";
+    private static final String ENTER_PASSWORD_AGAIN = "Enter your password again.";
 
     private final RegisterPresenter presenter;
     private final UsernameAvailabilityPresenter usernameAvailability;
@@ -81,6 +92,11 @@ public class RegisterView extends LkAuthCard {
         email.setRequired(true);
         email.setAutocomplete(Autocomplete.EMAIL);
         email.setMaxLength(RegisterPresenter.MAX_EMAIL_LENGTH);
+        // Each rule the field checks itself gets its words, or the field turns red with nothing saying why (#189).
+        email.setI18n(new EmailField.EmailFieldI18n()
+            .setRequiredErrorMessage(ENTER_EMAIL)
+            .setMaxLengthErrorMessage(EMAIL_TOO_LONG)
+            .setPatternErrorMessage(EMAIL_FORMAT));
         email.setWidthFull();
 
         IntegerField age = new IntegerField("Age");
@@ -88,11 +104,17 @@ public class RegisterView extends LkAuthCard {
         age.setMax(RegisterPresenter.MAX_AGE);
         age.setStepButtonsVisible(true);
         age.setRequiredIndicatorVisible(true);
+        age.setI18n(new IntegerField.IntegerFieldI18n()
+            .setRequiredErrorMessage(ENTER_AGE)
+            .setBadInputErrorMessage(AGE_WHOLE_NUMBER)
+            .setMinErrorMessage(AGE_RANGE)
+            .setMaxErrorMessage(AGE_RANGE));
         age.setWidthFull();
 
         PasswordField password = new PasswordField("Password");
         password.setPlaceholder("At least 8 characters");
         password.setRequired(true);
+        LkFieldRules.sayWhenEmpty(password, ENTER_PASSWORD);
         // new-password, on both fields, so a password manager offers to generate one and doesn't fill a stored one.
         password.setAutocomplete(Autocomplete.NEW_PASSWORD);
         password.setWidthFull();
@@ -105,6 +127,7 @@ public class RegisterView extends LkAuthCard {
         PasswordField confirm = new PasswordField("Confirm password");
         confirm.setPlaceholder("Re-enter your password");
         confirm.setRequired(true);
+        LkFieldRules.sayWhenEmpty(confirm, ENTER_PASSWORD_AGAIN);
         confirm.setAutocomplete(Autocomplete.NEW_PASSWORD);
         confirm.setWidthFull();
 
@@ -201,11 +224,11 @@ public class RegisterView extends LkAuthCard {
     private void attemptRegister(TextField username, EmailField email, IntegerField age,
                                  PasswordField password, PasswordField confirm) {
         errors.clear();
-        rejectIfEmpty(username, "Enter a username.");
-        rejectIfEmpty(email, "Enter your email address.");
-        rejectIfEmpty(age, "Enter your age.");
-        rejectIfEmpty(password, "Enter a password.");
-        rejectIfEmpty(confirm, "Enter your password again.");
+        rejectIfEmpty(username, ENTER_USERNAME);
+        rejectIfEmpty(email, ENTER_EMAIL);
+        rejectIfEmpty(age, ENTER_AGE);
+        rejectIfEmpty(password, ENTER_PASSWORD);
+        rejectIfEmpty(confirm, ENTER_PASSWORD_AGAIN);
         if (!errors.isEmpty()) {
             refuse("Please fill in every field.");
             return;

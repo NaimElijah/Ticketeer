@@ -164,6 +164,49 @@ class LkFormErrorsTest {
             + refusal + "\"");
     }
 
+    // ---- a field handed back to its own rule says what is wrong (#189) ----
+    //
+    // After a submit refuses the form, LkFormErrors hands each refused field back to its own rule once the user
+    // edits it. The age's range and the email's format then mark the field invalid, and the field must say
+    // why rather than turn red with a blank message (WCAG 3.3.1): RegisterView words those rules (setI18n),
+    // and the hand-back keeps the message the rule gives.
+
+    @Test
+    void GivenRegistrationRefusedForAnEmptyAge_WhenTheUserEntersAnAgeAboveTheMaximum_ThenTheAgeSaysWhatIsWrong() {
+        RegisterView view = registerView();
+        click(button(view, "Create account"));
+        IntegerField age = field(view, IntegerField.class, "Age");
+
+        age.setValue(AGE_OVER_MAX);
+
+        assertTrue(age.isInvalid(), "an age above the field's maximum is invalid by its own rule");
+        String message = age.getErrorMessage();
+        assertTrue(message != null && !message.isBlank(),
+            "an invalid age must say what is wrong with it; its message is \"" + message + "\"");
+    }
+
+    @Test
+    void GivenRegistrationRefusedForAnEmptyEmail_WhenTheUserEntersAMalformedAddress_ThenTheEmailSaysWhatIsWrong() {
+        RegisterView view = registerView();
+        click(button(view, "Create account"));
+        EmailField email = field(view, EmailField.class, "Email");
+
+        email.setValue("bob@");
+
+        assertTrue(email.isInvalid(), "\"bob@\" breaks the email field's own format");
+        String message = email.getErrorMessage();
+        assertTrue(message != null && !message.isBlank(),
+            "an invalid email must say what is wrong with it; its message is \"" + message + "\"");
+    }
+
+    private RegisterView registerView() {
+        UsernameAvailabilityPresenter availability = mock(UsernameAvailabilityPresenter.class);
+        when(availability.check(any())).thenReturn(new UsernameAvailabilityPresenter.Outcome.Available());
+        RegisterView view = new RegisterView(mock(RegisterPresenter.class), availability, mock(SessionIdentity.class));
+        harness.attach(view);
+        return view;
+    }
+
     private static IntegerField ageField() {
         IntegerField age = new IntegerField("Age");
         age.setMin(MIN_AGE);

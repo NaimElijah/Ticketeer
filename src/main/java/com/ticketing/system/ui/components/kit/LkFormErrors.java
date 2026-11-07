@@ -27,8 +27,8 @@ import com.vaadin.flow.data.binder.ValidationResult;
  * validation on every value change and sets {@code invalid} from its own constraints, but it never
  * replaces an error message set on it, so a field refused as empty and then given an out-of-range value
  * would go on saying the refusal. The first change after a refusal therefore hands the field back, as
- * {@link #clear()} does: the message goes, and the field is invalid only if its own constraints refuse the
- * new value; from then on its own validation decides, and the message it shows may be blank. This holds
+ * {@link #clear()} does: the refusal goes, and the field is invalid only if its own constraints refuse the
+ * new value, with the message they give (#189); from then on its own validation decides. This holds
  * for a field whose value is not its answer too, such as a search box with its own validation turned off
  * ({@code setManualValidation}): typing in it lifts the mark unless its own constraints fail, and its
  * view refuses it again on the next submit if it is still unanswered.
@@ -114,16 +114,20 @@ public final class LkFormErrors {
         }
     }
 
-    // As LkTextLimit hands a field back: no message, and invalid by the field's own constraints alone.
+    // Invalid by the field's own constraints alone, saying what they say. The field's own validation ran
+    // before this on the same change and kept the refusal's message, which it treats as one the view set,
+    // so dropping the message without putting the rule's in its place would leave it invalid and blank (#189).
     private static void handBackToOwnRule(HasValidationProperties field) {
-        field.setErrorMessage(null);
-        field.setInvalid(breaksOwnRule(field));
+        ValidationResult verdict = ownVerdict(field);
+        field.setErrorMessage(verdict.isError() ? verdict.getErrorMessage() : null);
+        field.setInvalid(verdict.isError());
     }
 
-    private static boolean breaksOwnRule(HasValidationProperties field) {
-        return field instanceof HasValidator<?> validated
-            && field instanceof HasValue<?, ?> valued
-            && ownVerdict(validated, valued.getValue()).isError();
+    private static ValidationResult ownVerdict(HasValidationProperties field) {
+        if (field instanceof HasValidator<?> validated && field instanceof HasValue<?, ?> valued) {
+            return ownVerdict(validated, valued.getValue());
+        }
+        return ValidationResult.ok();
     }
 
     // A null context is what a Vaadin field passes when it validates itself.
