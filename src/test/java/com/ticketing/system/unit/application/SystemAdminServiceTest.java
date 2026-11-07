@@ -544,6 +544,112 @@ class SystemAdminServiceTest {
         assertEquals(2, record.transactions().size());
     }
 
+    // ---- governance failure paths with no test before #189 ----
+
+    @Test
+    void GivenFromDateAfterToDate_WhenViewGlobalHistory_ThenIllegalArgumentAndNothingQueried() {
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null,
+                LocalDate.of(2026, 2, 2), LocalDate.of(2026, 2, 1));
+
+        IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                () -> service.viewGlobalHistory(ADMIN_TOKEN, filters));
+
+        assertEquals("fromDate must be before or equal to toDate", refused.getMessage());
+        verify(orderReceiptRepository, never()).findGlobal(any());
+    }
+
+    @Test
+    void GivenFromDateEqualToToDate_WhenViewGlobalHistory_ThenThatDayIsQueried() {
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, null,
+                LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 1));
+        when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of());
+
+        service.viewGlobalHistory(ADMIN_TOKEN, filters);
+
+        verify(orderReceiptRepository).findGlobal(filters);
+    }
+
+    @Test
+    void GivenCompanyFilterWithoutEventIds_WhenViewGlobalHistory_ThenAllTheCompanysEventsAreQueried() {
+        when(eventRepository.findIdsByCompany(3)).thenReturn(List.of(10, 11));
+        GlobalHistoryFiltersDTO expected = new GlobalHistoryFiltersDTO(null, null, List.of(10, 11), null, null);
+        when(orderReceiptRepository.findGlobal(expected)).thenReturn(List.of());
+
+        service.viewGlobalHistory(ADMIN_TOKEN, new GlobalHistoryFiltersDTO(null, 3, null, null, null));
+
+        verify(orderReceiptRepository).findGlobal(expected);
+    }
+
+    // A receipt the query returns for one of its lines can still hold no line of the selected events once
+    // they are mapped, and then it is no record of theirs.
+    @Test
+    void GivenAReceiptWithNoLineOfTheSelectedEvent_WhenViewGlobalHistory_ThenItIsLeftOut() {
+        ReceiptLine selected = new ReceiptLine(1, 100.0, 25, 1, null, PURCHASED_AT);
+        ReceiptLine other = new ReceiptLine(2, 200.0, 3, 1, "A2", PURCHASED_AT);
+        OrderReceipt withTheEvent = OrderReceipt.forMember(11, 1, 100.0, List.of(selected), PURCHASED_AT);
+        OrderReceipt withoutIt = OrderReceipt.forMember(12, 2, 200.0, List.of(other), PURCHASED_AT);
+        GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(null, null, List.of(25), null, null);
+        when(orderReceiptRepository.findGlobal(filters)).thenReturn(List.of(withTheEvent, withoutIt));
+        when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
+
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = service.viewGlobalHistory(ADMIN_TOKEN, filters).get(0).records();
+
+        assertEquals(List.of(11), records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+    }
+
+    @Test
+    void GivenCorruptStateFoundAtOpen_WhenOpenMarket_ThenIntegrityViolationAndStaysReady() {
+        SystemAdminService svc = readyService();
+        doThrow(new SystemIntegrityViolationException("active company 7 has no owner")).when(integrityVerifier).verify();
+
+        assertThrowsExactly(SystemIntegrityViolationException.class, () -> svc.openMarket(openRequest()));
+
+        assertFalse(svc.isMarketOpen());
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
+    }
+
+    // One reachable service of each kind is the quorum (I.1.2, I.1.3), whatever the others answer.
+    @Test
+    void GivenTwoPaymentGatewaysOneDown_WhenInitializePlatform_ThenReadyAndPaymentReportedReachable() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway down = mock(PaymentGateway.class);
+        when(down.verifyConnection()).thenReturn(false);
+        SystemAdminService svc = serviceWith(List.of(down, reachablePayment()), List.of(reachableIssuer()));
+
+        svc.initializePlatform();
+
+        MarketStateDTO state = svc.viewMarketState(ADMIN_TOKEN);
+        assertEquals("READY", state.currentStatus());
+        assertTrue(state.paymentGatewayHealthy());
+    }
+
+    // A probe that throws counts as unreachable rather than failing the init.
+    @Test
+    void GivenAPaymentProbeThatThrowsBesideAReachableOne_WhenInitializePlatform_ThenReady() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway throwing = mock(PaymentGateway.class);
+        when(throwing.verifyConnection()).thenThrow(new IllegalStateException("handshake timed out"));
+        SystemAdminService svc = serviceWith(List.of(throwing, reachablePayment()), List.of(reachableIssuer()));
+
+        svc.initializePlatform();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
+    }
+
+    @Test
+    void GivenOnlyAPaymentProbeThatThrows_WhenInitializePlatform_ThenNoReachablePaymentServiceAndUninitialized() {
+        when(adminRepository.existsAny()).thenReturn(true);
+        PaymentGateway throwing = mock(PaymentGateway.class);
+        when(throwing.verifyConnection()).thenThrow(new IllegalStateException("handshake timed out"));
+        SystemAdminService svc = serviceWith(List.of(throwing), List.of(reachableIssuer()));
+
+        ExternalServiceUnavailableException refused = assertThrowsExactly(ExternalServiceUnavailableException.class,
+                svc::initializePlatform);
+
+        assertEquals("Required external service unavailable: no reachable payment service", refused.getMessage());
+        assertEquals("UNINITIALIZED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
+    }
+
 
     // --- helpers ---
 
