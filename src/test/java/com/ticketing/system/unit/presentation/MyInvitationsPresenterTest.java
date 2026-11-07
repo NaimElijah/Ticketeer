@@ -25,6 +25,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.AppointmentNotFoundException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class MyInvitationsPresenterTest {
 
@@ -156,5 +157,14 @@ class MyInvitationsPresenterTest {
         MyInvitationsPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Failure.class, presenter.accept(TOKEN, 7));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(service.listMyInvitations(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(MyInvitationsPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 }

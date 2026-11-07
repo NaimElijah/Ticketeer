@@ -24,6 +24,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class SubmitComplaintPresenterTest {
 
@@ -121,5 +122,15 @@ class SubmitComplaintPresenterTest {
     @Test
     void GivenNoCategory_WhenMaxDetailsLength_ThenTheWholeColumn() {
         assertEquals(255, presenter.maxDetailsLength(null));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenSubmit_ThenReturnsNotAuthenticated() {
+        when(service.submitComplaint(eq(TOKEN), any())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(SubmitComplaintPresenter.Outcome.NotAuthenticated.class,
+                presenter.submit(TOKEN, "Subject", "Body", null));
     }
 }

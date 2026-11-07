@@ -290,4 +290,13 @@ class SupportInboxPresenterTest {
 
         assertEquals(Optional.of("2"), presenter.badge(thread, opened));
     }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(service.viewMyConversations(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(SupportInboxPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
+    }
 }

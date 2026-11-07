@@ -29,6 +29,7 @@ import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.support.ServiceErrors;
 import ch.qos.logback.classic.Level;
 import jakarta.persistence.PersistenceException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class RefundPresenterTest {
 
@@ -171,5 +172,15 @@ class RefundPresenterTest {
                     serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                     "the internal failure must be logged at ERROR with its exception by ServiceErrors");
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenRequestRefund_ThenFailureAsksTheMemberToSignIn() {
+        when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenThrow(new SessionExpiredException());
+
+        assertEquals(new RefundPresenter.Outcome.Failure("Please sign in to request a refund."),
+                presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 }

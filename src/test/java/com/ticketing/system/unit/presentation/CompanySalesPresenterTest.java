@@ -20,6 +20,7 @@ import com.ticketing.system.shared.dto.MyCompanyDTO;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.company.CompanySalesPresenter;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class CompanySalesPresenterTest {
 
@@ -83,5 +84,14 @@ class CompanySalesPresenterTest {
         CompanySalesPresenter.Outcome outcome = presenter.load(TOKEN, null);
 
         assertInstanceOf(CompanySalesPresenter.Outcome.NotAuthenticated.class, outcome);
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenNotAuthenticated() {
+        when(companyManagementService.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(CompanySalesPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN, null));
     }
 }

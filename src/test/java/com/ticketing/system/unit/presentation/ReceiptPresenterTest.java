@@ -25,6 +25,7 @@ import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.support.ServiceErrors;
 import ch.qos.logback.classic.Level;
 import jakarta.persistence.PersistenceException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class ReceiptPresenterTest {
 
@@ -156,5 +157,15 @@ class ReceiptPresenterTest {
                     serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                     "the internal failure must be logged at ERROR with its exception by ServiceErrors");
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenFailureAsksTheMemberToSignIn() {
+        when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new ReceiptPresenter.Outcome.Failure("Please sign in to view this receipt."),
+                presenter.load(TOKEN, RECEIPT_ID));
     }
 }

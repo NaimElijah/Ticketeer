@@ -32,6 +32,7 @@ import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class ManagerListPresenterTest {
 
@@ -290,5 +291,21 @@ class ManagerListPresenterTest {
             ManagerListPresenter.ActionOutcome.Failure.class,
             presenter.editPermissions(TOKEN, 7, 2, List.of("VIEW_SALES")));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenARevokedToken_WhenLoadRoster_ThenReturnsNotAuthenticated() {
+        when(service.findOwnedCompanies(TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertInstanceOf(ManagerListPresenter.Outcome.NotAuthenticated.class, presenter.loadRoster(TOKEN));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenLoadRoster_ThenReturnsNotAuthenticated() {
+        when(service.findOwnedCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(ManagerListPresenter.Outcome.NotAuthenticated.class, presenter.loadRoster(TOKEN));
     }
 }

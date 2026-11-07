@@ -27,6 +27,7 @@ import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class OwnerDashboardPresenterTest {
 
@@ -149,5 +150,14 @@ class OwnerDashboardPresenterTest {
         OwnerDashboardPresenter.Outcome.Failure fail =
             assertInstanceOf(OwnerDashboardPresenter.Outcome.Failure.class, outcome);
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoadFor_ThenReturnsNotAuthenticated() {
+        when(companyManagementService.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(OwnerDashboardPresenter.Outcome.NotAuthenticated.class, presenter.loadFor(TOKEN, null));
     }
 }

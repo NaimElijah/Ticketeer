@@ -27,6 +27,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class NewInquiryPresenterTest {
 
@@ -132,5 +133,15 @@ class NewInquiryPresenterTest {
         NewInquiryPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(NewInquiryPresenter.ActionOutcome.Failure.class, presenter.submit(TOKEN, 5, "S", "B"));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenSubmit_ThenReturnsNotAuthenticated() {
+        doThrow(new SessionExpiredException()).when(messaging).startConversation(anyString(), any());
+
+        assertInstanceOf(NewInquiryPresenter.ActionOutcome.NotAuthenticated.class,
+                presenter.submit(TOKEN, 5, "S", "B"));
     }
 }

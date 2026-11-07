@@ -32,6 +32,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class EventDetailsPresenterTest {
 
@@ -158,5 +159,15 @@ class EventDetailsPresenterTest {
                     serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                     "the internal failure must be logged at ERROR with its exception by ServiceErrors");
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenFailureAsksTheVisitorToRefresh() {
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new EventDetailsPresenter.Outcome.Failure("Your session has expired - please refresh and try again."),
+                presenter.load(CRED, EVENT_ID));
     }
 }

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 /**
  * Unit guard for {@code VenueMapPresenter.saveMap}: the venue map is persisted to the
@@ -145,5 +146,15 @@ class VenueMapPresenterTest {
     @Test
     void GivenNoZones_WhenANewZoneIsNamed_ThenItIsZoneOne() {
         assertEquals("Zone 1", presenter.defaultZoneName(List.of()));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenSaveMap_ThenReturnsNotAuthenticated() {
+        when(eventService.getEventDetail(eq(TOKEN), anyInt())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(VenueMapPresenter.SaveOutcome.NotAuthenticated.class,
+                presenter.saveMap(TOKEN, String.valueOf(EVENT_ID), config()));
     }
 }

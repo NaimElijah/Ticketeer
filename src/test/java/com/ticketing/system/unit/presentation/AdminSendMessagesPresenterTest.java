@@ -30,6 +30,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class AdminSendMessagesPresenterTest {
 
@@ -185,5 +186,21 @@ class AdminSendMessagesPresenterTest {
             AdminSendMessagesPresenter.ActionOutcome.Failure.class,
             presenter.send(TOKEN, "S", "B", List.of(7), false, false));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenARevokedToken_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewSentOutreach(TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertInstanceOf(AdminSendMessagesPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewSentOutreach(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(AdminSendMessagesPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 }

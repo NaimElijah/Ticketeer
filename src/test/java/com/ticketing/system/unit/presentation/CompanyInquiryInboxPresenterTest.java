@@ -407,7 +407,7 @@ class CompanyInquiryInboxPresenterTest {
     // ---- The respond page survives a failed mark-read (#187) ----
     //
     // Marking the thread read is a side effect of opening it. When the mark fails, the reader still
-    // gets the thread; only an expired session stops the page.
+    // gets the thread; only a dead session, expired or revoked, stops the page.
 
     @Test
     void GivenTheMarkFailsInternally_WhenLoadOne_ThenTheThreadIsStillShown() {
@@ -467,5 +467,14 @@ class CompanyInquiryInboxPresenterTest {
         InOrder order = inOrder(messaging);
         order.verify(messaging).markConversationRead(TOKEN, "c1");
         order.verify(messaging).viewConversation(TOKEN, "c1");
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoadFor_ThenReturnsNotAuthenticated() {
+        when(companyManagement.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(CompanyInquiryInboxPresenter.Outcome.NotAuthenticated.class, presenter.loadFor(TOKEN, 7));
     }
 }

@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class CompanyEventListPresenterTest {
 
@@ -428,5 +429,15 @@ class CompanyEventListPresenterTest {
         for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
             assertFalse(reason.contains(operatorText), "the reason shows operator text '" + operatorText + "': " + reason);
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(companyService.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(CompanyEventListPresenter.Outcome.NotAuthenticated.class,
+                presenter.load(TOKEN, null, CatalogSearchFiltersDTO.empty()));
     }
 }
