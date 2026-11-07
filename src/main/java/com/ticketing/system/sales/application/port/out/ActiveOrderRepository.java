@@ -32,9 +32,8 @@ public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> 
      *
      * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if another cart of the
      *     same identity still holds lines, or another request stored the member's or the guest session's
-     *     cart first. Deleting a
-     *     cart that holds lines would leave its seats reserved under an order key no cart holds, so its
-     *     lines must be released first (as the login merge does), or the request retried.
+     *     cart first. Deleting a cart that holds lines would leave its seats reserved under an order key no
+     *     cart holds, so its lines must be released first (as the login merge does), or the request retried.
      */
     void save(ActiveOrder activeOrder);
 

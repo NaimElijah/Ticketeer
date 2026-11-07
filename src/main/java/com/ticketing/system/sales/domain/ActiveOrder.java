@@ -63,7 +63,7 @@ public class ActiveOrder implements InvariantChecked {
     private Integer userId;
     @Column(name = "session_id")
     private String sessionId;
-    // The column uk_active_orders_guest_session_id keys on (#224, V10): the session id while this is a guest
+    // The column uk_active_orders_guest_session_id keys on (NaimElijah/Ticketeer#224, V10): the session id while this is a guest
     // cart, null once a member owns it, since a member cart keeps the id of its session and may share it
     // with that session's guest cart. Persistence-only, so nothing reads it; see deriveGuestSessionKey.
     @Column(name = "guest_session_id")

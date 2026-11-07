@@ -34,7 +34,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * entity delete cascades the item collection), refuses if one still holds lines, then persists this
  * one. Because the order lock here is a no-op, the database backs both sides: {@code uk_active_orders_user_id}
  * the member side, and {@code uk_active_orders_guest_session_id} the guest side, on the column
- * {@link ActiveOrder} fills only while it has no user (#224). Writes are {@code @Transactional} so the
+ * {@link ActiveOrder} fills only while it has no user (NaimElijah/Ticketeer#224). Writes are {@code @Transactional} so the
  * adapter is self-sufficient before the service layer gains transactions (#359).
  */
 @Repository

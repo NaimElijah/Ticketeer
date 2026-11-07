@@ -135,8 +135,8 @@ abstract class INotificationRepositoryContractTest {
     }
 
     // The JPA table holds the status under a check constraint too (ck_notifications_status), which a
-    // migration must widen for each new constant (ADR-007); the query by status flushes the insert, so a
-    // missing value fails here.
+    // migration must widen for each new constant (ADR-007). Inherited, so each save commits, and a missing
+    // value fails here.
     @ParameterizedTest
     @EnumSource(NotificationStatus.class)
     void GivenANotificationInEachStatus_WhenSaved_ThenItIsFoundByThatStatus(NotificationStatus status) {

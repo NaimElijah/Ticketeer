@@ -216,8 +216,9 @@ class SystemIntegrityVerifierTest {
     private static final int SHARED_EVENT_ID = 7;
     private static final int MEMBER_ID = 5;
 
-    // Two carts on one guest session id are a known, accepted race (#224, requirements.md §1 #8).
-    // Failing the scan on them would stop the boot (ADR-003) and block openMarket from CLOSED.
+    // V10 holds a guest session to one cart, but a pre-V10 instance serving during a rolling deploy can still
+    // leave two (NaimElijah/Ticketeer#224, requirements.md §1 #8), and failing the scan on them would stop the
+    // boot (ADR-003) and block openMarket from CLOSED. NaimElijah/Ticketeer#275 flips this test.
     @Test
     void GivenTwoGuestCartsOnOneSessionHoldingOneEvent_WhenVerify_ThenPasses() {
         ActiveOrder first = guestCartHolding("guest-session-1", SHARED_EVENT_ID);
@@ -225,7 +226,7 @@ class SystemIntegrityVerifierTest {
         when(activeOrderRepository.findAll()).thenReturn(List.of(first, second));
 
         assertDoesNotThrow(verifier::verify,
-                "two guest carts on one session id are a known race (#224), not a boot-stopping violation");
+                "two guest carts on one session id are left to the sweeper (#275), not a boot-stopping violation");
     }
 
     // Members stay in the scan: uk_active_orders_user_id holds them, so two carts are corrupt state.
