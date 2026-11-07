@@ -25,6 +25,7 @@ import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
+import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
@@ -34,6 +35,7 @@ import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
 import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
+import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
@@ -247,6 +249,20 @@ class FieldOwnRuleMessagesTest {
         AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
         when(presenter.load(any())).thenReturn(new AdminSendMessagesPresenter.Outcome.Success(List.of()));
         AdminSendMessagesView view = new AdminSendMessagesView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
+        Component field = field(view, Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
+    }
+
+    // ---- CompanyRegistrationView ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Company name", "Description"})
+    void GivenTheCompanyRegistrationPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        CompanyRegistrationView view = new CompanyRegistrationView(mock(CompanyRegistrationPresenter.class));
         harness.attach(view);
         Component field = field(view, Component.class, label);
 
