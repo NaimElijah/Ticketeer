@@ -138,7 +138,7 @@ public class VenueMapTest extends BaseDomainTest {
 
     @Test
     void GivenAVenueMap_WhenItsLocationIsSetToNull_ThenItIsRefusedAndKeepsItsLocation() {
-        VenueMap map = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 10, 50)));
+        VenueMap map = track(new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 10, 50))));
 
         assertThrows(IllegalArgumentException.class, () -> map.setLocation(null));
 

@@ -280,7 +280,7 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenDuplicateSeatNumbers_WhenRemoveSeats_ThenThrowsAndCartUnchanged() {
-        ActiveOrder order = new ActiveOrder(1, NOW);
+        ActiveOrder order = track(new ActiveOrder(1, NOW));
         order.addSeatedReservation(10, 2, List.of("A1", "A2"), 100, NOW);
 
         assertThrows(IllegalArgumentException.class,

@@ -119,26 +119,26 @@ public class InventoryZoneTest extends BaseDomainTest {
 
     @Test
     void GivenReservedSeat_WhenReserveAgain_ThenRejected() {
-        SeatedZone zone = new SeatedZone(
+        SeatedZone seatedZone = track(new SeatedZone(
                 1,
                 "Orchestra",
                 100,
-                List.of(new Seat("A1", 0, 0)));
+                List.of(new Seat("A1", 0, 0))));
 
-        zone.reserve(InventorySelection.seated(List.of("A1"), "test-order"));
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), "test-order"));
 
         assertThrows(
                 IllegalStateException.class,
-                () -> zone.reserve(InventorySelection.seated(List.of("A1"), "test-order")));
+                () -> seatedZone.reserve(InventorySelection.seated(List.of("A1"), "test-order")));
     }
 
     @Test
     void GivenStandingZone_WhenReserveSeatLabels_ThenRejected() {
-        StandingZone zone = new StandingZone(1, "General", 100, 50);
+        StandingZone standingZone = track(new StandingZone(1, "General", 100, 50));
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> zone.reserve(InventorySelection.seated(List.of("A1"))));
+                () -> standingZone.reserve(InventorySelection.seated(List.of("A1"))));
     }
 
     @Test
@@ -541,85 +541,85 @@ public class InventoryZoneTest extends BaseDomainTest {
 
     @Test
     void GivenStandingZoneReservedTickets_WhenConfirmSale_ThenReservedDecreasesAndSoldIncreases() {
-        StandingZone zone = new StandingZone(1, "General", 100, 50);
+        StandingZone standingZone = track(new StandingZone(1, "General", 100, 50));
 
-        zone.reserve(InventorySelection.standing(3));
-        zone.confirmSale(InventorySelection.standing(3));
+        standingZone.reserve(InventorySelection.standing(3));
+        standingZone.confirmSale(InventorySelection.standing(3));
 
-        assertEquals(0, zone.getReservedAmount());
-        assertEquals(3, zone.getSoldAmount());
-        assertEquals(97, zone.getAvailableAmount());
+        assertEquals(0, standingZone.getReservedAmount());
+        assertEquals(3, standingZone.getSoldAmount());
+        assertEquals(97, standingZone.getAvailableAmount());
     }
 
     @Test
     void GivenStandingZone_WhenAddPlaces_ThenCapacityAndAvailabilityIncrease() {
-        StandingZone zone = new StandingZone(1, "General", 100, 50);
+        StandingZone standingZone = track(new StandingZone(1, "General", 100, 50));
 
-        zone.addPlaces(25);
+        standingZone.addPlaces(25);
 
-        assertEquals(125, zone.getCapacity());
-        assertEquals(125, zone.getAvailableAmount());
+        assertEquals(125, standingZone.getCapacity());
+        assertEquals(125, standingZone.getAvailableAmount());
     }
 
     @Test
     void GivenStandingZoneWithReservations_WhenRemoveMoreThanAvailable_ThenThrowsException() {
-        StandingZone zone = new StandingZone(1, "General", 10, 50);
-        zone.reserve(InventorySelection.standing(4));
+        StandingZone standingZone = track(new StandingZone(1, "General", 10, 50));
+        standingZone.reserve(InventorySelection.standing(4));
 
-        assertThrows(IllegalArgumentException.class, () -> zone.removePlaces(7));
+        assertThrows(IllegalArgumentException.class, () -> standingZone.removePlaces(7));
 
-        assertEquals(10, zone.getCapacity());
-        assertEquals(6, zone.getAvailableAmount());
-        assertEquals(4, zone.getReservedAmount());
+        assertEquals(10, standingZone.getCapacity());
+        assertEquals(6, standingZone.getAvailableAmount());
+        assertEquals(4, standingZone.getReservedAmount());
     }
 
     @Test
     void GivenSeatedZone_WhenAddSeats_ThenCapacityAndAvailabilityIncrease() {
-        SeatedZone zone = new SeatedZone(
+        SeatedZone seatedZone = track(new SeatedZone(
                 1,
                 "Orchestra",
                 100,
-                List.of(new Seat("A1", 0, 0)));
+                List.of(new Seat("A1", 0, 0))));
 
-        zone.addSeats(List.of(
+        seatedZone.addSeats(List.of(
                 new Seat("A2", 1, 0),
                 new Seat("A3", 2, 0)));
 
-        assertEquals(3, zone.getCapacity());
-        assertEquals(3, zone.getAvailableAmount());
-        assertEquals(SeatStatus.AVAILABLE, zone.getSeatStatus("A2"));
+        assertEquals(3, seatedZone.getCapacity());
+        assertEquals(3, seatedZone.getAvailableAmount());
+        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A2"));
     }
 
     @Test
     void GivenSeatedZone_WhenRemoveAvailableSeat_ThenCapacityDecreases() {
-        SeatedZone zone = new SeatedZone(
+        SeatedZone seatedZone = track(new SeatedZone(
                 1,
                 "Orchestra",
                 100,
                 List.of(
                         new Seat("A1", 0, 0),
-                        new Seat("A2", 1, 0)));
+                        new Seat("A2", 1, 0))));
 
-        zone.removeSeats(List.of("A2"));
+        seatedZone.removeSeats(List.of("A2"));
 
-        assertEquals(1, zone.getCapacity());
-        assertThrows(IllegalArgumentException.class, () -> zone.getSeatStatus("A2"));
+        assertEquals(1, seatedZone.getCapacity());
+        assertThrows(IllegalArgumentException.class, () -> seatedZone.getSeatStatus("A2"));
     }
 
     @Test
     void GivenReservedSeat_WhenRemoveSeat_ThenThrowsException() {
-        SeatedZone zone = new SeatedZone(
+        SeatedZone seatedZone = track(new SeatedZone(
                 1,
                 "Orchestra",
                 100,
-                List.of(new Seat("A1", 0, 0)));
+                List.of(new Seat("A1", 0, 0))));
 
-        zone.reserve(InventorySelection.seated(List.of("A1"), "test-order"));
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), "test-order"));
 
-        assertThrows(IllegalStateException.class, () -> zone.removeSeats(List.of("A1")));
+        assertThrows(IllegalStateException.class, () -> seatedZone.removeSeats(List.of("A1")));
 
-        assertEquals(1, zone.getCapacity());
-        assertEquals(SeatStatus.RESERVED, zone.getSeatStatus("A1"));
+        assertEquals(1, seatedZone.getCapacity());
+        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
     }
 
     // -- returnSoldToStock (member refund: SOLD -> AVAILABLE) -----------------
