@@ -1,6 +1,7 @@
 package com.ticketing.system.integration;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -10,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
@@ -48,6 +50,8 @@ import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
+import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
 
 /**
@@ -59,7 +63,8 @@ import com.ticketing.system.shared.exception.ConcurrentReservationException;
  * other tab just reserved included, nor clear the cart.
  *
  * <p>The other tab is a real reservation, run on another thread from inside the attempt's freeze save,
- * before that save reaches the database. Runs on the Jpa adapters over H2.
+ * before that save reaches the database. Runs on the Jpa adapters over H2; {@code PostgresCheckoutFreezeRaceIT}
+ * runs the same tests on PostgreSQL.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -140,6 +145,33 @@ class CheckoutFreezeRaceJpaTest {
         assertNull(otherTabFailure.get(), "arrangement: the other tab's reservation must commit");
         verify(paymentGateway, never()).charge(any());
         assertCartAndHoldsKept(activeOrderRepository.getBySessionId(guestSessionId).orElse(null));
+    }
+
+    // The lost attempt changed nothing, so the buyer's next Pay buys the cart as the other tab left it.
+    @Test
+    void GivenAFreezeLostToAnotherTab_WhenTheMemberChecksOutAgain_ThenThePurchaseCompletesWithBothSeats() {
+        AuthTokenDTO member = fixture.registerAndLogin("freezeRetryMember");
+        reservationService.reserveForMember(member.token(), show.eventId(), show.zoneId(), seat(FIRST_SEAT));
+        AtomicReference<Throwable> otherTabFailure = reserveFromAnotherTabWhenTheAttemptFreezes(
+                () -> reservationService.reserveForMember(member.token(), show.eventId(), show.zoneId(),
+                        seat(SECOND_SEAT)));
+        RuntimeException lost = assertThrows(RuntimeException.class,
+                () -> checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD),
+                "arrangement: the first attempt's freeze must lose to the other tab");
+        assertFailedAsAConcurrentChange(lost);
+        assertNull(otherTabFailure.get(), "arrangement: the other tab's reservation must commit");
+
+        CheckoutResultDTO retry = assertDoesNotThrow(
+                () -> checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD),
+                "the retry must buy the cart as the other tab left it");
+
+        InventoryZoneDTO zone = fixture.zoneOf(show);
+        assertAll(
+                () -> assertEquals(2, retry.issuedTickets().size(), "the retry must buy both seats"),
+                () -> assertEquals(2, zone.getSoldAmount(), "both seats must be sold"),
+                () -> assertEquals(0, zone.getReservedAmount(), "no seat may stay held after the purchase"),
+                () -> assertNull(activeOrderRepository.getByUserId(member.userId()), "the bought cart is consumed"),
+                () -> verify(paymentGateway, times(1)).charge(any()));
     }
 
     // ---- assertions and arrangement ----

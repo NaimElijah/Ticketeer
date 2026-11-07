@@ -22,6 +22,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
@@ -68,6 +69,7 @@ import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.identity.application.port.out.CartRestorationPort;
@@ -108,6 +110,7 @@ class AuthenticationServiceTest {
     private SessionManager mockSessionManager;
     private SessionRepository mockSessionRepo;
     private AdminRepository mockAdminRepo;
+    private ISystemMetrics mockMetrics;
     private Clock fixedClock;
     private AuthenticationService service;
     private NotificationDispatchService mockNotification;
@@ -122,6 +125,7 @@ class AuthenticationServiceTest {
         mockCartRestorationPort = mock(CartRestorationPort.class);
         mockSessionRepo = mock(SessionRepository.class);
         mockAdminRepo = mock(AdminRepository.class);
+        mockMetrics = mock(ISystemMetrics.class);
         fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
         // The service may hash a throwaway secret when it is built (its dummy hash for unknown
         // usernames), so the mock answers with a hash and forgets that call: each test sees only the
@@ -129,7 +133,7 @@ class AuthenticationServiceTest {
         when(mockHasher.hash(any())).thenReturn(HASH_FROM_THE_HASHER);
         service = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
-                mockSessionRepo, mock(ISystemMetrics.class),
+                mockSessionRepo, mockMetrics,
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
                 IDENTITY, TestTransactions.recordingManager());
@@ -186,18 +190,21 @@ class AuthenticationServiceTest {
 
         service.endGuestSession("guest-1");
         verify(mockSessionRepo, times(1)).delete("guest-1");
+        verify(mockMetrics).record(MetricType.VISITOR_EXIT);
     }
 
     @Test
     void GivenNullSessionId_WhenEndGuestSession_ThenIsNoOpDeletingNothing() {
         service.endGuestSession(null);
         verify(mockSessionRepo, never()).delete(any());
+        verifyNoInteractions(mockMetrics);
     }
 
     @Test
     void GivenBlankSessionId_WhenEndGuestSession_ThenIsNoOpDeletingNothing() {
         service.endGuestSession("   ");
         verify(mockSessionRepo, never()).delete(any());
+        verifyNoInteractions(mockMetrics);
     }
 
     // ----------------------------------------------------------------------
@@ -312,7 +319,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void GivenSuccessfulRegistration_WhenCheckSession_ThenStillGuest() {
+    void GivenAGuestSession_WhenRegister_ThenItStaysAGuestAndNoTokenIsIssued() {
         Session guest = mockValidGuestSession("guest-1");
         when(mockUserRepo.existsByUsername(any())).thenReturn(false);
         when(mockUserRepo.findByEmail(any())).thenReturn(Optional.empty());
@@ -326,6 +333,21 @@ class AuthenticationServiceTest {
         // No JWT issued — session-establishing collaborators not invoked.
         verify(mockSessionManager, never()).generateToken(anyInt(), any());
         verify(mockSessionManager, never()).generateTokenForSession(any(), any());
+    }
+
+    // The session stays a guest, but registering is activity on it (II.1.4 / D10a).
+    @Test
+    void GivenAGuestSessionStartedEarlier_WhenRegister_ThenTheSessionIsTouchedAtTheClockAndSaved() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService onClock = newService(clock, new LockoutProperties(5, 15L));
+        Session guest = givenRegistrationWillSucceed("guest-1");
+        clock.advance(Duration.ofMinutes(5));
+
+        onClock.register(new RegisterRequestDTO("bob", "bob@example.com", "Password1", "guest-1", 56));
+
+        assertEquals(T0.plus(Duration.ofMinutes(5)), guest.getLastSeenAt(),
+                "registering must touch the session at the clock");
+        verify(mockSessionRepo).save(guest);
     }
 
     @Test
@@ -618,7 +640,7 @@ class AuthenticationServiceTest {
         when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("ISSUED_TOKEN");
         when(mockSessionManager.extractExpiration("ISSUED_TOKEN")).thenReturn(9999L);
         when(mockCartRestorationPort.restoreActiveOrder(7)).thenReturn(null);
-        when(mockNotification.deliverPending(7)).thenReturn(null);
+        when(mockNotification.deliverPending(7)).thenReturn(List.of());
 
         LoginDTO loginResult = service.login(new LoginRequestDTO("alice", "Password1", "guest-1"));
         AuthTokenDTO result = loginResult.authToken();
@@ -652,13 +674,29 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    void GivenTheClockPastTheGuestSessionsStart_WhenLogin_ThenTheSessionExpiresAMemberTtlAfterTheClock() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService onClock = newService(clock, new LockoutProperties(5, 15L));
+        Session guest = mockValidGuestSession("guest-1");
+        clock.advance(Duration.ofMinutes(10));
+        User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
+        when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(mockHasher.matches("Password1", "STORED_HASH")).thenReturn(true);
+        when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("TOK");
+
+        onClock.login(new LoginRequestDTO("alice", "Password1", "guest-1"));
+
+        assertEquals(T0.plus(Duration.ofMinutes(10)).plus(MEMBER_TTL_MINUTES, ChronoUnit.MINUTES), guest.getExpiresAt(),
+                "a promoted session must expire a member TTL after the clock, not keep the guest's expiry");
+        verify(mockSessionRepo).save(guest);
+    }
+
+    @Test
     void GivenWrongPassword_WhenLogin_ThenAuthenticationFailedExceptionThrown() {
         mockValidGuestSession("guest-1");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 77);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
         when(mockHasher.matches("wrong", "STORED_HASH")).thenReturn(false);
-        when(mockCartRestorationPort.restoreActiveOrder(7)).thenReturn(null);
-        when(mockNotification.deliverPending(7)).thenReturn(null);
 
         assertThrows(AuthenticationFailedException.class,
                 () -> service.login(new LoginRequestDTO("alice", "wrong", "guest-1")));
@@ -678,14 +716,18 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void GivenInvalidCredentials_WhenLogin_ThenRejected() {
-        mockValidGuestSession("guest-1");
+    void GivenInvalidCredentials_WhenLogin_ThenTheGuestSessionIsLeftAsItWasAndNoCartIsMerged() {
+        Session guest = mockValidGuestSession("guest-1");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 89);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
         when(mockHasher.matches("badpass", "STORED_HASH")).thenReturn(false);
 
         assertThrows(AuthenticationFailedException.class,
                 () -> service.login(new LoginRequestDTO("alice", "badpass", "guest-1")));
+
+        assertTrue(guest.isGuest(), "a refused login must not promote the guest session");
+        verify(mockSessionRepo, never()).save(any());
+        verifyNoInteractions(mockCartRestorationPort, mockNotification);
     }
 
     // ----------------------------------------------------------------------
@@ -776,7 +818,8 @@ class AuthenticationServiceTest {
         service.logout(new LogoutRequestDTO("SOME_TOKEN"));
 
         verify(mockSessionManager).invalidate("SOME_TOKEN");
-        verify(mockSessionManager, never()).tryExtractUserId(any());
+        verifyNoMoreInteractions(mockSessionManager);
+        verifyNoInteractions(mockSessionRepo);
     }
 
     // #187: a logout whose revocation failed leaves the session, and so the token, live; it must not
@@ -793,10 +836,23 @@ class AuthenticationServiceTest {
         assertSame(storeFailure, thrown, "logout must let the session store's own failure out unchanged");
     }
 
+    // Runs on the real session manager: a token that does not parse names no session, so it revokes none.
     @Test
-    void GivenAGarbageToken_WhenLogout_ThenDoesNotThrowAndDelegatesToSessionManagerInvalidate() {
-        service.logout(new LogoutRequestDTO("not-a-real-token"));
-        verify(mockSessionManager).invalidate("not-a-real-token");
+    void GivenAGarbageToken_WhenLogout_ThenDoesNotThrowAndAnotherMembersSessionStaysLive() {
+        MemorySessionRepository sessions = new MemorySessionRepository(fixedClock);
+        JwtSessionManager realSessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET),
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), sessions, fixedClock);
+        AuthenticationService serviceOnRealSessions = new AuthenticationService(
+                mockUserRepo, mockHasher, realSessionManager, mockCartRestorationPort, mockNotification,
+                sessions, mock(ISystemMetrics.class),
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
+                IDENTITY, TestTransactions.recordingManager());
+        String liveMemberToken = realSessionManager.generateToken(7, "alice");
+
+        assertDoesNotThrow(() -> serviceOnRealSessions.logout(new LogoutRequestDTO("not-a-real-token")));
+
+        assertTrue(realSessionManager.validateToken(liveMemberToken), "a garbage token must revoke no session");
     }
 
     // ----------------------------------------------------------------------
@@ -998,12 +1054,13 @@ class AuthenticationServiceTest {
         return email;
     }
 
-    private void givenRegistrationWillSucceed(String guestSessionId) {
-        mockValidGuestSession(guestSessionId);
+    private Session givenRegistrationWillSucceed(String guestSessionId) {
+        Session guest = mockValidGuestSession(guestSessionId);
         when(mockUserRepo.existsByUsername(any())).thenReturn(false);
         when(mockUserRepo.findByEmail(any())).thenReturn(Optional.empty());
         when(mockUserRepo.nextId()).thenReturn(42);
         when(mockHasher.hash(any())).thenReturn("HASHED");
+        return guest;
     }
 
     // ----------------------------------------------------------------------
@@ -1159,6 +1216,7 @@ class AuthenticationServiceTest {
     private static final long LOCK_MINUTES = 15;
     private static final String RIGHT_PASSWORD = "Password1";
     private static final String WRONG_PASSWORD = "wrong-password";
+    private static final String DEAD_GUEST_SESSION = "guest-session-that-was-never-issued";
 
     @Test
     void GivenFewerThanMaxFailures_WhenTheLockWindowHasPassed_ThenTheCountStartsFromZero() {
@@ -1203,6 +1261,52 @@ class AuthenticationServiceTest {
         assertThrows(AccountLockedException.class,
                 () -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
                 MAX_ATTEMPTS + " failures inside one window must lock the account");
+    }
+
+    @Test
+    void GivenMaxMinusOneFailuresThenASuccess_WhenMemberFailsMaxMinusOneTimesMore_ThenTheCountRestartedFromZero() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+        lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1"));
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "a sign-in must restart the count, so the failures before it no longer count towards the lock");
+    }
+
+    @Test
+    void GivenMaxMinusOneAdminFailuresThenASuccess_WhenAdminFailsMaxMinusOneTimesMore_ThenTheCountRestartedFromZero() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        String adminPassword = "AdminPass1";
+        when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "ADMIN_HASH", true));
+        when(mockHasher.matches(any(), eq("ADMIN_HASH")))
+                .thenAnswer(invocation -> adminPassword.equals(invocation.getArgument(0)));
+        when(mockSessionManager.generateAdminToken(1, "admin")).thenReturn("admin-jwt");
+
+        failAdminSignIns(lockoutService, MAX_ATTEMPTS - 1);
+        lockoutService.signInAsAdmin("admin", adminPassword);
+        failAdminSignIns(lockoutService, MAX_ATTEMPTS - 1);
+
+        assertDoesNotThrow(() -> lockoutService.signInAsAdmin("admin", adminPassword),
+                "an admin sign-in must restart the count, so the failures before it no longer count towards the lock");
+    }
+
+    @Test
+    void GivenMaxAttemptsFromADeadGuestSession_WhenAliceSignsInFromALiveOne_ThenSignedInBecauseNoneWasCounted() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+        when(mockSessionRepo.findById(DEAD_GUEST_SESSION)).thenReturn(Optional.empty());
+
+        for (int i = 0; i < MAX_ATTEMPTS; i++) {
+            assertThrows(GuestSessionRequiredException.class,
+                    () -> lockoutService.login(new LoginRequestDTO("alice", WRONG_PASSWORD, DEAD_GUEST_SESSION)));
+        }
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "an attempt refused for want of a guest session must not count towards the lock");
+        verify(mockHasher, times(1)).matches(any(), any());
     }
 
     // The locked message rounds the time left in the window up to whole minutes.
@@ -1341,6 +1445,13 @@ class AuthenticationServiceTest {
                     now.plus(GUEST_IDLE_MINUTES, ChronoUnit.MINUTES)));
         });
         when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("TOK");
+    }
+
+    private static void failAdminSignIns(AuthenticationService target, int times) {
+        for (int i = 0; i < times; i++) {
+            assertThrows(AuthenticationFailedException.class, () -> target.signInAsAdmin("admin", WRONG_PASSWORD),
+                    "a wrong password inside an unlocked window is refused as a failed sign-in, not a lock");
+        }
     }
 
     private static void failLogins(AuthenticationService target, int times) {

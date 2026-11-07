@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
@@ -15,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,9 +39,11 @@ import com.ticketing.system.shared.exception.DuplicateUsernameException;
  * one may get the name: two rows with one username make {@code SystemIntegrityVerifier} refuse the
  * next boot.
  *
- * <p>Runs on the Jpa adapters over H2, where the {@code users} table enforces the uniqueness. The
- * user repository is spied on only to hold each registration just after its uniqueness check until
- * the other has made its own, so both checks see a free name on every run.
+ * <p>Runs on the Jpa adapters over H2, where the {@code users} table enforces the uniqueness;
+ * {@code PostgresConcurrentRegistrationIT} runs the same tests on PostgreSQL. The user repository is spied
+ * on only to hold each registration just after its uniqueness check until the other has made its own. Each
+ * test asserts that both checks saw a free name and that the two met there, so a run in which they never
+ * overlapped fails, rather than passing on the refusal a second, sequential registration gets anyway.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -59,12 +65,9 @@ class ConcurrentRegistrationJpaTest {
 
     @Test
     void GivenTwoConcurrentRegistrationsOfOneUsername_WhenRegister_ThenExactlyOneSucceeds() throws Exception {
-        CyclicBarrier bothChecked = new CyclicBarrier(REGISTRATIONS);
-        doAnswer(invocation -> {
-            Object exists = invocation.callRealMethod();
-            awaitTheOtherRegistration(bothChecked);
-            return exists;
-        }).when(userRepository).existsByUsername(USERNAME);
+        Overlap overlap = new Overlap();
+        doAnswer(invocation -> overlap.afterCheck(invocation.callRealMethod()))
+                .when(userRepository).existsByUsername(USERNAME);
         List<RegisterRequestDTO> requests = List.of(
                 new RegisterRequestDTO(USERNAME, "racer-a@example.com", PASSWORD,
                         authService.startGuestSession().sessionId(), AGE),
@@ -73,6 +76,7 @@ class ConcurrentRegistrationJpaTest {
 
         List<Throwable> outcomes = registerAtOnce(requests);
 
+        overlap.assertBothChecksSaw(false);
         List<Throwable> failures = outcomes.stream().filter(outcome -> outcome != null).toList();
         assertEquals(1, outcomes.size() - failures.size(),
                 "exactly one registration may take the username, but the outcomes were " + outcomes);
@@ -88,18 +92,16 @@ class ConcurrentRegistrationJpaTest {
     @Test
     void GivenTwoConcurrentRegistrationsOfOneEmail_WhenRegister_ThenExactlyOneSucceedsAndTheOtherGetsDuplicateEmail()
             throws Exception {
-        CyclicBarrier bothChecked = new CyclicBarrier(REGISTRATIONS);
-        doAnswer(invocation -> {
-            Object found = invocation.callRealMethod();
-            awaitTheOtherRegistration(bothChecked);
-            return found;
-        }).when(userRepository).findByEmail(EMAIL);
+        Overlap overlap = new Overlap();
+        doAnswer(invocation -> overlap.afterCheck(invocation.callRealMethod()))
+                .when(userRepository).findByEmail(EMAIL);
         List<RegisterRequestDTO> requests = List.of(
                 new RegisterRequestDTO("email.racer.a", EMAIL, PASSWORD, authService.startGuestSession().sessionId(), AGE),
                 new RegisterRequestDTO("email.racer.b", EMAIL, PASSWORD, authService.startGuestSession().sessionId(), AGE));
 
         List<Throwable> outcomes = registerAtOnce(requests);
 
+        overlap.assertBothChecksSaw(Optional.empty());
         List<Throwable> failures = outcomes.stream().filter(outcome -> outcome != null).toList();
         assertEquals(1, outcomes.size() - failures.size(),
                 "exactly one registration may take the email, but the outcomes were " + outcomes);
@@ -145,13 +147,32 @@ class ConcurrentRegistrationJpaTest {
         }
     }
 
-    // An implementation that serialises registrations never brings both to the barrier; the wait is
-    // bounded so such an implementation is judged by its outcome rather than hanging the test.
-    private static void awaitTheOtherRegistration(CyclicBarrier bothChecked) throws InterruptedException {
-        try {
-            bothChecked.await(AWAIT_SECONDS / 2, TimeUnit.SECONDS);
-        } catch (BrokenBarrierException | TimeoutException e) {
-            // The other registration did not reach its check in time; go on alone.
+    /** What each registration's uniqueness check answered, and how many of them met the other there. */
+    private static final class Overlap {
+
+        private final CyclicBarrier bothChecked = new CyclicBarrier(REGISTRATIONS);
+        private final List<Object> answers = new CopyOnWriteArrayList<>();
+        private final AtomicInteger met = new AtomicInteger();
+
+        // A registration whose partner never reaches its check goes on alone once the bounded wait ends, so
+        // an implementation that serialises registrations still finishes; assertBothChecksSaw then reports
+        // that the race never happened.
+        Object afterCheck(Object answer) throws InterruptedException {
+            answers.add(answer);
+            try {
+                bothChecked.await(AWAIT_SECONDS / 2, TimeUnit.SECONDS);
+                met.incrementAndGet();
+            } catch (BrokenBarrierException | TimeoutException e) {
+                // Not met: recorded by met staying short of REGISTRATIONS.
+            }
+            return answer;
+        }
+
+        void assertBothChecksSaw(Object freeAnswer) {
+            assertEquals(REGISTRATIONS, met.get(), "both registrations must pass their check before either goes on, "
+                    + "or the race was never run; checks that met: " + met.get() + ", answers: " + answers);
+            assertEquals(Collections.nCopies(REGISTRATIONS, freeAnswer), answers,
+                    "both checks must find the value free, or the race was never run");
         }
     }
 }

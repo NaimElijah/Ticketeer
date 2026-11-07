@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -86,6 +87,22 @@ class EventTest extends BaseDomainTest {
                 null,
                 new DiscountPolicy(0)));
 
+    }
+
+    // No application path reaches this guard today: only a DRAFT or SCHEDULED event's layout may be edited, and
+    // only an ON_SALE one takes reservations. It stays as defence in depth against an event stored in that state,
+    // or a later transition back to SCHEDULED, which would otherwise orphan the places it holds (#189).
+    @Test
+    void GivenAScheduledEventWhoseZoneHoldsAPlace_WhenConfigureVenueMap_ThenRefusedAndTheMapIsUnchanged() {
+        zone.reserve(InventorySelection.standing(1, "order-1"));
+        VenueMap before = event.getVenueMap();
+        VenueMap replacement = new VenueMap(2, LOCATION, List.of(new StandingZone(ZONE_ID + 1, "Replacement", 10, 100)));
+
+        IllegalStateException refused =
+                assertThrows(IllegalStateException.class, () -> event.configureVenueMap(replacement, COMPANY_ID));
+
+        assertEquals("Cannot reconfigure venue map while tickets are reserved or sold", refused.getMessage());
+        assertSame(before, event.getVenueMap());
     }
 
     // Construction-time invariant enforcement (issue #303): a freshly-constructed
