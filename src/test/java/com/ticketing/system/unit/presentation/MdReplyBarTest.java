@@ -83,6 +83,17 @@ class MdReplyBarTest {
     }
 
     @Test
+    void GivenAnEmptyInput_WhenTheUserSends_ThenNothingIsSent() {
+        List<String> sent = new ArrayList<>();
+        MdReplyBar bar = new MdReplyBar().onSend(text -> sent.add(text));
+        harness.attach(bar);
+
+        ViewHarness.click(sendButtonOf(bar));
+
+        assertEquals(List.of(), sent);
+    }
+
+    @Test
     void GivenTheBar_WhenBuilt_ThenTheInputIsNamedReply() {
         MdReplyBar bar = new MdReplyBar();
 
