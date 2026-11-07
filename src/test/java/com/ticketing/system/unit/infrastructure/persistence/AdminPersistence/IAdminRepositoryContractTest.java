@@ -5,11 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Behavioural contract every {@link AdminRepository} implementation must satisfy.
@@ -72,7 +77,7 @@ abstract class IAdminRepositoryContractTest {
         assertTrue(repo.findAll().isEmpty());
         repo.save(new Admin(1, "admin", "HASH", true));
         repo.save(new Admin(2, "second", "HASH2", false));
-        assertEquals(2, repo.findAll().size());
+        assertEquals(Set.of(1, 2), repo.findAll().stream().map(Admin::getId).collect(Collectors.toSet()));
     }
 
     // The boot-time rotation of the committed default password (ADR-014) changes a stored admin: a
@@ -92,12 +97,17 @@ abstract class IAdminRepositoryContractTest {
         assertEquals(1, repo.findAll().size(), "the admin is updated, not saved a second time");
     }
 
+    // IRepository's lock contract: reentrant, and released by one unlock per lock. The second
+    // lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread. The JPA
+    // adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
     @Test
-    void GivenNoSavedAdmin_WhenLockForUpdateAndUnlock_ThenDoesNotThrow() {
-        // Admin is never contended (created once at synchronized platform init); the lock
-        // primitives must simply be callable. The JPA adapter makes them no-ops (optimistic
-        // @Version handles any future contention).
+    @Timeout(value = RepositoryLockProbe.TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate(1);
         repo.lockForUpdate(1);
         repo.unlock(1);
+        repo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, 1);
     }
 }
