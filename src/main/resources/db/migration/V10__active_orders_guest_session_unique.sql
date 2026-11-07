@@ -22,8 +22,9 @@
 -- serves traffic on this schema, the guest carts it writes have a null guest_session_id, so the key protects
 -- them only once code from this release rewrites them or the sweeper removes them. Such an instance also
 -- leaves the key on a guest cart it gives a member at login, until code from this release rewrites that cart.
--- That blocks no one: the login keeps the session's id for the member's session, and no guest cart is made
--- on a member's session.
+-- That blocks no one: the login keeps the session's id for the member's session, and the guest paths refuse
+-- a member's session id. A guest request already past that check when the same browser's login commits can
+-- still save a guest cart on the session; the sweeper releases its holds once they expire.
 
 alter table active_orders add column guest_session_id varchar(255);
 
