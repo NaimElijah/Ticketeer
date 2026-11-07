@@ -121,6 +121,24 @@ class SystemAnalyticsServiceTest {
         assertEquals(0L, dto.purchaseThroughputHr());
     }
 
+    // Both windows include their start: a receipt exactly WINDOW minutes old is in the rate, one exactly an
+    // hour old is in the throughput, and a second older is out of each.
+    @Test
+    void GivenReceiptsAtAndJustOutsideBothWindowEdges_WhenComputeAnalytics_ThenEachEdgeIsInside() {
+        LocalDateTime base = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+        OrderReceipt atWindowEdge = receiptAt(base.minusMinutes(WINDOW));
+        OrderReceipt justOutsideWindow = receiptAt(base.minusMinutes(WINDOW).minusSeconds(1));
+        OrderReceipt atHourEdge = receiptAt(base.minusMinutes(60));
+        OrderReceipt justOutsideHour = receiptAt(base.minusMinutes(60).minusSeconds(1));
+        when(orderReceiptRepository.findGlobal(any()))
+                .thenReturn(List.of(atWindowEdge, justOutsideWindow, atHourEdge, justOutsideHour));
+
+        SystemAnalyticsDTO dto = service.computeAnalytics(ADMIN_TOKEN);
+
+        assertEquals(1.0 / WINDOW, dto.purchaseRatePerMin(), 1e-9, "only the receipt at the window's edge");
+        assertEquals(3L, dto.purchaseThroughputHr(), "all but the receipt a second over the hour");
+    }
+
     private static OrderReceipt receiptAt(LocalDateTime purchaseTime) {
         OrderReceipt receipt = mock(OrderReceipt.class);
         when(receipt.getPurchaseTime()).thenReturn(purchaseTime);

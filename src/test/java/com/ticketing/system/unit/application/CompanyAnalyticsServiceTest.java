@@ -178,6 +178,22 @@ class CompanyAnalyticsServiceTest {
         assertEquals(20.0, stats.revenue30d());
     }
 
+    // The window's start is inclusive: a sale exactly thirty days before the clock counts, one a second
+    // earlier does not.
+    @Test
+    void GivenSalesAtAndJustBeforeTheThirtyDayCutoff_WhenDashboard_ThenOnlyTheOneAtTheCutoffCounts() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt justBefore = receipt(false, NOW.minusDays(30).minusSeconds(1), List.of(line(1, 50.0, EVENT_A)));
+        OrderReceipt atTheCutoff = receipt(false, NOW.minusDays(30), List.of(line(2, 20.0, EVENT_A)));
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(justBefore, atTheCutoff));
+
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
+
+        assertEquals(1, stats.ticketsSold30d());
+        assertEquals(20.0, stats.revenue30d());
+    }
+
     @Test
     void GivenSalesInquiriesAndEventsOfTheCompany_WhenDashboard_ThenAggregatesLiveCountersForTheCompany() {
         givenOwner();
