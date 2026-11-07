@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,6 +97,22 @@ abstract class IUserRepositoryContractTest {
     @Test
     void GivenNoSuchUser_WhenGetUserById_ThenThrowsUserNotFound() {
         assertThrows(UserNotFoundException.class, () -> repo.getUserById(9999));
+    }
+
+    // Backs the admin's broadcast to every member (II.6.3.2).
+    @Test
+    void GivenTwoSavedUsers_WhenFindAll_ThenReturnsBoth() {
+        int alice = repo.nextId();
+        repo.save(new User(alice, "alice", "alice@example.com", "HASH", 20));
+        int bob = repo.nextId();
+        repo.save(new User(bob, "bob", "bob@example.com", "HASH", 30));
+
+        assertEquals(Set.of(alice, bob), repo.findAll().stream().map(User::getUserId).collect(Collectors.toSet()));
+    }
+
+    @Test
+    void GivenNoUsers_WhenFindAll_ThenReturnsEmpty() {
+        assertTrue(repo.findAll().isEmpty());
     }
 
     @Test
