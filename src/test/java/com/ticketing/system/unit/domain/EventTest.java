@@ -299,28 +299,17 @@ class EventTest extends BaseDomainTest {
         assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A2"));
     }
 
+    // Reservation does not consult a purchase policy; the policy is checked by validateEffectivePolicy.
     @Test
-    void GivenPurchasePolicyRejectsQuantity_WhenReserveInventory_ThenThrowsException() {
+    void GivenScheduledEvent_WhenReserveInventory_ThenRefusedAsNotOnSaleAndNothingReserved() {
         StandingZone standingZone = track(new StandingZone(1, "General Admission", 10, 50.0));
+        Event event = createEventWithZones(List.of(standingZone));
 
-        PurchasePolicy rejectingPolicy = new NoPurchasePolicy();
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> event.reserveInventory(1, InventorySelection.standing(1)));
 
-        Event event = track(new Event(
-                EVENT_ID,
-                "Concert",
-                4.5,
-                ARTISTS,
-                EventCategory.CONCERT,
-                COMPANY_ID,
-                EventStatus.SCHEDULED,
-                new VenueMap(1, LOCATION, List.of(standingZone)),
-                List.of(new ShowDate(JERUSALEM_1930_WALL_TIME.plusDays(15), JERUSALEM_1930_WALL_TIME.plusDays(15).plusHours(2))),
-                ZoneId.of("Asia/Jerusalem"),
-                rejectingPolicy,
-                noDiscountPolicy()));
-
-        assertThrows(IllegalStateException.class, () -> event.reserveInventory(1, InventorySelection.standing(1)));
-
+        assertEquals("Cannot reserve tickets for an event that is not on sale", refused.getMessage());
+        assertEquals(EventStatus.SCHEDULED, event.getStatus());
         assertEquals(10, standingZone.getAvailableAmount());
         assertEquals(0, standingZone.getReservedAmount());
     }
