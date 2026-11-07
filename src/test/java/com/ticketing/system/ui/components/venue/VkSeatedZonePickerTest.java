@@ -2,6 +2,9 @@ package com.ticketing.system.ui.components.venue;
 
 import org.junit.jupiter.api.Test;
 
+import com.vaadin.flow.component.ClickEvent;
+import com.vaadin.flow.component.ComponentUtil;
+
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -14,7 +17,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * are plain Java objects that require no VaadinService to instantiate.
  *
  * <p>Click simulation uses {@link VkSeatedZonePicker#simulateClick(String)},
- * a package-private test hook that mirrors the real click-listener path.
+ * a package-private test hook that mirrors the real click-listener path. That hook repeats the
+ * picker's own "only a free seat" check, so the tests that pin the tiles' own listeners fire a
+ * click on the tile itself, and read the state the tile shows.
  */
 class VkSeatedZonePickerTest {
 
@@ -28,13 +33,10 @@ class VkSeatedZonePickerTest {
     // ── construction ────────────────────────────────────────────────────────
 
     @Test
-    void GivenEmptySeatList_WhenConstructed_ThenDoesNotThrow() {
-        assertDoesNotThrow(() -> new VkSeatedZonePicker(List.of(), null));
-    }
-
-    @Test
-    void GivenMixedStates_WhenConstructed_ThenDoesNotThrow() {
-        assertDoesNotThrow(() -> new VkSeatedZonePicker(MIXED_SEATS, null));
+    void GivenEmptySeatList_WhenConstructed_ThenItHasNoSelection() {
+        var picker = new VkSeatedZonePicker(List.of(), null);
+        assertFalse(picker.hasSelection());
+        assertNull(picker.getSelection());
     }
 
     // ── initial state ────────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ class VkSeatedZonePickerTest {
     }
 
     @Test
-    void GivenEmptyPicker_WhenClearSelection_ThenNoException() {
+    void GivenNoSelection_WhenClearSelection_ThenNoException() {
         var picker = new VkSeatedZonePicker(MIXED_SEATS, null);
         assertDoesNotThrow(picker::clearSelection);
     }
@@ -199,6 +201,54 @@ class VkSeatedZonePickerTest {
         assertEquals(1, count.get());
     }
 
+    // ---- #189: the tiles' own click listeners, and the state each tile shows ----
+
+    @Test
+    void GivenAFreeSeat_WhenAClickReachesItsTile_ThenItIsSelectedAndTheTileReadsMine() {
+        var picker = new VkSeatedZonePicker(MIXED_SEATS, null);
+
+        clickTile(picker, "A1");
+
+        assertEquals(List.of("A1"), picker.getSelection().getSeatNumbers());
+        assertTileState(picker, "A1", VkSeat.State.mine);
+    }
+
+    // The browser sends no click on a held seat's tile, which is disabled; if one arrives anyway, the picker
+    // must not take the seat.
+    @Test
+    void GivenAHeldSeat_WhenAClickReachesItsTile_ThenItIsNotSelectedAndStaysHeld() {
+        var picker = new VkSeatedZonePicker(MIXED_SEATS, null);
+
+        clickTile(picker, "A3");
+
+        assertFalse(picker.hasSelection());
+        assertTileState(picker, "A3", VkSeat.State.held);
+    }
+
+    @Test
+    void GivenASelectedSeat_WhenDeselected_ThenItsTileIsFreeAgain() {
+        var picker = new VkSeatedZonePicker(MIXED_SEATS, null);
+        clickTile(picker, "A1");
+
+        picker.deselect("A1");
+
+        assertTileState(picker, "A1", VkSeat.State.free);
+    }
+
+    @Test
+    void GivenTwoSelectedSeats_WhenClearSelection_ThenBothTilesAreFreeAgainAndTheOthersKeepTheirState() {
+        var picker = new VkSeatedZonePicker(MIXED_SEATS, null);
+        clickTile(picker, "A1");
+        clickTile(picker, "A2");
+
+        picker.clearSelection();
+
+        assertTileState(picker, "A1", VkSeat.State.free);
+        assertTileState(picker, "A2", VkSeat.State.free);
+        assertTileState(picker, "A3", VkSeat.State.held);
+        assertTileState(picker, "A4", VkSeat.State.sold);
+    }
+
     @Test
     void GivenNullCallback_WhenSeatToggledDeselectedAndCleared_ThenDoesNotThrow() {
         var picker = new VkSeatedZonePicker(MIXED_SEATS, null);
@@ -207,5 +257,30 @@ class VkSeatedZonePickerTest {
             picker.deselect("A1");
             picker.clearSelection();
         });
+    }
+
+    private static VkSeat tile(VkSeatedZonePicker picker, String label) {
+        return picker.getChildren()
+            .flatMap(canvas -> canvas.getChildren())
+            .filter(VkSeat.class::isInstance)
+            .map(VkSeat.class::cast)
+            .filter(seat -> label.equals(seat.getText()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no tile for seat " + label));
+    }
+
+    // A click event as the tile's listener takes it, fired whatever the tile's state.
+    private static void clickTile(VkSeatedZonePicker picker, String label) {
+        VkSeat tile = tile(picker, label);
+        ComponentUtil.fireEvent(tile, new ClickEvent<>(tile));
+    }
+
+    // The tile shows exactly this state's class, and says it: pressed for the buyer's own pick.
+    private static void assertTileState(VkSeatedZonePicker picker, String label, VkSeat.State state) {
+        VkSeat tile = tile(picker, label);
+        List<String> stateClasses = tile.getClassNames().stream().filter(c -> c.startsWith("vk-seat-")).toList();
+        assertEquals(List.of("vk-seat-" + state.name()), stateClasses, "seat " + label + "'s state class");
+        assertEquals(state == VkSeat.State.mine ? "true" : state == VkSeat.State.free ? "false" : null,
+            tile.getElement().getAttribute("aria-pressed"), "seat " + label + "'s aria-pressed");
     }
 }
