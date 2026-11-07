@@ -1,10 +1,17 @@
 package com.ticketing.system.unit.presentation;
 
 import static com.ticketing.system.unit.presentation.ViewHarness.field;
+import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,15 +19,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
+import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.auth.RegisterView;
+import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
+import com.vaadin.flow.router.AfterNavigationEvent;
 
 /**
  * A field that its own rule (required, a range, a length, a format) marks invalid says what is wrong (#189,
@@ -33,6 +44,9 @@ class FieldOwnRuleMessagesTest {
     private static final String TYPED = "x";
     // Well formed, and one character over the 254 registration accepts.
     private static final String EMAIL_OF_255_CHARACTERS = "a".repeat(64) + "@" + "b".repeat(186) + ".com";
+    private static final String MALFORMED_EMAIL = "bob@";
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
+    private static final String GUEST_SESSION = "guest-1";
 
     private ViewHarness harness;
 
@@ -100,6 +114,71 @@ class FieldOwnRuleMessagesTest {
         when(availability.check(any())).thenReturn(new UsernameAvailabilityPresenter.Outcome.Empty());
         RegisterView view = new RegisterView(mock(RegisterPresenter.class), availability, mock(SessionIdentity.class));
         harness.attach(view);
+        return view;
+    }
+
+    // ---- CheckoutView, as a guest ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Cardholder name", "Card number", "Expiry", "CVC"})
+    void GivenTheGuestCheckout_WhenARequiredCardFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        Component field = field(guestCheckout(), Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
+    }
+
+    @Test
+    void GivenTheGuestCheckout_WhenTheEmailIsEmptied_ThenItSaysWhatToEnter() {
+        EmailField email = field(guestCheckout(), EmailField.class, "Your email");
+
+        typeThenEmpty(email);
+
+        assertSaysWhatIsWrong(email, "an emptied guest email");
+    }
+
+    @Test
+    void GivenTheGuestCheckout_WhenTheEmailIsMalformed_ThenItSaysWhatIsWrong() {
+        EmailField email = field(guestCheckout(), EmailField.class, "Your email");
+
+        email.setValue(MALFORMED_EMAIL);
+
+        assertSaysWhatIsWrong(email, "\"" + MALFORMED_EMAIL + "\"");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 121})
+    void GivenTheGuestCheckout_WhenTheAgeIsOutsideItsRange_ThenItSaysWhatIsWrong(int age) {
+        IntegerField field = field(guestCheckout(), IntegerField.class, "Your age");
+
+        field.setValue(age);
+
+        assertSaysWhatIsWrong(field, "an age of " + age);
+    }
+
+    @Test
+    void GivenTheGuestCheckout_WhenTheAgeIsEmptied_ThenItSaysWhatToEnter() {
+        IntegerField field = field(guestCheckout(), IntegerField.class, "Your age");
+        field.setValue(RegisterPresenter.MIN_AGE);
+
+        field.clear();
+
+        assertSaysWhatIsWrong(field, "an emptied guest age");
+    }
+
+    private CheckoutView guestCheckout() {
+        CheckoutPresenter presenter = mock(CheckoutPresenter.class);
+        when(presenter.resolveIdentity()).thenReturn(new CheckoutPresenter.Identity(false, null, GUEST_SESSION, 0));
+        LocalDateTime added = LocalDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC);
+        ActiveOrderDTO order = new ActiveOrderDTO(0, GUEST_SESSION, added, 300, 10.0,
+            List.of(new ActiveOrderDTO.CartLineDTO(5, "Coldplay", 8, "A1", 10.0, added)));
+        when(presenter.loadOrder()).thenReturn(
+            new CheckoutPresenter.LoadOutcome.Loaded(order, new CheckoutPresenter.Pricing(1000, 1000)));
+        CheckoutView view = new CheckoutView(presenter, CLOCK);
+        harness.attach(view);
+        view.beforeEnter(routeTo());
+        view.afterNavigation(mock(AfterNavigationEvent.class));
         return view;
     }
 
