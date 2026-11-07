@@ -1,7 +1,9 @@
 package com.ticketing.system.unit.presentation;
 
 import static com.ticketing.system.unit.presentation.ViewHarness.field;
+import static com.ticketing.system.unit.presentation.ViewHarness.find;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -10,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -24,10 +27,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
+import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.presenters.company.ManagerInvitationPresenter;
@@ -44,6 +49,8 @@ import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
 import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
+import com.ticketing.system.ui.views.catalog.BrowseEventsView;
+import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.EventManagementView;
 import com.ticketing.system.ui.views.company.ManagerInvitationView;
@@ -55,6 +62,7 @@ import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.datetimepicker.DateTimePicker;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.shared.HasValidationProperties;
@@ -83,6 +91,7 @@ class FieldOwnRuleMessagesTest {
     private static final int COMPLAINT_DETAILS_LIMIT = 1000;
     private static final String RATING = "Rating (0–5)";
     private static final VenueLimitsProperties VENUE_LIMITS = new VenueLimitsProperties(12, 49_500, 1_000_000, 100_000);
+    private static final LocalDate START_DATE = LocalDate.of(2027, 8, 10);
 
     private ViewHarness harness;
 
@@ -479,6 +488,77 @@ class FieldOwnRuleMessagesTest {
         VenueMapEditorView view = new VenueMapEditorView(mock(VenueMapPresenter.class), VENUE_LIMITS);
         harness.attach(view);
         return view;
+    }
+
+    // ---- BrowseEventsView: the filters ----
+
+    // Below the minimum, above the maximum, and off the step of 10.
+    @ParameterizedTest
+    @ValueSource(ints = {-10, 1010, 15})
+    void GivenTheBrowsePage_WhenAPriceBoundBreaksItsRule_ThenItSaysWhatIsWrong(int price) {
+        for (IntegerField bound : bounds(browsePage(), IntegerField.class, 2)) {
+            bound.setValue(price);
+
+            assertSaysWhatIsWrong(bound, "a price bound of " + price);
+        }
+    }
+
+    // Below the minimum, above the maximum, and off the step of 0.5.
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.5, 5.5, 2.3})
+    void GivenTheBrowsePage_WhenARatingBoundBreaksItsRule_ThenItSaysWhatIsWrong(double rating) {
+        for (NumberField bound : bounds(browsePage(), NumberField.class, 4)) {
+            bound.setValue(rating);
+
+            assertSaysWhatIsWrong(bound, "a rating bound of " + rating);
+        }
+    }
+
+    @Test
+    void GivenTheBrowsePage_WhenTheEndDateIsBeforeTheStartDate_ThenTheEndDateSaysWhatIsWrong() {
+        BrowseEventsView view = browsePage();
+        customPicker(view, CatalogFilterSupport.CUSTOM_FROM).setValue(START_DATE);
+        DatePicker end = customPicker(view, CatalogFilterSupport.CUSTOM_TO);
+
+        end.setValue(START_DATE.minusDays(1));
+
+        assertSaysWhatIsWrong(end, "an end date before the start date");
+    }
+
+    @Test
+    void GivenTheBrowsePage_WhenTheStartDateIsAfterTheEndDate_ThenTheStartDateSaysWhatIsWrong() {
+        BrowseEventsView view = browsePage();
+        customPicker(view, CatalogFilterSupport.CUSTOM_TO).setValue(START_DATE);
+        DatePicker start = customPicker(view, CatalogFilterSupport.CUSTOM_FROM);
+
+        start.setValue(START_DATE.plusDays(1));
+
+        assertSaysWhatIsWrong(start, "a start date after the end date");
+    }
+
+    private BrowseEventsView browsePage() {
+        BrowseEventsPresenter presenter = mock(BrowseEventsPresenter.class);
+        when(presenter.search(any(), any())).thenReturn(new ListOutcome.Loaded<>(List.of()));
+        when(presenter.countries()).thenReturn(new ListOutcome.Loaded<>(List.of()));
+        BrowseEventsView view = new BrowseEventsView(presenter, mock(SessionIdentity.class),
+            InboxViewHarness.displayTime());
+        harness.attach(view);
+        return view;
+    }
+
+    // The custom range's pickers carry their name as an accessible name, not a label.
+    private static DatePicker customPicker(Component view, String name) {
+        return find(view, DatePicker.class).stream()
+            .filter(picker -> picker.getAriaLabel().filter(name::equals).isPresent())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no date picker named \"" + name + "\""));
+    }
+
+    // Each bound of a range filter, checked to be there, so a loop over them cannot pass on none.
+    private static <T extends Component> List<T> bounds(Component view, Class<T> type, int expected) {
+        List<T> bounds = find(view, type);
+        assertEquals(expected, bounds.size(), "the filters' " + type.getSimpleName() + " bounds");
+        return bounds;
     }
 
     // ---- shared ----

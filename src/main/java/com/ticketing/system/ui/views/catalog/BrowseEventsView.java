@@ -75,6 +75,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
     private static final List<String> CATEGORIES = CatalogFilterSupport.CATEGORIES;
 
+    private static final int PRICE_FILTER_MAX = 1000;
+    private static final String PRICE_OUT_OF_RANGE =
+            "Enter a price from " + CatalogFilterSupport.PRICE_MIN + " to " + PRICE_FILTER_MAX + ".";
+
     private static final List<String> SORTS = List.of(
             "Date · soonest", "Price · low to high", "Price · high to low",
             "Rating · high to low", "Rating · low to high");
@@ -255,6 +259,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         customFromPicker = new DatePicker();
         customFromPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_FROM);
         customFromPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_FROM);
+        customFromPicker.setI18n(new DatePicker.DatePickerI18n()
+                .setMaxErrorMessage(CatalogFilterSupport.START_AFTER_END)
+                .setBadInputErrorMessage(CatalogFilterSupport.NOT_A_DATE));
         customFromPicker.addValueChangeListener(e -> {
             customToPicker.setMin(e.getValue());   // null clears the constraint
             runCustomSearchIfValid();
@@ -263,6 +270,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         customToPicker = new DatePicker();
         customToPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_TO);
         customToPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_TO);
+        customToPicker.setI18n(new DatePicker.DatePickerI18n()
+                .setMinErrorMessage(CatalogFilterSupport.END_BEFORE_START)
+                .setBadInputErrorMessage(CatalogFilterSupport.NOT_A_DATE));
         customToPicker.addValueChangeListener(e -> {
             customFromPicker.setMax(e.getValue());
             runCustomSearchIfValid();
@@ -333,9 +343,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Component buildPriceRange() {
         priceMin = new IntegerField();
         priceMin.setPlaceholder(CatalogFilterSupport.BOUND_MIN);
-        priceMin.setMin(0);
-        priceMin.setMax(1000);
-        priceMin.setStep(10);
+        priceMin.setMin(CatalogFilterSupport.PRICE_MIN);
+        priceMin.setMax(PRICE_FILTER_MAX);
+        priceMin.setStep(CatalogFilterSupport.PRICE_STEP);
+        priceMin.setI18n(priceRules());
         priceMin.setPrefixComponent(new Span("$"));
         priceMin.setValueChangeMode(ValueChangeMode.LAZY);
         priceMin.getStyle().set("flex", "1 1 0");
@@ -347,9 +358,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
         priceMax = new IntegerField();
         priceMax.setPlaceholder(CatalogFilterSupport.BOUND_MAX);
-        priceMax.setMin(0);
-        priceMax.setMax(1000);
-        priceMax.setStep(10);
+        priceMax.setMin(CatalogFilterSupport.PRICE_MIN);
+        priceMax.setMax(PRICE_FILTER_MAX);
+        priceMax.setStep(CatalogFilterSupport.PRICE_STEP);
+        priceMax.setI18n(priceRules());
         priceMax.setPrefixComponent(new Span("$"));
         priceMax.setValueChangeMode(ValueChangeMode.LAZY);
         priceMax.getStyle().set("flex", "1 1 0");
@@ -360,6 +372,14 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         });
 
         return rangeWrap("Price range", priceMin, priceMax);
+    }
+
+    private static IntegerField.IntegerFieldI18n priceRules() {
+        return new IntegerField.IntegerFieldI18n()
+                .setBadInputErrorMessage(CatalogFilterSupport.PRICE_NOT_A_WHOLE_NUMBER)
+                .setMinErrorMessage(PRICE_OUT_OF_RANGE)
+                .setMaxErrorMessage(PRICE_OUT_OF_RANGE)
+                .setStepErrorMessage(CatalogFilterSupport.PRICE_OFF_STEP);
     }
 
     private Component buildEventRatingRange() {
@@ -394,9 +414,14 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private static NumberField ratingField(String placeholder, Consumer<Double> onChange) {
         NumberField f = new NumberField();
         f.setPlaceholder(placeholder);
-        f.setMin(0);
-        f.setMax(5);
-        f.setStep(0.5);
+        f.setMin(CatalogFilterSupport.RATING_MIN);
+        f.setMax(CatalogFilterSupport.RATING_MAX);
+        f.setStep(CatalogFilterSupport.RATING_STEP);
+        f.setI18n(new NumberField.NumberFieldI18n()
+                .setBadInputErrorMessage(CatalogFilterSupport.RATING_NOT_A_NUMBER)
+                .setMinErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE)
+                .setMaxErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE)
+                .setStepErrorMessage(CatalogFilterSupport.RATING_OFF_STEP));
         f.setValueChangeMode(ValueChangeMode.LAZY);
         f.getStyle().set("flex", "1 1 0");
         f.addValueChangeListener(e -> onChange.accept(e.getValue()));
