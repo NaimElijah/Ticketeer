@@ -421,8 +421,9 @@ class AdminAndMemberSessionAcceptanceTest {
         assertEquals(heldLines, cartOf(member).getItems().size(), "the member's cart is still held");
     }
 
-    // The member's cart carries the member's session id, so a guest checkout that took that id could reach
-    // the member's cart; the guest gate refuses the id before it does.
+    // The member's cart carries the member's session id, yet a guest checkout that took that id cannot
+    // reach it: the guest gate refuses a member session's id before any lookup, and getBySessionId returns
+    // no member cart anyway.
     @Test
     void GivenALiveMembersSessionId_WhenCheckoutGuest_ThenSessionExpiredAndNothingIsBought() {
         MemberWithCartOnItsSession member = memberWhoseCartIsBoundToTheirSessionId();
