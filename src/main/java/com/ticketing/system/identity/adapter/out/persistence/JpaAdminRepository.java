@@ -20,7 +20,8 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrent writes are guarded by
  * {@code Admin}'s {@code @Version} optimistic lock within the surrounding transaction
  * (per the {@code IRepository} contract — JPA replaces the in-memory write-lock with
- * version checks). Admin is written once at platform init, so contention is nil.
+ * version checks). Admin is written at platform init and by the boot-time password rotation (ADR-014),
+ * so contention is nil.
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
