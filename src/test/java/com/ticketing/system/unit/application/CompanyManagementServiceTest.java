@@ -637,6 +637,10 @@ public class CompanyManagementServiceTest {
                 ProductionCompany capturedCompany = companyCaptor.getValue();
                 assertEquals("Epic Productions", capturedCompany.getName());
                 assertEquals(userId, capturedCompany.getOwnerId());
+                // The founder owns the company from the start: an active owner appointment, not an offer.
+                assertTrue(membershipService.isOwnerInCompany(userId, expectedCompanyId),
+                                "the founder holds an active owner appointment");
+                assertNull(membershipService.getPendingCompanyAppointment(userId, expectedCompanyId));
         }
 
         @Test
@@ -1334,6 +1338,160 @@ public class CompanyManagementServiceTest {
                 assertEquals("User already has an pending appointment in this company", refused.getMessage());
                 assertEquals(List.of("Manager:ACTIVE:by" + OWNER_ID, "Owner:PENDING:by" + OWNER_ID), appointmentsOfTarget());
                 verifyNoInteractions(eventPublisher);
+        }
+
+        // ---- organization refusals with no test before #189 ------------------------------------
+
+        @Test
+        public void GivenCoOwner_WhenRevokeTheFoundersAppointment_ThenUnauthorizedAndTheFounderStaysAnOwner() {
+                ProductionCompany company = companyWithCoOwnerWhoInvitedAManager(true);
+                clearInvocations(eventPublisher);
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.RevokeAppointment(CO_OWNER_TOKEN,
+                                                new AppointmentRevokeDTO(COMPANY_ID, OWNER_ID)));
+
+                assertEquals("Not authorized to perform action: revoke the appointment of a company founder",
+                                refused.getMessage());
+                assertTrue(company.isOwner(OWNER_ID));
+                assertTrue(membershipService.isOwnerInCompany(OWNER_ID, COMPANY_ID));
+                verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        public void GivenAManager_WhenAppointOwner_ThenUnauthorizedAndNoOfferMade() {
+                founderAppointedTheTargetAsManager();
+                clearInvocations(eventPublisher);
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.appointOwner(TARGET_TOKEN,
+                                                new OwnerAppointmentRequestDTO(COMPANY_ID, CO_OWNER_ID)));
+
+                assertEquals("Not authorized to perform action: User is not an owner in this company", refused.getMessage());
+                assertEquals(List.of(), membershipService.getAllCompanyAppointments(CO_OWNER_ID));
+                verifyNoInteractions(eventPublisher);
+        }
+
+        private static final String POSITIVE_IDS = "companyId and targetUserId must be positive integers";
+
+        @Test
+        public void GivenCompanyIdZero_WhenAppointOwner_ThenIllegalArgumentBeforeAnyLookup() {
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(0, TARGET_USER_ID)));
+
+                assertEquals(POSITIVE_IDS, refused.getMessage());
+                verifyNoInteractions(sessionManager, mockUserRepo, mockCompanyRepo, eventPublisher);
+        }
+
+        @Test
+        public void GivenTargetUserIdZero_WhenAppointManager_ThenIllegalArgumentBeforeAnyLookup() {
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> companyService.appointManager(OWNER_TOKEN,
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, 0, defaultPermissions)));
+
+                assertEquals(POSITIVE_IDS, refused.getMessage());
+                verifyNoInteractions(sessionManager, mockUserRepo, mockCompanyRepo, eventPublisher);
+        }
+
+        @Test
+        public void GivenCompanyIdZero_WhenRespondToAppointment_ThenIllegalArgumentBeforeAnyLookup() {
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(0, true)));
+
+                assertEquals("companyId must be a positive integer", refused.getMessage());
+                verifyNoInteractions(sessionManager, mockUserRepo, mockCompanyRepo, eventPublisher);
+        }
+
+        // One is the smallest id the guards accept, so the offer is made.
+        @Test
+        public void GivenCompanyIdOne_WhenAppointOwner_ThenTheOfferIsMade() {
+                final int firstCompanyId = 1;
+                when(mockCompanyRepo.getCompanyById(firstCompanyId)).thenReturn(new ProductionCompany(firstCompanyId,
+                                OWNER_ID, COMPANY_1_NAME, CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+                membershipService.addFounderAppointment(OWNER_ID, firstCompanyId);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "offeree", TARGET_TOKEN);
+
+                companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(firstCompanyId, TARGET_USER_ID));
+
+                assertNotNull(membershipService.getPendingCompanyAppointment(TARGET_USER_ID, firstCompanyId));
+        }
+
+        @Test
+        public void GivenAManager_WhenListPendingInvitations_ThenUnauthorized() {
+                founderAppointedTheTargetAsManager();
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.listPendingInvitations(TARGET_TOKEN, COMPANY_ID));
+
+                assertEquals("Not authorized to perform action: User is not an owner in this company", refused.getMessage());
+        }
+
+        @Test
+        public void GivenOwnerManagerAndPendingOffereeInThreeCompanies_WhenFindOwnedCompanies_ThenOnlyTheOwnedOne() {
+                final int managedCompanyId = 200;
+                final int offeredCompanyId = 300;
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(new ProductionCompany(COMPANY_ID, OWNER_ID,
+                                COMPANY_1_NAME, CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+                when(mockCompanyRepo.getCompanyById(managedCompanyId)).thenReturn(new ProductionCompany(managedCompanyId,
+                                CO_OWNER_ID, "Managed Co", CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+                when(mockCompanyRepo.getCompanyById(offeredCompanyId)).thenReturn(new ProductionCompany(offeredCompanyId,
+                                CO_OWNER_ID, "Offered Co", CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5));
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                membershipService.addFounderAppointment(CO_OWNER_ID, managedCompanyId);
+                membershipService.receiveManagerAppointment(OWNER_ID, managedCompanyId, CO_OWNER_ID, defaultPermissions);
+                membershipService.acceptInvitation(OWNER_ID, managedCompanyId);
+                membershipService.addFounderAppointment(CO_OWNER_ID, offeredCompanyId);
+                membershipService.receiveOwnerAppointment(OWNER_ID, offeredCompanyId, CO_OWNER_ID);
+
+                List<ProductionCompanyDTO> owned = companyService.findOwnedCompanies(OWNER_TOKEN);
+
+                assertEquals(List.of(COMPANY_ID), owned.stream().map(ProductionCompanyDTO::companyId).toList());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", "   "})
+        @NullSource
+        public void GivenNoIdentifier_WhenResolveUserId_ThenIllegalArgumentAndNoLookup(String identifier) {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> companyService.resolveUserId(OWNER_TOKEN, identifier));
+
+                assertEquals("Identifier must not be blank", refused.getMessage());
+                verify(mockUserRepo, never()).findByUsername(any());
+                verify(mockUserRepo, never()).findByEmail(any());
+        }
+
+        @Test
+        public void GivenAnUnknownPlainUsername_WhenResolveUserId_ThenUserNotFound() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                when(mockUserRepo.findByUsername("nobody")).thenReturn(Optional.empty());
+
+                assertThrowsExactly(UserNotFoundException.class, () -> companyService.resolveUserId(OWNER_TOKEN, "nobody"));
+        }
+
+        @Test
+        public void GivenAMemberToken_WhenAdminViewOrgTree_ThenInvalidTokenAndNoCompanyRead() {
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+
+                InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                                () -> companyService.adminViewOrgTree(OWNER_TOKEN, COMPANY_ID));
+
+                assertEquals("Invalid authentication token: Admin privileges required", refused.getMessage());
+                verifyNoInteractions(mockCompanyRepo);
+        }
+
+        @Test
+        public void GivenAnAdminToken_WhenAdminViewOrgTree_ThenTheTreeOfACompanyTheAdminIsNoMemberOf() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+                when(sessionManager.validateAdminToken(ADMIN_TOKEN)).thenReturn(true);
+
+                OrganizationalTreeNodeDTO founder = companyService.adminViewOrgTree(ADMIN_TOKEN, COMPANY_ID);
+
+                assertEquals(OWNER_ID, founder.userId());
+                assertEquals(List.of(CO_OWNER_ID), childIds(founder));
         }
 
         // ---- a manager invitation is a pending offer, not a role change (#187) ----------------
