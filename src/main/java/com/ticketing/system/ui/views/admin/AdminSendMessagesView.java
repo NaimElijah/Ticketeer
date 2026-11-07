@@ -8,6 +8,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkChip;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkGrid;
 import com.ticketing.system.ui.components.kit.LkIcon;
@@ -58,6 +59,8 @@ public class AdminSendMessagesView extends LkPage {
     private static final String NO_RECIPIENT = "Add at least one recipient, or pick all members / all producers.";
     private static final String RECIPIENTS = "Recipients";
     private static final String SEARCH_MEMBERS = "Search members";
+    private static final String ENTER_SUBJECT = "Enter a subject.";
+    private static final String WRITE_MESSAGE = "Write the message.";
 
     private final AdminSendMessagesPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
@@ -102,10 +105,12 @@ public class AdminSendMessagesView extends LkPage {
 
         subject.setPlaceholder("Short, clear headline");
         subject.setRequired(true);
+        LkFieldRules.sayWhenEmpty(subject, ENTER_SUBJECT);
         subject.setWidthFull();
         LkTextLimit.apply(subject);
         body.setPlaceholder("Body of the message…");
         body.setRequired(true);
+        LkFieldRules.sayWhenEmpty(body, WRITE_MESSAGE);
         body.setHeight("160px");
         body.setWidthFull();
         LkTextLimit.apply(body);
@@ -232,10 +237,10 @@ public class AdminSendMessagesView extends LkPage {
     private void send() {
         errors.clear();
         if (subject.isEmpty()) {
-            errors.reject(subject, "Enter a subject.");
+            errors.reject(subject, ENTER_SUBJECT);
         }
         if (body.isEmpty()) {
-            errors.reject(body, "Write the message.");
+            errors.reject(body, WRITE_MESSAGE);
         }
         if (!errors.isEmpty()) {
             refuse("Subject and body are required.");

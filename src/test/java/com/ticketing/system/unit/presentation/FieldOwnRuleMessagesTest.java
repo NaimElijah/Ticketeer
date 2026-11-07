@@ -26,9 +26,11 @@ import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
+import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.admin.AdminComplaintRespondView;
+import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
 import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
@@ -234,6 +236,23 @@ class FieldOwnRuleMessagesTest {
         typeThenEmpty(reply);
 
         assertSaysWhatIsWrong(reply, "an emptied response");
+    }
+
+    // ---- AdminSendMessagesView ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Subject", "Body"})
+    void GivenTheSendMessagesPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        ViewHarness.signInAdmin();
+        AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
+        when(presenter.load(any())).thenReturn(new AdminSendMessagesPresenter.Outcome.Success(List.of()));
+        AdminSendMessagesView view = new AdminSendMessagesView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
+        Component field = field(view, Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
     }
 
     // ---- shared ----
