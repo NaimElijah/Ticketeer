@@ -16,7 +16,8 @@ import com.ticketing.system.shared.IRepository;
  * <li>Member carts are looked up by userId.</li>
  * <li>Guest carts are looked up by sessionId.</li>
  * </ul>
- * Both methods return {@link Optional} to make absence explicit.
+ * {@link #getBySessionId} returns an {@link Optional}; {@link #getByUserId} returns {@code null} when the
+ * member has no cart.
  *
  * <p>The {@link IRepository} contract uses {@link String} as the lock-id type
  * — callers should normalize to {@code "user:" + userId} or {@code "sess:" + sessionId}
