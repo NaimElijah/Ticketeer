@@ -3,6 +3,7 @@ package com.ticketing.system.unit.presentation;
 import static com.ticketing.system.unit.presentation.ViewHarness.MEMBER_TOKEN;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static com.ticketing.system.unit.presentation.ViewHarness.text;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -68,5 +69,47 @@ class ReceiptRefundsTest {
         // ReceiptPresenter sums the refunds. The sum, $45.00, differs from what stays paid, $55.00, so a page
         // showing the remainder as the refund fails (#189).
         assertTrue(shown.contains("$45.00"), "expected the $45.00 refunded in all, in: " + shown);
+    }
+
+    // ---- the receipt's other refund states (#189) ----
+
+    @Test
+    void GivenAFullyRefundedReceipt_WhenTheMemberOpensIt_ThenItReadsRefundedAndItsTotalIsTheRefund() {
+        ReceiptView view = receiptView(new PurchaseRecordDTO(
+            RECEIPT_ID, 7, null, PAID_AT, 100.00, RefundStatus.FULL,
+            List.of(
+                new TransactionRecordDTO("PAYMENT_CHARGE", "WSEP", "TX-1", 100.00, "USD", PAID_AT),
+                new TransactionRecordDTO("REFUND", "WSEP", "RF-1", 100.00, "USD", PAID_AT.plusDays(1))),
+            List.of(), "alice"));
+
+        String shown = text(view);
+        assertTrue(shown.contains("Refund status"), "a refunded receipt says how it was refunded, in: " + shown);
+        assertTrue(shown.contains("Refunded"), "a fully refunded receipt reads Refunded, in: " + shown);
+        assertFalse(shown.contains("Partly refunded"), "a full refund is not a partial one, in: " + shown);
+        assertTrue(shown.contains("Total refunded"), "its total is the amount refunded, in: " + shown);
+    }
+
+    @Test
+    void GivenAnUnrefundedReceipt_WhenTheMemberOpensIt_ThenNoRefundStatusShowsAndItsTotalIsWhatWasPaid() {
+        ReceiptView view = receiptView(new PurchaseRecordDTO(
+            RECEIPT_ID, 7, null, PAID_AT, 100.00, RefundStatus.NONE,
+            List.of(new TransactionRecordDTO("PAYMENT_CHARGE", "WSEP", "TX-1", 100.00, "USD", PAID_AT)),
+            List.of(), "alice"));
+
+        String shown = text(view);
+        assertTrue(shown.contains("Total paid"), "its total is what was paid, in: " + shown);
+        assertFalse(shown.contains("Refund status"), "nothing was refunded, so no refund status shows: " + shown);
+        assertFalse(shown.contains("Refunded"), "nothing was refunded, in: " + shown);
+    }
+
+    private static ReceiptView receiptView(PurchaseRecordDTO receipt) {
+        MemberAccountService accountService = mock(MemberAccountService.class);
+        when(accountService.viewMyReceipt(MEMBER_TOKEN, RECEIPT_ID)).thenReturn(receipt);
+        SessionIdentity identity = mock(SessionIdentity.class);
+        when(identity.memberToken()).thenReturn(MEMBER_TOKEN);
+        ReceiptView view = new ReceiptView(new ReceiptPresenter(accountService), mock(RefundPresenter.class),
+            identity, InboxViewHarness.displayTime());
+        view.beforeEnter(routeTo("receiptId", String.valueOf(RECEIPT_ID)));
+        return view;
     }
 }
