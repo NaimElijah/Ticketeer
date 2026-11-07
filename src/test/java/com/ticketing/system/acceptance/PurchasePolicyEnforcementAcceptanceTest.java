@@ -169,8 +169,9 @@ class PurchasePolicyEnforcementAcceptanceTest {
         assertEquals(3, zoneOf(f).getReservedAmount(), "the zone holds only the first three");
     }
 
-    // II.2.8, all or nothing: the refused checkout records no purchase, returns the hold to stock and
-    // empties the cart. That it charges nothing is CheckoutServiceTest's, whose gateway is a mock
+    // The refused checkout records no purchase, returns the hold to stock and empties the cart. II.2.8's
+    // all or nothing names other failures, so this pins today's behaviour until OQ-31 settles it. That it
+    // charges nothing is CheckoutServiceTest's, whose gateway is a mock
     // (GivenQuantityBelowMinTicketsPolicy_WhenCheckout_ThenThrowExceptionAndPaymentNotCharged).
     @Test
     void GivenMinTwoPolicy_WhenBuyerChecksOutOne_ThenNothingIsBoughtAndTheHoldIsReleased() {
