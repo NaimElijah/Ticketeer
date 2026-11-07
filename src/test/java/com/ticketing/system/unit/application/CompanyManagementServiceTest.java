@@ -1332,7 +1332,6 @@ public class CompanyManagementServiceTest {
                 verifyNoInteractions(eventPublisher);
         }
 
-        // The message's grammar ("an pending") is production text, pinned as it stands.
         @Test
         public void GivenPendingOwnerOffer_WhenReceiveOwnerAppointmentAgain_ThenRefusedAndOneOfferStands() {
                 founderAppointedTheTargetAsManager();
@@ -1343,7 +1342,7 @@ public class CompanyManagementServiceTest {
                                 () -> companyService.appointOwner(OWNER_TOKEN,
                                                 new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID)));
 
-                assertEquals("User already has an pending appointment in this company", refused.getMessage());
+                assertEquals("User already has a pending appointment in this company", refused.getMessage());
                 assertEquals(List.of("Manager:ACTIVE:by" + OWNER_ID, "Owner:PENDING:by" + OWNER_ID), appointmentsOfTarget());
                 verifyNoInteractions(eventPublisher);
         }
