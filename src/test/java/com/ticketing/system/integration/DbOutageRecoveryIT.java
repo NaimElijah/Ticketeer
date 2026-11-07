@@ -30,6 +30,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -49,6 +50,7 @@ import com.zaxxer.hikari.HikariDataSource;
  * (#173). This test goes through that same setting, shortened to {@value #SOCKET_TIMEOUT_SECONDS} s.
  */
 @Testcontainers
+@RunsOnPostgres
 @SpringBootTest(properties = {
         "spring.datasource.hikari.maximum-pool-size=2",
         // No idle floor, so retiring the idle connections does not start a refill before the pause.

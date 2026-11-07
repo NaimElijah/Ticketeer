@@ -43,6 +43,7 @@ import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 
 /**
  * Two buyers check out in one zone at the same moment (SLR.1, SLR.5). On PostgreSQL their Phase 3s share
@@ -58,6 +59,7 @@ import com.ticketing.system.support.PostgresContainers;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
+@RunsOnPostgres
 @DirtiesContext
 class PostgresConcurrentCheckoutsOneZoneIT {
 

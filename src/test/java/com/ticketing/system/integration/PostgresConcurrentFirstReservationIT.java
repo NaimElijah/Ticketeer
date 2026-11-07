@@ -7,6 +7,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 
 /**
  * Runs {@link ConcurrentFirstReservationJpaTest} on PostgreSQL, the production database (ADR-006, #171).
@@ -16,6 +17,7 @@ import com.ticketing.system.support.PostgresContainers;
  * PostgreSQL raises at that point.
  */
 @Testcontainers
+@RunsOnPostgres
 @DirtiesContext
 class PostgresConcurrentFirstReservationIT extends ConcurrentFirstReservationJpaTest {
 

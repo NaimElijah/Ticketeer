@@ -7,6 +7,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 
 /**
  * Runs {@link CheckoutFreezeRaceJpaTest} on PostgreSQL, the production database (ADR-006, #171), with its
@@ -14,6 +15,7 @@ import com.ticketing.system.support.PostgresContainers;
  * stale update, and the retry must find the cart and its holds as the other tab left them.
  */
 @Testcontainers
+@RunsOnPostgres
 @DirtiesContext
 class PostgresCheckoutFreezeRaceIT extends CheckoutFreezeRaceJpaTest {
 

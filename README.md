@@ -326,7 +326,7 @@ About 3,100 test methods, organised by what they boot. Each name reads `Given…
 | `unit/` · `ui/` | Domain rules, services and presenters with mocked ports, both adapters of every repository port | Nothing, or `@DataJpaTest` on H2 for the JPA contract tests |
 | `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
 | `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats, checkouts, cancellations, refunds and registrations | Spring under `test`: JPA repositories on H2; each `concurrency/` suite, and the checkout, checkout-freeze, cancellation, first-reservation and registration races, also run on PostgreSQL as `Postgres…IT` |
-| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith), `RepositoryAdapterProfileTest` (which adapter each profile set selects) and `TestConventionsTest` (test names) | Nothing |
+| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith), `RepositoryAdapterProfileTest` (which adapter each profile set selects) and `TestConventionsTest` (test names, and the PostgreSQL check on every `*IT`) | Nothing |
 | `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database, with an index on every foreign key and listed queried column (`SchemaMigrationIT`), the concurrency suites and the checkout, checkout-freeze, cancellation, first-reservation and registration races (`Postgres…IT` in `concurrency/` and `integration/`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
 ```bash

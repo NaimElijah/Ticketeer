@@ -1,5 +1,6 @@
 package com.ticketing.system.architecture;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -10,6 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.platform.commons.annotation.Testable;
 
+import com.ticketing.system.support.RunsOnPostgres;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -34,9 +36,37 @@ class TestConventionsTest {
             .should().haveNameMatching("Given" + SECTION + "_When" + SECTION + "_Then" + SECTION)
             .because("a test name states its scenario, its action and its outcome (ADR-023)");
 
+    // Failsafe runs the *IT classes, and each needs PostgreSQL. Without the check, one whose container no
+    // longer reaches its context boots on application-test.yml's H2 and passes (#189).
+    private static final ArchRule INTEGRATION_TESTS_CHECK_THEIR_DATABASE = classes()
+            .that().haveSimpleNameEndingWith("IT")
+            .should().beAnnotatedWith(RunsOnPostgres.class)
+            .because("an IT that boots on H2 must fail, not pass under a PostgreSQL name (#189)");
+
     @Test
     void GivenTheTestSuite_WhenScanned_ThenEveryTestNameReadsGivenWhenThen() {
         TEST_NAMES_READ_GIVEN_WHEN_THEN.check(testClasses());
+    }
+
+    @Test
+    void GivenTheTestSuite_WhenScanned_ThenEveryIntegrationTestChecksItRunsOnPostgres() {
+        INTEGRATION_TESTS_CHECK_THEIR_DATABASE.check(testClasses());
+    }
+
+    @Test
+    void GivenAnIntegrationTestWithoutThePostgresCheck_WhenScanned_ThenTheDatabaseRuleFails() {
+        JavaClasses imported = new ClassFileImporter().importClasses(UncheckedIT.class);
+
+        assertThatThrownBy(() -> INTEGRATION_TESTS_CHECK_THEIR_DATABASE.check(imported))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(UncheckedIT.class.getName());
+    }
+
+    @Test
+    void GivenAnIntegrationTestWithThePostgresCheck_WhenScanned_ThenTheDatabaseRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(CheckedIT.class);
+
+        assertThatCode(() -> INTEGRATION_TESTS_CHECK_THEIR_DATABASE.check(imported)).doesNotThrowAnyException();
     }
 
     @Test
@@ -149,5 +179,14 @@ class TestConventionsTest {
 
         void aHelperThatIsNoTest() {
         }
+    }
+
+    // Failsafe, like surefire, skips a nested class, so neither IT below ever runs.
+
+    abstract static class UncheckedIT {
+    }
+
+    @RunsOnPostgres
+    abstract static class CheckedIT {
     }
 }

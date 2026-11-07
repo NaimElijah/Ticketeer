@@ -7,6 +7,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 
 /**
  * Runs {@link JpaEventRepositoryContractTest}, and so the whole {@link IEventRepositoryContractTest} suite, on PostgreSQL, the production
@@ -14,6 +15,7 @@ import com.ticketing.system.support.PostgresContainers;
  * datasource: {@code @AutoConfigureTestDatabase} replaces only a datasource that is not a test one.
  */
 @Testcontainers
+@RunsOnPostgres
 @DirtiesContext
 class PostgresEventRepositoryContractIT extends JpaEventRepositoryContractTest {
 
