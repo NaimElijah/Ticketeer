@@ -36,6 +36,9 @@ import com.ticketing.system.ui.views.company.OwnerDashboardView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasElement;
 import com.vaadin.flow.component.applayout.AppLayout;
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
@@ -150,6 +153,27 @@ class NavigationLandmarksTest {
         assertFocusMovesToH1(adminLayout());
     }
 
+    // PageFocus focuses the first h1 that shows, if the page has one (#189).
+    @Test
+    void GivenAPageWhoseFirstH1IsHidden_WhenTheShellNavigatesToIt_ThenFocusEndsOnTheFirstH1ThatShows() {
+        H1 hidden = new H1("Hidden title");
+        hidden.setVisible(false);
+        H1 shown = new H1("Shown title");
+
+        showInShell(mainLayout(), new Div(hidden, shown));
+
+        assertEquals(Optional.of(shown.getElement()), ViewHarness.focusEndsOn(harness.focusTargets()),
+            "focus must end on the first h1 a visitor sees");
+    }
+
+    @Test
+    void GivenAPageWithNoH1_WhenTheShellNavigatesToIt_ThenNoFocusCallIsSent() {
+        showInShell(mainLayout(), new Div(new Span("No heading here")));
+
+        assertEquals(List.of(), harness.focusTargets().stream().map(A11y::describe).toList(),
+            "with no h1 to announce, focus stays where it is");
+    }
+
     // ---- helpers ---------------------------------------------------------------------------------
 
     private static LkTopBar topBarWithBrowseActive() {
@@ -214,13 +238,17 @@ class NavigationLandmarksTest {
     // Shows a page in the shell as the router does: the page becomes the content, then the shell hears of
     // the navigation.
     private LkPage navigateTo(AppLayout layout) {
-        harness.attach(layout);
         LkPage page = new LkPage(PAGE_TITLE);
-        layout.showRouterLayoutContent(page);
+        showInShell(layout, page);
+        return page;
+    }
+
+    private void showInShell(AppLayout layout, Component page) {
+        harness.attach(layout);
+        layout.showRouterLayoutContent((HasElement) page);
         AfterNavigationEvent event = mock(AfterNavigationEvent.class);
         when(event.getActiveChain()).thenReturn(List.<HasElement>of(page, layout));
         ((AfterNavigationObserver) layout).afterNavigation(event);
-        return page;
     }
 
     private void assertFirstTabStopSkipsToContent(AppLayout layout) {
