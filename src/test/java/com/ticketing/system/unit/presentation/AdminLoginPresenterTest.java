@@ -36,6 +36,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
+import jakarta.persistence.PersistenceException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class AdminLoginPresenterTest {
 
@@ -162,6 +164,17 @@ class AdminLoginPresenterTest {
             .thenThrow(new IllegalStateException("boom"));
 
         assertEquals(new AdminLoginPresenter.Outcome.Failure("boom"),
+            presenter.attemptAdminLogin("root", "pw"));
+    }
+
+    // ---- an internal failure reads as generic text, never as its own (#189) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenAttemptAdminLogin_ThenFailureCarriesTheGenericText() {
+        when(authenticationService.signInAsAdmin("root", "pw"))
+            .thenThrow(new PersistenceException("could not execute statement [insert into sessions]"));
+
+        assertEquals(new AdminLoginPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
             presenter.attemptAdminLogin("root", "pw"));
     }
 }
