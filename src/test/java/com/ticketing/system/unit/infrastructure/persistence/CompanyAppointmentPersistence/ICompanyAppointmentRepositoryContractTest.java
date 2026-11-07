@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,10 @@ abstract class ICompanyAppointmentRepositoryContractTest {
         return CompanyAppointment.ManagerAppointment(repo.nextId(), companyId, targetId, inviterId, permissions, INVITED_AT);
     }
 
+    private static Set<Integer> ids(List<CompanyAppointment> appointments) {
+        return appointments.stream().map(CompanyAppointment::getAppointmentId).collect(Collectors.toSet());
+    }
+
     @Test
     void GivenASavedAppointment_WhenFindById_ThenReturnsTheSavedAppointment() {
         CompanyAppointment saved = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
@@ -72,12 +77,12 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
     @Test
     void GivenAppointmentsOfSeveralUsers_WhenFindByTargetId_ThenReturnsOnlyThatUsersAppointments() {
-        repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
-        repo.save(manager(20, 5, 99, List.of(Permission.VIEW_SALES)));
-        repo.save(manager(10, 6, 99, List.of(Permission.CONFIGURE_VENUE)));
+        CompanyAppointment fiveInTen = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
+        CompanyAppointment fiveInTwenty = repo.save(manager(20, 5, 99, List.of(Permission.VIEW_SALES)));
+        CompanyAppointment sixInTen = repo.save(manager(10, 6, 99, List.of(Permission.CONFIGURE_VENUE)));
 
-        assertEquals(2, repo.findByTargetId(5).size());
-        assertEquals(1, repo.findByTargetId(6).size());
+        assertEquals(Set.of(fiveInTen.getAppointmentId(), fiveInTwenty.getAppointmentId()), ids(repo.findByTargetId(5)));
+        assertEquals(Set.of(sixInTen.getAppointmentId()), ids(repo.findByTargetId(6)));
         assertTrue(repo.findByTargetId(123).isEmpty());
     }
 
@@ -94,12 +99,12 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
     @Test
     void GivenAppointmentsInTwoCompanies_WhenFindByCompanyId_ThenReturnsEveryAppointmentForThatCompany() {
-        repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
-        repo.save(manager(10, 6, 99, List.of(Permission.VIEW_SALES)));
-        repo.save(manager(20, 7, 99, List.of(Permission.CONFIGURE_VENUE)));
+        CompanyAppointment fiveInTen = repo.save(manager(10, 5, 99, List.of(Permission.MANAGE_INVENTORY)));
+        CompanyAppointment sixInTen = repo.save(manager(10, 6, 99, List.of(Permission.VIEW_SALES)));
+        CompanyAppointment sevenInTwenty = repo.save(manager(20, 7, 99, List.of(Permission.CONFIGURE_VENUE)));
 
-        assertEquals(2, repo.findByCompanyId(10).size());
-        assertEquals(1, repo.findByCompanyId(20).size());
+        assertEquals(Set.of(fiveInTen.getAppointmentId(), sixInTen.getAppointmentId()), ids(repo.findByCompanyId(10)));
+        assertEquals(Set.of(sevenInTwenty.getAppointmentId()), ids(repo.findByCompanyId(20)));
         assertTrue(repo.findByCompanyId(999).isEmpty());
     }
 
