@@ -40,6 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import jakarta.persistence.PersistenceException;
@@ -107,6 +110,8 @@ public class ReservationServiceTest {
     private static final int OTHER_ZONE_ID = 6;
     // An event a cart line still names after the event was deleted.
     private static final int DELETED_EVENT_ID = 11;
+    private static final String BLANK_TOKEN = "  ";
+    private static final String MISSING_TOKEN = "Missing authentication token";
 
     @BeforeEach
     void setUp() {
@@ -165,10 +170,17 @@ public class ReservationServiceTest {
         verify(activeOrderRepository).save(cart);
     }
 
-    @Test
-    void GivenMissingToken_WhenRemoveForMember_ThenThrowException() {
-        assertThrows(IllegalArgumentException.class, () -> reservationService.removeForMember(null, EVENT_ID, ZONE_ID,
-                InventorySelectionDTO.standing(QUANTITY)));
+    // A blank token is refused by the service's own check: nothing else stops it before the session manager.
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {BLANK_TOKEN})
+    void GivenMissingOrBlankToken_WhenRemoveForMember_ThenRefusedAndNothingIsTouched(String token) {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.removeForMember(token, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(MISSING_TOKEN, refused.getMessage());
+        verifyNoInteractions(sessionManager, activeOrderRepository, eventRepository);
     }
 
     @Test
@@ -290,10 +302,16 @@ public class ReservationServiceTest {
                 "each line must record the zone's price");
     }
 
-    @Test
-    void GivenMissingToken_WhenReserveForMember_ThenThrowException() {
-        assertThrows(IllegalArgumentException.class, () -> reservationService.reserveForMember(null, EVENT_ID, ZONE_ID,
-                InventorySelectionDTO.standing(QUANTITY)));
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {BLANK_TOKEN})
+    void GivenMissingOrBlankToken_WhenReserveForMember_ThenRefusedAndNothingIsTouched(String token) {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> reservationService.reserveForMember(token, EVENT_ID, ZONE_ID,
+                        InventorySelectionDTO.standing(QUANTITY)));
+
+        assertEquals(MISSING_TOKEN, refused.getMessage());
+        verifyNoInteractions(sessionManager, activeOrderRepository, eventRepository);
     }
 
     @Test
