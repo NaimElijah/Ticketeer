@@ -33,6 +33,7 @@ import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
+import com.ticketing.system.ui.presenters.company.CompanyEventListPresenter;
 import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.presenters.company.ManagerInvitationPresenter;
@@ -51,6 +52,7 @@ import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
 import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
+import com.ticketing.system.ui.views.company.CompanyEventListView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.EventManagementView;
 import com.ticketing.system.ui.views.company.ManagerInvitationView;
@@ -559,6 +561,62 @@ class FieldOwnRuleMessagesTest {
         List<T> bounds = find(view, type);
         assertEquals(expected, bounds.size(), "the filters' " + type.getSimpleName() + " bounds");
         return bounds;
+    }
+
+    // ---- CompanyEventListView: the filters ----
+
+    // Below the minimum and off the step of 10; the list's price bounds have no maximum.
+    @ParameterizedTest
+    @ValueSource(ints = {-10, 15})
+    void GivenTheCompanyEventList_WhenAPriceBoundBreaksItsRule_ThenItSaysWhatIsWrong(int price) {
+        for (IntegerField bound : bounds(companyEventList(), IntegerField.class, 2)) {
+            bound.setValue(price);
+
+            assertSaysWhatIsWrong(bound, "a price bound of " + price);
+        }
+    }
+
+    // Below the minimum, above the maximum, and off the step of 0.5.
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.5, 5.5, 2.3})
+    void GivenTheCompanyEventList_WhenARatingBoundBreaksItsRule_ThenItSaysWhatIsWrong(double rating) {
+        for (NumberField bound : bounds(companyEventList(), NumberField.class, 2)) {
+            bound.setValue(rating);
+
+            assertSaysWhatIsWrong(bound, "a rating bound of " + rating);
+        }
+    }
+
+    @Test
+    void GivenTheCompanyEventList_WhenTheEndDateIsBeforeTheStartDate_ThenTheEndDateSaysWhatIsWrong() {
+        CompanyEventListView view = companyEventList();
+        customPicker(view, CatalogFilterSupport.CUSTOM_FROM).setValue(START_DATE);
+        DatePicker end = customPicker(view, CatalogFilterSupport.CUSTOM_TO);
+
+        end.setValue(START_DATE.minusDays(1));
+
+        assertSaysWhatIsWrong(end, "an end date before the start date");
+    }
+
+    @Test
+    void GivenTheCompanyEventList_WhenTheStartDateIsAfterTheEndDate_ThenTheStartDateSaysWhatIsWrong() {
+        CompanyEventListView view = companyEventList();
+        customPicker(view, CatalogFilterSupport.CUSTOM_TO).setValue(START_DATE);
+        DatePicker start = customPicker(view, CatalogFilterSupport.CUSTOM_FROM);
+
+        start.setValue(START_DATE.plusDays(1));
+
+        assertSaysWhatIsWrong(start, "a start date after the end date");
+    }
+
+    private CompanyEventListView companyEventList() {
+        ViewHarness.signInMember();
+        CompanyEventListPresenter presenter = mock(CompanyEventListPresenter.class);
+        when(presenter.load(any(), any(), any())).thenReturn(new CompanyEventListPresenter.Outcome.Success(List.of()));
+        when(presenter.countries(any(), any())).thenReturn(new ListOutcome.Loaded<>(List.of()));
+        CompanyEventListView view = new CompanyEventListView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
+        return view;
     }
 
     // ---- shared ----
