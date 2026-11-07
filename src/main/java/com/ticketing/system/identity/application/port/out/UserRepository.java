@@ -12,9 +12,6 @@ public interface UserRepository extends IRepository<User, Integer> {
     /** @throws com.ticketing.system.shared.exception.UserNotFoundException if no user with that id exists */
     User getUserById(int targetId);
 
-    /** Persists changes to an existing User. */
-    void updateUser(User targetUser);
-
     /** By-username lookup. Used by UC-11 (uniqueness check) and UC-12 (login). */
     Optional<User> findByUsername(String username);
 

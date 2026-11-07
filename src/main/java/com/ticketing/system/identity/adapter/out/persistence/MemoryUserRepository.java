@@ -58,11 +58,6 @@ public class MemoryUserRepository implements UserRepository {
     }
 
     @Override
-    public void updateUser(User targetUser) {
-        usersById.put(targetUser.getUserId(), targetUser);
-    }
-
-    @Override
     public Optional<User> findByUsername(String username) {
         return usersById.values().stream()
                 .filter(u -> username.equals(u.getUsername()))
