@@ -392,11 +392,17 @@ class SystemAdminServiceTest {
         assertEquals("CLOSED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
+    // An admin exists, so the self-heal gets as far as the WSEP probe and fails there, not on the admin check.
     @Test
     void GivenNoReachableServices_WhenEnsureMarketOpen_ThenNeverThrowsAndStaysClosed() {
+        when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(), List.of());
-        assertDoesNotThrow(svc::ensureMarketOpen);            // self-heal must never throw out to its caller
+
+        boolean probed = svc.ensureMarketOpen();               // self-heal must never throw out to its caller
+
+        assertTrue(probed, "the self-heal must have reached the WSEP probe");
         assertFalse(svc.isMarketOpen());
+        assertEquals("UNINITIALIZED", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -475,14 +481,14 @@ class SystemAdminServiceTest {
     }
 
     @Test
-    void GivenFilters_WhenViewGlobalHistory_ThenFiltersPassedToRepository() {
+    void GivenCompanyAndEventFilters_WhenViewGlobalHistory_ThenOnlyTheCompanysRequestedEventsReachTheRepository() {
+        // Event 99 is not one of company 3's events, so the intersection drops it.
         GlobalHistoryFiltersDTO filters = new GlobalHistoryFiltersDTO(
-                7, 3, List.of(10, 11),
+                7, 3, List.of(10, 99),
                 LocalDate.of(2026, 1, 1),
                 LocalDate.of(2026, 12, 31));
-        // normalizeGlobalHistoryFilters resolves companyId → null and intersects eventIds
         GlobalHistoryFiltersDTO expectedFilters = new GlobalHistoryFiltersDTO(
-                7, null, List.of(10, 11),
+                7, null, List.of(10),
                 LocalDate.of(2026, 1, 1),
                 LocalDate.of(2026, 12, 31));
         when(eventRepository.findIdsByCompany(3)).thenReturn(List.of(10, 11));

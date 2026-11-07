@@ -59,6 +59,7 @@ import com.ticketing.system.shared.dto.CompanyPolicyConfigDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.shared.event.ManagerAppointmentPendingNotice;
 import com.ticketing.system.shared.event.RoleChangedNotice;
+import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
@@ -528,10 +529,12 @@ public class CompanyManagementServiceTest {
                                 new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
         }
 
+        // The founder is an owner, so the refusal is the target's missing appointment, not the caller's rights.
         @Test
-        public void GivenTargetIsNotManager_WhenModifyManagerPermissions_ThenThrowException() {
+        public void GivenTargetIsNotManager_WhenModifyManagerPermissions_ThenAppointmentNotFoundAndNothingPublished() {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
@@ -539,11 +542,13 @@ public class CompanyManagementServiceTest {
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
 
-                // editManagerPermissions only fetches the target user (not the owner), so no
-                // owner mock needed
-                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(
-                                OWNER_TOKEN,
-                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+                AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                                () -> companyService.editManagerPermissions(OWNER_TOKEN,
+                                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertEquals("No active appointment to edit found for the specified company", refused.getMessage());
+                assertNull(membershipService.getActiveCompanyAppointment(TARGET_USER_ID, COMPANY_ID));
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test

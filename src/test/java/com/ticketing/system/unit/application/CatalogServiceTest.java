@@ -3,6 +3,7 @@ package com.ticketing.system.unit.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
@@ -276,7 +278,13 @@ class CatalogServiceTest {
 
         List<EventSummaryDTO> results = catalogService.searchByCompany(VALID_TOKEN, 10, filters);
 
-        assertEquals(1, results.size());
+        assertEquals(List.of(1), results.stream().map(EventSummaryDTO::eventId).toList());
+        // The service filters company ratings itself only in searchGlobal, so here the proof is that the
+        // query never receives them.
+        ArgumentCaptor<CatalogSearchFiltersDTO> queried = ArgumentCaptor.forClass(CatalogSearchFiltersDTO.class);
+        verify(mockEventRepository).searchONSALE(queried.capture());
+        assertNull(queried.getValue().minCompanyRating(), "the company-rating bound reached the query");
+        assertNull(queried.getValue().maxCompanyRating(), "the company-rating bound reached the query");
     }
 
     // UC-7: searchByCompany returns an empty list when no events match the given
