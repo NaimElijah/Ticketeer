@@ -220,6 +220,22 @@ class MinorA11yTest {
             "a rule the password misses must say \"not met\" in words; it reads \"" + unmet + "\"");
     }
 
+    // Register refuses a password over 72 bytes in UTF-8. Without a rule for it, such a password would read
+    // Weak with every rule met, and the user could not tell why (#189).
+    @Test
+    void GivenAPasswordRegisterRefusesAsTooLong_WhenTheMeterUpdates_ThenItIsWeakAndItsLengthRuleIsNotMet() {
+        PasswordStrengthMeter meter = new PasswordStrengthMeter();
+        String tooLong = "Aa1!".repeat(18) + "a";
+
+        meter.update(tooLong);
+
+        assertEquals(PasswordStrength.WEAK.label(), strengthBar(meter).getAttribute("aria-valuetext"),
+            "a password register refuses must read Weak");
+        String lengthRule = A11y.text(ruleElement(meter, "not too long"));
+        assertTrue(NOT_MET.matcher(lengthRule).find(),
+            "a password over the server's limit must say its length rule is not met; it reads \"" + lengthRule + "\"");
+    }
+
     // ---- LkIconBtn and row context ----
 
     @Test

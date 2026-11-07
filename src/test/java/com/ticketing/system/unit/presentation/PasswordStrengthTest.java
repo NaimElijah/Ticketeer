@@ -31,6 +31,7 @@ import com.ticketing.system.shared.exception.GuestSessionRequiredException;
 import com.ticketing.system.shared.exception.WeakPasswordException;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.testutil.TestTransactions;
+import java.nio.charset.StandardCharsets;
 
 class PasswordStrengthTest {
 
@@ -100,9 +101,21 @@ class PasswordStrengthTest {
             new SessionProperties(1440, 30), new LockoutProperties(5, 15L), new IdentityProperties(List.of(), "admin"),
             TestTransactions.recordingManager());
 
+    // The longest password register accepts is 72 bytes in UTF-8, so the boundary runs in ASCII, one byte a
+    // character, and in Hebrew, two bytes a letter: 35 letters and two digits are 72 bytes.
+    private static final String ASCII_24_BYTES = "a1a1a1a1a1a1a1a1a1a1a1a1";
+    private static final String ASCII_72_BYTES = ASCII_24_BYTES + ASCII_24_BYTES + ASCII_24_BYTES;
+    private static final String ASCII_73_BYTES = ASCII_72_BYTES + "a";
+    private static final String HEBREW_7_LETTERS = "\u05e1\u05d9\u05e1\u05de\u05d0\u05d5\u05ea";
+    private static final String HEBREW_35_LETTERS =
+            HEBREW_7_LETTERS + HEBREW_7_LETTERS + HEBREW_7_LETTERS + HEBREW_7_LETTERS + HEBREW_7_LETTERS;
+    private static final String HEBREW_72_BYTES = HEBREW_35_LETTERS + "12";
+    private static final String HEBREW_73_BYTES = HEBREW_35_LETTERS + "123";
+
     @ParameterizedTest
     @ValueSource(strings = {"", "short1", "abcdef1", "abcdefg1", "abcdefgh", "12345678", "password1", "abcdefghij1",
-            "Aa1!Bb2@Cc3#", "p\u00e4ssw\u00f6rd1", "pass word 1"})
+            "Aa1!Bb2@Cc3#", "p\u00e4ssw\u00f6rd1", "pass word 1", ASCII_72_BYTES, ASCII_73_BYTES, HEBREW_72_BYTES,
+            HEBREW_73_BYTES})
     void GivenAPassword_WhenTheMeterAndTheServerJudgeIt_ThenTheyAgree(String password) {
         assertEquals(serverAccepts(password), PasswordStrength.passesServerRules(password),
                 "the meter and the server disagree on \"" + password + "\"");
@@ -123,5 +136,19 @@ class PasswordStrengthTest {
         } catch (GuestSessionRequiredException e) {
             return true;
         }
+    }
+
+    // Register refuses a password over 72 bytes in UTF-8, the most BCrypt reads
+    // (AuthenticationService.MAX_PASSWORD_UTF8_BYTES), so the meter must not call such a password acceptable
+    // (#189). The first is 73 ASCII characters; the second is 63 characters and 77 bytes.
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+        "p\u00e4ssw\u00f6rd1p\u00e4ssw\u00f6rd1p\u00e4ssw\u00f6rd1p\u00e4ssw\u00f6rd1p\u00e4ssw\u00f6rd1p\u00e4ssw\u00f6rd1p\u00e4ssw\u00f6rd1"})
+    void GivenAPasswordOver72BytesInUtf8_WhenTheMeterAndTheServerJudgeIt_ThenBothRefuseIt(String password) {
+        assertFalse(serverAccepts(password), "precondition: the server refuses it");
+        assertFalse(PasswordStrength.passesServerRules(password),
+                "the meter accepts a password of " + password.getBytes(StandardCharsets.UTF_8).length
+                        + " UTF-8 bytes that the server refuses");
     }
 }

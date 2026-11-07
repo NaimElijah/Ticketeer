@@ -38,6 +38,7 @@ public class PasswordStrengthMeter extends Div {
     private static final Map<Rule, String> RULE_LABELS = new LinkedHashMap<>();
     static {
         RULE_LABELS.put(Rule.MIN_8_CHARS,   "8+ chars");
+        RULE_LABELS.put(Rule.NOT_TOO_LONG,  "not too long");
         RULE_LABELS.put(Rule.HAS_LETTER,    "letter");
         RULE_LABELS.put(Rule.HAS_DIGIT,     "digit");
         RULE_LABELS.put(Rule.MIN_12_CHARS,  "12+ chars");

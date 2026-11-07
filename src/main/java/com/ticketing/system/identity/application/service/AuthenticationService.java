@@ -84,8 +84,11 @@ public class AuthenticationService {
      */
     public static final int MAX_EMAIL_LENGTH = 254;
 
-    /** The most of a password BCrypt reads; {@code PasswordHasher.hash} throws for a longer one. */
-    static final int MAX_PASSWORD_UTF8_BYTES = 72;
+    /**
+     * The most of a password BCrypt reads; {@code PasswordHasher.hash} throws for a longer one. Public so the
+     * registration form's strength meter refuses the same passwords.
+     */
+    public static final int MAX_PASSWORD_UTF8_BYTES = 72;
 
     private static final int MIN_PASSWORD_LENGTH = 8;
 
