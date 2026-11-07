@@ -69,6 +69,7 @@ import com.vaadin.flow.component.HasValue;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.datetimepicker.DateTimePicker;
+import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.EmailField;
@@ -91,6 +92,7 @@ class FieldOwnRuleMessagesTest {
     // Well formed, and one character over the 254 registration accepts.
     private static final String EMAIL_OF_255_CHARACTERS = "a".repeat(64) + "@" + "b".repeat(186) + ".com";
     private static final String MALFORMED_EMAIL = "bob@";
+    private static final String SHORT_CARD_NUMBER = "4111";
     private static final String RESERVED_USERNAME = "admin";
     private static final String PASSWORD = "Secret-pw-123";
     private static final String UNMATCHED_SEARCH = "zzz";
@@ -266,6 +268,42 @@ class FieldOwnRuleMessagesTest {
         field.clear();
 
         assertSaysWhatIsWrong(field, "an emptied guest age");
+    }
+
+    // The second Pay hands the refused email back to its rule before any edit has validated it, then stops at
+    // the card number: the user's next edit must still decide what the email says.
+    @Test
+    void GivenTheEmailWasHandedBackByAPayThatStoppedEarlier_WhenAMalformedEmailIsTyped_ThenItSaysWhatIsWrong() {
+        CheckoutView view = guestCheckout();
+        fillCard(view);
+        field(view, IntegerField.class, "Your age").setValue(RegisterPresenter.MIN_AGE);
+        EmailField email = field(view, EmailField.class, "Your email");
+        click(payButton(view));
+        assertEquals("Please enter a valid email address.", email.getErrorMessage(),
+            "the first Pay must refuse the empty email");
+        TextField cardNumber = field(view, TextField.class, "Card number");
+        cardNumber.setValue(SHORT_CARD_NUMBER);
+        click(payButton(view));
+        assertEquals("Card number must be 16 digits.", cardNumber.getErrorMessage(),
+            "the second Pay must stop at the card number, before it checks the email");
+
+        email.setValue(MALFORMED_EMAIL);
+
+        assertSays(email, "Enter an email address like you@example.com.", "\"" + MALFORMED_EMAIL + "\"");
+    }
+
+    private static void fillCard(CheckoutView view) {
+        field(view, TextField.class, "Cardholder name").setValue("Guest Example");
+        field(view, TextField.class, "Card number").setValue("4111 1111 1111 1111");
+        field(view, TextField.class, "Expiry").setValue("12/30");
+        field(view, TextField.class, "CVC").setValue("123");
+    }
+
+    private static NativeButton payButton(CheckoutView view) {
+        return find(view, NativeButton.class).stream()
+            .filter(button -> button.getElement().getTextRecursively().trim().startsWith("Pay "))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no Pay button on the checkout"));
     }
 
     private CheckoutView guestCheckout() {

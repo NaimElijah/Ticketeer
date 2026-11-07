@@ -44,6 +44,7 @@ class LkFormErrorsTest {
     private static final int MIN_AGE = 1;
     private static final int MAX_AGE = 120;
     private static final int AGE_OVER_MAX = 150;
+    private static final String AGE_REFUSED = "Please enter your age.";
 
     private ViewHarness harness;
 
@@ -107,6 +108,21 @@ class LkFormErrorsTest {
 
         assertTrue(email.isInvalid(), "clearing the last submit's refusals must not unmark an address that is still "
             + "malformed by the field's own rule");
+    }
+
+    // clear() keeps a field it leaves invalid, to hand it back again on its next edit, but the submit that
+    // called it has refused nothing yet.
+    @Test
+    void GivenAnAgeAboveItsMaximumWasRefused_WhenTheNextSubmitClearsTheRefusals_ThenNoFieldCountsAsRefused() {
+        IntegerField age = ageField();
+        age.setValue(AGE_OVER_MAX);
+        LkFormErrors errors = new LkFormErrors();
+        errors.reject(age, AGE_REFUSED);
+
+        errors.clear();
+
+        assertTrue(age.isInvalid(), "precondition: the age is still invalid by its own rule");
+        assertTrue(errors.isEmpty(), "a field the submit has not refused must not count as refused");
     }
 
     // ---- a message another check set ----

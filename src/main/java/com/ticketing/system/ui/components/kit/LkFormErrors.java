@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Focusable;
@@ -21,7 +22,9 @@ import com.vaadin.flow.data.binder.ValidationResult;
  * the order the form shows them, and then {@link #focusFirst()}. Clearing on the next submit undoes a mark
  * that a rule across fields set, such as a confirmation that no longer differs once the password changed,
  * and hands the field back to its own constraints: one still breaking them, such as an age above its
- * maximum, stays invalid.
+ * maximum, stays invalid, saying what they say. That message came from no run of the field's own validation,
+ * so Vaadin counts it as one the view set and would keep it through the next edit; such a field is therefore
+ * handed back again on its next edit, as below, though it no longer counts as refused.
  *
  * <p>A refusal also gives way once the user edits the field (#188, review C1). A Vaadin field runs its own
  * validation on every value change and sets {@code invalid} from its own constraints, but it never
@@ -37,22 +40,34 @@ import com.vaadin.flow.data.binder.ValidationResult;
  */
 public final class LkFormErrors {
 
-    private final List<Mark> marked = new ArrayList<>();
+    /** The fields refused since {@link #clear()}, in the order refused. */
+    private final List<Mark> refused = new ArrayList<>();
+    /** The fields {@link #clear()} handed back still invalid, with the message it gave them. */
+    private final List<Mark> handedBack = new ArrayList<>();
     /** The fields this instance already listens to, so a field refused on every submit gets one listener. */
     private final Set<HasValidationProperties> listening = new HashSet<>();
     private Runnable focusFirst;
 
     /**
      * Unmarks every field the last submit refused and hands it back to its own constraints; a submit calls
-     * it before its checks. A field still breaking its own constraints stays invalid. A field whose message
-     * has changed since is left alone: the user has edited it, or another check, such as
-     * {@link LkTextLimit}, marked it.
+     * it before its checks. A field still breaking its own constraints stays invalid, saying what they say,
+     * and its next edit hands it back again, as the class comment says. A field whose message has changed
+     * since is left alone: the user has edited it, or another check, such as {@link LkTextLimit}, marked it.
      */
     public void clear() {
-        marked.stream()
+        List<HasValidationProperties> shown = marks()
             .filter(Mark::isShown)
-            .forEach(mark -> handBackToOwnRule(mark.field()));
-        marked.clear();
+            .map(Mark::field)
+            .distinct()
+            .toList();
+        refused.clear();
+        handedBack.clear();
+        for (HasValidationProperties field : shown) {
+            handBackToOwnRule(field);
+            if (field.isInvalid()) {
+                handedBack.add(new Mark(field, field.getErrorMessage()));
+            }
+        }
         focusFirst = null;
     }
 
@@ -85,9 +100,12 @@ public final class LkFormErrors {
         mark(rows, message, rows::focus);
     }
 
-    /** {@code true} while no field has been refused since {@link #clear()}. */
+    /**
+     * {@code true} while no field has been refused since {@link #clear()}. A field {@link #clear()} left
+     * invalid by its own constraints does not count: the submit's own checks decide whether to refuse it.
+     */
     public boolean isEmpty() {
-        return marked.isEmpty();
+        return refused.isEmpty();
     }
 
     /** Moves focus to the first field refused since {@link #clear()}; does nothing when none was. */
@@ -100,7 +118,7 @@ public final class LkFormErrors {
     private void mark(HasValidationProperties field, String message, Runnable focus) {
         field.setErrorMessage(message);
         field.setInvalid(true);
-        marked.add(new Mark(field, message));
+        refused.add(new Mark(field, message));
         if (focusFirst == null) {
             focusFirst = focus;
         }
@@ -109,14 +127,19 @@ public final class LkFormErrors {
     // Hands back fully rather than only dropping the message: a field with manual validation would
     // otherwise stay invalid with nothing saying why.
     private void dropShownRefusal(HasValidationProperties field) {
-        if (marked.stream().anyMatch(mark -> mark.field() == field && mark.isShown())) {
+        if (marks().anyMatch(mark -> mark.field() == field && mark.isShown())) {
             handBackToOwnRule(field);
         }
     }
 
-    // Invalid by the field's own constraints alone, saying what they say. The field's own validation ran
-    // before this on the same change and kept the refusal's message, which it treats as one the view set,
-    // so dropping the message without putting the rule's in its place would leave it invalid and blank (#189).
+    private Stream<Mark> marks() {
+        return Stream.concat(refused.stream(), handedBack.stream());
+    }
+
+    // Invalid by the field's own constraints alone, saying what they say. On an edit, the field's own
+    // validation ran before this on the same change and kept the refusal's message, which it treats as one the
+    // view set, so dropping the message without putting the rule's in its place would leave it invalid and
+    // blank (#189).
     private static void handBackToOwnRule(HasValidationProperties field) {
         ValidationResult verdict = ownVerdict(field);
         field.setErrorMessage(verdict.isError() ? verdict.getErrorMessage() : null);
@@ -138,7 +161,7 @@ public final class LkFormErrors {
 
     private record Mark(HasValidationProperties field, String message) {
 
-        /** Whether the field still shows this refusal, rather than a message something else set since. */
+        /** Whether the field still shows this mark's message, rather than one something else set since. */
         boolean isShown() {
             return message.equals(field.getErrorMessage());
         }
