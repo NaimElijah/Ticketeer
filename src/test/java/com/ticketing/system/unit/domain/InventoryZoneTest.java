@@ -237,6 +237,66 @@ public class InventoryZoneTest extends BaseDomainTest {
         assertEquals(2, seatedZone.getAvailableAmount());
     }
 
+    // ---- a multi-seat call is all or nothing when one seat is in the wrong state (#189) ----
+    // Seats are checked in label order, so A1 passes its check before A2 fails: a call that changed seats
+    // as it checked them would leave A1 changed for a buyer whose call failed.
+
+    @Test
+    void GivenOneSeatAlreadyReserved_WhenReserveBoth_ThenRefusedAndTheOtherStaysAvailable() {
+        SeatedZone seatedZone = track(twoSeatZone());
+        seatedZone.reserve(InventorySelection.seated(List.of("A2"), HOLDING_ORDER));
+
+        assertThrows(IllegalStateException.class,
+                () -> seatedZone.reserve(InventorySelection.seated(List.of("A1", "A2"), ASKING_ORDER)));
+
+        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
+        assertEquals(HOLDING_ORDER, seatedZone.getSeatByLabel("A2").getReservedByOrderKey());
+        assertEquals(1, seatedZone.getAvailableAmount());
+    }
+
+    @Test
+    void GivenOneSeatAlreadySold_WhenReserveBoth_ThenRefusedAndTheOtherStaysAvailable() {
+        SeatedZone seatedZone = track(twoSeatZone());
+        seatedZone.reserve(InventorySelection.seated(List.of("A2"), HOLDING_ORDER));
+        seatedZone.confirmSale(InventorySelection.seated(List.of("A2"), HOLDING_ORDER));
+
+        assertThrows(IllegalStateException.class,
+                () -> seatedZone.reserve(InventorySelection.seated(List.of("A1", "A2"), ASKING_ORDER)));
+
+        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
+        assertEquals(SeatStatus.SOLD, seatedZone.getSeatStatus("A2"));
+    }
+
+    @Test
+    void GivenAnOrderHoldingOnlyTheFirstSeat_WhenReleaseBoth_ThenRefusedAndItsSeatStaysHeld() {
+        SeatedZone seatedZone = track(twoSeatZone());
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), HOLDING_ORDER));
+
+        assertThrows(IllegalStateException.class,
+                () -> seatedZone.release(InventorySelection.seated(List.of("A1", "A2"), HOLDING_ORDER)));
+
+        assertEquals(HOLDING_ORDER, seatedZone.getSeatByLabel("A1").getReservedByOrderKey());
+        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
+        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A2"));
+    }
+
+    @Test
+    void GivenAnOrderHoldingOnlyTheFirstSeat_WhenConfirmSaleOfBoth_ThenRefusedAndNothingIsSold() {
+        SeatedZone seatedZone = track(twoSeatZone());
+        seatedZone.reserve(InventorySelection.seated(List.of("A1"), HOLDING_ORDER));
+
+        assertThrows(IllegalStateException.class,
+                () -> seatedZone.confirmSale(InventorySelection.seated(List.of("A1", "A2"), HOLDING_ORDER)));
+
+        assertEquals(HOLDING_ORDER, seatedZone.getSeatByLabel("A1").getReservedByOrderKey());
+        assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
+        assertEquals(0, seatedZone.getSoldAmount());
+    }
+
+    private static SeatedZone twoSeatZone() {
+        return new SeatedZone(1, "Orchestra", 120.0, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
+    }
+
     @Test
     void GivenReservedSeat_WhenReserveAgain_ThenThrowsException() {
         SeatedZone seatedZone = track(new SeatedZone(
