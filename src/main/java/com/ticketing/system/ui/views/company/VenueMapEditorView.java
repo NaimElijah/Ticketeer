@@ -12,6 +12,7 @@ import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRemoveButton;
@@ -57,6 +58,9 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private static final int MAX_ROWS_PER_ZONE = 99;
     private static final int MAX_SEATS_PER_ROW = 500;
     private static final String EVENT_NOT_FOUND = "Event not found.";
+    private static final String ZONE_NAME_REQUIRED = "Zone name is required.";
+    private static final String ENTER_PRICE = "Enter the zone's price.";
+    private static final String WHOLE_NUMBER = "Enter a whole number.";
     private static final String ARIA_PRESSED = "aria-pressed";
     // What the seat preview shows, read instead of its seats (#188).
     private static final String SEAT_PREVIEW = "Seat preview: %d rows of %d seats";
@@ -180,8 +184,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
     private Component buildCanvasCard() {
         LkCard card = new LkCard("Venue Grid").pad(14);
-        gridRowsField.setMin(1); gridRowsField.setMax(venueLimits.maxGridSize()); gridRowsField.setValue(gridRows);
-        gridColsField.setMin(1); gridColsField.setMax(venueLimits.maxGridSize()); gridColsField.setValue(gridCols);
+        limitTo(gridRowsField, venueLimits.maxGridSize()); gridRowsField.setValue(gridRows);
+        limitTo(gridColsField, venueLimits.maxGridSize()); gridColsField.setValue(gridCols);
         gridRowsField.setHelperText(allowedRange(venueLimits.maxGridSize()));
         gridColsField.setHelperText(allowedRange(venueLimits.maxGridSize()));
         gridRowsField.addValueChangeListener(e -> applyCanvasSize());
@@ -198,10 +202,10 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private void applyCanvasSize() {
         gridRows = orDefault(gridRowsField.getValue(), gridRows);
         gridCols = orDefault(gridColsField.getValue(), gridCols);
-        gridRowField.setMax(gridRows);
-        gridRowSpanField.setMax(gridRows);
-        gridColField.setMax(gridCols);
-        gridColSpanField.setMax(gridCols);
+        limitTo(gridRowField, gridRows);
+        limitTo(gridRowSpanField, gridRows);
+        limitTo(gridColField, gridCols);
+        limitTo(gridColSpanField, gridCols);
         refreshMapHolder();
     }
 
@@ -324,10 +328,12 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         LkCard card = new LkCard("Edit Zone").pad(20);
 
         zoneNameField.setRequired(true);
+        LkFieldRules.sayWhenEmpty(zoneNameField, ZONE_NAME_REQUIRED);
         zoneNameField.setWidthFull();
         LkTextLimit.apply(zoneNameField);
         priceField.setPrefixComponent(new Span("$"));
         priceField.setRequired(true);
+        LkFieldRules.sayWhenEmpty(priceField, ENTER_PRICE);
         priceField.setWidthFull();
 
         Div formGrid = new Div();
@@ -340,8 +346,8 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
 
         seatedEditor = new Div();
         LkRow dims = new LkRow().gap(12).align("flex-end");
-        rowsField.setMin(1); rowsField.setMax(MAX_ROWS_PER_ZONE); rowsField.setWidth("120px");
-        seatsPerRowField.setMin(1); seatsPerRowField.setMax(MAX_SEATS_PER_ROW); seatsPerRowField.setWidth("120px");
+        limitTo(rowsField, MAX_ROWS_PER_ZONE); rowsField.setWidth("120px");
+        limitTo(seatsPerRowField, MAX_SEATS_PER_ROW); seatsPerRowField.setWidth("120px");
         rowsField.setHelperText(allowedRange(MAX_ROWS_PER_ZONE));
         seatsPerRowField.setHelperText(allowedRange(MAX_SEATS_PER_ROW));
         rowsField.addValueChangeListener(e -> refreshSeatPreview());
@@ -353,7 +359,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
         seatHint.getStyle().set("font-size", "12px").set("margin-top", "8px").set("display", "block");
         seatedEditor.add(dims, seatPreview, seatHint);
 
-        capacityField.setMin(1); capacityField.setMax(venueLimits.maxStandingCapacity()); capacityField.setWidthFull();
+        limitTo(capacityField, venueLimits.maxStandingCapacity()); capacityField.setWidthFull();
         capacityField.setHelperText(allowedRange(venueLimits.maxStandingCapacity()));
         standingEditor = new Div();
         standingEditor.add(capacityField);
@@ -394,9 +400,20 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     }
 
     private void configurePlacementField(IntegerField field, int max) {
+        limitTo(field, max);
+        field.setWidthFull();
+    }
+
+    // Allows 1 to max, and words each rule the field checks itself with that range, or a value outside it
+    // turns the field red with nothing saying why (#189). Called again whenever max changes.
+    private static void limitTo(IntegerField field, int max) {
         field.setMin(1);
         field.setMax(max);
-        field.setWidthFull();
+        String outsideRange = "Enter a number from " + allowedRange(max) + ".";
+        field.setI18n(new IntegerField.IntegerFieldI18n()
+            .setBadInputErrorMessage(WHOLE_NUMBER)
+            .setMinErrorMessage(outsideRange)
+            .setMaxErrorMessage(outsideRange));
     }
 
     private void loadZoneIntoEditor(int idx) {
@@ -458,7 +475,7 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
                 refreshAll();
                 Toasts.success("Zone \"" + v.name() + "\" updated — click Save map to persist.");
             }
-            case VenueMapPresenter.ZoneOutcome.InvalidName ignored -> refuseZone(zoneNameField, "Zone name is required.");
+            case VenueMapPresenter.ZoneOutcome.InvalidName ignored -> refuseZone(zoneNameField, ZONE_NAME_REQUIRED);
             case VenueMapPresenter.ZoneOutcome.InvalidPrice ignored -> refuseZone(priceField, "Invalid price.");
         }
     }

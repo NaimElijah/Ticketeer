@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
@@ -31,6 +32,7 @@ import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.presenters.company.ManagerInvitationPresenter;
 import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter;
+import com.ticketing.system.ui.presenters.company.VenueMapPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
@@ -46,6 +48,7 @@ import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.EventManagementView;
 import com.ticketing.system.ui.views.company.ManagerInvitationView;
 import com.ticketing.system.ui.views.company.OwnerAppointmentView;
+import com.ticketing.system.ui.views.company.VenueMapEditorView;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
 import com.ticketing.system.ui.views.order.CheckoutView;
@@ -59,6 +62,7 @@ import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.NumberField;
 import com.vaadin.flow.component.textfield.TextArea;
+import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.AfterNavigationEvent;
 
 /**
@@ -78,6 +82,7 @@ class FieldOwnRuleMessagesTest {
     // What the complaint presenter allows in the details, well above anything these tests type.
     private static final int COMPLAINT_DETAILS_LIMIT = 1000;
     private static final String RATING = "Rating (0–5)";
+    private static final VenueLimitsProperties VENUE_LIMITS = new VenueLimitsProperties(12, 49_500, 1_000_000, 100_000);
 
     private ViewHarness harness;
 
@@ -417,6 +422,62 @@ class FieldOwnRuleMessagesTest {
         EventManagementView view = new EventManagementView(presenter);
         harness.attach(view);
         view.beforeEnter(routeTo("eventId", "new"));
+        return view;
+    }
+
+    // ---- VenueMapEditorView ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Zone name", "Price"})
+    void GivenTheVenueEditor_WhenARequiredZoneFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        TextField field = field(venueEditor(), TextField.class, label);
+
+        field.clear();
+
+        assertSaysWhatIsWrong(field, label);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Rows", "Seats / row", "Capacity", "Grid row", "Grid col", "Row span", "Col span",
+        "Grid rows", "Grid cols"})
+    void GivenTheVenueEditor_WhenANumberIsBelowItsMinimum_ThenItSaysWhatIsWrong(String label) {
+        IntegerField field = field(venueEditor(), IntegerField.class, label);
+
+        field.setValue(field.getMin() - 1);
+
+        assertSaysWhatIsWrong(field, label + " below its minimum");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Rows", "Seats / row", "Capacity", "Grid row", "Grid col", "Row span", "Col span",
+        "Grid rows", "Grid cols"})
+    void GivenTheVenueEditor_WhenANumberIsAboveItsMaximum_ThenItSaysWhatIsWrong(String label) {
+        IntegerField field = field(venueEditor(), IntegerField.class, label);
+
+        field.setValue(field.getMax() + 1);
+
+        assertSaysWhatIsWrong(field, label + " above its maximum");
+    }
+
+    // A placement field's maximum follows the canvas, so its message must name the new one.
+    @Test
+    void GivenTheVenueEditor_WhenTheCanvasGrowsAndAPlacementIsAboveTheNewMaximum_ThenItNamesTheNewMaximum() {
+        VenueMapEditorView view = venueEditor();
+        IntegerField gridRows = field(view, IntegerField.class, "Grid rows");
+        IntegerField gridRow = field(view, IntegerField.class, "Grid row");
+        int grown = gridRows.getValue() + 1;
+        gridRows.setValue(grown);
+
+        gridRow.setValue(grown + 1);
+
+        assertSaysWhatIsWrong(gridRow, "a grid row past the grown canvas");
+        assertTrue(gridRow.getErrorMessage().contains(String.valueOf(grown)),
+            "the message must name the new maximum, " + grown + ": " + gridRow.getErrorMessage());
+    }
+
+    private VenueMapEditorView venueEditor() {
+        VenueMapEditorView view = new VenueMapEditorView(mock(VenueMapPresenter.class), VENUE_LIMITS);
+        harness.attach(view);
         return view;
     }
 
