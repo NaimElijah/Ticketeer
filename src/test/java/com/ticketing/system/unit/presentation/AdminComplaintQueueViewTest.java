@@ -118,6 +118,18 @@ class AdminComplaintQueueViewTest {
         assertEquals("2", badge(rows(view).get(1)));
     }
 
+    // The view selects the first row on its own, without opening it; a click on that row still opens it (#189).
+    @Test
+    void GivenTheRowTheViewSelectedOnItsOwn_WhenTheReaderClicksIt_ThenItIsOpened() {
+        AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
+        verify(presenter, never()).open(any(), any(), any());
+
+        click(rows(view).get(0));
+
+        verify(presenter).open(any(), eq(first), any());
+    }
+
     @Test
     void GivenTheOpenFails_WhenTheReaderOpensARow_ThenNoToastShowsAndTheBadgeStays() {
         when(presenter.open(any(), any(), any()))
