@@ -72,6 +72,16 @@ class CatalogFilterSupportTest {
                 CatalogFilterSupport.dateWindow("This weekend", saturday));
     }
 
+    // On a Sunday the weekend is nearly over, so "This weekend" means what is left of it, today, not the next
+    // one (the owner's decision, 2026-11-07, #189).
+    @Test
+    void GivenThisWeekendOnASunday_WhenDateWindow_ThenIsTodayOnly() {
+        LocalDate sunday = LocalDate.of(2026, 6, 28);
+
+        assertEquals(new CatalogFilterSupport.DateWindow(sunday, sunday),
+                CatalogFilterSupport.dateWindow("This weekend", sunday));
+    }
+
     @Test
     void GivenCustomRange_WhenDateWindow_ThenIsOpenBounds() {
         // "Custom range" falls through to the default case — the view reads the

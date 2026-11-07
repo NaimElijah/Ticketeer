@@ -49,7 +49,9 @@ public final class CatalogFilterSupport {
         if (preset == null) return new DateWindow(null, null);
         return switch (preset) {
             case "Today" -> new DateWindow(today, today);
+            // On a Sunday the weekend is today alone, not the next one (the owner's decision, #189).
             case "This weekend" -> {
+                if (today.getDayOfWeek() == DayOfWeek.SUNDAY) yield new DateWindow(today, today);
                 LocalDate sat = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY));
                 yield new DateWindow(sat, sat.plusDays(1));
             }
