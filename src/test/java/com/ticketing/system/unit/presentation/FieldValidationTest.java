@@ -15,6 +15,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -27,6 +29,8 @@ import java.util.Locale;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
@@ -92,6 +96,8 @@ class FieldValidationTest {
     private static final String PAY_LABEL_PREFIX = "Pay ";
 
     private ViewHarness harness;
+    // The checkout's presenter, once a test has built the checkout.
+    private CheckoutPresenter checkoutPresenter;
 
     @BeforeEach
     void setUp() {
@@ -203,6 +209,22 @@ class FieldValidationTest {
         click(payButton(view));
 
         assertRefusedAt(field(view, TextField.class, "Card number"), "Card number");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"4111 1111 1111 111", "4111 1111 1111 11111"})
+    void GivenACardNumberOneDigitEitherSideOf16_WhenTheMemberPays_ThenTheCardNumberIsRefusedAndNothingIsPaid(
+            String cardNumber) {
+        CheckoutView view = memberCheckout();
+        field(view, TextField.class, "Cardholder name").setValue("Alice Example");
+        field(view, TextField.class, "Card number").setValue(cardNumber);
+        field(view, TextField.class, "Expiry").setValue("12/30");
+        field(view, TextField.class, "CVC").setValue("123");
+
+        click(payButton(view));
+
+        assertRefusedAt(field(view, TextField.class, "Card number"), "Card number");
+        verify(checkoutPresenter, never()).payAsMember(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -501,6 +523,7 @@ class FieldValidationTest {
 
     private CheckoutView checkout(CheckoutPresenter.Identity identity) {
         CheckoutPresenter presenter = mock(CheckoutPresenter.class);
+        checkoutPresenter = presenter;
         when(presenter.resolveIdentity()).thenReturn(identity);
         when(presenter.loadOrder()).thenReturn(
             new CheckoutPresenter.LoadOutcome.Loaded(order(), new CheckoutPresenter.Pricing(TOTAL_CENTS, TOTAL_CENTS)));
