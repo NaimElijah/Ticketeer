@@ -72,6 +72,7 @@ class PopoverTriggerA11yTest {
     @Test
     void GivenASelect_WhenTheUserPicksAnotherOption_ThenOnlyThatOptionIsMarkedChosen() {
         LkSelect select = new LkSelect("Israel", COUNTRIES).label(COUNTRY);
+        harness.attach(select);
         assertOnlyChosen(select, COUNTRIES, "Israel");
 
         choose(select, "France");
@@ -96,6 +97,7 @@ class PopoverTriggerA11yTest {
     @Test
     void GivenADateRange_WhenTheUserPicksAnotherPreset_ThenOnlyThatPresetIsMarkedChosen() {
         LkDateRangeField range = new LkDateRangeField("Next 7 days").label(WHEN);
+        harness.attach(range);
         List<String> presets = List.of("Any time", "Today", "Next 7 days", "Next 30 days");
         assertOnlyChosen(range, presets, "Next 7 days");
 
@@ -123,6 +125,7 @@ class PopoverTriggerA11yTest {
     @Test
     void GivenAFilterChip_WhenTheUserTicksAnotherOption_ThenBothTickedOptionsAreMarkedChosen() {
         LkFilterChip chip = new LkFilterChip(STATUS, STATUSES, false, List.of("Open"));
+        harness.attach(chip);
         assertOnlyChosen(chip, STATUSES, "Open");
 
         choose(chip, "Closed");

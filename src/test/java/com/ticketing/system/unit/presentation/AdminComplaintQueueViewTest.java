@@ -67,6 +67,7 @@ class AdminComplaintQueueViewTest {
     @Test
     void GivenAQueueOfTwoThreads_WhenTheViewIsBuilt_ThenNoThreadIsOpenedAndEveryBadgeStays() {
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
 
         verify(presenter, never()).open(any(), any(), any());
         assertEquals(List.of("2", "2"), rows(view).stream().map(InboxViewHarness::badge).toList());
@@ -75,6 +76,7 @@ class AdminComplaintQueueViewTest {
     @Test
     void GivenAQueueOfTwoThreads_WhenTheReaderClicksTheSecondRow_ThenOnlyThatThreadIsOpened() {
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -88,6 +90,7 @@ class AdminComplaintQueueViewTest {
         when(presenter.load(any(), eq(OPEN)))
             .thenReturn(new AdminComplaintQueuePresenter.Outcome.Success(List.of(second)));
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
         clearInvocations(presenter);
 
         find(view, LkSelect.class).get(0).setValue(OPEN);
@@ -107,6 +110,7 @@ class AdminComplaintQueueViewTest {
         when(presenter.open(any(), any(), any()))
             .thenReturn(new AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated());
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -119,6 +123,7 @@ class AdminComplaintQueueViewTest {
         when(presenter.open(any(), any(), any()))
             .thenReturn(new AdminComplaintQueuePresenter.ActionOutcome.Failure("reason"));
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -136,6 +141,7 @@ class AdminComplaintQueueViewTest {
             return new AdminComplaintQueuePresenter.ActionOutcome.Success();
         });
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 

@@ -360,9 +360,10 @@ final class ViewHarness implements AutoCloseable {
     }
 
     /**
-     * Clicks {@code component} as the visitor would, which only a control that shows and is enabled allows.
+     * Clicks {@code component} as the visitor would, which only a control on the page, shown and enabled, allows.
      *
-     * @throws AssertionError when {@code component} or an ancestor is hidden, or it is disabled
+     * @throws AssertionError when {@code component} is attached to no UI (a view the test never attached, or a
+     *     control a rebuild removed), it or an ancestor is hidden, or it is disabled
      */
     static void click(Component component) {
         A11y.requireActionable(component.getElement(), "click");
@@ -375,15 +376,23 @@ final class ViewHarness implements AutoCloseable {
      * one unless its listener opts in with {@code DisabledUpdateMode.ALWAYS}. It does not check whether a
      * popover or dialog is open. Only for a test that pins a view's own guard behind such a control, so the
      * guard still holds if that ever changes.
+     *
+     * @throws AssertionError when {@code component} is attached to no UI: a control on no page is not one a
+     *     guard protects
      */
     static void forceClick(Component component) {
+        if (component.getUI().isEmpty()) {
+            throw new AssertionError("cannot force a click on " + A11y.describe(component.getElement())
+                + ": it is attached to no UI");
+        }
         ComponentUtil.fireEvent(component, new ClickEvent<>(component));
     }
 
     /**
      * Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}.
      *
-     * @throws AssertionError when {@code element} or an ancestor is hidden, or it is disabled
+     * @throws AssertionError when {@code element} is attached to no UI, it or an ancestor is hidden, or it is
+     *     disabled
      */
     static void domClick(Element element) {
         A11y.requireActionable(element, "click");

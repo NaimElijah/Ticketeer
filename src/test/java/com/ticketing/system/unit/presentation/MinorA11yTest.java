@@ -535,6 +535,7 @@ class MinorA11yTest {
                 new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5)),
             new SystemAnalyticsPresenter.Outcome.Failure("analytics-down"));
         SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime);
+        harness.attach(view);
         String loadedAt = displayTime.formatNow(TIME_OF_DAY);
         clock.advance(Duration.ofMinutes(5));
 
@@ -981,11 +982,12 @@ class MinorA11yTest {
         return presenter;
     }
 
-    private static NewInquiryView inquiryWithAcmeChosen() {
+    private NewInquiryView inquiryWithAcmeChosen() {
         NewInquiryPresenter presenter = mock(NewInquiryPresenter.class);
         when(presenter.searchCompanies(anyString())).thenReturn(new NewInquiryPresenter.SearchOutcome.Success(
             List.of(new CompanySummaryDTO(3, "Acme", null))));
         NewInquiryView view = new NewInquiryView(presenter);
+        harness.attach(view);
         field(view, TextField.class, "Production company").setValue("Ac");
         click(buttons(view, "Acme").get(0));
         return view;

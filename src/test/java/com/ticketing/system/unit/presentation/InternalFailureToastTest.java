@@ -89,6 +89,7 @@ class InternalFailureToastTest {
         when(presenter.loadCart()).thenReturn(new CartPresenter.LoadOutcome.Shown(cart, CART_CENTS));
         when(presenter.removeLine(any())).thenReturn(new CartPresenter.RemoveOutcome.Failure(GENERIC));
         CartView view = new CartView(presenter);
+        harness.attach(view);
 
         click(button(view, "Remove"));
 
@@ -128,6 +129,7 @@ class InternalFailureToastTest {
         when(presenter.reserveStanding(anyInt(), anyInt(), anyInt()))
             .thenReturn(new SeatPickerPresenter.ReserveOutcome.Failure(GENERIC));
         SeatPickerView view = new SeatPickerView(presenter, new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
 
         click(find(view, LkBtn.class).stream()

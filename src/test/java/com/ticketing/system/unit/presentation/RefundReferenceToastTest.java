@@ -68,6 +68,7 @@ class RefundReferenceToastTest {
     @Test
     void GivenARefundableOrder_WhenTheMemberRequestsItsRefund_ThenTheReferenceIsStillShownAfterTheRefresh() {
         MyAccountView view = myAccount();
+        harness.attach(view);
 
         click(button(view, "Request Refund"));
         assertTrue(harness.confirmOpenDialog(), "a refund asks for confirmation first");

@@ -107,6 +107,7 @@ class CategoryLabelsTest {
         LandingPresenter presenter = mock(LandingPresenter.class);
         when(presenter.load()).thenReturn(new LandingPresenter.Outcome.Success(List.of(), List.of()));
         LandingView view = new LandingView(presenter);
+        harness.attach(view);
 
         List<Component> cards = categoryCards(view);
         cards.forEach(card -> domClick(card.getElement()));

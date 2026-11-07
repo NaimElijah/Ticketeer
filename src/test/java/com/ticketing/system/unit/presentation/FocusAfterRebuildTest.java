@@ -694,11 +694,12 @@ class FocusAfterRebuildTest {
             .orElseThrow(() -> new AssertionError("no zone " + zone + " on the map"));
     }
 
-    private static VenueMapEditorView venueEditorWithTwoZones() {
+    private VenueMapEditorView venueEditorWithTwoZones() {
         VenueMapPresenter presenter = mock(VenueMapPresenter.class);
         when(presenter.defaultZoneName(any())).thenReturn("Zone 2");
         VenueMapEditorView view = new VenueMapEditorView(presenter,
             new VenueLimitsProperties(12, 49_500, 1_000_000, 100_000));
+        harness.attach(view);
         click(button(view, "+ Seated"));
         return view;
     }

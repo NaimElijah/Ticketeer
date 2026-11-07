@@ -116,10 +116,12 @@ class NotificationBellComponentTest {
 
     // Records each id the bell tries to mark, then answers as the store would.
     private NotificationBellComponent bell(Function<String, MarkReadOutcome> store) {
-        return new NotificationBellComponent(id -> {
+        NotificationBellComponent bell = new NotificationBellComponent(id -> {
             attempted.add(id);
             return store.apply(id);
         }, createdAt -> "");
+        harness.attach(bell);
+        return bell;
     }
 
     // The bell lists the newest first, so minutesAgo orders the rows top to bottom.

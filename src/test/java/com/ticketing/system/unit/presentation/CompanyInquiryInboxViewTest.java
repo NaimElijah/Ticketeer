@@ -67,6 +67,7 @@ class CompanyInquiryInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheViewIsBuilt_ThenNoThreadIsOpenedAndEveryBadgeStays() {
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         verify(presenter, never()).open(any(), any(), any());
         assertEquals(List.of("2", "2"), rows(view).stream().map(InboxViewHarness::badge).toList());
@@ -75,6 +76,7 @@ class CompanyInquiryInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheReaderClicksTheSecondRow_ThenOnlyThatThreadIsOpened() {
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -86,6 +88,7 @@ class CompanyInquiryInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheStatusFilterLeavesOnlyTheSecond_ThenTheViewSelectsItWithoutOpeningIt() {
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
         clearInvocations(presenter);
 
         applyStatusFilter(view, "Open");
@@ -104,6 +107,7 @@ class CompanyInquiryInboxViewTest {
         when(presenter.open(any(), any(), any()))
             .thenReturn(new CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated());
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -116,6 +120,7 @@ class CompanyInquiryInboxViewTest {
         when(presenter.open(any(), any(), any()))
             .thenReturn(new CompanyInquiryInboxPresenter.ActionOutcome.Failure("reason"));
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -133,6 +138,7 @@ class CompanyInquiryInboxViewTest {
             return new CompanyInquiryInboxPresenter.ActionOutcome.Success();
         });
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 

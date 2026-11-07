@@ -91,6 +91,7 @@ class VenueMapFailedLoadTest {
     @Test
     void GivenANonNumericEventId_WhenTheEditorOpens_ThenItSaysNotFoundSaveMapIsDisabledAndNothingIsSaved() {
         VenueMapEditorView view = new VenueMapEditorView(presenter, LIMITS);
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", "abc"));
 
         // Neither the browser nor Flow lets a click reach the disabled Save Map; forced through, the view's own

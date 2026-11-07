@@ -133,6 +133,7 @@ class LiveAnnouncementsTest {
             List.of(thread("c1", "COMPLAINT", "ADMIN_GROUP"))));
         when(presenter.badge(any(), any())).thenReturn(Optional.empty());
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
         Element region = liveRegionSaying(view, Pattern.compile("(?i)\\b2 complaints\\b"), "the complaint count");
 
         choose(view, "Open");
@@ -168,6 +169,7 @@ class LiveAnnouncementsTest {
     @Test
     void GivenTheQuantityIncreasedToItsMaximum_WhenTheSelectorRefreshes_ThenIncreaseIsAriaDisabledButStillFocusable() {
         VkQuantitySelector selector = new VkQuantitySelector(2, 1000, null);
+        harness.attach(selector);
         NativeButton increase = stepButtons(selector).get(1);
 
         click(increase);
@@ -179,6 +181,7 @@ class LiveAnnouncementsTest {
     @Test
     void GivenTheQuantityAtItsMinimum_WhenDecreaseIsActivated_ThenTheQuantityStaysAtOne() {
         VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+        harness.attach(selector);
 
         click(stepButtons(selector).get(0));
 
@@ -188,6 +191,7 @@ class LiveAnnouncementsTest {
     @Test
     void GivenAQuantitySelector_WhenTheQuantityIncreases_ThenTheSameLiveRegionAnnouncesTheCountAndPrice() {
         VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+        harness.attach(selector);
         Element region = liveRegionSaying(selector, Pattern.compile("(?i)\\b1 ticket\\b.*\\$10\\.00"),
             "the quantity and price");
 
@@ -347,13 +351,14 @@ class LiveAnnouncementsTest {
             EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of(), 50.0);
     }
 
-    private static SeatPickerView seatPicker() {
+    private SeatPickerView seatPicker() {
         SeatPickerPresenter presenter = mock(SeatPickerPresenter.class);
         when(presenter.loadZone(anyInt(), anyInt())).thenReturn(new SeatPickerPresenter.LoadOutcome.Loaded(
             new InventoryZoneDTO(8, "Floor", "SEATED", 2, 2, 0, 0, 10.0,
                 List.of(new SeatDTO("A1", 1, 0, "AVAILABLE"), new SeatDTO("A2", 2, 0, "AVAILABLE")), null),
             ZoneType.SEATED));
         SeatPickerView view = new SeatPickerView(presenter, new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", "5", "zoneId", "8"));
         return view;
     }
@@ -365,7 +370,7 @@ class LiveAnnouncementsTest {
             .orElseThrow(() -> new AssertionError("no seat " + label + " on the picker"));
     }
 
-    private static EventDetailsView eventPage() {
+    private EventDetailsView eventPage() {
         EventDetailsPresenter presenter = mock(EventDetailsPresenter.class);
         when(presenter.load(any(), anyInt())).thenReturn(new EventDetailsPresenter.Outcome.Success(
             new EventDetailDTO("5", "Coldplay", null, "Live", EventCategory.CONCERT, null, "3", "Acme",
@@ -375,6 +380,7 @@ class LiveAnnouncementsTest {
             3, 3, null));
         EventDetailsView view = new EventDetailsView(presenter, mock(SessionIdentity.class),
             new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", "5"));
         return view;
     }
@@ -386,12 +392,14 @@ class LiveAnnouncementsTest {
             .orElseThrow(() -> new AssertionError("no zone " + zone + " on the map"));
     }
 
-    private static AdminSendMessagesView sendMessagesView() {
+    private AdminSendMessagesView sendMessagesView() {
         ViewHarness.signInAdmin();
         AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
         when(presenter.load(any())).thenReturn(new AdminSendMessagesPresenter.Outcome.Success(List.of()));
         when(presenter.searchUsers(any(), any())).thenReturn(new AdminSendMessagesPresenter.SearchOutcome.Success(
             List.of(new MemberSearchResultDTO(7, "alice"), new MemberSearchResultDTO(8, "alan"))));
-        return new AdminSendMessagesView(presenter, displayTime());
+        AdminSendMessagesView view = new AdminSendMessagesView(presenter, displayTime());
+        harness.attach(view);
+        return view;
     }
 }

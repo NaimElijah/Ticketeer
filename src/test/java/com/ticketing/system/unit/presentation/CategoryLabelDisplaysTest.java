@@ -92,6 +92,7 @@ class CategoryLabelDisplaysTest {
             new PurchaseHistoryDTO(List.of(order()))));
         MyAccountView view = new MyAccountView(presenter, mock(RefundPresenter.class), identity,
             InboxViewHarness.displayTime());
+        harness.attach(view);
 
         click(button(view, "View ticket + barcode"));
 
@@ -104,6 +105,7 @@ class CategoryLabelDisplaysTest {
         when(accountService.viewMyReceipt(MEMBER_TOKEN, ORDER_ID)).thenReturn(order());
         ReceiptView view = new ReceiptView(new ReceiptPresenter(accountService), mock(RefundPresenter.class),
             identity, InboxViewHarness.displayTime());
+        harness.attach(view);
         view.beforeEnter(routeTo("receiptId", String.valueOf(ORDER_ID)));
 
         click(button(view, "View ticket"));

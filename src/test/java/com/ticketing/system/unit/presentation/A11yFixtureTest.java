@@ -27,8 +27,8 @@ import com.vaadin.flow.dom.Element;
  * and a button test passes on a span that only listens for clicks.
  *
  * <p>They also click and read only what shows (#189): a click, an activation or a key press fails on a hidden
- * or disabled control, or one in a closed popover or dialog, which no visitor can use; a focus call on one does
- * not count; and text under a hidden element is not shown text.
+ * or disabled control, one in a closed popover or dialog, or one attached to no page, which no visitor can use;
+ * a focus call on one does not count; and text under a hidden element is not shown text.
  */
 class A11yFixtureTest {
 
@@ -416,6 +416,66 @@ class A11yFixtureTest {
         page.add(card);
 
         assertThrows(AssertionError.class, () -> A11y.activate(card.getElement()));
+    }
+
+    // ---- #263 review: a control on no page cannot be used ----
+
+    @Test
+    void GivenAButtonInAViewNeverAttached_WhenClicked_ThenTheClickFailsAndItsListenerNeverRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        Div view = new Div(button);
+
+        AssertionError refused = assertThrows(AssertionError.class, () -> ViewHarness.click(button),
+            "a view the router never attached shows nothing, so no visitor can click it");
+
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+        assertTrue(refused.getMessage().contains("attached to no UI"), "the failure must say why: " + refused);
+        assertFalse(view.getUI().isPresent(), "precondition: the view is on no page");
+    }
+
+    @Test
+    void GivenAButtonARebuildRemoved_WhenClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        page.add(button);
+        ViewHarness.click(button);
+
+        page.remove(button);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(button),
+            "a control the page no longer shows cannot be clicked");
+        assertEquals(1, clicks.get(), "only the click made while it showed reaches the listener");
+    }
+
+    @Test
+    void GivenADisabledButtonOnNoPage_WhenForceClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        button.setEnabled(false);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.forceClick(button));
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+    }
+
+    @Test
+    void GivenADetachedElementWithAClickListener_WhenDomClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        Div card = new Div();
+        card.getElement().addEventListener("click", e -> clicks.incrementAndGet());
+
+        assertThrows(AssertionError.class, () -> ViewHarness.domClick(card.getElement()));
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+    }
+
+    @Test
+    void GivenADetachedSpanWithAClickListener_WhenActivated_ThenTheActivationFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        Span span = roleButtonSpan();
+        span.addClickListener(e -> clicks.incrementAndGet());
+
+        assertThrows(AssertionError.class, () -> A11y.activate(span.getElement()));
+        assertEquals(0, clicks.get(), "a refused activation must not reach the listener");
     }
 
     // A popover the trigger opens on a click, as the kit's LkPopover builds one; the trigger sits on the page

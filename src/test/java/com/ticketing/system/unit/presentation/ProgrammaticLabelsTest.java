@@ -134,6 +134,7 @@ class ProgrammaticLabelsTest {
     @Test
     void GivenADraftEvent_WhenTheOwnerOpensItsStatusDialog_ThenTheStatusSelectIsNamed() {
         CompanyEventListView view = myEvents();
+        harness.attach(view);
 
         click(button(view, "Change status"));
 
@@ -149,6 +150,7 @@ class ProgrammaticLabelsTest {
     @Test
     void GivenTwoArtistRows_WhenTheyRender_ThenEachRowFieldIsNamedByTheLabelAndItsPosition() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
+        harness.attach(rows);
         click(button(rows, "+ Add artist"));
 
         List<TextField> fields = find(rows, TextField.class);

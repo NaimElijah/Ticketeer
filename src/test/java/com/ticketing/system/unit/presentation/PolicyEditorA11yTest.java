@@ -258,8 +258,9 @@ class PolicyEditorA11yTest {
         return presenter;
     }
 
-    private static PurchasePolicyEditorView open(PurchasePolicyEditorPresenter presenter) {
+    private PurchasePolicyEditorView open(PurchasePolicyEditorPresenter presenter) {
         PurchasePolicyEditorView view = new PurchasePolicyEditorView(presenter);
+        harness.attach(view);
         view.beforeEnter(routeTo());
         return view;
     }

@@ -52,6 +52,7 @@ class EventPageCancelConfirmationTest {
                 "Acme", EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of("Coldplay"), 50.0)));
         when(presenter.cancel(any(), anyInt())).thenReturn(new EventManagementPresenter.CancelOutcome.Success());
         view = new EventManagementView(presenter);
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID)));
     }
 

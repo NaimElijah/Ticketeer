@@ -99,6 +99,7 @@ class ClickOnlyControlsTest {
     void GivenTheOrgTreeOnAcme_WhenTheAdminActivatesBeta_ThenBetaBecomesTheCurrentCompany() {
         ViewHarness.signInAdmin();
         OrganizationalTreeView view = new OrganizationalTreeView(orgTree());
+        harness.attach(view);
 
         activate(control(view, "Beta Productions"));
 
@@ -168,6 +169,7 @@ class ClickOnlyControlsTest {
         when(presenter.searchUsers(any(), anyString())).thenReturn(new AdminSendMessagesPresenter.SearchOutcome.Success(
             List.of(new MemberSearchResultDTO(7, "bob"))));
         AdminSendMessagesView view = new AdminSendMessagesView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
 
         field(view, TextField.class, "Search members").setValue("bo");
         activate(control(view, "bob"));
@@ -281,13 +283,14 @@ class ClickOnlyControlsTest {
             List.of(), ZoneOffset.UTC, 50.0, 50.0, false, List.of());
     }
 
-    private static SeatPickerView seatPicker() {
+    private SeatPickerView seatPicker() {
         SeatPickerPresenter presenter = mock(SeatPickerPresenter.class);
         when(presenter.loadZone(anyInt(), anyInt())).thenReturn(new SeatPickerPresenter.LoadOutcome.Loaded(
             new InventoryZoneDTO(8, "Floor", "SEATED", 2, 2, 0, 0, 10.0,
                 List.of(new SeatDTO("A1", 1, 0, "AVAILABLE"), new SeatDTO("A2", 2, 0, "AVAILABLE")), null),
             ZoneType.SEATED));
         SeatPickerView view = new SeatPickerView(presenter, new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", "5", "zoneId", "8"));
         return view;
     }

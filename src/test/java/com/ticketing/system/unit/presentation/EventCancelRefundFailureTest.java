@@ -129,6 +129,7 @@ class EventCancelRefundFailureTest {
         EventManagementService eventService = eventServiceWhoseRefundsFail(gatewayUnreachable());
         CompanyEventListView view = new CompanyEventListView(realEventListPresenter(eventService),
             InboxViewHarness.displayTime());
+        harness.attach(view);
         long readsBeforeTheCancel = eventListReads(eventService);
 
         click(button(view, "Cancel event"));
@@ -270,6 +271,7 @@ class EventCancelRefundFailureTest {
 
     private void cancelFromMyEvents(CompanyEventListPresenter presenter) {
         CompanyEventListView view = new CompanyEventListView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
         click(button(view, "Cancel event"));
         assertTrue(harness.confirmOpenDialog(), "cancelling from My Events asks for confirmation");
     }
@@ -277,6 +279,7 @@ class EventCancelRefundFailureTest {
     // The event page asks for confirmation first, as My Events does (UI-A4).
     private void cancelFromTheEventPage(EventManagementPresenter presenter) {
         EventManagementView view = new EventManagementView(presenter);
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID)));
         click(button(view, "Cancel This Event"));
         assertTrue(harness.confirmOpenDialog(), "cancelling from the event page asks for confirmation");

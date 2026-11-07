@@ -108,6 +108,7 @@ class ZonePriceCentsTest {
         when(eventService.getEventZones(MEMBER_TOKEN, EVENT_ID)).thenReturn(layoutWithOneZone());
         when(eventService.getEventDetail(MEMBER_TOKEN, EVENT_ID)).thenReturn(eventOfCompany());
         VenueMapEditorView view = new VenueMapEditorView(new VenueMapPresenter(eventService), LIMITS);
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID)));
 
         click(button(view, "Apply Zone"));

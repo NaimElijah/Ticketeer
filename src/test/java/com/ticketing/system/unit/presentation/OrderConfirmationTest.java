@@ -149,6 +149,7 @@ class OrderConfirmationTest {
             new LoginDTO(new AuthTokenDTO(ViewHarness.MEMBER_TOKEN, 0L, ViewHarness.MEMBER_ID, "alice"), null,
                 List.of())));
         LoginView loginView = new LoginView(login, mock(SessionIdentity.class));
+        harness.attach(loginView);
         field(loginView, TextField.class, "Username").setValue("alice");
         field(loginView, PasswordField.class, "Password").setValue("secret-pw");
 

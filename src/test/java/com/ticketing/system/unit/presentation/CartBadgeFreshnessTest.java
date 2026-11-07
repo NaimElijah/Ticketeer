@@ -126,6 +126,7 @@ class CartBadgeFreshnessTest {
         when(reservationService.viewMyActiveOrder(MEMBER_TOKEN)).thenReturn(order(2), order(1));
         MainLayout layout = mainLayout();
         CartView cartView = new CartView(new CartPresenter(reservationService, identity));
+        harness.attach(cartView);
 
         click(button(cartView, "Remove"));
         layout.afterNavigation(mock(AfterNavigationEvent.class));
@@ -199,6 +200,7 @@ class CartBadgeFreshnessTest {
         when(login.attemptLogin(any(), any(), any())).thenReturn(new LoginPresenter.Outcome.Success(
             new LoginDTO(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "alice"), null, List.of())));
         LoginView loginView = new LoginView(login, identity);
+        harness.attach(loginView);
         field(loginView, TextField.class, "Username").setValue("alice");
         field(loginView, PasswordField.class, "Password").setValue("secret-pw");
 
@@ -221,6 +223,7 @@ class CartBadgeFreshnessTest {
             .thenReturn(new VenueMapDTO(1, null, 3, 3, List.of(zone)));
         SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity),
             new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
         return view;
     }
@@ -233,6 +236,7 @@ class CartBadgeFreshnessTest {
             .thenReturn(new VenueMapDTO(1, null, 3, 3, List.of(zone)));
         SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity),
             new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
         return view;
     }
