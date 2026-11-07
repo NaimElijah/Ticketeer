@@ -8,6 +8,7 @@ import com.ticketing.system.ui.components.kit.LkSideNav;
 import com.ticketing.system.ui.components.kit.LkTopBar;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.views.admin.AdminComplaintQueueView;
 import com.ticketing.system.ui.views.admin.AdminInboxView;
 import com.ticketing.system.ui.views.admin.AdminSendMessagesView;
@@ -132,8 +133,8 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
         String[] parts = name.trim().split("\\s+");
         if (parts.length == 1) {
             String p = parts[0];
-            return p.substring(0, Math.min(2, p.length())).toUpperCase();
+            return p.substring(0, Math.min(2, p.length())).toUpperCase(DisplayLocale.PAGE);
         }
-        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase(DisplayLocale.PAGE);
     }
 }

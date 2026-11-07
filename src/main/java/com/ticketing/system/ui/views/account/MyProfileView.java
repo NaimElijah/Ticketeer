@@ -10,6 +10,7 @@ import com.ticketing.system.ui.presenters.account.MyProfilePresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.DescriptionList;
 import com.vaadin.flow.component.html.Div;
@@ -100,8 +101,8 @@ public class MyProfileView extends LkPage {
         String[] parts = name.trim().split("\\s+");
         if (parts.length == 1) {
             String p = parts[0];
-            return p.substring(0, Math.min(2, p.length())).toUpperCase();
+            return p.substring(0, Math.min(2, p.length())).toUpperCase(DisplayLocale.PAGE);
         }
-        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase(DisplayLocale.PAGE);
     }
 }

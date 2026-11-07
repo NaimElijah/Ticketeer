@@ -10,6 +10,7 @@ import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.SignOutFlow;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.account.MyInvitationsView;
 import com.ticketing.system.ui.views.account.MyProfileView;
@@ -176,9 +177,9 @@ public class WorkspaceLayout extends AppLayout implements AfterNavigationObserve
         String[] parts = name.trim().split("\\s+");
         if (parts.length == 1) {
             String p = parts[0];
-            return p.substring(0, Math.min(2, p.length())).toUpperCase();
+            return p.substring(0, Math.min(2, p.length())).toUpperCase(DisplayLocale.PAGE);
         }
-        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase(DisplayLocale.PAGE);
     }
 
 }

@@ -3,6 +3,7 @@ package com.ticketing.system.ui.presenters.company;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +19,6 @@ import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.session.SessionIdentity;
-import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
@@ -429,7 +429,7 @@ public class PurchasePolicyEditorPresenter {
             if (c == '\\' || c == '"') {
                 escaped.append('\\').append(c);
             } else if (c < FIRST_NON_CONTROL_CHAR) {
-                escaped.append(String.format(DisplayLocale.PAGE, "\\u%04x", (int) c));
+                escaped.append(String.format(Locale.ROOT, "\\u%04x", (int) c));
             } else {
                 escaped.append(c);
             }

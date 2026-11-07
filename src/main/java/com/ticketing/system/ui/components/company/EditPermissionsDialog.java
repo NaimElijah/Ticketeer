@@ -6,6 +6,7 @@ import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
@@ -93,7 +94,7 @@ public class EditPermissionsDialog {
 
     /** MANAGE_INVENTORY -> "Manage inventory". */
     private static String humanize(String enumName) {
-        return Arrays.stream(enumName.toLowerCase().split("_"))
+        return Arrays.stream(enumName.toLowerCase(DisplayLocale.PAGE).split("_"))
             .reduce((a, b) -> a + " " + b)
             .map(s -> Character.toUpperCase(s.charAt(0)) + s.substring(1))
             .orElse(enumName);

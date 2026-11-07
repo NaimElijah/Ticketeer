@@ -563,7 +563,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         StringBuilder s = new StringBuilder();
         s.append(n).append(" event").append(n == 1 ? "" : "s");
         if (!CAT_ALL.equals(filterCategory))
-            s.append(" · ").append(filterCategory.toLowerCase());
+            s.append(" · ").append(filterCategory.toLowerCase(DisplayLocale.PAGE));
         if (!filterArtist.isBlank())
             s.append(" · ").append(filterArtist);
         if (!CITY_ALL.equals(filterCity))
@@ -576,7 +576,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
                 s.append(" · ").append(customFromPicker.getValue())
                  .append(" → ").append(customToPicker.getValue());
             } else if (!"Custom range".equals(filterDateRange)) {
-                s.append(" · ").append(filterDateRange.toLowerCase());
+                s.append(" · ").append(filterDateRange.toLowerCase(DisplayLocale.PAGE));
             }
         }
         if (filterPriceMin != null || filterPriceMax != null) {

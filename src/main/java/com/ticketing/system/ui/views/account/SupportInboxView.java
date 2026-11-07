@@ -16,6 +16,7 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
 import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
@@ -334,6 +335,6 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     /** "OPEN" → "Open", "RESPONDED" → "Responded", etc. */
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
-        return status.charAt(0) + status.substring(1).toLowerCase();
+        return status.charAt(0) + status.substring(1).toLowerCase(DisplayLocale.PAGE);
     }
 }

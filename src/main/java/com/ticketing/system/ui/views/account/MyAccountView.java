@@ -339,7 +339,7 @@ public class MyAccountView extends LkPage {
 
     private static String prettyStatus(TicketStatus st) {
         if (st == null) return "—";
-        String s = st.name().toLowerCase().replace('_', ' ');
+        String s = st.name().toLowerCase(DisplayLocale.PAGE).replace('_', ' ');
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
@@ -348,9 +348,9 @@ public class MyAccountView extends LkPage {
         String[] parts = name.trim().split("\\s+");
         if (parts.length == 1) {
             String p = parts[0];
-            return p.substring(0, Math.min(2, p.length())).toUpperCase();
+            return p.substring(0, Math.min(2, p.length())).toUpperCase(DisplayLocale.PAGE);
         }
-        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase(DisplayLocale.PAGE);
     }
 
     private static String escape(String s) {
