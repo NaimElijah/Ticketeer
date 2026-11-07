@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkChip;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -50,6 +51,8 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
 
     private static final String CHOOSE_COMPANY = "Please choose a production company.";
     private static final String CHOSEN_COMPANY_LABEL = "Company:";
+    private static final String ENTER_TITLE = "Enter a title.";
+    private static final String ENTER_DESCRIPTION = "Enter a description.";
 
     private final NewInquiryPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
@@ -104,11 +107,13 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
 
         subject.setPlaceholder("Brief summary of your question");
         subject.setRequired(true);
+        LkFieldRules.sayWhenEmpty(subject, ENTER_TITLE);
         LkTextLimit.apply(subject);
         subject.setWidthFull();
         details.setPlaceholder("Write your question to the organizer…");
         details.setMinHeight("160px");
         details.setRequired(true);
+        LkFieldRules.sayWhenEmpty(details, ENTER_DESCRIPTION);
         LkTextLimit.apply(details);
         details.setWidthFull();
 
@@ -199,10 +204,10 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
             return;
         }
         if (subject.isEmpty()) {
-            errors.reject(subject, "Enter a title.");
+            errors.reject(subject, ENTER_TITLE);
         }
         if (details.isEmpty()) {
-            errors.reject(details, "Enter a description.");
+            errors.reject(details, ENTER_DESCRIPTION);
         }
         if (!errors.isEmpty()) {
             refuse("Please fill in a title and description.");

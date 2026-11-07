@@ -30,6 +30,7 @@ import com.ticketing.system.ui.presenters.company.ManagerInvitationPresenter;
 import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
+import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.admin.AdminComplaintRespondView;
@@ -40,6 +41,7 @@ import com.ticketing.system.ui.views.auth.RegisterView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.ManagerInvitationView;
 import com.ticketing.system.ui.views.company.OwnerAppointmentView;
+import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
@@ -299,6 +301,20 @@ class FieldOwnRuleMessagesTest {
         typeThenEmpty(invitee);
 
         assertSaysWhatIsWrong(invitee, "an emptied invitee");
+    }
+
+    // ---- NewInquiryView ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Title", "Description"})
+    void GivenTheNewInquiryPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        NewInquiryView view = new NewInquiryView(mock(NewInquiryPresenter.class));
+        harness.attach(view);
+        Component field = field(view, Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
     }
 
     // ---- shared ----
