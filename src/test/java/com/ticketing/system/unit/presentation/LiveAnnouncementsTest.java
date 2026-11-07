@@ -278,13 +278,13 @@ class LiveAnnouncementsTest {
         AdminSendMessagesView view = sendMessagesView();
         TextField search = field(view, TextField.class, "Search members");
         search.setValue("al");
+        assertFalse(regionsSayingFound(view).isEmpty(),
+            "precondition: a live region says how many members the search found: "
+                + politeRegions(view).stream().map(A11y::text).toList());
 
         search.setValue("");
 
-        List<String> stale = politeRegions(view).stream()
-            .map(A11y::text)
-            .filter(text -> Pattern.compile("(?i)\\bfound\\b").matcher(text).find())
-            .toList();
+        List<String> stale = regionsSayingFound(view);
         assertTrue(stale.isEmpty(), "with the query cleared no results show, so no live region may still say how "
             + "many members were found: " + stale);
     }
@@ -340,6 +340,13 @@ class LiveAnnouncementsTest {
             what + " must say it is unavailable (aria-disabled=true): " + A11y.describe(button));
         assertFalse(A11y.disabled(button),
             what + " must stay focusable, not be disabled, so focus is not lost from it: " + A11y.describe(button));
+    }
+
+    private static List<String> regionsSayingFound(Component root) {
+        return politeRegions(root).stream()
+            .map(A11y::text)
+            .filter(text -> Pattern.compile("(?i)\\bfound\\b").matcher(text).find())
+            .toList();
     }
 
     private static List<Element> politeRegions(Component root) {

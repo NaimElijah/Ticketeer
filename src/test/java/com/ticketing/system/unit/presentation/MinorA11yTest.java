@@ -478,6 +478,8 @@ class MinorA11yTest {
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
 
         String text = A11y.text(view.getElement());
+        assertTrue(text.contains("Complaints members have sent to the TicketHub team."),
+            "the subtitle must say what the queue holds, in words: " + text);
         assertFalse(text.contains("type=COMPLAINT"),
             "the subtitle must not show the internal \"Conversation type=COMPLAINT\": " + text);
     }
@@ -702,7 +704,9 @@ class MinorA11yTest {
         view.beforeEnter(routeTo("eventId", "5", "zoneId", "8"));
 
         String text = A11y.text(view.getElement());
-        assertFalse(Pattern.compile("(?i)\\bgreen\\b").matcher(text).find(),
+        assertTrue(Pattern.compile("(?i)\\bavailable seat\\b").matcher(text).find(),
+            "the instruction must say which seats to choose by their state, \"an available seat\": " + text);
+        assertFalse(Pattern.compile("(?i)\\b(green|blue)\\b").matcher(text).find(),
             "an instruction must not name a colour (\"click a green seat\"), which a colour-blind user cannot "
                 + "follow; say \"an available seat\": " + text);
     }
