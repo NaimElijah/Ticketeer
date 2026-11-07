@@ -37,6 +37,8 @@ import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.testutil.LogCapture;
+import static org.mockito.Mockito.verifyNoInteractions;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 class AdminComplaintQueuePresenterTest {
 
@@ -438,5 +440,31 @@ class AdminComplaintQueuePresenterTest {
         when(messaging.viewAllComplaints(eq(TOKEN), any())).thenThrow(new SessionExpiredException());
 
         assertInstanceOf(AdminComplaintQueuePresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN, "All"));
+    }
+
+    // ---- a signed-out respond page touches nothing; a thread or queue that fails to load says why (#189) ----
+
+    @Test
+    void GivenANullToken_WhenLoadOne_ThenNothingIsMarkedReadOrViewed() {
+        assertEquals(new AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(null, "c1"));
+
+        verifyNoInteractions(messaging);
+    }
+
+    @Test
+    void GivenTheThreadFailsToLoad_WhenLoadOne_ThenFailureCarriesTheGenericText() {
+        when(messaging.viewConversation(TOKEN, "c1"))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select * from conversations]"));
+
+        assertEquals(new AdminComplaintQueuePresenter.SingleOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.loadOne(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheQueueRefusesTheCaller_WhenLoad_ThenFailureCarriesTheRule() {
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view all complaints");
+        when(messaging.viewAllComplaints(eq(TOKEN), any())).thenThrow(refusal);
+
+        assertEquals(new AdminComplaintQueuePresenter.Outcome.Failure(refusal.getMessage()), presenter.load(TOKEN, "All"));
     }
 }

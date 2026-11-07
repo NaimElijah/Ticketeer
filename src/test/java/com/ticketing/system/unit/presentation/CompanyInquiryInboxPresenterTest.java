@@ -37,6 +37,7 @@ import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.testutil.LogCapture;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class CompanyInquiryInboxPresenterTest {
 
@@ -476,5 +477,38 @@ class CompanyInquiryInboxPresenterTest {
         when(companyManagement.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
 
         assertInstanceOf(CompanyInquiryInboxPresenter.Outcome.NotAuthenticated.class, presenter.loadFor(TOKEN, 7));
+    }
+
+    // ---- a signed-out respond page touches nothing; a dead token or a failed read on the second call (#189) ----
+
+    @Test
+    void GivenANullToken_WhenLoadOne_ThenNothingIsMarkedReadOrViewed() {
+        assertEquals(new CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(null, "c1"));
+
+        verifyNoInteractions(messaging, companyManagement);
+    }
+
+    @Test
+    void GivenATokenRevokedBetweenTheCompaniesAndTheInbox_WhenLoadFor_ThenReturnsNotAuthenticated() {
+        when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(company(7, "Acme")));
+        when(messaging.viewCompanyInbox(TOKEN, 7)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new CompanyInquiryInboxPresenter.Outcome.NotAuthenticated(), presenter.loadFor(TOKEN, 7));
+    }
+
+    @Test
+    void GivenATokenRevokedAfterTheMark_WhenLoadOne_ThenReturnsNotAuthenticated() {
+        when(messaging.viewConversation(TOKEN, "c1")).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheThreadFailsToLoad_WhenLoadOne_ThenFailureCarriesTheGenericText() {
+        when(messaging.viewConversation(TOKEN, "c1"))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select * from conversations]"));
+
+        assertEquals(new CompanyInquiryInboxPresenter.SingleOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.loadOne(TOKEN, "c1"));
     }
 }

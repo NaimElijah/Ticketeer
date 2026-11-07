@@ -99,8 +99,8 @@ class NewInquiryPresenterTest {
         ArgumentCaptor<StartConversationRequestDTO> captor =
             ArgumentCaptor.forClass(StartConversationRequestDTO.class);
         verify(messaging).startConversation(eq(TOKEN), captor.capture());
-        assertEquals(5, captor.getValue().counterpartyId());
-        assertEquals("Parking?", captor.getValue().subject());
+        assertEquals(new StartConversationRequestDTO(5, "Parking?", "Is there parking?"), captor.getValue(),
+            "the inquiry goes to the company with the subject and body as typed");
     }
 
     @Test
