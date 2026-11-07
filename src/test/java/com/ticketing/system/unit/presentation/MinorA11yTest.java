@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -443,6 +444,22 @@ class MinorA11yTest {
     }
 
     // ---- page titles ----
+
+    @Test
+    void GivenTheEventPageInEditMode_WhenItIsEntered_ThenItsDocumentTitleSaysEditNotCreate() {
+        ViewHarness.signInMember();
+        EventManagementPresenter presenter = mock(EventManagementPresenter.class);
+        when(presenter.load(any(), eq(5))).thenReturn(new EventManagementPresenter.LoadOutcome.Success(
+            new EventDetailDTO("5", "Coldplay", 4.5, "Live", EventCategory.CONCERT, null, "3", "Acme",
+                EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of("Coldplay"), 50.0)));
+        EventManagementView view = new EventManagementView(presenter);
+
+        view.beforeEnter(routeTo("eventId", "5"));
+
+        String title = documentTitle(view);
+        assertTrue(title.contains("Edit") && !title.contains("Create"),
+            "editing an event must not be titled as creating one (HasDynamicTitle); the title is \"" + title + "\"");
+    }
 
     @Test
     void GivenTheEventPageInCreateMode_WhenItIsEntered_ThenItsDocumentTitleSaysCreateNotEdit() {
