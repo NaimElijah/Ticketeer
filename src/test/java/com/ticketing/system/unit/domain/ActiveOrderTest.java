@@ -239,8 +239,19 @@ class ActiveOrderTest extends BaseDomainTest {
 
         List<CartLineItem> returned = order.ReturnToStock();
 
-        assertEquals(4, returned.size());
+        assertEquals(List.of(
+                        EVENT_ID + "/" + ZONE_ID + "/standing",
+                        EVENT_ID + "/" + ZONE_ID + "/standing",
+                        EVENT_ID + "/" + (ZONE_ID + 1) + "/A1",
+                        EVENT_ID + "/" + (ZONE_ID + 1) + "/A2"),
+                returned.stream().map(ActiveOrderTest::eventZoneAndPlace).toList(),
+                "exactly the lines the order held go back to stock");
         assertTrue(order.isEmpty());
+    }
+
+    private static String eventZoneAndPlace(CartLineItem line) {
+        return line.geteventId() + "/" + line.getzoneId() + "/"
+                + (line.getSeatNumber() == null ? "standing" : line.getSeatNumber());
     }
 
     @Test

@@ -218,8 +218,13 @@ class EventTest extends BaseDomainTest {
     // schedule alone).
     @Test
     void GivenEmptyShowDates_WhenEditDetails_ThenThrowsIllegalArgument() {
+        List<ShowDate> before = event.getShowDates();
+
         assertThrows(IllegalArgumentException.class, () -> event.editDetails(
-                null, null, null, null, null, List.of(), JERUSALEM_1930));
+                "Renamed", null, null, null, null, List.of(), JERUSALEM_1930));
+
+        assertEquals(before, event.getShowDates());
+        assertEquals("Concert", event.getName(), "nothing in a refused edit is applied");
     }
 
     @Test

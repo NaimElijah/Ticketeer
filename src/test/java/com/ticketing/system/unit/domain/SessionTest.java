@@ -88,18 +88,25 @@ class SessionTest extends BaseDomainTest {
 
     @Test
     void GivenAMemberSession_WhenPromoted_ThenRejectsAlreadyMember() {
-        Session s = new Session("sid", 5, T0, T_EXPIRES);
+        Session s = track(new Session("sid", 5, T0, T_EXPIRES));
 
         assertThrows(IllegalStateException.class,
                 () -> s.promoteTo(7, T_EXPIRES.plusSeconds(60)));
+
+        assertEquals(5, s.getUserId(), "a refused promotion must not hand the row to another member");
+        assertEquals(T_EXPIRES, s.getExpiresAt());
     }
 
     @Test
     void GivenAGuestSession_WhenPromotedWithNullExpiry_ThenRejects() {
-        Session s = new Session("sid", null, T0, T_EXPIRES);
+        Session s = track(new Session("sid", null, T0, T_EXPIRES));
 
         assertThrows(IllegalArgumentException.class,
                 () -> s.promoteTo(7, null));
+
+        assertTrue(s.isGuest(), "a refused promotion leaves the row a guest row");
+        assertNull(s.getUserId());
+        assertEquals(T_EXPIRES, s.getExpiresAt());
     }
 
     @Test

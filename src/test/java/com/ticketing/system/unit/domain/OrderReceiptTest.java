@@ -211,6 +211,10 @@ class OrderReceiptTest extends BaseDomainTest {
         TransactionRecord charge = TransactionRecord.paymentCharge(7, "test-gateway", 50.0, "ILS", AT);
 
         assertThrows(IllegalArgumentException.class, () -> receipt.completeEventRefund(CANCELLED_EVENT, charge));
+
+        assertEquals(List.of(LineRefundState.PENDING, LineRefundState.PENDING), statesOf(receipt, CANCELLED_EVENT),
+                "a refused record leaves the claim in flight");
+        assertTrue(receipt.getTransactionRecords().isEmpty(), "a refused record is not added");
     }
 
     @Test
