@@ -28,6 +28,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Focusable;
 import com.vaadin.flow.component.UI;
@@ -75,11 +76,9 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
     private static final String SHOW_TIME_FORMAT = "Enter a valid date and time.";
     private static final String SHOW_TIME_INCOMPLETE = "Enter both a date and a time.";
     private static final String CHOOSE_TIME_ZONE = "Please choose the venue's time zone.";
-    private static final int RATING_MIN = 0;
-    private static final int RATING_MAX = 5;
-    private static final String SET_RATING = "Please set a rating (0–5).";
-    private static final String RATING_RANGE = "Enter a rating from " + RATING_MIN + " to " + RATING_MAX + ".";
-    private static final String RATING_NOT_A_NUMBER = "Enter the rating as a number.";
+    // An event's rating has the bounds the catalog filters search it by, so it shares their words too.
+    private static final String SET_RATING =
+        "Please set a rating (" + CatalogFilterSupport.RATING_MIN + "–" + CatalogFilterSupport.RATING_MAX + ").";
 
     private final TextField title = new TextField("Title");
     private final Select<String> category = new Select<>();
@@ -414,15 +413,15 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
         end.setI18n(showTimeRules(SET_END));
         end.setWidthFull();
 
-        rating.setMin(RATING_MIN);
-        rating.setMax(RATING_MAX);
+        rating.setMin(CatalogFilterSupport.RATING_MIN);
+        rating.setMax(CatalogFilterSupport.RATING_MAX);
         // No step constraint: accept any decimal (e.g. 4.1); only out-of-range [0,5] is flagged invalid.
         rating.setRequiredIndicatorVisible(true);
         rating.setI18n(new NumberField.NumberFieldI18n()
             .setRequiredErrorMessage(SET_RATING)
-            .setBadInputErrorMessage(RATING_NOT_A_NUMBER)
-            .setMinErrorMessage(RATING_RANGE)
-            .setMaxErrorMessage(RATING_RANGE));
+            .setBadInputErrorMessage(CatalogFilterSupport.RATING_NOT_A_NUMBER)
+            .setMinErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE)
+            .setMaxErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE));
         rating.setWidthFull();
 
         description.setMinHeight("120px");
