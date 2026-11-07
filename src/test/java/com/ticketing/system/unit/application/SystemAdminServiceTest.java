@@ -136,7 +136,10 @@ class SystemAdminServiceTest {
     void GivenAllServicesReachableAndAdminExists_WhenInitializePlatform_ThenSucceeds() {
         when(adminRepository.existsAny()).thenReturn(true);
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
-        assertDoesNotThrow(svc::initializePlatform);
+
+        svc.initializePlatform();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -184,7 +187,10 @@ class SystemAdminServiceTest {
         doThrow(new RuntimeException("duplicate key value violates unique constraint \"admins_pkey\""))
                 .when(adminRepository).save(any(Admin.class));
         SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
-        assertDoesNotThrow(svc::initializePlatform);
+
+        svc.initializePlatform();
+
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     @Test
@@ -204,12 +210,23 @@ class SystemAdminServiceTest {
         assertThrows(SystemIntegrityViolationException.class, svc::initializePlatform);
     }
 
+    // A second init is a no-op: no second probe, admin save or integrity scan.
     @Test
     void GivenAlreadyInitialized_WhenInitializePlatformAgain_ThenDoesNotThrow() {
         when(adminRepository.existsAny()).thenReturn(true);
-        SystemAdminService svc = serviceWith(List.of(reachablePayment()), List.of(reachableIssuer()));
+        PaymentGateway gateway = reachablePayment();
+        TicketIssuer issuer = reachableIssuer();
+        SystemAdminService svc = serviceWith(List.of(gateway), List.of(issuer));
         svc.initializePlatform();
+        clearInvocations(gateway, issuer, adminRepository, integrityVerifier);
+
         assertDoesNotThrow(svc::initializePlatform);
+
+        verify(gateway, never()).verifyConnection();
+        verify(issuer, never()).verifyConnection();
+        verify(adminRepository, never()).save(any(Admin.class));
+        verify(integrityVerifier, never()).verify();
+        assertEquals("READY", svc.viewMarketState(ADMIN_TOKEN).currentStatus());
     }
 
     // --- UC-32: market lifecycle (open / close / view) ---
