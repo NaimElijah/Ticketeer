@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -54,12 +55,14 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 /**
  * {@link MessagingService} on real in-memory adapters and the real {@link CompanyMembershipService}: who may
  * act for a company (II.4.4), the admin gate's check that the admin still exists, and the failure paths
- * and orderings #189 found untested. Only the session port is a double.
+ * and orderings #189 found untested. Two doubles stand in: the session port, and the event publisher, a mock
+ * so a test can read the notices the service published.
  */
 class MessagingServiceStaffAndAdminGateTest {
 
     private static final Instant DAY_ONE = Instant.parse("2027-07-15T17:00:00Z");
     private static final LocalDate DAY_ONE_DATE = LocalDate.of(2027, 7, 15);
+    private static final Duration ONE_DAY = Duration.ofDays(1);
     private static final int MEMBER_AGE = 30;
     private static final int COMPANY_ID = 5;
     private static final int UNKNOWN_COMPANY_ID = 404;
@@ -92,7 +95,8 @@ class MessagingServiceStaffAndAdminGateTest {
     private final MemoryProductionCompanyRepository companies = new MemoryProductionCompanyRepository();
     private final CompanyMembershipService membership =
             new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.fixed(DAY_ONE, ZoneOffset.UTC));
-    private ApplicationEventPublisher events;
+    // One publisher for every service a test builds, so published() reads what each of them published.
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private MessagingService service;
 
     @BeforeEach
@@ -120,7 +124,6 @@ class MessagingServiceStaffAndAdminGateTest {
     }
 
     private MessagingService serviceAt(Instant now) {
-        events = mock(ApplicationEventPublisher.class);
         return new MessagingService(conversations, sessions, admins, users, companies, membership, events,
                 Clock.fixed(now, ZoneOffset.UTC));
     }
@@ -288,7 +291,7 @@ class MessagingServiceStaffAndAdminGateTest {
     @Test
     void GivenConversationsStartedOnDifferentDays_WhenViewMyConversations_ThenNewestFirst() {
         String older = inquiryFrom(MEMBER_TOKEN).conversationId();
-        service = serviceAt(DAY_ONE.plusSeconds(86_400));
+        service = serviceAt(DAY_ONE.plus(ONE_DAY));
         String newer = complaintFrom(MEMBER_TOKEN);
 
         assertEquals(List.of(newer, older), idsOf(service.viewMyConversations(MEMBER_TOKEN)));
@@ -298,9 +301,9 @@ class MessagingServiceStaffAndAdminGateTest {
     @Test
     void GivenComplaintsOnThreeDays_WhenViewAllComplaintsFromTheSecondDayToTheThird_ThenTheLaterTwoNewestFirst() {
         complaintFrom(MEMBER_TOKEN);
-        service = serviceAt(DAY_ONE.plusSeconds(86_400));
+        service = serviceAt(DAY_ONE.plus(ONE_DAY));
         String second = complaintFrom(MEMBER2_TOKEN);
-        service = serviceAt(DAY_ONE.plusSeconds(2 * 86_400));
+        service = serviceAt(DAY_ONE.plus(ONE_DAY.multipliedBy(2)));
         String third = complaintFrom(MEMBER_TOKEN);
 
         List<ConversationDTO> found = service.viewAllComplaints(ADMIN_TOKEN,
@@ -312,9 +315,9 @@ class MessagingServiceStaffAndAdminGateTest {
     @Test
     void GivenComplaintsOnThreeDays_WhenViewAllComplaintsForOneDay_ThenOnlyThatDays() {
         complaintFrom(MEMBER_TOKEN);
-        service = serviceAt(DAY_ONE.plusSeconds(86_400));
+        service = serviceAt(DAY_ONE.plus(ONE_DAY));
         String second = complaintFrom(MEMBER2_TOKEN);
-        service = serviceAt(DAY_ONE.plusSeconds(2 * 86_400));
+        service = serviceAt(DAY_ONE.plus(ONE_DAY.multipliedBy(2)));
         complaintFrom(MEMBER_TOKEN);
 
         List<ConversationDTO> found = service.viewAllComplaints(ADMIN_TOKEN,
