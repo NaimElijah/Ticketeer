@@ -1,5 +1,7 @@
 package com.ticketing.system.architecture;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleNameEndingWith;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleNameStartingWith;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,7 +14,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.platform.commons.annotation.Testable;
 
 import com.ticketing.system.support.RunsOnPostgres;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
@@ -36,10 +41,20 @@ class TestConventionsTest {
             .should().haveNameMatching("Given" + SECTION + "_When" + SECTION + "_Then" + SECTION)
             .because("a test name states its scenario, its action and its outcome (ADR-023)");
 
-    // Failsafe runs the *IT classes, and each needs PostgreSQL. Without the check, one whose container no
-    // longer reaches its context boots on application-test.yml's H2 and passes (#189).
+    // The pom sets no failsafe includes, so failsafe runs its defaults: **/IT*.java, **/*IT.java and
+    // **/*ITCase.java.
+    private static final DescribedPredicate<JavaClass> NAMED_AS_FAILSAFE_RUNS = simpleNameStartingWith("IT")
+            .or(simpleNameEndingWith("IT"))
+            .or(simpleNameEndingWith("ITCase"))
+            .as("are named IT*, *IT or *ITCase");
+
+    // Failsafe runs those classes, and each needs PostgreSQL. Without the check, one whose container no
+    // longer reaches its context boots on application-test.yml's H2 and passes (#189). JUnit runs no
+    // abstract class, and abstract contract tests such as ITicketRepositoryContractTest start with IT.
     private static final ArchRule INTEGRATION_TESTS_CHECK_THEIR_DATABASE = classes()
-            .that().haveSimpleNameEndingWith("IT")
+            .that(NAMED_AS_FAILSAFE_RUNS)
+            .and().doNotHaveModifier(JavaModifier.ABSTRACT)
+            .and().areNotInterfaces()
             .should().beAnnotatedWith(RunsOnPostgres.class)
             .because("an IT that boots on H2 must fail, not pass under a PostgreSQL name (#189)");
 
@@ -55,16 +70,31 @@ class TestConventionsTest {
 
     @Test
     void GivenAnIntegrationTestWithoutThePostgresCheck_WhenScanned_ThenTheDatabaseRuleFails() {
-        JavaClasses imported = new ClassFileImporter().importClasses(UncheckedIT.class);
+        assertDatabaseRuleFailsOn(UncheckedIT.class);
+    }
 
-        assertThatThrownBy(() -> INTEGRATION_TESTS_CHECK_THEIR_DATABASE.check(imported))
-                .isInstanceOf(AssertionError.class)
-                .hasMessageContaining(UncheckedIT.class.getName());
+    @Test
+    void GivenAnITPrefixedIntegrationTestWithoutThePostgresCheck_WhenScanned_ThenTheDatabaseRuleFails() {
+        assertDatabaseRuleFailsOn(ITUnchecked.class);
+    }
+
+    @Test
+    void GivenAnITCaseIntegrationTestWithoutThePostgresCheck_WhenScanned_ThenTheDatabaseRuleFails() {
+        assertDatabaseRuleFailsOn(UncheckedITCase.class);
     }
 
     @Test
     void GivenAnIntegrationTestWithThePostgresCheck_WhenScanned_ThenTheDatabaseRulePasses() {
         JavaClasses imported = new ClassFileImporter().importClasses(CheckedIT.class);
+
+        assertThatCode(() -> INTEGRATION_TESTS_CHECK_THEIR_DATABASE.check(imported)).doesNotThrowAnyException();
+    }
+
+    // CheckedIT is imported too: a rule that matches no class fails for that reason alone.
+    @Test
+    void GivenAnAbstractClassAndAnInterfaceNamedLikeITsWithoutThePostgresCheck_WhenScanned_ThenTheDatabaseRulePasses() {
+        JavaClasses imported = new ClassFileImporter()
+                .importClasses(ITAbstractContract.class, ITContract.class, CheckedIT.class);
 
         assertThatCode(() -> INTEGRATION_TESTS_CHECK_THEIR_DATABASE.check(imported)).doesNotThrowAnyException();
     }
@@ -112,6 +142,14 @@ class TestConventionsTest {
         JavaClasses imported = new ClassFileImporter().importClasses(CompliantCaseWithAHelper.class);
 
         assertThatCode(() -> TEST_NAMES_READ_GIVEN_WHEN_THEN.check(imported)).doesNotThrowAnyException();
+    }
+
+    private static void assertDatabaseRuleFailsOn(Class<?> offender) {
+        JavaClasses imported = new ClassFileImporter().importClasses(offender);
+
+        assertThatThrownBy(() -> INTEGRATION_TESTS_CHECK_THEIR_DATABASE.check(imported))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(offender.getName());
     }
 
     private static void assertNamingRuleFailsOn(Class<?> offender, String offendingName) {
@@ -181,12 +219,25 @@ class TestConventionsTest {
         }
     }
 
-    // Failsafe, like surefire, skips a nested class, so neither IT below ever runs.
+    // Failsafe, like surefire, skips a nested class, so no IT below ever runs, and none holds a test. The
+    // offenders are concrete because the rule leaves abstract classes out.
 
-    abstract static class UncheckedIT {
+    static class UncheckedIT {
+    }
+
+    static class ITUnchecked {
+    }
+
+    static class UncheckedITCase {
     }
 
     @RunsOnPostgres
-    abstract static class CheckedIT {
+    static class CheckedIT {
+    }
+
+    abstract static class ITAbstractContract {
+    }
+
+    interface ITContract {
     }
 }
