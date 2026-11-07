@@ -184,8 +184,10 @@ class CompanyAnalyticsServiceTest {
     void GivenSalesAtAndJustBeforeTheThirtyDayCutoff_WhenDashboard_ThenOnlyTheOneAtTheCutoffCounts() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
-        OrderReceipt justBefore = receipt(false, NOW.minusDays(30).minusSeconds(1), List.of(line(1, 50.0, EVENT_A)));
-        OrderReceipt atTheCutoff = receipt(false, NOW.minusDays(30), List.of(line(2, 20.0, EVENT_A)));
+        OrderReceipt justBefore = OrderReceipt.forMember(1, BUYER_ID, 50.0, List.of(line(1, 50.0, EVENT_A)),
+                NOW.minusDays(30).minusSeconds(1));
+        OrderReceipt atTheCutoff = OrderReceipt.forMember(2, BUYER_ID, 20.0, List.of(line(2, 20.0, EVENT_A)),
+                NOW.minusDays(30));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(justBefore, atTheCutoff));
 
         CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);

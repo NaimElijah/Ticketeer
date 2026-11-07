@@ -47,6 +47,12 @@ class SystemAnalyticsServiceTest {
     private static final int WINDOW = 5;
     private static final int REFRESH_INTERVAL_MS = 5000;
     private static final String ADMIN_TOKEN = "admin-token";
+    private static final int RECEIPT_ID = 1;
+    private static final int BUYER_ID = 7;
+    private static final int TICKET_ID = 1;
+    private static final int EVENT_ID = 1;
+    private static final int ZONE_ID = 1;
+    private static final double PRICE = 50.0;
 
     private ISystemMetrics metrics;
     private OrderReceiptRepository orderReceiptRepository;
@@ -83,9 +89,7 @@ class SystemAnalyticsServiceTest {
         when(metrics.total(MetricType.REGISTRATION)).thenReturn(8L);
         when(metrics.total(MetricType.RESERVATION)).thenReturn(50L);
 
-        // Two receipts inside the 5-min window, one only inside the hour. Build the stubbed
-        // receipts first — nesting receiptAt()'s own when(...) inside thenReturn(...) would
-        // trip Mockito's UnfinishedStubbing check.
+        // Two receipts inside the 5-min window, one only inside the hour.
         LocalDateTime base = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
         OrderReceipt now = receiptAt(base);
         OrderReceipt twoMinAgo = receiptAt(base.minusMinutes(2));
@@ -139,10 +143,10 @@ class SystemAnalyticsServiceTest {
         assertEquals(3L, dto.purchaseThroughputHr(), "all but the receipt a second over the hour");
     }
 
+    // A real receipt of one line, so the analytics read only what an order can hold.
     private static OrderReceipt receiptAt(LocalDateTime purchaseTime) {
-        OrderReceipt receipt = mock(OrderReceipt.class);
-        when(receipt.getPurchaseTime()).thenReturn(purchaseTime);
-        return receipt;
+        ReceiptLine line = new ReceiptLine(TICKET_ID, PRICE, EVENT_ID, ZONE_ID, null, purchaseTime);
+        return OrderReceipt.forMember(RECEIPT_ID, BUYER_ID, PRICE, List.of(line), purchaseTime);
     }
 
     @Test
