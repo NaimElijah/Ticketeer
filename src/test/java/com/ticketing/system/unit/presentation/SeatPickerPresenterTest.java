@@ -46,6 +46,10 @@ import com.ticketing.system.ui.support.ServiceErrors;
 
 import ch.qos.logback.classic.Level;
 import jakarta.persistence.PersistenceException;
+import com.ticketing.system.catalog.domain.ZoneType;
+import com.ticketing.system.shared.dto.LocationDTO;
+import com.ticketing.system.shared.dto.VenueMapDTO;
+import org.mockito.ArgumentCaptor;
 
 /**
  * {@link SeatPickerPresenter} through its public methods. The visitor is resolved by a real
@@ -251,5 +255,77 @@ class SeatPickerPresenterTest {
     private void signInAsLiveMember() {
         AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "member"));
         when(authenticationService.liveMemberId(MEMBER_TOKEN)).thenReturn(OptionalInt.of(MEMBER_ID));
+    }
+
+    // ---- loading a zone, a refusal's reason, and a guest's reservation (#189) ----
+
+    private static final InventoryZoneDTO SEATED_ZONE = new InventoryZoneDTO(ZONE_ID, "Stalls", "SEATED", 2, 2, 0, 0,
+            50.0, List.of(new SeatDTO("A1", 0, 0, "AVAILABLE"), new SeatDTO("A2", 30, 0, "SOLD")), null);
+    private static final InventoryZoneDTO STANDING_ZONE =
+            new InventoryZoneDTO(ZONE_ID + 1, "Floor", "STANDING", 100, 80, 0, 0, 45.0, List.of(), null);
+
+    @Test
+    void GivenTheZoneInTheEventsMap_WhenLoadZone_ThenLoadedWithItsType() {
+        when(catalogService.getEventVenueMap(GUEST_SESSION_ID, EVENT_ID)).thenReturn(mapOf(SEATED_ZONE, STANDING_ZONE));
+
+        assertEquals(new SeatPickerPresenter.LoadOutcome.Loaded(STANDING_ZONE, ZoneType.STANDING),
+                presenter.loadZone(EVENT_ID, ZONE_ID + 1));
+    }
+
+    @Test
+    void GivenAZoneNotInTheEventsMap_WhenLoadZone_ThenNotFoundSaysItIsNoLongerAvailable() {
+        when(catalogService.getEventVenueMap(GUEST_SESSION_ID, EVENT_ID)).thenReturn(mapOf(SEATED_ZONE));
+
+        assertEquals(new SeatPickerPresenter.LoadOutcome.NotFound("That zone is no longer available"),
+                presenter.loadZone(EVENT_ID, 404));
+    }
+
+    @Test
+    void GivenNoVenueMap_WhenLoadZone_ThenFailureSaysTheMapCouldNotLoad() {
+        when(catalogService.getEventVenueMap(GUEST_SESSION_ID, EVENT_ID)).thenReturn(null);
+
+        assertEquals(new SeatPickerPresenter.LoadOutcome.Failure("Could not load venue map"),
+                presenter.loadZone(EVENT_ID, ZONE_ID));
+    }
+
+    @Test
+    void GivenADomainRefusal_WhenReserveSeated_ThenFailureCarriesItsMessage() {
+        BusinessRuleViolationException refusal = new BusinessRuleViolationException("This event is no longer on sale.");
+        doThrow(refusal).when(reservationService).reserveForGuest(any(), anyInt(), anyInt(), any());
+
+        assertEquals(new SeatPickerPresenter.ReserveOutcome.Failure(refusal.getMessage()),
+                presenter.reserveSeated(InventorySelectionDTO.seated(List.of("A1")), EVENT_ID, ZONE_ID));
+    }
+
+    @Test
+    void GivenADomainRefusal_WhenReserveStanding_ThenFailureCarriesItsMessage() {
+        BusinessRuleViolationException refusal = new BusinessRuleViolationException("Only 1 ticket left in this zone.");
+        doThrow(refusal).when(reservationService).reserveForGuest(any(), anyInt(), anyInt(), any());
+
+        assertEquals(new SeatPickerPresenter.ReserveOutcome.Failure(refusal.getMessage()),
+                presenter.reserveStanding(2, EVENT_ID, ZONE_ID));
+    }
+
+    @Test
+    void GivenAGuest_WhenReserveSeated_ThenTheGuestsSessionReservesThoseSeats() {
+        InventorySelectionDTO seats = InventorySelectionDTO.seated(List.of("A1", "A3"));
+
+        assertEquals(new SeatPickerPresenter.ReserveOutcome.Success(2), presenter.reserveSeated(seats, EVENT_ID, ZONE_ID));
+
+        verify(reservationService).reserveForGuest(GUEST_SESSION_ID, EVENT_ID, ZONE_ID, seats);
+    }
+
+    @Test
+    void GivenAGuest_WhenReserveStanding_ThenTheGuestsSessionReservesThatMany() {
+        assertEquals(new SeatPickerPresenter.ReserveOutcome.Success(3), presenter.reserveStanding(3, EVENT_ID, ZONE_ID));
+
+        ArgumentCaptor<InventorySelectionDTO> selection = ArgumentCaptor.forClass(InventorySelectionDTO.class);
+        verify(reservationService).reserveForGuest(eq(GUEST_SESSION_ID), eq(EVENT_ID), eq(ZONE_ID), selection.capture());
+        assertEquals(3, selection.getValue().getQuantity());
+        assertEquals(List.of(), selection.getValue().getSeatNumbers());
+    }
+
+    private static VenueMapDTO mapOf(InventoryZoneDTO... zones) {
+        return new VenueMapDTO(1, new LocationDTO("Israel", "Tel Aviv"), 4, 4, List.of(zones));
     }
 }
