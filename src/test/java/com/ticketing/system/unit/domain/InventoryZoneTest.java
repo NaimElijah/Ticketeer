@@ -573,6 +573,58 @@ public class InventoryZoneTest extends BaseDomainTest {
         assertEquals(4, standingZone.getReservedAmount());
     }
 
+    // ---- standing capacity edges (#189) ----
+
+    @Test
+    void GivenNegativeCapacity_WhenCreateStandingZone_ThenRefused() {
+        assertThrows(IllegalStateException.class, () -> new StandingZone(1, "General", -1, 50));
+    }
+
+    @Test
+    void GivenStandingZoneWithReservations_WhenRemoveExactlyTheAvailablePlaces_ThenOnlyTheHeldPlacesRemain() {
+        StandingZone standingZone = track(new StandingZone(1, "General", 10, 50));
+        standingZone.reserve(InventorySelection.standing(4));
+
+        standingZone.removePlaces(6);
+
+        assertEquals(4, standingZone.getCapacity());
+        assertEquals(0, standingZone.getAvailableAmount());
+        assertEquals(4, standingZone.getReservedAmount());
+    }
+
+    @Test
+    void GivenStandingZone_WhenAddZeroPlaces_ThenRefusedAndCapacityKept() {
+        StandingZone standingZone = track(new StandingZone(1, "General", 10, 50));
+
+        assertThrows(IllegalArgumentException.class, () -> standingZone.addPlaces(0));
+
+        assertEquals(10, standingZone.getCapacity());
+    }
+
+    @Test
+    void GivenAFullStandingZone_WhenReserveOneMore_ThenRefusedAndTheCountsKept() {
+        StandingZone standingZone = track(new StandingZone(1, "General", 3, 50));
+        standingZone.reserve(InventorySelection.standing(3, HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> standingZone.reserve(InventorySelection.standing(1, ASKING_ORDER)));
+
+        assertEquals("remaining 0 tickets available", refused.getMessage());
+        assertEquals(3, standingZone.getReservedAmount());
+        assertEquals(0, standingZone.getAvailableAmount());
+    }
+
+    // Checkout's Phase 3 checks a seat's holder by its order key, so a seat held for nobody could never be sold.
+    @Test
+    void GivenNoOrderKey_WhenReserveSeats_ThenRefusedAndTheSeatStaysAvailable() {
+        SeatedZone seatedZone = track(twoSeatZone());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> seatedZone.reserve(InventorySelection.seated(List.of("A1"))));
+
+        assertEquals(SeatStatus.AVAILABLE, seatedZone.getSeatStatus("A1"));
+    }
+
     @Test
     void GivenSeatedZone_WhenAddSeats_ThenCapacityAndAvailabilityIncrease() {
         SeatedZone seatedZone = track(new SeatedZone(
