@@ -2,6 +2,7 @@ package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,5 +61,15 @@ class ViewHarnessRouterTest {
         assertEquals("stub/browse", browse.getHref());
         assertEquals("stub/events/5", event.getHref());
         assertEquals(event.getHref(), ViewHarness.linkTo(EventDetailsView.class, "eventId", "5"));
+    }
+
+    // A name with no value is a mistake in the test, not a parameter to drop.
+    @Test
+    void GivenANameWithNoValue_WhenTheHarnessBuildsALinkUrl_ThenItRefusesNamingTheRoute() {
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+                () -> ViewHarness.linkTo(EventDetailsView.class, "eventId", "5", "page"));
+
+        assertTrue(thrown.getMessage().contains(EventDetailsView.class.getSimpleName()),
+                "the failure must name the route: " + thrown.getMessage());
     }
 }

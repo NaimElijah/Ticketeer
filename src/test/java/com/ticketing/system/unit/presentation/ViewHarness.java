@@ -586,9 +586,14 @@ final class ViewHarness implements AutoCloseable {
      * The URL a link to {@code target} with these {@code name, value} parameters gets: {@code stub/} and the
      * route's path with the parameters filled in, to compare with a rendered link's {@code href}.
      *
+     * @throws IllegalArgumentException when a name has no value after it
      * @throws AssertionError when the parameters leave out one the route needs
      */
     static String linkTo(Class<?> target, String... nameValuePairs) {
+        if (nameValuePairs.length % 2 != 0) {
+            throw new IllegalArgumentException("a link to " + target.getSimpleName() + " was given a name with no value: "
+                + List.of(nameValuePairs));
+        }
         Map<String, String> params = new java.util.LinkedHashMap<>();
         for (int i = 0; i + 1 < nameValuePairs.length; i += 2) {
             params.put(nameValuePairs[i], nameValuePairs[i + 1]);
