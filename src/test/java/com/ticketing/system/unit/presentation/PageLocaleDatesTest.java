@@ -60,6 +60,11 @@ import com.ticketing.system.ui.views.company.CompanySalesView;
  * October. The views keep their formatters in static fields, which take the default locale when the class is
  * initialised, so each page is first built inside the swap: run alone, a test sees the formatter its view
  * would get on a German server.
+ *
+ * <p>Those static fields are also why this test cannot guard the behaviour alone: a view that an earlier test in
+ * the same JVM loaded keeps the formatter it got then, so a regression in it would pass here.
+ * {@code HexagonalRulesTest}'s locale rule is the guard, whatever the order; this test is the readable
+ * statement of what the pages show.
  */
 class PageLocaleDatesTest {
 

@@ -25,6 +25,7 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Comparator;
@@ -58,6 +59,10 @@ import com.ticketing.system.architecture.fixture.identity.application.service.Au
 import com.ticketing.system.architecture.fixture.notifications.NotificationsTypeUsingOrganization;
 import com.ticketing.system.architecture.fixture.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.architecture.fixture.sales.domain.SalesDomainTypeUsingCatalogDomain;
+import com.ticketing.system.architecture.fixture.ui.UiTypeFormattingADateInTheJvmLocale;
+import com.ticketing.system.architecture.fixture.ui.UiTypeFormattingInAGivenLocale;
+import com.ticketing.system.architecture.fixture.ui.UiTypeFormattingWithFormatted;
+import com.ticketing.system.architecture.fixture.ui.UiTypeFormattingWithStringFormat;
 import com.ticketing.system.architecture.fixture.ui.UiTypeUsingADrivenPort;
 import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnAdapter;
 import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnApplicationService;
@@ -794,6 +799,69 @@ class HexagonalRulesTest {
             .that().doNotHaveFullyQualifiedName(SecurityConfig.class.getName())
             .should().accessTargetWhere(CREATE_A_SYSTEM_CLOCK)
             .because("ADR-008: SecurityConfig.systemClock is the one clock everything else injects");
+
+    /**
+     * #189: the pages are English, so {@code ui} formats every date and number in the locale it names,
+     * {@code DisplayLocale.PAGE}. {@code DateTimeFormatter.ofPattern(String)}, {@code String.format(String,
+     * Object...)} and {@code String.formatted} take the server JVM's default locale instead, which on a German
+     * server wrote "Okt." and "$1.234,50" on an English page. {@code PageLocaleDatesTest} and
+     * {@code PageLocaleNumbersTest} state that behaviour, but a view keeps its formatters in static fields, built
+     * when an earlier test may already have loaded it, so this rule is what catches a regression in any order.
+     *
+     * <p>Kept to {@code ui}: outside it only the notifications and the dev seed report format text, with
+     * {@code %s}, which no locale changes, and the seed report's ungrouped {@code %d}, which only a locale with
+     * digits of its own (Arabic, Persian) changes, in a log.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenTheUiFormatsOnlyInALocaleItNames() {
+        uiFormatsOnlyInALocaleItNames(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    @Test
+    void GivenAUiDateFormatterBuiltWithoutALocale_WhenScanned_ThenTheLocaleRuleFails() {
+        assertRuleFails(uiFormatsOnlyInALocaleItNames(FIXTURE_ROOT), UiTypeFormattingADateInTheJvmLocale.class);
+    }
+
+    @Test
+    void GivenAUiStringFormatWithoutALocale_WhenScanned_ThenTheLocaleRuleFails() {
+        assertRuleFails(uiFormatsOnlyInALocaleItNames(FIXTURE_ROOT), UiTypeFormattingWithStringFormat.class);
+    }
+
+    @Test
+    void GivenAUiStringFormatted_WhenScanned_ThenTheLocaleRuleFails() {
+        assertRuleFails(uiFormatsOnlyInALocaleItNames(FIXTURE_ROOT), UiTypeFormattingWithFormatted.class);
+    }
+
+    @Test
+    void GivenAUiClassFormattingInALocaleItNames_WhenScanned_ThenTheLocaleRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(UiTypeFormattingInAGivenLocale.class);
+        assertThatCode(() -> uiFormatsOnlyInALocaleItNames(FIXTURE_ROOT).check(imported))
+                .doesNotThrowAnyException();
+    }
+
+    private static final DescribedPredicate<JavaAccess<?>> FORMAT_IN_THE_JVM_LOCALE =
+            DescribedPredicate.describe("format in the JVM's default locale", access -> {
+                if (!(access.getTarget() instanceof AccessTarget.CodeUnitAccessTarget target)) {
+                    return false;
+                }
+                String owner = target.getOwner().getName();
+                String name = target.getName();
+                List<JavaClass> parameters = target.getRawParameterTypes();
+                boolean datePattern = owner.equals(DateTimeFormatter.class.getName()) && name.equals("ofPattern")
+                        && parameters.size() == 1;
+                // String.format(Locale, String, Object...) names its locale first, so it is the allowed form.
+                boolean stringFormat = owner.equals(String.class.getName()) && name.equals("format")
+                        && !parameters.isEmpty() && parameters.get(0).isEquivalentTo(String.class);
+                // formatted has no form that takes a locale.
+                boolean formatted = owner.equals(String.class.getName()) && name.equals("formatted");
+                return datePattern || stringFormat || formatted;
+            });
+
+    private static ArchRule uiFormatsOnlyInALocaleItNames(String root) {
+        return noClasses().that(resideInModule(root, UI_MODULE))
+                .should().accessTargetWhere(FORMAT_IN_THE_JVM_LOCALE)
+                .because("#189: the pages are English; format in DisplayLocale.PAGE");
+    }
 
     // Fixtures for the self-tests above, one per way of reading the system clock.
     static class CallsLocalDateTimeNow {
