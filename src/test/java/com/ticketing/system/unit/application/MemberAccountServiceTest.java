@@ -188,7 +188,7 @@ class MemberAccountServiceTest {
         assertThat(thrown).isSameAs(failure);
     }
 
-    // The session port answers false only for a null or blank token; viewMyReceipt then throws InvalidTokenException.
+    // The session port answers false only for a null or blank token; viewMyHistory then throws InvalidTokenException.
     @Test
     void GivenBlankToken_WhenViewMyHistory_ThenInvalidTokenThrown() {
         Mockito.when(authenticationService.validateToken("  ")).thenReturn(false);
