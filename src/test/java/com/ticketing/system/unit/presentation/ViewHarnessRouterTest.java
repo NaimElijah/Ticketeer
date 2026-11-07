@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.ui.views.account.ReceiptView;
+import com.ticketing.system.ui.views.catalog.BrowseEventsView;
+import com.ticketing.system.ui.views.catalog.EventDetailsView;
 import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.router.RouterLink;
 
@@ -43,9 +45,20 @@ class ViewHarnessRouterTest {
     }
 
     @Test
-    void GivenARouteWithAMandatoryParameter_WhenALinkGivesTheParameter_ThenTheLinkGetsAUrl() {
+    void GivenARouteWithAMandatoryParameter_WhenALinkGivesTheParameter_ThenTheLinkGetsAUrlWithTheParameterInItsPath() {
         RouterLink link = new RouterLink("Receipt", ReceiptView.class, new RouteParameters(RECEIPT_ID, "7"));
 
-        assertEquals("stub", link.getHref());
+        assertEquals("stub/receipt/7", link.getHref());
+    }
+
+    // A view test reads where a link leads from its URL, so two links to different pages must differ (#189).
+    @Test
+    void GivenLinksToTwoRoutes_WhenBuilt_ThenEachUrlNamesItsOwnRoutesPath() {
+        RouterLink browse = new RouterLink("Browse", BrowseEventsView.class);
+        RouterLink event = new RouterLink("Event", EventDetailsView.class, new RouteParameters("eventId", "5"));
+
+        assertEquals("stub/browse", browse.getHref());
+        assertEquals("stub/events/5", event.getHref());
+        assertEquals(event.getHref(), ViewHarness.linkTo(EventDetailsView.class, "eventId", "5"));
     }
 }
