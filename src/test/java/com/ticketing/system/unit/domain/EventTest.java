@@ -184,8 +184,8 @@ class EventTest extends BaseDomainTest {
         assertEquals(1, z.getAvailableAmount());
     }
 
-    // UC-19 — editDetails applies all five updatable fields while DRAFT or
-    // SCHEDULED.
+    // UC-19 — editDetails applies its updatable fields while DRAFT or SCHEDULED. The time zone is left
+    // null here: GivenNewTimeZone_WhenEditDetails_ThenTheEventIsInThatZone covers it.
     @Test
     void GivenScheduledEvent_WhenEditDetailsAllFields_ThenAllApplied() {
         ShowDate newShow = new ShowDate(JERUSALEM_1930_WALL_TIME.plusDays(40),
@@ -898,18 +898,7 @@ class EventTest extends BaseDomainTest {
     }
 
     private DiscountPolicy noDiscountPolicy() {
-        return new DiscountPolicy(0) {
-            @Override
-            public double calculate(int quantity, Double priceAtOneTicketReservation, LocalDateTime now) {
-                return quantity * priceAtOneTicketReservation;
-            }
-
-            @Override
-            public double calculatePriceforoneticket(int quantity, Double priceAtOneTicketReservation,
-                    LocalDateTime now) {
-                return priceAtOneTicketReservation;
-            }
-        };
+        return new DiscountPolicy(0);
     }
 
     // -- DRAFT -> SCHEDULED transition (issue #305) -----------------------

@@ -2,6 +2,7 @@ package com.ticketing.system.unit.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,16 +23,11 @@ import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.support.BaseDomainTest;
 
 /**
- * Regression coverage for the "invariants hold at runtime, not just at construction"
- * work: every state-mutating method re-asserts {@link
- * com.ticketing.system.shared.InvariantChecked#checkInvariants()}, and
- * collection getters hand back defensive copies so external code cannot corrupt an
- * aggregate behind its own back.
- *
- * <p>Aggregates that are deliberately driven into a rejected state are NOT registered
- * via {@link #track(Object)} — the mutator throws <em>after</em> writing the field, so
- * the object is left invalid on purpose and the {@code @AfterEach} harness would
- * (correctly) flag it.
+ * Regression coverage for the "invariants hold at runtime, not just at construction" work: the mutators
+ * driven here validate before they commit, so a refused call leaves the aggregate valid and as it was, and
+ * collection getters hand back defensive copies so external code cannot corrupt an aggregate behind its own
+ * back. Every aggregate here is registered with {@code track}, so the harness re-checks
+ * {@link com.ticketing.system.shared.InvariantChecked#checkInvariants()} after each test.
  */
 class RuntimeInvariantGuardTest extends BaseDomainTest {
 
@@ -80,6 +76,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
 
         memberCart.clearSession();
 
+        assertNull(memberCart.getSessionId(), "the cart no longer points at the ended session");
         assertTrue(memberCart.isMember());
         assertEquals(42, memberCart.getUserId());
     }

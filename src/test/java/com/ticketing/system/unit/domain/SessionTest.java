@@ -225,10 +225,16 @@ class SessionTest extends BaseDomainTest {
         assertEquals(5, admin.getUserId());
     }
 
+    // Pins today's behaviour, which Session cites: the domain doesn't validate userId positivity, that is
+    // the User aggregate's job. Whether that is a requirement is not decided (#189).
     @Test
     void GivenZeroAndNegativeUserIds_WhenMemberSessionConstructed_ThenDoesNotThrow() {
-        // Domain doesn't validate userId positivity — that's the User aggregate's job.
-        assertDoesNotThrow(() -> new Session("sid-a", 0, T0, T_EXPIRES));
-        assertDoesNotThrow(() -> new Session("sid-b", -1, T0, T_EXPIRES));
+        Session zero = track(assertDoesNotThrow(() -> new Session("sid-a", 0, T0, T_EXPIRES)));
+        Session negative = track(assertDoesNotThrow(() -> new Session("sid-b", -1, T0, T_EXPIRES)));
+
+        assertEquals(0, zero.getUserId());
+        assertEquals(SessionKind.MEMBER, zero.getKind());
+        assertEquals(-1, negative.getUserId());
+        assertEquals(SessionKind.MEMBER, negative.getKind());
     }
 }

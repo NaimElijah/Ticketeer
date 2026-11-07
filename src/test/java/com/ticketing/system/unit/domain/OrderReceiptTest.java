@@ -20,8 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrderReceiptTest extends BaseDomainTest {
 
+    // Distinct, so a receipt built with the two swapped is caught.
     private final int USER_ID = 5;
-    private final int RECEIPT_ID = 5;
+    private final int RECEIPT_ID = 6;
 
     // The purchase time comes from the caller's clock (ADR-008); the receipt no longer reads the JVM's.
     @Test
@@ -38,7 +39,8 @@ class OrderReceiptTest extends BaseDomainTest {
     void GivenAUserId_WhenForMember_ThenSetsUserIdCorrectly() {
         ReceiptLine item = new ReceiptLine(1, 20.0, 1, 1, "A1", AT);
         OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 100.0, new ArrayList<>(List.of(item)), AT));
-        assertEquals(5, receipt.getUserid());
+        assertEquals(USER_ID, receipt.getUserid());
+        assertEquals(RECEIPT_ID, receipt.getId());
     }
 
     @Test
