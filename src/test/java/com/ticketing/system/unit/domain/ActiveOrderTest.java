@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.domain;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -27,6 +28,23 @@ class ActiveOrderTest extends BaseDomainTest {
 
     // The hold is judged against this instant, as UTC wall time from the injected clock (ADR-008).
     private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
+    // The hold length is process-wide state that any Spring context sets from configuration
+    // (ReservationHoldConfig), so every time below is read from it rather than assuming ten minutes.
+    private static final Duration ONE_MINUTE = Duration.ofMinutes(1);
+
+    private static Duration hold() {
+        return CartLineItem.getExpirationLimit();
+    }
+
+    // Added when one minute of the hold is left at NOW.
+    private static LocalDateTime nearExpiry() {
+        return NOW.minus(hold()).plus(ONE_MINUTE);
+    }
+
+    // Added so long ago that the hold ran out a minute before NOW.
+    private static LocalDateTime pastTheHold() {
+        return NOW.minus(hold()).minus(ONE_MINUTE);
+    }
 
     private final int USER_ID = 1;
     private final int EVENT_ID = 10;
@@ -50,8 +68,7 @@ class ActiveOrderTest extends BaseDomainTest {
     @Test
     void GivenOrderWhoseHoldHasRunOut_WhenValidateCanCheckout_ThenRefusedAsAnInvalidStateTransition() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0,
-                NOW.minus(CartLineItem.getExpirationLimit()).minusMinutes(1));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, pastTheHold());
 
         assertThrows(InvalidStateTransitionException.class, () -> order.validateCanCheckout(NOW));
     }
@@ -259,21 +276,17 @@ class ActiveOrderTest extends BaseDomainTest {
     void GivenItemsNearExpiry_WhenRenewReservationTimers_ThenAllTimersResetToFullWindow() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
 
-        // Added 9 minutes ago -> ~1 minute left on the 10-minute window.
-        LocalDateTime nineMinutesAgo = NOW.minusMinutes(9);
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, nineMinutesAgo);
-        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1"), 120.0, nineMinutesAgo);
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, nearExpiry());
+        order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("A1"), 120.0, nearExpiry());
 
-        assertTrue(order.getRemainingTime(NOW).getSeconds() < 120,
-                "precondition: cart should be near expiry before renewal");
+        assertEquals(ONE_MINUTE, order.getRemainingTime(NOW), "precondition: one minute of the hold is left");
 
         order.renewReservationTimers(NOW);
 
-        // Every line item now has a fresh ~10-minute window.
-        assertTrue(order.getRemainingTime(NOW).getSeconds() > 590,
-                "all timers should be reset close to the full 10-minute window");
+        assertEquals(hold(), order.getRemainingTime(NOW), "the whole hold starts again at NOW");
         for (CartLineItem item : order.getItems()) {
-            assertTrue(item.getRemainingTime(NOW).getSeconds() > 590);
+            assertEquals(NOW, item.getAddedAt());
+            assertEquals(hold(), item.getRemainingTime(NOW));
             assertFalse(item.isExpired(NOW));
         }
     }
@@ -290,16 +303,14 @@ class ActiveOrderTest extends BaseDomainTest {
 
     @Test
     void GivenLineItem_WhenRenew_ThenAddedAtUpdatedAndTimerFresh() {
-        LocalDateTime nineMinutesAgo = NOW.minusMinutes(9);
-        CartLineItem item = new CartLineItem(EVENT_ID, ZONE_ID, "A7", 120.0, nineMinutesAgo);
+        CartLineItem item = new CartLineItem(EVENT_ID, ZONE_ID, "A7", 120.0, nearExpiry());
 
-        assertTrue(item.getRemainingTime(NOW).getSeconds() < 120);
+        assertEquals(ONE_MINUTE, item.getRemainingTime(NOW), "precondition: one minute of the hold is left");
 
-        LocalDateTime now = NOW;
-        item.renew(now);
+        item.renew(NOW);
 
-        assertEquals(now, item.getAddedAt());
-        assertTrue(item.getRemainingTime(NOW).getSeconds() > 590);
+        assertEquals(NOW, item.getAddedAt());
+        assertEquals(hold(), item.getRemainingTime(NOW));
     }
 
     // R1: a buyer must be able to manually remove an EXPIRED standing line (previously the !isExpired
@@ -307,7 +318,7 @@ class ActiveOrderTest extends BaseDomainTest {
     @Test
     void GivenExpiredStandingLine_WhenRemoveStandingSpots_ThenLineRemoved() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
-        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, NOW.minusMinutes(30));
+        order.addStandingReservation(EVENT_ID, ZONE_ID, 2, 50.0, pastTheHold());
 
         // Precondition: the lines are genuinely expired.
         assertTrue(order.getItems().get(0).isExpired(NOW));
@@ -322,8 +333,7 @@ class ActiveOrderTest extends BaseDomainTest {
     @Test
     void GivenExpiredSeatedLine_WhenRemoveSeats_ThenSeatRemoved() {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
-        order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2"), 120.0,
-                NOW.minusMinutes(30));
+        order.addSeatedReservation(EVENT_ID, ZONE_ID, List.of("A1", "A2"), 120.0, pastTheHold());
 
         assertTrue(order.getItems().get(0).isExpired(NOW));
 
