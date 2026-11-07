@@ -1,9 +1,12 @@
 package com.ticketing.system.unit.presentation;
 
+import static com.ticketing.system.unit.presentation.ViewHarness.button;
+import static com.ticketing.system.unit.presentation.ViewHarness.click;
 import static com.ticketing.system.unit.presentation.ViewHarness.field;
 import static com.ticketing.system.unit.presentation.ViewHarness.find;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -71,6 +74,7 @@ import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.NumberField;
+import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.AfterNavigationEvent;
@@ -87,6 +91,8 @@ class FieldOwnRuleMessagesTest {
     // Well formed, and one character over the 254 registration accepts.
     private static final String EMAIL_OF_255_CHARACTERS = "a".repeat(64) + "@" + "b".repeat(186) + ".com";
     private static final String MALFORMED_EMAIL = "bob@";
+    private static final String RESERVED_USERNAME = "admin";
+    private static final String PASSWORD = "Secret-pw-123";
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
     private static final String GUEST_SESSION = "guest-1";
     // What the complaint presenter allows in the details, well above anything these tests type.
@@ -156,12 +162,58 @@ class FieldOwnRuleMessagesTest {
         assertSaysWhatIsWrong(age, "an emptied age");
     }
 
+    // The refusal's message is one the view set, so the next edit hands the field back to its required rule.
+    @Test
+    void GivenAReservedUsernameWasRefused_WhenTheUsernameIsEmptied_ThenItSaysWhatToEnter() {
+        UsernameAvailabilityPresenter availability = availabilityWithNoVerdict();
+        when(availability.isReserved(RESERVED_USERNAME)).thenReturn(true);
+        RegisterView view = registerPage(availability);
+        TextField username = field(view, TextField.class, "Username");
+        fillRegistration(view, RESERVED_USERNAME);
+        click(button(view, "Create account"));
+        assertEquals("That username is reserved — please choose another.", username.getErrorMessage(),
+            "the reserved name must be refused before it is emptied");
+
+        username.clear();
+
+        assertSays(username, "Enter a username.", "an emptied username after a refusal");
+    }
+
+    // The live availability check lifts the required rule's mark while the user types: an emptied username
+    // that no submit refused is not red.
+    @Test
+    void GivenNoRefusal_WhenTheUsernameIsEmptied_ThenItIsNotMarkedInvalid() {
+        TextField username = field(registerPage(), TextField.class, "Username");
+
+        typeThenEmpty(username);
+
+        assertFalse(username.isInvalid(), "an emptied username no submit refused must not be red");
+    }
+
     private RegisterView registerPage() {
-        UsernameAvailabilityPresenter availability = mock(UsernameAvailabilityPresenter.class);
-        when(availability.check(any())).thenReturn(new UsernameAvailabilityPresenter.Outcome.Empty());
+        return registerPage(availabilityWithNoVerdict());
+    }
+
+    private RegisterView registerPage(UsernameAvailabilityPresenter availability) {
         RegisterView view = new RegisterView(mock(RegisterPresenter.class), availability, mock(SessionIdentity.class));
         harness.attach(view);
         return view;
+    }
+
+    // The live check answering Empty for every name: it calls no name taken, and lifts the mark on each change.
+    private static UsernameAvailabilityPresenter availabilityWithNoVerdict() {
+        UsernameAvailabilityPresenter availability = mock(UsernameAvailabilityPresenter.class);
+        when(availability.check(any())).thenReturn(new UsernameAvailabilityPresenter.Outcome.Empty());
+        return availability;
+    }
+
+    // Every field filled and the passwords matching, so a submit reaches the reserved-name check.
+    private static void fillRegistration(RegisterView view, String username) {
+        field(view, TextField.class, "Username").setValue(username);
+        field(view, EmailField.class, "Email").setValue("alice@example.com");
+        field(view, IntegerField.class, "Age").setValue(RegisterPresenter.MIN_AGE);
+        field(view, PasswordField.class, "Password").setValue(PASSWORD);
+        field(view, PasswordField.class, "Confirm password").setValue(PASSWORD);
     }
 
     // ---- CheckoutView, as a guest ----
@@ -634,5 +686,11 @@ class FieldOwnRuleMessagesTest {
         String message = field.getErrorMessage();
         assertTrue(message != null && !message.isBlank(),
             what + " must say what is wrong; its message is \"" + message + "\"");
+    }
+
+    private static void assertSays(Component component, String message, String what) {
+        HasValidationProperties field = (HasValidationProperties) component;
+        assertTrue(field.isInvalid(), what + " must be invalid by the field's own rule");
+        assertEquals(message, field.getErrorMessage(), what + " must say what its rule says");
     }
 }

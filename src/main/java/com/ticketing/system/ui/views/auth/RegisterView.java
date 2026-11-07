@@ -76,6 +76,7 @@ public class RegisterView extends LkAuthCard {
         username.setPlaceholder("3–32 characters, letters and digits");
         username.setHelperText(USERNAME_HELP_DEFAULT);
         username.setRequired(true);
+        LkFieldRules.sayWhenEmpty(username, ENTER_USERNAME);
         username.setAutocomplete(Autocomplete.USERNAME);
         username.setWidthFull();
         username.setAutofocus(true);
