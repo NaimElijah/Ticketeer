@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import jakarta.persistence.PersistenceException;
 
 /**
  * Unit tests for {@link OrgTreePresenter} (UC-25 / V2-VIEW-03).
@@ -141,7 +142,7 @@ class OrgTreePresenterTest {
         OrgTreePresenter.Outcome.Success ok =
                 assertInstanceOf(OrgTreePresenter.Outcome.Success.class, presenter.load(TOKEN, null, false));
 
-        assertEquals(2, ok.companies().size());
+        assertEquals(List.of(acme, bravo), ok.companies());
     }
 
     // ── admin success ──────────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ class OrgTreePresenterTest {
                 assertInstanceOf(OrgTreePresenter.Outcome.Success.class,
                         presenter.load(ADMIN_TOKEN, null, true));
 
-        assertEquals(2, ok.companies().size());
+        assertEquals(List.of(acme, bravo), ok.companies());
         assertEquals(acme, ok.selected());
         verify(service, never()).findOwnedCompanies(anyString());
         verify(service, never()).viewOrganizationalTree(anyString(), anyInt());
@@ -239,5 +240,17 @@ class OrgTreePresenterTest {
         OrgTreePresenter.Outcome.Failure fail =
                 assertInstanceOf(OrgTreePresenter.Outcome.Failure.class, presenter.load(TOKEN, null, false));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- the admin's tree read fails after the company list loaded (#189) ----
+
+    @Test
+    void GivenAnAdminWhoseTreeFailsToLoad_WhenLoad_ThenFailureCarriesTheGenericText() {
+        when(service.adminListAllCompanies(ADMIN_TOKEN)).thenReturn(List.of(company(7, "Acme")));
+        when(service.adminViewOrgTree(ADMIN_TOKEN, 7))
+                .thenThrow(new PersistenceException("could not extract ResultSet [select * from company_appointments]"));
+
+        assertEquals(new OrgTreePresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                presenter.load(ADMIN_TOKEN, null, true));
     }
 }
