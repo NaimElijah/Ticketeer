@@ -441,6 +441,36 @@ public class InventoryZoneTest extends BaseDomainTest {
         assertEquals(0, standingZone.getSoldAmount());
     }
 
+    // Standing holds are counted per order: checkout's Phase 3 confirms only the places its own order holds.
+
+    @Test
+    void GivenPlacesHeldByAnotherOrder_WhenReleaseStanding_ThenRefusedAndTheHoldKept() {
+        StandingZone standingZone = track(new StandingZone(1, "General Admission", 100, 50.0));
+        standingZone.reserve(InventorySelection.standing(2, HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> standingZone.release(InventorySelection.standing(2, ASKING_ORDER)));
+
+        assertEquals("Cannot release 2 tickets: this order holds only 0 in this zone.", refused.getMessage());
+        assertEquals(2, standingZone.getReservedAmount());
+        standingZone.release(InventorySelection.standing(2, HOLDING_ORDER));
+        assertEquals(0, standingZone.getReservedAmount(), "the holding order still owns both places");
+    }
+
+    @Test
+    void GivenPlacesHeldByAnotherOrder_WhenConfirmSaleStanding_ThenRefusedAndNothingSold() {
+        StandingZone standingZone = track(new StandingZone(1, "General Admission", 100, 50.0));
+        standingZone.reserve(InventorySelection.standing(2, HOLDING_ORDER));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> standingZone.confirmSale(InventorySelection.standing(2, ASKING_ORDER)));
+
+        assertEquals("Cannot confirm the sale of 2 tickets: this order holds only 0 in this zone.",
+                refused.getMessage());
+        assertEquals(0, standingZone.getSoldAmount());
+        assertEquals(2, standingZone.getReservedAmount());
+    }
+
     @Test
     void GivenStandingZone_WhenReserveSeatSelection_ThenThrowsException() {
         StandingZone standingZone = track(new StandingZone(1, "General Admission", 100, 50.0));
