@@ -27,6 +27,7 @@ import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.ticketing.system.ui.presenters.company.ManagerInvitationPresenter;
+import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
@@ -38,6 +39,7 @@ import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.ManagerInvitationView;
+import com.ticketing.system.ui.views.company.OwnerAppointmentView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
@@ -280,6 +282,19 @@ class FieldOwnRuleMessagesTest {
         ManagerInvitationView view = new ManagerInvitationView(mock(ManagerInvitationPresenter.class));
         harness.attach(view);
         Component invitee = field(view, Component.class, "Username or email");
+
+        typeThenEmpty(invitee);
+
+        assertSaysWhatIsWrong(invitee, "an emptied invitee");
+    }
+
+    // ---- OwnerAppointmentView ----
+
+    @Test
+    void GivenTheOwnerAppointmentPage_WhenTheInviteeIsEmptied_ThenItSaysWhatToEnter() {
+        OwnerAppointmentView view = new OwnerAppointmentView(mock(MyCompaniesPresenter.class));
+        harness.attach(view);
+        Component invitee = field(view, Component.class, "Invitee username or email");
 
         typeThenEmpty(invitee);
 

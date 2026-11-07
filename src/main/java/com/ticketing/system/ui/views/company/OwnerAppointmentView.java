@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -29,6 +30,8 @@ import jakarta.annotation.security.PermitAll;
 @RequireCapability(Capability.APPOINT_CO_OWNER)
 public class OwnerAppointmentView extends LkPage {
 
+    private static final String ENTER_INVITEE = "Enter a username or email to appoint.";
+
    private final MyCompaniesPresenter membershipPresenter;
     private final TextField invitee = new TextField("Invitee username or email");
     private final TextField scope   = new TextField("Scope");
@@ -49,6 +52,7 @@ public class OwnerAppointmentView extends LkPage {
 
         invitee.setPlaceholder("Who do you want to appoint?");
         invitee.setRequired(true);
+        LkFieldRules.sayWhenEmpty(invitee, ENTER_INVITEE);
         invitee.setWidthFull();
 
         UserCompanyDTO current = membershipPresenter.currentCompany();
@@ -81,7 +85,7 @@ public class OwnerAppointmentView extends LkPage {
     private void sendInvitation() {
         errors.clear();
         if (invitee.isEmpty()) {
-            refuseInvitee("Enter a username or email to appoint.");
+            refuseInvitee(ENTER_INVITEE);
             return;
         }
         String ident = invitee.getValue().trim();
