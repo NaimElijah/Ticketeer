@@ -3,19 +3,29 @@ package com.ticketing.system.unit.infrastructure.persistence.OrderReceiptPersist
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
+import javax.sql.DataSource;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.adapter.out.persistence.JpaOrderReceiptRepository;
@@ -36,6 +46,10 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContractTest {
 
     private static final LocalDateTime AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+    /** How long the second transaction's write may wait for the row lock before its statement is cancelled. */
+    private static final int LOCKED_WRITE_TIMEOUT_SECONDS = 1;
+    /** An upper bound on that write's whole attempt; never reached when the lock holds. */
+    private static final long LOCKED_WRITE_AWAIT_SECONDS = 30;
 
     @Autowired
     private JpaOrderReceiptRepository repository;
@@ -46,6 +60,12 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @BeforeEach
     void cleanTable() {
         data.deleteAll();
@@ -54,6 +74,33 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     @Override
     protected OrderReceiptRepository newRepository() {
         return repository;
+    }
+
+    // Unlike every other Jpa adapter's, this lockForUpdate takes a real row lock (SELECT ... FOR UPDATE,
+    // #410) that lasts until the caller's transaction ends, so two refunds of one receipt cannot both reach
+    // the gateway. Meanwhile another transaction's write of the row waits, and its statement times out.
+    // Outside the test transaction, so the receipt is committed and the second connection sees it.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenAReceiptLockedInOneTransaction_WhenAnotherTransactionWritesItMeanwhile_ThenTheWriteWaitsAndTimesOut() {
+        repository.save(receipt(1));
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            repository.lockForUpdate(1);
+
+            CompletableFuture<Integer> otherWrite = CompletableFuture.supplyAsync(() -> {
+                JdbcTemplate otherConnection = new JdbcTemplate(dataSource);
+                otherConnection.setQueryTimeout(LOCKED_WRITE_TIMEOUT_SECONDS);
+                return otherConnection.update("update receipts set total_price = 60 where receipt_id = 1");
+            });
+
+            ExecutionException failed = assertThrows(ExecutionException.class,
+                    () -> otherWrite.get(LOCKED_WRITE_AWAIT_SECONDS, TimeUnit.SECONDS),
+                    "the other transaction wrote the receipt while it was locked");
+            assertInstanceOf(DataAccessException.class, failed.getCause());
+        });
+
+        assertEquals(50.0, jdbc.queryForObject("select total_price from receipts where receipt_id = 1", Double.class));
     }
 
     // A new adapter instance models a restarted process (#19, as JpaTicketRepositoryContractTest does for
