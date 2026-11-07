@@ -563,6 +563,16 @@ class EventManagementServiceTest {
                 verify(mockEventRepo, never()).save(any());
         }
 
+        @Test
+        void GivenEventOfAnotherCompany_WhenGetEventPurchasePolicy_ThenUnauthorized() {
+                storedEventOfAnotherCompany();
+
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> eventService.getEventPurchasePolicy(OWNER_TOKEN, COMPANY_ID, OTHER_EVENT_ID));
+
+                assertEquals(NOT_THIS_COMPANYS_EVENT, refused.getMessage());
+        }
+
         private static List<String> zoneNames(Event event) {
                 return event.getVenueMap().getInventoryZones().stream().map(InventoryZone::getName).toList();
         }
