@@ -70,9 +70,9 @@ import com.vaadin.flow.router.AfterNavigationEvent;
  * session must clear that cache: the next page shows the new count at once (#187, UI-A12). The cart is
  * changed through the real presenters, so the cache may be cleared in the view or the presenter.
  *
- * <p>Not covered: the checkout, which empties the cart, since its view and presenter need the payment
- * flow. A member's sign-in and a sign-out, which swap the cart, go through {@link LoginView} and
- * {@link FreshGuestSession}.
+ * <p>The checkout, which empties the cart, is driven through its view with a mocked presenter, since the real
+ * one needs the payment flow. A member's sign-in and a sign-out, which swap the cart, go through
+ * {@link LoginView} and {@link FreshGuestSession}.
  */
 class CartBadgeFreshnessTest {
 

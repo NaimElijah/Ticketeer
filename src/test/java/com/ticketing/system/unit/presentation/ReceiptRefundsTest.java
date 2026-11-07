@@ -55,7 +55,7 @@ class ReceiptRefundsTest {
             List.of(
                 new TransactionRecordDTO("PAYMENT_CHARGE", "WSEP", "TX-1", 100.00, "USD", PAID_AT),
                 new TransactionRecordDTO("REFUND", "WSEP", "RF-1", 20.00, "USD", PAID_AT.plusDays(1)),
-                new TransactionRecordDTO("REFUND", "WSEP", "RF-2", 30.00, "USD", PAID_AT.plusDays(2))),
+                new TransactionRecordDTO("REFUND", "WSEP", "RF-2", 25.00, "USD", PAID_AT.plusDays(2))),
             List.of(), "alice"));
         SessionIdentity identity = mock(SessionIdentity.class);
         when(identity.memberToken()).thenReturn(MEMBER_TOKEN);
@@ -65,7 +65,8 @@ class ReceiptRefundsTest {
         view.beforeEnter(routeTo("receiptId", String.valueOf(RECEIPT_ID)));
 
         String shown = text(view);
-        // ReceiptPresenter sums the refunds.
-        assertTrue(shown.contains("$50.00"), "expected the $50.00 refunded in all, in: " + shown);
+        // ReceiptPresenter sums the refunds. The sum, $45.00, differs from what stays paid, $55.00, so a page
+        // showing the remainder as the refund fails (#189).
+        assertTrue(shown.contains("$45.00"), "expected the $45.00 refunded in all, in: " + shown);
     }
 }
