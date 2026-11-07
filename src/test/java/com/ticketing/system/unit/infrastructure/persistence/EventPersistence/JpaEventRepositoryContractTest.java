@@ -156,6 +156,20 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
                 converter.convertToDatabaseColumn(repository.findById(1).getPurchasePolicy()));
     }
 
+    // A new adapter instance models a restarted process (#19, as JpaTicketRepositoryContractTest does for
+    // tickets): both id sequences must resume above the rows a previous boot persisted, not start at 1.
+    @Test
+    void GivenEventsPersistedByAPreviousBoot_WhenAFreshAdapterMintsIds_ThenEachIsAboveItsExistingMax() {
+        data.saveAllAndFlush(List.of(seatedEvent(1, 7), seatedEvent(2, 8), seatedEvent(3, 9)));
+
+        JpaEventRepository afterRestart = new JpaEventRepository(data);
+
+        int eventId = afterRestart.nextId();
+        int venueMapId = afterRestart.nextVenueMapId();
+        assertTrue(eventId > 3, "event id after a restart: " + eventId);
+        assertTrue(venueMapId > 9, "venue map id after a restart: " + venueMapId);
+    }
+
     // The Jpa adapter needs no lock to save a stored event again: @Version guards the write, and the
     // Memory adapter, which has none, refuses (MemoryEventRepositoryTest). Outside the test transaction
     // the load is a detached copy, so the change reaches the row only through this save.
@@ -203,7 +217,11 @@ class JpaEventRepositoryContractTest extends IEventRepositoryContractTest {
     }
 
     private static Event seatedEvent(int id) {
-        VenueMap venue = new VenueMap(id, new Location("Belgium", "Brussels"), List.of(
+        return seatedEvent(id, id);
+    }
+
+    private static Event seatedEvent(int id, int venueMapId) {
+        VenueMap venue = new VenueMap(venueMapId, new Location("Belgium", "Brussels"), List.of(
                 new SeatedZone(1, "Stage", 80.0, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0))),
                 new StandingZone(2, "Floor", 100, 50.0)));
         return new Event(id, "Show " + id, 4.5, List.of("Artist A"), EventCategory.MUSIC, 7, EventStatus.CANCELED,

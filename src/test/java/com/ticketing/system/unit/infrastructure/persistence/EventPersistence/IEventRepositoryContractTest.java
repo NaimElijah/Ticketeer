@@ -214,6 +214,24 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(List.of(1), eventRepo.findAll().stream().map(Event::getId).toList());
     }
 
+    // === nextId / nextVenueMapId ===
+
+    @Test
+    void GivenRepository_WhenNextIdCalledTwice_ThenProducesDistinctIncreasingValues() {
+        int a = eventRepo.nextId();
+        int b = eventRepo.nextId();
+        assertTrue(a > 0, "an event id is positive: " + a);
+        assertTrue(b > a, "ids increase: " + a + " then " + b);
+    }
+
+    @Test
+    void GivenRepository_WhenNextVenueMapIdCalledTwice_ThenProducesDistinctIncreasingValues() {
+        int a = eventRepo.nextVenueMapId();
+        int b = eventRepo.nextVenueMapId();
+        assertTrue(a > 0, "a venue map id is positive: " + a);
+        assertTrue(b > a, "ids increase: " + a + " then " + b);
+    }
+
     // === findByCompanyId ===
 
     @Test
