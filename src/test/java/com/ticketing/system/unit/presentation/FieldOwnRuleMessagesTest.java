@@ -20,10 +20,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
@@ -180,6 +182,20 @@ class FieldOwnRuleMessagesTest {
         view.beforeEnter(routeTo());
         view.afterNavigation(mock(AfterNavigationEvent.class));
         return view;
+    }
+
+    // ---- LoginView ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Username", "Password"})
+    void GivenTheSignInPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        LoginView view = new LoginView(mock(LoginPresenter.class), mock(SessionIdentity.class));
+        harness.attach(view);
+        Component field = field(view, Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
     }
 
     // ---- shared ----
