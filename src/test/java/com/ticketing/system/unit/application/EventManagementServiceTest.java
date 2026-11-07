@@ -565,6 +565,83 @@ class EventManagementServiceTest {
                 return event.getVenueMap().getInventoryZones().stream().map(InventoryZone::getName).toList();
         }
 
+        // -- removing seats from a seated zone, and the manual status change that must not cancel --
+
+        private int ownerAddsSeatedZoneA1ToA4() {
+                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
+                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
+                int seatedZoneId = eventService.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                seatedZone("Orchestra", "A", 4));
+                clearInvocations(mockEventRepo);
+                return seatedZoneId;
+        }
+
+        private List<String> seatLabelsOf(int zoneId) {
+                return ((SeatedZone) event.getVenueMap().getZone(zoneId)).getSeats().stream()
+                                .map(Seat::getLabel).sorted().toList();
+        }
+
+        @Test
+        void GivenSeatedZone_WhenRemoveSeatsFromSeatedZone_ThenOnlyThoseSeatsAreGoneAndSaved() {
+                int seatedZoneId = ownerAddsSeatedZoneA1ToA4();
+
+                eventService.removeSeatsFromSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                List.of("A2", "A3"));
+
+                assertEquals(List.of("A1", "A4"), seatLabelsOf(seatedZoneId));
+                verify(mockEventRepo).save(event);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // Every label is checked before any seat goes, so one unknown label removes nothing.
+        @Test
+        void GivenAnUnknownSeatLabel_WhenRemoveSeatsFromSeatedZone_ThenRefusedAndNoSeatRemoved() {
+                int seatedZoneId = ownerAddsSeatedZoneA1ToA4();
+
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> eventService.removeSeatsFromSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
+                                                seatedZoneId, List.of("A1", "Z9")));
+
+                assertEquals("Seat not found in zone: Z9", refused.getMessage());
+                assertEquals(List.of("A1", "A2", "A3", "A4"), seatLabelsOf(seatedZoneId));
+                verify(mockEventRepo, never()).save(any());
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        @Test
+        void GivenSeatedZone_WhenRemoveSeatRowFromSeatedZone_ThenTheRowIsGoneAndSaved() {
+                int seatedZoneId = ownerAddsSeatedZoneA1ToA4();
+                eventService.addSeatRowToSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                "B", 1, 3, 0.0, 1.0, 10.0);
+                clearInvocations(mockEventRepo);
+
+                eventService.removeSeatRowFromSeatedZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID, seatedZoneId,
+                                List.of("B1", "B2", "B3"));
+
+                assertEquals(List.of("A1", "A2", "A3", "A4"), seatLabelsOf(seatedZoneId));
+                verify(mockEventRepo).save(event);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
+        // A cancel must go through cancelEventAndRefund, which hands the refunds to sales; a manual
+        // status change to CANCELED would cancel with no refund at all.
+        @Test
+        void GivenOwner_WhenChangeEventStatusToCanceled_ThenRefusedAndTheEventIsNotCancelled() {
+                givenOwnerSignedInAndEventStored();
+
+                InvalidStateTransitionException refused = assertThrowsExactly(InvalidStateTransitionException.class,
+                                () -> eventService.changeEventStatus(OWNER_TOKEN, EVENT_ID, EventStatus.CANCELED));
+
+                assertEquals("Cannot manually set status to CANCELED", refused.getMessage());
+                assertEquals(EventStatus.SCHEDULED, event.getStatus());
+                verify(mockEventRepo, never()).save(any());
+                verifyNoInteractions(eventPublisher);
+                verify(mockEventRepo).unlock(EVENT_ID);
+        }
+
         // new test
         @Test
         void GivenSeatedVenueConfig_WhenConfigureVenueMap_ThenSeatCoordinatesArePreserved() {
