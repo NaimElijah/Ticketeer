@@ -20,11 +20,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
+import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
 import com.ticketing.system.ui.views.order.CheckoutView;
@@ -190,6 +192,20 @@ class FieldOwnRuleMessagesTest {
     @ValueSource(strings = {"Username", "Password"})
     void GivenTheSignInPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
         LoginView view = new LoginView(mock(LoginPresenter.class), mock(SessionIdentity.class));
+        harness.attach(view);
+        Component field = field(view, Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
+    }
+
+    // ---- AdminLoginView ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Admin username", "Password"})
+    void GivenTheAdminSignInPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        AdminLoginView view = new AdminLoginView(mock(AdminLoginPresenter.class));
         harness.attach(view);
         Component field = field(view, Component.class, label);
 

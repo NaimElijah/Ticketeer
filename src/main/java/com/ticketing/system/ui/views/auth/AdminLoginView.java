@@ -3,6 +3,7 @@ package com.ticketing.system.ui.views.auth;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
@@ -29,6 +30,9 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 @AnonymousAllowed
 public class AdminLoginView extends LkAuthCard {
 
+    private static final String ENTER_USERNAME = "Enter your admin username.";
+    private static final String ENTER_PASSWORD = "Enter your password.";
+
     private final AdminLoginPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
 
@@ -39,12 +43,14 @@ public class AdminLoginView extends LkAuthCard {
         // The autocomplete tokens let a browser or password manager fill the fields (#188, WCAG 1.3.5).
         TextField username = new TextField("Admin username");
         username.setRequired(true);
+        LkFieldRules.sayWhenEmpty(username, ENTER_USERNAME);
         username.setAutofocus(true);
         username.setAutocomplete(Autocomplete.USERNAME);
         username.setWidthFull();
 
         PasswordField password = new PasswordField("Password");
         password.setRequired(true);
+        LkFieldRules.sayWhenEmpty(password, ENTER_PASSWORD);
         password.setAutocomplete(Autocomplete.CURRENT_PASSWORD);
         password.setWidthFull();
 
@@ -61,10 +67,10 @@ public class AdminLoginView extends LkAuthCard {
     private void attempt(TextField username, PasswordField password) {
         errors.clear();
         if (username.isEmpty()) {
-            errors.reject(username, "Enter your admin username.");
+            errors.reject(username, ENTER_USERNAME);
         }
         if (password.isEmpty()) {
-            errors.reject(password, "Enter your password.");
+            errors.reject(password, ENTER_PASSWORD);
         }
         if (!errors.isEmpty()) {
             Toasts.failure("Please enter both username and password.");
