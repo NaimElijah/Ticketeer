@@ -12,6 +12,8 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -53,6 +55,16 @@ abstract class IProductionCompanyRepositoryContractTest {
         assertEquals("Acme", found.getName());
         assertEquals(7, found.getFounderId());
         assertEquals(CompanyStatus.ACTIVE, found.getStatus());
+    }
+
+    // The Jpa table holds the status under a check constraint that a migration must widen for each new
+    // constant (ADR-007). Inherited, so the save commits and a missing value fails here.
+    @ParameterizedTest
+    @EnumSource(CompanyStatus.class)
+    void GivenACompanyInEachStatus_WhenSaved_ThenItIsFoundWithThatStatus(CompanyStatus status) {
+        repo.save(company(1, 7, "Acme", status));
+
+        assertEquals(status, repo.getCompanyById(1).getStatus());
     }
 
     @Test

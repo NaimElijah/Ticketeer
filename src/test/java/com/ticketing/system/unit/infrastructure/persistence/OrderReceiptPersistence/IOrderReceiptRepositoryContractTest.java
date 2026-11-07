@@ -107,6 +107,20 @@ abstract class IOrderReceiptRepositoryContractTest {
         assertEquals("ILS", tx.getCurrency());
     }
 
+    // The Jpa table holds the transaction type under a check constraint that a migration must widen for
+    // each new constant (ADR-007).
+    @Test
+    void GivenAReceiptWithATransactionOfEachType_WhenSavedAndReloaded_ThenEachTypeComesBack() {
+        OrderReceipt r = member(1, 7, 5);
+        r.addTransaction(TransactionRecord.paymentCharge(999, "WSEP", 50.0, "ILS", AT));
+        r.addTransaction(TransactionRecord.ticketIssuance("issue-1", "WSEP", AT));
+        r.addTransaction(TransactionRecord.refund("refund-1", "WSEP", 50.0, "ILS", AT));
+        repo.save(r);
+
+        assertEquals(Set.of(TransactionType.values()), repo.findByOrderReceiptId(1).orElseThrow()
+                .getTransactionRecords().stream().map(TransactionRecord::getType).collect(Collectors.toSet()));
+    }
+
     @Test
     void GivenLinesInEveryRefundState_WhenSavedAndReloaded_ThenEachLineKeepsItsState() {
         OrderReceipt r = OrderReceipt.forMember(1, 7, 150.0, List.of(line(10, 5), line(11, 6), line(12, 8)), AT);

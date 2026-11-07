@@ -6,12 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.messaging.domain.ConversationStatus;
@@ -92,6 +95,48 @@ abstract class IConversationRepositoryContractTest {
         assertEquals(Set.of(c.getConversationId()),
                 ids(repo.findByTypeAndStatus(ConversationType.INQUIRY, ConversationStatus.OPEN)));
         assertTrue(repo.findByTypeAndStatus(ConversationType.INQUIRY, ConversationStatus.CLOSED).isEmpty());
+    }
+
+    // The Jpa tables hold the type, both participant types, the status and each message's sender type
+    // under check constraints that a migration must widen for each new constant (ADR-007). Inherited, so
+    // each save commits and a missing value fails here.
+    @ParameterizedTest
+    @EnumSource(ParticipantType.class)
+    void GivenAConversationWhoseParticipantsAreOfEachType_WhenSaved_ThenTheTypesComeBack(ParticipantType type) {
+        Conversation c = Conversation.start(ConversationType.DIRECT, 5, type, 10, type, "Hi", "hello", STARTED_AT);
+        repo.save(c);
+
+        Conversation found = repo.findById(c.getConversationId()).orElseThrow();
+        assertEquals(List.of(type, type, type),
+                List.of(found.getInitiatorType(), found.getCounterpartyType(), found.getMessages().get(0).getSenderType()));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ConversationType.class)
+    void GivenAConversationOfEachType_WhenSaved_ThenItIsFoundByThatType(ConversationType type) {
+        Conversation c = Conversation.start(type, 5, ParticipantType.MEMBER, 10, ParticipantType.COMPANY,
+                "Hi", "hello", STARTED_AT);
+        repo.save(c);
+
+        assertEquals(Set.of(c.getConversationId()), ids(repo.findByType(type)));
+    }
+
+    @Test
+    void GivenConversationsInEveryStatus_WhenSaved_ThenEachKeepsItsStatus() {
+        Conversation open = inquiry(5, 10, "Open", "hello");
+        Conversation responded = inquiry(5, 10, "Responded", "hello");
+        responded.transitionToResponded();
+        Conversation resolved = inquiry(5, 10, "Resolved", "hello");
+        resolved.transitionToResolved();
+        Conversation closed = inquiry(5, 10, "Closed", "hello");
+        closed.transitionToClosed();
+        List.of(open, responded, resolved, closed).forEach(repo::save);
+
+        Map<String, ConversationStatus> stored = repo.findByCompanyAsCounterparty(10).stream()
+                .collect(Collectors.toMap(Conversation::getSubject, Conversation::getStatus));
+
+        assertEquals(Map.of("Open", ConversationStatus.OPEN, "Responded", ConversationStatus.RESPONDED,
+                "Resolved", ConversationStatus.RESOLVED, "Closed", ConversationStatus.CLOSED), stored);
     }
 
     @Test

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -118,6 +119,41 @@ abstract class ICompanyAppointmentRepositoryContractTest {
 
         CompanyAppointment found = repo.findById(appt.getAppointmentId()).orElseThrow();
         assertEquals(AppointmentStatus.ACTIVE, found.getStatus());
+    }
+
+    // The Jpa tables hold role, status and permission under check constraints that a migration must
+    // widen for each new constant (ADR-007). Inherited, so each save commits and a missing value fails here.
+    @Test
+    void GivenAppointmentsInEveryStatusAndRole_WhenSaved_ThenEachKeepsItsStatusAndRole() {
+        CompanyAppointment pending = repo.save(manager(10, 5, 99, List.of(Permission.VIEW_SALES)));
+        CompanyAppointment accepted = manager(10, 6, 99, List.of(Permission.VIEW_SALES));
+        accepted.accept();
+        repo.save(accepted);
+        CompanyAppointment rejected = manager(10, 7, 99, List.of(Permission.VIEW_SALES));
+        rejected.reject();
+        repo.save(rejected);
+        CompanyAppointment revoked = manager(10, 8, 99, List.of(Permission.VIEW_SALES));
+        revoked.accept();
+        revoked.revoke(99);
+        repo.save(revoked);
+        CompanyAppointment owner = repo.save(CompanyAppointment.OwnerAppointment(repo.nextId(), 10, 9, 99, INVITED_AT));
+
+        Map<Integer, String> stored = repo.findByCompanyId(10).stream().collect(Collectors.toMap(
+                CompanyAppointment::getAppointmentId, a -> a.getRole() + " " + a.getStatus()));
+
+        assertEquals(Map.of(
+                pending.getAppointmentId(), "Manager PENDING",
+                accepted.getAppointmentId(), "Manager ACTIVE",
+                rejected.getAppointmentId(), "Manager REJECTED",
+                revoked.getAppointmentId(), "Manager REVOKED",
+                owner.getAppointmentId(), "Owner PENDING"), stored);
+    }
+
+    @Test
+    void GivenAManagerAppointmentWithEveryPermission_WhenSaved_ThenItKeepsThemAll() {
+        CompanyAppointment saved = repo.save(manager(10, 5, 99, List.of(Permission.values())));
+
+        assertEquals(Set.of(Permission.values()), repo.findById(saved.getAppointmentId()).orElseThrow().getPermissions());
     }
 
     @Test

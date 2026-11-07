@@ -137,6 +137,14 @@ abstract class INotificationRepositoryContractTest {
     // The JPA table holds the type under a check constraint that a migration must widen for each new
     // constant (ADR-007); reading back through a query flushes the insert, so a missing value fails here.
     @ParameterizedTest
+    @EnumSource(NotificationStatus.class)
+    void GivenANotificationInEachStatus_WhenSaved_ThenItIsFoundByThatStatus(NotificationStatus status) {
+        repo.save(note("n1", 5, status));
+
+        assertEquals(Set.of("n1"), ids(repo.findByRecipientAndStatus(5, status)));
+    }
+
+    @ParameterizedTest
     @EnumSource(NotificationType.class)
     void GivenANotificationOfEachType_WhenSaved_ThenItIsFoundWithThatType(NotificationType type) {
         repo.save(new Notification("typed", 5, type, NotificationStatus.PENDING, "hello", T));

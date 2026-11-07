@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -74,6 +75,30 @@ abstract class ITicketRepositoryContractTest {
         repo.save(loaded);
 
         assertEquals(TicketStatus.REFUNDED, repo.findById(1).getStatus());
+    }
+
+    // The Jpa table holds the status under a check constraint that a migration must widen for each new
+    // constant (ADR-007). A ticket starts PAID, from which AVAILABLE and RESERVED cannot be reached, so
+    // those two are not stored here.
+    @Test
+    void GivenTicketsInEveryStatusReachableFromPaid_WhenSaved_ThenEachKeepsItsStatus() {
+        Ticket paid = ticket(1, 10, 2, 1);
+        Ticket issued = ticket(2, 10, 2, 1);
+        issued.markIssued("BC-2");
+        Ticket used = ticket(3, 10, 2, 1);
+        used.markIssued("BC-3");
+        used.markUsed();
+        Ticket refunded = ticket(4, 10, 2, 1);
+        refunded.markRefunded();
+        Ticket voided = ticket(5, 10, 2, 1);
+        voided.markVoided();
+        List.of(paid, issued, used, refunded, voided).forEach(repo::save);
+
+        Map<Integer, TicketStatus> stored = repo.findByEventId(10).stream()
+                .collect(Collectors.toMap(Ticket::getId, Ticket::getStatus));
+
+        assertEquals(Map.of(1, TicketStatus.PAID, 2, TicketStatus.ISSUED, 3, TicketStatus.USED,
+                4, TicketStatus.REFUNDED, 5, TicketStatus.VOIDED), stored);
     }
 
     // --- findByEventId ---------------------------------------------------------
