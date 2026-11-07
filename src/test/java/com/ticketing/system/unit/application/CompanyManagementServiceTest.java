@@ -1223,6 +1223,32 @@ public class CompanyManagementServiceTest {
                 assertFalse(membershipService.isOwnerInCompany(CO_OWNER_ID, COMPANY_ID));
         }
 
+        // II.4.8: the tree hangs each member under whoever appointed them, so a co-owner's manager sits a
+        // level below the co-owner, not beside them under the founder. Built through the service calls,
+        // on a real company, so the owner and manager lists are the ones those calls leave behind.
+        @Test
+        public void GivenFounderCoOwnerAndManagerChain_WhenViewOrganizationalTree_ThenThreeLevels() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+
+                OrganizationalTreeNodeDTO founder = companyService.viewOrganizationalTree(OWNER_TOKEN, COMPANY_ID);
+
+                assertEquals(OWNER_ID, founder.userId());
+                assertTrue(founder.isFounder());
+                assertEquals(List.of(CO_OWNER_ID), childIds(founder));
+                OrganizationalTreeNodeDTO coOwner = founder.appointedByThisUser().get(0);
+                assertEquals("Owner", coOwner.role());
+                assertFalse(coOwner.isFounder());
+                assertEquals(List.of(TARGET_USER_ID), childIds(coOwner));
+                OrganizationalTreeNodeDTO manager = coOwner.appointedByThisUser().get(0);
+                assertEquals("Manager", manager.role());
+                assertEquals(Set.copyOf(defaultPermissions), Set.copyOf(manager.grantedPermissions()));
+                assertEquals(List.of(), childIds(manager));
+        }
+
+        private static List<Integer> childIds(OrganizationalTreeNodeDTO node) {
+                return node.appointedByThisUser().stream().map(OrganizationalTreeNodeDTO::userId).toList();
+        }
+
         // ---- a manager invitation is a pending offer, not a role change (#187) ----------------
         // The invitee's role changes only when they accept, so the invitation must not tell them it
         // already has; the acceptance tells them once.
