@@ -15,12 +15,15 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.Seat;
 import com.ticketing.system.catalog.domain.SeatStatus;
 import com.ticketing.system.catalog.domain.SeatedZone;
@@ -230,6 +233,44 @@ public abstract class IEventRepositoryContractTest {
         int b = eventRepo.nextVenueMapId();
         assertTrue(a > 0, "a venue map id is positive: " + a);
         assertTrue(b > a, "ids increase: " + a + " then " + b);
+    }
+
+    // === every enum constant is storable ===
+    // The Jpa tables hold status and category under check constraints that a migration must widen for
+    // each new constant (ADR-007). Inherited, so each save commits and a missing value fails here.
+
+    @ParameterizedTest
+    @EnumSource(EventStatus.class)
+    void GivenAnEventInEachStatus_WhenSaved_ThenItIsFoundByThatStatus(EventStatus status) {
+        eventRepo.save(buildEvent(1, "Status Show", 4.5, 10, status, EventCategory.CONCERT));
+
+        assertEquals(List.of(1), eventRepo.findByStatus(status).stream().map(Event::getId).toList());
+    }
+
+    @ParameterizedTest
+    @EnumSource(EventCategory.class)
+    void GivenAnEventInEachCategory_WhenSaved_ThenItIsFoundWithThatCategory(EventCategory category) {
+        eventRepo.save(buildEvent(1, "Category Show", 4.5, 10, EventStatus.ON_SALE, category));
+
+        assertEquals(category, eventRepo.findById(1).getCategory());
+    }
+
+    @Test
+    void GivenSeatsInEverySeatState_WhenSavedAndFound_ThenEachSeatKeepsItsState() {
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new SeatedZone(1, "Stage", 80.0,
+                List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0), new Seat("A3", 2, 0)))));
+        Event event = new Event(1, "Seated Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
+        event.reserveInventory(1, InventorySelection.seated(List.of("A2"), "order-held", FUTURE_START));
+        event.reserveInventory(1, InventorySelection.seated(List.of("A3"), "order-sold", FUTURE_START));
+        event.confirmInventorySale(1, InventorySelection.seated(List.of("A3"), "order-sold"));
+        eventRepo.save(event);
+
+        SeatedZone found = (SeatedZone) eventRepo.findById(1).getVenueMap().getInventoryZones().get(0);
+
+        assertEquals(Map.of("A1", SeatStatus.AVAILABLE, "A2", SeatStatus.RESERVED, "A3", SeatStatus.SOLD),
+                found.getSeats().stream().collect(Collectors.toMap(Seat::getLabel, Seat::getStatus)));
     }
 
     // === findByCompanyId ===
