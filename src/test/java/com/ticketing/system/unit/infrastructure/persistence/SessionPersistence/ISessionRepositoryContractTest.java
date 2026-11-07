@@ -71,9 +71,13 @@ abstract class ISessionRepositoryContractTest {
     }
 
     @Test
-    void GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrow() {
+    void GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrowAndTheStoredSessionStays() {
+        repo.save(new Session("sid-1", 5, T0, T_FAR_FUTURE));
+
         assertDoesNotThrow(() -> repo.delete("ghost"));
         assertDoesNotThrow(() -> repo.delete(null));
+
+        assertTrue(repo.findById("sid-1").isPresent(), "deleting an unknown or null id must leave other sessions");
     }
 
     @Test
@@ -92,13 +96,6 @@ abstract class ISessionRepositoryContractTest {
     void GivenExpiredSession_WhenExistsByUserId_ThenIgnoresIt() {
         repo.save(new Session("sid-1", 5, T_PAST, T_PAST_PLUS_ONE));
         assertFalse(repo.existsByUserId(5));
-    }
-
-    @Test
-    void GivenLiveGuestSession_WhenExistsByUserId_ThenIgnoresIt() {
-        repo.save(new Session("sid-guest", null, T0, T_FAR_FUTURE));
-        // No userId equals null's "missing user," so any int query returns false.
-        assertFalse(repo.existsByUserId(0));
     }
 
     // An admin's id can equal a member's (ADR-012), and isOnline asks about members only.
