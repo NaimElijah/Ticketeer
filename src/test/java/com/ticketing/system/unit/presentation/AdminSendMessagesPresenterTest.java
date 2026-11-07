@@ -255,14 +255,16 @@ class AdminSendMessagesPresenterTest {
         assertEquals(2, history().size(), "one row per admin's send: " + history());
     }
 
+    // Listed in neither time order nor its reverse, with subjects whose alphabetical order, either way, is not
+    // newest first, so only a sort by time gives the expected order.
     @Test
-    void GivenSendsListedOldestFirst_WhenLoad_ThenTheHistoryIsNewestFirst() {
+    void GivenSendsListedOutOfTimeOrder_WhenLoad_ThenTheHistoryIsNewestFirst() {
         when(messaging.viewSentOutreach(TOKEN)).thenReturn(List.of(
-            outreachAt("c1", ADMIN_ID, 7, "First", "a", SENT_AT.minusDays(2)),
-            outreachAt("c2", ADMIN_ID, 7, "Second", "b", SENT_AT.minusDays(1)),
-            outreachAt("c3", ADMIN_ID, 7, "Third", "c", SENT_AT)));
+            outreachAt("c1", ADMIN_ID, 7, "Alpha", "a", SENT_AT.minusDays(1)),
+            outreachAt("c2", ADMIN_ID, 7, "Charlie", "c", SENT_AT.minusDays(2)),
+            outreachAt("c3", ADMIN_ID, 7, "Bravo", "b", SENT_AT)));
 
-        assertEquals(List.of("Third", "Second", "First"),
+        assertEquals(List.of("Bravo", "Alpha", "Charlie"),
             history().stream().map(AdminSendMessagesPresenter.SentOutreach::subject).toList());
     }
 
