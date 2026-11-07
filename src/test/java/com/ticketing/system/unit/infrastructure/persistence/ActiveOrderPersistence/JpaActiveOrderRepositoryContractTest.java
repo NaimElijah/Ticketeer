@@ -62,6 +62,21 @@ class JpaActiveOrderRepositoryContractTest extends IActiveOrderRepositoryContrac
         return repository;
     }
 
+    // This adapter needs no lock to save a stored cart again: @Version guards the write, and the Memory
+    // adapter, which has none, refuses (MemoryActiveOrderRepositoryContractTest). Outside the test
+    // transaction the load is a detached copy, so the new line reaches the table only through this save.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void GivenAStoredCart_WhenLoadedChangedAndSavedWithoutALock_ThenTheChangeIsStored() {
+        repository.save(ActiveOrder.forMember(MEMBER_ID, "sid-A", CREATED));
+        ActiveOrder loaded = repository.getByUserId(MEMBER_ID);
+        loaded.addStandingReservation(1, 10, 1, 50.0, CREATED);
+
+        repository.save(loaded);
+
+        assertEquals(1, repository.getByUserId(MEMBER_ID).getItems().size());
+    }
+
     // The login merge loads the guest cart and gives it the member's id inside the login transaction, so
     // the save's first query flushes that UPDATE. If another device stored the member's first cart in the
     // meantime, uk_active_orders_user_id fails right there, and the login must see a retryable concurrent

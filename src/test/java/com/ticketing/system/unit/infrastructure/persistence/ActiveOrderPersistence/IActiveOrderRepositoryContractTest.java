@@ -112,6 +112,38 @@ abstract class IActiveOrderRepositoryContractTest {
         assertEquals(List.of(stored.getOrderKey()), repo.findAll().stream().map(ActiveOrder::getOrderKey).toList());
     }
 
+    // A reservation, a removal and the sweeper all load the cart, change its lines and save it again
+    // under the cart's lock. The Memory adapter refuses that save without the lock
+    // (MemoryActiveOrderRepositoryContractTest); the Jpa adapter relies on @Version and needs none.
+    @Test
+    void GivenASavedCartWithLines_WhenLoadedChangedAndSavedUnderItsLock_ThenTheStoredCartHoldsTheNewLines() {
+        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
+        cart.addStandingReservation(1, 10, 2, 50.0, NOW);
+        repo.save(cart);
+
+        repo.lockForUpdate("user:5");
+        try {
+            ActiveOrder loaded = repo.getByUserId(5);
+            loaded.removeStandingSpots(1, 10, 1);
+            loaded.addSeatedReservation(1, 11, List.of("B2"), 75.0, NOW);
+            repo.save(loaded);
+        } finally {
+            repo.unlock("user:5");
+        }
+
+        ActiveOrder reloaded = repo.getByUserId(5);
+        assertEquals(cart.getOrderKey(), reloaded.getOrderKey());
+        assertEquals(List.of("1/10/standing", "1/11/B2"), lines(reloaded));
+        assertEquals(1, repo.findAll().size(), "the cart is updated, not stored a second time");
+    }
+
+    private static List<String> lines(ActiveOrder cart) {
+        return cart.getItems().stream()
+                .map(i -> i.geteventId() + "/" + i.getzoneId() + "/"
+                        + (i.getSeatNumber() == null ? "standing" : i.getSeatNumber()))
+                .sorted().toList();
+    }
+
     @Test
     void GivenAnotherCartOfTheMemberHoldingNothing_WhenSavingANewCart_ThenTheSecondCartWins() {
         // D9a edge: re-saving a Member cart (e.g., after promotion) replaces
