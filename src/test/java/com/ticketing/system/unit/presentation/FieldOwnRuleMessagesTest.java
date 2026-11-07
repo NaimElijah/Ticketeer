@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 
@@ -20,12 +21,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.ui.presenters.auth.AdminLoginPresenter;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
 import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter;
 import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
+import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.presenters.company.ManagerInvitationPresenter;
 import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
@@ -40,6 +43,7 @@ import com.ticketing.system.ui.views.auth.AdminLoginView;
 import com.ticketing.system.ui.views.auth.LoginView;
 import com.ticketing.system.ui.views.auth.RegisterView;
 import com.ticketing.system.ui.views.company.CompanyRegistrationView;
+import com.ticketing.system.ui.views.company.EventManagementView;
 import com.ticketing.system.ui.views.company.ManagerInvitationView;
 import com.ticketing.system.ui.views.company.OwnerAppointmentView;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
@@ -47,9 +51,13 @@ import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
+import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.datetimepicker.DateTimePicker;
+import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.shared.HasValidationProperties;
 import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.IntegerField;
+import com.vaadin.flow.component.textfield.NumberField;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.router.AfterNavigationEvent;
 
@@ -69,6 +77,7 @@ class FieldOwnRuleMessagesTest {
     private static final String GUEST_SESSION = "guest-1";
     // What the complaint presenter allows in the details, well above anything these tests type.
     private static final int COMPLAINT_DETAILS_LIMIT = 1000;
+    private static final String RATING = "Rating (0–5)";
 
     private ViewHarness harness;
 
@@ -335,6 +344,80 @@ class FieldOwnRuleMessagesTest {
         typeThenEmpty(field);
 
         assertSaysWhatIsWrong(field, label);
+    }
+
+    // ---- EventManagementView, create mode ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Title", "Country", "City"})
+    void GivenTheCreateEventPage_WhenARequiredTextFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        Component field = field(createEventPage(), Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked") // the category select holds the category's name
+    void GivenTheCreateEventPage_WhenTheCategoryIsCleared_ThenItSaysWhatToChoose() {
+        Select<String> category = field(createEventPage(), Select.class, "Category");
+        category.setValue(EventCategory.THEATER.name());
+
+        category.clear();
+
+        assertSaysWhatIsWrong(category, "a cleared category");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked") // the time zone box holds zone ids
+    void GivenTheCreateEventPage_WhenTheTimeZoneIsCleared_ThenItSaysWhatToChoose() {
+        ComboBox<ZoneId> timeZone = field(createEventPage(), ComboBox.class, "Time zone");
+
+        timeZone.clear();
+
+        assertSaysWhatIsWrong(timeZone, "a cleared time zone");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Starts", "Ends"})
+    void GivenTheCreateEventPage_WhenAShowTimeIsCleared_ThenItSaysWhatToSet(String label) {
+        DateTimePicker picker = field(createEventPage(), DateTimePicker.class, label);
+        picker.setValue(LocalDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC).plusDays(30));
+
+        picker.clear();
+
+        assertSaysWhatIsWrong(picker, label);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.5, 5.5})
+    void GivenTheCreateEventPage_WhenTheRatingIsOutsideItsRange_ThenItSaysWhatIsWrong(double value) {
+        NumberField rating = field(createEventPage(), NumberField.class, RATING);
+
+        rating.setValue(value);
+
+        assertSaysWhatIsWrong(rating, "a rating of " + value);
+    }
+
+    @Test
+    void GivenTheCreateEventPage_WhenTheRatingIsEmptied_ThenItSaysWhatToEnter() {
+        NumberField rating = field(createEventPage(), NumberField.class, RATING);
+        rating.setValue(1.0);
+
+        rating.clear();
+
+        assertSaysWhatIsWrong(rating, "an emptied rating");
+    }
+
+    private EventManagementView createEventPage() {
+        ViewHarness.signInMember();
+        EventManagementPresenter presenter = mock(EventManagementPresenter.class);
+        when(presenter.defaultTimeZone()).thenReturn(ZoneOffset.UTC);
+        EventManagementView view = new EventManagementView(presenter);
+        harness.attach(view);
+        view.beforeEnter(routeTo("eventId", "new"));
+        return view;
     }
 
     // ---- shared ----

@@ -15,6 +15,7 @@ import com.ticketing.system.ui.components.kit.LkBadge;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -65,6 +66,20 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
     private static final String SAVE_LABEL = "Save Changes";
     private static final String EVENT_NOT_FOUND = "Event not found.";
     private static final String NO_ARTIST = "Please list at least one artist.";
+    private static final String ENTER_TITLE = "Please enter a title.";
+    private static final String CHOOSE_CATEGORY = "Please choose a category.";
+    private static final String ENTER_COUNTRY = "Enter the country.";
+    private static final String ENTER_CITY = "Enter the city.";
+    private static final String SET_START = "Set the start time.";
+    private static final String SET_END = "Set the end time.";
+    private static final String SHOW_TIME_FORMAT = "Enter a valid date and time.";
+    private static final String SHOW_TIME_INCOMPLETE = "Enter both a date and a time.";
+    private static final String CHOOSE_TIME_ZONE = "Please choose the venue's time zone.";
+    private static final int RATING_MIN = 0;
+    private static final int RATING_MAX = 5;
+    private static final String SET_RATING = "Please set a rating (0–5).";
+    private static final String RATING_RANGE = "Enter a rating from " + RATING_MIN + " to " + RATING_MAX + ".";
+    private static final String RATING_NOT_A_NUMBER = "Enter the rating as a number.";
 
     private final TextField title = new TextField("Title");
     private final Select<String> category = new Select<>();
@@ -251,17 +266,17 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
     private void createEvent() {
         errors.clear();
         String name = blankToNull(title.getValue());
-        if (name == null) { refuse(title, "Please enter a title."); return; }
-        if (category.getValue() == null) { refuse(category, "Please choose a category."); return; }
+        if (name == null) { refuse(title, ENTER_TITLE); return; }
+        if (category.getValue() == null) { refuse(category, CHOOSE_CATEGORY); return; }
 
         String co = country.getValue() == null ? "" : country.getValue().trim();
         String ci = city.getValue() == null ? "" : city.getValue().trim();
-        if (co.isBlank()) { errors.reject(country, "Enter the country."); }
-        if (ci.isBlank()) { errors.reject(city, "Enter the city."); }
+        if (co.isBlank()) { errors.reject(country, ENTER_COUNTRY); }
+        if (ci.isBlank()) { errors.reject(city, ENTER_CITY); }
         if (!errors.isEmpty()) { refuse("Please enter both a country and a city."); return; }
 
-        if (start.getValue() == null) { errors.reject(start, "Set the start time."); }
-        if (end.getValue() == null) { errors.reject(end, "Set the end time."); }
+        if (start.getValue() == null) { errors.reject(start, SET_START); }
+        if (end.getValue() == null) { errors.reject(end, SET_END); }
         if (!errors.isEmpty()) { refuse("Please set both a start and an end time."); return; }
         if (!end.getValue().isAfter(start.getValue())) {
             refuse(end, "The end time must be after the start time.");
@@ -269,7 +284,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
         }
         // Whether the start is still ahead depends on the venue's zone, so the service judges it
         // against the injected clock and the presenter surfaces its reason.
-        if (timeZone.getValue() == null) { refuse(timeZone, "Please choose the venue's time zone."); return; }
+        if (timeZone.getValue() == null) { refuse(timeZone, CHOOSE_TIME_ZONE); return; }
 
         List<String> artistList = artists.getValues();
         if (artistList.isEmpty()) {
@@ -278,7 +293,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
             return;
         }
 
-        if (rating.getValue() == null) { refuse(rating, "Please set a rating (0–5)."); return; }
+        if (rating.getValue() == null) { refuse(rating, SET_RATING); return; }
 
         switch (presenter.create(AuthSession.token(), CurrentCompanies.currentCompanyId(),
                 name, blankToNull(description.getValue()), category.getValue(),
@@ -366,16 +381,22 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
     private Component buildDetailsCard() {
         LkCard card = new LkCard("Event Details").pad(20).flush();
 
+        // Each rule a field checks itself gets its words, or it turns red with nothing saying why (#189). Category,
+        // country, city and the show times are required on the create page alone (markCreateRequirements).
         title.setRequired(true);
+        LkFieldRules.sayWhenEmpty(title, ENTER_TITLE);
         title.setWidthFull();
         LkTextLimit.apply(title);
         artists.textLimit(TextLimits.MAX_TEXT_LENGTH);
 
         category.setLabel("Category");
         category.setItems(Arrays.stream(EventCategory.values()).map(Enum::name).toList());
+        category.setI18n(new Select.SelectI18n().setRequiredErrorMessage(CHOOSE_CATEGORY));
         category.setWidthFull();
 
+        LkFieldRules.sayWhenEmpty(country, ENTER_COUNTRY);
         country.setWidthFull();
+        LkFieldRules.sayWhenEmpty(city, ENTER_CITY);
         city.setWidthFull();
 
         artists.setWidthFull();
@@ -383,17 +404,25 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
         timeZone.setItems(ZoneId.getAvailableZoneIds().stream().sorted().map(ZoneId::of).toList());
         timeZone.setItemLabelGenerator(ZoneId::getId);
         timeZone.setRequired(true);
+        timeZone.setI18n(new ComboBox.ComboBoxI18n().setRequiredErrorMessage(CHOOSE_TIME_ZONE));
         timeZone.setWidthFull();
 
         start.setHelperText(VENUE_TIME_HINT);
+        start.setI18n(showTimeRules(SET_START));
         start.setWidthFull();
         end.setHelperText(VENUE_TIME_HINT);
+        end.setI18n(showTimeRules(SET_END));
         end.setWidthFull();
 
-        rating.setMin(0);
-        rating.setMax(5);
+        rating.setMin(RATING_MIN);
+        rating.setMax(RATING_MAX);
         // No step constraint: accept any decimal (e.g. 4.1); only out-of-range [0,5] is flagged invalid.
         rating.setRequiredIndicatorVisible(true);
+        rating.setI18n(new NumberField.NumberFieldI18n()
+            .setRequiredErrorMessage(SET_RATING)
+            .setBadInputErrorMessage(RATING_NOT_A_NUMBER)
+            .setMinErrorMessage(RATING_RANGE)
+            .setMaxErrorMessage(RATING_RANGE));
         rating.setWidthFull();
 
         description.setMinHeight("120px");
@@ -411,6 +440,13 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
         col.add(grid, artists, description);
         card.add(col);
         return card;
+    }
+
+    private static DateTimePicker.DateTimePickerI18n showTimeRules(String whenEmpty) {
+        return new DateTimePicker.DateTimePickerI18n()
+            .setRequiredErrorMessage(whenEmpty)
+            .setBadInputErrorMessage(SHOW_TIME_FORMAT)
+            .setIncompleteInputErrorMessage(SHOW_TIME_INCOMPLETE);
     }
 
     private Component buildSideCol() {
