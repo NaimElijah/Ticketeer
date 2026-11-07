@@ -428,10 +428,14 @@ class EventManagementServiceTest {
 
         // -- deleteEvent: only a cancelled event with no sales history, by a MANAGE_INVENTORY member --
 
-        private void givenOwnerSignedInAndEventStored() {
+        private void givenOwnerSignedIn() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+        }
+
+        private void givenOwnerSignedInAndEventStored() {
+                givenOwnerSignedIn();
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
         }
 
@@ -509,9 +513,7 @@ class EventManagementServiceTest {
                                 new VenueMap(2, LOCATION, List.of(new StandingZone(ZONE_ID, "Floor", 10, 80))),
                                 List.of(new ShowDate(NOW_UTC.plusDays(12), NOW_UTC.plusDays(12).plusHours(2))),
                                 JERUSALEM, new AgePurchasePolicy(18), new DiscountPolicy(0));
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                givenOwnerSignedIn();
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockEventRepo.findById(OTHER_EVENT_ID)).thenReturn(other);
                 return other;
@@ -580,9 +582,7 @@ class EventManagementServiceTest {
         // -- removing seats from a seated zone, and the manual status change that must not cancel --
 
         private int ownerAddsSeatedZoneA1ToA4() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                givenOwnerSignedIn();
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockEventRepo.findById(EVENT_ID)).thenReturn(event);
                 int seatedZoneId = eventService.addInventoryZone(OWNER_TOKEN, COMPANY_ID, EVENT_ID,
@@ -740,9 +740,7 @@ class EventManagementServiceTest {
         }
 
         private void stubOwnerCanAddEvents() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(userRepository.getUserById(OWNER_ID)).thenReturn(ownerUser);
+                givenOwnerSignedIn();
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockEventRepo.nextId()).thenReturn(EVENT_ID + 1);
                 when(mockEventRepo.nextVenueMapId()).thenReturn(2);

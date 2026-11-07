@@ -35,10 +35,10 @@ class ActiveOrderTest extends BaseDomainTest {
 
     // The hold is judged against this instant, as UTC wall time from the injected clock (ADR-008).
     private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
-    // The hold length is process-wide state that any Spring context sets from configuration
-    // (ReservationHoldConfig), so every time below is read from it rather than assuming ten minutes.
     private static final Duration ONE_MINUTE = Duration.ofMinutes(1);
 
+    // The hold length is process-wide state that any Spring context sets from configuration
+    // (ReservationHoldConfig), so every time below is read from it rather than assuming ten minutes.
     private static Duration hold() {
         return CartLineItem.getExpirationLimit();
     }
@@ -53,9 +53,9 @@ class ActiveOrderTest extends BaseDomainTest {
         return NOW.minus(hold()).minus(ONE_MINUTE);
     }
 
-    private final int USER_ID = 1;
-    private final int EVENT_ID = 10;
-    private final int ZONE_ID = 5;
+    private static final int USER_ID = 1;
+    private static final int EVENT_ID = 10;
+    private static final int ZONE_ID = 5;
 
     @Test
     @Disabled("V1: addReservation appends CartLineItem (UC-5)")
@@ -456,11 +456,13 @@ class ActiveOrderTest extends BaseDomainTest {
     static Stream<Named<Consumer<ActiveOrder>>> mutators() {
         return Stream.of(
                 Named.<Consumer<ActiveOrder>>of("addStandingReservation",
-                        order -> order.addStandingReservation(10, 5, 1, 50.0, NOW)),
+                        order -> order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, NOW)),
                 Named.<Consumer<ActiveOrder>>of("addSeatedReservation",
-                        order -> order.addSeatedReservation(10, 6, List.of("B1"), 120.0, NOW)),
-                Named.<Consumer<ActiveOrder>>of("removeStandingSpots", order -> order.removeStandingSpots(10, 5, 1)),
-                Named.<Consumer<ActiveOrder>>of("removeSeats", order -> order.removeSeats(10, 6, List.of("A1"))),
+                        order -> order.addSeatedReservation(EVENT_ID, ZONE_ID + 1, List.of("B1"), 120.0, NOW)),
+                Named.<Consumer<ActiveOrder>>of("removeStandingSpots",
+                        order -> order.removeStandingSpots(EVENT_ID, ZONE_ID, 1)),
+                Named.<Consumer<ActiveOrder>>of("removeSeats",
+                        order -> order.removeSeats(EVENT_ID, ZONE_ID + 1, List.of("A1"))),
                 Named.<Consumer<ActiveOrder>>of("clear", ActiveOrder::clear));
     }
 

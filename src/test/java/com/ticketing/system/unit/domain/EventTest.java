@@ -54,7 +54,7 @@ import com.ticketing.system.catalog.domain.ShowDate;
 // Unit tests for the Event aggregate (Event + VenueMap + InventoryZone + ShowDate + policies).
 class EventTest extends BaseDomainTest {
 
-    private final int COMPANY_ID = 100;
+    private static final int COMPANY_ID = 100;
     private final int EVENT_ID = 10;
     private final int ZONE_ID = 5;
     private final Location LOCATION = new Location("Belgium", "Brussels");
@@ -114,7 +114,7 @@ class EventTest extends BaseDomainTest {
 
     // ---- only the owning company changes an event's layout (#189) ----
 
-    private final int OTHER_COMPANY_ID = COMPANY_ID + 1;
+    private static final int OTHER_COMPANY_ID = COMPANY_ID + 1;
 
     @Test
     void GivenOtherCompany_WhenConfigureVenueMap_ThenUnauthorizedAndMapKept() {
@@ -137,19 +137,19 @@ class EventTest extends BaseDomainTest {
 
     // Each layout edit an owner can make, made on a SCHEDULED event with a standing zone (1) and a seated one (2).
     static Stream<Named<Consumer<Event>>> layoutEditsByAnotherCompany() {
-        int other = 101; // not COMPANY_ID, which is 100
         return Stream.of(
-                Named.<Consumer<Event>>of("addStandingZone", e -> e.addStandingZone("Late", 5, 10.0, other)),
+                Named.<Consumer<Event>>of("addStandingZone", e -> e.addStandingZone("Late", 5, 10.0, OTHER_COMPANY_ID)),
                 Named.<Consumer<Event>>of("addSeatedZone",
-                        e -> e.addSeatedZone("Late", 10.0, List.of(new Seat("C1", 0, 0)), other)),
-                Named.<Consumer<Event>>of("removeInventoryZone", e -> e.removeInventoryZone(1, other)),
-                Named.<Consumer<Event>>of("addPlacesToStandingZone", e -> e.addPlacesToStandingZone(1, 5, other)),
+                        e -> e.addSeatedZone("Late", 10.0, List.of(new Seat("C1", 0, 0)), OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("removeInventoryZone", e -> e.removeInventoryZone(1, OTHER_COMPANY_ID)),
+                Named.<Consumer<Event>>of("addPlacesToStandingZone",
+                        e -> e.addPlacesToStandingZone(1, 5, OTHER_COMPANY_ID)),
                 Named.<Consumer<Event>>of("removePlacesFromStandingZone",
-                        e -> e.removePlacesFromStandingZone(1, 5, other)),
+                        e -> e.removePlacesFromStandingZone(1, 5, OTHER_COMPANY_ID)),
                 Named.<Consumer<Event>>of("addSeatsToSeatedZone",
-                        e -> e.addSeatsToSeatedZone(2, List.of(new Seat("B2", 1, 0)), other)),
+                        e -> e.addSeatsToSeatedZone(2, List.of(new Seat("B2", 1, 0)), OTHER_COMPANY_ID)),
                 Named.<Consumer<Event>>of("removeSeatsFromSeatedZone",
-                        e -> e.removeSeatsFromSeatedZone(2, List.of("B1"), other)));
+                        e -> e.removeSeatsFromSeatedZone(2, List.of("B1"), OTHER_COMPANY_ID)));
     }
 
     @ParameterizedTest(name = "{0}")
