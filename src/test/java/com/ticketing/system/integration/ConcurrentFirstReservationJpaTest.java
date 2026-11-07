@@ -158,8 +158,8 @@ class ConcurrentFirstReservationJpaTest {
     // Each request's first save of the buyer's cart is the one that writes it; a later save on the same thread
     // is the loser's rollback, which runs unheld. The first save to return, its cart written but not committed,
     // waits until the other save has returned or thrown, or is inside its cart's INSERT: past its own lookup,
-    // so it can no longer see this cart, and on both databases the INSERT waits on this cart's uncommitted key
-    // entry until this transaction ends, so it never returns while held.
+    // so it can no longer see this cart. That INSERT waits on this cart's uncommitted key entry: on PostgreSQL
+    // until this transaction ends, on H2 for up to its 2 s lock timeout, far longer than the hold lasts.
     private void holdTheFirstCartSaveUntilTheOtherSaveRan(ArgumentMatcher<ActiveOrder> buyersCart) {
         Set<Thread> saving = ConcurrentHashMap.newKeySet();
         AtomicReference<Thread> heldSave = new AtomicReference<>();

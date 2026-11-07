@@ -11,12 +11,12 @@ Every `*IT` reruns a suite on a PostgreSQL container, the production database
 `support/PostgresContainers`, with `@Container @ServiceConnection`.
 
 Nothing checks that the connection took. `application-test.yml` points every `test` context at an in-memory H2
-database and names no dialect, so a context that never reaches the container still boots, on H2. An IT that
-lost its `@ServiceConnection`, or a Spring Boot upgrade that changed how `@AutoConfigureTestDatabase` replaces a
-data source, would then pass under a PostgreSQL name while testing H2. Most ITs use nothing PostgreSQL alone
-has, so nothing in them would fail. The difference matters because H2 and PostgreSQL differ where these tests
-look: H2 has no shared row lock, fails a unique insert at once where PostgreSQL waits, and serialises what
-PostgreSQL runs together.
+database and names no dialect, so a context that never reaches the container still boots, on H2. An IT that lost
+its `@ServiceConnection`, or a Spring Boot upgrade that changed how `@AutoConfigureTestDatabase` replaces a data
+source, would then pass under a PostgreSQL name while testing H2. Most ITs use nothing PostgreSQL alone has, so
+nothing in them would fail. The difference matters because H2 and PostgreSQL differ where these tests look: H2
+has no shared row lock, gives up on an insert that collides with an uncommitted key after its 2 s lock timeout
+where PostgreSQL waits until the other transaction ends, and serialises what PostgreSQL runs together.
 
 ## Decision
 
