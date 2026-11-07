@@ -132,8 +132,11 @@ allowances, each domain inside its context, application-not-adapter, no-backend�
 another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
 stay open, #208), the module map,
 `GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules,
-ui formats no date or number in the JVM's locale (no `DateTimeFormatter.ofPattern(String)`, `String.format(String, …)` or
-`formatted`; pass `DisplayLocale.PAGE`, #189);
+ui formats no date or number, and changes no case, in the JVM's locale (no `DateTimeFormatter.ofPattern(String)` or
+`ofLocalized…`, `DateTimeFormatterBuilder.toFormatter()`, `String.format(String, …)` or `formatted`, `NumberFormat`'s
+`get…Instance()`, `new DecimalFormat()` or `new DecimalFormat(String)`, `new MessageFormat(String)` or the static
+`MessageFormat.format`, `Locale.getDefault`, or `toLowerCase()`/`toUpperCase()`; pass `DisplayLocale.PAGE` for page text,
+`Locale.ROOT` for machine text, #189);
 the clock, locale, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
 they fail on a fixture), `TestConventionsTest` (every test name reads `Given…_When…_Then…`, [ADR-023](../docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md); every `*IT` carries `@RunsOnPostgres`) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
