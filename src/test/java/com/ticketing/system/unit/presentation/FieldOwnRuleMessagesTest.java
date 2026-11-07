@@ -31,6 +31,7 @@ import com.ticketing.system.ui.presenters.company.MyCompaniesPresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
+import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.admin.AdminComplaintRespondView;
@@ -42,6 +43,7 @@ import com.ticketing.system.ui.views.company.CompanyRegistrationView;
 import com.ticketing.system.ui.views.company.ManagerInvitationView;
 import com.ticketing.system.ui.views.company.OwnerAppointmentView;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
+import com.ticketing.system.ui.views.messaging.SubmitComplaintView;
 import com.ticketing.system.ui.views.order.CheckoutView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasValue;
@@ -65,6 +67,8 @@ class FieldOwnRuleMessagesTest {
     private static final String MALFORMED_EMAIL = "bob@";
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
     private static final String GUEST_SESSION = "guest-1";
+    // What the complaint presenter allows in the details, well above anything these tests type.
+    private static final int COMPLAINT_DETAILS_LIMIT = 1000;
 
     private ViewHarness harness;
 
@@ -309,6 +313,22 @@ class FieldOwnRuleMessagesTest {
     @ValueSource(strings = {"Title", "Description"})
     void GivenTheNewInquiryPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
         NewInquiryView view = new NewInquiryView(mock(NewInquiryPresenter.class));
+        harness.attach(view);
+        Component field = field(view, Component.class, label);
+
+        typeThenEmpty(field);
+
+        assertSaysWhatIsWrong(field, label);
+    }
+
+    // ---- SubmitComplaintView ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Subject", "Details"})
+    void GivenTheComplaintPage_WhenARequiredFieldIsEmptied_ThenItSaysWhatToEnter(String label) {
+        SubmitComplaintPresenter presenter = mock(SubmitComplaintPresenter.class);
+        when(presenter.maxDetailsLength(any())).thenReturn(COMPLAINT_DETAILS_LIMIT);
+        SubmitComplaintView view = new SubmitComplaintView(presenter);
         harness.attach(view);
         Component field = field(view, Component.class, label);
 
