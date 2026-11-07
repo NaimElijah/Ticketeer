@@ -1,6 +1,9 @@
 package com.ticketing.system.unit.domain;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.sales.domain.LineRefundState;
 import com.ticketing.system.sales.domain.OrderReceipt;
@@ -240,6 +243,93 @@ class OrderReceiptTest extends BaseDomainTest {
 
         assertTrue(receipt.getReceiptLines().stream().allMatch(ReceiptLine::isRefunded));
         assertTrue(receipt.claimRefundForEvent(CANCELLED_EVENT).isEmpty());
+    }
+
+    // ---- whose receipt it is, and what it holds (#189) ----
+
+    private static final String GUEST_EMAIL = "guest@test.com";
+    private static final String GUEST_SESSION = "session-123";
+
+    private static List<ReceiptLine> oneLine() {
+        return List.of(new ReceiptLine(1, 20.0, CANCELLED_EVENT, 1, "A1", AT));
+    }
+
+    @ParameterizedTest(name = "userId={0}")
+    @ValueSource(ints = {0, -1})
+    void GivenAUserIdBelowOne_WhenForMember_ThenRefused(int userId) {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> OrderReceipt.forMember(RECEIPT_ID, userId, 20.0, oneLine(), AT));
+
+        assertEquals("userid must be positive", refused.getMessage());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void GivenNoGuestEmail_WhenForGuest_ThenRefused(String email) {
+        assertThrows(IllegalArgumentException.class,
+                () -> OrderReceipt.forGuest(email, GUEST_SESSION, RECEIPT_ID, 20.0, oneLine(), AT));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void GivenNoGuestSession_WhenForGuest_ThenRefused(String sessionId) {
+        assertThrows(IllegalArgumentException.class,
+                () -> OrderReceipt.forGuest(GUEST_EMAIL, sessionId, RECEIPT_ID, 20.0, oneLine(), AT));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    void GivenNoLines_WhenForMember_ThenRefused(List<ReceiptLine> lines) {
+        assertThrows(IllegalArgumentException.class,
+                () -> OrderReceipt.forMember(RECEIPT_ID, USER_ID, 20.0, lines, AT));
+    }
+
+    @Test
+    void GivenANegativeTotal_WhenForMember_ThenRefused() {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> OrderReceipt.forMember(RECEIPT_ID, USER_ID, -0.01, oneLine(), AT));
+
+        assertEquals("totalPrice must be non-negative", refused.getMessage());
+    }
+
+    @ParameterizedTest(name = "receiptId={0}")
+    @ValueSource(ints = {0, -1})
+    void GivenAReceiptIdBelowOne_WhenForMember_ThenRefused(int receiptId) {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> OrderReceipt.forMember(receiptId, USER_ID, 20.0, oneLine(), AT));
+
+        assertEquals("receiptId must be positive", refused.getMessage());
+    }
+
+    @Test
+    void GivenAnEventNotOnTheReceipt_WhenClaimRefundForEvent_ThenNothingIsClaimedAndNoLineChanges() {
+        OrderReceipt receipt = twoEventOrder();
+        int eventNotOnTheReceipt = OTHER_EVENT + 1;
+
+        assertTrue(receipt.claimRefundForEvent(eventNotOnTheReceipt).isEmpty());
+
+        assertTrue(receipt.getReceiptLines().stream().allMatch(l -> l.getRefundState() == LineRefundState.NONE));
+        assertFalse(receipt.hasRefundedOrPendingLines());
+    }
+
+    @Test
+    void GivenAChargeInDollars_WhenGetPaymentCurrency_ThenDollars() {
+        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 20.0, oneLine(), AT,
+                List.of(TransactionRecord.paymentCharge(7, "test-gateway", 20.0, "USD", AT))));
+
+        assertEquals("USD", receipt.getPaymentCurrency());
+    }
+
+    // Pins today's fallback for a receipt with no recorded charge (a free order, or one stored before charges
+    // were recorded).
+    @Test
+    void GivenNoCharge_WhenGetPaymentCurrency_ThenShekels() {
+        OrderReceipt receipt = track(OrderReceipt.forMember(RECEIPT_ID, USER_ID, 0.0,
+                List.of(new ReceiptLine(1, 0.0, CANCELLED_EVENT, 1, "A1", AT)), AT));
+
+        assertEquals("ILS", receipt.getPaymentCurrency());
     }
 
     @Test
