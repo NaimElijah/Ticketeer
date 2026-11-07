@@ -27,6 +27,10 @@ import org.springframework.dao.DataAccessResourceFailureException;
 
 class RegisterPresenterTest {
 
+    // What AuthenticationService.register throws for an age outside the range it accepts.
+    private static final String AGE_OUT_OF_RANGE =
+        "Age must be from " + AuthenticationService.MIN_AGE + " to " + AuthenticationService.MAX_AGE;
+
     private AuthenticationService authenticationService;
     private RegisterPresenter presenter;
 
@@ -123,7 +127,7 @@ class RegisterPresenterTest {
 
     @Test
     void GivenAnIllegalArgument_WhenAttemptRegister_ThenReturnsInvalidInputWithMessage() {
-        doThrow(new IllegalArgumentException("Age cannot be negative"))
+        doThrow(new IllegalArgumentException(AGE_OUT_OF_RANGE))
             .when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -131,7 +135,7 @@ class RegisterPresenterTest {
 
         RegisterPresenter.Outcome.InvalidInput bad =
             assertInstanceOf(RegisterPresenter.Outcome.InvalidInput.class, outcome);
-        assertEquals("Age cannot be negative", bad.reason());
+        assertEquals(AGE_OUT_OF_RANGE, bad.reason());
     }
 
     @Test
