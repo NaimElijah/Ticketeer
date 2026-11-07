@@ -23,7 +23,6 @@ import java.util.Locale;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -88,16 +87,6 @@ class CatalogServiceTest {
                 mockSessionManager,
                 mockEventRepository,
                 mockCompanyRepository);
-    }
-
-    @Test
-    @Disabled("UC-3: browseEventCatalog returns active events from active companies")
-    void GivenActiveCompanies_WhenBrowse_ThenReturnsActiveEvents() {
-    }
-
-    @Test
-    @Disabled("UC-3: events from closed companies excluded")
-    void GivenClosedCompany_WhenBrowse_ThenEventsExcluded() {
     }
 
     // -------------------------------------------------------------------------
