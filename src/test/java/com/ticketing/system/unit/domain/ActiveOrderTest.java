@@ -2,6 +2,7 @@ package com.ticketing.system.unit.domain;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -111,6 +112,8 @@ class ActiveOrderTest extends BaseDomainTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
+        // Only "not enough to remove" is the expected refusal; anything else is a race the order lost.
+        ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
         try {
             for (int i = 0; i < numberOfThreads; i = i + 1) {
@@ -123,8 +126,11 @@ class ActiveOrderTest extends BaseDomainTest {
 
                         successCount.incrementAndGet();
 
-                    } catch (Exception e) {
+                    } catch (IllegalArgumentException e) {
                         failureCount.incrementAndGet();
+
+                    } catch (Throwable e) {
+                        unexpected.add(e);
 
                     } finally {
                         doneLatch.countDown();
@@ -132,12 +138,13 @@ class ActiveOrderTest extends BaseDomainTest {
                 });
             }
 
-            readyLatch.await();
+            assertTrue(readyLatch.await(5, TimeUnit.SECONDS), "every remover must be ready within 5 s");
             startLatch.countDown();
 
             boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
 
             assertEquals(true, finished);
+            assertEquals(List.of(), List.copyOf(unexpected), "no remover may fail other than by the refusal");
             assertEquals(initialTickets, successCount.get());
             assertEquals(numberOfThreads - initialTickets, failureCount.get());
             assertEquals(0, realActiveOrder.countTickets(EVENT_ID, ZONE_ID, NOW));

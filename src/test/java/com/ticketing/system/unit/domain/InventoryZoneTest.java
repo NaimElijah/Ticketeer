@@ -2,6 +2,7 @@ package com.ticketing.system.unit.domain;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -56,6 +57,8 @@ public class InventoryZoneTest extends BaseDomainTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
+        // Only "not enough left" is the expected refusal; anything else is a race the zone lost.
+        ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
         try {
             for (int i = 0; i < numberOfThreads; i = i + 1) {
@@ -68,8 +71,11 @@ public class InventoryZoneTest extends BaseDomainTest {
 
                         successCount.incrementAndGet();
 
-                    } catch (Exception e) {
+                    } catch (IllegalStateException e) {
                         failureCount.incrementAndGet();
+
+                    } catch (Throwable e) {
+                        unexpected.add(e);
 
                     } finally {
                         doneLatch.countDown();
@@ -77,12 +83,13 @@ public class InventoryZoneTest extends BaseDomainTest {
                 });
             }
 
-            readyLatch.await();
+            assertTrue(readyLatch.await(5, TimeUnit.SECONDS), "every buyer must be ready within 5 s");
             startLatch.countDown();
 
             boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
 
             assertEquals(true, finished);
+            assertEquals(List.of(), List.copyOf(unexpected), "no buyer may fail other than by the refusal");
             assertEquals(capacity, successCount.get());
             assertEquals(numberOfThreads - capacity, failureCount.get());
             assertEquals(0, realZone.getAvailableAmount());
@@ -489,6 +496,8 @@ public class InventoryZoneTest extends BaseDomainTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
+        // Only "seat not available" is the expected refusal; anything else is a race the zone lost.
+        ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
 
         try {
             for (int i = 0; i < numberOfThreads; i++) {
@@ -500,8 +509,11 @@ public class InventoryZoneTest extends BaseDomainTest {
                         seatedZone.reserve(InventorySelection.seated(List.of("A1"), "test-order"));
                         successCount.incrementAndGet();
 
-                    } catch (Exception e) {
+                    } catch (IllegalStateException e) {
                         failureCount.incrementAndGet();
+
+                    } catch (Throwable e) {
+                        unexpected.add(e);
 
                     } finally {
                         doneLatch.countDown();
@@ -509,12 +521,13 @@ public class InventoryZoneTest extends BaseDomainTest {
                 });
             }
 
-            readyLatch.await();
+            assertTrue(readyLatch.await(5, TimeUnit.SECONDS), "every buyer must be ready within 5 s");
             startLatch.countDown();
 
             boolean finished = doneLatch.await(5, TimeUnit.SECONDS);
 
             assertTrue(finished);
+            assertEquals(List.of(), List.copyOf(unexpected), "no buyer may fail other than by the refusal");
             assertEquals(1, successCount.get());
             assertEquals(numberOfThreads - 1, failureCount.get());
             assertEquals(SeatStatus.RESERVED, seatedZone.getSeatStatus("A1"));
