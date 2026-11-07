@@ -646,9 +646,7 @@ public class CheckoutService {
             throw new EntityNotFoundException("Active order not found");
         }
 
-        if (!order.validateCanCheckout(LocalDateTime.now(clock))) {
-            throw new InvalidStateTransitionException("Order cannot checkout");
-        }
+        order.validateCanCheckout(LocalDateTime.now(clock));
     }
 
     // We extract the unique event IDs from the list of cart line items and sort

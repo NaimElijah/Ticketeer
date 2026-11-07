@@ -500,7 +500,7 @@ class ActiveOrderTest extends BaseDomainTest {
         ActiveOrder order = track(new ActiveOrder(USER_ID, NOW));
         order.addStandingReservation(EVENT_ID, ZONE_ID, 1, 50.0, nearExpiry());
 
-        assertTrue(order.validateCanCheckout(NOW));
+        assertDoesNotThrow(() -> order.validateCanCheckout(NOW));
     }
 
     // The order is as old as its oldest hold: the countdown shows the time until the first line expires.
