@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -85,12 +86,12 @@ public class CompanyManagementServiceTest {
         private final String TARGET_TOKEN = "target-token";
         private final String INVALID_TOKEN = "invalid-token";
 
-        private final int COMPANY_ID = 100;
+        private static final int COMPANY_ID = 100;
         private final int OWNER_ID = 1;
         private final String COMPANY_1_NAME = "Company1";
         private final String COMPANY_1_DESCRIPTION = "A test production company1";
 
-        private final int TARGET_USER_ID = 2;
+        private static final int TARGET_USER_ID = 2;
         private List<Permission> defaultPermissions;
 
         @BeforeEach
@@ -1402,20 +1403,29 @@ public class CompanyManagementServiceTest {
 
         private static final String POSITIVE_IDS = "companyId and targetUserId must be positive integers";
 
-        @Test
-        public void GivenCompanyIdZero_WhenAppointOwner_ThenIllegalArgumentBeforeAnyLookup() {
+        // One id at zero at a time, so each half of the guard is refused on its own.
+        private static Stream<Arguments> companyIdOrTargetIdZero() {
+                return Stream.of(Arguments.of(0, TARGET_USER_ID), Arguments.of(COMPANY_ID, 0));
+        }
+
+        @ParameterizedTest(name = "companyId={0}, targetUserId={1}")
+        @MethodSource("companyIdOrTargetIdZero")
+        public void GivenCompanyIdOrTargetIdZero_WhenAppointOwner_ThenIllegalArgumentBeforeAnyLookup(int companyId,
+                        int targetUserId) {
                 IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
-                                () -> companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(0, TARGET_USER_ID)));
+                                () -> companyService.appointOwner(OWNER_TOKEN, new OwnerAppointmentRequestDTO(companyId, targetUserId)));
 
                 assertEquals(POSITIVE_IDS, refused.getMessage());
                 verifyNoInteractions(sessionManager, mockUserRepo, mockCompanyRepo, eventPublisher);
         }
 
-        @Test
-        public void GivenTargetUserIdZero_WhenAppointManager_ThenIllegalArgumentBeforeAnyLookup() {
+        @ParameterizedTest(name = "companyId={0}, targetUserId={1}")
+        @MethodSource("companyIdOrTargetIdZero")
+        public void GivenCompanyIdOrTargetIdZero_WhenAppointManager_ThenIllegalArgumentBeforeAnyLookup(int companyId,
+                        int targetUserId) {
                 IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
                                 () -> companyService.appointManager(OWNER_TOKEN,
-                                                new ManagerAppointmentRequestDTO(COMPANY_ID, 0, defaultPermissions)));
+                                                new ManagerAppointmentRequestDTO(companyId, targetUserId, defaultPermissions)));
 
                 assertEquals(POSITIVE_IDS, refused.getMessage());
                 verifyNoInteractions(sessionManager, mockUserRepo, mockCompanyRepo, eventPublisher);
