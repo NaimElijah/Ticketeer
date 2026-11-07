@@ -33,6 +33,7 @@ import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TicketRecor
 import com.ticketing.system.sales.application.dto.PurchaseHistoryDTO.TransactionRecordDTO;
 import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.sales.domain.TicketStatus;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.dto.CheckoutResultDTO;
 import com.ticketing.system.shared.dto.EventSummaryDTO;
 import com.ticketing.system.shared.dto.InventoryZoneDTO;
@@ -47,6 +48,8 @@ import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
 import com.ticketing.system.ui.presenters.landing.LandingPresenter;
+import com.ticketing.system.ui.presenters.order.CartPresenter;
+import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.OrderSession;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.views.account.MyAccountView;
@@ -55,9 +58,12 @@ import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.ticketing.system.ui.views.catalog.EventDetailsView;
 import com.ticketing.system.ui.views.catalog.SeatPickerView;
 import com.ticketing.system.ui.views.landing.LandingView;
+import com.ticketing.system.ui.views.order.CartView;
+import com.ticketing.system.ui.views.order.CheckoutView;
 import com.ticketing.system.ui.views.order.OrderConfirmationView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.dom.Element;
+import com.vaadin.flow.router.AfterNavigationEvent;
 
 /**
  * Headings give the page its structure: each page has exactly one top-level heading naming it, a card's
@@ -178,6 +184,48 @@ class HeadingStructureTest {
 
         assertOneH1(new MyAccountView(presenter, mock(RefundPresenter.class), identity,
             InboxViewHarness.displayTime()));
+    }
+
+    @Test
+    void GivenTheCart_WhenItRenders_ThenItHasExactlyOneH1() {
+        CartPresenter presenter = mock(CartPresenter.class);
+        when(presenter.loadCart()).thenReturn(new CartPresenter.LoadOutcome.Shown(new CartPresenter.CartVM(
+            List.of(new CartPresenter.CartVM.LineVM("Coldplay", "A1", 10.0, 5, 8)), 300), 1000));
+
+        assertOneH1(new CartView(presenter));
+    }
+
+    @Test
+    void GivenTheCheckout_WhenItRenders_ThenItHasExactlyOneH1() {
+        ViewHarness.signInMember();
+        CheckoutPresenter presenter = mock(CheckoutPresenter.class);
+        when(presenter.resolveIdentity()).thenReturn(new CheckoutPresenter.Identity(true, MEMBER_TOKEN, null, MEMBER_ID));
+        LocalDateTime added = LocalDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC);
+        when(presenter.loadOrder()).thenReturn(new CheckoutPresenter.LoadOutcome.Loaded(
+            new ActiveOrderDTO(MEMBER_ID, null, added, 300, 10.0,
+                List.of(new ActiveOrderDTO.CartLineDTO(5, "Coldplay", 8, "A1", 10.0, added))),
+            new CheckoutPresenter.Pricing(1000, 1000)));
+        CheckoutView view = new CheckoutView(presenter, CLOCK);
+        harness.attach(view);
+
+        view.beforeEnter(routeTo());
+        view.afterNavigation(mock(AfterNavigationEvent.class));
+
+        assertOneH1(view);
+    }
+
+    @Test
+    void GivenAReceipt_WhenItRenders_ThenItHasExactlyOneH1() {
+        MemberAccountService accountService = mock(MemberAccountService.class);
+        when(accountService.viewMyReceipt(MEMBER_TOKEN, ORDER_ID)).thenReturn(order(RefundStatus.NONE, List.of()));
+        SessionIdentity identity = mock(SessionIdentity.class);
+        when(identity.memberToken()).thenReturn(MEMBER_TOKEN);
+        ReceiptView view = new ReceiptView(new ReceiptPresenter(accountService), mock(RefundPresenter.class),
+            identity, InboxViewHarness.displayTime());
+
+        view.beforeEnter(routeTo("receiptId", String.valueOf(ORDER_ID)));
+
+        assertOneH1(view);
     }
 
     // ---- receipt ----
