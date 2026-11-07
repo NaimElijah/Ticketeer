@@ -104,20 +104,20 @@ class RefundPresenterTest {
     }
 
     @Test
-    void GivenAnAlreadyRefundedOrder_WhenRequestRefund_ThenReturnsNotEligible() {
+    void GivenAnAlreadyRefundedOrder_WhenRequestRefund_ThenNotEligibleSaysSo() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new BusinessRuleViolationException("already refunded"));
 
-        assertInstanceOf(RefundPresenter.Outcome.NotEligible.class,
+        assertEquals(new RefundPresenter.Outcome.NotEligible("This order isn't eligible for a refund."),
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 
     @Test
-    void GivenAMissingOrder_WhenRequestRefund_ThenReturnsNotFound() {
+    void GivenAMissingOrder_WhenRequestRefund_ThenNotFoundSaysTheOrderWasNotFound() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new EntityNotFoundException("OrderReceipt", ORDER_ID));
 
-        assertInstanceOf(RefundPresenter.Outcome.NotFound.class,
+        assertEquals(new RefundPresenter.Outcome.NotFound("We couldn't find that order."),
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 
@@ -149,10 +149,10 @@ class RefundPresenterTest {
     }
 
     @Test
-    void GivenAnInvalidToken_WhenRequestRefund_ThenReturnsFailure() {
+    void GivenAnInvalidToken_WhenRequestRefund_ThenFailureAsksTheMemberToSignIn() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenThrow(new InvalidTokenException());
 
-        assertInstanceOf(RefundPresenter.Outcome.Failure.class,
+        assertEquals(new RefundPresenter.Outcome.Failure("Please sign in to request a refund."),
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 

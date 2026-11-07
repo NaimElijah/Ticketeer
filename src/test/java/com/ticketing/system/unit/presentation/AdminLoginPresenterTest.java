@@ -65,6 +65,7 @@ class AdminLoginPresenterTest {
 
     private static final int MEMBER_ID = 42;
     private static final AuthTokenDTO ADMIN_AUTH = new AuthTokenDTO("admin-jwt", 0L, 1, "admin", true);
+    private static final String LOCKED_REASON = "locked for 15 minutes";
 
     @Test
     void GivenAMemberSignedInBefore_WhenSignIn_ThenTheirAlertsAreSentBackTheBellClearedThenTheAdminStored() {
@@ -128,11 +129,11 @@ class AdminLoginPresenterTest {
     }
 
     @Test
-    void GivenALockedAccount_WhenAttemptAdminLogin_ThenReturnsLocked() {
+    void GivenALockedAccount_WhenAttemptAdminLogin_ThenLockedWithTheLockReason() {
         when(authenticationService.signInAsAdmin("root", "pw"))
-            .thenThrow(new AccountLockedException("locked for 15 minutes"));
+            .thenThrow(new AccountLockedException(LOCKED_REASON));
 
-        assertInstanceOf(AdminLoginPresenter.Outcome.Locked.class,
+        assertEquals(new AdminLoginPresenter.Outcome.Locked(LOCKED_REASON),
             presenter.attemptAdminLogin("root", "pw"));
     }
 
@@ -147,11 +148,11 @@ class AdminLoginPresenterTest {
     }
 
     @Test
-    void GivenAnUnexpectedIllegalStateException_WhenAttemptAdminLogin_ThenReturnsFailure() {
+    void GivenAnIllegalStateException_WhenAttemptAdminLogin_ThenFailureCarriesItsMessage() {
         when(authenticationService.signInAsAdmin("root", "pw"))
             .thenThrow(new IllegalStateException("boom"));
 
-        assertInstanceOf(AdminLoginPresenter.Outcome.Failure.class,
+        assertEquals(new AdminLoginPresenter.Outcome.Failure("boom"),
             presenter.attemptAdminLogin("root", "pw"));
     }
 }

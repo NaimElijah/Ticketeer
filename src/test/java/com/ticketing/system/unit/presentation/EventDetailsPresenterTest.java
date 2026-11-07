@@ -79,21 +79,22 @@ class EventDetailsPresenterTest {
     }
 
     @Test
-    void GivenTheEventIsNotFound_WhenLoad_ThenReturnsNotFound() {
+    void GivenTheEventIsNotFound_WhenLoad_ThenNotFoundSaysItIsNotAvailable() {
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
 
-        assertInstanceOf(EventDetailsPresenter.Outcome.NotFound.class, outcome);
+        assertEquals(new EventDetailsPresenter.Outcome.NotFound("This event isn't available."), outcome);
     }
 
     @Test
-    void GivenAnInvalidToken_WhenLoad_ThenReturnsFailure() {
+    void GivenAnInvalidToken_WhenLoad_ThenFailureAsksTheVisitorToRefresh() {
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new InvalidTokenException());
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
 
-        assertInstanceOf(EventDetailsPresenter.Outcome.Failure.class, outcome);
+        assertEquals(new EventDetailsPresenter.Outcome.Failure("Your session has expired - please refresh and try again."),
+                outcome);
     }
 
     // An event with no (accessible) venue map still shows its detail — zones fall back to empty.

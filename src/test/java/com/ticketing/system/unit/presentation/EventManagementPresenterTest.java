@@ -279,11 +279,11 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void GivenTheServiceFails_WhenCreate_ThenReturnsFailure() {
+    void GivenTheServiceFailsInternally_WhenCreate_ThenFailureCarriesTheGenericText() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
         when(eventService.addEvent(eq(TOKEN), any())).thenThrow(new RuntimeException("boom"));
 
-        assertInstanceOf(EventManagementPresenter.CreateOutcome.Failure.class,
+        assertEquals(new EventManagementPresenter.CreateOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
                 createWith(null, futureStart(), futureEnd()));
     }
 

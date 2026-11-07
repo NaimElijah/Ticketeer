@@ -64,15 +64,16 @@ class CompanySalesPresenterTest {
     }
 
     @Test
-    void GivenMemberWithoutViewSales_WhenLoad_ThenReturnsFailure() {
+    void GivenMemberWithoutViewSales_WhenLoad_ThenFailureCarriesTheRefusal() {
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view this company's data");
         when(companyManagementService.findMyCompanies(TOKEN))
             .thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Manager")));
         when(companyAnalyticsService.salesHistory(TOKEN, 7))
-            .thenThrow(new UnauthorizedActionException("view this company's data"));
+            .thenThrow(refusal);
 
         CompanySalesPresenter.Outcome outcome = presenter.load(TOKEN, null);
 
-        assertInstanceOf(CompanySalesPresenter.Outcome.Failure.class, outcome);
+        assertEquals(new CompanySalesPresenter.Outcome.Failure(refusal.getMessage()), outcome);
     }
 
     @Test

@@ -95,13 +95,13 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void GivenAMissingReceipt_WhenLoad_ThenReturnsNotFound() {
+    void GivenAMissingReceipt_WhenLoad_ThenNotFoundSaysTheReceiptWasNotFound() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
                 .thenThrow(new EntityNotFoundException("OrderReceipt", RECEIPT_ID));
 
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
 
-        assertInstanceOf(ReceiptPresenter.Outcome.NotFound.class, outcome);
+        assertEquals(new ReceiptPresenter.Outcome.NotFound("We couldn't find that receipt."), outcome);
     }
 
     @Test
@@ -133,12 +133,12 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void GivenAnInvalidToken_WhenLoad_ThenReturnsFailure() {
+    void GivenAnInvalidToken_WhenLoad_ThenFailureAsksTheMemberToSignIn() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenThrow(new InvalidTokenException());
 
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
 
-        assertInstanceOf(ReceiptPresenter.Outcome.Failure.class, outcome);
+        assertEquals(new ReceiptPresenter.Outcome.Failure("Please sign in to view this receipt."), outcome);
     }
 
     // ---- UI-B5: an internal failure goes through ServiceErrors (#187) ----

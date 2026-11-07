@@ -130,15 +130,16 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void GivenCallerNoLongerMember_WhenLoadFor_ThenReturnsFailure() {
+    void GivenCallerNoLongerMember_WhenLoadFor_ThenFailureCarriesTheRefusal() {
         MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Manager");
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view this company's data");
         when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first));
         when(companyAnalyticsService.dashboard(TOKEN, 7))
-            .thenThrow(new UnauthorizedActionException("view this company's data"));
+            .thenThrow(refusal);
 
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
 
-        assertInstanceOf(OwnerDashboardPresenter.Outcome.Failure.class, outcome);
+        assertEquals(new OwnerDashboardPresenter.Outcome.Failure(refusal.getMessage()), outcome);
     }
 
     @Test

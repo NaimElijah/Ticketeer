@@ -28,6 +28,7 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * Unit tests for {@link SystemAnalyticsPresenter} (UC-46 / #43, #279). Both
@@ -78,10 +79,10 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void GivenTheAdminServiceThrows_WhenLoad_ThenReturnsFailure() {
+    void GivenTheAdminServiceFailsInternally_WhenLoad_ThenFailureCarriesTheGenericText() {
         when(adminService.viewMarketState(TOKEN)).thenThrow(new RuntimeException("boom"));
 
-        assertInstanceOf(SystemAnalyticsPresenter.Outcome.Failure.class, presenter.load());
+        assertEquals(new SystemAnalyticsPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE), presenter.load());
     }
 
     @Test
@@ -129,27 +130,29 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void GivenAMarketNotOpenRefusal_WhenOpenMarket_ThenMapsToRejected() {
-        when(adminService.openMarket(any())).thenThrow(new MarketNotOpenException("platform not initialized"));
+    void GivenAMarketNotOpenRefusal_WhenOpenMarket_ThenRejectedWithItsReason() {
+        MarketNotOpenException refusal = new MarketNotOpenException("platform not initialized");
+        when(adminService.openMarket(any())).thenThrow(refusal);
 
-        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Rejected.class,
+
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Rejected(refusal.getMessage()),
                 presenter.openMarket(TOKEN, "go"));
     }
 
     @Test
-    void GivenAnInvalidTransition_WhenCloseMarket_ThenMapsToRejected() {
+    void GivenAnInvalidTransition_WhenCloseMarket_ThenRejectedWithItsReason() {
         when(adminService.closeMarket(any()))
                 .thenThrow(new InvalidStateTransitionException("market is not open; cannot close"));
 
-        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Rejected.class,
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Rejected("market is not open; cannot close"),
                 presenter.closeMarket(TOKEN, "stop"));
     }
 
     @Test
-    void GivenAnUnexpectedError_WhenCloseMarket_ThenMapsToFailure() {
+    void GivenAnUnexpectedError_WhenCloseMarket_ThenFailureCarriesTheGenericText() {
         when(adminService.closeMarket(any())).thenThrow(new RuntimeException("db down"));
 
-        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Failure.class,
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
                 presenter.closeMarket(TOKEN, "stop"));
     }
 
