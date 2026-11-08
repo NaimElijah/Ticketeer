@@ -599,8 +599,10 @@ class CompanyAcceptanceTest {
         // editEventDetails — acceptance tests
         // -------------------------------------------------------------------------
 
+        // The Memory adapters hand back the stored instance, so these show what an edit changes, not that it
+        // persists; EventEditPersistenceJpaTest reads an edit back from the database.
         @Test
-        void GivenOwner_WhenEditEventName_ThenNameIsUpdatedInRepository() {
+        void GivenOwner_WhenEditEventName_ThenTheEventReadsTheNewName() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner1");
                 int companyId = companyService.registerCompany(
                                 owner.token(), new CompanyRegistrationDTO("EditCo1", "desc")).companyId();
@@ -622,7 +624,7 @@ class CompanyAcceptanceTest {
         }
 
         @Test
-        void GivenOwner_WhenEditEventCategory_ThenCategoryIsUpdatedInRepository() {
+        void GivenOwner_WhenEditEventCategory_ThenTheEventReadsTheNewCategory() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner2");
                 int companyId = companyService.registerCompany(
                                 owner.token(), new CompanyRegistrationDTO("EditCo2", "desc")).companyId();

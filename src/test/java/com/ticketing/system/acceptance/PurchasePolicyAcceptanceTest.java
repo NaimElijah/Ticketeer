@@ -97,8 +97,11 @@ class PurchasePolicyAcceptanceTest {
         assertEquals("NONE", dto.type());
     }
 
+    // On the Memory adapters a read hands back the stored instance, so these show what the owner reads back, not
+    // that a policy persists. JpaEventRepositoryContractTest and IProductionCompanyRepositoryContractTest read
+    // policies back from the database.
     @Test
-    void GivenAgePolicy_WhenSetEventPolicyAndGet_ThenRoundTrips() {
+    void GivenAgePolicy_WhenSetEventPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("AGE", 18, null, null, null);
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, policy));
 
@@ -108,7 +111,7 @@ class PurchasePolicyAcceptanceTest {
     }
 
     @Test
-    void GivenMinTicketsPolicy_WhenSetEventPolicyAndGet_ThenRoundTrips() {
+    void GivenMinTicketsPolicy_WhenSetEventPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("MIN_TICKETS", null, 2, null, null);
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, policy));
 
@@ -118,7 +121,7 @@ class PurchasePolicyAcceptanceTest {
     }
 
     @Test
-    void GivenMaxTicketsPolicy_WhenSetEventPolicyAndGet_ThenRoundTrips() {
+    void GivenMaxTicketsPolicy_WhenSetEventPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("MAX_TICKETS", null, null, 5, null);
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, policy));
 
@@ -195,7 +198,7 @@ class PurchasePolicyAcceptanceTest {
     }
 
     @Test
-    void GivenAgePolicy_WhenSetCompanyPolicyAndGet_ThenRoundTrips() {
+    void GivenAgePolicy_WhenSetCompanyPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("AGE", 21, null, null, null);
         companyService.setCompanyPolicies(token, new CompanyPolicyConfigDTO(companyId, policy, List.of()));
 
