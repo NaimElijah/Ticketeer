@@ -82,6 +82,8 @@ Both gates run on every build and are **green**:
     the root [README](../../README.md) and described in
     [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md); the reasoning is in
     [ADR-011](../ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md);
+  - every allowed cross-module exception still matches a production dependency, so a dependency that
+    has gone cannot come back unnoticed;
   - **`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is
     the same cycle engine Spring Modulith uses, run *without* the open-module exemption, so it is the
     substantive cycle guarantee.
