@@ -535,7 +535,7 @@ class CompanyAnalyticsServiceTest {
     // price change keeps its price. No repricing path exists to drive this end to end, so two sales of the
     // same zone carry the price before and after the change.
     @Test
-    void GivenPriceChangedAfterSale_WhenSalesHistory_ThenOriginalPriceShown() {
+    void GivenTwoSalesOfOneZoneAtDifferentPrices_WhenSalesHistory_ThenEachShowsItsReceiptLinePrice() {
         final double originalPrice = 100.0;
         final double changedPrice = 150.0;
         givenOwner();
