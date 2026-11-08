@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class CompanyEventListPresenterTest {
 
@@ -198,7 +199,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenCancelEvent_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("refund failed")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+        doThrow(new RuntimeException("could not execute statement")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
 
         CompanyEventListPresenter.CancelOutcome.Failure fail =
                 assertInstanceOf(CompanyEventListPresenter.CancelOutcome.Failure.class,
@@ -345,7 +346,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenChangeEventStatus_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("invalid transition"))
+        doThrow(new RuntimeException("could not execute statement"))
                 .when(eventService).changeEventStatus(TOKEN, EVENT_ID, EventStatus.ON_SALE);
 
         CompanyEventListPresenter.ActionOutcome.Failure fail =
@@ -375,8 +376,8 @@ class CompanyEventListPresenterTest {
     void GivenCompanyEventsWithARepeatedCountry_WhenCountries_ThenReturnsThemDistinctAndSorted() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID)));
         when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(List.of(
-                eventAt(1, "Israel", "Tel Aviv"),
                 eventAt(2, "USA", "New York"),
+                eventAt(1, "Israel", "Tel Aviv"),
                 eventAt(3, "Israel", "Haifa")));
 
         assertEquals(new ListOutcome.Loaded<>(List.of("Israel", "USA")), presenter.countries(TOKEN, null));
@@ -428,5 +429,52 @@ class CompanyEventListPresenterTest {
         for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
             assertFalse(reason.contains(operatorText), "the reason shows operator text '" + operatorText + "': " + reason);
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(companyService.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(CompanyEventListPresenter.Outcome.NotAuthenticated.class,
+                presenter.load(TOKEN, null, CatalogSearchFiltersDTO.empty()));
+    }
+
+    // ---- which company's events the list shows when none of the caller's companies is selected (#189) ----
+
+    private static final int OTHER_COMPANY_ID = 43;
+    private static final int UNKNOWN_COMPANY_ID = 99;
+
+    @Test
+    void GivenTwoCompaniesAndNoSelection_WhenLoad_ThenTheFirstCompanysEventsAreListed() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID), company(OTHER_COMPANY_ID)));
+        List<EventDetailDTO> events = List.of(event(EVENT_ID, "Gala Night"));
+        when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(events);
+
+        assertEquals(new CompanyEventListPresenter.Outcome.Success(events),
+                presenter.load(TOKEN, null, CatalogSearchFiltersDTO.empty()));
+        verify(eventService, never()).listEventsForCompany(anyString(), eq(OTHER_COMPANY_ID), any());
+    }
+
+    @Test
+    void GivenASelectionTheCallerIsNotIn_WhenLoad_ThenTheFirstCompanysEventsAreListed() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID), company(OTHER_COMPANY_ID)));
+        List<EventDetailDTO> events = List.of(event(EVENT_ID, "Gala Night"));
+        when(eventService.listEventsForCompany(eq(TOKEN), eq(COMPANY_ID), any())).thenReturn(events);
+
+        assertEquals(new CompanyEventListPresenter.Outcome.Success(events),
+                presenter.load(TOKEN, UNKNOWN_COMPANY_ID, CatalogSearchFiltersDTO.empty()));
+        verify(eventService, never()).listEventsForCompany(anyString(), eq(UNKNOWN_COMPANY_ID), any());
+    }
+
+    @Test
+    void GivenTheSecondCompanySelected_WhenLoad_ThenItsEventsAreListed() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID), company(OTHER_COMPANY_ID)));
+        List<EventDetailDTO> events = List.of(event(EVENT_ID, "Gala Night"));
+        when(eventService.listEventsForCompany(eq(TOKEN), eq(OTHER_COMPANY_ID), any())).thenReturn(events);
+
+        assertEquals(new CompanyEventListPresenter.Outcome.Success(events),
+                presenter.load(TOKEN, OTHER_COMPANY_ID, CatalogSearchFiltersDTO.empty()));
     }
 }

@@ -70,9 +70,9 @@ import com.vaadin.flow.router.AfterNavigationEvent;
  * session must clear that cache: the next page shows the new count at once (#187, UI-A12). The cart is
  * changed through the real presenters, so the cache may be cleared in the view or the presenter.
  *
- * <p>Not covered: the checkout, which empties the cart, since its view and presenter need the payment
- * flow. A member's sign-in and a sign-out, which swap the cart, go through {@link LoginView} and
- * {@link FreshGuestSession}.
+ * <p>The checkout, which empties the cart, is driven through its view with a mocked presenter, since the real
+ * one needs the payment flow. A member's sign-in and a sign-out, which swap the cart, go through
+ * {@link LoginView} and {@link FreshGuestSession}.
  */
 class CartBadgeFreshnessTest {
 
@@ -126,6 +126,7 @@ class CartBadgeFreshnessTest {
         when(reservationService.viewMyActiveOrder(MEMBER_TOKEN)).thenReturn(order(2), order(1));
         MainLayout layout = mainLayout();
         CartView cartView = new CartView(new CartPresenter(reservationService, identity));
+        harness.attach(cartView);
 
         click(button(cartView, "Remove"));
         layout.afterNavigation(mock(AfterNavigationEvent.class));
@@ -199,6 +200,7 @@ class CartBadgeFreshnessTest {
         when(login.attemptLogin(any(), any(), any())).thenReturn(new LoginPresenter.Outcome.Success(
             new LoginDTO(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "alice"), null, List.of())));
         LoginView loginView = new LoginView(login, identity);
+        harness.attach(loginView);
         field(loginView, TextField.class, "Username").setValue("alice");
         field(loginView, PasswordField.class, "Password").setValue("secret-pw");
 
@@ -221,6 +223,7 @@ class CartBadgeFreshnessTest {
             .thenReturn(new VenueMapDTO(1, null, 3, 3, List.of(zone)));
         SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity),
             new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
         return view;
     }
@@ -233,6 +236,7 @@ class CartBadgeFreshnessTest {
             .thenReturn(new VenueMapDTO(1, null, 3, 3, List.of(zone)));
         SeatPickerView view = new SeatPickerView(new SeatPickerPresenter(catalogService, reservationService, identity),
             new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID), "zoneId", String.valueOf(ZONE_ID)));
         return view;
     }

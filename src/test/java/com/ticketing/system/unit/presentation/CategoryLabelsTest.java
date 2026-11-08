@@ -14,8 +14,9 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +34,7 @@ import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
 import com.ticketing.system.ui.views.landing.LandingView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.dom.Element;
 
 /**
  * Every event category has one label, the label a browsed event shows is the one that filters back to
@@ -92,14 +94,14 @@ class CategoryLabelsTest {
         }
         BrowseEventsView view = browseWith(events);
 
-        // The browse page sorts its rows, so compare the categories the labels filter to, in name order.
-        List<String> labels = gridColumn(view, "Category");
-        List<String> filtered = labels.stream()
-            .map(label -> String.valueOf(CatalogFilterSupport.categoryFilterValue(label)))
-            .sorted()
-            .toList();
-        assertEquals(Arrays.stream(categories).map(Enum::name).sorted().toList(), filtered,
-            "browse labels " + labels + " must each filter back to their own category");
+        // The browse page sorts its rows, so each row's label is paired with its event through the name column.
+        Map<String, String> labelByEvent = categoryLabelByEventName(view);
+        assertEquals(categories.length, labelByEvent.size(), "one row per event: " + labelByEvent);
+        for (int i = 0; i < categories.length; i++) {
+            String name = "Event " + (i + 1);
+            assertEquals(categories[i].name(), CatalogFilterSupport.categoryFilterValue(labelByEvent.get(name)),
+                "the label \"" + labelByEvent.get(name) + "\" of " + name + " must filter back to its category");
+        }
     }
 
     @Test
@@ -107,6 +109,7 @@ class CategoryLabelsTest {
         LandingPresenter presenter = mock(LandingPresenter.class);
         when(presenter.load()).thenReturn(new LandingPresenter.Outcome.Success(List.of(), List.of()));
         LandingView view = new LandingView(presenter);
+        harness.attach(view);
 
         List<Component> cards = categoryCards(view);
         cards.forEach(card -> domClick(card.getElement()));
@@ -121,6 +124,26 @@ class CategoryLabelsTest {
     }
 
     // ---- arrangement ----
+
+    // Each browse row's category label by the row's event name, which the grid sets as markup.
+    private static Map<String, String> categoryLabelByEventName(Component view) {
+        Element table = A11y.elements(view, e -> "table".equals(e.getTag())).get(0);
+        List<Element> sections = table.getChildren().toList();
+        List<String> headers = sections.stream()
+            .filter(section -> "thead".equals(section.getTag()))
+            .flatMap(Element::getChildren)
+            .flatMap(Element::getChildren)
+            .map(Element::getTextRecursively)
+            .toList();
+        int nameColumn = headers.indexOf("Event");
+        int categoryColumn = headers.indexOf("Category");
+        Map<String, String> labels = new LinkedHashMap<>();
+        sections.stream()
+            .filter(section -> "tbody".equals(section.getTag()))
+            .flatMap(Element::getChildren)
+            .forEach(row -> labels.put(A11y.text(row.getChild(nameColumn)), A11y.text(row.getChild(categoryColumn))));
+        return labels;
+    }
 
     private static EventSummaryDTO event(int id, EventCategory category) {
         return new EventSummaryDTO(id, "Event " + id, "ON_SALE", null, "Acme", category.name(), "Tel Aviv",

@@ -164,4 +164,21 @@ class MyProfilePresenterTest {
             return throwables;
         }
     }
+
+    // ---- a guest, and the text an outage shows (#189) ----
+
+    @Test
+    void GivenAGuest_WhenLoad_ThenNotAuthenticatedAndNoProfileIsRead() {
+        assertEquals(new MyProfilePresenter.Outcome.NotAuthenticated(), presenter.load());
+        verify(memberQueryService, never()).getMemberProfile(any());
+    }
+
+    @Test
+    void GivenTheStoreIsDown_WhenLoad_ThenFailureSaysTheServiceIsUnavailable() {
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_USER_ID, "member"));
+        when(memberQueryService.getMemberProfile(MEMBER_TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        assertEquals(new MyProfilePresenter.Outcome.Failure(ServiceErrors.DB_UNAVAILABLE_MESSAGE), presenter.load());
+    }
 }

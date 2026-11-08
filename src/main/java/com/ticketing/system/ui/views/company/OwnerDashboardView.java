@@ -17,6 +17,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Div;
@@ -151,10 +152,10 @@ public class OwnerDashboardView extends LkPage {
         // (RESPOND_TO_INQUIRIES) as null for members without the permission (#22), so the server
         // decides what is shown.
         if (stats.ticketsSold30d() != null) {
-            row.add(new LkStat("Tickets sold · 30d", String.format("%,d", stats.ticketsSold30d())));
+            row.add(new LkStat("Tickets sold · 30d", String.format(DisplayLocale.PAGE, "%,d", stats.ticketsSold30d())));
         }
         if (stats.revenue30d() != null) {
-            row.add(new LkStat("Revenue · 30d", "$" + String.format("%,.0f", stats.revenue30d())));
+            row.add(new LkStat("Revenue · 30d", "$" + String.format(DisplayLocale.PAGE, "%,.0f", stats.revenue30d())));
         }
         if (stats.openInquiries() != null) {
             LkStat inquiries = new LkStat("Open inquiries", String.valueOf(stats.openInquiries()));

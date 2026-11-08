@@ -155,7 +155,7 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | Framework | Spring Boot | 3.5.16 | Transactions, profiles and AOP, with the domain kept free of Spring |
 | UI | Vaadin Flow | 24.10.7 | Server-side Java views, so one language and one process from view to database |
 | Modularity | Spring Modulith | 1.4.14 | Module model, verification and generated module docs |
-| Architecture tests | ArchUnit | 1.4.2 | Fails the build on a layer violation, a module cycle or a badly named test |
+| Architecture tests | ArchUnit | 1.4.2 | Fails the build on a layer violation, a module cycle, a badly named test or a page formatted in the server's locale |
 | Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a configuration switch |
 | Schema migrations | Flyway | Boot-managed (11.7.2) | Versioned SQL applied at startup; Hibernate only validates ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)) |
 | Auth | jjwt + BCrypt | 0.13.0 | Signed session tokens and hashed passwords |

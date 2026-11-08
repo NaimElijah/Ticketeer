@@ -9,6 +9,7 @@ import static com.ticketing.system.unit.presentation.InboxViewHarness.rows;
 import static com.ticketing.system.unit.presentation.InboxViewHarness.thread;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
@@ -67,6 +68,7 @@ class CompanyInquiryInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheViewIsBuilt_ThenNoThreadIsOpenedAndEveryBadgeStays() {
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         verify(presenter, never()).open(any(), any(), any());
         assertEquals(List.of("2", "2"), rows(view).stream().map(InboxViewHarness::badge).toList());
@@ -75,6 +77,7 @@ class CompanyInquiryInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheReaderClicksTheSecondRow_ThenOnlyThatThreadIsOpened() {
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -86,11 +89,15 @@ class CompanyInquiryInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheStatusFilterLeavesOnlyTheSecond_ThenTheViewSelectsItWithoutOpeningIt() {
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
         clearInvocations(presenter);
 
         applyStatusFilter(view, "Open");
 
         assertEquals(1, rows(view).size());
+        String current = rows(view).get(0).getElement().getAttribute("aria-current");
+        assertTrue(current != null && !current.isBlank() && !"false".equals(current),
+            "the thread left must be the one shown as selected");
         verify(presenter, never()).open(any(), any(), any());
     }
 
@@ -104,6 +111,7 @@ class CompanyInquiryInboxViewTest {
         when(presenter.open(any(), any(), any()))
             .thenReturn(new CompanyInquiryInboxPresenter.ActionOutcome.NotAuthenticated());
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -111,11 +119,24 @@ class CompanyInquiryInboxViewTest {
         assertEquals("2", badge(rows(view).get(1)));
     }
 
+    // The view selects the first row on its own, without opening it; a click on that row still opens it (#189).
+    @Test
+    void GivenTheRowTheViewSelectedOnItsOwn_WhenTheReaderClicksIt_ThenItIsOpened() {
+        CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
+        verify(presenter, never()).open(any(), any(), any());
+
+        click(rows(view).get(0));
+
+        verify(presenter).open(any(), eq(first), any());
+    }
+
     @Test
     void GivenTheOpenFails_WhenTheReaderOpensARow_ThenNoToastShowsAndTheBadgeStays() {
         when(presenter.open(any(), any(), any()))
             .thenReturn(new CompanyInquiryInboxPresenter.ActionOutcome.Failure("reason"));
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -133,6 +154,7 @@ class CompanyInquiryInboxViewTest {
             return new CompanyInquiryInboxPresenter.ActionOutcome.Success();
         });
         CompanyInquiryInboxView view = new CompanyInquiryInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 

@@ -21,6 +21,7 @@ import com.ticketing.system.ui.presenters.account.MyAccountPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.security.Capability;
@@ -40,7 +41,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @Route(value = "my-account", layout = MainLayout.class)
@@ -54,8 +54,8 @@ public class MyAccountView extends LkPage {
     private static final String REQUEST_REFUND = "Request Refund";
     private static final String ORDER_PREFIX = "order #";
     private static final String SEAT_SEPARATOR = ", seat ";
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
-    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy", DisplayLocale.PAGE);
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", DisplayLocale.PAGE);
 
     private final MyAccountPresenter presenter;
     private final RefundPresenter refundPresenter;
@@ -309,7 +309,7 @@ public class MyAccountView extends LkPage {
     }
 
     private static String money(double amount) {
-        return String.format("$%,.2f", amount);
+        return String.format(DisplayLocale.PAGE, "$%,.2f", amount);
     }
 
     // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).
@@ -339,7 +339,7 @@ public class MyAccountView extends LkPage {
 
     private static String prettyStatus(TicketStatus st) {
         if (st == null) return "—";
-        String s = st.name().toLowerCase().replace('_', ' ');
+        String s = st.name().toLowerCase(DisplayLocale.PAGE).replace('_', ' ');
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
@@ -348,9 +348,9 @@ public class MyAccountView extends LkPage {
         String[] parts = name.trim().split("\\s+");
         if (parts.length == 1) {
             String p = parts[0];
-            return p.substring(0, Math.min(2, p.length())).toUpperCase();
+            return p.substring(0, Math.min(2, p.length())).toUpperCase(DisplayLocale.PAGE);
         }
-        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase(DisplayLocale.PAGE);
     }
 
     private static String escape(String s) {

@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCheckRow;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
@@ -36,6 +37,7 @@ public class ManagerInvitationView extends LkPage {
 
     // Titles the permissions card and names the group of its checkboxes.
     private static final String PERMISSIONS = "Permissions";
+    private static final String ENTER_INVITEE = "Enter a username or email to invite.";
 
         // Map each display label to its domain Permission value (same order as PERMS list).
     private static final Map<String, Permission> PERM_MAP = new LinkedHashMap<>();
@@ -65,6 +67,7 @@ private final ManagerInvitationPresenter presenter;
         LkCard inviteeCard = new LkCard("Invitee").pad(20);
         invitee.setPlaceholder("Who do you want to invite?");
         invitee.setRequired(true);
+        LkFieldRules.sayWhenEmpty(invitee, ENTER_INVITEE);
         invitee.setWidthFull();
         inviteeCard.add(invitee);
 
@@ -94,7 +97,7 @@ private final ManagerInvitationPresenter presenter;
    private void sendInvitation() {
         errors.clear();
         if (invitee.isEmpty()) {
-            refuseInvitee("Enter a username or email to invite.");
+            refuseInvitee(ENTER_INVITEE);
             return;
         }
         List<Permission> selected = new ArrayList<>();

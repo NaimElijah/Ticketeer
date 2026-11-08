@@ -49,6 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -495,6 +496,41 @@ class AuthenticationServiceTest {
         service.register(new RegisterRequestDTO("u1", "u1@example.com", "Password1", "guest-1", 56));
 
         verify(mockUserRepo, times(1)).save(argThat(user -> "u1".equals(user.getUsername())));
+    }
+
+    // ----------------------------------------------------------------------
+    // Register — the age is from 1 to 120, the range the form asks for (#189). A caller that skips
+    // the form is refused with the other format checks, before any repository call or hash, with a
+    // message the visitor can read. User's invariant still refuses only a negative age, so a stored
+    // age of 0 keeps loading.
+    // ----------------------------------------------------------------------
+
+    private static final String AGE_OUT_OF_RANGE = "Age must be from 1 to 120";
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 121})
+    void GivenAnAgeOutsideOneTo120_WhenRegister_ThenRefusedBeforeAnyRepositoryCallAndNothingSaved(int age) {
+        givenRegistrationWillSucceed("guest-1");
+        clearInvocations(mockHasher);
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", "guest-1", age)),
+                "an age of " + age + " is outside 1 to 120");
+
+        assertEquals(AGE_OUT_OF_RANGE, refused.getMessage());
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockSessionRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 120})
+    void GivenAnAgeAtEitherEndOfOneTo120_WhenRegister_ThenRegisteredWithThatAge(int age) {
+        givenRegistrationWillSucceed("guest-1");
+
+        service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", "guest-1", age));
+
+        verify(mockUserRepo, times(1)).save(argThat(user -> user.getAge() == age));
     }
 
     // ----------------------------------------------------------------------

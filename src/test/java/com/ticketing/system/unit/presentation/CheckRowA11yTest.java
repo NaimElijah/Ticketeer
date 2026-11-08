@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.ui.components.kit.LkCheckRow;
@@ -29,6 +31,18 @@ class CheckRowA11yTest {
 
     private static final String LABEL = "All members";
     private static final Pattern SPACE = Pattern.compile("' '|\" \"|(?i)space");
+
+    private ViewHarness harness;
+
+    @BeforeEach
+    void setUp() {
+        harness = new ViewHarness();
+    }
+
+    @AfterEach
+    void tearDown() {
+        harness.close();
+    }
 
     @Test
     void GivenACheckRow_WhenItRenders_ThenItHasOneFocusableCheckboxNamedByItsLabel() {
@@ -58,6 +72,7 @@ class CheckRowA11yTest {
     void GivenAnUncheckedRow_WhenTheUserTogglesItTwice_ThenTheCheckboxFollowsAndTheCallbackGetsEachState() {
         List<Boolean> toggled = new ArrayList<>();
         LkCheckRow row = new LkCheckRow(LABEL, false).onToggle(toggled::add);
+        harness.attach(row);
 
         userToggle(row);
         assertEquals(Optional.of(true), exposedChecked(checkbox(row)), "checked after the first toggle");
@@ -83,6 +98,7 @@ class CheckRowA11yTest {
     void GivenACheckRow_WhenSpaceIsPressedOnIt_ThenItToggles() {
         List<Boolean> toggled = new ArrayList<>();
         LkCheckRow row = new LkCheckRow(LABEL, false).onToggle(toggled::add);
+        harness.attach(row);
         Element box = checkbox(row);
         if (nativeCheckbox(box)) {
             return;

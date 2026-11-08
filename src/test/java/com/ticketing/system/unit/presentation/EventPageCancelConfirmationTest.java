@@ -4,6 +4,7 @@ import static com.ticketing.system.unit.presentation.ViewHarness.button;
 import static com.ticketing.system.unit.presentation.ViewHarness.click;
 import static com.ticketing.system.unit.presentation.ViewHarness.founderOf;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,6 +27,8 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.views.company.EventManagementView;
+import com.vaadin.flow.component.ComponentUtil;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 
 /**
  * Cancelling from the event's management page refunds every holder and cannot be undone, so it asks for
@@ -52,6 +55,7 @@ class EventPageCancelConfirmationTest {
                 "Acme", EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of("Coldplay"), 50.0)));
         when(presenter.cancel(any(), anyInt())).thenReturn(new EventManagementPresenter.CancelOutcome.Success());
         view = new EventManagementView(presenter);
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", String.valueOf(EVENT_ID)));
     }
 
@@ -66,6 +70,24 @@ class EventPageCancelConfirmationTest {
 
         verify(presenter, never()).cancel(any(), anyInt());
         assertFalse(harness.dialogs().isEmpty(), "cancelling must ask for confirmation first");
+    }
+
+    // Cancelling refunds every holder and cannot be undone, so turning the confirmation down must do nothing (#189).
+    @Test
+    void GivenTheCancelConfirmation_WhenTheOwnerKeepsTheEvent_ThenNothingIsCancelled() {
+        click(button(view, "Cancel This Event"));
+        ConfirmDialog confirmation = harness.dialogs().stream()
+            .filter(ConfirmDialog.class::isInstance)
+            .map(ConfirmDialog.class::cast)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("cancelling must ask for confirmation first"));
+        assertEquals("Keep event", confirmation.getElement().getProperty("cancelText"),
+            "precondition: the confirmation offers to keep the event");
+
+        ComponentUtil.fireEvent(confirmation, new ConfirmDialog.CancelEvent(confirmation, true));
+
+        verify(presenter, never()).cancel(any(), anyInt());
+        assertEquals(List.of(), harness.toasts(), "nothing happened, so nothing is said");
     }
 
     @Test

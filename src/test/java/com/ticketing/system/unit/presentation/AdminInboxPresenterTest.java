@@ -110,7 +110,7 @@ class AdminInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed")).when(messaging).sendMessage(anyString(), any());
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).sendMessage(anyString(), any());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "x"));
@@ -145,7 +145,7 @@ class AdminInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenClose_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("already closed")).when(messaging).closeConversation(anyString(), anyString());
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).closeConversation(anyString(), anyString());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.close(TOKEN, "c1"));
@@ -279,5 +279,14 @@ class AdminInboxPresenterTest {
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
 
         assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewAdminInbox(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(AdminInboxPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 }

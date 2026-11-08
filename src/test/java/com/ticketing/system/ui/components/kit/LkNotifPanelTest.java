@@ -1,6 +1,8 @@
 package com.ticketing.system.ui.components.kit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -21,6 +23,8 @@ class LkNotifPanelTest {
     private static final LocalDateTime CREATED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     // ---- UI-B13: no "View all notifications" link without a page behind it (#187) ----
+    // Each test first reads what the panel does show, so an absence it then asserts is not that of an empty
+    // panel; and the absence is of the words, whatever control would carry them (#189).
 
     @Test
     void GivenNotifications_WhenThePanelIsBuilt_ThenItShowsNoViewAllLink() {
@@ -28,6 +32,9 @@ class LkNotifPanelTest {
                 List.of(new NotificationDTO("n1", "PURCHASE_CONFIRMED", "SENT", "Your seats are confirmed", CREATED_AT)),
                 () -> { }, id -> { }, createdAt -> "5m");
 
+        String shown = panel.getElement().getTextRecursively();
+        assertTrue(shown.contains("Your seats are confirmed"), "the panel lists the notification: " + shown);
+        assertFalse(shown.contains(VIEW_ALL), "the panel must not offer a link to no page: " + shown);
         assertEquals(List.of(), buttonsReading(panel, VIEW_ALL), "the panel must not offer a link to no page");
     }
 
@@ -35,6 +42,9 @@ class LkNotifPanelTest {
     void GivenNoNotifications_WhenThePanelIsBuilt_ThenItShowsNoViewAllLink() {
         LkNotifPanel panel = LkNotifPanel.fromDTOs(List.of(), () -> { }, id -> { }, createdAt -> "5m");
 
+        String shown = panel.getElement().getTextRecursively();
+        assertTrue(shown.contains("No new notifications"), "the panel says it is empty: " + shown);
+        assertFalse(shown.contains(VIEW_ALL), "the panel must not offer a link to no page: " + shown);
         assertEquals(List.of(), buttonsReading(panel, VIEW_ALL), "the panel must not offer a link to no page");
     }
 

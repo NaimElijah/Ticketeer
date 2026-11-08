@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -16,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * category label → enum-name mapping and the date-range preset → concrete window. Shared by the
  * browse and owner event-list filters; needs no Vaadin/Spring.
  */
-class BrowseEventsFilterTest {
+class CatalogFilterSupportTest {
 
     @Test
     void GivenCategoryLabels_WhenCategoryFilterValue_ThenMapsLabelsToEnumNames() {
@@ -60,10 +59,27 @@ class BrowseEventsFilterTest {
     @Test
     void GivenThisWeekendOnAWednesday_WhenDateWindow_ThenIsUpcomingSaturdayToSunday() {
         LocalDate today = LocalDate.of(2026, 6, 24); // a Wednesday
-        CatalogFilterSupport.DateWindow w = CatalogFilterSupport.dateWindow("This weekend", today);
-        assertEquals(DayOfWeek.SATURDAY, w.from().getDayOfWeek());
-        assertEquals(w.from().plusDays(1), w.to());          // Saturday → Sunday
-        assertFalse(w.from().isBefore(today));               // upcoming, not in the past
+
+        assertEquals(new CatalogFilterSupport.DateWindow(LocalDate.of(2026, 6, 27), LocalDate.of(2026, 6, 28)),
+                CatalogFilterSupport.dateWindow("This weekend", today));
+    }
+
+    @Test
+    void GivenThisWeekendOnASaturday_WhenDateWindow_ThenIsTodayToTomorrow() {
+        LocalDate saturday = LocalDate.of(2026, 6, 27);
+
+        assertEquals(new CatalogFilterSupport.DateWindow(saturday, LocalDate.of(2026, 6, 28)),
+                CatalogFilterSupport.dateWindow("This weekend", saturday));
+    }
+
+    // On a Sunday the weekend is nearly over, so "This weekend" means what is left of it, today, not the next
+    // one (the owner's decision, 2026-11-07, #189).
+    @Test
+    void GivenThisWeekendOnASunday_WhenDateWindow_ThenIsTodayOnly() {
+        LocalDate sunday = LocalDate.of(2026, 6, 28);
+
+        assertEquals(new CatalogFilterSupport.DateWindow(sunday, sunday),
+                CatalogFilterSupport.dateWindow("This weekend", sunday));
     }
 
     @Test
@@ -82,7 +98,7 @@ class BrowseEventsFilterTest {
     }
 
     @Test
-    void GivenCitySelectedWithAllCountries_WhenLocationFilter_ThenReturnsCityIgnoringCountry() {
+    void GivenCitySelectedWithAllCountries_WhenLocationFilter_ThenReturnsCity() {
         // city takes priority — country is redundant once city is known
         assertEquals("Tel Aviv", CatalogFilterSupport.locationFilter("Tel Aviv", "All countries"));
     }

@@ -73,6 +73,7 @@ class ReloadInPlaceTest {
     void GivenAPendingOwnerInvitation_WhenTheMemberAcceptsIt_ThenTheInvitationsLoadAgain() {
         MyInvitationsPresenter presenter = invitationsPresenter("Owner");
         MyInvitationsView view = new MyInvitationsView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
 
         click(button(view, "Accept"));
 
@@ -84,6 +85,7 @@ class ReloadInPlaceTest {
     void GivenAPendingManagerInvitation_WhenTheMemberAcceptsIt_ThenTheInvitationsLoadAgain() {
         MyInvitationsPresenter presenter = invitationsPresenter("Manager");
         MyInvitationsView view = new MyInvitationsView(presenter, InboxViewHarness.displayTime());
+        harness.attach(view);
 
         click(button(view, "Accept"));
 

@@ -25,6 +25,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.dto.GridPlacementDTO;
+import com.ticketing.system.shared.dto.VenueLayoutDTO;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Unit guard for {@code VenueMapPresenter.saveMap}: the venue map is persisted to the
@@ -145,5 +151,81 @@ class VenueMapPresenterTest {
     @Test
     void GivenNoZones_WhenANewZoneIsNamed_ThenItIsZoneOne() {
         assertEquals("Zone 1", presenter.defaultZoneName(List.of()));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenSaveMap_ThenReturnsNotAuthenticated() {
+        when(eventService.getEventDetail(eq(TOKEN), anyInt())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(VenueMapPresenter.SaveOutcome.NotAuthenticated.class,
+                presenter.saveMap(TOKEN, String.valueOf(EVENT_ID), config()));
+    }
+
+    // ---- loading the zones, and what the zone form accepts (#189) ----
+
+    private static final GridPlacementDTO PLACEMENT = new GridPlacementDTO(0, 0, 1, 2);
+
+    @Test
+    void GivenANullToken_WhenLoadZones_ThenNotAuthenticatedAndNoServiceCall() {
+        assertEquals(new VenueMapPresenter.LoadOutcome.NotAuthenticated(), presenter.loadZones(null, EVENT_ID));
+        verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void GivenTheEventsLayout_WhenLoadZones_ThenSuccessCarriesIt() {
+        VenueLayoutDTO layout = new VenueLayoutDTO(4, 6, List.of());
+        when(eventService.getEventZones(TOKEN, EVENT_ID)).thenReturn(layout);
+
+        assertEquals(new VenueMapPresenter.LoadOutcome.Success(layout), presenter.loadZones(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenLoadZones_ThenNotAuthenticated() {
+        when(eventService.getEventZones(TOKEN, EVENT_ID)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new VenueMapPresenter.LoadOutcome.NotAuthenticated(), presenter.loadZones(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenLoadZones_ThenNotAuthenticated() {
+        when(eventService.getEventZones(TOKEN, EVENT_ID)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new VenueMapPresenter.LoadOutcome.NotAuthenticated(), presenter.loadZones(TOKEN, EVENT_ID));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void GivenNoZoneName_WhenValidateZone_ThenInvalidName(String name) {
+        assertEquals(new VenueMapPresenter.ZoneOutcome.InvalidName(),
+                presenter.validateZone(name, "45", true, 2, 3, null, PLACEMENT));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"forty", "45,00"})
+    void GivenAPriceThatIsNoNumber_WhenValidateZone_ThenInvalidPrice(String price) {
+        assertEquals(new VenueMapPresenter.ZoneOutcome.InvalidPrice(),
+                presenter.validateZone("Floor", price, false, null, null, 100, PLACEMENT));
+    }
+
+    @Test
+    void GivenASeatedZone_WhenValidateZone_ThenItsRowsAndSeatsAndNoStandingCapacity() {
+        assertEquals(new VenueMapPresenter.ZoneOutcome.Valid("Balcony", true, 2, 3, 0, 45.5, PLACEMENT),
+                presenter.validateZone("Balcony", " 45.5 ", true, 2, 3, 500, PLACEMENT));
+    }
+
+    @Test
+    void GivenAStandingZone_WhenValidateZone_ThenItsCapacity() {
+        assertEquals(new VenueMapPresenter.ZoneOutcome.Valid("Floor", false, 1, 1, 100, 20.0, PLACEMENT),
+                presenter.validateZone("Floor", "20", false, null, null, 100, PLACEMENT));
+    }
+
+    @Test
+    void GivenAZoneWithNoSizesEntered_WhenValidateZone_ThenEachSizeDefaultsToOne() {
+        assertEquals(new VenueMapPresenter.ZoneOutcome.Valid("Floor", false, 1, 1, 1, 20.0, PLACEMENT),
+                presenter.validateZone("Floor", "20", false, null, null, null, PLACEMENT));
     }
 }

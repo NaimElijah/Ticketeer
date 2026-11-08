@@ -27,6 +27,7 @@ import com.ticketing.system.ui.presenters.company.OwnerDashboardPresenter;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.support.ServiceErrors;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class OwnerDashboardPresenterTest {
 
@@ -129,15 +130,16 @@ class OwnerDashboardPresenterTest {
     }
 
     @Test
-    void GivenCallerNoLongerMember_WhenLoadFor_ThenReturnsFailure() {
+    void GivenCallerNoLongerMember_WhenLoadFor_ThenFailureCarriesTheRefusal() {
         MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Manager");
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view this company's data");
         when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first));
         when(companyAnalyticsService.dashboard(TOKEN, 7))
-            .thenThrow(new UnauthorizedActionException("view this company's data"));
+            .thenThrow(refusal);
 
         OwnerDashboardPresenter.Outcome outcome = presenter.loadFor(TOKEN, null);
 
-        assertInstanceOf(OwnerDashboardPresenter.Outcome.Failure.class, outcome);
+        assertEquals(new OwnerDashboardPresenter.Outcome.Failure(refusal.getMessage()), outcome);
     }
 
     @Test
@@ -149,5 +151,35 @@ class OwnerDashboardPresenterTest {
         OwnerDashboardPresenter.Outcome.Failure fail =
             assertInstanceOf(OwnerDashboardPresenter.Outcome.Failure.class, outcome);
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoadFor_ThenReturnsNotAuthenticated() {
+        when(companyManagementService.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(OwnerDashboardPresenter.Outcome.NotAuthenticated.class, presenter.loadFor(TOKEN, null));
+    }
+
+    // ---- the dashboard call itself refuses the token; an id the caller is not in (#189) ----
+
+    @Test
+    void GivenATokenRevokedBetweenTheCompaniesAndTheDashboard_WhenLoadFor_ThenNotAuthenticated() {
+        when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(new MyCompanyDTO(7, "Acme", "Founder")));
+        when(companyAnalyticsService.dashboard(TOKEN, 7)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new OwnerDashboardPresenter.Outcome.NotAuthenticated(), presenter.loadFor(TOKEN, null));
+    }
+
+    @Test
+    void GivenACompanyIdTheCallerIsNotIn_WhenLoadFor_ThenTheFirstCompanyIsSelected() {
+        MyCompanyDTO first = new MyCompanyDTO(7, "Acme", "Founder");
+        MyCompanyDTO second = new MyCompanyDTO(9, "Globex", "Manager");
+        when(companyManagementService.findMyCompanies(TOKEN)).thenReturn(List.of(first, second));
+        when(companyAnalyticsService.dashboard(TOKEN, 7)).thenReturn(stats());
+
+        assertEquals(new OwnerDashboardPresenter.Outcome.Success(List.of(first, second), first, stats()),
+            presenter.loadFor(TOKEN, 99));
     }
 }

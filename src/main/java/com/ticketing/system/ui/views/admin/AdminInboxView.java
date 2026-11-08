@@ -18,6 +18,7 @@ import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
@@ -262,6 +263,6 @@ public class AdminInboxView extends LkPage {
 
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
-        return status.charAt(0) + status.substring(1).toLowerCase();
+        return status.charAt(0) + status.substring(1).toLowerCase(DisplayLocale.PAGE);
     }
 }

@@ -32,6 +32,7 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.NullVenueMapException;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class EventDetailsPresenterTest {
 
@@ -78,21 +79,22 @@ class EventDetailsPresenterTest {
     }
 
     @Test
-    void GivenTheEventIsNotFound_WhenLoad_ThenReturnsNotFound() {
+    void GivenTheEventIsNotFound_WhenLoad_ThenNotFoundSaysItIsNotAvailable() {
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
 
-        assertInstanceOf(EventDetailsPresenter.Outcome.NotFound.class, outcome);
+        assertEquals(new EventDetailsPresenter.Outcome.NotFound("This event isn't available."), outcome);
     }
 
     @Test
-    void GivenAnInvalidToken_WhenLoad_ThenReturnsFailure() {
+    void GivenAnInvalidToken_WhenLoad_ThenFailureAsksTheVisitorToRefresh() {
         when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new InvalidTokenException());
 
         EventDetailsPresenter.Outcome outcome = presenter.load(CRED, EVENT_ID);
 
-        assertInstanceOf(EventDetailsPresenter.Outcome.Failure.class, outcome);
+        assertEquals(new EventDetailsPresenter.Outcome.Failure("Your session has expired - please refresh and try again."),
+                outcome);
     }
 
     // An event with no (accessible) venue map still shows its detail — zones fall back to empty.
@@ -158,5 +160,29 @@ class EventDetailsPresenterTest {
                     serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                     "the internal failure must be logged at ERROR with its exception by ServiceErrors");
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenFailureAsksTheVisitorToRefresh() {
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new EventDetailsPresenter.Outcome.Failure("Your session has expired - please refresh and try again."),
+                presenter.load(CRED, EVENT_ID));
+    }
+
+    // ---- the organizer's rating is best-effort (#189) ----
+
+    @Test
+    void GivenTheCompanyRatingFails_WhenLoad_ThenThePageStillLoadsWithNoRating() {
+        EventDetailDTO detail = detail();
+        when(catalogService.getEventDetail(CRED, EVENT_ID)).thenReturn(detail);
+        VenueMapDTO map = venueMap();
+        when(catalogService.getEventVenueMap(CRED, EVENT_ID)).thenReturn(map);
+        when(catalogService.companyRating(10)).thenThrow(new PersistenceException("could not prepare statement"));
+
+        assertEquals(new EventDetailsPresenter.Outcome.Success(detail, map.inventoryZones(), 4, 4, null),
+                presenter.load(CRED, EVENT_ID));
     }
 }

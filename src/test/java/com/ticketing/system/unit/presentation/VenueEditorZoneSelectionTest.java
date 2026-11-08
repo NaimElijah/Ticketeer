@@ -41,6 +41,7 @@ class VenueEditorZoneSelectionTest {
         VenueMapPresenter presenter = mock(VenueMapPresenter.class);
         when(presenter.defaultZoneName(any())).thenReturn(SECOND);
         view = new VenueMapEditorView(presenter, new VenueLimitsProperties(12, 49_500, 1_000_000, 100_000));
+        harness.attach(view);
         click(button(view, "+ Standing"));
     }
 

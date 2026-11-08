@@ -47,6 +47,7 @@ import com.vaadin.flow.internal.nodefeature.ElementListenerMap;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.Location;
 import com.vaadin.flow.router.QueryParameters;
+import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.server.RouteRegistry;
 import com.vaadin.flow.router.Router;
@@ -62,7 +63,10 @@ import elemental.json.Json;
  *
  * <p>On top of that it records navigations instead of routing them, installs a map-backed
  * {@code VaadinSession} for the session holders, and a {@link VaadinService} whose router answers every
- * route with a stub URL, so a view or layout that builds a {@code RouterLink} can be constructed. It can
+ * route with a stub URL, so a view or layout that builds a {@code RouterLink} can be constructed, unless the
+ * link leaves out a mandatory route parameter: then, as in Flow, it has no URL and the link throws. The stub
+ * URL is {@code stub/} and the route's path with the link's parameters filled in, so a test can read where a
+ * link leads ({@link #linkTo}). It can
  * also sign a member or an admin in, and make the member a company's founder or manager through
  * {@link CompanyManagementBridge}, which it clears while open and restores on {@link #close()}.
  * Create one per test.
@@ -75,6 +79,8 @@ final class ViewHarness implements AutoCloseable {
     static final int ADMIN_ID = 1;
 
     private static final Pattern TAG = Pattern.compile("<[^>]*>");
+    // What every link's URL starts with; a route's path follows it.
+    private static final String STUB_URL = "stub";
     // A script focusing its Nth parameter: Focusable.focus() and callJsFunction("focus") both send one.
     private static final Pattern FOCUS_CALL = Pattern.compile("\\$(\\d+)\\.focus\\(");
 
@@ -358,9 +364,10 @@ final class ViewHarness implements AutoCloseable {
     }
 
     /**
-     * Clicks {@code component} as the visitor would, which only a control that shows and is enabled allows.
+     * Clicks {@code component} as the visitor would, which only a control on the page, shown and enabled, allows.
      *
-     * @throws AssertionError when {@code component} or an ancestor is hidden, or it is disabled
+     * @throws AssertionError when {@code component} is attached to no UI (a view the test never attached, or a
+     *     control a rebuild removed), it or an ancestor is hidden, or it is disabled
      */
     static void click(Component component) {
         A11y.requireActionable(component.getElement(), "click");
@@ -373,15 +380,23 @@ final class ViewHarness implements AutoCloseable {
      * one unless its listener opts in with {@code DisabledUpdateMode.ALWAYS}. It does not check whether a
      * popover or dialog is open. Only for a test that pins a view's own guard behind such a control, so the
      * guard still holds if that ever changes.
+     *
+     * @throws AssertionError when {@code component} is attached to no UI: a control on no page is not one a
+     *     guard protects
      */
     static void forceClick(Component component) {
+        if (component.getUI().isEmpty()) {
+            throw new AssertionError("cannot force a click on " + A11y.describe(component.getElement())
+                + ": it is attached to no UI");
+        }
         ComponentUtil.fireEvent(component, new ClickEvent<>(component));
     }
 
     /**
      * Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}.
      *
-     * @throws AssertionError when {@code element} or an ancestor is hidden, or it is disabled
+     * @throws AssertionError when {@code element} is attached to no UI, it or an ancestor is hidden, or it is
+     *     disabled
      */
     static void domClick(Element element) {
         A11y.requireActionable(element, "click");
@@ -513,13 +528,18 @@ final class ViewHarness implements AutoCloseable {
             .orElse("");
     }
 
-    // RouterLink asks the current service's router for the URL of its target; every target gets one.
+    // RouterLink asks the current service's router for the URL of its target. As in Flow's registry, a target
+    // whose @Route has a mandatory parameter the link does not give has no URL, so RouterLink.setRoute throws
+    // here as it does in production (the /owner crash); every other target gets a stub URL naming its path.
     private static VaadinService stubRouterService() {
-        Answer<Object> urlForEveryTarget = call -> call.getMethod().getReturnType() == Optional.class
+        Answer<Object> registryUrls = call -> "getTargetUrl".equals(call.getMethod().getName())
+            && call.getArguments().length == 2
+            ? stubUrl(call.getArgument(0), call.getArgument(1))
+            : call.getMethod().getReturnType() == Optional.class
             && call.getMethod().getName().toLowerCase().contains("url")
             ? Optional.of("stub")
             : Mockito.RETURNS_DEFAULTS.answer(call);
-        RouteRegistry registry = mock(RouteRegistry.class, urlForEveryTarget);
+        RouteRegistry registry = mock(RouteRegistry.class, registryUrls);
         Router router = mock(Router.class);
         when(router.getRegistry()).thenReturn(registry);
         VaadinService service = mock(VaadinService.class);
@@ -527,6 +547,60 @@ final class ViewHarness implements AutoCloseable {
         // A component that reads the deployment mode when attached (Flow's Label does) finds development mode.
         when(service.getDeploymentConfiguration()).thenReturn(mock(DeploymentConfiguration.class));
         return service;
+    }
+
+    private static Optional<String> stubUrl(Class<?> target, RouteParameters parameters) {
+        Route route = target.getAnnotation(Route.class);
+        return route == null ? Optional.of(STUB_URL) : routePath(route.value(), parameters).map(ViewHarness::stubUrl);
+    }
+
+    private static String stubUrl(String path) {
+        return path.isEmpty() ? STUB_URL : STUB_URL + "/" + path;
+    }
+
+    // The route template's path with each parameter's value in its place, as Flow builds a link's URL: a
+    // parameter segment is ":name", with "?" (optional) or "*" (wildcard) after the name and "(regex)" after
+    // that when the template restricts its values. Empty when a mandatory parameter has no value.
+    private static Optional<String> routePath(String template, RouteParameters parameters) {
+        List<String> path = new ArrayList<>();
+        for (String segment : template.split("/")) {
+            if (!segment.startsWith(":")) {
+                if (!segment.isEmpty()) {
+                    path.add(segment);
+                }
+                continue;
+            }
+            String name = segment.substring(1, segment.contains("(") ? segment.indexOf('(') : segment.length());
+            boolean optional = name.endsWith("?") || name.endsWith("*");
+            Optional<String> value = parameters.get(optional ? name.substring(0, name.length() - 1) : name);
+            if (value.isPresent()) {
+                path.add(value.get());
+            } else if (!optional) {
+                return Optional.empty();
+            }
+        }
+        return Optional.of(String.join("/", path));
+    }
+
+    /**
+     * The URL a link to {@code target} with these {@code name, value} parameters gets: {@code stub/} and the
+     * route's path with the parameters filled in, to compare with a rendered link's {@code href}.
+     *
+     * @throws IllegalArgumentException when a name has no value after it
+     * @throws AssertionError when the parameters leave out one the route needs
+     */
+    static String linkTo(Class<?> target, String... nameValuePairs) {
+        if (nameValuePairs.length % 2 != 0) {
+            throw new IllegalArgumentException("a link to " + target.getSimpleName() + " was given a name with no value: "
+                + List.of(nameValuePairs));
+        }
+        Map<String, String> params = new java.util.LinkedHashMap<>();
+        for (int i = 0; i + 1 < nameValuePairs.length; i += 2) {
+            params.put(nameValuePairs[i], nameValuePairs[i + 1]);
+        }
+        return stubUrl(target, new RouteParameters(params))
+            .orElseThrow(() -> new AssertionError(target.getSimpleName() + "'s route needs a parameter that "
+                + List.of(nameValuePairs) + " does not give"));
     }
 
     // Records instead of queueing in the state tree (see InboxViewHarness), and records navigations

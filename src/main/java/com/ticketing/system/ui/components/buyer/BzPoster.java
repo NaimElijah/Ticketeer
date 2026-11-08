@@ -8,6 +8,8 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.router.RouterLink;
 
+import com.ticketing.system.ui.support.DisplayLocale;
+
 /**
  * Event poster card — gradient image-block (color-keyed to a colour family)
  * with a category chip overlay, title, venue / date meta, and price.
@@ -45,7 +47,7 @@ public class BzPoster extends RouterLink {
         img.getStyle()
             .set("height", "150px")
             .set("background", "linear-gradient(135deg, " + grad[0] + ", " + grad[1] + ")");
-        Span cat = new Span(chipLabel.toUpperCase(Locale.ROOT));
+        Span cat = new Span(chipLabel.toUpperCase(DisplayLocale.PAGE));
         cat.addClassName("bz-poster-cat");
         img.add(cat);
 

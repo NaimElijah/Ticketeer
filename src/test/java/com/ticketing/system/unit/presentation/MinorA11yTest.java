@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -186,8 +187,7 @@ class MinorA11yTest {
         meter.update("abcdefgh");
 
         Element bar = strengthBar(meter);
-        String valueText = bar.getAttribute("aria-valuetext");
-        assertTrue(valueText != null && !valueText.isBlank(),
+        assertEquals(PasswordStrength.of("abcdefgh").label(), bar.getAttribute("aria-valuetext"),
             "the bar must say its tier in words (aria-valuetext), not only a fraction: " + A11y.describe(bar));
     }
 
@@ -218,6 +218,22 @@ class MinorA11yTest {
                 + met + "\"");
         assertTrue(NOT_MET.matcher(unmet).find(),
             "a rule the password misses must say \"not met\" in words; it reads \"" + unmet + "\"");
+    }
+
+    // Register refuses a password over 72 bytes in UTF-8. Without a rule for it, such a password would read
+    // Weak with every rule met, and the user could not tell why (#189).
+    @Test
+    void GivenAPasswordRegisterRefusesAsTooLong_WhenTheMeterUpdates_ThenItIsWeakAndItsLengthRuleIsNotMet() {
+        PasswordStrengthMeter meter = new PasswordStrengthMeter();
+        String tooLong = "Aa1!".repeat(18) + "a";
+
+        meter.update(tooLong);
+
+        assertEquals(PasswordStrength.WEAK.label(), strengthBar(meter).getAttribute("aria-valuetext"),
+            "a password register refuses must read Weak");
+        String lengthRule = A11y.text(ruleElement(meter, "not too long"));
+        assertTrue(NOT_MET.matcher(lengthRule).find(),
+            "a password over the server's limit must say its length rule is not met; it reads \"" + lengthRule + "\"");
     }
 
     // ---- LkIconBtn and row context ----
@@ -446,6 +462,22 @@ class MinorA11yTest {
     // ---- page titles ----
 
     @Test
+    void GivenTheEventPageInEditMode_WhenItIsEntered_ThenItsDocumentTitleSaysEditNotCreate() {
+        ViewHarness.signInMember();
+        EventManagementPresenter presenter = mock(EventManagementPresenter.class);
+        when(presenter.load(any(), eq(5))).thenReturn(new EventManagementPresenter.LoadOutcome.Success(
+            new EventDetailDTO("5", "Coldplay", 4.5, "Live", EventCategory.CONCERT, null, "3", "Acme",
+                EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of("Coldplay"), 50.0)));
+        EventManagementView view = new EventManagementView(presenter);
+
+        view.beforeEnter(routeTo("eventId", "5"));
+
+        String title = documentTitle(view);
+        assertTrue(title.contains("Edit") && !title.contains("Create"),
+            "editing an event must not be titled as creating one (HasDynamicTitle); the title is \"" + title + "\"");
+    }
+
+    @Test
     void GivenTheEventPageInCreateMode_WhenItIsEntered_ThenItsDocumentTitleSaysCreateNotEdit() {
         ViewHarness.signInMember();
         EventManagementPresenter presenter = mock(EventManagementPresenter.class);
@@ -478,6 +510,8 @@ class MinorA11yTest {
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
 
         String text = A11y.text(view.getElement());
+        assertTrue(text.contains("Complaints members have sent to the TicketHub team."),
+            "the subtitle must say what the queue holds, in words: " + text);
         assertFalse(text.contains("type=COMPLAINT"),
             "the subtitle must not show the internal \"Conversation type=COMPLAINT\": " + text);
     }
@@ -535,6 +569,7 @@ class MinorA11yTest {
                 new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5)),
             new SystemAnalyticsPresenter.Outcome.Failure("analytics-down"));
         SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime);
+        harness.attach(view);
         String loadedAt = displayTime.formatNow(TIME_OF_DAY);
         clock.advance(Duration.ofMinutes(5));
 
@@ -672,7 +707,7 @@ class MinorA11yTest {
     // ---- ReceiptView refund badges ----
 
     @Test
-    void GivenAPartlyRefundedReceipt_WhenItRenders_ThenTheRefundStatusSaysPartlyNotThreeTicks() {
+    void GivenAPartlyRefundedReceipt_WhenItRenders_ThenTheRefundStatusSaysPartly() {
         MemberAccountService accountService = mock(MemberAccountService.class);
         when(accountService.viewMyReceipt(MEMBER_TOKEN, ORDER_ID)).thenReturn(receipt(RefundStatus.PARTIAL));
         SessionIdentity identity = mock(SessionIdentity.class);
@@ -701,7 +736,9 @@ class MinorA11yTest {
         view.beforeEnter(routeTo("eventId", "5", "zoneId", "8"));
 
         String text = A11y.text(view.getElement());
-        assertFalse(Pattern.compile("(?i)\\bgreen\\b").matcher(text).find(),
+        assertTrue(Pattern.compile("(?i)\\bavailable seat\\b").matcher(text).find(),
+            "the instruction must say which seats to choose by their state, \"an available seat\": " + text);
+        assertFalse(Pattern.compile("(?i)\\b(green|blue)\\b").matcher(text).find(),
             "an instruction must not name a colour (\"click a green seat\"), which a colour-blind user cannot "
                 + "follow; say \"an available seat\": " + text);
     }
@@ -723,6 +760,7 @@ class MinorA11yTest {
         ViewHarness.signInAdmin();
         AdminSendMessagesView view = sendMessagesView();
 
+        List<Element> groups = new ArrayList<>();
         for (String choice : List.of("All members", "All producers")) {
             Element control = A11y.elements(view, e -> choice.equals(A11y.name(e)) && !A11y.role(e).isEmpty())
                 .stream()
@@ -735,7 +773,10 @@ class MinorA11yTest {
                 "\"" + choice + "\" must sit in a radio group (role=radiogroup or a RadioButtonGroup): "
                     + A11y.describe(control)));
             assertFalse(groupName(group).isBlank(), "the radio group must be named: " + A11y.describe(group));
+            groups.add(group);
         }
+        // Two radios in two groups can both be on, which is the defect the radios fix.
+        assertEquals(groups.get(0), groups.get(1), "\"All members\" and \"All producers\" must share one group");
     }
 
     // ---- assertions ------------------------------------------------------------------------------
@@ -981,11 +1022,12 @@ class MinorA11yTest {
         return presenter;
     }
 
-    private static NewInquiryView inquiryWithAcmeChosen() {
+    private NewInquiryView inquiryWithAcmeChosen() {
         NewInquiryPresenter presenter = mock(NewInquiryPresenter.class);
         when(presenter.searchCompanies(anyString())).thenReturn(new NewInquiryPresenter.SearchOutcome.Success(
             List.of(new CompanySummaryDTO(3, "Acme", null))));
         NewInquiryView view = new NewInquiryView(presenter);
+        harness.attach(view);
         field(view, TextField.class, "Production company").setValue("Ac");
         click(buttons(view, "Acme").get(0));
         return view;

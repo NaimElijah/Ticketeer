@@ -37,6 +37,8 @@ import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.testutil.LogCapture;
+import static org.mockito.Mockito.verifyNoInteractions;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 class AdminComplaintQueuePresenterTest {
 
@@ -148,7 +150,7 @@ class AdminComplaintQueuePresenterTest {
     @Test
     void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(messaging.viewAllComplaints(eq(TOKEN), any()))
-            .thenThrow(new RuntimeException("not an admin"));
+            .thenThrow(new RuntimeException("could not execute statement"));
 
         AdminComplaintQueuePresenter.Outcome outcome = presenter.load(TOKEN, "All");
 
@@ -183,7 +185,7 @@ class AdminComplaintQueuePresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenRespond_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("already resolved"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).respondToComplaint(anyString(), any());
 
         AdminComplaintQueuePresenter.ActionOutcome outcome = presenter.respond(TOKEN, "c1", "late");
@@ -204,14 +206,6 @@ class AdminComplaintQueuePresenterTest {
     }
 
     // -- loadOne --------------------------------------------------------------
-
-    @Test
-    void GivenANullToken_WhenLoadOne_ThenReturnsNotAuthenticatedWithoutViewingTheConversation() {
-        AdminComplaintQueuePresenter.SingleOutcome outcome = presenter.loadOne(null, "c1");
-
-        assertInstanceOf(AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated.class, outcome);
-        verify(messaging, never()).viewConversation(anyString(), anyString());
-    }
 
     @Test
     void GivenAnExistingConversation_WhenLoadOne_ThenReturnsConversation() {
@@ -369,7 +363,7 @@ class AdminComplaintQueuePresenterTest {
     // ---- The respond page survives a failed mark-read (#187) ----
     //
     // Marking the thread read is a side effect of opening it. When the mark fails, the reader still
-    // gets the thread; only an expired session stops the page.
+    // gets the thread; only a dead session, expired or revoked, stops the page.
 
     @Test
     void GivenTheMarkFailsInternally_WhenLoadOne_ThenTheThreadIsStillShown() {
@@ -429,5 +423,40 @@ class AdminComplaintQueuePresenterTest {
         InOrder order = inOrder(messaging);
         order.verify(messaging).markConversationRead(TOKEN, "c1");
         order.verify(messaging).viewConversation(TOKEN, "c1");
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewAllComplaints(eq(TOKEN), any())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(AdminComplaintQueuePresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN, "All"));
+    }
+
+    // ---- a signed-out respond page touches nothing; a thread or queue that fails to load says why (#189) ----
+
+    @Test
+    void GivenANullToken_WhenLoadOne_ThenNotAuthenticatedAndNothingIsViewedOrMarkedRead() {
+        assertEquals(new AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(null, "c1"));
+
+        verifyNoInteractions(messaging);
+    }
+
+    @Test
+    void GivenTheThreadFailsToLoad_WhenLoadOne_ThenFailureCarriesTheGenericText() {
+        when(messaging.viewConversation(TOKEN, "c1"))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select * from conversations]"));
+
+        assertEquals(new AdminComplaintQueuePresenter.SingleOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.loadOne(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheQueueRefusesTheCaller_WhenLoad_ThenFailureCarriesTheRule() {
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view all complaints");
+        when(messaging.viewAllComplaints(eq(TOKEN), any())).thenThrow(refusal);
+
+        assertEquals(new AdminComplaintQueuePresenter.Outcome.Failure(refusal.getMessage()), presenter.load(TOKEN, "All"));
     }
 }

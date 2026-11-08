@@ -37,6 +37,7 @@ import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.testutil.LogCapture;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class CompanyInquiryInboxPresenterTest {
 
@@ -189,7 +190,7 @@ class CompanyInquiryInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).sendMessage(anyString(), any());
 
         CompanyInquiryInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "late reply");
@@ -229,7 +230,7 @@ class CompanyInquiryInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenClose_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("already closed"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).closeConversation(anyString(), anyString());
 
         CompanyInquiryInboxPresenter.ActionOutcome outcome = presenter.close(TOKEN, "c1");
@@ -250,14 +251,6 @@ class CompanyInquiryInboxPresenterTest {
     }
 
     // -- loadOne --------------------------------------------------------------
-
-    @Test
-    void GivenANullToken_WhenLoadOne_ThenReturnsNotAuthenticatedWithoutViewingTheConversation() {
-        CompanyInquiryInboxPresenter.SingleOutcome outcome = presenter.loadOne(null, "c1");
-
-        assertInstanceOf(CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated.class, outcome);
-        verify(messaging, never()).viewConversation(anyString(), anyString());
-    }
 
     @Test
     void GivenAnExistingConversation_WhenLoadOne_ThenReturnsConversation() {
@@ -407,7 +400,7 @@ class CompanyInquiryInboxPresenterTest {
     // ---- The respond page survives a failed mark-read (#187) ----
     //
     // Marking the thread read is a side effect of opening it. When the mark fails, the reader still
-    // gets the thread; only an expired session stops the page.
+    // gets the thread; only a dead session, expired or revoked, stops the page.
 
     @Test
     void GivenTheMarkFailsInternally_WhenLoadOne_ThenTheThreadIsStillShown() {
@@ -467,5 +460,47 @@ class CompanyInquiryInboxPresenterTest {
         InOrder order = inOrder(messaging);
         order.verify(messaging).markConversationRead(TOKEN, "c1");
         order.verify(messaging).viewConversation(TOKEN, "c1");
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoadFor_ThenReturnsNotAuthenticated() {
+        when(companyManagement.findMyCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(CompanyInquiryInboxPresenter.Outcome.NotAuthenticated.class, presenter.loadFor(TOKEN, 7));
+    }
+
+    // ---- a signed-out respond page touches nothing; a dead token or a failed read on the second call (#189) ----
+
+    @Test
+    void GivenANullToken_WhenLoadOne_ThenNotAuthenticatedAndNothingIsViewedOrMarkedRead() {
+        assertEquals(new CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(null, "c1"));
+
+        verifyNoInteractions(messaging, companyManagement);
+    }
+
+    @Test
+    void GivenATokenRevokedBetweenTheCompaniesAndTheInbox_WhenLoadFor_ThenReturnsNotAuthenticated() {
+        when(companyManagement.findMyCompanies(TOKEN)).thenReturn(List.of(company(7, "Acme")));
+        when(messaging.viewCompanyInbox(TOKEN, 7)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new CompanyInquiryInboxPresenter.Outcome.NotAuthenticated(), presenter.loadFor(TOKEN, 7));
+    }
+
+    @Test
+    void GivenATokenRevokedAfterTheMark_WhenLoadOne_ThenReturnsNotAuthenticated() {
+        when(messaging.viewConversation(TOKEN, "c1")).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new CompanyInquiryInboxPresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheThreadFailsToLoad_WhenLoadOne_ThenFailureCarriesTheGenericText() {
+        when(messaging.viewConversation(TOKEN, "c1"))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select * from conversations]"));
+
+        assertEquals(new CompanyInquiryInboxPresenter.SingleOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.loadOne(TOKEN, "c1"));
     }
 }

@@ -71,6 +71,7 @@ class SignInGuestSessionTest {
         LoginPresenter presenter = mock(LoginPresenter.class);
         when(presenter.attemptLogin(any(), any(), any())).thenReturn(new LoginPresenter.Outcome.InvalidCredentials());
         LoginView view = new LoginView(presenter, sessionIdentity);
+        harness.attach(view);
         field(view, TextField.class, "Username").setValue("alice");
         field(view, PasswordField.class, "Password").setValue("secret-pw");
 
@@ -87,6 +88,7 @@ class SignInGuestSessionTest {
         UsernameAvailabilityPresenter availability = mock(UsernameAvailabilityPresenter.class);
         when(availability.check(any())).thenReturn(new UsernameAvailabilityPresenter.Outcome.Available());
         RegisterView view = new RegisterView(presenter, availability, sessionIdentity);
+        harness.attach(view);
         field(view, TextField.class, "Username").setValue("alice");
         field(view, EmailField.class, "Email").setValue("alice@example.com");
         field(view, IntegerField.class, "Age").setValue(30);

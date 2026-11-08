@@ -11,6 +11,7 @@ import com.ticketing.system.ui.components.kit.LkPage;
 import com.ticketing.system.ui.components.kit.LkRow;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.session.OrderSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.vaadin.flow.component.Component;
@@ -83,7 +84,7 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
         title.getStyle().set("margin", "0").set("color", "#fff");
 
         String receiptDisplay = (result != null)
-            ? "Receipt #TKT-" + String.format("%05d", result.orderReceiptId())
+            ? "Receipt #TKT-" + String.format(DisplayLocale.PAGE, "%05d", result.orderReceiptId())
             : "Receipt pending";
         String totalDisplay = (result != null)
             ? Money.format(Money.toCents(result.totalCharged()))

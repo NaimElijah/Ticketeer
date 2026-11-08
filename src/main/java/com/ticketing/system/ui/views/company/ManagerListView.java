@@ -22,6 +22,7 @@ import com.ticketing.system.ui.security.Capabilities;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -232,7 +233,7 @@ public class ManagerListView extends LkPage {
     }
 
     private static String humanize(String enumName) {
-        return Arrays.stream(enumName.toLowerCase().split("_"))
+        return Arrays.stream(enumName.toLowerCase(DisplayLocale.PAGE).split("_"))
             .reduce((a, b) -> a + " " + b)
             .map(s -> Character.toUpperCase(s.charAt(0)) + s.substring(1))
             .orElse(enumName);

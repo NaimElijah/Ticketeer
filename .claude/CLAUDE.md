@@ -46,7 +46,7 @@ unreadable or refused by the parser (a bare `expect-error`, for one) stops the b
 
 - Run tests from a shell that sets none of `application.yml`'s variables (`JWT_SECRET`, `PLATFORM_ADMIN_PASSWORD`, …) and none named after a property (`SPRING_DATASOURCE_URL`): most outrank `application-test.yml`, whose closing comment lists the known ones (#261).
 - `-Pno-vaadin` skips Vaadin's `prepare-frontend`, which tests don't need. Tests only; the app then serves no views. The Windows NPE it once worked around no longer reproduces (24.7.0 and 24.10.7, #40).
-- **Don't run the full suite locally.** About 3,800 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
+- **Don't run the full suite locally.** Over 4,000 tests boot many Spring contexts, and a full run has been killed for low memory on the maintainer's Windows machine. Run the targeted classes, treat CI as the full-suite gate (say so in the PR), and ask before a full local run.
 - CI (`.github/workflows/ci.yml`): `mvn -B verify` on ubuntu with Temurin 21, for pushes and PRs to `main`/`dev`, with the JVM in UTC ("Build, test and package", the required check), and again with `-Pno-vaadin` in Asia/Jerusalem ("Test in Asia/Jerusalem", not required yet). A third job, "Production artifact", packages with `-Pproduction`, fails if the jar holds H2, Vaadin's dev tooling or Hilla (ADR-013), and boots it against a PostgreSQL service until `/actuator/health` is UP (not required yet). `.github/workflows/dependency-audit.yml` submits the resolved Maven tree to the dependency graph, and on PRs its "Dependency review" fails a PR that adds or upgrades to a dependency with a high or critical advisory (not required yet, #200; accepted ones go in `allow-ghsas` with their ADR, ADR-010). Nothing watches the merged tree until Dependabot alerts are on (#202). Dependabot (`.github/dependabot.yml`) opens weekly update PRs into `dev`, ignoring majors, Jackson and Netty minors, Vaadin past 24.10.7 and ArchUnit (rules in ADR-010, reasons in ADR-009); it reads the file from `main`, so it starts once that file is promoted. There is no format or lint step.
 - `.mvn/wrapper/maven-wrapper.properties` pins `distributionSha256Sum`: bump it with `distributionUrl`, or `./mvnw` refuses the download. Apache publishes only SHA-512, so check the zip against that and compute the SHA-256 from the checked zip.
 - To run tests in another JVM zone locally, add `"-DargLine=-Duser.timezone=Asia/Jerusalem"` (or `UTC`). It reaches the surefire and failsafe forks, and overrides any `argLine` the pom gains later (e.g. a JaCoCo agent), so CI's command must then append to it.
@@ -131,8 +131,13 @@ Events are in-process, with no outbox and no Modulith event registry. Catalog �
 allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui never depends on
 another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
 stay open, #208), the module map,
-`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules;
-the clock, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
+`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules,
+ui formats no date or number, and changes no case, in the JVM's locale (no `DateTimeFormatter.ofPattern(String)` or
+`ofLocalized…`, `DateTimeFormatterBuilder.toFormatter()`, `String.format(String, …)` or `formatted`, `NumberFormat`'s
+`get…Instance()`, `new DecimalFormat()` or `new DecimalFormat(String)`, `new MessageFormat(String)` or the static
+`MessageFormat.format`, `Locale.getDefault`, or `toLowerCase()`/`toUpperCase()`; pass `DisplayLocale.PAGE` for page text,
+`Locale.ROOT` for machine text, #189, [ADR-027](../docs/ADRs/ADR-027-pages-format-in-a-fixed-locale.md));
+the clock, locale, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
 they fail on a fixture), `TestConventionsTest` (every test name reads `Given…_When…_Then…`, [ADR-023](../docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md); every `*IT` carries `@RunsOnPostgres`) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by

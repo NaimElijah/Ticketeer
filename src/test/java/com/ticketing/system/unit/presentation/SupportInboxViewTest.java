@@ -60,6 +60,7 @@ class SupportInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheViewIsBuilt_ThenNoThreadIsOpenedAndEveryBadgeStays() {
         SupportInboxView view = new SupportInboxView(presenter, displayTime());
+        harness.attach(view);
 
         verify(presenter, never()).open(any(), any(), any());
         assertEquals(List.of("2", "2"), rows(view).stream().map(InboxViewHarness::badge).toList());
@@ -68,6 +69,7 @@ class SupportInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheReaderClicksTheSecondRow_ThenOnlyThatThreadIsOpened() {
         SupportInboxView view = new SupportInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -84,6 +86,7 @@ class SupportInboxViewTest {
     void GivenTheSessionEnded_WhenTheReaderOpensARow_ThenTheSessionExpiredToastShowsAndTheBadgeStays() {
         when(presenter.open(any(), any(), any())).thenReturn(new SupportInboxPresenter.ActionOutcome.NotAuthenticated());
         SupportInboxView view = new SupportInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -91,10 +94,23 @@ class SupportInboxViewTest {
         assertEquals("2", badge(rows(view).get(1)));
     }
 
+    // The view selects the first row on its own, without opening it; a click on that row still opens it (#189).
+    @Test
+    void GivenTheRowTheViewSelectedOnItsOwn_WhenTheReaderClicksIt_ThenItIsOpened() {
+        SupportInboxView view = new SupportInboxView(presenter, displayTime());
+        harness.attach(view);
+        verify(presenter, never()).open(any(), any(), any());
+
+        click(rows(view).get(0));
+
+        verify(presenter).open(any(), eq(first), any());
+    }
+
     @Test
     void GivenTheOpenFails_WhenTheReaderOpensARow_ThenNoToastShowsAndTheBadgeStays() {
         when(presenter.open(any(), any(), any())).thenReturn(new SupportInboxPresenter.ActionOutcome.Failure("reason"));
         SupportInboxView view = new SupportInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -112,6 +128,7 @@ class SupportInboxViewTest {
             return new SupportInboxPresenter.ActionOutcome.Success();
         });
         SupportInboxView view = new SupportInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 

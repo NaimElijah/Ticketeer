@@ -22,6 +22,7 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.ReceiptPresenter;
 import com.ticketing.system.ui.presenters.account.RefundPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.security.Capability;
@@ -58,8 +59,8 @@ import java.util.Optional;
 @RequireCapability(Capability.MEMBER_ACCOUNT)
 public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
-    private static final DateTimeFormatter EVENT_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", Locale.US);
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", DisplayLocale.PAGE);
+    private static final DateTimeFormatter EVENT_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm zzz", DisplayLocale.PAGE);
 
     private final ReceiptPresenter presenter;
     private final RefundPresenter refundPresenter;
@@ -241,7 +242,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
     private Div statBlock(String label, Component value) {
         Div block = new Div();
-        Span l = new Span(label.toUpperCase());
+        Span l = new Span(label.toUpperCase(DisplayLocale.PAGE));
         l.getStyle()
                 .set("font-size", "0.66rem").set("font-weight", "800").set("letter-spacing", "0.1em")
                 .set("color", "var(--muted)").set("display", "block").set("margin-bottom", "4px");
@@ -423,7 +424,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     }
 
     private static String[] gradientFor(String cat) {
-        return switch (cat == null ? "" : cat.toLowerCase()) {
+        return switch (cat == null ? "" : cat.toLowerCase(Locale.ROOT)) {
             case "concert", "music" -> new String[] { "#8b5cf6", "#ec4899" };
             case "sport", "sports" -> new String[] { "#0ea5e9", "#10b981" };
             case "theatre", "theater" -> new String[] { "#dc2626", "#f59e0b" };
@@ -433,7 +434,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     }
 
     private static String money(double amount) {
-        return String.format("$%,.2f", amount);
+        return String.format(DisplayLocale.PAGE, "$%,.2f", amount);
     }
 
     // A ticket names its category by its one label (EventCategoryLabels), as the browse page does (#187).

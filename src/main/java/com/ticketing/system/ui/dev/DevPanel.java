@@ -20,6 +20,7 @@ import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.MockPermissions;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -443,7 +444,7 @@ public final class DevPanel {
     }
 
     private static String prettify(String snake) {
-        String[] parts = snake.toLowerCase().split("_");
+        String[] parts = snake.toLowerCase(DisplayLocale.PAGE).split("_");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < parts.length; i++) {
             if (parts[i].isEmpty()) continue;

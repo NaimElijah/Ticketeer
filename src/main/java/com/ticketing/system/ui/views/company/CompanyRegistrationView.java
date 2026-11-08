@@ -6,6 +6,7 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -39,6 +40,9 @@ import jakarta.annotation.security.PermitAll;
 @RequireCapability(Capability.REGISTER_COMPANY)
 public class CompanyRegistrationView extends LkPage {
 
+    private static final String ENTER_NAME = "Please fill in a company name.";
+    private static final String ENTER_DESCRIPTION = "Please provide a company description.";
+
     private final CompanyRegistrationPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
 
@@ -60,11 +64,13 @@ public class CompanyRegistrationView extends LkPage {
 
         name.setPlaceholder("e.g. BlueWave Productions");
         name.setRequired(true);
+        LkFieldRules.sayWhenEmpty(name, ENTER_NAME);
         name.setWidthFull();
         LkTextLimit.apply(name);
 
         description.setPlaceholder("What kind of events does this company produce?");
         description.setRequired(true);
+        LkFieldRules.sayWhenEmpty(description, ENTER_DESCRIPTION);
         description.setMinHeight("120px");
         description.setWidthFull();
         LkTextLimit.apply(description);
@@ -91,13 +97,13 @@ public class CompanyRegistrationView extends LkPage {
     private void attemptRegister() {
         errors.clear();
         if (name.isEmpty()) {
-            refuse(name, "Please fill in a company name.");
+            refuse(name, ENTER_NAME);
             return;
         }
 
         String descriptionValue = description.getValue() == null ? "" : description.getValue().trim();
         if (descriptionValue.isEmpty()) {
-            refuse(description, "Please provide a company description.");
+            refuse(description, ENTER_DESCRIPTION);
             return;
         }
 

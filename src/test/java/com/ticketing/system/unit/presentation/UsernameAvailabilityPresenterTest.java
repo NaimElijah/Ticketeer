@@ -12,6 +12,11 @@ import com.ticketing.system.ui.presenters.auth.UsernameAvailabilityPresenter.Out
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import jakarta.persistence.PersistenceException;
+import com.ticketing.system.ui.support.ServiceErrors;
+import static org.mockito.Mockito.verifyNoInteractions;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class UsernameAvailabilityPresenterTest {
 
@@ -78,10 +83,38 @@ class UsernameAvailabilityPresenterTest {
     }
 
     @Test
-    void GivenTheServiceThrowsIllegalStateException_WhenCheck_ThenReturnsFailureWithMessage() {
-        when(memberQueryService.usernameExists("anyone")).thenThrow(new IllegalStateException("db down"));
+    void GivenTheServiceThrowsIllegalStateException_WhenCheck_ThenFailureCarriesItsMessage() {
+        when(memberQueryService.usernameExists("anyone")).thenThrow(new IllegalStateException("Name checks are paused"));
 
         Outcome.Failure failure = assertInstanceOf(Outcome.Failure.class, presenter.check("anyone"));
-        assertEquals("db down", failure.reason());
+        assertEquals("Name checks are paused", failure.reason());
+    }
+
+    // ---- an internal failure reads as generic text, never as its own (#189) ----
+
+    @Test
+    void GivenTheLookupFailsInternally_WhenCheck_ThenFailureCarriesTheGenericText() {
+        when(memberQueryService.usernameExists("anyone"))
+            .thenThrow(new PersistenceException("could not prepare statement [select * from users]"));
+
+        assertEquals(new Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE), presenter.check("anyone"));
+    }
+
+    // ---- the length bounds, 3 to 32 characters (#189) ----
+
+    @ParameterizedTest
+    @ValueSource(ints = {3, 32})
+    void GivenAFreeNameOnALengthBound_WhenCheck_ThenAvailable(int length) {
+        String name = "a".repeat(length);
+        when(memberQueryService.usernameExists(name)).thenReturn(false);
+
+        assertEquals(new Outcome.Available(), presenter.check(name));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {2, 33})
+    void GivenANameJustOutsideTheLengthBounds_WhenCheck_ThenInvalidFormatAndNoLookup(int length) {
+        assertEquals(new Outcome.InvalidFormat(), presenter.check("a".repeat(length)));
+        verifyNoInteractions(memberQueryService);
     }
 }

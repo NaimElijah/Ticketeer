@@ -13,6 +13,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
 import com.ticketing.system.ui.components.kit.LkCountdown;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -21,6 +22,7 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.CartBadgeCache;
 import com.ticketing.system.ui.session.OrderSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.DetachEvent;
@@ -54,6 +56,14 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
     private static final String EXPIRY_FORMAT = "MM / YY";
     private static final String GUEST_EMAIL_NEEDED = "Please enter a valid email address.";
     private static final String GUEST_AGE_NEEDED = "Please enter your age.";
+    private static final String ENTER_CARDHOLDER = "Enter the name on the card.";
+    private static final String ENTER_CARD_NUMBER = "Enter the card number.";
+    private static final String ENTER_EXPIRY = "Enter the expiry date, as " + EXPIRY_FORMAT + ".";
+    private static final String ENTER_CVC = "Enter the security code.";
+    private static final String ENTER_EMAIL = "Enter your email address.";
+    private static final String EMAIL_FORMAT = "Enter an email address like you@example.com.";
+    private static final String ENTER_AGE = "Enter your age.";
+    private static final String AGE_WHOLE_NUMBER = "Enter your age as a whole number.";
 
     private final CheckoutPresenter presenter;
     private final Clock clock;
@@ -350,12 +360,14 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         // The cc-* tokens let a browser fill the card from its saved details (#188, WCAG 1.3.5).
         cardholder.setPlaceholder("Name on card");
         cardholder.setRequired(true);
+        LkFieldRules.sayWhenEmpty(cardholder, ENTER_CARDHOLDER);
         cardholder.setAutocomplete(Autocomplete.CC_NAME);
         cardholder.setWidthFull();
 
         cardNumber.setPlaceholder("1234 5678 9012 3456");
         cardNumber.setSuffixComponent(new LkIcon("card", 16));
         cardNumber.setRequired(true);
+        LkFieldRules.sayWhenEmpty(cardNumber, ENTER_CARD_NUMBER);
         cardNumber.setAutocomplete(Autocomplete.CC_NUMBER);
         cardNumber.setWidthFull();
 
@@ -363,9 +375,11 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         // The placeholder goes once the user types; the helper text keeps the format in view (#188).
         expiry.setHelperText(EXPIRY_FORMAT);
         expiry.setRequired(true);
+        LkFieldRules.sayWhenEmpty(expiry, ENTER_EXPIRY);
         expiry.setAutocomplete(Autocomplete.CC_EXP);
         cvc.setPlaceholder("123");
         cvc.setRequired(true);
+        LkFieldRules.sayWhenEmpty(cvc, ENTER_CVC);
         cvc.setAutocomplete(Autocomplete.CC_CSC);
 
         LkRow expiryCvc = new LkRow().gap(12);
@@ -378,6 +392,10 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         if (!isMember) {
             guestEmail.setPlaceholder("you@example.com");
             guestEmail.setRequired(true);
+            // Each rule the field checks itself gets its words, or it turns red with nothing saying why (#189).
+            guestEmail.setI18n(new EmailField.EmailFieldI18n()
+                .setRequiredErrorMessage(ENTER_EMAIL)
+                .setPatternErrorMessage(EMAIL_FORMAT));
             guestEmail.setAutocomplete(Autocomplete.EMAIL);
             guestEmail.setWidthFull();
             // The platform sends no email yet (#102), so the field promises none.
@@ -387,6 +405,12 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             guestAge.setMin(1);
             guestAge.setMax(120);
             guestAge.setRequired(true);
+            String ageRange = "Enter an age from " + guestAge.getMin() + " to " + guestAge.getMax() + ".";
+            guestAge.setI18n(new IntegerField.IntegerFieldI18n()
+                .setRequiredErrorMessage(ENTER_AGE)
+                .setBadInputErrorMessage(AGE_WHOLE_NUMBER)
+                .setMinErrorMessage(ageRange)
+                .setMaxErrorMessage(ageRange));
             guestAge.setHelperText("Required to verify age-restricted events.");
             guestAge.setWidthFull();
 
@@ -426,10 +450,10 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
             return;
         }
         paymentErrors.clear();
-        rejectIfEmpty(cardholder, "Enter the name on the card.");
-        rejectIfEmpty(cardNumber, "Enter the card number.");
-        rejectIfEmpty(expiry, "Enter the expiry date, as " + EXPIRY_FORMAT + ".");
-        rejectIfEmpty(cvc, "Enter the security code.");
+        rejectIfEmpty(cardholder, ENTER_CARDHOLDER);
+        rejectIfEmpty(cardNumber, ENTER_CARD_NUMBER);
+        rejectIfEmpty(expiry, ENTER_EXPIRY);
+        rejectIfEmpty(cvc, ENTER_CVC);
         if (!paymentErrors.isEmpty()) {
             refusePayment("Please fill in every payment field.");
             return;
@@ -574,6 +598,6 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         }
         long abs = Math.abs(cents);
         String sign = cents < 0 ? "-" : "";
-        return sign + "$" + (abs / 100) + "." + String.format("%02d", abs % 100);
+        return sign + "$" + (abs / 100) + "." + String.format(DisplayLocale.PAGE, "%02d", abs % 100);
     }
 }

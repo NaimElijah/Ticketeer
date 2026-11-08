@@ -29,6 +29,8 @@ import com.ticketing.system.ui.support.ServiceErrors;
 
 import ch.qos.logback.classic.Level;
 import jakarta.persistence.PersistenceException;
+import java.time.LocalDateTime;
+import com.ticketing.system.shared.dto.ActiveOrderDTO;
 
 /**
  * {@link CartBadgePresenter#loadBadge()} for a guest whose session is live, resolved by a real
@@ -126,5 +128,34 @@ class CartBadgePresenterTest {
     private String loggedFailures() {
         return "CartBadgePresenter WARN " + presenterLog.messagesAt(Level.WARN)
                 + ", ServiceErrors ERROR " + serviceErrorsLog.messagesAt(Level.ERROR);
+    }
+
+    // ---- the badge's count and time left, and no badge for an empty cart (#189) ----
+
+    private static final LocalDateTime ADDED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
+    @Test
+    void GivenACartOfTwoTickets_WhenLoadBadge_ThenTheCountAndTheSecondsLeft() {
+        when(reservationService.viewMyActiveOrder(GUEST_SESSION_ID)).thenReturn(new ActiveOrderDTO(null, GUEST_SESSION_ID,
+            ADDED_AT, 420, 120.5, List.of(
+                new ActiveOrderDTO.CartLineDTO(3, "Coldplay", 9, "A1", 75.0, ADDED_AT),
+                new ActiveOrderDTO.CartLineDTO(3, "Coldplay", 10, null, 45.5, ADDED_AT))));
+
+        assertEquals(new CartBadgePresenter.Outcome.Cart(2, 420), presenter.loadBadge());
+    }
+
+    @Test
+    void GivenNoActiveOrder_WhenLoadBadge_ThenEmpty() {
+        when(reservationService.viewMyActiveOrder(GUEST_SESSION_ID)).thenReturn(null);
+
+        assertEquals(new CartBadgePresenter.Outcome.Empty(), presenter.loadBadge());
+    }
+
+    @Test
+    void GivenAnOrderWithNoLines_WhenLoadBadge_ThenEmpty() {
+        when(reservationService.viewMyActiveOrder(GUEST_SESSION_ID))
+            .thenReturn(new ActiveOrderDTO(null, GUEST_SESSION_ID, ADDED_AT, 420, 0, List.of()));
+
+        assertEquals(new CartBadgePresenter.Outcome.Empty(), presenter.loadBadge());
     }
 }

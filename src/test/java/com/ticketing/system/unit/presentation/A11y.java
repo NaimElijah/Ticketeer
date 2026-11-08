@@ -449,8 +449,8 @@ final class A11y {
      * Activates {@code e} as a click does: through its component's click listeners when it has any (they
      * expect a click's coordinates, which a bare DOM event lacks), else as a DOM click.
      *
-     * @throws AssertionError when {@code e} or an ancestor is hidden, or it is disabled, as no visitor can
-     *     click it then
+     * @throws AssertionError when {@code e} is attached to no UI, it or an ancestor is hidden, or it is disabled,
+     *     as no visitor can click it then
      */
     static void activate(Element e) {
         requireActionable(e, "activate");
@@ -463,15 +463,20 @@ final class A11y {
     }
 
     /**
-     * Fails unless a visitor could {@code action} {@code e}: the browser renders it and every ancestor (none
-     * is hidden or a closed popover or dialog), and it is enabled. Flow hands a component event to its
-     * listeners whatever the component's state, while the browser never sends a click on a control it does
-     * not show or that is disabled, so a test without this check would prove a control works that no visitor
-     * can use.
+     * Fails unless a visitor could {@code action} {@code e}: it is attached to a UI, the browser renders it and
+     * every ancestor (none is hidden or a closed popover or dialog), and it is enabled. Flow hands a component
+     * event to its listeners whatever the component's state, while the browser never sends a click on a control
+     * it does not show or that is disabled, nor on one that a rebuild removed or that was never attached, so a
+     * test without this check would prove a control works that no visitor can use.
      *
-     * @throws AssertionError naming the hidden element, the closed overlay or the disabled state
+     * @throws AssertionError naming the detached element, the hidden element, the closed overlay or the disabled
+     *     state
      */
     static void requireActionable(Element e, String action) {
+        if (!e.getNode().isAttached()) {
+            throw new AssertionError("cannot " + action + " " + describe(e)
+                + ": it is attached to no UI, so the browser does not show it");
+        }
         Optional<Element> unrendered = unrendered(e, null);
         if (unrendered.isPresent()) {
             Element a = unrendered.get();

@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,9 @@ import com.ticketing.system.ui.views.company.OwnerDashboardView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.HasElement;
 import com.vaadin.flow.component.applayout.AppLayout;
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.router.AfterNavigationEvent;
 import com.vaadin.flow.router.AfterNavigationObserver;
@@ -149,6 +153,27 @@ class NavigationLandmarksTest {
         assertFocusMovesToH1(adminLayout());
     }
 
+    // PageFocus focuses the first h1 that shows, if the page has one (#189).
+    @Test
+    void GivenAPageWhoseFirstH1IsHidden_WhenTheShellNavigatesToIt_ThenFocusEndsOnTheFirstH1ThatShows() {
+        H1 hidden = new H1("Hidden title");
+        hidden.setVisible(false);
+        H1 shown = new H1("Shown title");
+
+        showInShell(mainLayout(), new Div(hidden, shown));
+
+        assertEquals(Optional.of(shown.getElement()), ViewHarness.focusEndsOn(harness.focusTargets()),
+            "focus must end on the first h1 a visitor sees");
+    }
+
+    @Test
+    void GivenAPageWithNoH1_WhenTheShellNavigatesToIt_ThenNoFocusCallIsSent() {
+        showInShell(mainLayout(), new Div(new Span("No heading here")));
+
+        assertEquals(List.of(), harness.focusTargets().stream().map(A11y::describe).toList(),
+            "with no h1 to announce, focus stays where it is");
+    }
+
     // ---- helpers ---------------------------------------------------------------------------------
 
     private static LkTopBar topBarWithBrowseActive() {
@@ -213,13 +238,17 @@ class NavigationLandmarksTest {
     // Shows a page in the shell as the router does: the page becomes the content, then the shell hears of
     // the navigation.
     private LkPage navigateTo(AppLayout layout) {
-        harness.attach(layout);
         LkPage page = new LkPage(PAGE_TITLE);
-        layout.showRouterLayoutContent(page);
+        showInShell(layout, page);
+        return page;
+    }
+
+    private void showInShell(AppLayout layout, Component page) {
+        harness.attach(layout);
+        layout.showRouterLayoutContent((HasElement) page);
         AfterNavigationEvent event = mock(AfterNavigationEvent.class);
         when(event.getActiveChain()).thenReturn(List.<HasElement>of(page, layout));
         ((AfterNavigationObserver) layout).afterNavigation(event);
-        return page;
     }
 
     private void assertFirstTabStopSkipsToContent(AppLayout layout) {
@@ -236,6 +265,23 @@ class NavigationLandmarksTest {
         assertTrue(!target.equals(layout.getElement())
                 && (A11y.within(page.getElement(), target) || A11y.within(target, page.getElement())),
             "the skip link must lead to the page's content, not " + A11y.describe(target));
+        assertSkipLinkMovesFocusTo(first, target);
+    }
+
+    // The page sets <base href>, so the browser would resolve the link's "#id" against the app's root and leave
+    // the page: the link must be left alone by the client router and move focus itself, to a target that can
+    // take focus from a script (#189).
+    private void assertSkipLinkMovesFocusTo(Element skipLink, Element target) {
+        assertTrue(skipLink.hasAttribute("router-ignore"),
+            "the client router must leave the skip link alone, or it navigates: " + A11y.describe(skipLink));
+        assertTrue(A11y.scriptFocusable(target),
+            "the skip link's target must take focus from a script (a tabindex): " + A11y.describe(target));
+        String targetId = target.getAttribute("id");
+        List<List<Object>> calls = harness.javaScriptCalls();
+        assertTrue(calls.stream().anyMatch(call -> call.contains(skipLink) && call.contains(targetId)
+                && String.valueOf(call.get(0)).contains("addEventListener('click'")
+                && String.valueOf(call.get(0)).contains(".focus()")),
+            "the skip link must move focus to #" + targetId + " on a click; scripts sent: " + calls);
     }
 
     private void assertFocusMovesToH1(AppLayout layout) {
@@ -244,17 +290,10 @@ class NavigationLandmarksTest {
         Element h1 = A11y.elements(page, e -> "h1".equals(e.getTag())).get(0);
         assertEquals("-1", h1.getAttribute("tabindex"),
             "the h1 must take focus from a script without joining the Tab order (tabindex=-1)");
-        List<List<Object>> calls = harness.javaScriptCalls();
-        assertTrue(calls.stream().anyMatch(call -> focuses(call, h1)),
-            "after a navigation focus must move to the page's h1; scripts sent: " + calls);
-    }
-
-    private static boolean focuses(List<Object> call, Element h1) {
-        String expression = String.valueOf(call.get(0));
-        if (!expression.contains("focus")) {
-            return false;
-        }
-        return call.subList(1, call.size()).contains(h1) || expression.contains("h1");
+        List<Element> focused = harness.focusTargets();
+        assertEquals(Optional.of(h1), ViewHarness.focusEndsOn(focused),
+            "after a navigation focus must end on the page's h1; focus calls: "
+                + focused.stream().map(A11y::describe).toList());
     }
 
     // navbar, then drawer, then content, as vaadin-app-layout lays out its slots.

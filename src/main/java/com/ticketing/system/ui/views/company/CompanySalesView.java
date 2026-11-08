@@ -17,6 +17,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.admin.SalesDateRange;
 import com.ticketing.system.reporting.application.dto.SalesSummaryDTO;
@@ -39,7 +40,7 @@ import java.util.Map;
 @RequireCapability(Capability.VIEW_COMPANY_SALES)
 public class CompanySalesView extends LkPage {
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy", DisplayLocale.PAGE);
 
     private static final String NO_TOP_EVENT = "—";
 

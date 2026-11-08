@@ -150,7 +150,7 @@ service call).
 
 | Operation | Application-service call |
 |---|---|
-| `register <alias> <password> <email> <age>` | `AuthenticationService.register` |
+| `register <alias> <password> <email> <age>` | `AuthenticationService.register`, which refuses an age outside 1 to 120 |
 | `login <alias>` | `AuthenticationService.login` |
 | `login-admin <alias>` | `AuthenticationService.signInAsAdmin` with the configured default admin's `platform.admin.username` and `platform.admin.password`, so the file holds no password |
 | `login-admin <alias> <username> <password>` | `AuthenticationService.signInAsAdmin` with the credentials the file names |

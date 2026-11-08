@@ -22,6 +22,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -321,6 +322,6 @@ public class CompanyInquiryInboxView extends LkPage {
     /** "OPEN" → "Open", "RESPONDED" → "Responded", etc. */
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
-        return status.charAt(0) + status.substring(1).toLowerCase();
+        return status.charAt(0) + status.substring(1).toLowerCase(DisplayLocale.PAGE);
     }
 }

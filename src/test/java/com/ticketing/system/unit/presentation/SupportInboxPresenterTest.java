@@ -150,7 +150,7 @@ class SupportInboxPresenterTest {
 
     @Test
     void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed"))
+        doThrow(new RuntimeException("could not execute statement"))
             .when(service).sendMessage(anyString(), any());
 
         SupportInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "late reply");
@@ -289,5 +289,14 @@ class SupportInboxPresenterTest {
         assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
 
         assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(service.viewMyConversations(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(SupportInboxPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 }

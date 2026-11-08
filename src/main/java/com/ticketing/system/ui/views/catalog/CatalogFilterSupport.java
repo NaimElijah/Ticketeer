@@ -32,6 +32,36 @@ public final class CatalogFilterSupport {
     public static final String CUSTOM_FROM = "Start date";
     public static final String CUSTOM_TO   = "End date";
 
+    // A range filter's field checks its bounds itself and turns red when a value breaks one, so each rule needs
+    // words, or nothing says why (#189).
+
+    /** A price filter's lowest bound. */
+    public static final int PRICE_MIN = 0;
+    /** The step a price filter's value must keep from {@link #PRICE_MIN}. */
+    public static final int PRICE_STEP = 10;
+    /** What a price filter says to a value off its step. */
+    public static final String PRICE_OFF_STEP = "Enter a price in steps of " + PRICE_STEP + ", like 50.";
+    /** What a price filter says to text that is no whole number. */
+    public static final String PRICE_NOT_A_WHOLE_NUMBER = "Enter the price as a whole number.";
+    /** A rating filter's lowest bound. */
+    public static final int RATING_MIN = 0;
+    /** A rating filter's highest bound. */
+    public static final int RATING_MAX = 5;
+    /** The step a rating filter's value must keep from {@link #RATING_MIN}. */
+    public static final double RATING_STEP = 0.5;
+    /** What a rating filter says to a value outside its bounds. */
+    public static final String RATING_OUT_OF_RANGE = "Enter a rating from " + RATING_MIN + " to " + RATING_MAX + ".";
+    /** What a rating filter says to a value off its step. */
+    public static final String RATING_OFF_STEP = "Enter a rating in steps of " + RATING_STEP + ", like 3.5.";
+    /** What a rating filter says to text that is no number. */
+    public static final String RATING_NOT_A_NUMBER = "Enter the rating as a number.";
+    /** What a custom range's end date says when it is before the start date, its minimum. */
+    public static final String END_BEFORE_START = "Choose an end date on or after the start date.";
+    /** What a custom range's start date says when it is after the end date, its maximum. */
+    public static final String START_AFTER_END = "Choose a start date on or before the end date.";
+    /** What a custom range's date picker says to text that is no date. */
+    public static final String NOT_A_DATE = "Enter a valid date.";
+
     /** The category filter's options: {@link #CAT_ALL}, then every category's label ({@link EventCategoryLabels}). */
     public static final List<String> CATEGORIES =
             Stream.concat(Stream.of(CAT_ALL), EventCategoryLabels.labels().stream()).toList();
@@ -49,7 +79,9 @@ public final class CatalogFilterSupport {
         if (preset == null) return new DateWindow(null, null);
         return switch (preset) {
             case "Today" -> new DateWindow(today, today);
+            // On a Sunday the weekend is today alone, not the next one (the owner's decision, #189).
             case "This weekend" -> {
+                if (today.getDayOfWeek() == DayOfWeek.SUNDAY) yield new DateWindow(today, today);
                 LocalDate sat = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY));
                 yield new DateWindow(sat, sat.plusDays(1));
             }

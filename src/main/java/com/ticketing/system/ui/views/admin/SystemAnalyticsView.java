@@ -16,6 +16,7 @@ import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
@@ -29,7 +30,6 @@ import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.PermitAll;
 
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 
 /**
  * System Analytics dashboard (UC-46 / #43, #279). Admin-only page reached from
@@ -52,9 +52,9 @@ public class SystemAnalyticsView extends LkPage {
 
     private final SystemAnalyticsPresenter presenter;
     private final DisplayTime displayTime;
-    private static final DateTimeFormatter OPENED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.US);
+    private static final DateTimeFormatter OPENED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", DisplayLocale.PAGE);
     // Seconds, since the self-heal re-checks WSEP every 30 s by default.
-    private static final DateTimeFormatter CHECKED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", Locale.US);
+    private static final DateTimeFormatter CHECKED_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm:ss", DisplayLocale.PAGE);
     private static final String LAST_UPDATED = "Last updated ";
     // One name in both states: aria-pressed says whether it is paused, and a name that flipped as well would
     // contradict it, read as "Resume auto-refresh, pressed".
@@ -162,7 +162,7 @@ public class SystemAnalyticsView extends LkPage {
         String status = market.currentStatus();
         statusBadge.setText(status);
         statusBadge.tone(toneFor(status));
-        marketDetail.setText(String.format(
+        marketDetail.setText(String.format(DisplayLocale.PAGE,
             "%s · Default admin: %s%s",
             servicesText(market),
             market.defaultAdminPresent() ? "present" : "missing",
@@ -174,7 +174,7 @@ public class SystemAnalyticsView extends LkPage {
         if (market.lastProbedAt() == null) {
             return "Payment gateway and ticket issuer: not checked yet";
         }
-        return String.format("Payment gateway: %s · Ticket issuer: %s (at last check, %s)",
+        return String.format(DisplayLocale.PAGE, "Payment gateway: %s · Ticket issuer: %s (at last check, %s)",
             reachability(market.paymentGatewayHealthy()),
             reachability(market.ticketIssuerHealthy()),
             displayTime.format(market.lastProbedAt(), CHECKED_FMT));
@@ -207,7 +207,7 @@ public class SystemAnalyticsView extends LkPage {
     }
 
     private static String rate(double v) {
-        return String.format("%.2f", v);
+        return String.format(DisplayLocale.PAGE, "%.2f", v);
     }
 
     @Override

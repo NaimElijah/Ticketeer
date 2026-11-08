@@ -51,6 +51,7 @@ class LoginPresenterLockedTest {
         when(presenter.attemptLogin(any(), any(), any())).thenReturn(new LoginPresenter.Outcome.Locked(LOCKOUT));
         try (ViewHarness harness = new ViewHarness()) {
             LoginView view = new LoginView(presenter, mock(SessionIdentity.class));
+            harness.attach(view);
             field(view, TextField.class, "Username").setValue("alice");
             field(view, PasswordField.class, "Password").setValue("secret-pw");
 

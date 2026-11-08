@@ -19,18 +19,6 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class VkQuantitySelectorTest {
 
-    // ── construction ────────────────────────────────────────────────────────
-
-    @Test
-    void GivenPositiveAvailable_WhenConstructed_ThenDoesNotThrow() {
-        assertDoesNotThrow(() -> new VkQuantitySelector(100, 9000, null));
-    }
-
-    @Test
-    void GivenZeroAvailable_WhenConstructed_ThenDoesNotThrow() {
-        assertDoesNotThrow(() -> new VkQuantitySelector(0, 9000, null));
-    }
-
     // ── initial state ────────────────────────────────────────────────────────
 
     @Test
@@ -84,6 +72,17 @@ class VkQuantitySelectorTest {
         var sel = new VkQuantitySelector(1, 9000, null); // starts at 1, max = 1
         sel.increment();
         assertEquals(1, sel.getQuantity());
+    }
+
+    // A sold-out zone offers nothing to hold, however often Increase is pressed.
+    @Test
+    void GivenZeroAvailable_WhenIncrement_ThenStaysZeroWithNoSelection() {
+        var count = new AtomicInteger(0);
+        var sel = new VkQuantitySelector(0, 9000, count::incrementAndGet);
+        sel.increment();
+        assertEquals(0, sel.getQuantity());
+        assertNull(sel.getSelection());
+        assertEquals(0, count.get(), "nothing changed, so the callback must not fire");
     }
 
     @Test

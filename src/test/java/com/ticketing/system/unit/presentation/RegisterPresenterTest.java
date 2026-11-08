@@ -21,8 +21,15 @@ import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import jakarta.persistence.PersistenceException;
+import com.ticketing.system.ui.support.ServiceErrors;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 class RegisterPresenterTest {
+
+    // What AuthenticationService.register throws for an age outside the range it accepts.
+    private static final String AGE_OUT_OF_RANGE =
+        "Age must be from " + AuthenticationService.MIN_AGE + " to " + AuthenticationService.MAX_AGE;
 
     private AuthenticationService authenticationService;
     private RegisterPresenter presenter;
@@ -120,7 +127,7 @@ class RegisterPresenterTest {
 
     @Test
     void GivenAnIllegalArgument_WhenAttemptRegister_ThenReturnsInvalidInputWithMessage() {
-        doThrow(new IllegalArgumentException("Age cannot be negative"))
+        doThrow(new IllegalArgumentException(AGE_OUT_OF_RANGE))
             .when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -128,12 +135,12 @@ class RegisterPresenterTest {
 
         RegisterPresenter.Outcome.InvalidInput bad =
             assertInstanceOf(RegisterPresenter.Outcome.InvalidInput.class, outcome);
-        assertEquals("Age cannot be negative", bad.reason());
+        assertEquals(AGE_OUT_OF_RANGE, bad.reason());
     }
 
     @Test
-    void GivenAnUnexpectedIllegalStateException_WhenAttemptRegister_ThenReturnsFailureWithMessage() {
-        doThrow(new IllegalStateException("database down"))
+    void GivenAnIllegalStateException_WhenAttemptRegister_ThenFailureCarriesItsMessage() {
+        doThrow(new IllegalStateException("Registration is paused for maintenance"))
             .when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -141,6 +148,26 @@ class RegisterPresenterTest {
 
         RegisterPresenter.Outcome.Failure fail =
             assertInstanceOf(RegisterPresenter.Outcome.Failure.class, outcome);
-        assertEquals("database down", fail.reason());
+        assertEquals("Registration is paused for maintenance", fail.reason());
+    }
+
+    // ---- an internal failure reads as generic text, never as its own (#189) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenAttemptRegister_ThenFailureCarriesTheGenericText() {
+        doThrow(new PersistenceException("could not execute statement [insert into users]"))
+            .when(authenticationService).register(any());
+
+        assertEquals(new RegisterPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.attemptRegister("adam", "adam@x.com", "password1", 22, "guest-sid"));
+    }
+
+    @Test
+    void GivenTheDatabaseIsDown_WhenAttemptRegister_ThenFailureSaysTheServiceIsUnavailable() {
+        doThrow(new DataAccessResourceFailureException("could not get a connection"))
+            .when(authenticationService).register(any());
+
+        assertEquals(new RegisterPresenter.Outcome.Failure(ServiceErrors.DB_UNAVAILABLE_MESSAGE),
+            presenter.attemptRegister("adam", "adam@x.com", "password1", 22, "guest-sid"));
     }
 }

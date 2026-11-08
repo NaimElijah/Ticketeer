@@ -65,6 +65,9 @@ Both gates run on every build and are **green**:
   - no backend context, `reporting` included, depends on `ui`;
   - `ui` never depends on another module's `application.port.out` or `adapter` packages. That is a
     deny-list: other modules' `domain` types and `config` records stay open to it (#208);
+  - `ui` formats dates and numbers, and changes case, only in a locale it names: `DisplayLocale.PAGE`
+    for text a page shows, `Locale.ROOT` for machine text
+    ([ADR-027](../ADRs/ADR-027-pages-format-in-a-fixed-locale.md));
   - each module depends only on the modules its entry in the test's module map allows, plus the one
     `identity → notifications` class pair (#53). The graph is drawn in the Architecture section of
     the root [README](../../README.md) and described in

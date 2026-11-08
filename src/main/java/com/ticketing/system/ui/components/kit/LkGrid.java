@@ -6,6 +6,7 @@ import com.vaadin.flow.dom.Element;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -26,7 +27,7 @@ public class LkGrid extends Div {
         LEFT, RIGHT, CENTER;
 
         public String css() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
     }
 

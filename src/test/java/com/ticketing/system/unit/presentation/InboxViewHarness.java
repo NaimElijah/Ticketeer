@@ -76,9 +76,10 @@ final class InboxViewHarness implements AutoCloseable {
     }
 
     /**
-     * Clicks {@code component} as the reader would, which only a control that shows and is enabled allows.
+     * Clicks {@code component} as the reader would, which only a control on the page, shown and enabled, allows.
      *
-     * @throws AssertionError when {@code component} or an ancestor is hidden, or it is disabled
+     * @throws AssertionError when {@code component} is attached to no UI, it or an ancestor is hidden, or it is
+     *     disabled
      */
     static void click(Component component) {
         ViewHarness.click(component);
@@ -89,6 +90,11 @@ final class InboxViewHarness implements AutoCloseable {
         List<T> found = new ArrayList<>();
         collect(root, type, found);
         return found;
+    }
+
+    /** Attaches {@code view} to this UI, as the router does with the view it shows, so a reader can click it. */
+    void attach(Component view) {
+        ui.add(view);
     }
 
     /** The text of each toast shown so far, in the order shown. */

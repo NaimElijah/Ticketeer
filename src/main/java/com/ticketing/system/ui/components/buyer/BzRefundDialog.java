@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkConfirm;
 import com.ticketing.system.ui.components.kit.LkIcon;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.textfield.TextArea;
 
 /**
@@ -44,6 +45,6 @@ public final class BzRefundDialog {
     }
 
     private static String money(double amount) {
-        return String.format("$%,.2f", amount);
+        return String.format(DisplayLocale.PAGE, "$%,.2f", amount);
     }
 }

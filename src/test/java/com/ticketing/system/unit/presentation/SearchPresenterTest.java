@@ -17,6 +17,9 @@ import com.ticketing.system.shared.dto.SearchResultDTO;
 import com.ticketing.system.catalog.application.service.CatalogService;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.presenters.catalog.SearchPresenter;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
+
+import ch.qos.logback.classic.Level;
 
 class SearchPresenterTest {
 
@@ -59,6 +62,8 @@ class SearchPresenterTest {
         try (LogCapture logs = LogCapture.of(SearchPresenter.class)) {
             presenter.search(CRED, query);
 
+            assertEquals(List.of("Top-bar search failed for a query of 21 characters: boom"), logs.messagesAt(Level.WARN),
+                    "the failure is logged once, at WARN, with the query's length");
             logs.assertNeverLogged(query);
         }
     }
@@ -74,5 +79,20 @@ class SearchPresenterTest {
         // Should not throw even though there is no session to store into.
         presenter.record("coldplay");
         assertEquals(List.of(), presenter.recents());
+    }
+
+    // ---- recent searches live on the visitor's session (#189) ----
+
+    @Test
+    void GivenASession_WhenTwoQueriesAreRecorded_ThenRecentsListsTheLatestFirstAndTrimmed() {
+        MapBackedVaadinSession.install();
+        try {
+            presenter.record("coldplay");
+            presenter.record("  adele ");
+
+            assertEquals(List.of("adele", "coldplay"), presenter.recents());
+        } finally {
+            MapBackedVaadinSession.uninstall();
+        }
     }
 }

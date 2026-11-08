@@ -2,6 +2,7 @@ package com.ticketing.system.ui.components.buyer;
 
 import java.util.Locale;
 
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
@@ -72,7 +73,7 @@ public final class BzTicketDialog {
             .set("color", "#fff")
             .set("padding", "22px 22px 20px");
 
-        Span cat = new Span(t.category.toUpperCase());
+        Span cat = new Span(t.category.toUpperCase(DisplayLocale.PAGE));
         cat.getStyle()
             .set("font-size", "0.66rem").set("font-weight", "800").set("letter-spacing", "0.16em")
             .set("opacity", "0.92").set("display", "block")
@@ -169,7 +170,7 @@ public final class BzTicketDialog {
 
     private static Div field(String label, String value) {
         Div block = new Div();
-        Span l = new Span(label.toUpperCase());
+        Span l = new Span(label.toUpperCase(DisplayLocale.PAGE));
         l.getStyle()
             .set("font-size", "0.66rem").set("font-weight", "800").set("letter-spacing", "0.1em")
             .set("color", "var(--muted)").set("display", "block").set("margin-bottom", "3px");

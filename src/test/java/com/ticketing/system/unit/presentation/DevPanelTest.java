@@ -67,6 +67,7 @@ class DevPanelTest {
     private static final long BADGE_READ_AT_MS = 1_000_000L;
 
     private InboxViewHarness harness;
+    private final SignOutFlow signOutFlow = mock(SignOutFlow.class);
     private ReservationService reservationService;
     private AuthenticationService authenticationService;
     // The bridge is static and a Spring context in the same JVM may have set it, so it is restored after.
@@ -81,7 +82,7 @@ class DevPanelTest {
         reservationService = mock(ReservationService.class);
         authenticationService = mock(AuthenticationService.class);
         DevPanel.init(reservationService);
-        DevPanel.bindBeans(authenticationService, mock(SignOutFlow.class),
+        DevPanel.bindBeans(authenticationService, signOutFlow,
                 new SessionIdentity(authenticationService, new FreshGuestSession(authenticationService,
                         new UnreadAlertsSendBack(mock(INotificationService.class)))),
                 DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD);
@@ -133,6 +134,7 @@ class DevPanelTest {
     @Test
     void GivenACachedCartBadge_WhenTheMemberPersonaSignsIn_ThenTheBadgeIsReadAgain() {
         CartBadgeCache.store(new CartBadgeCache.Badge(2, null), BADGE_READ_AT_MS);
+        assertTrue(CartBadgeCache.fresh(BADGE_READ_AT_MS).isPresent(), "precondition: the guest's badge is cached");
         when(authenticationService.login(any())).thenReturn(
             new LoginDTO(new AuthTokenDTO(MEMBER_TOKEN, 0L, MEMBER_ID, "member"), null, List.of()));
 
@@ -165,6 +167,7 @@ class DevPanelTest {
 
         clickPersona("Guest");
 
+        verify(signOutFlow).execute();
         verify(reservationService, never()).viewMyActiveOrder(ADMIN_TOKEN);
         verify(reservationService, never()).abandonActiveOrder(any());
     }

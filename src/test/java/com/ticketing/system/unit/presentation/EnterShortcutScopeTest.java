@@ -6,7 +6,10 @@ import static com.ticketing.system.unit.presentation.ViewHarness.field;
 import static com.ticketing.system.unit.presentation.ViewHarness.routeTo;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -78,6 +81,37 @@ class EnterShortcutScopeTest {
 
         assertEnterScopedToFormHolding(view, "Sign in",
             field(view, TextField.class, "Username"), field(view, PasswordField.class, "Password"));
+    }
+
+    // Where the shortcut listens says nothing of what Enter does there, so press it (#189).
+    @Test
+    void GivenAFilledSignIn_WhenEnterIsPressedInThePassword_ThenTheSignInIsAttemptedWithWhatWasTyped() {
+        LoginPresenter presenter = mock(LoginPresenter.class);
+        when(presenter.attemptLogin(any(), any(), any())).thenReturn(new LoginPresenter.Outcome.InvalidCredentials());
+        LoginView view = new LoginView(presenter, mock(SessionIdentity.class));
+        harness.attach(view);
+        field(view, TextField.class, "Username").setValue("alice");
+        PasswordField password = field(view, PasswordField.class, "Password");
+        password.setValue("secret-pw");
+
+        pressEnterIn(password);
+
+        verify(presenter).attemptLogin(eq("alice"), eq("secret-pw"), any());
+    }
+
+    @Test
+    void GivenAFilledAdminSignIn_WhenEnterIsPressedInThePassword_ThenTheAdminSignInIsAttempted() {
+        AdminLoginPresenter presenter = mock(AdminLoginPresenter.class);
+        when(presenter.attemptAdminLogin(any(), any())).thenReturn(new AdminLoginPresenter.Outcome.InvalidCredentials());
+        AdminLoginView view = new AdminLoginView(presenter);
+        harness.attach(view);
+        field(view, TextField.class, "Admin username").setValue("admin");
+        PasswordField password = field(view, PasswordField.class, "Password");
+        password.setValue("secret-pw");
+
+        pressEnterIn(password);
+
+        verify(presenter).attemptAdminLogin("admin", "secret-pw");
     }
 
     @Test
@@ -160,6 +194,17 @@ class EnterShortcutScopeTest {
         assertTrue(othersTakenOver.isEmpty(),
             "Enter on these must keep its own action, but the shortcut listens around them: "
                 + othersTakenOver);
+    }
+
+    // A key press in the field, as the browser reports it: a keydown that bubbles from the field up to the
+    // element the Enter shortcut listens on.
+    private void pressEnterIn(Component field) {
+        Element host = enterHosts().stream()
+            .filter(e -> A11y.within(field.getElement(), e))
+            .reduce((outer, inner) -> inner)
+            .orElseThrow(() -> new AssertionError("no Enter shortcut listens around "
+                + field.getElement().getProperty("label")));
+        A11y.fireBubbling(field.getElement(), host, "keydown");
     }
 
     private static void assertNotPageWide(List<Element> hosts) {
