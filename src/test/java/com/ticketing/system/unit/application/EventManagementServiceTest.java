@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -654,23 +655,23 @@ class EventManagementServiceTest {
                 verify(mockEventRepo).unlock(EVENT_ID);
         }
 
-        // new test
+        // The venue editor draws each seat where its coordinates say, so the map must keep them as configured.
         @Test
         void GivenSeatedVenueConfig_WhenConfigureVenueMap_ThenSeatCoordinatesArePreserved() {
-                // configure seats A1 with x=10, y=20
-                // fetch event venue map
-                // assert A1.getX() == 10
-                // assert A1.getY() == 20
+                EventManagementService service = ownerCanConfigureVenueUnder(SHIPPED_VENUE_LIMITS);
+                VenueMapConfigDTO config = venueConfig(3, 3, new VenueMapConfigDTO.ZoneConfigDTO("Orchestra", true, null,
+                                List.of(new VenueMapConfigDTO.SeatConfigDTO("A1", 10.0, 20.0),
+                                                new VenueMapConfigDTO.SeatConfigDTO("A2", 35.5, 22.0)),
+                                50.0, null));
 
-        }
+                service.configureVenueMap(OWNER_TOKEN, COMPANY_ID, config);
 
-        @Test
-        void GivenEventCreatedByAddEventAndVenueConfigured_WhenReserveStandingTicket_ThenReservationSucceeds() {
-                // addEvent(...)
-                // configureVenueMap(...)
-                // reserveStandingTicketsForMember(...)
-                // should not throw UnsupportedOperationException from PurchasePolicy
-
+                verify(mockEventRepo).save(event);
+                SeatedZone orchestra = (SeatedZone) event.getVenueMap().getInventoryZones().get(0);
+                assertEquals(List.of("A1 at (10.0, 20.0)", "A2 at (35.5, 22.0)"), orchestra.getSeats().stream()
+                                .sorted(Comparator.comparing(Seat::getLabel))
+                                .map(seat -> seat.getLabel() + " at (" + seat.getX() + ", " + seat.getY() + ")")
+                                .toList());
         }
 
         // -------------------------------------------------------------------------
