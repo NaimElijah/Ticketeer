@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -75,7 +77,7 @@ class LogCaptureTest {
             writer.start();
             assertTrue(appendStarted.await(AWAIT_SECONDS, TimeUnit.SECONDS), "precondition: the append has begun");
             reader.start();
-            awaitBlockedOrDone(reader);
+            awaitBlockedOnOrDone(reader, captureAppender());
 
             assertNull(read.get(), "the read must wait for the append in progress, but returned " + read.get());
             finishAppend.countDown();
@@ -99,15 +101,27 @@ class LogCaptureTest {
         throw new AssertionError("LogCapture attached no ListAppender to " + LOG.getName());
     }
 
-    // Waits, bounded, until the reader is blocked on a monitor or has finished; either answers the test.
-    private static void awaitBlockedOrDone(Thread reader) {
+    // Waits, bounded, until the reader is blocked on the appender's monitor or has finished; either answers
+    // the test. Blocked on another monitor, a class being initialised say, it answers nothing, so the wait
+    // goes on.
+    private static void awaitBlockedOnOrDone(Thread reader, Object monitor) {
+        // ThreadInfo names a monitor by its class and its identity hash in hex.
+        String monitorName = monitor.getClass().getName() + '@'
+                + Integer.toHexString(System.identityHashCode(monitor));
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AWAIT_SECONDS);
-        while (reader.getState() != Thread.State.BLOCKED && reader.getState() != Thread.State.TERMINATED) {
+        while (reader.getState() != Thread.State.TERMINATED && !blockedOn(reader, monitorName)) {
             if (System.nanoTime() > deadline) {
-                throw new AssertionError("the reader neither blocked nor finished; state " + reader.getState());
+                throw new AssertionError("the reader neither blocked on the appender nor finished; state "
+                        + reader.getState());
             }
             Thread.onSpinWait();
         }
+    }
+
+    private static boolean blockedOn(Thread thread, String monitorName) {
+        ThreadInfo info = ManagementFactory.getThreadMXBean().getThreadInfo(thread.threadId());
+        return info != null && info.getThreadState() == Thread.State.BLOCKED
+                && monitorName.equals(info.getLockName());
     }
 
     private static void awaitQuietly(CountDownLatch latch) {
