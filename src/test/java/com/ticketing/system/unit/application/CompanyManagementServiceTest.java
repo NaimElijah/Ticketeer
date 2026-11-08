@@ -63,6 +63,7 @@ import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
@@ -93,6 +94,10 @@ public class CompanyManagementServiceTest {
 
         private static final int TARGET_USER_ID = 2;
         private List<Permission> defaultPermissions;
+
+        // The refusals a caller reads (ServiceErrors shows a DomainException's message).
+        private static final String INVALID_TOKEN_MESSAGE = "Invalid authentication token: Invalid token";
+        private static final String NOT_AN_OWNER = "Not authorized to perform action: User is not an owner in this company";
 
         @BeforeEach
         public void setUp() {
@@ -302,26 +307,32 @@ public class CompanyManagementServiceTest {
         public void GivenInvalidToken_WhenInviteManager_ThenThrowException() {
                 when(sessionManager.validateToken("invalid-token")).thenReturn(false);
 
-                assertThrows(RuntimeException.class, () -> companyService.appointManager(
-                                "invalid-token",
-                                new ManagerAppointmentRequestDTO(
-                                                COMPANY_ID,
-                                                TARGET_USER_ID,
-                                                defaultPermissions)));
+                InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                                () -> companyService.appointManager("invalid-token",
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertEquals(INVALID_TOKEN_MESSAGE, refused.getMessage());
+                assertEquals(List.of(), appointmentsOfTarget());
+                verifyNoInteractions(mockUserRepo, mockCompanyRepo, eventPublisher);
         }
 
+        // The caller still holds an owner appointment in a company the store no longer has, so the ownership
+        // check passes and the company lookup is what refuses. That lookup comes after the invitation is
+        // recorded; the call's transaction rolls the record back, which this test, having none, cannot show.
         @Test
-        public void GivenCompanyDoesNotExist_WhenInviteManager_ThenThrowException() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
+        public void GivenCompanyDoesNotExist_WhenInviteManager_ThenCompanyNotFoundAndNoNoticePublished() {
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "invitee", TARGET_TOKEN);
+                CompanyNotFoundException companyGone = new CompanyNotFoundException(COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(companyGone);
 
-                assertThrows(RuntimeException.class, () -> companyService.appointManager(
-                                OWNER_TOKEN,
-                                new ManagerAppointmentRequestDTO(
-                                                COMPANY_ID,
-                                                TARGET_USER_ID,
-                                                defaultPermissions)));
+                CompanyNotFoundException refused = assertThrowsExactly(CompanyNotFoundException.class,
+                                () -> companyService.appointManager(OWNER_TOKEN,
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertSame(companyGone, refused);
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -334,13 +345,16 @@ public class CompanyManagementServiceTest {
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(3);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockUserRepo.getUserById(3)).thenReturn(nonOwnerUser);
+                when(mockUserRepo.getUserById(TARGET_USER_ID))
+                                .thenReturn(new User(TARGET_USER_ID, "targetUser", "target@test.com", "password", 25));
 
-                assertThrows(RuntimeException.class, () -> companyService.appointManager(
-                                OWNER_TOKEN,
-                                new ManagerAppointmentRequestDTO(
-                                                COMPANY_ID,
-                                                TARGET_USER_ID,
-                                                defaultPermissions)));
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.appointManager(OWNER_TOKEN,
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertEquals(NOT_AN_OWNER, refused.getMessage());
+                assertEquals(List.of(), appointmentsOfTarget());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -354,18 +368,21 @@ public class CompanyManagementServiceTest {
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
-                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(null);
+                // UserRepository.getUserById throws for an unknown id; it never answers null.
+                UserNotFoundException targetGone = new UserNotFoundException(TARGET_USER_ID);
+                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenThrow(targetGone);
 
-                assertThrows(RuntimeException.class, () -> companyService.appointManager(
-                                OWNER_TOKEN,
-                                new ManagerAppointmentRequestDTO(
-                                                COMPANY_ID,
-                                                TARGET_USER_ID,
-                                                defaultPermissions)));
+                UserNotFoundException refused = assertThrowsExactly(UserNotFoundException.class,
+                                () -> companyService.appointManager(OWNER_TOKEN,
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertSame(targetGone, refused);
+                assertEquals(List.of(), appointmentsOfTarget());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
-        public void GivenEmptyPermissions_WhenInviteManager_ThenThrowException() {
+        public void GivenEmptyPermissions_WhenInviteManager_ThenRefusedWithNoAppointmentOrNotice() {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
@@ -378,46 +395,65 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
 
-                assertThrows(RuntimeException.class, () -> companyService.appointManager(
-                                OWNER_TOKEN,
-                                new ManagerAppointmentRequestDTO(
-                                                COMPANY_ID,
-                                                TARGET_USER_ID,
-                                                new ArrayList<>())));
+                // Refused at the service boundary, as editManagerPermissions refuses an empty edit, before the
+                // appointment's own invariant is reached.
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> companyService.appointManager(OWNER_TOKEN,
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, new ArrayList<>())));
+
+                assertEquals("Manager role must have at least one permission", refused.getMessage());
+                assertEquals(List.of(), appointmentsOfTarget());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
         public void GivenInvalidToken_WhenAcceptManagerInvitation_ThenThrowException() {
                 when(sessionManager.validateToken("invalid-token")).thenReturn(false);
 
-                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(
-                                "invalid-token",
-                                new AppointmentResponseDTO(COMPANY_ID, true)));
+                InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                                () -> companyService.respondToAppointment("invalid-token",
+                                                new AppointmentResponseDTO(COMPANY_ID, true)));
+
+                assertEquals(INVALID_TOKEN_MESSAGE, refused.getMessage());
+                verifyNoInteractions(mockUserRepo, mockCompanyRepo, eventPublisher);
         }
 
         @Test
         public void GivenTargetUserDoesNotExist_WhenAcceptManagerInvitation_ThenThrowException() {
                 when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
-                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(null);
+                UserNotFoundException targetGone = new UserNotFoundException(TARGET_USER_ID);
+                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenThrow(targetGone);
 
-                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(
-                                TARGET_TOKEN,
-                                new AppointmentResponseDTO(COMPANY_ID, true)));
+                UserNotFoundException refused = assertThrowsExactly(UserNotFoundException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                                new AppointmentResponseDTO(COMPANY_ID, true)));
+
+                assertSame(targetGone, refused);
+                verifyNoInteractions(mockCompanyRepo, eventPublisher);
         }
 
+        // ProductionCompanyRepository.getCompanyById throws for an unknown id; it never answers null.
         @Test
         public void GivenCompanyDoesNotExist_WhenAcceptManagerInvitation_ThenThrowException() {
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 20);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                membershipService.receiveManagerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
 
                 when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
+                CompanyNotFoundException companyGone = new CompanyNotFoundException(COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(companyGone);
 
-                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(
-                                TARGET_TOKEN,
-                                new AppointmentResponseDTO(COMPANY_ID, true)));
+                CompanyNotFoundException refused = assertThrowsExactly(CompanyNotFoundException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                                new AppointmentResponseDTO(COMPANY_ID, true)));
+
+                assertSame(companyGone, refused);
+                assertEquals(List.of("Manager:PENDING:by" + OWNER_ID), appointmentsOfTarget(),
+                                "the invitation is still pending, unaccepted");
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -431,18 +467,27 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
 
-                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(
-                                TARGET_TOKEN,
-                                new AppointmentResponseDTO(COMPANY_ID, true)));
+                AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                                new AppointmentResponseDTO(COMPANY_ID, true)));
+
+                assertEquals("Cannot accept invitation: no appointment found for the specified company",
+                                refused.getMessage());
+                assertFalse(company.getManagers().contains(TARGET_USER_ID));
+                verify(mockCompanyRepo, never()).updateCompany(any());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
         public void GivenInvalidToken_WhenRejectManagerInvitation_ThenThrowException() {
                 when(sessionManager.validateToken("invalid-token")).thenReturn(false);
 
-                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(
-                                "invalid-token",
-                                new AppointmentResponseDTO(COMPANY_ID, false)));
+                InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                                () -> companyService.respondToAppointment("invalid-token",
+                                                new AppointmentResponseDTO(COMPANY_ID, false)));
+
+                assertEquals(INVALID_TOKEN_MESSAGE, refused.getMessage());
+                verifyNoInteractions(mockUserRepo, mockCompanyRepo, eventPublisher);
         }
 
         @Test
@@ -456,26 +501,38 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
 
-                assertThrows(RuntimeException.class, () -> companyService.respondToAppointment(
-                                TARGET_TOKEN,
-                                new AppointmentResponseDTO(COMPANY_ID, false)));
+                AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                                () -> companyService.respondToAppointment(TARGET_TOKEN,
+                                                new AppointmentResponseDTO(COMPANY_ID, false)));
+
+                assertEquals("Cannot reject invitation: no appointment found for the specified company",
+                                refused.getMessage());
+                verify(mockCompanyRepo, never()).updateCompany(any());
         }
 
         @Test
         public void GivenInvalidToken_WhenRevokeManager_ThenThrowException() {
                 when(sessionManager.validateToken("invalid-token")).thenReturn(false);
 
-                assertThrows(RuntimeException.class, () -> companyService.RevokeAppointment(
-                                "invalid-token",
-                                new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)));
+                InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                                () -> companyService.RevokeAppointment("invalid-token",
+                                                new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)));
+
+                assertEquals(INVALID_TOKEN_MESSAGE, refused.getMessage());
+                verifyNoInteractions(mockUserRepo, mockCompanyRepo, eventPublisher);
         }
 
+        // The target is the founder's manager, so a refusal that let the revoke through would show.
         @Test
         public void GivenUserIsNotOwner_WhenRevokeManager_ThenThrowException() {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User nonOwnerUser = new User(3, "nonOwner", "user@test.com", "password", 22);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 22);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                membershipService.receiveManagerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
+                membershipService.acceptInvitation(TARGET_USER_ID, COMPANY_ID);
+                company.addManager(TARGET_USER_ID);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(3);
@@ -483,9 +540,15 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(3)).thenReturn(nonOwnerUser);
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
 
-                assertThrows(RuntimeException.class, () -> companyService.RevokeAppointment(
-                                OWNER_TOKEN,
-                                new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)));
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.RevokeAppointment(OWNER_TOKEN,
+                                                new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)));
+
+                assertEquals(NOT_AN_OWNER, refused.getMessage());
+                assertEquals(List.of("Manager:ACTIVE:by" + OWNER_ID), appointmentsOfTarget());
+                assertTrue(company.getManagers().contains(TARGET_USER_ID));
+                verify(mockCompanyRepo, never()).updateCompany(any());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -502,34 +565,51 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
 
-                assertThrows(RuntimeException.class, () -> companyService.RevokeAppointment(
-                                OWNER_TOKEN,
-                                new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)));
+                AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                                () -> companyService.RevokeAppointment(OWNER_TOKEN,
+                                                new AppointmentRevokeDTO(COMPANY_ID, TARGET_USER_ID)));
+
+                assertEquals("Cannot remove appointment: no active appointment found to revoke for the specified company",
+                                refused.getMessage());
+                verify(mockCompanyRepo, never()).updateCompany(any());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
         public void GivenInvalidToken_WhenModifyManagerPermissions_ThenThrowException() {
                 when(sessionManager.validateToken("invalid-token")).thenReturn(false);
 
-                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(
-                                "invalid-token",
-                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+                InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
+                                () -> companyService.editManagerPermissions("invalid-token",
+                                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertEquals(INVALID_TOKEN_MESSAGE, refused.getMessage());
+                verifyNoInteractions(mockUserRepo, mockCompanyRepo, eventPublisher);
         }
 
+        // The target is the founder's manager, so a refusal that let the edit through would show.
         @Test
         public void GivenUserIsNotOwner_WhenModifyManagerPermissions_ThenThrowException() {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User targetUser = new User(TARGET_USER_ID, "targetUser", "user@test.com", "password", 25);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                membershipService.receiveManagerAppointment(TARGET_USER_ID, COMPANY_ID, OWNER_ID, defaultPermissions);
+                membershipService.acceptInvitation(TARGET_USER_ID, COMPANY_ID);
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(3);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
 
-                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(
-                                OWNER_TOKEN,
-                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.editManagerPermissions(OWNER_TOKEN,
+                                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, List.of(Permission.EDIT_POLICIES))));
+
+                assertEquals(NOT_AN_OWNER, refused.getMessage());
+                assertEquals(Set.copyOf(defaultPermissions),
+                                membershipService.getActiveCompanyAppointment(TARGET_USER_ID, COMPANY_ID).getPermissions());
+                verifyNoInteractions(eventPublisher);
         }
 
         // The founder is an owner, so the refusal is the target's missing appointment, not the caller's rights.
@@ -580,10 +660,14 @@ public class CompanyManagementServiceTest {
 
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
+                clearInvocations(eventPublisher);
 
-                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(
-                                OWNER_TOKEN,
-                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, new ArrayList<>())));
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
+                                () -> companyService.editManagerPermissions(OWNER_TOKEN,
+                                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, new ArrayList<>())));
+
+                assertEquals("Manager role must have at least one permission", refused.getMessage());
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -602,9 +686,15 @@ public class CompanyManagementServiceTest {
 
                 companyService.appointManager(OWNER_TOKEN,
                                 new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions));
+                clearInvocations(eventPublisher);
 
-                assertThrows(RuntimeException.class, () -> companyService.appointManager(OWNER_TOKEN,
-                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+                BusinessRuleViolationException refused = assertThrowsExactly(BusinessRuleViolationException.class,
+                                () -> companyService.appointManager(OWNER_TOKEN,
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertEquals("User already has an active or pending appointment in this company", refused.getMessage());
+                assertEquals(List.of("Manager:PENDING:by" + OWNER_ID), appointmentsOfTarget(), "the first invitation stands alone");
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -653,11 +743,10 @@ public class CompanyManagementServiceTest {
 
                 when(sessionManager.validateToken(token)).thenReturn(false);
 
-                RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-                        companyService.registerCompany(token, request);
-                });
+                InvalidTokenException exception = assertThrowsExactly(InvalidTokenException.class,
+                                () -> companyService.registerCompany(token, request));
 
-                assertEquals("Invalid authentication token: Invalid token", exception.getMessage());
+                assertEquals(INVALID_TOKEN_MESSAGE, exception.getMessage());
                 verify(mockCompanyRepo, never()).save(any());
         }
 
@@ -699,18 +788,25 @@ public class CompanyManagementServiceTest {
         public void GivenInvalidToken_WhenViewOrganizationalTree_ThenThrowException() {
                 when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
-                assertThrows(RuntimeException.class,
+                InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class,
                                 () -> companyService.viewOrganizationalTree(INVALID_TOKEN, COMPANY_ID));
+
+                assertEquals(INVALID_TOKEN_MESSAGE, refused.getMessage());
+                verifyNoInteractions(mockUserRepo, mockCompanyRepo);
         }
 
         @Test
         public void GivenCompanyNotFound_WhenViewOrganizationalTree_ThenThrowException() {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
+                CompanyNotFoundException companyGone = new CompanyNotFoundException(COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(companyGone);
 
-                assertThrows(RuntimeException.class,
+                CompanyNotFoundException refused = assertThrowsExactly(CompanyNotFoundException.class,
                                 () -> companyService.viewOrganizationalTree(OWNER_TOKEN, COMPANY_ID));
+
+                assertSame(companyGone, refused);
+                verifyNoInteractions(mockUserRepo);
         }
 
         @Test
@@ -721,10 +817,13 @@ public class CompanyManagementServiceTest {
                 when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
                 when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
-                when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(null);
+                UserNotFoundException userGone = new UserNotFoundException(OWNER_ID);
+                when(mockUserRepo.getUserById(OWNER_ID)).thenThrow(userGone);
 
-                assertThrows(RuntimeException.class,
+                UserNotFoundException refused = assertThrowsExactly(UserNotFoundException.class,
                                 () -> companyService.viewOrganizationalTree(OWNER_TOKEN, COMPANY_ID));
+
+                assertSame(userGone, refused);
         }
 
         @Test
@@ -739,8 +838,10 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(nonOwnerUser);
                 // No appointment is seeded for OWNER_ID, so the membership service reports "not an owner".
 
-                assertThrows(RuntimeException.class,
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
                                 () -> companyService.viewOrganizationalTree(OWNER_TOKEN, COMPANY_ID));
+
+                assertEquals("Not authorized to perform action: view this company's data", refused.getMessage());
         }
 
         @Test
@@ -951,7 +1052,10 @@ public class CompanyManagementServiceTest {
                 when(sessionManager.validateToken(TARGET_TOKEN)).thenReturn(true);
                 when(sessionManager.extractUserId(TARGET_TOKEN)).thenReturn(TARGET_USER_ID);
 
-                assertThrows(RuntimeException.class, () -> companyService.listManagers(TARGET_TOKEN, COMPANY_ID));
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.listManagers(TARGET_TOKEN, COMPANY_ID));
+
+                assertEquals(NOT_AN_OWNER, refused.getMessage());
         }
 
         @Test
@@ -1217,6 +1321,19 @@ public class CompanyManagementServiceTest {
                 assertEquals(List.of(new ManagerRevokedNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME)), publishedEvents());
         }
 
+        // A manager whose permissions change is told: the notice names them and the company (UC-35, I.5.1).
+        @Test
+        public void GivenCurrentCoOwner_WhenEditTheirManagersPermissions_ThenExactlyARoleChangedNoticeNamingTheManagerIsPublished() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+                clearInvocations(eventPublisher);
+
+                companyService.editManagerPermissions(CO_OWNER_TOKEN,
+                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, editedPermissions()));
+
+                assertEquals(List.of(new RoleChangedNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME,
+                                "MANAGER (permissions updated)")), publishedEvents());
+        }
+
         @Test
         public void GivenPendingManagerInviteFromACurrentCoOwner_WhenAccepted_ThenTheTargetIsAManager() {
                 ProductionCompany company = companyWithCoOwnerWhoInvitedAManager(false);
@@ -1330,6 +1447,26 @@ public class CompanyManagementServiceTest {
 
                 assertEquals("User already has an active Owner appointment in this company", refused.getMessage());
                 assertNull(membershipService.getPendingCompanyAppointment(CO_OWNER_ID, COMPANY_ID));
+                verifyNoInteractions(eventPublisher);
+        }
+
+        // §1 #4: owners are members, so an owner offer to an id that names no user is refused, and none is made.
+        @Test
+        public void GivenUnknownTarget_WhenAppointOwner_ThenUserNotFoundAndNoOfferMade() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                UserNotFoundException noSuchUser = new UserNotFoundException(TARGET_USER_ID);
+                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenThrow(noSuchUser);
+
+                UserNotFoundException refused = assertThrowsExactly(UserNotFoundException.class,
+                                () -> companyService.appointOwner(OWNER_TOKEN,
+                                                new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID)));
+
+                assertSame(noSuchUser, refused);
+                assertEquals(List.of(), appointmentsOfTarget());
                 verifyNoInteractions(eventPublisher);
         }
 
@@ -1642,6 +1779,21 @@ public class CompanyManagementServiceTest {
                 assertTrue(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID));
         }
 
+        // II.4.8: the offeree may reject an owner offer. The offer is closed, and they become no owner, so no
+        // role change is announced to them.
+        @Test
+        public void GivenPendingOwnerOffer_WhenRejected_ThenNotAnOwnerAndTheOfferIsClosed() {
+                ProductionCompany company = companyWithCoOwnerWhoOfferedOwnership();
+                clearInvocations(eventPublisher);
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, false));
+
+                assertEquals(List.of("Owner:REJECTED:by" + CO_OWNER_ID), appointmentsOfTarget(),
+                                "the offer is closed as rejected, and the offeree holds no other appointment");
+                assertFalse(company.isOwner(TARGET_USER_ID), "the offeree did not become an owner of the company");
+                assertEquals(List.of(), publishedRoleChangedNotices());
+        }
+
         // ---- founding a company is not an invitation (#187) -----------------------------------
 
         private static final int OTHER_COMPANY_ID = 200;
@@ -1698,8 +1850,9 @@ public class CompanyManagementServiceTest {
                 DataAccessResourceFailureException outage = new DataAccessResourceFailureException("company store unreachable");
                 doThrow(outage).when(mockCompanyRepo).save(any(ProductionCompany.class));
 
-                RuntimeException thrown = assertThrows(RuntimeException.class, () -> companyService.registerCompany(
-                                OWNER_TOKEN, new CompanyRegistrationDTO(COMPANY_1_NAME, COMPANY_1_DESCRIPTION)));
+                DataAccessResourceFailureException thrown = assertThrowsExactly(DataAccessResourceFailureException.class,
+                                () -> companyService.registerCompany(OWNER_TOKEN,
+                                                new CompanyRegistrationDTO(COMPANY_1_NAME, COMPANY_1_DESCRIPTION)));
 
                 assertSame(outage, thrown, "the store's own exception must reach the caller, not a wrapper; got " + thrown);
         }

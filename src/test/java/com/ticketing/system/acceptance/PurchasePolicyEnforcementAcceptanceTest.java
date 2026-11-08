@@ -1,8 +1,11 @@
 package com.ticketing.system.acceptance;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
@@ -31,6 +34,7 @@ import com.ticketing.system.shared.dto.InventoryZoneDTO;
 import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
@@ -45,6 +49,9 @@ import com.ticketing.system.catalog.application.service.EventManagementService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.reporting.application.service.MemberAccountService;
+import com.ticketing.system.sales.adapter.out.wsep.StubPaymentGateway;
+import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
+import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
@@ -75,12 +82,17 @@ class PurchasePolicyEnforcementAcceptanceTest {
     @Autowired private CatalogService catalogService;
     @Autowired private SystemAdminService systemAdminService;
     @Autowired private MemberAccountService memberAccountService;
+    @Autowired private OrderReceiptRepository orderReceiptRepository;
+    @Autowired private StubPaymentGateway stubPaymentGateway;
     @Autowired private Clock clock;
 
     private static final AtomicInteger SEQ = new AtomicInteger(0);
     private static final int ZONE_CAPACITY = 100;
     private static final double TICKET_PRICE = 50.0;
     private static final String CURRENCY = "ILS";
+    private static final int MINIMUM_AGE = 18;
+    // Any amount but a two-ticket checkout's, so the stub tells a probe from a repeat of the checkout's charge.
+    private static final double PROBE_CHARGE = 1.0;
 
     /** Reservations/checkout require the trading market open; the test profile boots closed. */
     @BeforeEach
@@ -210,6 +222,46 @@ class PurchasePolicyEnforcementAcceptanceTest {
         assertEquals(0, zoneOf(f).getReservedAmount(), "a refused reservation must hold nothing");
     }
 
+    // A guest's age is unknown until checkout collects it, so a company's age policy defers at reservation and
+    // refuses at checkout. A member's age is on record, so a minor member is refused at reservation already.
+    @Test
+    void GivenACompanyWithAnEighteenPlusPolicy_WhenAMinorGuestChecksOut_ThenRefusedForAgeAndNothingIsCharged() {
+        Fixture f = newEventOfACompanyWithMinimumAge(MINIMUM_AGE);
+        String guestSessionId = authService.startGuestSession().sessionId();
+        reservationService.reserveForGuest(guestSessionId, f.eventId, f.zoneId, InventorySelectionDTO.standing(2));
+        String idempotencyKey = "idem-" + SEQ.incrementAndGet();
+        String guestEmail = guestEmail();
+
+        RuntimeException refused = assertThrowsExactly(RuntimeException.class, () -> checkoutService.checkoutGuest(
+                guestSessionId, guestEmail, idempotencyKey, CURRENCY, card(), MINIMUM_AGE - 1));
+
+        // CheckoutPresenter shows the cause of the wrapper, so the age rule's own text is what the guest reads.
+        assertEquals("Checkout failed, tickets returned to stock", refused.getMessage());
+        PolicyViolationException reason = assertInstanceOf(PolicyViolationException.class, refused.getCause());
+        assertEquals("You must be at least 18 years old to buy tickets", reason.getMessage());
+        // The stub refuses a second charge under a key it has charged before for another amount, so accepting
+        // one under the checkout's key shows the refused checkout charged nothing.
+        assertDoesNotThrow(() -> stubPaymentGateway.charge(new PaymentRequestDTO(
+                idempotencyKey, PROBE_CHARGE, CURRENCY, card(), null, guestEmail)),
+                "the refused checkout must charge nothing");
+        assertEquals(0, zoneOf(f).getReservedAmount(), "the refused checkout must release the hold");
+    }
+
+    // The control for the refused minor, at the boundary: a guest of exactly the minimum age buys.
+    @Test
+    void GivenACompanyWithAnEighteenPlusPolicy_WhenAnEighteenYearOldGuestChecksOut_ThenTheTicketsAreBought() {
+        Fixture f = newEventOfACompanyWithMinimumAge(MINIMUM_AGE);
+        String guestSessionId = authService.startGuestSession().sessionId();
+        reservationService.reserveForGuest(guestSessionId, f.eventId, f.zoneId, InventorySelectionDTO.standing(2));
+
+        CheckoutResultDTO result = checkoutService.checkoutGuest(guestSessionId, guestEmail(),
+                "idem-" + SEQ.incrementAndGet(), CURRENCY, card(), MINIMUM_AGE);
+
+        assertEquals(2 * TICKET_PRICE, result.totalCharged(), "2 standing tickets @ 50.0");
+        assertEquals(List.of(result.orderReceiptId()), orderReceiptRepository.findByEventId(f.eventId).stream()
+                .map(OrderReceipt::getId).toList(), "the purchase is recorded as the event's one sale");
+    }
+
     // ---- helpers --------------------------------------------------------
 
     private record Fixture(String ownerToken, int companyId, int eventId, int zoneId) { }
@@ -229,6 +281,14 @@ class PurchasePolicyEnforcementAcceptanceTest {
         Fixture f = newPublishedEvent();
         companyService.setCompanyPolicies(f.ownerToken, new CompanyPolicyConfigDTO(f.companyId,
                 new PurchasePolicyDTO("MAX_TICKETS", null, null, max, null), List.of()));
+        return f;
+    }
+
+    /** The same event, with no policy of its own, run by a company whose policy requires {@code minimumAge}. */
+    private Fixture newEventOfACompanyWithMinimumAge(int minimumAge) {
+        Fixture f = newPublishedEvent();
+        companyService.setCompanyPolicies(f.ownerToken, new CompanyPolicyConfigDTO(f.companyId,
+                new PurchasePolicyDTO("AGE", minimumAge, null, null, null), List.of()));
         return f;
     }
 
@@ -272,6 +332,10 @@ class PurchasePolicyEnforcementAcceptanceTest {
         String sid = authService.startGuestSession().sessionId();
         authService.register(new RegisterRequestDTO(name, name + "@test.com", "Password1", sid, 25));
         return authService.login(new LoginRequestDTO(name, "Password1", sid)).authToken();
+    }
+
+    private static String guestEmail() {
+        return "ageGuest" + SEQ.incrementAndGet() + "@test.com";
     }
 
     private static CardDetailsDTO card() {

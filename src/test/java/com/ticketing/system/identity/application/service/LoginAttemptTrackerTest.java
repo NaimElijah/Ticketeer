@@ -73,6 +73,30 @@ class LoginAttemptTrackerTest {
         assertEquals(T0.plus(WINDOW).plus(WINDOW), admission.windowEndsAt());
     }
 
+    // The count is capped one past the limit (Admission's contract): enough to refuse, and it cannot overflow.
+    @Test
+    void GivenFarMoreAttemptsThanTheLimit_WhenAdmit_ThenRefusedWithAttemptsStayingAtMaxPlusOne() {
+        admitTimes(Pool.MEMBER, "alice", MAX_ATTEMPTS * 10);
+
+        Admission admission = tracker.admit(Pool.MEMBER, "alice");
+
+        assertFalse(admission.admitted(), "every attempt past the limit is refused");
+        assertEquals(MAX_ATTEMPTS + 1, admission.attempts());
+    }
+
+    @Test
+    void GivenBothPoolsCountingOneName_WhenTheAdminSignInSucceeds_ThenTheMembersCountStays() {
+        admitTimes(Pool.MEMBER, "alice", MAX_ATTEMPTS);
+        admitTimes(Pool.ADMIN, "alice", 1);
+
+        tracker.clear(Pool.ADMIN, "alice");
+
+        Admission member = tracker.admit(Pool.MEMBER, "alice");
+        assertFalse(member.admitted(), "an admin sign-in must not clear the member's window");
+        assertEquals(MAX_ATTEMPTS + 1, member.attempts());
+        assertEquals(1, tracker.admit(Pool.ADMIN, "alice").attempts(), "the admin's own count was cleared");
+    }
+
     @Test
     void GivenFailedAttempts_WhenCleared_ThenTheCountStartsFromZero() {
         admitTimes(Pool.MEMBER, "alice", MAX_ATTEMPTS);

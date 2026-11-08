@@ -40,8 +40,8 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.testutil.DefaultLocale;
 import com.ticketing.system.testutil.RepositoryLockProbe;
 
-// Contract tests every EventRepository implementation must satisfy. Future JPA-backed
-// adapter will subclass this with its own newRepository() factory; tests are reused.
+// Contract tests every EventRepository implementation must satisfy. The Memory and Jpa adapters each
+// subclass this with their own newRepository() factory; the tests are reused.
 public abstract class IEventRepositoryContractTest {
 
     protected abstract EventRepository newRepository();
@@ -587,18 +587,56 @@ public abstract class IEventRepositoryContractTest {
         assertTrue(result.isEmpty());
     }
 
+    @Test
+    void GivenCheapestPriceAboveMaxPrice_WhenSearchAll_ThenReturnsEmpty() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Pricey Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, 40.0, null, null, null, null, null, null, null));
+
+        assertTrue(result.isEmpty(), "an event whose cheapest ticket costs more than the maximum must not match");
+    }
+
+    // Both price bounds are inclusive: a buyer filtering "up to 50" or "from 50" sees an event at 50.
+    @Test
+    void GivenCheapestPriceEqualToMaxPrice_WhenSearchAll_ThenMatches() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Fifty Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, 50.0, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), result.stream().map(Event::getId).toList(),
+                "an event whose cheapest ticket costs exactly the maximum must match");
+    }
+
+    @Test
+    void GivenCheapestPriceEqualToMinPrice_WhenSearchAll_ThenMatches() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Fifty Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, 50.0, null, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), result.stream().map(Event::getId).toList(),
+                "an event whose cheapest ticket costs exactly the minimum must match");
+    }
+
     // === searchAll — event rating range ===
 
     @Test
     void GivenEventRatingAtOrAboveMin_WhenSearchAll_ThenReturnsMatchingEvent() {
         eventRepo.save(buildEvent(1, "Top Rated", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Low Rated", 2.0, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(3, "Rated At The Min", 4.0, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 null, null, null, null, null, null, null, null, null, 4.0, null, null, null));
 
-        assertEquals(1, result.size());
-        assertEquals("Top Rated", result.get(0).getName());
+        // The minimum is inclusive: an event rated exactly at it matches.
+        assertEquals(Set.of("Top Rated", "Rated At The Min"),
+                result.stream().map(Event::getName).collect(Collectors.toSet()));
     }
 
     @Test
@@ -796,6 +834,19 @@ public abstract class IEventRepositoryContractTest {
 
         List<Event> found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 null, null, null, null, null, null, null, null, "fRANce", null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
+    // II.2.3.a: the buyer's search of all events, searchONSALE, narrows by location; an event in another city
+    // of the same country is left out.
+    @Test
+    void GivenEventInAnotherCity_WhenSearchONSALEByLocation_ThenExcluded() {
+        eventRepo.save(eventWithArtistAt(1, "Artist A", new Location("France", "Paris")));
+        eventRepo.save(eventWithArtistAt(2, "Artist A", new Location("France", "Lyon")));
+
+        List<Event> found = eventRepo.searchONSALE(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null, null, null, "Paris", null, null, null, null));
 
         assertEquals(List.of(1), found.stream().map(Event::getId).toList());
     }

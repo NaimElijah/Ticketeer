@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -20,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import com.ticketing.system.shared.config.WsepProperties;
@@ -52,16 +55,25 @@ class WsepTicketIssuerTest {
                 new IssuanceRequestDTO.TicketIssuanceItemDTO(10, "Concert", 5, null)));
     }
 
+    // verifyConnection goes through the retrying postWithRetry: the handshake is idempotent.
     @Test
-    void GivenOkOrOtherAnswerOrTransportError_WhenVerifyConnection_ThenTrueOnOkFalseOtherwise() {
-        // verifyConnection now goes through the retrying postWithRetry (idempotent handshake).
+    void GivenWsepAnswersOk_WhenVerifyConnection_ThenTrue() {
         when(http.postWithRetry(any())).thenReturn("OK");
+
         assertTrue(issuer.verifyConnection());
+    }
 
+    @Test
+    void GivenWsepAnswersAnythingButOk_WhenVerifyConnection_ThenFalse() {
         when(http.postWithRetry(any())).thenReturn("down");
-        assertFalse(issuer.verifyConnection());
 
+        assertFalse(issuer.verifyConnection());
+    }
+
+    @Test
+    void GivenTheHandshakeFailsInTransport_WhenVerifyConnection_ThenFalse() {
         when(http.postWithRetry(any())).thenThrow(new WsepCommunicationException("x", new RuntimeException()));
+
         assertFalse(issuer.verifyConnection());
     }
 
@@ -93,6 +105,27 @@ class WsepTicketIssuerTest {
     void GivenIssuerAnswersMinusOne_WhenIssue_ThenFailsTheWholeIssuance() {
         when(http.post(any())).thenReturn("-1");
         assertThrows(TicketIssuanceFailedException.class, () -> issuer.issue(twoTicketRequest()));
+    }
+
+    // Partial failure: the first ticket was issued, but a purchase gets all its tickets or none.
+    @Test
+    void GivenTheSecondTicketRejected_WhenIssue_ThenTheWholeIssuanceFails() {
+        when(http.post(any())).thenReturn("TIX-aaaa-1111", "-1");
+
+        TicketIssuanceFailedException failed = assertThrowsExactly(TicketIssuanceFailedException.class,
+                () -> issuer.issue(twoTicketRequest()), "a rejection is not an outage");
+
+        assertTrue(failed.getMessage().contains("rejected"), "the failure says WSEP rejected it: " + failed.getMessage());
+        verify(http, times(2)).post(any());
+    }
+
+    @ParameterizedTest(name = "answer ''{0}''")
+    @ValueSource(strings = {"", "   "})
+    void GivenABlankAnswer_WhenIssue_ThenIssuanceFails(String answer) {
+        when(http.post(any())).thenReturn(answer, "TIX-bbbb-2222");
+
+        assertThrowsExactly(TicketIssuanceFailedException.class, () -> issuer.issue(twoTicketRequest()),
+                "a blank answer is no ticket code");
     }
 
     @Test

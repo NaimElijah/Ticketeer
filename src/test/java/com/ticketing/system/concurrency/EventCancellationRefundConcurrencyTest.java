@@ -1,5 +1,8 @@
 package com.ticketing.system.concurrency;
 
+import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -13,16 +16,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -159,9 +161,7 @@ class EventCancellationRefundConcurrencyTest {
                     try {
                         armed.countDown();
                         // release every run at once to maximise the race
-                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                            throw new IllegalStateException("the race was never started");
-                        }
+                        awaitOrFailWith(fire, Duration.ofSeconds(FIRE_TIMEOUT_SECONDS), "the race was never started");
                         publishCancellation();
                     } catch (RefundFailedException refused) {
                         // A run that skipped a receipt another run had claimed reports it still pending.
@@ -208,7 +208,8 @@ class EventCancellationRefundConcurrencyTest {
         ExecutorService firstRunner = Executors.newSingleThreadExecutor();
         try {
             Future<?> firstRun = firstRunner.submit(this::publishCancellation);
-            awaitOrFail(firstInGateway, "arrangement: the first run reaches the gateway with receipt " + heldReceipt);
+            awaitOrFail(firstInGateway, Duration.ofSeconds(AWAIT_SECONDS),
+                    "arrangement: the first run reaches the gateway with receipt " + heldReceipt);
 
             Throwable secondRunFailure = failureOf(() -> {
                 publishCancellation();
@@ -310,29 +311,11 @@ class EventCancellationRefundConcurrencyTest {
             refundsByCharge.computeIfAbsent(chargeId, id -> new AtomicInteger()).incrementAndGet();
             if (chargeId == heldCharge && holding.getAndSet(false)) {
                 inGateway.countDown();
-                awaitOrFail(release, "the test releases the held refund");
+                awaitOrFail(release, Duration.ofSeconds(AWAIT_SECONDS), "the test releases the held refund");
             }
             return new RefundResultDTO("refund-" + chargeId, String.valueOf(chargeId), invocation.getArgument(1),
                     WHEN, List.of(), List.of());
         }).when(paymentGateway).refund(anyInt(), anyDouble());
-    }
-
-    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
-    private static Throwable failureOf(Callable<?> call) {
-        try {
-            call.call();
-            return null;
-        } catch (ExecutionException e) {
-            return e.getCause();
-        } catch (Exception e) {
-            return e;
-        }
-    }
-
-    private static void awaitOrFail(CountDownLatch latch, String what) throws InterruptedException {
-        if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-            throw new IllegalStateException(what + ", but it never did");
-        }
     }
 
     /** Whether a run's failure reports only receipts still pending under another run's claim, none declined. */

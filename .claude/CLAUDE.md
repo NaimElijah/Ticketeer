@@ -59,7 +59,7 @@ unreadable or refused by the parser (a bare `expect-error`, for one) stops the b
 | `unit/infrastructure/persistence/<Agg>Persistence/` | Abstract `IXxxRepositoryContractTest` + `Memory…`/`Jpa…` subclasses; Jpa = `@DataJpaTest @Import(JpaXxxRepository.class)`, no profile, on H2. `Postgres…IT` extends each Jpa subclass to run the same suite on a PostgreSQL container (failsafe). Admin and MemoryEvent subclasses are named `…RepositoryTest`; Admin's IT is `PostgresAdminRepositoryIT` |
 | `acceptance/` | `@SpringBootTest @ActiveProfiles({"test", PersistenceProfiles.MEMORY})`: Memory repos, `Stub*` WSEP |
 | `integration/`, `concurrency/` | `@SpringBootTest @ActiveProfiles("test")`: Jpa repos on H2, except `CheckoutPresenterExpiryTransactionTest`, an `ApplicationContextRunner` with an embedded H2 and a transaction manager only, to test an after-commit listener. Each `concurrency/` suite has a `Postgres…IT` subclass that runs it on a PostgreSQL container (#171); so do the cancel-during-checkout, checkout-freeze, concurrent first-reservation and concurrent-registration races and, PostgreSQL only, the concurrent-checkout race (`PostgresConcurrentCheckoutsOneZoneIT`), since H2 serialises what PostgreSQL runs together |
-| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Modulith), `RepositoryAdapterProfileTest` (adapter per profile set), `TestConventionsTest` (test names, `@RunsOnPostgres` on every `*IT`) |
+| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Modulith), `RepositoryAdapterProfileTest` (adapter per profile set), `TestConventionsTest` (test names, `@RunsOnPostgres` on every `*IT`); `application/service/` holds the aspects' tests, `LoggingAspectTest`, `OptimisticLockTranslationAspectTest` and `OptimisticLockTranslationOrderTest`, there so the aspects' `..application.service..` pointcut matches them, and the order test starts a bare Spring context (`ApplicationContextRunner`) |
 
 ## Architecture
 
@@ -130,15 +130,14 @@ Events are in-process, with no outbox and no Modulith event registry. Catalog �
 **Enforcement** (`src/test/.../architecture/`): `HexagonalRulesTest` (domain purity and its
 allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui never depends on
 another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
-stay open, #208), the module map,
-`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules,
+stay open, #208), the module map, and no allowance in it that nothing uses any more,
+`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, every `@Route` class is in `ui` (Vaadin routes only `vaadin.allowed-packages`), notice listeners are `@Async("notificationExecutor")` `AFTER_COMMIT` listeners with fallback execution, the ADR-008 clock rules and, in test code, ADR-024's,
 ui formats no date or number, and changes no case, in the JVM's locale (no `DateTimeFormatter.ofPattern(String)` or
 `ofLocalized…`, `DateTimeFormatterBuilder.toFormatter()`, `String.format(String, …)` or `formatted`, `NumberFormat`'s
 `get…Instance()`, `new DecimalFormat()` or `new DecimalFormat(String)`, `new MessageFormat(String)` or the static
 `MessageFormat.format`, `Locale.getDefault`, or `toLowerCase()`/`toUpperCase()`; pass `DisplayLocale.PAGE` for page text,
 `Locale.ROOT` for machine text, #189, [ADR-027](../docs/ADRs/ADR-027-pages-format-in-a-fixed-locale.md));
-the clock, locale, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
-they fail on a fixture), `TestConventionsTest` (every test name reads `Given…_When…_Then…`, [ADR-023](../docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md); every `*IT` carries `@RunsOnPostgres`) and `ModularityTests`
+every rule has self-tests that prove it fails on a fixture), `TestConventionsTest` (every test name reads `Given…_When…_Then…`, [ADR-023](../docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md); every `*IT` carries `@RunsOnPostgres`) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by
 copying from `target/`; git has CRLF and the generator writes LF, so a naive diff shows every line.
@@ -193,7 +192,7 @@ non-2xx status or a body over `MAX_RESPONSE_BODY_BYTES`, and
 ### UI (Vaadin MVP)
 
 - ~40 thin `@Route` views in `ui/views`; logic lives in matching `ui/presenters`; shared widgets in `ui/components`. Calculations don't belong in views (revenue moved to reporting's `SalesSummaryCalculator`).
-- Vaadin scans only `com.ticketing.system.ui` (`vaadin.allowed-packages`); a view outside it is silently never routed.
+- Vaadin scans only `com.ticketing.system.ui` (`vaadin.allowed-packages`); a view outside it is silently never routed, so `HexagonalRulesTest` fails the build on a `@Route` class outside `ui`.
 - `ui/security/AuthBootstrap` (a `VaadinServiceInitListener`) is the global guard. It first checks that the stored token is live (a member's through `SessionIdentity.isMember()`, an admin's through `AuthenticationService.liveAdminId`) and signs out a visitor whose token is dead (`FreshGuestSession.restore()`). Then it runs an auth gate (routes without `@AnonymousAllowed` need a session) and a capability gate (`@RequireCapability` + `Capability`). The gates only steer navigation; the application services still validate the token on every call.
 - Session state lives in `ui/session` (`AuthSession`, `GuestSession`, `OrderSession`, …). Use `SessionIdentity` for "member or guest, and which credential": it also replaces a dead guest session id (`FreshGuestSession.renewGuest()`). Dev-only seeding UI lives in `ui/dev` (`DevUserSeeder`, `DevPanel`).
 - A presenter that shows a caught `RuntimeException` passes it through `ServiceErrors.userMessage`, never `e.getMessage()`: only a `DomainException`, `IllegalArgumentException` or `IllegalStateException` message reaches the user; anything else shows generic text and is logged at ERROR. So a business rule that a user should read must throw one of those, not a plain `RuntimeException`. The rule itself is `shared/exception/UserFacingErrors`; backend code that puts a failure's text in front of a user (`ReservationService`'s failure alerts) applies it too. A presenter that also logs the failure calls `ServiceErrors.userMessageLogged(e, action)` instead, with the ids in `action` and no log line of its own, so each failure is logged once, with its exception: an internal failure at ERROR, a database outage at WARN, and a refusal the user may read at DEBUG, since `LoggingAspect` already logs the refused service call at WARN.

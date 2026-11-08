@@ -1,5 +1,6 @@
 package com.ticketing.system.integration;
 
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -218,18 +218,6 @@ class CheckoutFreezeRaceJpaTest {
 
     private static boolean isFreeze(InvocationOnMock save) {
         return save.<ActiveOrder>getArgument(0).isCheckoutInProgress();
-    }
-
-    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
-    private static Throwable failureOf(Callable<?> call) {
-        try {
-            call.call();
-            return null;
-        } catch (ExecutionException e) {
-            return e.getCause();
-        } catch (Exception e) {
-            return e;
-        }
     }
 
     private static List<String> sortedSeats(ActiveOrder order) {

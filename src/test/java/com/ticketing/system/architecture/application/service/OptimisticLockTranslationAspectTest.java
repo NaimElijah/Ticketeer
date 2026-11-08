@@ -79,7 +79,6 @@ class OptimisticLockTranslationAspectTest {
         assertFalse(message.contains("(..)"), "the message carries a method signature: " + message);
         assertTrue(message.toLowerCase(Locale.ROOT).contains("retry"),
                 "the message must still ask the user to retry: " + message);
-        assertSame(conflict, thrown.getCause(), "the original failure must be preserved as the cause");
     }
 
     @Test

@@ -1,5 +1,8 @@
 package com.ticketing.system.integration;
 
+import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,12 +15,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -237,7 +240,8 @@ class SecondCheckoutAttemptJpaTest {
             if (freeze == 1) {
                 Future<CheckoutResultDTO> loser = otherThreads.submit(() ->
                         checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD));
-                awaitOrFail(loserAtItsFreeze, "arrangement: the loser validates the order before it is frozen");
+                awaitOrFail(loserAtItsFreeze, Duration.ofSeconds(AWAIT_SECONDS),
+                        "arrangement: the loser validates the order before it is frozen");
                 invocation.callRealMethod();
                 afterTheSaveCommits(() -> {
                     winnerFrozen.countDown();
@@ -246,7 +250,8 @@ class SecondCheckoutAttemptJpaTest {
                 });
             } else if (freeze == 2) {
                 loserAtItsFreeze.countDown();
-                awaitOrFail(winnerFrozen, "arrangement: the winner's freeze commits first");
+                awaitOrFail(winnerFrozen, Duration.ofSeconds(AWAIT_SECONDS),
+                        "arrangement: the winner's freeze commits first");
                 invocation.callRealMethod();
             } else {
                 invocation.callRealMethod();
@@ -336,24 +341,6 @@ class SecondCheckoutAttemptJpaTest {
         return save.<ActiveOrder>getArgument(0).isCheckoutInProgress();
     }
 
-    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
-    private static Throwable failureOf(Callable<?> call) {
-        try {
-            call.call();
-            return null;
-        } catch (ExecutionException e) {
-            return e.getCause();
-        } catch (Exception e) {
-            return e;
-        }
-    }
-
-    private static void awaitOrFail(CountDownLatch latch, String what) throws InterruptedException {
-        if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-            throw new IllegalStateException(what + ", but it never did");
-        }
-    }
-
     private static void assertFailedBecauseTheOrderWasInCheckout(Throwable failure) {
         assertNotNull(failure, "the attempt must fail, but it completed");
         assertEquals(CHECKOUT_FAILED, failure.getMessage(), "the checkout failure wrapper");
@@ -399,9 +386,8 @@ class SecondCheckoutAttemptJpaTest {
         doAnswer(invocation -> {
             if (firstCharge.getAndSet(false)) {
                 charging.countDown();
-                if (!releaseCharge.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("the test never released the held charge");
-                }
+                awaitOrFailWith(releaseCharge, Duration.ofSeconds(AWAIT_SECONDS),
+                        "the test never released the held charge");
             }
             return invocation.callRealMethod();
         }).when(paymentGateway).charge(any());

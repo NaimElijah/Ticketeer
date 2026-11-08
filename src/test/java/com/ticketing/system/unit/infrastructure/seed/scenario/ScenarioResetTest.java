@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.InOrder;
 
 import com.ticketing.system.bootstrap.config.SeedProperties;
 import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioRunner;
@@ -68,8 +70,10 @@ class ScenarioResetTest {
 
         assertDoesNotThrow(() -> runner.run(null));
 
-        verify(fixture.repoCleaner).clearAll();
-        verify(fixture.authenticationService)
+        // The wipe comes first: run after the replay, it would delete the users the scenario just registered.
+        InOrder wipeThenReplay = inOrder(fixture.repoCleaner, fixture.authenticationService);
+        wipeThenReplay.verify(fixture.repoCleaner).clearAll();
+        wipeThenReplay.verify(fixture.authenticationService)
                 .register(argThat(request -> request.username().equals(EXISTING_USERNAME)));
     }
 

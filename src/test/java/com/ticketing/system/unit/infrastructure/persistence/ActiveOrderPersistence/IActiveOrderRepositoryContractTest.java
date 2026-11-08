@@ -163,6 +163,8 @@ abstract class IActiveOrderRepositoryContractTest {
         // Only one cart for user 5 — the second one wins.
         assertEquals("sid-B", repo.getByUserId(5).getSessionId());
         assertEquals(0, repo.getByUserId(5).getItems().size());
+        assertEquals(List.of(cartV2.getOrderKey()), repo.findAll().stream().map(ActiveOrder::getOrderKey).toList(),
+                "the member keeps one cart: the empty first one is gone");
     }
 
     // Deleting a cart that still holds lines would leave its seats reserved under an order key that no

@@ -21,6 +21,7 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.mock.env.MockEnvironment;
@@ -36,8 +37,9 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * {@code SPRING_PROFILES_ACTIVE} cannot change the outcome.
  *
  * <p>It also skips Boot's config-data processing, which expands {@code spring.profiles.group},
- * {@code include} and {@code active} from the config files. So the last test reads every shipped
- * config file and fails if one of them could switch a run onto the Memory adapters.
+ * {@code include} and {@code active} from the config files. So a test reads every shipped config file
+ * and fails if one of them could switch a run onto the Memory adapters. No shipped file sets any of those
+ * keys today, so that test proves nothing alone: a fixture file that does shows the reader finds them.
  */
 class RepositoryAdapterProfileTest {
 
@@ -53,6 +55,9 @@ class RepositoryAdapterProfileTest {
             "classpath*:application*.yml", "classpath*:application*.yaml", "classpath*:application*.properties");
     private static final Pattern PROFILE_ACTIVATION_KEY =
             Pattern.compile("^spring\\.profiles\\.(group\\.[^\\[]+|include|active)(\\[\\d+])?$");
+    // ${NAME:default}: the profiles a file activates when the variable is unset, as the file ships.
+    private static final Pattern PLACEHOLDER_WITH_DEFAULT = Pattern.compile("^\\$\\{[^:}]+:(.*)}$");
+    private static final String ACTIVATING_FIXTURE = "architecture/activates-the-suite-profiles.yml";
 
     static Stream<Arguments> profileSetsOutsideTheInMemorySuite() {
         return Stream.of(
@@ -85,22 +90,45 @@ class RepositoryAdapterProfileTest {
 
     @Test
     void GivenShippedConfigFiles_WhenReadingProfileActivation_ThenNoneActivatesTestOrMemory() throws IOException {
-        List<String> activations = profileActivationsInConfigFiles();
-
-        assertThat(activations).as("no config file may activate the suite profiles")
-                .noneMatch(activation -> activation.endsWith("=" + TEST_PROFILE)
-                        || activation.endsWith("=" + PersistenceProfiles.MEMORY));
+        assertThat(suiteProfileActivations(shippedConfigFiles()))
+                .as("no config file may activate the suite profiles").isEmpty();
     }
 
-    /** Every profile named by a group, include or active key, as {@code file key=profile}. */
-    private static List<String> profileActivationsInConfigFiles() throws IOException {
+    @Test
+    void GivenAConfigFileActivatingTheSuiteProfiles_WhenReadingProfileActivation_ThenEachActivationIsReported()
+            throws IOException {
+        Resource fixture = new ClassPathResource(ACTIVATING_FIXTURE);
+        String file = fixture.getFilename();
+
+        assertThat(suiteProfileActivations(List.of(fixture))).containsExactlyInAnyOrder(
+                file + " spring.profiles.active=" + TEST_PROFILE,
+                file + " spring.profiles.include[1]=" + PersistenceProfiles.MEMORY,
+                file + " spring.profiles.group.local=" + TEST_PROFILE);
+    }
+
+    private static List<Resource> shippedConfigFiles() throws IOException {
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         List<Resource> files = new ArrayList<>();
         for (String pattern : CONFIG_FILE_PATTERNS) {
             files.addAll(List.of(resolver.getResources(pattern)));
         }
         assertThat(files).as("the shipped application.yml must be on the classpath").isNotEmpty();
+        return files;
+    }
 
+    /** The activations, as {@link #profileActivations} lists them, that name the test or memory profile. */
+    private static List<String> suiteProfileActivations(List<Resource> files) throws IOException {
+        return profileActivations(files).stream()
+                .filter(activation -> activation.endsWith("=" + TEST_PROFILE)
+                        || activation.endsWith("=" + PersistenceProfiles.MEMORY))
+                .toList();
+    }
+
+    /**
+     * Every profile named by a group, include or active key, as {@code file key=profile}. A placeholder
+     * with a default counts as its default.
+     */
+    private static List<String> profileActivations(List<Resource> files) throws IOException {
         List<String> activations = new ArrayList<>();
         for (Resource file : files) {
             PropertySourceLoader loader = file.getFilename().endsWith(".properties")
@@ -110,7 +138,8 @@ class RepositoryAdapterProfileTest {
                 EnumerablePropertySource<?> properties = (EnumerablePropertySource<?>) document;
                 for (String key : properties.getPropertyNames()) {
                     if (PROFILE_ACTIVATION_KEY.matcher(key).matches()) {
-                        for (String profile : String.valueOf(properties.getProperty(key)).split(",")) {
+                        String value = withoutPlaceholder(String.valueOf(properties.getProperty(key)));
+                        for (String profile : value.split(",")) {
                             activations.add(file.getFilename() + " " + key + "=" + profile.trim());
                         }
                     }
@@ -118,6 +147,11 @@ class RepositoryAdapterProfileTest {
             }
         }
         return activations;
+    }
+
+    private static String withoutPlaceholder(String value) {
+        Matcher placeholder = PLACEHOLDER_WITH_DEFAULT.matcher(value.trim());
+        return placeholder.matches() ? placeholder.group(1) : value;
     }
 
     /** Maps each repository port (e.g. {@code UserRepository}) to the adapter kinds active for it. */

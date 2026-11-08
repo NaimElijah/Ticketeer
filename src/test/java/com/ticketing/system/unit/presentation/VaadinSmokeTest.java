@@ -43,17 +43,16 @@ import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.account.MyAccountView;
 import com.ticketing.system.ui.views.account.MyInvitationsView;
-import com.ticketing.system.ui.views.admin.AdminDashboardView;
 import com.ticketing.system.ui.views.admin.GlobalHistoryView;
 import com.ticketing.system.ui.views.admin.OrganizationalTreeView;
 import com.ticketing.system.ui.views.admin.SystemAnalyticsView;
-import com.ticketing.system.ui.views.catalog.BrowseEventsView;
 import com.ticketing.system.ui.views.company.ManagerListView;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.router.Route;
 
 /**
- * Views built without Spring and read for what they show, and the package every view must live in.
+ * Views built without Spring and read for what they show. {@code HexagonalRulesTest} keeps every view in the
+ * package Vaadin routes.
  *
  * <p>Until #189 this class booted a Spring context, for little more than {@link DisplayTime}, which
  * {@link InboxViewHarness#displayTime()} gives, and most of its tests only asserted that classes load and that
@@ -72,21 +71,6 @@ class VaadinSmokeTest {
     @AfterEach
     void tearDown() {
         harness.close();
-    }
-
-    // ---- the package Vaadin routes ----
-
-    @Test
-    void GivenBrowseEventsAndAdminDashboardViews_WhenPackageNameRead_ThenTheyLiveUnderTheUiPackage() {
-        // All view classes must live under the package configured in
-        // application.yml `vaadin.allowed-packages`, otherwise Vaadin's
-        // route scanner won't discover them.
-        assertTrue(BrowseEventsView.class.getPackageName()
-                .startsWith("com.ticketing.system.ui"),
-            "BrowseEventsView must live under com.ticketing.system.ui");
-        assertTrue(AdminDashboardView.class.getPackageName()
-                .startsWith("com.ticketing.system.ui"),
-            "AdminDashboardView must live under com.ticketing.system.ui");
     }
 
     // ---- the workspace drawer ----

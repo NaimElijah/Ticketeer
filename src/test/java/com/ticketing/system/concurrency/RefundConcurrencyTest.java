@@ -1,5 +1,8 @@
 package com.ticketing.system.concurrency;
 
+import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,10 +19,8 @@ import static org.mockito.Mockito.when;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -134,9 +135,7 @@ class RefundConcurrencyTest {
                     try {
                         armed.countDown();
                         // release all requests at once to maximise the race
-                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                            throw new IllegalStateException("the race was never started");
-                        }
+                        awaitOrFailWith(fire, Duration.ofSeconds(FIRE_TIMEOUT_SECONDS), "the race was never started");
                         refundService.requestRefund(buyerToken, RECEIPT_ID, "double-click");
                         refunded.incrementAndGet();
                     } catch (BusinessRuleViolationException refused) {
@@ -187,7 +186,8 @@ class RefundConcurrencyTest {
         try {
             Future<RefundResultDTO> first = threads.submit(
                     () -> refundService.requestRefund(buyerToken, RECEIPT_ID, "first click"));
-            awaitOrFail(firstInGateway, "arrangement: the first refund reaches the gateway");
+            awaitOrFail(firstInGateway, Duration.ofSeconds(AWAIT_SECONDS),
+                    "arrangement: the first refund reaches the gateway");
             Future<RefundResultDTO> second = threads.submit(
                     () -> refundService.requestRefund(buyerToken, RECEIPT_ID, "second click"));
             await().atMost(Duration.ofSeconds(AWAIT_SECONDS)).pollDelay(Duration.ZERO).pollInterval(LOCK_WAIT_POLL)
@@ -237,7 +237,7 @@ class RefundConcurrencyTest {
         doAnswer(invocation -> {
             if (calls.incrementAndGet() == 1) {
                 inGateway.countDown();
-                awaitOrFail(release, "the test releases the held refund");
+                awaitOrFail(release, Duration.ofSeconds(AWAIT_SECONDS), "the test releases the held refund");
             }
             return validRefundOf(invocation.getArgument(0), invocation.getArgument(1));
         }).when(paymentGateway).refund(anyInt(), anyDouble());
@@ -248,23 +248,5 @@ class RefundConcurrencyTest {
     private static RefundResultDTO validRefundOf(int paymentTransactionId, double amount) {
         return new RefundResultDTO("refund-" + paymentTransactionId, String.valueOf(paymentTransactionId), amount,
                 WHEN, List.of(), List.of());
-    }
-
-    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
-    private static Throwable failureOf(Callable<?> call) {
-        try {
-            call.call();
-            return null;
-        } catch (ExecutionException e) {
-            return e.getCause();
-        } catch (Exception e) {
-            return e;
-        }
-    }
-
-    private static void awaitOrFail(CountDownLatch latch, String what) throws InterruptedException {
-        if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-            throw new IllegalStateException(what + ", but it never did");
-        }
     }
 }

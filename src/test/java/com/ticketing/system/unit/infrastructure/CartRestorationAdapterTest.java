@@ -2,10 +2,12 @@ package com.ticketing.system.unit.infrastructure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -92,6 +94,7 @@ class CartRestorationAdapterTest {
     void GivenGuestCartAndHeldMemberOrder_WhenMerge_ThenMemberOrderReleasedBeforeGuestCartClaimed() {
         ActiveOrder guestCart = ActiveOrder.forGuest("preserved-sid", CART_CREATED);
         ActiveOrder memberOrder = ActiveOrder.forMember(7, "old-sid", CART_CREATED);
+        memberOrder.addStandingReservation(3, 30, 2, 40.0, CART_CREATED); // the member's order holds places
         when(mockActiveOrderRepo.getBySessionId("preserved-sid")).thenReturn(Optional.of(guestCart));
         when(mockActiveOrderRepo.getByUserId(7)).thenReturn(memberOrder);
 
@@ -134,7 +137,7 @@ class CartRestorationAdapterTest {
         verify(mockActiveOrderRepo, times(1)).save(priorCart);
     }
 
-    /** Case 3: no cart at all — the merge is a no-op on the repository (no save). */
+    /** Case 3: no cart at all — the merge is a no-op on the repository (no save, nothing released). */
     @Test
     void GivenNoCartAtAll_WhenMergeGuestCartOnPromotion_ThenSavesNothing() {
         when(mockActiveOrderRepo.getBySessionId("sid-1")).thenReturn(Optional.empty());
@@ -143,6 +146,25 @@ class CartRestorationAdapterTest {
         adapter.mergeGuestCartOnPromotion("sid-1", 7);
 
         verify(mockActiveOrderRepo, never()).save(any());
+        verify(mockReservation, never()).abandonActiveOrder(any());
+    }
+
+    /** A failed save fails the merge, and the login transaction with it, but leaves no cart key locked. */
+    @Test
+    void GivenTheSaveFails_WhenMergeGuestCartOnPromotion_ThenTheFailurePropagatesAndBothKeysAreUnlocked() {
+        ActiveOrder guestCart = ActiveOrder.forGuest("sid-1", CART_CREATED);
+        when(mockActiveOrderRepo.getBySessionId("sid-1")).thenReturn(Optional.of(guestCart));
+        IllegalStateException saveFailure = new IllegalStateException("the cart row could not be written");
+        doThrow(saveFailure).when(mockActiveOrderRepo).save(guestCart);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> adapter.mergeGuestCartOnPromotion("sid-1", 7));
+
+        assertSame(saveFailure, thrown, "the save's failure must reach the login unchanged");
+        InOrder ordered = inOrder(mockActiveOrderRepo);
+        ordered.verify(mockActiveOrderRepo).save(guestCart);
+        ordered.verify(mockActiveOrderRepo).unlock("user:7");
+        ordered.verify(mockActiveOrderRepo).unlock("sess:sid-1");
     }
 
     /**

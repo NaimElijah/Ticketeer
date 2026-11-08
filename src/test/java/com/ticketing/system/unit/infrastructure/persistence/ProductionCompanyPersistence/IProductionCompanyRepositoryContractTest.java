@@ -108,6 +108,35 @@ abstract class IProductionCompanyRepositoryContractTest {
         assertTrue(repo.findByFounder(123).isEmpty());
     }
 
+    // Inherited, so the Jpa adapter hands back a detached copy: the change reaches the table only through
+    // updateCompany. The Memory adapter hands back the stored instance (#274).
+    @Test
+    void GivenALoadedCompanyWithANewDescription_WhenUpdateCompany_ThenTheStoredCompanyHasIt() {
+        repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
+        ProductionCompany loaded = repo.getCompanyById(1);
+        loaded.setDescription("a new description");
+
+        repo.updateCompany(loaded);
+
+        ProductionCompany stored = repo.getCompanyById(1);
+        assertEquals("a new description", stored.getDescription());
+        assertEquals("Acme", stored.getName(), "only the description changed");
+    }
+
+    // The admin view lists every company, whatever its status, unlike findActive.
+    @Test
+    void GivenCompaniesInEveryStatus_WhenFindAll_ThenEveryCompanyIsListed() {
+        CompanyStatus[] statuses = CompanyStatus.values();
+        for (int i = 0; i < statuses.length; i++) {
+            repo.save(company(i + 1, 7, "Company " + statuses[i], statuses[i]));
+        }
+
+        Set<String> expected = java.util.Arrays.stream(statuses).map(status -> "Company " + status)
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(expected,
+                repo.findAll().stream().map(ProductionCompany::getName).collect(java.util.stream.Collectors.toSet()));
+    }
+
     @Test
     void GivenRepository_WhenNextIdCalledTwice_ThenProducesDistinctIncreasingValues() {
         int a = repo.nextId();

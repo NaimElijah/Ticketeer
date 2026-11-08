@@ -171,6 +171,26 @@ class EventCompletionSweeperTest {
         verify(eventRepo).save(ok);
     }
 
+    // Resilience: a save that fails for one event (a lost @Version race, a database error) is logged and
+    // the next event is still completed; the failed one's lock is released and it is not counted.
+    @Test
+    void GivenSaveFailsForOneEvent_WhenCompleteFinishedEvents_ThenTheNextIsCompletedAndTheLockReleased() {
+        Event failing = onSaleEvent(7, SHOW_END);
+        Event ok = onSaleEvent(8, SHOW_END);
+        when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(failing, ok));
+        when(eventRepo.findById(7)).thenReturn(failing);
+        when(eventRepo.findById(8)).thenReturn(ok);
+        when(eventRepo.save(failing)).thenThrow(new IllegalStateException("the event row could not be written"));
+
+        int completed = sweeper.completeFinishedEvents(AFTER_SHOW);
+
+        assertEquals(1, completed, "only the event whose save succeeded is counted");
+        verify(eventRepo).unlock(7);
+        assertEquals(EventStatus.COMPLETED, ok.getStatus());
+        verify(eventRepo).save(ok);
+        verify(eventRepo).unlock(8);
+    }
+
     // -- the venue's zone decides when a show has ended (#74, ADR-008) --------
 
     @Test

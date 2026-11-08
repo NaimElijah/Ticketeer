@@ -100,6 +100,14 @@ abstract class ISessionRepositoryContractTest {
         assertFalse(repo.existsByUserId(5));
     }
 
+    // Session.isExpiredAt counts now == expiresAt as expired, and both adapters must agree.
+    @Test
+    void GivenSessionExpiringExactlyNow_WhenExistsByUserId_ThenFalse() {
+        repo.save(new Session("sid-1", 5, T_PAST, NOW));
+
+        assertFalse(repo.existsByUserId(5), "a session whose expiry is the adapter's now is no longer live");
+    }
+
     // An admin's id can equal a member's (ADR-012), and isOnline asks about members only.
     @Test
     void GivenLiveAdminSessionWithTheSameId_WhenExistsByUserId_ThenFalse() {

@@ -177,13 +177,27 @@ abstract class IOrderReceiptRepositoryContractTest {
     }
 
     @Test
-    void GivenReceiptsForThreeEvents_WhenFindByEventIds_ThenReturnsReceiptsContainingAnyOfThoseEventsAndNoneForAnEmptyList() {
+    void GivenReceiptsForThreeEvents_WhenFindByEventIds_ThenReturnsReceiptsContainingAnyOfThoseEvents() {
         repo.save(member(1, 7, 5));
         repo.save(member(2, 7, 6));
         repo.save(member(3, 7, 8));
 
         assertEquals(Set.of(1, 2), ids(repo.findByEventIds(List.of(5, 6))));
+    }
+
+    @Test
+    void GivenSavedReceipts_WhenFindByEventIdsWithAnEmptyList_ThenNothingMatches() {
+        repo.save(member(1, 7, 5));
+
         assertTrue(repo.findByEventIds(List.of()).isEmpty());
+    }
+
+    // A list, not a set: a receipt with lines in two of the events is still one receipt, listed once.
+    @Test
+    void GivenAReceiptWithLinesInTwoOfTheEvents_WhenFindByEventIds_ThenItIsListedOnce() {
+        repo.save(OrderReceipt.forMember(1, 7, 100.0, List.of(line(10, 5), line(11, 6)), AT));
+
+        assertEquals(List.of(1), repo.findByEventIds(List.of(5, 6)).stream().map(OrderReceipt::getId).toList());
     }
 
     // A company with no events is filtered by an empty event list: it has no sales, so nothing matches.

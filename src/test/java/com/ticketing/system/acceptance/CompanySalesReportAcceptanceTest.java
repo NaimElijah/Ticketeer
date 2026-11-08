@@ -8,6 +8,8 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,12 +35,13 @@ import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.ui.presenters.company.CompanySalesPresenter;
 
 /**
- * Issue #430 [Eval 9] — after a successful purchase the sale must appear in the owner's
- * sales report (real receipt data, not mocked). These tests drive the exact path the
- * {@code owner/sales} view uses ({@link CompanySalesPresenter#load}) and assert that a
- * freshly-persisted purchase shows up on a subsequent {@code load()} — which is precisely
- * what the new Refresh button does at runtime. Existing suites hit the service directly;
- * this closes the gap by exercising the presenter and the reload (refresh) contract.
+ * Issue #430 [Eval 9] — after a purchase the sale must appear in the owner's sales report. These
+ * tests save receipts straight to the receipt repository, with the owner as the buyer, rather than
+ * buying through checkout, and drive the exact path the {@code owner/sales} view uses
+ * ({@link CompanySalesPresenter#load}): a receipt saved after one {@code load()} shows up on the
+ * next, which is what the Refresh button does at runtime. A checkout reaching the company's sales
+ * history is {@code EventCancellationAcceptanceTest}'s
+ * ({@code GivenCrossCompanyOrder_WhenOneCompanyCancelsItsEvent_ThenOnlyItsLinesLeaveTheRevenueFigures}).
  */
 @SpringBootTest
 @ActiveProfiles({"test", PersistenceProfiles.MEMORY})
@@ -74,12 +77,25 @@ class CompanySalesReportAcceptanceTest {
         return Integer.parseInt(event.eventId());
     }
 
-    /** Persists a completed purchase of {@code eventId} for {@code total} (one standing ticket). */
-    private void recordPurchase(AuthTokenDTO buyer, int eventId, double total) {
+    /**
+     * Persists a completed purchase of {@code eventId} for {@code total} (one standing ticket).
+     *
+     * @return the receipt's id
+     */
+    private int recordPurchase(AuthTokenDTO buyer, int eventId, double total) {
+        int receiptId = orderReceiptRepository.nextId();
         orderReceiptRepository.save(OrderReceipt.forMember(
-                orderReceiptRepository.nextId(), buyer.userId(), total,
+                receiptId, buyer.userId(), total,
                 List.of(new ReceiptLine(1, total, eventId, 1, null, LocalDateTime.now(clock))),
                 LocalDateTime.now(clock)));
+        return receiptId;
+    }
+
+    /** Each record of the report as its receipt id and total; the report does not promise an order. */
+    private static Set<List<Object>> receiptsAndTotals(CompanySalesPresenter.Outcome.Success report) {
+        return report.sales().records().stream()
+                .map(record -> List.<Object>of(record.orderReceiptId(), record.totalPaid()))
+                .collect(Collectors.toSet());
     }
 
     private CompanySalesPresenter.Outcome.Success loadSuccess(AuthTokenDTO owner) {
@@ -88,7 +104,7 @@ class CompanySalesReportAcceptanceTest {
     }
 
     @Test
-    void GivenCompletedPurchase_WhenOwnerReloadsSalesReport_ThenSaleAppears() {
+    void GivenAReceiptSavedForTheCompanysEvent_WhenOwnerReloadsSalesReport_ThenTheSaleAppears() {
         AuthTokenDTO owner = registerAndLoginMember("salesReportOwner1");
         int companyId = companyService.registerCompany(
                 owner.token(), new CompanyRegistrationDTO("SalesReportCo1", "desc")).companyId();
@@ -99,7 +115,7 @@ class CompanySalesReportAcceptanceTest {
         assertEquals("SalesReportCo1", before.companyName());
         assertTrue(before.sales().records().isEmpty(), "no sales expected before any purchase");
 
-        // A buyer completes a purchase of the company's event.
+        // A receipt for the company's event is saved, as a completed checkout would save it.
         recordPurchase(owner, eventId, 80.0);
 
         // Reloading the report (== clicking Refresh) surfaces the recent sale.
@@ -115,13 +131,14 @@ class CompanySalesReportAcceptanceTest {
                 owner.token(), new CompanyRegistrationDTO("SalesReportCo2", "desc")).companyId();
         int eventId = addEventForCompany(owner, companyId, "Report Event 2");
 
-        recordPurchase(owner, eventId, 80.0);
-        assertEquals(1, loadSuccess(owner).sales().records().size());
+        int firstReceiptId = recordPurchase(owner, eventId, 80.0);
+        assertEquals(Set.of(List.of(firstReceiptId, 80.0)), receiptsAndTotals(loadSuccess(owner)));
 
         // A second purchase lands after the report was already viewed once.
-        recordPurchase(owner, eventId, 50.0);
+        int secondReceiptId = recordPurchase(owner, eventId, 50.0);
 
         // A further reload reflects the new sale too (no stale snapshot).
-        assertEquals(2, loadSuccess(owner).sales().records().size());
+        assertEquals(Set.of(List.of(firstReceiptId, 80.0), List.of(secondReceiptId, 50.0)),
+                receiptsAndTotals(loadSuccess(owner)));
     }
 }
