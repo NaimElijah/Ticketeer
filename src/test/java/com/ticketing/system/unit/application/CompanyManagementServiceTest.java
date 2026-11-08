@@ -1777,6 +1777,21 @@ public class CompanyManagementServiceTest {
                 assertTrue(membershipService.isOwnerInCompany(TARGET_USER_ID, COMPANY_ID));
         }
 
+        // II.4.8: the offeree may reject an owner offer. The offer is closed, and they become no owner, so no
+        // role change is announced to them.
+        @Test
+        public void GivenPendingOwnerOffer_WhenRejected_ThenNotAnOwnerAndTheOfferIsClosed() {
+                ProductionCompany company = companyWithCoOwnerWhoOfferedOwnership();
+                clearInvocations(eventPublisher);
+
+                companyService.respondToAppointment(TARGET_TOKEN, new AppointmentResponseDTO(COMPANY_ID, false));
+
+                assertEquals(List.of("Owner:REJECTED:by" + CO_OWNER_ID), appointmentsOfTarget(),
+                                "the offer is closed as rejected, and the offeree holds no other appointment");
+                assertFalse(company.isOwner(TARGET_USER_ID), "the offeree did not become an owner of the company");
+                assertEquals(List.of(), publishedRoleChangedNotices());
+        }
+
         // ---- founding a company is not an invitation (#187) -----------------------------------
 
         private static final int OTHER_COMPANY_ID = 200;
