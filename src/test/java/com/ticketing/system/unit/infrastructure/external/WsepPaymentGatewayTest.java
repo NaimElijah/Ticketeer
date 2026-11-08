@@ -28,7 +28,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.slf4j.LoggerFactory;
 
 import com.ticketing.system.shared.config.WsepProperties;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
@@ -43,13 +42,9 @@ import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.shared.external.WsepCommunicationException;
 import com.ticketing.system.shared.external.WsepHttpClient;
 import com.ticketing.system.sales.adapter.out.wsep.WsepPaymentGateway;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.LoopbackHttpServer;
 import com.ticketing.system.testutil.LoopbackHttpServer.RecordedRequest;
-
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 
 class WsepPaymentGatewayTest {
 
@@ -70,16 +65,25 @@ class WsepPaymentGatewayTest {
         return new PaymentRequestDTO("idem-1", 100.0, "USD", card, 42, null);
     }
 
+    // verifyConnection goes through the retrying postWithRetry: the handshake is idempotent.
     @Test
-    void GivenOkOrOtherAnswerOrTransportError_WhenVerifyConnection_ThenTrueOnOkFalseOtherwiseFalseOnTransportError() {
-        // verifyConnection now goes through the retrying postWithRetry (idempotent handshake).
+    void GivenWsepAnswersOk_WhenVerifyConnection_ThenTrue() {
         when(http.postWithRetry(any())).thenReturn("OK");
+
         assertTrue(gateway.verifyConnection());
+    }
 
+    @Test
+    void GivenWsepAnswersAnythingButOk_WhenVerifyConnection_ThenFalse() {
         when(http.postWithRetry(any())).thenReturn("down");
-        assertFalse(gateway.verifyConnection());
 
+        assertFalse(gateway.verifyConnection());
+    }
+
+    @Test
+    void GivenTheHandshakeFailsInTransport_WhenVerifyConnection_ThenFalse() {
         when(http.postWithRetry(any())).thenThrow(new WsepCommunicationException("x", new RuntimeException()));
+
         assertFalse(gateway.verifyConnection());
     }
 
@@ -140,12 +144,18 @@ class WsepPaymentGatewayTest {
     }
 
     @Test
-    void GivenWsepAnswersOneOrMinusOne_WhenRefund_ThenOneIsSuccessMinusOneFails() {
+    void GivenWsepAnswersOne_WhenRefund_ThenTheRefundSucceedsForThatTransaction() {
         when(http.post(any())).thenReturn("1");
-        RefundResultDTO ok = gateway.refund(54321, 100.0);
-        assertEquals("54321", ok.orderReceiptId());
 
+        RefundResultDTO ok = gateway.refund(54321, 100.0);
+
+        assertEquals("54321", ok.orderReceiptId());
+    }
+
+    @Test
+    void GivenWsepAnswersMinusOne_WhenRefund_ThenRefundFailed() {
         when(http.post(any())).thenReturn("-1");
+
         assertThrows(RefundFailedException.class, () -> gateway.refund(54321, 100.0));
     }
 
@@ -237,29 +247,13 @@ class WsepPaymentGatewayTest {
 
     @Test
     void GivenDebugLogging_WhenCharge_ThenLogsTheMaskedCardButNeverFullPanOrCvv() {
-        Logger logger = (Logger) LoggerFactory.getLogger(WsepPaymentGateway.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        Level original = logger.getLevel();
-        logger.setLevel(Level.DEBUG);
-        try {
+        try (LogCapture logs = LogCapture.of(WsepPaymentGateway.class)) {
             when(http.post(any())).thenReturn("54321");
             gateway.charge(request());
 
-            boolean anyLogged = false;
-            for (ILoggingEvent event : appender.list) {
-                String msg = event.getFormattedMessage();
-                assertFalse(msg.contains(FULL_PAN), "full PAN leaked: " + msg);
-                assertFalse(msg.contains(CVV), "cvv leaked: " + msg);
-                if (msg.contains("9999")) {
-                    anyLogged = true; // last 4 is fine to show
-                }
-            }
-            assertTrue(anyLogged, "expected a masked card debug line");
-        } finally {
-            logger.setLevel(original);
-            logger.detachAppender(appender);
+            assertFalse(logs.eventsContaining("9999").isEmpty(), "expected a masked card debug line; the last 4 may show");
+            logs.assertNeverLogged(FULL_PAN);
+            logs.assertNeverLogged(CVV);
         }
     }
 
