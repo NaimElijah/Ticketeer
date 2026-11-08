@@ -131,13 +131,13 @@ Events are in-process, with no outbox and no Modulith event registry. Catalog �
 allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui never depends on
 another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
 stay open, #208), the module map,
-`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` after-commit, the ADR-008 clock rules,
+`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` `AFTER_COMMIT` listeners with fallback execution, the ADR-008 clock rules,
 ui formats no date or number, and changes no case, in the JVM's locale (no `DateTimeFormatter.ofPattern(String)` or
 `ofLocalized…`, `DateTimeFormatterBuilder.toFormatter()`, `String.format(String, …)` or `formatted`, `NumberFormat`'s
 `get…Instance()`, `new DecimalFormat()` or `new DecimalFormat(String)`, `new MessageFormat(String)` or the static
 `MessageFormat.format`, `Locale.getDefault`, or `toLowerCase()`/`toUpperCase()`; pass `DisplayLocale.PAGE` for page text,
 `Locale.ROOT` for machine text, #189, [ADR-027](../docs/ADRs/ADR-027-pages-format-in-a-fixed-locale.md));
-the clock, locale, module-map, domain-context, domain-allowance and ui rules each have self-tests that prove
+the clock, locale, module-map, domain-context, domain-allowance, ui and notice-listener rules each have self-tests that prove
 they fail on a fixture), `TestConventionsTest` (every test name reads `Given…_When…_Then…`, [ADR-023](../docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md); every `*IT` carries `@RunsOnPostgres`) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
 `docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by

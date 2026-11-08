@@ -50,6 +50,7 @@ import jakarta.persistence.AttributeConverter;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.ticketing.system.architecture.fixture.catalog.domain.ConverterUsingJackson;
@@ -82,6 +83,7 @@ import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnApplicationServ
 import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnInboundPort;
 import com.ticketing.system.architecture.fixture.undocumented.UndocumentedModuleType;
 import com.ticketing.system.shared.config.SecurityConfig;
+import com.ticketing.system.shared.event.PurchaseCompletedNotice;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.AccessTarget;
 import com.tngtech.archunit.core.domain.JavaAccess;
@@ -628,15 +630,40 @@ class HexagonalRulesTest {
     /**
      * ADR-004: every {@code shared.event} notice is consumed after the publisher commits, off its
      * thread. Publishers no longer guard {@code publishEvent}, so a synchronous listener on a notice
-     * would let a notification failure fail the use case, e.g. report a paid checkout as failed.
+     * would let a notification failure fail the use case, e.g. report a paid checkout as failed. A
+     * listener in another phase would deliver work that has not committed, and one without fallback
+     * execution would drop the notices checkout and event cancellation publish after their
+     * transactions end.
      */
     @Test
     void GivenANoticeListener_WhenScanned_ThenItIsAnAsyncAfterCommitListener() {
-        methods().that().areAnnotatedWith(EventListener.class)
-                .or().areMetaAnnotatedWith(EventListener.class)
-                .and(TAKE_A_SHARED_EVENT_NOTICE)
-                .should(BE_ASYNC_AFTER_COMMIT_LISTENERS)
-                .check(PRODUCTION_CLASSES);
+        NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT.check(PRODUCTION_CLASSES);
+    }
+
+    @Test
+    void GivenAnAsyncNoticeListenerOutsideTheTransaction_WhenScanned_ThenTheListenerRuleFails() {
+        assertRuleFails(NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT, AsyncPlainNoticeListener.class);
+    }
+
+    @Test
+    void GivenANoticeListenerWithoutAsync_WhenScanned_ThenTheListenerRuleFails() {
+        assertRuleFails(NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT, NoticeListenerWithoutAsync.class);
+    }
+
+    @Test
+    void GivenABeforeCommitNoticeListener_WhenScanned_ThenTheListenerRuleFails() {
+        assertRuleFails(NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT, BeforeCommitNoticeListener.class);
+    }
+
+    @Test
+    void GivenANoticeListenerWithoutFallbackExecution_WhenScanned_ThenTheListenerRuleFails() {
+        assertRuleFails(NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT, NoticeListenerWithoutFallbackExecution.class);
+    }
+
+    @Test
+    void GivenTheDocumentedNoticeListener_WhenScanned_ThenTheListenerRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(DocumentedNoticeListener.class);
+        assertThatCode(() -> NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT.check(imported)).doesNotThrowAnyException();
     }
 
     private static final DescribedPredicate<JavaMethod> TAKE_A_SHARED_EVENT_NOTICE =
@@ -644,16 +671,28 @@ class HexagonalRulesTest {
                     .stream().anyMatch(type -> type.getPackageName().equals("com.ticketing.system.shared.event")));
 
     private static final ArchCondition<JavaMethod> BE_ASYNC_AFTER_COMMIT_LISTENERS =
-            new ArchCondition<>("be @TransactionalEventListener methods that run @Async") {
+            new ArchCondition<>("be @Async @TransactionalEventListener(phase = AFTER_COMMIT, fallbackExecution = true)"
+                    + " methods") {
                 @Override
                 public void check(JavaMethod method, ConditionEvents events) {
-                    boolean afterCommit = method.isAnnotatedWith(TransactionalEventListener.class);
+                    boolean afterCommitWithFallback = method.tryGetAnnotationOfType(TransactionalEventListener.class)
+                            .filter(listener -> listener.phase() == TransactionPhase.AFTER_COMMIT)
+                            .filter(TransactionalEventListener::fallbackExecution)
+                            .isPresent();
                     boolean async = method.isAnnotatedWith(Async.class) || method.getOwner().isAnnotatedWith(Async.class);
-                    events.add(new SimpleConditionEvent(method, afterCommit && async,
-                            method.getFullName() + (afterCommit && async ? " is" : " is not")
-                                    + " an @Async @TransactionalEventListener"));
+                    boolean satisfied = afterCommitWithFallback && async;
+                    events.add(new SimpleConditionEvent(method, satisfied, method.getFullName()
+                            + (satisfied ? " is" : " is not") + " an @Async @TransactionalEventListener"
+                            + " (phase = AFTER_COMMIT, fallbackExecution = true)"));
                 }
             };
+
+    private static final ArchRule NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT = methods()
+            .that().areAnnotatedWith(EventListener.class)
+            .or().areMetaAnnotatedWith(EventListener.class)
+            .and(TAKE_A_SHARED_EVENT_NOTICE)
+            .should(BE_ASYNC_AFTER_COMMIT_LISTENERS)
+            .because("ADR-004: notices are delivered after commit, off the publisher's thread");
 
     /**
      * ADR-008: every "now" comes from the one injected UTC {@link Clock}, and no zone comes from the
@@ -1019,6 +1058,43 @@ class HexagonalRulesTest {
     static class ReferencesClockSystemUtc {
         Supplier<Clock> read() {
             return Clock::systemUTC;
+        }
+    }
+
+    // Fixtures for the notice-listener self-tests: each offender breaks exactly one part of the ADR-004
+    // pattern, and none is a bean, so no Spring context ever delivers a notice to one.
+    static class AsyncPlainNoticeListener {
+        @Async
+        @EventListener
+        void on(PurchaseCompletedNotice notice) {
+        }
+    }
+
+    static class NoticeListenerWithoutAsync {
+        @TransactionalEventListener(fallbackExecution = true)
+        void on(PurchaseCompletedNotice notice) {
+        }
+    }
+
+    @Async
+    static class BeforeCommitNoticeListener {
+        @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
+        void on(PurchaseCompletedNotice notice) {
+        }
+    }
+
+    @Async
+    static class NoticeListenerWithoutFallbackExecution {
+        @TransactionalEventListener
+        void on(PurchaseCompletedNotice notice) {
+        }
+    }
+
+    // Mirrors NotificationEventListener: @Async on the class, the listener annotation on the method.
+    @Async
+    static class DocumentedNoticeListener {
+        @TransactionalEventListener(fallbackExecution = true)
+        void on(PurchaseCompletedNotice notice) {
         }
     }
 }
