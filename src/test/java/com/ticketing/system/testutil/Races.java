@@ -22,7 +22,7 @@ public final class Races {
      * Runs a call and returns what it threw.
      *
      * <p>An {@link ExecutionException}, as a {@code Future}'s {@code get} throws, is unwrapped to its
-     * cause; one without a cause reads as a return. Any other {@link Exception} is returned as it is, a
+     * cause, and returned as it is when it has none, so a failure never reads as a return. Any other {@link Exception} is returned as it is, a
      * {@code get}'s {@link java.util.concurrent.TimeoutException} and an {@link InterruptedException}
      * included, and the thread's interrupt flag is left cleared. An {@link Error}, such as a failed
      * assertion inside the call, propagates.
@@ -35,7 +35,7 @@ public final class Races {
             call.call();
             return null;
         } catch (ExecutionException e) {
-            return e.getCause();
+            return e.getCause() != null ? e.getCause() : e;
         } catch (Exception e) {
             return e;
         }

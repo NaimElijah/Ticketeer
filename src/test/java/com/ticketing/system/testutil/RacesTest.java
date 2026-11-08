@@ -49,12 +49,14 @@ class RacesTest {
                 "the ExecutionException is unwrapped to its cause");
     }
 
-    // Pinned, not endorsed: a failed call whose ExecutionException carries no cause is indistinguishable
-    // from one that returned. A Future always supplies the cause, so no caller meets this today.
+    // A failure must never read as a return: with no cause to unwrap, the ExecutionException itself is
+    // what the call threw.
     @Test
-    void GivenAnExecutionExceptionWithoutACause_WhenFailureOf_ThenItIsNullAsIfTheCallReturned() {
-        assertNull(failureOf(() -> {
-            throw new ExecutionException(null);
+    void GivenAnExecutionExceptionWithoutACause_WhenFailureOf_ThenItIsThatException() {
+        ExecutionException causeless = new ExecutionException(null);
+
+        assertSame(causeless, failureOf(() -> {
+            throw causeless;
         }));
     }
 
