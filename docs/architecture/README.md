@@ -68,6 +68,15 @@ Both gates run on every build and are **green**:
   - `ui` formats dates and numbers, and changes case, only in a locale it names: `DisplayLocale.PAGE`
     for text a page shows, `Locale.ROOT` for machine text
     ([ADR-027](../ADRs/ADR-027-pages-format-in-a-fixed-locale.md));
+  - every `@Route` class is in `ui`, since Vaadin routes only `vaadin.allowed-packages` and silently
+    skips a view outside it;
+  - every listener of a `shared/event` notice is an `AFTER_COMMIT` `@TransactionalEventListener` with
+    `fallbackExecution`, on `@Async("notificationExecutor")`
+    ([ADR-004](../ADRs/ADR-004-no-outbox-for-notifications.md));
+  - production code reads time only from the `Clock` bean
+    ([ADR-008](../ADRs/ADR-008-event-time-zones-and-one-clock.md),
+    [ADR-022](../ADRs/ADR-022-system-current-time-millis-is-a-system-clock-read.md)), and tests read it
+    from a clock, never the JVM's ([ADR-024](../ADRs/ADR-024-tests-read-time-from-a-clock-never-the-jvm.md));
   - each module depends only on the modules its entry in the test's module map allows, plus the one
     `identity → notifications` class pair (#53). The graph is drawn in the Architecture section of
     the root [README](../../README.md) and described in
