@@ -712,7 +712,7 @@ class CompanyAcceptanceTest {
         }
 
         @Test
-        void GivenOwner_WhenEditAllFields_ThenDescriptionLocationAndShowDatesPersist() {
+        void GivenOwner_WhenEditAllFields_ThenTheEventReadsTheNewDetailsAndShowDates() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner5");
                 int companyId = companyService.registerCompany(
                                 owner.token(), new CompanyRegistrationDTO("EditCo5", "desc")).companyId();
