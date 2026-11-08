@@ -15,6 +15,7 @@ import java.text.DecimalFormat;
 import java.text.MessageFormat;
 import java.text.NumberFormat;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
@@ -55,15 +56,24 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.ticketing.system.architecture.fixture.catalog.domain.ConverterUsingJackson;
 import com.ticketing.system.architecture.fixture.catalog.domain.ConverterWithTypeReference;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingAnAdapter;
 import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingHibernateAnnotation;
 import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingHibernateSession;
 import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingJackson;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingSharedExternal;
 import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingSharedPersistence;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingSpring;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingTheApplicationLayer;
 import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingTheRootPackage;
+import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingVaadin;
 import com.ticketing.system.architecture.fixture.identity.IdentityTypeUsingNotificationDispatch;
+import com.ticketing.system.architecture.fixture.identity.application.service.ApplicationTypeUsingAnAdapter;
 import com.ticketing.system.architecture.fixture.identity.application.service.AuthenticationService;
 import com.ticketing.system.architecture.fixture.notifications.NotificationsTypeUsingOrganization;
 import com.ticketing.system.architecture.fixture.notifications.application.service.NotificationDispatchService;
+import com.ticketing.system.architecture.fixture.organization.OrganizationFixtureType;
+import com.ticketing.system.architecture.fixture.organization.OrganizationTypeUsingNotifications;
+import com.ticketing.system.architecture.fixture.reporting.ReportingTypeUsingTheUi;
 import com.ticketing.system.architecture.fixture.sales.domain.SalesDomainTypeUsingCatalogDomain;
 import com.ticketing.system.architecture.fixture.ui.UiTypeBuildingADateFormatterWithoutALocale;
 import com.ticketing.system.architecture.fixture.ui.UiTypeChangingCaseInTheJvmLocale;
@@ -145,9 +155,35 @@ class HexagonalRulesTest {
         DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS.check(PRODUCTION_CLASSES);
     }
 
+    // One offender per denied package, so a typo in any entry of the deny-list fails its own test.
     @Test
     void GivenADomainClassUsingSharedPersistence_WhenScanned_ThenTheDomainPurityRuleFails() {
         assertRuleFails(DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS, DomainTypeUsingSharedPersistence.class);
+    }
+
+    @Test
+    void GivenADomainClassUsingSpring_WhenScanned_ThenTheDomainPurityRuleFails() {
+        assertRuleFails(DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS, DomainTypeUsingSpring.class);
+    }
+
+    @Test
+    void GivenADomainClassUsingVaadin_WhenScanned_ThenTheDomainPurityRuleFails() {
+        assertRuleFails(DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS, DomainTypeUsingVaadin.class);
+    }
+
+    @Test
+    void GivenADomainClassUsingTheApplicationLayer_WhenScanned_ThenTheDomainPurityRuleFails() {
+        assertRuleFails(DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS, DomainTypeUsingTheApplicationLayer.class);
+    }
+
+    @Test
+    void GivenADomainClassUsingAnAdapter_WhenScanned_ThenTheDomainPurityRuleFails() {
+        assertRuleFails(DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS, DomainTypeUsingAnAdapter.class);
+    }
+
+    @Test
+    void GivenADomainClassUsingSharedExternal_WhenScanned_ThenTheDomainPurityRuleFails() {
+        assertRuleFails(DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS, DomainTypeUsingSharedExternal.class);
     }
 
     private static final ArchRule DOMAIN_IS_FREE_OF_FRAMEWORK_AND_OUTER_LAYERS = noClasses()
@@ -167,11 +203,17 @@ class HexagonalRulesTest {
      */
     @Test
     void GivenProductionCode_WhenScanned_ThenTheApplicationDoesNotDependOnAdapters() {
-        noClasses()
-                .that().resideInAPackage("..application..")
-                .should().dependOnClassesThat().resideInAPackage("..adapter..")
-                .check(PRODUCTION_CLASSES);
+        APPLICATION_DOES_NOT_DEPEND_ON_ADAPTERS.check(PRODUCTION_CLASSES);
     }
+
+    @Test
+    void GivenAnApplicationClassUsingAnAdapter_WhenScanned_ThenTheApplicationRuleFails() {
+        assertRuleFails(APPLICATION_DOES_NOT_DEPEND_ON_ADAPTERS, ApplicationTypeUsingAnAdapter.class);
+    }
+
+    private static final ArchRule APPLICATION_DOES_NOT_DEPEND_ON_ADAPTERS = noClasses()
+            .that().resideInAPackage("..application..")
+            .should().dependOnClassesThat().resideInAPackage("..adapter..");
 
     /**
      * The Vaadin {@code ui} module is the single driving (inbound) adapter: it may depend on the
@@ -185,15 +227,24 @@ class HexagonalRulesTest {
      */
     @Test
     void GivenProductionCode_WhenScanned_ThenNoBackendContextDependsOnTheUi() {
-        noClasses()
-                .that().resideInAnyPackage(
-                        "com.ticketing.system.identity..", "com.ticketing.system.organization..",
-                        "com.ticketing.system.catalog..", "com.ticketing.system.sales..",
-                        "com.ticketing.system.messaging..", "com.ticketing.system.notifications..",
-                        "com.ticketing.system.governance..", "com.ticketing.system.reporting..",
-                        "com.ticketing.system.shared..")
-                .should().dependOnClassesThat().resideInAPackage("com.ticketing.system.ui..")
-                .check(PRODUCTION_CLASSES);
+        noBackendContextDependsOnTheUi(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    // Low risk, since the module map refuses these edges too; this proves the rule would still hold alone.
+    @Test
+    void GivenReportingUsingTheUi_WhenScanned_ThenTheNoBackendToUiRuleFails() {
+        assertRuleFails(noBackendContextDependsOnTheUi(FIXTURE_ROOT), ReportingTypeUsingTheUi.class);
+    }
+
+    private static final List<String> BACKEND_MODULES = List.of("identity", "organization", "catalog", "sales",
+            "messaging", "notifications", "governance", "reporting", "shared");
+
+    private static ArchRule noBackendContextDependsOnTheUi(String root) {
+        return noClasses()
+                .that().resideInAnyPackage(BACKEND_MODULES.stream()
+                        .map(module -> root + "." + module + "..")
+                        .toArray(String[]::new))
+                .should().dependOnClassesThat().resideInAPackage(root + ".ui..");
     }
 
     /**
@@ -621,10 +672,25 @@ class HexagonalRulesTest {
     
     @Test
     void GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic() {
-        slices()
-                .matching("com.ticketing.system.(*)..")   // one slice per top-level module (catalog, sales, ...)
-                .should().beFreeOfCycles()
-                .check(PRODUCTION_CLASSES);
+        boundedContextsAreAcyclic(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    // Low risk, since an acyclic module map already implies it; this proves the rule would still hold alone.
+    @Test
+    void GivenTwoModulesDependingOnEachOther_WhenScanned_ThenTheAcyclicRuleFails() {
+        JavaClasses imported = new ClassFileImporter().importClasses(OrganizationTypeUsingNotifications.class,
+                NotificationsTypeUsingOrganization.class, OrganizationFixtureType.class);
+
+        assertThatThrownBy(() -> boundedContextsAreAcyclic(FIXTURE_ROOT).check(imported))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(OrganizationTypeUsingNotifications.class.getSimpleName())
+                .hasMessageContaining(NotificationsTypeUsingOrganization.class.getSimpleName());
+    }
+
+    private static ArchRule boundedContextsAreAcyclic(String root) {
+        return slices()
+                .matching(root + ".(*)..")   // one slice per top-level module (catalog, sales, ...)
+                .should().beFreeOfCycles();
     }
 
     /**
@@ -787,8 +853,45 @@ class HexagonalRulesTest {
     }
 
     @Test
+    void GivenACallToNowInAZone_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(CallsLocalDateTimeNowInAZone.class);
+    }
+
+    @Test
+    void GivenAReadOfTheDefaultTimeZone_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(ReadsTheDefaultTimeZone.class);
+    }
+
+    @Test
+    void GivenADefaultZoneSystemClock_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(CreatesADefaultZoneClock.class);
+    }
+
+    @Test
+    void GivenTheSystemInstantSource_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(ReadsTheSystemInstantSource.class);
+    }
+
+    @Test
+    void GivenACalendarInstance_WhenScanned_ThenTheClockRuleFails() {
+        assertClockRuleFails(CreatesACalendar.class);
+    }
+
+    // Clock.tick(Clock, Duration) only rounds the clock it is given, so it reads no system clock.
+    @Test
+    void GivenATickingClockDerivedFromAGivenClock_WhenScanned_ThenTheClockRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(DerivesATickingClock.class);
+        assertThatCode(() -> NO_SYSTEM_CLOCK_OR_DEFAULT_ZONE.check(imported)).doesNotThrowAnyException();
+    }
+
+    @Test
     void GivenAReferenceToClockSystemUtcOutsideTheClockBean_WhenScanned_ThenTheBeanRuleFails() {
         assertRuleFails(ONLY_THE_CLOCK_BEAN_CREATES_A_SYSTEM_CLOCK, ReferencesClockSystemUtc.class);
+    }
+
+    @Test
+    void GivenAZonedSystemClockOutsideTheClockBean_WhenScanned_ThenTheBeanRuleFails() {
+        assertRuleFails(ONLY_THE_CLOCK_BEAN_CREATES_A_SYSTEM_CLOCK, CreatesAZonedSystemClock.class);
     }
 
     private static void assertClockRuleFails(Class<?> offender) {
@@ -1058,6 +1161,48 @@ class HexagonalRulesTest {
     static class ReferencesClockSystemUtc {
         Supplier<Clock> read() {
             return Clock::systemUTC;
+        }
+    }
+
+    static class CallsLocalDateTimeNowInAZone {
+        LocalDateTime read() {
+            return LocalDateTime.now(ZoneOffset.UTC);
+        }
+    }
+
+    static class ReadsTheDefaultTimeZone {
+        TimeZone read() {
+            return TimeZone.getDefault();
+        }
+    }
+
+    static class CreatesADefaultZoneClock {
+        Clock read() {
+            return Clock.systemDefaultZone();
+        }
+    }
+
+    static class ReadsTheSystemInstantSource {
+        InstantSource read() {
+            return InstantSource.system();
+        }
+    }
+
+    static class CreatesACalendar {
+        Calendar read() {
+            return Calendar.getInstance();
+        }
+    }
+
+    static class DerivesATickingClock {
+        Clock read(Clock clock) {
+            return Clock.tick(clock, Duration.ofSeconds(1));
+        }
+    }
+
+    static class CreatesAZonedSystemClock {
+        Clock read() {
+            return Clock.system(ZoneOffset.UTC);
         }
     }
 
