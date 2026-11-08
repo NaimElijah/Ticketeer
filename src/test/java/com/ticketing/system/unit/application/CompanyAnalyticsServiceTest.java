@@ -531,6 +531,29 @@ class CompanyAnalyticsServiceTest {
         assertEquals(100.0, result.records().get(0).totalPaid());      // only EVENT_A revenue
     }
 
+    // II.4.5: each sale shows the price stored on its receipt line when it was sold, so a sale made before a
+    // price change keeps its price. No repricing path exists to drive this end to end, so two sales of the
+    // same zone carry the price before and after the change.
+    @Test
+    void GivenPriceChangedAfterSale_WhenSalesHistory_ThenOriginalPriceShown() {
+        final double originalPrice = 100.0;
+        final double changedPrice = 150.0;
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt soldBeforeTheChange = fullReceipt(false, NOW.minusDays(2), List.of(line(1, originalPrice, EVENT_A)), 1);
+        OrderReceipt soldAfterTheChange = fullReceipt(false, NOW.minusDays(1), List.of(line(2, changedPrice, EVENT_A)), 2);
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A)))
+                .thenReturn(List.of(soldBeforeTheChange, soldAfterTheChange));
+        when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
+
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = service.salesHistory(OWNER_TOKEN, COMPANY_ID).records();
+
+        assertEquals(List.of(originalPrice, changedPrice),
+                records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::totalPaid).toList());
+        assertEquals(List.of(originalPrice, changedPrice),
+                records.stream().map(record -> record.tickets().get(0).pricePaid()).toList());
+    }
+
     // ─── salesHistory payment data on shared orders (#121, UC-22) ─────────────────
 
     @Test
