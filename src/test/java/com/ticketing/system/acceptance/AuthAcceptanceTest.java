@@ -229,7 +229,7 @@ class AuthAcceptanceTest {
     // ------------------------------------------------------------------
 
     @Test
-    void GivenLoggedInMember_WhenLogout_ThenStateGuest() {
+    void GivenLoggedInMember_WhenLogout_ThenTheTokenIsRejectedAndTheSessionRowIsDeleted() {
         // II.3.1 / D8: logout deletes the Session row entirely.
         String sid = authService.startGuestSession().sessionId();
         authService.register(new RegisterRequestDTO("frank", "frank@example.com", "Password1", sid, 20  ));

@@ -117,7 +117,7 @@ class CompanyAcceptanceTest {
 
         // UC-20
         @Test
-        void GivenOwner_WhenConfigureVenueMapWithCapacity_ThenInventoryZoneCapacityAdded() {
+        void GivenAStandingZoneOfAHundred_WhenOwnerAddsFiftyPlaces_ThenItHoldsAHundredAndFifty() {
                 AuthTokenDTO owner = registerAndLoginMember("capacityOwner");
 
                 int companyId = companyService.registerCompany(
@@ -416,7 +416,7 @@ class CompanyAcceptanceTest {
 
         // UC-24
         @Test
-        void GivenOwner_WhenAppointManager_ThenWithPermissions() {
+        void GivenOwner_WhenAppointManager_ThenAPendingAppointmentWithThePermissions() {
                 AuthTokenDTO owner = registerAndLoginMember("owner24a");
                 AuthTokenDTO manager = registerAndLoginMember("manager24a");
 

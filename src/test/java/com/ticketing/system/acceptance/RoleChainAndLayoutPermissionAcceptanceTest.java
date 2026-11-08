@@ -50,7 +50,8 @@ import com.ticketing.system.organization.domain.Permission;
  * <p>Builds the founder → owner → manager chain (u1 founds, appoints u2 owner; u2 appoints u3
  * manager with CONFIGURE_VENUE only) and asserts:
  * <ul>
- *   <li>the chain is recorded (founder, owner, manager-with-the-granted-permission);</li>
+ *   <li>the chain is recorded (founder, owner, manager-with-the-granted-permission), the manager's
+ *       appointment naming u2, who made it;</li>
  *   <li>u3 CAN edit an event's layout (configure venue map) but CANNOT manage purchase policies;</li>
  *   <li>a published event is locked against layout changes by its status: only a DRAFT or SCHEDULED
  *       event's map may change, so tickets on sale are never orphaned by a reconfiguration. The guard
@@ -82,6 +83,9 @@ class RoleChainAndLayoutPermissionAcceptanceTest {
                 "u3 (appointed by u2) has the granted CONFIGURE_VENUE permission");
         assertFalse(companyMembershipService.hasPermissionInCompany(c.u3Id, c.companyId, Permission.EDIT_POLICIES),
                 "u3 was NOT granted EDIT_POLICIES");
+        // u2's inviter needs no check here: accepting refuses an offer whose inviter is no owner, and u1 was the only one.
+        assertEquals(c.u2Id, companyMembershipService.getActiveCompanyAppointment(c.u3Id, c.companyId).getInviterId(),
+                "u2, not the founder, appointed u3");
     }
 
     @Test

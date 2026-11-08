@@ -35,12 +35,13 @@ import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.ui.presenters.company.CompanySalesPresenter;
 
 /**
- * Issue #430 [Eval 9] — after a successful purchase the sale must appear in the owner's
- * sales report (real receipt data, not mocked). These tests drive the exact path the
- * {@code owner/sales} view uses ({@link CompanySalesPresenter#load}) and assert that a
- * freshly-persisted purchase shows up on a subsequent {@code load()} — which is precisely
- * what the new Refresh button does at runtime. Existing suites hit the service directly;
- * this closes the gap by exercising the presenter and the reload (refresh) contract.
+ * Issue #430 [Eval 9] — after a purchase the sale must appear in the owner's sales report. These
+ * tests save receipts straight to the receipt repository, with the owner as the buyer, rather than
+ * buying through checkout, and drive the exact path the {@code owner/sales} view uses
+ * ({@link CompanySalesPresenter#load}): a receipt saved after one {@code load()} shows up on the
+ * next, which is what the Refresh button does at runtime. A checkout reaching the company's sales
+ * history is {@code EventCancellationAcceptanceTest}'s
+ * ({@code GivenCrossCompanyOrder_WhenOneCompanyCancelsItsEvent_ThenOnlyItsLinesLeaveTheRevenueFigures}).
  */
 @SpringBootTest
 @ActiveProfiles({"test", PersistenceProfiles.MEMORY})
@@ -103,7 +104,7 @@ class CompanySalesReportAcceptanceTest {
     }
 
     @Test
-    void GivenCompletedPurchase_WhenOwnerReloadsSalesReport_ThenSaleAppears() {
+    void GivenAReceiptSavedForTheCompanysEvent_WhenOwnerReloadsSalesReport_ThenTheSaleAppears() {
         AuthTokenDTO owner = registerAndLoginMember("salesReportOwner1");
         int companyId = companyService.registerCompany(
                 owner.token(), new CompanyRegistrationDTO("SalesReportCo1", "desc")).companyId();
@@ -114,7 +115,7 @@ class CompanySalesReportAcceptanceTest {
         assertEquals("SalesReportCo1", before.companyName());
         assertTrue(before.sales().records().isEmpty(), "no sales expected before any purchase");
 
-        // A buyer completes a purchase of the company's event.
+        // A receipt for the company's event is saved, as a completed checkout would save it.
         recordPurchase(owner, eventId, 80.0);
 
         // Reloading the report (== clicking Refresh) surfaces the recent sale.

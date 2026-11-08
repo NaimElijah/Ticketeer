@@ -3,6 +3,7 @@ package com.ticketing.system.acceptance;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.MessageDTO;
 import com.ticketing.system.shared.dto.OutreachRequestDTO;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
@@ -132,13 +134,17 @@ class MessagingAcceptanceTest {
     void GivenAdmin_WhenViewAllComplaints_ThenAllListed() {
         AuthTokenDTO admin = registerAdmin("queue.admin.a");
         AuthTokenDTO member = registerMember("queue.member.a");
+        AuthTokenDTO otherMember = registerMember("queue.member.b");
 
         ConversationDTO complaint = messagingService.submitComplaint(member.token(),
                 new SubmitComplaintRequestDTO(member.userId(), "Listed?", "Please review.", null));
+        ConversationDTO otherComplaint = messagingService.submitComplaint(otherMember.token(),
+                new SubmitComplaintRequestDTO(otherMember.userId(), "Me too", "Please review mine.", null));
 
         List<ConversationDTO> queue = messagingService.viewAllComplaints(admin.token(), null);
-        assertTrue(containsConversation(queue, complaint.conversationId()),
-                "admin complaint queue must include the freshly filed complaint");
+        assertTrue(containsConversation(queue, complaint.conversationId())
+                        && containsConversation(queue, otherComplaint.conversationId()),
+                "admin complaint queue must include every member's complaint");
         assertTrue(queue.stream().allMatch(c -> "COMPLAINT".equals(c.type())),
                 "the complaint queue must contain only complaints");
     }
@@ -162,6 +168,17 @@ class MessagingAcceptanceTest {
         assertThrows(BusinessRuleViolationException.class,
                 () -> messagingService.sendMessage(member.token(),
                         new SendMessageRequestDTO(complaint.conversationId(), 0, null, "still here?")));
+
+        // Terminal: once resolved, no admin answers it again, this one or another.
+        AuthTokenDTO otherAdmin = registerAdmin("resolve.admin.b");
+        ConversationClosedException closed = assertThrowsExactly(ConversationClosedException.class,
+                () -> messagingService.respondToComplaint(otherAdmin.token(), new RespondToComplaintRequestDTO(
+                        complaint.conversationId(), otherAdmin.userId(), "A second answer.", "RESOLVED")));
+        assertEquals("Conversation " + complaint.conversationId() + " is closed; no further messages allowed",
+                closed.getMessage());
+        assertEquals(messageIds(reloaded),
+                messageIds(messagingService.viewConversation(admin.token(), complaint.conversationId())),
+                "the refused answer must add no message");
     }
 
     @Test
@@ -302,6 +319,10 @@ class MessagingAcceptanceTest {
     private boolean hasOutreach(AuthTokenDTO member, String subject) {
         return messagingService.viewMyConversations(member.token()).stream()
                 .anyMatch(c -> "DIRECT".equals(c.type()) && subject.equals(c.subject()));
+    }
+
+    private static List<String> messageIds(ConversationDTO conversation) {
+        return conversation.messages().stream().map(MessageDTO::messageId).toList();
     }
 
     private static boolean containsConversation(List<ConversationDTO> list, String conversationId) {
