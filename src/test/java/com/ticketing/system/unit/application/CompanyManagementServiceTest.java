@@ -1319,6 +1319,19 @@ public class CompanyManagementServiceTest {
                 assertEquals(List.of(new ManagerRevokedNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME)), publishedEvents());
         }
 
+        // A manager whose permissions change is told: the notice names them and the company (UC-35, I.5.1).
+        @Test
+        public void GivenCurrentCoOwner_WhenEditTheirManagersPermissions_ThenExactlyARoleChangedNoticeNamingTheManagerIsPublished() {
+                companyWithCoOwnerWhoInvitedAManager(true);
+                clearInvocations(eventPublisher);
+
+                companyService.editManagerPermissions(CO_OWNER_TOKEN,
+                                new PermissionEditDTO(COMPANY_ID, TARGET_USER_ID, editedPermissions()));
+
+                assertEquals(List.of(new RoleChangedNotice(TARGET_USER_ID, COMPANY_ID, COMPANY_1_NAME,
+                                "MANAGER (permissions updated)")), publishedEvents());
+        }
+
         @Test
         public void GivenPendingManagerInviteFromACurrentCoOwner_WhenAccepted_ThenTheTargetIsAManager() {
                 ProductionCompany company = companyWithCoOwnerWhoInvitedAManager(false);
