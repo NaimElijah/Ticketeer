@@ -598,6 +598,31 @@ public abstract class IEventRepositoryContractTest {
         assertTrue(result.isEmpty(), "an event whose cheapest ticket costs more than the maximum must not match");
     }
 
+    // Both price bounds are inclusive: a buyer filtering "up to 50" or "from 50" sees an event at 50.
+    @Test
+    void GivenCheapestPriceEqualToMaxPrice_WhenSearchAll_ThenMatches() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Fifty Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, 50.0, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), result.stream().map(Event::getId).toList(),
+                "an event whose cheapest ticket costs exactly the maximum must match");
+    }
+
+    @Test
+    void GivenCheapestPriceEqualToMinPrice_WhenSearchAll_ThenMatches() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Fifty Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, 50.0, null, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), result.stream().map(Event::getId).toList(),
+                "an event whose cheapest ticket costs exactly the minimum must match");
+    }
+
     // === searchAll — event rating range ===
 
     @Test
