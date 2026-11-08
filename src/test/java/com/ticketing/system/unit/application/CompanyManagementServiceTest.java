@@ -1435,6 +1435,26 @@ public class CompanyManagementServiceTest {
                 verifyNoInteractions(eventPublisher);
         }
 
+        // §1 #4: owners are members, so an owner offer to an id that names no user is refused, and none is made.
+        @Test
+        public void GivenUnknownTarget_WhenAppointOwner_ThenUserNotFoundAndNoOfferMade() {
+                ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
+                                CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(company);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                UserNotFoundException noSuchUser = new UserNotFoundException(TARGET_USER_ID);
+                when(mockUserRepo.getUserById(TARGET_USER_ID)).thenThrow(noSuchUser);
+
+                UserNotFoundException refused = assertThrowsExactly(UserNotFoundException.class,
+                                () -> companyService.appointOwner(OWNER_TOKEN,
+                                                new OwnerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID)));
+
+                assertSame(noSuchUser, refused);
+                assertEquals(List.of(), appointmentsOfTarget());
+                verifyNoInteractions(eventPublisher);
+        }
+
         @Test
         public void GivenPendingOwnerOffer_WhenAppointOwnerAgain_ThenRefusedAndOneOfferStands() {
                 founderAppointedTheTargetAsManager();
