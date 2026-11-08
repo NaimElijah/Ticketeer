@@ -257,7 +257,10 @@ class AuthenticationServiceLoginTransactionTest {
 
             assertThat(logs.messagesAt(Level.WARN))
                     .as("a delivery failure the login absorbs must still be reported, not swallowed")
-                    .isNotEmpty();
+                    .containsExactly("pending notifications not delivered at login, left for the poller: id=" + USER_ID);
+            assertThat(logs.throwableClassNamesAt(Level.WARN))
+                    .as("the WARN carries the failure itself")
+                    .containsExactly(DataAccessResourceFailureException.class.getName());
         });
     }
 
