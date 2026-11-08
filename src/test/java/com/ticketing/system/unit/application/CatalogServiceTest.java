@@ -830,12 +830,14 @@ class CatalogServiceTest {
     void GivenActiveCompanyEventsSharingACountry_WhenOnSaleCountries_ThenDistinctAndSorted() {
         // Build mocks into locals BEFORE stubbing the repos — helper calls invoke when(...) themselves,
         // which Mockito rejects if nested inside an ongoing thenReturn(...) stub.
-        Event e1 = locatedEvent(1, 10, "Israel", "Tel Aviv");
-        Event e2 = locatedEvent(2, 10, "Israel", "Haifa");
-        Event e3 = locatedEvent(3, 20, "USA", "New York");
+        // The search answers USA first and repeats Israel apart, so only a sort and a distinct give the result.
+        Event e1 = locatedEvent(1, 20, "USA", "New York");
+        Event e2 = locatedEvent(2, 10, "Israel", "Tel Aviv");
+        Event e3 = locatedEvent(3, 20, "USA", "Chicago");
+        Event e4 = locatedEvent(4, 10, "Israel", "Haifa");
         ProductionCompany a = createMockCompany("A", 4.0);
         ProductionCompany b = createMockCompany("B", 4.0);
-        when(mockEventRepository.searchONSALE(any())).thenReturn(List.of(e1, e2, e3));
+        when(mockEventRepository.searchONSALE(any())).thenReturn(List.of(e1, e2, e3, e4));
         when(mockCompanyRepository.getCompanyById(10)).thenReturn(a);
         when(mockCompanyRepository.getCompanyById(20)).thenReturn(b);
 
