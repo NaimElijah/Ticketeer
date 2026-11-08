@@ -1,5 +1,6 @@
 package com.ticketing.system.integration;
 
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -10,7 +11,6 @@ import static org.mockito.Mockito.doAnswer;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -173,13 +173,7 @@ class SessionAndOrderSweeperJpaTest {
         AtomicBoolean ran = new AtomicBoolean(false);
         doAnswer(invocation -> {
             if (ran.compareAndSet(false, true)) {
-                try {
-                    buyerTab.submit(reservation).get(AWAIT_SECONDS, TimeUnit.SECONDS);
-                } catch (ExecutionException e) {
-                    failure.set(e.getCause());
-                } catch (Exception e) {
-                    failure.set(e);
-                }
+                failure.set(failureOf(() -> buyerTab.submit(reservation).get(AWAIT_SECONDS, TimeUnit.SECONDS)));
             }
             return invocation.callRealMethod();
         }).when(eventRepository).lockForUpdate(show.eventId());
