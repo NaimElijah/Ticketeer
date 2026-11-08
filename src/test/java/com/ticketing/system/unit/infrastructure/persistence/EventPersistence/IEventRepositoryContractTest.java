@@ -814,6 +814,19 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(List.of(1), found.stream().map(Event::getId).toList());
     }
 
+    // II.2.3.a: the buyer's search of all events, searchONSALE, narrows by location; an event in another city
+    // of the same country is left out.
+    @Test
+    void GivenEventInAnotherCity_WhenSearchONSALEByLocation_ThenExcluded() {
+        eventRepo.save(eventWithArtistAt(1, "Artist A", new Location("France", "Paris")));
+        eventRepo.save(eventWithArtistAt(2, "Artist A", new Location("France", "Lyon")));
+
+        List<Event> found = eventRepo.searchONSALE(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null, null, null, "Paris", null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
     private Event eventWithArtistAt(int id, String artist, Location location) {
         VenueMap venueMap = new VenueMap(id, location, List.of(new StandingZone(1, "Floor", 100, 50)));
         return new Event(id, "Concert " + id, 4.5, List.of(artist), EventCategory.CONCERT, 10, EventStatus.ON_SALE,
