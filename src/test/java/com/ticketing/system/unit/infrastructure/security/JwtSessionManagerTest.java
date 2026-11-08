@@ -419,6 +419,9 @@ class JwtSessionManagerTest {
         assertTrue(manager.validateToken(token));
         assertEquals(9, manager.extractUserId(token));
         assertEquals("dave", manager.extractUsername(token));
+        // It names the promoted row itself: a re-minted session would also validate, but drop the guest's cart.
+        assertEquals("preserved-sid", sidOf(token), "the token must name the existing session row");
+        assertEquals(1, countSessionsForUser(9), "no second session row may be created for the member");
     }
 
     @Test
@@ -1096,6 +1099,162 @@ class JwtSessionManagerTest {
     }
 
     /** The sid claim, read with the test's own key so it does not depend on the manager's readers. */
+    // ---- #189: claims the binding refuses ----
+
+    @Test
+    void GivenATokenWithoutASessionId_WhenValidateToken_ThenThrowsInvalidToken() {
+        String token = signedToken(MEMBER_ID, null, ROLE_MEMBER);
+
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
+                "a token that names no session row is bound to none");
+    }
+
+    @Test
+    void GivenATokenWithAnUnknownRole_WhenValidateToken_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(MEMBER_ID, sidOf(memberToken), "OWNER");
+
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
+                "a role that is neither MEMBER nor ADMIN matches no session kind");
+    }
+
+    @Test
+    void GivenATokenWithoutARole_WhenValidateToken_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String token = signedToken(MEMBER_ID, sidOf(memberToken), null);
+
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(token),
+                "a token without a role claim matches no session kind");
+    }
+
+    // An unsecured JWT ("alg": "none") carries the same claims as a signed one; only the signature binds them.
+    @Test
+    void GivenAnUnsignedTokenNamingALiveRow_WhenValidateToken_ThenThrowsInvalidToken() {
+        String memberToken = boundManager.generateToken(MEMBER_ID, "alice");
+        String unsigned = Jwts.builder()
+                .subject(String.valueOf(MEMBER_ID))
+                .claim(CLAIM_USERNAME, "alice")
+                .claim(CLAIM_SID, sidOf(memberToken))
+                .claim(CLAIM_ROLE, ROLE_MEMBER)
+                .issuedAt(Date.from(T0))
+                .expiration(Date.from(T0.plus(Duration.ofHours(1))))
+                .compact();
+
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateToken(unsigned),
+                "an unsigned token must never validate");
+    }
+
+    // ---- #189: the readers' refusals the port documents ----
+
+    @Test
+    void GivenAnAdminToken_WhenExtractUsername_ThenThrowsInvalidToken() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractUsername(adminToken),
+                "extractUsername is a member reader, so an admin token is refused as a revoked one");
+    }
+
+    @Test
+    void GivenAGarbageToken_WhenIsAdminToken_ThenFalse() {
+        assertFalse(boundManager.isAdminToken("not-a-jwt"));
+    }
+
+    @Test
+    void GivenAGarbageToken_WhenExtractAdminId_ThenThrowsInvalidToken() {
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractAdminId("not-a-jwt"));
+    }
+
+    @Test
+    void GivenAGarbageToken_WhenValidateAdminToken_ThenThrowsInvalidToken() {
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.validateAdminToken("not-a-jwt"));
+    }
+
+    @Test
+    void GivenAnExpiredAdminToken_WhenIsAdminToken_ThenFalse() {
+        JwtSessionManager expiredManager = expiredOnIssueManager();
+        String adminToken = expiredManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertFalse(expiredManager.isAdminToken(adminToken), "an expired admin token is no live admin token");
+    }
+
+    @Test
+    void GivenAnExpiredAdminToken_WhenExtractAdminId_ThenThrowsSessionExpired() {
+        JwtSessionManager expiredManager = expiredOnIssueManager();
+        String adminToken = expiredManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertThrowsExactly(SessionExpiredException.class, () -> expiredManager.extractAdminId(adminToken));
+    }
+
+    @Test
+    void GivenAnExpiredAdminToken_WhenValidateAdminToken_ThenThrowsSessionExpired() {
+        JwtSessionManager expiredManager = expiredOnIssueManager();
+        String adminToken = expiredManager.generateAdminToken(ADMIN_ID, "admin");
+
+        assertThrowsExactly(SessionExpiredException.class, () -> expiredManager.validateAdminToken(adminToken));
+    }
+
+    @Test
+    void GivenARevokedAdminToken_WhenIsAdminToken_ThenFalse() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+        boundManager.invalidate(adminToken);
+
+        assertFalse(boundManager.isAdminToken(adminToken), "a signed-out admin's token is no live admin token");
+    }
+
+    @Test
+    void GivenARevokedAdminToken_WhenExtractAdminId_ThenThrowsInvalidToken() {
+        String adminToken = boundManager.generateAdminToken(ADMIN_ID, "admin");
+        boundManager.invalidate(adminToken);
+
+        assertThrowsExactly(InvalidTokenException.class, () -> boundManager.extractAdminId(adminToken));
+    }
+
+    // ---- #189: a session-store failure is not a bad credential, on every reader ----
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenValidateGuestSession_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        store.save(new Session(GUEST_SID, null, T0, T0.plus(Duration.ofMinutes(30))));
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.validateGuestSession(GUEST_SID),
+                "an unreachable session store must not read as a dead guest session");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenValidateToken_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        String token = onStore.generateToken(MEMBER_ID, "alice");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.validateToken(token),
+                "an unreachable session store must not read as an invalid token");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenValidateAdminToken_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        String adminToken = onStore.generateAdminToken(ADMIN_ID, "admin");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.validateAdminToken(adminToken),
+                "an unreachable session store must not read as an invalid admin token");
+    }
+
+    @Test
+    void GivenSessionStoreUnreachable_WhenIsAdminToken_ThenTheStoreFailurePropagates() {
+        OutageSessionRepository store = new OutageSessionRepository(new MemorySessionRepository(FIXED_CLOCK));
+        JwtSessionManager onStore = onFixedClock(store);
+        String adminToken = onStore.generateAdminToken(ADMIN_ID, "admin");
+        store.goDown();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> onStore.isAdminToken(adminToken),
+                "an unreachable session store is not a non-admin token");
+    }
+
     private static String sidOf(String token) {
         return Jwts.parser().verifyWith(TEST_KEY).clock(() -> Date.from(T0)).build()
                 .parseSignedClaims(token).getPayload().get(CLAIM_SID, String.class);
