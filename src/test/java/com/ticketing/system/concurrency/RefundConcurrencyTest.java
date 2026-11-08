@@ -1,6 +1,7 @@
 package com.ticketing.system.concurrency;
 
 import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
 import static com.ticketing.system.testutil.Races.failureOf;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -134,9 +135,7 @@ class RefundConcurrencyTest {
                     try {
                         armed.countDown();
                         // release all requests at once to maximise the race
-                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                            throw new IllegalStateException("the race was never started");
-                        }
+                        awaitOrFailWith(fire, Duration.ofSeconds(FIRE_TIMEOUT_SECONDS), "the race was never started");
                         refundService.requestRefund(buyerToken, RECEIPT_ID, "double-click");
                         refunded.incrementAndGet();
                     } catch (BusinessRuleViolationException refused) {

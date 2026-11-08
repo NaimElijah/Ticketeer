@@ -1,6 +1,7 @@
 package com.ticketing.system.integration;
 
 import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
 import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -385,9 +386,8 @@ class SecondCheckoutAttemptJpaTest {
         doAnswer(invocation -> {
             if (firstCharge.getAndSet(false)) {
                 charging.countDown();
-                if (!releaseCharge.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("the test never released the held charge");
-                }
+                awaitOrFailWith(releaseCharge, Duration.ofSeconds(AWAIT_SECONDS),
+                        "the test never released the held charge");
             }
             return invocation.callRealMethod();
         }).when(paymentGateway).charge(any());

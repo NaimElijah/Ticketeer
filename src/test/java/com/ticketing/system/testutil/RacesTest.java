@@ -1,6 +1,7 @@
 package com.ticketing.system.testutil;
 
 import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
 import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,8 +22,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The race helpers the concurrency suites share (#189): what {@code failureOf} returns for each way a
- * call ends, and how {@code awaitOrFail} ends at its bound. A zero bound times out at once, so no test
- * here waits.
+ * call ends, and how {@code awaitOrFail} and {@code awaitOrFailWith} end at their bound. A zero bound
+ * times out at once, so no test here waits.
  */
 class RacesTest {
 
@@ -102,5 +103,18 @@ class RacesTest {
         Thread.currentThread().interrupt();
 
         assertThrows(InterruptedException.class, () -> awaitOrFail(new CountDownLatch(1), LONG_WAIT, "the step"));
+    }
+
+    @Test
+    void GivenALatchAtZero_WhenAwaitOrFailWith_ThenItReturns() {
+        assertDoesNotThrow(() -> awaitOrFailWith(new CountDownLatch(0), NO_WAIT, "the race was never started"));
+    }
+
+    @Test
+    void GivenALatchAboveZeroAtTheBound_WhenAwaitOrFailWith_ThenItThrowsTheMessageAsGiven() {
+        IllegalStateException timedOut = assertThrows(IllegalStateException.class,
+                () -> awaitOrFailWith(new CountDownLatch(1), NO_WAIT, "the race was never started"));
+
+        assertEquals("the race was never started", timedOut.getMessage());
     }
 }

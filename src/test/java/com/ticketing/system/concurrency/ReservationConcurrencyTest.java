@@ -1,11 +1,13 @@
 package com.ticketing.system.concurrency;
 
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -293,9 +295,7 @@ class ReservationConcurrencyTest {
                     try {
                         armed.countDown();
                         // release all workers at once to maximise the race window
-                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                            throw new IllegalStateException("the race was never started");
-                        }
+                        awaitOrFailWith(fire, Duration.ofSeconds(FIRE_TIMEOUT_SECONDS), "the race was never started");
                         reservationService.reserveForGuest(guestSessionId, eventId, zoneId, selection);
                         successes.incrementAndGet();
                     } catch (Throwable t) {

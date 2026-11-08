@@ -52,8 +52,23 @@ public final class Races {
      * @throws InterruptedException when the waiting thread is interrupted
      */
     public static void awaitOrFail(CountDownLatch latch, Duration bound, String what) throws InterruptedException {
+        awaitOrFailWith(latch, bound, what + NEVER_HAPPENED);
+    }
+
+    /**
+     * Waits until a latch reaches zero, for at most {@code bound}, as {@link #awaitOrFail} does, for a
+     * caller whose timeout message is not {@code what + ", but it never did"}.
+     *
+     * @param latch the latch the awaited step counts down
+     * @param bound the longest wait
+     * @param timeoutMessage the whole message of the timeout
+     * @throws IllegalStateException with {@code timeoutMessage} when the bound passes with the latch above zero
+     * @throws InterruptedException when the waiting thread is interrupted
+     */
+    public static void awaitOrFailWith(CountDownLatch latch, Duration bound, String timeoutMessage)
+            throws InterruptedException {
         if (!latch.await(bound.toNanos(), TimeUnit.NANOSECONDS)) {
-            throw new IllegalStateException(what + NEVER_HAPPENED);
+            throw new IllegalStateException(timeoutMessage);
         }
     }
 }

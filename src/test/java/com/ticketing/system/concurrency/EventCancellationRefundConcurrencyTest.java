@@ -1,6 +1,7 @@
 package com.ticketing.system.concurrency;
 
 import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
 import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -160,9 +161,7 @@ class EventCancellationRefundConcurrencyTest {
                     try {
                         armed.countDown();
                         // release every run at once to maximise the race
-                        if (!fire.await(FIRE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                            throw new IllegalStateException("the race was never started");
-                        }
+                        awaitOrFailWith(fire, Duration.ofSeconds(FIRE_TIMEOUT_SECONDS), "the race was never started");
                         publishCancellation();
                     } catch (RefundFailedException refused) {
                         // A run that skipped a receipt another run had claimed reports it still pending.
