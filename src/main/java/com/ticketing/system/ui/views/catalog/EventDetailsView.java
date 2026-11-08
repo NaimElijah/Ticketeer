@@ -39,7 +39,6 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 @Route(value = "events/:eventId", layout = MainLayout.class)
 @PageTitle("Event · TicketHub")
@@ -398,7 +397,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         if (name == null || name.isBlank()) {
             return "EVENT";
         }
-        return name.trim().substring(0, 1).toUpperCase(Locale.US);
+        return name.trim().substring(0, 1).toUpperCase(DisplayLocale.PAGE);
     }
 
     /** Rating shown without a trailing ".0" (e.g. 4.5 → "4.5", 4.0 → "4"). */
@@ -423,7 +422,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         if (enumName == null || enumName.isBlank()) {
             return "";
         }
-        String lower = enumName.replace('_', ' ').toLowerCase(Locale.US);
+        String lower = enumName.replace('_', ' ').toLowerCase(DisplayLocale.PAGE);
         return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
