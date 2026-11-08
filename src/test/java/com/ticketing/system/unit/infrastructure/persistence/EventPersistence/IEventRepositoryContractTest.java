@@ -40,8 +40,8 @@ import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.testutil.DefaultLocale;
 import com.ticketing.system.testutil.RepositoryLockProbe;
 
-// Contract tests every EventRepository implementation must satisfy. Future JPA-backed
-// adapter will subclass this with its own newRepository() factory; tests are reused.
+// Contract tests every EventRepository implementation must satisfy. The Memory and Jpa adapters each
+// subclass this with their own newRepository() factory; the tests are reused.
 public abstract class IEventRepositoryContractTest {
 
     protected abstract EventRepository newRepository();
