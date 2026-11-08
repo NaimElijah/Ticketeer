@@ -22,6 +22,9 @@ import ch.qos.logback.core.read.ListAppender;
  *
  * <p>The level is lowered to TRACE while attached: a value logged only at DEBUG still reaches the
  * log in the dev profile, so a test that asserts something is never logged must see DEBUG too.
+ *
+ * <p>Safe to read while another thread logs, such as the {@code notify-} thread delivering notices after
+ * commit: every read takes a snapshot under the lock Logback appends under.
  */
 public final class LogCapture implements AutoCloseable {
 
@@ -61,7 +64,7 @@ public final class LogCapture implements AutoCloseable {
     public List<String> eventsContaining(String text) {
         String needle = text.toLowerCase(Locale.ROOT);
         List<String> matches = new ArrayList<>();
-        for (ILoggingEvent event : List.copyOf(appender.list)) {
+        for (ILoggingEvent event : recorded()) {
             String rendered = event.getFormattedMessage() + throwableMessages(event.getThrowableProxy());
             if (rendered.toLowerCase(Locale.ROOT).contains(needle)) {
                 matches.add(event.getLevel() + " " + rendered);
@@ -77,7 +80,7 @@ public final class LogCapture implements AutoCloseable {
      * @return the messages at that level, empty when none was logged at it
      */
     public List<String> messagesAt(Level level) {
-        return List.copyOf(appender.list).stream()
+        return recorded().stream()
                 .filter(event -> event.getLevel().equals(level))
                 .map(ILoggingEvent::getFormattedMessage)
                 .toList();
@@ -91,7 +94,7 @@ public final class LogCapture implements AutoCloseable {
      * @return the attached throwables' class names, empty when no event at that level carried one
      */
     public List<String> throwableClassNamesAt(Level level) {
-        return List.copyOf(appender.list).stream()
+        return recorded().stream()
                 .filter(event -> event.getLevel().equals(level))
                 .map(ILoggingEvent::getThrowableProxy)
                 .filter(throwable -> throwable != null)
@@ -120,7 +123,15 @@ public final class LogCapture implements AutoCloseable {
 
     /** How many events were recorded, so a test can show its path logged anything at all. */
     public int eventCount() {
-        return appender.list.size();
+        return recorded().size();
+    }
+
+    // ListAppender's list is a plain ArrayList, appended to inside AppenderBase.doAppend, which holds the
+    // appender's monitor; a copy taken under the same monitor never sees a half-finished append.
+    private List<ILoggingEvent> recorded() {
+        synchronized (appender) {
+            return List.copyOf(appender.list);
+        }
     }
 
     private static String throwableMessages(IThrowableProxy throwable) {
