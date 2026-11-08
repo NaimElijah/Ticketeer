@@ -589,9 +589,8 @@ public abstract class IEventRepositoryContractTest {
 
     @Test
     void GivenCheapestPriceAboveMaxPrice_WhenSearchAll_ThenReturnsEmpty() {
-        eventRepo.save(buildEvent(1, "Pricey Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT)); // zone
-                                                                                                           // price
-                                                                                                           // = 50
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Pricey Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 null, null, null, null, null, 40.0, null, null, null, null, null, null, null));

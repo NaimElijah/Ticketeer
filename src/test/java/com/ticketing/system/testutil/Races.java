@@ -22,10 +22,10 @@ public final class Races {
      * Runs a call and returns what it threw.
      *
      * <p>An {@link ExecutionException}, as a {@code Future}'s {@code get} throws, is unwrapped to its
-     * cause, and returned as it is when it has none, so a failure never reads as a return. Any other {@link Exception} is returned as it is, a
-     * {@code get}'s {@link java.util.concurrent.TimeoutException} and an {@link InterruptedException}
-     * included, and the thread's interrupt flag is left cleared. An {@link Error}, such as a failed
-     * assertion inside the call, propagates.
+     * cause, and returned as it is when it has none, so a failure never reads as a return. Any other
+     * {@link Exception} is returned as it is, a {@code get}'s {@link java.util.concurrent.TimeoutException}
+     * and an {@link InterruptedException} included, and the thread's interrupt flag is left cleared. An
+     * {@link Error}, such as a failed assertion inside the call, propagates.
      *
      * @param call the call to run, typically {@code () -> future.get(bound, unit)}
      * @return what the call threw, unwrapped as above; {@code null} when it returned

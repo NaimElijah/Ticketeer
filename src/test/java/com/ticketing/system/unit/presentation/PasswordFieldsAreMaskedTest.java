@@ -33,7 +33,7 @@ import com.vaadin.flow.component.textfield.PasswordField;
  */
 class PasswordFieldsAreMaskedTest {
 
-    private static final String PASSWORD = "password";
+    private static final String PASSWORD_LABEL_WORD = "password";
 
     private ViewHarness harness;
 
@@ -67,7 +67,7 @@ class PasswordFieldsAreMaskedTest {
     private static void assertEveryPasswordInputIsMasked(Component form, List<String> expectedLabels) {
         List<Component> passwordInputs = find(form, Component.class).stream()
             .filter(component -> component instanceof HasValue<?, ?>)
-            .filter(component -> labelOf(component).toLowerCase(Locale.ROOT).contains(PASSWORD))
+            .filter(component -> labelOf(component).toLowerCase(Locale.ROOT).contains(PASSWORD_LABEL_WORD))
             .toList();
 
         assertEquals(expectedLabels, passwordInputs.stream().map(PasswordFieldsAreMaskedTest::labelOf).toList(),

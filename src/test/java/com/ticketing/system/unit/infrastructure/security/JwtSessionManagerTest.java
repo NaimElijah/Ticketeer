@@ -1098,7 +1098,6 @@ class JwtSessionManagerTest {
         }
     }
 
-    /** The sid claim, read with the test's own key so it does not depend on the manager's readers. */
     // ---- #189: claims the binding refuses ----
 
     @Test
@@ -1255,6 +1254,7 @@ class JwtSessionManagerTest {
                 "an unreachable session store is not a non-admin token");
     }
 
+    /** The sid claim, read with the test's own key so it does not depend on the manager's readers. */
     private static String sidOf(String token) {
         return Jwts.parser().verifyWith(TEST_KEY).clock(() -> Date.from(T0)).build()
                 .parseSignedClaims(token).getPayload().get(CLAIM_SID, String.class);

@@ -169,7 +169,7 @@ class MessagingAcceptanceTest {
                 () -> messagingService.sendMessage(member.token(),
                         new SendMessageRequestDTO(complaint.conversationId(), 0, null, "still here?")));
 
-        // Terminal: once resolved, no admin answers it again, this one or another.
+        // Terminal: once resolved, a second admin's answer is refused too.
         AuthTokenDTO otherAdmin = registerAdmin("resolve.admin.b");
         ConversationClosedException closed = assertThrowsExactly(ConversationClosedException.class,
                 () -> messagingService.respondToComplaint(otherAdmin.token(), new RespondToComplaintRequestDTO(
