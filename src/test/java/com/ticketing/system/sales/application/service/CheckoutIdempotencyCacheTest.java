@@ -29,9 +29,9 @@ import com.ticketing.system.shared.exception.IdempotencyConflictException;
  * without limit. Past its capacity the oldest entry goes first.
  *
  * <p>Tests the package-private cache {@code CheckoutService} keeps its completed checkouts in, so the
- * bound can be shown with a small capacity instead of hundreds of real checkouts. Which entry a read
- * refreshes, if any, is not specified here: eviction is pinned only for entries never read after they
- * were cached.
+ * bound can be shown with a small capacity instead of hundreds of real checkouts. Eviction follows the
+ * order the checkouts were cached in: a replay reads an entry without refreshing it, so it never keeps an
+ * entry alive past newer checkouts.
  */
 class CheckoutIdempotencyCacheTest {
 
@@ -98,6 +98,36 @@ class CheckoutIdempotencyCacheTest {
                 () -> assertEquals(Optional.of(result(1)), cache.find(key(1), BUYER)),
                 () -> assertEquals(Optional.of(result(2)), cache.find(key(2), BUYER)),
                 () -> assertEquals(Optional.of(result(SMALL_CAPACITY)), cache.find(key(SMALL_CAPACITY), BUYER)));
+    }
+
+    @Test
+    void GivenAReplayedOldestEntry_WhenOneMoreIsCached_ThenItIsStillEvictedFirst() {
+        CheckoutIdempotencyCache cache = new CheckoutIdempotencyCache(SMALL_CAPACITY);
+        IntStream.range(0, SMALL_CAPACITY).forEach(i -> cache.putIfAbsent(key(i), BUYER, result(i)));
+        assertEquals(Optional.of(result(0)), cache.find(key(0), BUYER), "precondition: the oldest is replayed");
+
+        cache.putIfAbsent(key(SMALL_CAPACITY), BUYER, result(SMALL_CAPACITY));
+
+        assertAll(
+                () -> assertEquals(Optional.empty(), cache.find(key(0), BUYER),
+                        "a replay must not keep the oldest entry alive past a newer checkout"),
+                () -> assertEquals(Optional.of(result(1)), cache.find(key(1), BUYER)),
+                () -> assertEquals(Optional.of(result(2)), cache.find(key(2), BUYER)),
+                () -> assertEquals(Optional.of(result(SMALL_CAPACITY)), cache.find(key(SMALL_CAPACITY), BUYER)));
+    }
+
+    // The first result wins whoever caches the key next, so one buyer's purchase is never replaced by another's.
+    @Test
+    void GivenAKeyCachedForOneBuyer_WhenAnotherBuyerCachesIt_ThenTheFirstBuyerKeepsItsResult() {
+        CheckoutIdempotencyCache cache = new CheckoutIdempotencyCache(SMALL_CAPACITY);
+        CheckoutResultDTO first = result(1);
+        cache.putIfAbsent("idem-1", BUYER, first);
+
+        cache.putIfAbsent("idem-1", OTHER_BUYER, result(2));
+
+        assertEquals(Optional.of(first), cache.find("idem-1", BUYER), "the first buyer's purchase stays cached");
+        assertThrows(IdempotencyConflictException.class, () -> cache.find("idem-1", OTHER_BUYER),
+                "the key still belongs to the first buyer");
     }
 
     @Test
