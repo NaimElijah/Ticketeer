@@ -8,6 +8,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +28,40 @@ import com.ticketing.system.shared.metrics.InMemorySystemMetrics;
 class InMemorySystemMetricsTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
+    private static final int THREADS = 8;
+    private static final int RECORDS_PER_THREAD = 10_000;
+    private static final long AWAIT_SECONDS = 30;
+
+    // Requests record on many threads at once; the Javadoc promises none is lost.
+    @Test
+    void GivenConcurrentRecords_WhenTotalAndCount_ThenNoneIsLost() throws Exception {
+        InMemorySystemMetrics metrics = new InMemorySystemMetrics(new MutableClock(T0));
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        try {
+            List<Future<?>> recorders = new ArrayList<>();
+            for (int t = 0; t < THREADS; t++) {
+                recorders.add(pool.submit(() -> {
+                    start.await();
+                    for (int i = 0; i < RECORDS_PER_THREAD; i++) {
+                        metrics.record(MetricType.VISITOR_ENTRY);
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> recorder : recorders) {
+                recorder.get(AWAIT_SECONDS, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        long expected = (long) THREADS * RECORDS_PER_THREAD;
+        assertEquals(expected, metrics.total(MetricType.VISITOR_ENTRY), "every record must reach the total");
+        assertEquals(expected, metrics.count(MetricType.VISITOR_ENTRY, Duration.ofMinutes(1)),
+                "every record must be in the window");
+    }
 
     @Test
     void GivenEventsTenMinutesApart_WhenCountAndTotal_ThenOnlyCountsEventsInsideTheWindowAndTotalCountsAll() {
