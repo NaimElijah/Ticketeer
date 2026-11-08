@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
@@ -453,8 +454,9 @@ class CompanyAcceptanceTest {
                                                 .getPermissions().stream().toList());
         }
 
+        // `other` holds no appointment in the company, so the owner check refuses the edit before the appointer check.
         @Test
-        void GivenDifferentOwner_WhenEditPermissions_ThenRejected() {
+        void GivenAMemberOutsideTheCompany_WhenEditPermissions_ThenRefusedAsNoOwnerAndThePermissionsAreUnchanged() {
                 AuthTokenDTO owner = registerAndLoginMember("owner24c");
                 AuthTokenDTO other = registerAndLoginMember("other24c");
                 AuthTokenDTO manager = registerAndLoginMember("manager24c");
@@ -470,10 +472,13 @@ class CompanyAcceptanceTest {
 
                 companyService.respondToAppointment(manager.token(), new AppointmentResponseDTO(companyId, true));
 
-                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(
-                                other.token(),
-                                new PermissionEditDTO(companyId, manager.userId(), List.of(Permission.EDIT_POLICIES))));
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.editManagerPermissions(other.token(),
+                                                new PermissionEditDTO(companyId, manager.userId(),
+                                                                List.of(Permission.EDIT_POLICIES))));
 
+                assertEquals("Not authorized to perform action: User is not an owner in this company",
+                                refused.getMessage());
                 assertEquals(original,
                                 companyMembershipService.getActiveCompanyAppointment(manager.userId(), companyId)
                                                 .getPermissions().stream().toList());
@@ -582,9 +587,12 @@ class CompanyAcceptanceTest {
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
-                assertThrows(RuntimeException.class,
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
                                 () -> eventManagementService.getEventDetail(outsider.token(),
                                                 Integer.parseInt(created.eventId())));
+
+                assertEquals("Not authorized to perform action: User is not a member of this company",
+                                refused.getMessage());
         }
 
         // -------------------------------------------------------------------------
@@ -658,8 +666,9 @@ class CompanyAcceptanceTest {
                 assertEquals(EventCategory.THEATER, stored.getCategory());
         }
 
+        // Editing an event's details needs MANAGE_INVENTORY; this manager holds VIEW_SALES only.
         @Test
-        void GivenManagerWithoutConfigureVenuePermission_WhenEditEventDetails_ThenThrows() {
+        void GivenManagerWithoutManageInventory_WhenEditEventDetails_ThenMissingPermissionAndTheEventIsUnchanged() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner4");
                 AuthTokenDTO manager = registerAndLoginMember("editManager4");
                 int companyId = companyService.registerCompany(
@@ -679,11 +688,16 @@ class CompanyAcceptanceTest {
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
-                assertThrows(RuntimeException.class,
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
                                 () -> eventManagementService.editEventDetails(manager.token(),
                                                 new EventUpdateDTO(created.eventId(), "Blocked Edit", null, null, null,
                                                                 null,
                                                                 null)));
+
+                assertEquals("Not authorized to perform action: Missing permission: MANAGE_INVENTORY",
+                                refused.getMessage());
+                assertEquals("Restricted Event", eventManagementService.getEventDetail(owner.token(),
+                                Integer.parseInt(created.eventId())).name(), "the refused edit must not reach the event");
         }
 
         @Test
