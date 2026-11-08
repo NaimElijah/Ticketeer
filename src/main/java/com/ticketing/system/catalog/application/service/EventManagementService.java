@@ -990,12 +990,8 @@ public class EventManagementService {
 
     // UC-21 — set / replace the event-level purchase policy. No discount is set here: an event's discount
     // stays the 0% addEvent gives it, and whether it should be settable is NaimElijah/Ticketeer#259.
-    // this function replaces any existing event-level purchase policy with a new
-    // one built from the provided DTO, while also inheriting
-    // and combining with the company-level purchase policy. If the company does not
-    // have a purchase policy, it simply uses the event-specific
-    // one. The resulting combined purchase policy is then set on the event and
-    // saved to the repository.
+    // It replaces the event's own purchase policy with one built from the DTO and stores only that: the
+    // company's policy is combined with it each time a purchase is checked (Event.validateEffectivePolicy).
 
     // in this function, lock the event as well to prevent concurrent modifications
     // to the event's purchase policy while we're updating it. This ensures that we
