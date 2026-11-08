@@ -82,19 +82,74 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void GivenASavedOpenInquiry_WhenFindByTypeOrCompanyAsCounterpartyOrTypeAndStatus_ThenReturnsItOnlyForMatchingArguments() {
+    void GivenASavedInquiry_WhenFindByType_ThenItIsFoundUnderItsTypeOnly() {
         Conversation c = inquiry(5, 10, "Help", "hello");
         repo.save(c);
 
         assertEquals(Set.of(c.getConversationId()), ids(repo.findByType(ConversationType.INQUIRY)));
         assertTrue(repo.findByType(ConversationType.COMPLAINT).isEmpty());
+    }
+
+    @Test
+    void GivenASavedInquiryToACompany_WhenFindByCompanyAsCounterparty_ThenItIsFoundForThatCompanyOnly() {
+        Conversation c = inquiry(5, 10, "Help", "hello");
+        repo.save(c);
 
         assertEquals(Set.of(c.getConversationId()), ids(repo.findByCompanyAsCounterparty(10)));
         assertTrue(repo.findByCompanyAsCounterparty(999).isEmpty());
+    }
+
+    @Test
+    void GivenASavedOpenInquiry_WhenFindByTypeAndStatus_ThenItIsFoundUnderItsStatusOnly() {
+        Conversation c = inquiry(5, 10, "Help", "hello");
+        repo.save(c);
 
         assertEquals(Set.of(c.getConversationId()),
                 ids(repo.findByTypeAndStatus(ConversationType.INQUIRY, ConversationStatus.OPEN)));
         assertTrue(repo.findByTypeAndStatus(ConversationType.INQUIRY, ConversationStatus.CLOSED).isEmpty());
+    }
+
+    // The member Support Inbox (port Javadoc): what the member opened, inquiry or complaint, and the
+    // outreach an admin sent the member.
+    @Test
+    void GivenTheMembersInquiryComplaintAndAnAdminsOutreach_WhenFindMemberInbox_ThenAllThreeAreListed() {
+        Conversation inquiry = inquiry(5, 10, "Help", "hello");
+        Conversation complaint = Conversation.start(ConversationType.COMPLAINT, 5, ParticipantType.MEMBER,
+                0, ParticipantType.ADMIN_GROUP, "Refund", "never arrived", STARTED_AT);
+        Conversation outreach = Conversation.start(ConversationType.DIRECT, 1, ParticipantType.ADMIN,
+                5, ParticipantType.MEMBER, "Notice", "about your account", STARTED_AT);
+        List.of(inquiry, complaint, outreach).forEach(repo::save);
+
+        assertEquals(Set.of(inquiry.getConversationId(), complaint.getConversationId(), outreach.getConversationId()),
+                ids(repo.findMemberInbox(5)));
+    }
+
+    // Ids of members, companies and admins share one integer space: company 5 and admin 5 are not member 5.
+    @Test
+    void GivenConversationsOfOtherMembersAndOfACompanyWithTheMembersId_WhenFindMemberInbox_ThenNoneIsListed() {
+        repo.save(inquiry(6, 10, "Another member's", "hello"));
+        repo.save(inquiry(6, 5, "To company 5", "hello"));
+        repo.save(Conversation.start(ConversationType.DIRECT, 1, ParticipantType.ADMIN,
+                5, ParticipantType.COMPANY, "To company 5", "about your company", STARTED_AT));
+        repo.save(Conversation.start(ConversationType.DIRECT, 5, ParticipantType.ADMIN,
+                6, ParticipantType.MEMBER, "From admin 5", "about your account", STARTED_AT));
+
+        assertTrue(repo.findMemberInbox(5).isEmpty(), "none of these belongs in member 5's inbox");
+    }
+
+    // The admin outreach history: DIRECT conversations an admin started, not those a member started.
+    @Test
+    void GivenDirectConversationsStartedByAnAdminAndByAMember_WhenFindByTypeAndInitiatorType_ThenOnlyTheAdminsMatch() {
+        Conversation byAdmin = Conversation.start(ConversationType.DIRECT, 1, ParticipantType.ADMIN,
+                5, ParticipantType.MEMBER, "Notice", "about your account", STARTED_AT);
+        Conversation byMember = Conversation.start(ConversationType.DIRECT, 5, ParticipantType.MEMBER,
+                6, ParticipantType.MEMBER, "Hi", "hello", STARTED_AT);
+        Conversation adminInquiry = Conversation.start(ConversationType.INQUIRY, 1, ParticipantType.ADMIN,
+                10, ParticipantType.COMPANY, "Question", "hello", STARTED_AT);
+        List.of(byAdmin, byMember, adminInquiry).forEach(repo::save);
+
+        assertEquals(Set.of(byAdmin.getConversationId()),
+                ids(repo.findByTypeAndInitiatorType(ConversationType.DIRECT, ParticipantType.ADMIN)));
     }
 
     // The Jpa tables hold the type, both participant types, the status and each message's sender type
