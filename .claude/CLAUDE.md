@@ -131,7 +131,7 @@ Events are in-process, with no outbox and no Modulith event registry. Catalog �
 allowances, each domain inside its context, application-not-adapter, no-backend→ui, ui never depends on
 another module's `application.port.out` or `adapter` (a deny-list: `config` records and `domain` types
 stay open, #208), the module map,
-`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, notice listeners are `@Async` `AFTER_COMMIT` listeners with fallback execution, the ADR-008 clock rules,
+`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic`, every `@Route` class is in `ui` (Vaadin routes only `vaadin.allowed-packages`), notice listeners are `@Async` `AFTER_COMMIT` listeners with fallback execution, the ADR-008 clock rules,
 ui formats no date or number, and changes no case, in the JVM's locale (no `DateTimeFormatter.ofPattern(String)` or
 `ofLocalized…`, `DateTimeFormatterBuilder.toFormatter()`, `String.format(String, …)` or `formatted`, `NumberFormat`'s
 `get…Instance()`, `new DecimalFormat()` or `new DecimalFormat(String)`, `new MessageFormat(String)` or the static

@@ -54,6 +54,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import com.ticketing.system.architecture.fixture.catalog.RoutedViewOutsideTheUi;
 import com.ticketing.system.architecture.fixture.catalog.domain.ConverterUsingJackson;
 import com.ticketing.system.architecture.fixture.catalog.domain.ConverterWithTypeReference;
 import com.ticketing.system.architecture.fixture.catalog.domain.DomainTypeUsingAnAdapter;
@@ -74,6 +75,7 @@ import com.ticketing.system.architecture.fixture.notifications.application.servi
 import com.ticketing.system.architecture.fixture.organization.OrganizationFixtureType;
 import com.ticketing.system.architecture.fixture.organization.OrganizationTypeUsingNotifications;
 import com.ticketing.system.architecture.fixture.reporting.ReportingTypeUsingTheUi;
+import com.ticketing.system.architecture.fixture.ui.RoutedUiView;
 import com.ticketing.system.architecture.fixture.sales.domain.SalesDomainTypeUsingCatalogDomain;
 import com.ticketing.system.architecture.fixture.ui.UiTypeBuildingADateFormatterWithoutALocale;
 import com.ticketing.system.architecture.fixture.ui.UiTypeChangingCaseInTheJvmLocale;
@@ -106,6 +108,7 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.vaadin.flow.router.Route;
 
 /**
  * ArchUnit hexagonal-layering rules for the bounded-context modules.
@@ -317,6 +320,32 @@ class HexagonalRulesTest {
     @Test
     void GivenProductionCode_WhenScanned_ThenTheUiUsesNoOtherModulesDrivenPortsOrAdapters() {
         uiUsesNoOtherModulesDrivenPortsOrAdapters(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    /**
+     * {@code application.yml}'s {@code vaadin.allowed-packages} limits Vaadin's route scan to
+     * {@code com.ticketing.system.ui}, so a {@code @Route} class anywhere else is silently never routed.
+     */
+    @Test
+    void GivenProductionCode_WhenScanned_ThenEveryRouteIsInTheUi() {
+        routesResideInTheUi(PRODUCTION_ROOT).check(PRODUCTION_CLASSES);
+    }
+
+    @Test
+    void GivenARouteOutsideTheUi_WhenScanned_ThenTheRouteRuleFails() {
+        assertRuleFails(routesResideInTheUi(FIXTURE_ROOT), RoutedViewOutsideTheUi.class);
+    }
+
+    @Test
+    void GivenARouteInTheUi_WhenScanned_ThenTheRouteRulePasses() {
+        JavaClasses imported = new ClassFileImporter().importClasses(RoutedUiView.class);
+        assertThatCode(() -> routesResideInTheUi(FIXTURE_ROOT).check(imported)).doesNotThrowAnyException();
+    }
+
+    private static ArchRule routesResideInTheUi(String root) {
+        return classes().that().areAnnotatedWith(Route.class)
+                .should().resideInAPackage(root + "." + UI_MODULE + "..")
+                .because("application.yml's vaadin.allowed-packages routes only the ui package");
     }
 
     // The class comment records a rule engine that silently checked nothing; these prove each graph

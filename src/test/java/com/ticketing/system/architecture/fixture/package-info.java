@@ -9,6 +9,7 @@
  * names ({@code AuthenticationService}, {@code NotificationDispatchService}). So a fixture must never
  * carry a Spring stereotype ({@code @Component}, {@code @Service}, ...), {@code @Entity} or
  * {@code @Converter}: component or entity scanning would pick it up, clash with the production bean or
- * mapping, and change the application under test.
+ * mapping, and change the application under test. A {@code @Route} fixture is safe for the reason the
+ * route rule exists: Vaadin scans only {@code com.ticketing.system.ui}, which this root is not under.
  */
 package com.ticketing.system.architecture.fixture;
