@@ -1,17 +1,21 @@
 package com.ticketing.system.unit.application;
 
+import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +69,9 @@ class RefundServiceTest {
     @Mock InventoryCommandPort inventoryPort;
 
     RefundService service;
+
+    // How long the concurrent-refund race may wait for a request to start or end before it fails.
+    static final Duration RACE_BOUND = Duration.ofSeconds(20);
 
     static final String VALID_TOKEN   = "valid-token";
     static final String INVALID_TOKEN = "bad-token";
@@ -365,27 +372,33 @@ class RefundServiceTest {
         RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, inventoryPortMock, TestTransactions.recordingManager());
 
         int threads = 2;
-        CyclicBarrier barrier = new CyclicBarrier(threads);
+        CountDownLatch bothStarted = new CountDownLatch(threads);
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         AtomicInteger succeeded = new AtomicInteger();
         AtomicInteger alreadyRefunded = new AtomicInteger();
-        List<Future<?>> futures = new ArrayList<>();
-        for (int i = 0; i < threads; i++) {
-            futures.add(pool.submit(() -> {
-                barrier.await();
-                try {
-                    concurrentService.requestRefund(VALID_TOKEN, ORDER_ID, "x");
-                    succeeded.incrementAndGet();
-                } catch (BusinessRuleViolationException expected) {
-                    alreadyRefunded.incrementAndGet();
-                }
-                return null;
-            }));
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    bothStarted.countDown();
+                    awaitOrFail(bothStarted, RACE_BOUND, "both refund requests start");
+                    try {
+                        concurrentService.requestRefund(VALID_TOKEN, ORDER_ID, "x");
+                        succeeded.incrementAndGet();
+                    } catch (BusinessRuleViolationException expected) {
+                        alreadyRefunded.incrementAndGet();
+                    }
+                    return null;
+                }));
+            }
+            for (Future<?> f : futures) {
+                assertThat(failureOf(() -> f.get(RACE_BOUND.toSeconds(), TimeUnit.SECONDS)))
+                        .as("each refund request ends within %s, refunded or refused as already refunded", RACE_BOUND)
+                        .isNull();
+            }
+        } finally {
+            pool.shutdownNow();
         }
-        for (Future<?> f : futures) {
-            f.get();
-        }
-        pool.shutdownNow();
 
         assertThat(refundCalls.get()).isEqualTo(1);
         assertThat(succeeded.get()).isEqualTo(1);
