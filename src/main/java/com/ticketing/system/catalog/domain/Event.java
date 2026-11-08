@@ -608,7 +608,9 @@ public class Event implements InvariantChecked {
         if (newShowDates != null) {
             // null means "leave the schedule alone"; an explicitly empty list was rejected above
             // rather than silently ignored, since an event must always have >=1 show date.
-            this.showDates = List.copyOf(newShowDates);
+            // A mutable copy, as the constructor makes: saving a managed event merges it onto itself, and
+            // Hibernate then replaces an element collection's contents in place, which an immutable list refuses.
+            this.showDates = new ArrayList<>(newShowDates);
         }
         checkInvariants();
     }

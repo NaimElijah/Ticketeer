@@ -31,6 +31,7 @@ import com.ticketing.system.shared.dto.CompanyRegistrationDTO;
 import com.ticketing.system.shared.dto.EventUpdateDTO;
 import com.ticketing.system.shared.dto.LocationDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
+import com.ticketing.system.shared.dto.ShowDateDTO;
 
 import jakarta.persistence.EntityManager;
 
@@ -84,6 +85,30 @@ class EventEditPersistenceJpaTest {
         assertEquals(new StoredDetails("After Edit", "updated desc", EventCategory.THEATER,
                 new Location("France", "Paris"), EDITED_ZONE, List.of(List.of(showStart, showEnd))), reloaded(eventId),
                 "every edited field, and the schedule left alone, must be read back from the database");
+    }
+
+    @Test
+    void GivenOwner_WhenEditEventShowDates_ThenTheNewScheduleSurvivesAReload() {
+        AuthTokenDTO owner = registerAndLogin("editScheduleOwner");
+        int companyId = companyService.registerCompany(owner.token(),
+                new CompanyRegistrationDTO("EditScheduleCo-" + owner.userId(), "desc")).companyId();
+        LocalDateTime showStart = LocalDateTime.now(clock.withZone(CREATED_ZONE))
+                .plusDays(DAYS_UNTIL_SHOW).truncatedTo(ChronoUnit.MINUTES);
+        int eventId = Integer.parseInt(eventManagementService.addEvent(owner.token(), new EventCreationDTO(
+                companyId, "Rescheduled", "desc", List.of("Artist"), EventCategory.MUSIC, 4.0,
+                new Location("Italy", "Rome"),
+                List.of(new ShowDate(showStart, showStart.plusHours(SHOW_HOURS))),
+                CREATED_ZONE,
+                null)).eventId());
+        LocalDateTime newStart = showStart.plusDays(DAYS_UNTIL_SHOW);
+        LocalDateTime newEnd = newStart.plusHours(SHOW_HOURS);
+
+        eventManagementService.editEventDetails(owner.token(), new EventUpdateDTO(
+                String.valueOf(eventId), null, null, null, null, null,
+                List.of(new ShowDateDTO(newStart, newEnd))));
+
+        assertEquals(List.of(List.of(newStart, newEnd)), reloaded(eventId).showDates(),
+                "the new schedule must be read back from the database");
     }
 
     private record StoredDetails(String name, String description, EventCategory category, Location location,
