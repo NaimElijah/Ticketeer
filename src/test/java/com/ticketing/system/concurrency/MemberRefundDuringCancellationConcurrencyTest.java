@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -27,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.DoubleConsumer;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +88,9 @@ class MemberRefundDuringCancellationConcurrencyTest {
     private static final Duration FIRE_TIMEOUT = Duration.ofSeconds(10);
     // Bounds every other wait, so a broken lock fails a test instead of hanging it.
     private static final long AWAIT_SECONDS = 20;
+    // How long the workers get to end once interrupted: longer than database.socket-timeout (30 s), the longest
+    // a statement stuck in a lock wait runs on PostgreSQL.
+    private static final long WORKERS_END_SECONDS = 35;
     // Polled this often for the waiting session: H2 ends a lock wait after its lock timeout, so the held
     // refund is released as soon as the wait shows.
     private static final Duration LOCK_WAIT_POLL = Duration.ofMillis(10);
@@ -103,6 +109,9 @@ class MemberRefundDuringCancellationConcurrencyTest {
 
     /** The amount of every refund the gateway was asked for, in the order the calls arrived. */
     private final List<Double> gatewayRefunds = new CopyOnWriteArrayList<>();
+
+    /** Every pool the test started, so {@link #waitForTheWorkers} can check that each ended with it. */
+    private final List<ExecutorService> pools = new ArrayList<>();
 
     private String buyerToken;
     private int cancelledEventTicketId;
@@ -132,11 +141,21 @@ class MemberRefundDuringCancellationConcurrencyTest {
         buyerToken = jwtSessionManager.generateToken(BUYER_ID, "buyer");
     }
 
+    // A worker stuck in a lock wait ignores the interrupt each test's finally sends, and one that outlived its
+    // test could refund the next test's receipt, which has the same id, through the next test's stub.
+    @AfterEach
+    void waitForTheWorkers() throws InterruptedException {
+        for (ExecutorService pool : pools) {
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(WORKERS_END_SECONDS, TimeUnit.SECONDS), "a race worker outlived its test");
+        }
+    }
+
     @Test
     void GivenAMemberRefundAndACancellationOfOneReceipt_WhenBothStartAtOnce_ThenEachLineIsRefundedOnce()
             throws Exception {
         CountDownLatch fire = new CountDownLatch(1);
-        ExecutorService threads = Executors.newFixedThreadPool(2);
+        ExecutorService threads = started(Executors.newFixedThreadPool(2));
         try {
             Future<RefundResultDTO> memberRefund = threads.submit(() -> {
                 awaitOrFailWith(fire, FIRE_TIMEOUT, "the race was never started");
@@ -174,7 +193,7 @@ class MemberRefundDuringCancellationConcurrencyTest {
         CountDownLatch memberInGateway = new CountDownLatch(1);
         CountDownLatch releaseMember = new CountDownLatch(1);
         holdTheFirstGatewayRefund(memberInGateway, releaseMember);
-        ExecutorService threads = Executors.newFixedThreadPool(2);
+        ExecutorService threads = started(Executors.newFixedThreadPool(2));
         try {
             Future<RefundResultDTO> memberRefund = threads.submit(
                     () -> refundService.requestRefund(buyerToken, RECEIPT_ID, "changed my mind"));
@@ -214,7 +233,7 @@ class MemberRefundDuringCancellationConcurrencyTest {
         CountDownLatch cancellationInGateway = new CountDownLatch(1);
         CountDownLatch releaseCancellation = new CountDownLatch(1);
         holdTheFirstGatewayRefund(cancellationInGateway, releaseCancellation);
-        ExecutorService threads = Executors.newSingleThreadExecutor();
+        ExecutorService threads = started(Executors.newSingleThreadExecutor());
         try {
             Future<?> cancellation = threads.submit(() -> {
                 cancelEvent();
@@ -249,6 +268,11 @@ class MemberRefundDuringCancellationConcurrencyTest {
     protected int count(String sql) {
         Integer count = jdbc.queryForObject(sql, Integer.class);
         return count == null ? 0 : count;
+    }
+
+    private ExecutorService started(ExecutorService pool) {
+        pools.add(pool);
+        return pool;
     }
 
     private void cancelEvent() {
