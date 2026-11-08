@@ -148,9 +148,6 @@ class CompanyAcceptanceTest {
 
                 Event storedEvent = eventRepository.findById(Integer.parseInt(event.eventId()));
 
-                // eventManagementService.updateStandingZoneCapacity(owner.token(), companyId,
-                // storedEvent.getId(), 1, 150);
-                //
                 eventManagementService.addPlacesToStandingZone(owner.token(), companyId, storedEvent.getId(), 1, 50);
                 InventoryZone zone = storedEvent.getVenueMap().getInventoryZones().stream()
                                 .filter(z -> z.getId() == 1)
