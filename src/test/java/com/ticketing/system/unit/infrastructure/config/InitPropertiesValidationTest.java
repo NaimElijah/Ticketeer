@@ -46,14 +46,18 @@ import com.ticketing.system.sales.config.ReservationHoldProperties;
 import com.ticketing.system.shared.config.DatabaseProperties;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
 import com.ticketing.system.shared.config.WsepProperties;
+import com.ticketing.system.testutil.WithoutTheShellsEnvironment;
 
 /**
  * V3 4.b / ADR-003: an out-of-bounds initialization parameter stops the context from starting, with
- * a bind failure that names the offending field. The baseline is the shipped {@code application.yml}.
+ * a bind failure that names the offending field. The baseline is the shipped {@code application.yml}, read
+ * without the shell's environment, so an exported {@code SEED_MODE} or {@code PLATFORM_TIME_ZONE} cannot
+ * change an outcome.
  */
 class InitPropertiesValidationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withInitializer(new WithoutTheShellsEnvironment())
             .withInitializer(new ConfigDataApplicationContextInitializer())
             .withUserConfiguration(InitProperties.class);
 

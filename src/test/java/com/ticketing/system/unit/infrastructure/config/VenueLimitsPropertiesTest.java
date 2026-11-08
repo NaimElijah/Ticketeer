@@ -14,17 +14,20 @@ import org.springframework.core.NestedExceptionUtils;
 import org.springframework.validation.FieldError;
 
 import com.ticketing.system.catalog.config.VenueLimitsProperties;
+import com.ticketing.system.testutil.WithoutTheShellsEnvironment;
 
 /**
  * #185: the venue size limits {@code configureVenueMap} enforces are init parameters bound from
  * {@code catalog.venue-limits.*} (ADR-003). The shipped defaults match the venue editor's own caps
  * (99 rows x 500 seats per zone, 1,000,000 standing places, a 12 x 12 grid) plus a per-map seat total.
+ * They are read without the shell's environment, so an exported {@code CATALOG_VENUE_*} cannot change them.
  */
 class VenueLimitsPropertiesTest {
 
     private static final String PREFIX = "catalog.venue-limits";
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withInitializer(new WithoutTheShellsEnvironment())
             .withInitializer(new ConfigDataApplicationContextInitializer())
             .withUserConfiguration(LimitsOnly.class);
 
