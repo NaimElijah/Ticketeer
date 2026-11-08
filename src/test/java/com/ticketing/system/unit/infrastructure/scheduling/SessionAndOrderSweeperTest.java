@@ -529,6 +529,26 @@ class SessionAndOrderSweeperTest {
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+    // The same race, when the buyer removes the cart's only line while the sweeper waits for the lock: under
+    // the lock the cart is empty, with nothing left to keep, so it is deleted and no event is read or saved.
+    @Test
+    void GivenACartEmptiedWhileTheSweeperWaitsForItsLock_WhenSweepExpiredOrders_ThenItIsDeletedAndNoEventIsReadOrSaved() {
+        ActiveOrder emptiedCart = ActiveOrder.forMember(5, "sid-emptied", NOW);
+        emptiedCart.addStandingReservation(1, 10, 1, 30.0, NOW.minusMinutes(30)); // expired at the scan
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(emptiedCart));
+        doAnswer(lockTaken -> {
+            emptiedCart.removeStandingSpots(1, 10, 1);
+            return null;
+        }).when(orderRepo).lockForUpdate("user:5");
+
+        sweeper.sweepExpiredOrders(T0);
+
+        verify(orderRepo).delete(emptiedCart);
+        verify(orderRepo).unlock("user:5");
+        verify(eventRepo, never()).findById(anyInt());
+        verify(eventRepo, never()).save(any());
+    }
+
     // RC1: one zone release failing (e.g. a double-release race with abandonActiveOrder) must not abort
     // release of the other events or the deletion of the order.
     @Test
