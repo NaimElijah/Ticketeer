@@ -251,8 +251,11 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
   - `AppointmentCycleException` is never thrown, and the acceptance test for cycles is disabled
     (#52).
 - Each manager has exactly one appointer, an owner, and only that appointer may change or remove
-  the manager (`CompanyAppointment.revoke`, `CompanyMembershipService`). Editing by another owner
-  is rejected in `CompanyAcceptanceTest`; removal by another owner has no test.
+  the manager (`CompanyAppointment.revoke`, `CompanyMembershipService`). Another owner can neither
+  edit the manager's permissions
+  (`CompanyMembershipServiceTest.GivenManagerAppointedByAnotherOwner_WhenModifyManagerPermissions_ThenUnauthorizedActionAndUnchanged`)
+  nor remove the manager
+  (`CompanyAppointmentTest.GivenAnActiveManager_WhenRevokedByAnotherOwner_ThenRefusedAndStaysActive`).
 - The Founder can neither resign nor be removed (`ProductionCompany`).
 
 ### Company lifecycle (Deferred, #62 and #66)
@@ -363,8 +366,11 @@ The course states §3 #3 and §3 #4 as one bullet; the code cites them separatel
 - A discount applies to a whole company, one event, or one show of an event (V2). Partial: event
   scope is built; company and show scope are #67. The wider scopes in the general document are
   [OQ-24](#open-questions).
-- When a policy refuses a purchase, the UI explains why, for example "Tickets for this event can
-  be bought from age 18" (V2, service level 3.5).
+- When a policy refuses a purchase, the UI explains why (V2, service level 3.5). The refusal names
+  the rule the buyer failed, for example "You must be at least 18 years old to buy tickets"
+  (`AgePurchasePolicy`, shown by `CheckoutPresenter` ·
+  `PurchasePolicyEnforcementAcceptanceTest.GivenACompanyWithAnEighteenPlusPolicy_WhenAMinorGuestChecksOut_ThenRefusedForAgeAndNothingIsCharged`,
+  `CheckoutPresenterTest.GivenAPolicyViolation_WhenPay_ThenPolicyRejectedWithTheReason`).
 
 ### Lottery and queue (Deferred, #71 and #72)
 
