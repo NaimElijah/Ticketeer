@@ -8,6 +8,8 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,12 +76,25 @@ class CompanySalesReportAcceptanceTest {
         return Integer.parseInt(event.eventId());
     }
 
-    /** Persists a completed purchase of {@code eventId} for {@code total} (one standing ticket). */
-    private void recordPurchase(AuthTokenDTO buyer, int eventId, double total) {
+    /**
+     * Persists a completed purchase of {@code eventId} for {@code total} (one standing ticket).
+     *
+     * @return the receipt's id
+     */
+    private int recordPurchase(AuthTokenDTO buyer, int eventId, double total) {
+        int receiptId = orderReceiptRepository.nextId();
         orderReceiptRepository.save(OrderReceipt.forMember(
-                orderReceiptRepository.nextId(), buyer.userId(), total,
+                receiptId, buyer.userId(), total,
                 List.of(new ReceiptLine(1, total, eventId, 1, null, LocalDateTime.now(clock))),
                 LocalDateTime.now(clock)));
+        return receiptId;
+    }
+
+    /** Each record of the report as its receipt id and total; the report does not promise an order. */
+    private static Set<List<Object>> receiptsAndTotals(CompanySalesPresenter.Outcome.Success report) {
+        return report.sales().records().stream()
+                .map(record -> List.<Object>of(record.orderReceiptId(), record.totalPaid()))
+                .collect(Collectors.toSet());
     }
 
     private CompanySalesPresenter.Outcome.Success loadSuccess(AuthTokenDTO owner) {
@@ -115,13 +130,14 @@ class CompanySalesReportAcceptanceTest {
                 owner.token(), new CompanyRegistrationDTO("SalesReportCo2", "desc")).companyId();
         int eventId = addEventForCompany(owner, companyId, "Report Event 2");
 
-        recordPurchase(owner, eventId, 80.0);
-        assertEquals(1, loadSuccess(owner).sales().records().size());
+        int firstReceiptId = recordPurchase(owner, eventId, 80.0);
+        assertEquals(Set.of(List.of(firstReceiptId, 80.0)), receiptsAndTotals(loadSuccess(owner)));
 
         // A second purchase lands after the report was already viewed once.
-        recordPurchase(owner, eventId, 50.0);
+        int secondReceiptId = recordPurchase(owner, eventId, 50.0);
 
         // A further reload reflects the new sale too (no stale snapshot).
-        assertEquals(2, loadSuccess(owner).sales().records().size());
+        assertEquals(Set.of(List.of(firstReceiptId, 80.0), List.of(secondReceiptId, 50.0)),
+                receiptsAndTotals(loadSuccess(owner)));
     }
 }

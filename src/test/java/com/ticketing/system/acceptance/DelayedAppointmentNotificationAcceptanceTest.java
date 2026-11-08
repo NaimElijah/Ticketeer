@@ -2,11 +2,11 @@ package com.ticketing.system.acceptance;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,9 +79,9 @@ class DelayedAppointmentNotificationAcceptanceTest {
         // --- u2 confirms the appointment -> u2 is now a company owner ---
         companyService.respondToAppointment(
                 u2Login.authToken().token(), new AppointmentResponseDTO(companyId, true));
-        assertTrue(companyRepository.getCompanyById(companyId).isOwner(u2Id),
-                "after confirming, u2 is an owner of the company");
-        assertFalse(companyRepository.getCompanyById(companyId).isOwner(-1));
+        assertEquals(Stream.of(u1.userId(), u2Id).sorted().toList(),
+                companyRepository.getCompanyById(companyId).getOwnerIds().stream().sorted().toList(),
+                "after confirming, u2 is an owner of the company beside its founder, and no one else is");
     }
 
     // ---- helpers --------------------------------------------------------

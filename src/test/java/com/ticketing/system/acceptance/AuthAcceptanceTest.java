@@ -1,5 +1,6 @@
 package com.ticketing.system.acceptance;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -250,9 +251,15 @@ class AuthAcceptanceTest {
         authService.register(new RegisterRequestDTO("grace", "grace@example.com", "Password1", sid, 20));
         LoginDTO session = authService.login(new LoginRequestDTO("grace", "Password1", sid));
         authService.logout(new LogoutRequestDTO(session.authToken().token()));
+        String nextSid = authService.startGuestSession().sessionId();
+        LoginDTO nextSession = authService.login(new LoginRequestDTO("grace", "Password1", nextSid));
 
-        // Second call should silently succeed.
-        authService.logout(new LogoutRequestDTO(session.authToken().token()));
+        assertDoesNotThrow(() -> authService.logout(new LogoutRequestDTO(session.authToken().token())),
+                "a repeated logout must succeed silently");
+
+        // The old token names only its own session, so repeating its logout must not end the member's next one.
+        assertTrue(authService.validateToken(nextSession.authToken().token()),
+                "the member's later session must stay live");
     }
 
     @Test

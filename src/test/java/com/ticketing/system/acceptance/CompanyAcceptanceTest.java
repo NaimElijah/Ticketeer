@@ -1,7 +1,7 @@
 package com.ticketing.system.acceptance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
@@ -11,6 +11,8 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,7 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
@@ -242,18 +245,26 @@ class CompanyAcceptanceTest {
                 null));
 
         int eventId = Integer.parseInt(event.eventId());
+        int firstReceiptId = orderReceiptRepository.nextId();
         orderReceiptRepository.save(OrderReceipt.forMember(
-                orderReceiptRepository.nextId(), owner.userId(), 50.0,
+                firstReceiptId, owner.userId(), 50.0,
                 List.of(new ReceiptLine(1, 50.0, eventId, 1, null, LocalDateTime.now(clock))),
                 LocalDateTime.now(clock)));
+        int secondReceiptId = orderReceiptRepository.nextId();
         orderReceiptRepository.save(OrderReceipt.forMember(
-                orderReceiptRepository.nextId(), owner.userId(), 30.0,
+                secondReceiptId, owner.userId(), 30.0,
                 List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now(clock))),
                 LocalDateTime.now(clock)));
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
-        assertEquals(2, result.records().size());
+        // The read side does not promise an order, so the records are compared as a set.
+        assertEquals(Set.of(List.of(firstReceiptId, 50.0, 1), List.of(secondReceiptId, 30.0, 2)),
+                result.records().stream()
+                        .map(record -> List.<Object>of(record.orderReceiptId(), record.totalPaid(),
+                                record.tickets().get(0).ticketId()))
+                        .collect(Collectors.toSet()),
+                "each order's receipt, total and ticket");
         }
 
         @Test
@@ -422,10 +433,11 @@ class CompanyAcceptanceTest {
                 companyService.appointManager(owner.token(),
                                 new ManagerAppointmentRequestDTO(companyId, manager.userId(), permissions));
 
-                assertNotEquals(null, companyMembershipService.getPendingCompanyAppointment(manager.userId(), companyId));
-                assertEquals(permissions,
-                                companyMembershipService.getPendingCompanyAppointment(manager.userId(), companyId)
-                                                .getPermissions().stream().toList());
+                CompanyAppointment pending = companyMembershipService.getPendingCompanyAppointment(manager.userId(),
+                                companyId);
+                assertNotNull(pending, "the appointment must wait for the manager's answer");
+                assertEquals(owner.userId(), pending.getInviterId(), "the appointing owner is its inviter");
+                assertEquals(permissions, pending.getPermissions().stream().toList());
         }
 
         @Test

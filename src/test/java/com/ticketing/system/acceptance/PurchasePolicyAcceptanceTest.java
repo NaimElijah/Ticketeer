@@ -139,8 +139,7 @@ class PurchasePolicyAcceptanceTest {
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, and));
 
         PurchasePolicyDTO loaded = eventManagementService.getEventPurchasePolicy(token, companyId, eventId);
-        assertEquals("AND", loaded.type());
-        assertEquals(2, loaded.children().size());
+        assertEquals(and, loaded, "the tree must come back with each child's type, value and place");
     }
 
     @Test
@@ -152,8 +151,7 @@ class PurchasePolicyAcceptanceTest {
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, or));
 
         PurchasePolicyDTO loaded = eventManagementService.getEventPurchasePolicy(token, companyId, eventId);
-        assertEquals("OR", loaded.type());
-        assertEquals(2, loaded.children().size());
+        assertEquals(or, loaded, "the tree must come back with each child's type, value and place");
     }
 
     @Test
@@ -216,8 +214,7 @@ class PurchasePolicyAcceptanceTest {
         companyService.setCompanyPolicies(token, new CompanyPolicyConfigDTO(companyId, and, List.of()));
 
         PurchasePolicyDTO loaded = companyService.getCompanyPurchasePolicy(token, companyId);
-        assertEquals("AND", loaded.type());
-        assertEquals(2, loaded.children().size());
+        assertEquals(and, loaded, "the tree must come back with each child's type, value and place");
     }
 
     @Test
