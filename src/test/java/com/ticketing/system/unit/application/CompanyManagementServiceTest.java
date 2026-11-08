@@ -382,7 +382,7 @@ public class CompanyManagementServiceTest {
         }
 
         @Test
-        public void GivenEmptyPermissions_WhenInviteManager_ThenThrowException() {
+        public void GivenEmptyPermissions_WhenInviteManager_ThenRefusedWithNoAppointmentOrNotice() {
                 ProductionCompany company = new ProductionCompany(COMPANY_ID, OWNER_ID, COMPANY_1_NAME,
                                 CompanyStatus.ACTIVE, COMPANY_1_DESCRIPTION, 4.5);
                 User ownerUser = new User(OWNER_ID, "ownerUser", "user@test.com", "password", 22);
@@ -395,12 +395,14 @@ public class CompanyManagementServiceTest {
                 when(mockUserRepo.getUserById(OWNER_ID)).thenReturn(ownerUser);
                 when(mockUserRepo.getUserById(TARGET_USER_ID)).thenReturn(targetUser);
 
-                IllegalStateException refused = assertThrowsExactly(IllegalStateException.class,
+                // Refused at the service boundary, as editManagerPermissions refuses an empty edit, before the
+                // appointment's own invariant is reached.
+                IllegalArgumentException refused = assertThrowsExactly(IllegalArgumentException.class,
                                 () -> companyService.appointManager(OWNER_TOKEN,
                                                 new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, new ArrayList<>())));
 
-                assertEquals("CompanyAppointment invariant violated: Manager role must have at least one permission",
-                                refused.getMessage());
+                assertEquals("Manager role must have at least one permission", refused.getMessage());
+                assertEquals(List.of(), appointmentsOfTarget());
                 verifyNoInteractions(eventPublisher);
         }
 

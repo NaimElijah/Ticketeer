@@ -135,6 +135,10 @@ public class CompanyManagementService {
             log.warn("Invalid manager appointment request: companyId and targetUserId must be positive integers");
             throw new IllegalArgumentException("companyId and targetUserId must be positive integers");
         }
+        if (request.permissions() == null || request.permissions().isEmpty()) {
+            log.warn("Invalid manager appointment request: permissions list cannot be null or empty");
+            throw new IllegalArgumentException("Manager role must have at least one permission");
+        }
         int ownerId = authenticate(token);
         User owner = userRepository.getUserById(ownerId);
         User targetUser = userRepository.getUserById(request.targetUserId());
