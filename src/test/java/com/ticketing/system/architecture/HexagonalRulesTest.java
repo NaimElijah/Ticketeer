@@ -94,6 +94,7 @@ import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnAdapter;
 import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnApplicationService;
 import com.ticketing.system.architecture.fixture.ui.UiTypeUsingAnInboundPort;
 import com.ticketing.system.architecture.fixture.undocumented.UndocumentedModuleType;
+import com.ticketing.system.notifications.config.NotificationAsyncConfig;
 import com.ticketing.system.shared.config.SecurityConfig;
 import com.ticketing.system.shared.event.PurchaseCompletedNotice;
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -728,7 +729,9 @@ class HexagonalRulesTest {
      * would let a notification failure fail the use case, e.g. report a paid checkout as failed. A
      * listener in another phase would deliver work that has not committed, and one without fallback
      * execution would drop the notices checkout and event cancellation publish after their
-     * transactions end.
+     * transactions end. The listener must run on {@code notificationExecutor}, the single
+     * {@code notify-} thread whose submission order ADR-004 relies on: a bare {@code @Async}, or one
+     * naming another executor, runs on a pool that can reorder notices or lacks the drop-and-log bound.
      */
     @Test
     void GivenANoticeListener_WhenScanned_ThenItIsAnAsyncAfterCommitListener() {
@@ -756,6 +759,21 @@ class HexagonalRulesTest {
     }
 
     @Test
+    void GivenANoticeListenerOnTheDefaultExecutor_WhenScanned_ThenTheListenerRuleFails() {
+        assertRuleFails(NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT, NoticeListenerOnTheDefaultExecutor.class);
+    }
+
+    @Test
+    void GivenANoticeListenerOnAnotherExecutor_WhenScanned_ThenTheListenerRuleFails() {
+        assertRuleFails(NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT, NoticeListenerOnAnotherExecutor.class);
+    }
+
+    @Test
+    void GivenANoticeListenerWhoseMethodPicksAnotherExecutor_WhenScanned_ThenTheListenerRuleFails() {
+        assertRuleFails(NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT, NoticeListenerWhoseMethodPicksAnotherExecutor.class);
+    }
+
+    @Test
     void GivenTheDocumentedNoticeListener_WhenScanned_ThenTheListenerRulePasses() {
         JavaClasses imported = new ClassFileImporter().importClasses(DocumentedNoticeListener.class);
         assertThatCode(() -> NOTICE_LISTENERS_ARE_ASYNC_AFTER_COMMIT.check(imported)).doesNotThrowAnyException();
@@ -765,20 +783,28 @@ class HexagonalRulesTest {
             DescribedPredicate.describe("take a shared.event notice", method -> method.getRawParameterTypes()
                     .stream().anyMatch(type -> type.getPackageName().equals("com.ticketing.system.shared.event")));
 
+    private static final String ASYNC_ON_THE_NOTIFICATION_EXECUTOR =
+            "@Async(\"" + NotificationAsyncConfig.NOTIFICATION_EXECUTOR + "\")";
+
     private static final ArchCondition<JavaMethod> BE_ASYNC_AFTER_COMMIT_LISTENERS =
-            new ArchCondition<>("be @Async @TransactionalEventListener(phase = AFTER_COMMIT, fallbackExecution = true)"
-                    + " methods") {
+            new ArchCondition<>("be " + ASYNC_ON_THE_NOTIFICATION_EXECUTOR
+                    + " @TransactionalEventListener(phase = AFTER_COMMIT, fallbackExecution = true) methods") {
                 @Override
                 public void check(JavaMethod method, ConditionEvents events) {
                     boolean afterCommitWithFallback = method.tryGetAnnotationOfType(TransactionalEventListener.class)
                             .filter(listener -> listener.phase() == TransactionPhase.AFTER_COMMIT)
                             .filter(TransactionalEventListener::fallbackExecution)
                             .isPresent();
-                    boolean async = method.isAnnotatedWith(Async.class) || method.getOwner().isAnnotatedWith(Async.class);
-                    boolean satisfied = afterCommitWithFallback && async;
+                    // Spring takes the executor from the method's @Async first, then from its class's.
+                    String executor = method.tryGetAnnotationOfType(Async.class)
+                            .or(() -> method.getOwner().tryGetAnnotationOfType(Async.class))
+                            .map(Async::value)
+                            .orElse(null);
+                    boolean onTheNotificationExecutor = NotificationAsyncConfig.NOTIFICATION_EXECUTOR.equals(executor);
+                    boolean satisfied = afterCommitWithFallback && onTheNotificationExecutor;
                     events.add(new SimpleConditionEvent(method, satisfied, method.getFullName()
-                            + (satisfied ? " is" : " is not") + " an @Async @TransactionalEventListener"
-                            + " (phase = AFTER_COMMIT, fallbackExecution = true)"));
+                            + (satisfied ? " is" : " is not") + " an " + ASYNC_ON_THE_NOTIFICATION_EXECUTOR
+                            + " @TransactionalEventListener (phase = AFTER_COMMIT, fallbackExecution = true)"));
                 }
             };
 
@@ -1238,7 +1264,7 @@ class HexagonalRulesTest {
     // Fixtures for the notice-listener self-tests: each offender breaks exactly one part of the ADR-004
     // pattern, and none is a bean, so no Spring context ever delivers a notice to one.
     static class AsyncPlainNoticeListener {
-        @Async
+        @Async(NotificationAsyncConfig.NOTIFICATION_EXECUTOR)
         @EventListener
         void on(PurchaseCompletedNotice notice) {
         }
@@ -1250,22 +1276,45 @@ class HexagonalRulesTest {
         }
     }
 
-    @Async
+    @Async(NotificationAsyncConfig.NOTIFICATION_EXECUTOR)
     static class BeforeCommitNoticeListener {
         @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
         void on(PurchaseCompletedNotice notice) {
         }
     }
 
-    @Async
+    @Async(NotificationAsyncConfig.NOTIFICATION_EXECUTOR)
     static class NoticeListenerWithoutFallbackExecution {
         @TransactionalEventListener
         void on(PurchaseCompletedNotice notice) {
         }
     }
 
-    // Mirrors NotificationEventListener: @Async on the class, the listener annotation on the method.
     @Async
+    static class NoticeListenerOnTheDefaultExecutor {
+        @TransactionalEventListener(fallbackExecution = true)
+        void on(PurchaseCompletedNotice notice) {
+        }
+    }
+
+    @Async("taskScheduler")
+    static class NoticeListenerOnAnotherExecutor {
+        @TransactionalEventListener(fallbackExecution = true)
+        void on(PurchaseCompletedNotice notice) {
+        }
+    }
+
+    // The method's @Async wins over its class's, so this listener runs on taskScheduler.
+    @Async(NotificationAsyncConfig.NOTIFICATION_EXECUTOR)
+    static class NoticeListenerWhoseMethodPicksAnotherExecutor {
+        @Async("taskScheduler")
+        @TransactionalEventListener(fallbackExecution = true)
+        void on(PurchaseCompletedNotice notice) {
+        }
+    }
+
+    // Mirrors NotificationEventListener: @Async on the class, the listener annotation on the method.
+    @Async(NotificationAsyncConfig.NOTIFICATION_EXECUTOR)
     static class DocumentedNoticeListener {
         @TransactionalEventListener(fallbackExecution = true)
         void on(PurchaseCompletedNotice notice) {
