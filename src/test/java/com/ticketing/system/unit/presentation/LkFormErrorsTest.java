@@ -209,7 +209,7 @@ class LkFormErrorsTest {
         email.setValue("bob@");
 
         assertTrue(email.isInvalid(), "\"bob@\" breaks the email field's own format");
-        assertEquals("Enter an email address like you@email.com.", email.getErrorMessage(),
+        assertEquals("Enter an email address like you@example.com.", email.getErrorMessage(),
             "an invalid email must say what its format rule says");
     }
 

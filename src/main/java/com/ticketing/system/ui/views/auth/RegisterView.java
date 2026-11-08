@@ -44,7 +44,7 @@ public class RegisterView extends LkAuthCard {
     private static final String AVAILABILITY_UNKNOWN = "Couldn't verify availability right now.";
     private static final String ENTER_USERNAME = "Enter a username.";
     private static final String ENTER_EMAIL = "Enter your email address.";
-    private static final String EMAIL_FORMAT = "Enter an email address like you@email.com.";
+    private static final String EMAIL_FORMAT = "Enter an email address like you@example.com.";
     private static final String EMAIL_TOO_LONG = "Enter at most " + RegisterPresenter.MAX_EMAIL_LENGTH + " characters.";
     private static final String ENTER_AGE = "Enter your age.";
     private static final String AGE_RANGE =
@@ -89,7 +89,7 @@ public class RegisterView extends LkAuthCard {
         username.addValueChangeListener(e -> applyUsernameFeedback(username, e.getValue()));
 
         EmailField email = new EmailField("Email");
-        email.setPlaceholder("you@email.com");
+        email.setPlaceholder("you@example.com");
         email.setRequired(true);
         email.setAutocomplete(Autocomplete.EMAIL);
         email.setMaxLength(RegisterPresenter.MAX_EMAIL_LENGTH);
