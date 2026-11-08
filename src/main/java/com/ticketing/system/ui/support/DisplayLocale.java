@@ -13,7 +13,8 @@ import java.util.Locale;
  * formatter and case change in {@code ui} names a locale: {@link #PAGE} for text a page shows,
  * {@code Locale.ROOT} for machine text (a switch key, a CSS value, a JSON escape). A few accessible names
  * built from {@code %s} and an ungrouped {@code %d} take {@code Locale.ROOT} too, which writes them as
- * {@link #PAGE} would. {@code HexagonalRulesTest} refuses a call that names none.
+ * {@link #PAGE} would. {@code HexagonalRulesTest} refuses a call that names none. Vaadin's own components, the date
+ * pickers among them, take the UI's locale instead, which {@link PageLocaleBootstrap} sets to {@link #PAGE}.
  */
 public final class DisplayLocale {
 

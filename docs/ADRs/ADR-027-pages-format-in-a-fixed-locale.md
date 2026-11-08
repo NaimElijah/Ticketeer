@@ -21,6 +21,9 @@ No requirement asks for a second language, and nothing in the product chooses a 
 - `ui/support/DisplayLocale.PAGE` (`Locale.ENGLISH`, the language the pages declare) is the one locale the pages
   format in. Text a page shows (dates, money, counts, a case change) is built with it.
 - Machine text (a switch key, a CSS value, a JSON escape) names `Locale.ROOT`.
+- Every UI starts in `PAGE` (`ui/support/PageLocaleBootstrap`). With no `I18NProvider`, Vaadin gives each UI the JVM's
+  default, and its own components, the date pickers among them, format and parse in the UI's locale, a path the
+  rule below cannot see. `PageLocaleBootstrapTest` pins it.
 - `HexagonalRulesTest` refuses, in `ui` production code, the calls that fall back on the JVM's default locale:
   the `java.time` and `java.text` formatters given none, `String.format(String, …)` and `formatted`,
   `Locale.getDefault`, and case changes given none. The full list is in the rule and in `.claude/CLAUDE.md`'s
