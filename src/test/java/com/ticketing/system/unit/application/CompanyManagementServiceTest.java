@@ -63,6 +63,7 @@ import com.ticketing.system.shared.event.ManagerRevokedNotice;
 import com.ticketing.system.shared.event.RoleChangedNotice;
 import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
@@ -310,18 +311,23 @@ public class CompanyManagementServiceTest {
                                                 defaultPermissions)));
         }
 
+        // The caller still holds an owner appointment in a company the store no longer has, so the ownership
+        // check passes and the company lookup is what refuses. That lookup comes after the invitation is
+        // recorded; the call's transaction rolls the record back, which this test, having none, cannot show.
         @Test
-        public void GivenCompanyDoesNotExist_WhenInviteManager_ThenThrowException() {
-                when(sessionManager.validateToken(OWNER_TOKEN)).thenReturn(true);
-                when(sessionManager.extractUserId(OWNER_TOKEN)).thenReturn(OWNER_ID);
-                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenReturn(null);
+        public void GivenCompanyDoesNotExist_WhenInviteManager_ThenCompanyNotFoundAndNoNoticePublished() {
+                membershipService.addFounderAppointment(OWNER_ID, COMPANY_ID);
+                givenUserWithToken(OWNER_ID, "founder", OWNER_TOKEN);
+                givenUserWithToken(TARGET_USER_ID, "invitee", TARGET_TOKEN);
+                CompanyNotFoundException companyGone = new CompanyNotFoundException(COMPANY_ID);
+                when(mockCompanyRepo.getCompanyById(COMPANY_ID)).thenThrow(companyGone);
 
-                assertThrows(RuntimeException.class, () -> companyService.appointManager(
-                                OWNER_TOKEN,
-                                new ManagerAppointmentRequestDTO(
-                                                COMPANY_ID,
-                                                TARGET_USER_ID,
-                                                defaultPermissions)));
+                CompanyNotFoundException refused = assertThrowsExactly(CompanyNotFoundException.class,
+                                () -> companyService.appointManager(OWNER_TOKEN,
+                                                new ManagerAppointmentRequestDTO(COMPANY_ID, TARGET_USER_ID, defaultPermissions)));
+
+                assertSame(companyGone, refused);
+                verifyNoInteractions(eventPublisher);
         }
 
         @Test
