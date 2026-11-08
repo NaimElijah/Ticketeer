@@ -60,7 +60,18 @@ class ScenarioParserTest {
         ScenarioCommand c = parser.parse("login").get(0);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> c.requirePos(0, "user alias"));
-        assertTrue(ex.getMessage().contains("user alias"));
+        assertTrue(ex.getMessage().contains("user alias"), "the error names the argument, but was: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("line 1"), "the error names the line, but was: " + ex.getMessage());
+    }
+
+    @Test
+    void GivenANonIntegerNamedValue_WhenIntNamed_ThenTheErrorNamesTheLineAndTheKey() {
+        ScenarioCommand c = parser.parse("login u1\nreserve u1 e1 standing qty=two").get(1);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> c.intNamed("qty", 1));
+
+        assertTrue(ex.getMessage().contains("line 2"), "the error names the line, but was: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("qty"), "the error names the key, but was: " + ex.getMessage());
     }
 
     // ---- Defect 4: a bare expect-error is refused when the file is parsed (#187) ----
