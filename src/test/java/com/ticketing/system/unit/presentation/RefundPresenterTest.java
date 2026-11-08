@@ -29,6 +29,7 @@ import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.support.ServiceErrors;
 import ch.qos.logback.classic.Level;
 import jakarta.persistence.PersistenceException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class RefundPresenterTest {
 
@@ -89,7 +90,7 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_success_carriesReferenceAndAmount() {
+    void GivenARefundThatSucceeds_WhenRequestRefund_ThenCarriesReferenceAndAmount() {
         RefundResultDTO result = new RefundResultDTO(
                 "refund-1", "555", 150.00, LocalDateTime.of(2026, 6, 1, 12, 0), List.of(), List.of());
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenReturn(result);
@@ -103,25 +104,25 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_alreadyRefunded_returnsNotEligible() {
+    void GivenAnAlreadyRefundedOrder_WhenRequestRefund_ThenNotEligibleSaysSo() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new BusinessRuleViolationException("already refunded"));
 
-        assertInstanceOf(RefundPresenter.Outcome.NotEligible.class,
+        assertEquals(new RefundPresenter.Outcome.NotEligible("This order isn't eligible for a refund."),
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 
     @Test
-    void requestRefund_missingOrder_returnsNotFound() {
+    void GivenAMissingOrder_WhenRequestRefund_ThenNotFoundSaysTheOrderWasNotFound() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new EntityNotFoundException("OrderReceipt", ORDER_ID));
 
-        assertInstanceOf(RefundPresenter.Outcome.NotFound.class,
+        assertEquals(new RefundPresenter.Outcome.NotFound("We couldn't find that order."),
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 
     @Test
-    void requestRefund_otherMembersOrder_returnsNotFound() {
+    void GivenAnotherMembersOrder_WhenRequestRefund_ThenReturnsNotFound() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason"))
                 .thenThrow(new UnauthorizedActionException("refund order " + ORDER_ID, 42));
 
@@ -148,10 +149,10 @@ class RefundPresenterTest {
     }
 
     @Test
-    void requestRefund_invalidToken_returnsFailure() {
+    void GivenAnInvalidToken_WhenRequestRefund_ThenFailureAsksTheMemberToSignIn() {
         when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenThrow(new InvalidTokenException());
 
-        assertInstanceOf(RefundPresenter.Outcome.Failure.class,
+        assertEquals(new RefundPresenter.Outcome.Failure("Please sign in to request a refund."),
                 presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 
@@ -171,5 +172,15 @@ class RefundPresenterTest {
                     serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                     "the internal failure must be logged at ERROR with its exception by ServiceErrors");
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenRequestRefund_ThenFailureAsksTheMemberToSignIn() {
+        when(refundService.requestRefund(TOKEN, ORDER_ID, "reason")).thenThrow(new SessionExpiredException());
+
+        assertEquals(new RefundPresenter.Outcome.Failure("Please sign in to request a refund."),
+                presenter.requestRefund(TOKEN, ORDER_ID, "reason"));
     }
 }

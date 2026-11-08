@@ -1,6 +1,6 @@
 # ADR-012: Session tokens are bound to a typed session row, and member paths accept member tokens only
 
-- **Status:** Accepted
+- **Status:** Accepted. Decision 2's two exceptions are related by [ADR-025](ADR-025-an-expired-session-is-an-invalid-token.md): `SessionExpiredException` is now an `InvalidTokenException`.
 - **Date:** 2026-10-30
 - **Issue:** #185 (security scan); related #34, #38, #75
 

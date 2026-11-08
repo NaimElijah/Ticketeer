@@ -38,6 +38,8 @@ import com.ticketing.system.testutil.LogCapture;
 
 class NotificationDispatchServiceTest {
 
+    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     private NotificationRepository mockRepo;
     private PushNotificationService mockPushService;
     private NotificationDispatchService service;
@@ -50,14 +52,14 @@ class NotificationDispatchServiceTest {
     }
 
     @Test
-    void dispatch_savesPendingNotification() {
+    void GivenAPendingNotification_WhenDispatch_ThenSavesPendingNotification() {
         Notification notification = new Notification(
                 "notif-1",
                 42,
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
                 "Your purchase has been confirmed",
-                LocalDateTime.now());
+                CREATED_AT);
 
         service.dispatch(notification);
 
@@ -66,14 +68,14 @@ class NotificationDispatchServiceTest {
     }
 
     @Test
-    void dispatch_rejectsNonPendingNotification() {
+    void GivenANonPendingNotification_WhenDispatch_ThenRejectsNonPendingNotificationWithoutSaving() {
         Notification notification = new Notification(
                 "notif-1",
                 42,
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.SENT,
                 "msg",
-                LocalDateTime.now());
+                CREATED_AT);
 
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> service.dispatch(notification));
@@ -82,7 +84,7 @@ class NotificationDispatchServiceTest {
 
     /* UC-37: deliver pending notifications */
     @Test
-    void givenPendingNotifications_whenDeliverPending_thenAllDelivered() {
+    void GivenPendingNotifications_WhenDeliverPending_ThenAllDelivered() {
         int userId = 42;
 
         Notification notif1 = new Notification(
@@ -91,7 +93,7 @@ class NotificationDispatchServiceTest {
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
                 "Your purchase has been confirmed",
-                LocalDateTime.now());
+                CREATED_AT);
 
         Notification notif2 = new Notification(
                 "notif-2",
@@ -99,7 +101,7 @@ class NotificationDispatchServiceTest {
                 NotificationType.EVENT_SOLD_OUT,
                 NotificationStatus.PENDING,
                 "An event you're interested in is sold out",
-                LocalDateTime.now());
+                CREATED_AT);
 
         List<Notification> pendingNotifications = new ArrayList<>();
         pendingNotifications.add(notif1);
@@ -128,9 +130,30 @@ class NotificationDispatchServiceTest {
         assertEquals("SENT", result.get(1).status());
     }
 
+    // Only the in-memory push adapter exists today, and it always succeeds, so this branch is reachable
+    // only through the port: a refused push leaves the notification pending for the next delivery.
+    @Test
+    void GivenTheFirstOfTwoPushesFails_WhenDeliverPending_ThenItStaysPendingUnsavedAndOnlyTheSecondIsReturned() {
+        int userId = 42;
+        Notification refused = new Notification("notif-1", userId, NotificationType.PURCHASE_CONFIRMED,
+                NotificationStatus.PENDING, "Your purchase has been confirmed", CREATED_AT);
+        Notification pushed = new Notification("notif-2", userId, NotificationType.EVENT_SOLD_OUT,
+                NotificationStatus.PENDING, "An event you're interested in is sold out", CREATED_AT);
+        when(mockRepo.findByRecipientAndStatus(userId, NotificationStatus.PENDING)).thenReturn(List.of(refused, pushed));
+        when(mockPushService.send(userId, refused)).thenReturn(false);
+        when(mockPushService.send(userId, pushed)).thenReturn(true);
+
+        List<NotificationDTO> result = service.deliverPending(userId);
+
+        assertEquals(List.of("notif-2"), result.stream().map(NotificationDTO::notificationId).toList());
+        assertEquals(NotificationStatus.PENDING, refused.getStatus());
+        verify(mockRepo, never()).save(refused);
+        verify(mockRepo).save(pushed);
+    }
+
     /* UC-37: no pending notifications is no-op */
     @Test
-    void givenNoPending_whenDeliverPending_thenNoop() {
+    void GivenNoPending_WhenDeliverPending_ThenNoop() {
         int userId = 42;
 
         // Mock repository to return empty list (no pending notifications)

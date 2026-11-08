@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;
@@ -72,20 +74,43 @@ class TicketTest extends BaseDomainTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void freshlyConstructedTicket_hasNullHolderUserId() {
+    void GivenAFreshlyConstructedTicket_WhenGetHolderUserId_ThenHasNullHolderUserId() {
         Ticket t = track(new Ticket(1, 10, 11, null, 25.0, 100, "barcode-X"));
         assertNull(t.getHolderUserId());
     }
 
     @Test
-    void setHolderUserId_assignsMemberOwnership() {
+    void GivenATicketWithoutAHolder_WhenSetHolderUserId_ThenAssignsMemberOwnership() {
         Ticket t = track(new Ticket(1, 10, 11, null, 25.0, 100, "barcode-X"));
         t.setHolderUserId(42);
         assertEquals(42, t.getHolderUserId());
     }
 
+    // A user id is positive; checkout assigns the paying member (CheckoutService), never 0 for a guest.
+    @ParameterizedTest(name = "holder={0}")
+    @ValueSource(ints = {0, -1})
+    void GivenATicketWithAHolder_WhenSetHolderUserIdBelowOne_ThenRefusedAndTheHolderKept(int holder) {
+        Ticket t = track(new Ticket(1, 10, 11, null, 25.0, 100, "barcode-X"));
+        t.setHolderUserId(HOLDER_ID);
+
+        assertThrows(IllegalArgumentException.class, () -> t.setHolderUserId(holder));
+
+        assertEquals(HOLDER_ID, t.getHolderUserId());
+    }
+
+    @ParameterizedTest(name = "holder={0}")
+    @ValueSource(ints = {0, -1})
+    void GivenAvailableTicket_WhenReserveForAHolderBelowOne_ThenRefusedAndStillAvailable(int holder) {
+        Ticket ticket = track(storedTicket(TicketStatus.AVAILABLE));
+
+        assertThrows(IllegalArgumentException.class, () -> ticket.reserve(holder));
+
+        assertEquals(TicketStatus.AVAILABLE, ticket.getStatus());
+        assertNull(ticket.getHolderUserId());
+    }
+
     @Test
-    void setHolderUserId_nullClearsOwnership() {
+    void GivenATicketWithAHolder_WhenSetHolderUserIdToNull_ThenClearsOwnership() {
         // E.g., refund-to-pool flow could clear the holder. Domain allows it.
         Ticket t = track(new Ticket(1, 10, 11, null, 25.0, 100, "barcode-X"));
         t.setHolderUserId(42);
@@ -94,7 +119,7 @@ class TicketTest extends BaseDomainTest {
     }
 
     @Test
-    void testMarkRefundedChangesStatusToRefunded() {
+    void GivenPaidTicket_WhenMarkRefunded_ThenChangesStatusToRefunded() {
         Ticket ticket = track(new Ticket(10, 1, 11, null, 50.0, 100, "BARCODE123"));
         ticket.markRefunded();
         assertEquals(TicketStatus.REFUNDED, ticket.getStatus());

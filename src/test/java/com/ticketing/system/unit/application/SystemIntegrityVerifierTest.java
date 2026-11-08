@@ -32,6 +32,7 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventCategory;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
 import com.ticketing.system.catalog.domain.InventoryZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.catalog.domain.ShowDate;
@@ -69,12 +70,12 @@ class SystemIntegrityVerifierTest {
     // ---- existing structural scans (#4 / #6) ----
 
     @Test
-    void givenEmptySystem_whenVerify_thenPasses() {
+    void GivenEmptySystem_WhenVerify_ThenPasses() {
         assertDoesNotThrow(verifier::verify);
     }
 
     @Test
-    void givenActiveCompanyWithOwnerAndKnownProducers_whenVerify_thenPasses() {
+    void GivenActiveCompanyWithOwnerAndKnownProducers_WhenVerify_ThenPasses() {
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getOwnerIds()).thenReturn(List.of(5));
         when(company.getManagers()).thenReturn(List.of(6));
@@ -86,7 +87,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenActiveCompanyWithNoOwner_whenVerify_thenThrows() {   // constraint #6
+    void GivenActiveCompanyWithNoOwner_WhenVerify_ThenThrows() {   // constraint #6
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getOwnerIds()).thenReturn(List.of());
         when(company.getName()).thenReturn("Ghost Co");
@@ -96,7 +97,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenProducerThatIsNotAUser_whenVerify_thenThrows() {     // constraint #4
+    void GivenProducerThatIsNotAUser_WhenVerify_ThenThrows() {     // constraint #4
         ProductionCompany company = mock(ProductionCompany.class);
         when(company.getOwnerIds()).thenReturn(List.of(5));
         when(company.getManagers()).thenReturn(List.of());
@@ -110,7 +111,7 @@ class SystemIntegrityVerifierTest {
     // ---- #372 V3 scans against loaded state ----
 
     @Test
-    void givenLoadedAggregateThatViolatesItsInvariant_whenVerify_thenThrows() {   // re-validation sweep
+    void GivenLoadedAggregateThatViolatesItsInvariant_WhenVerify_ThenThrows() {   // re-validation sweep
         Event badEvent = mock(Event.class);
         doThrow(new IllegalStateException("rating out of range")).when(badEvent).checkInvariants();
         when(eventRepository.findAll()).thenReturn(List.of(badEvent));
@@ -119,7 +120,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenDuplicateUsernames_whenVerify_thenThrows() {   // constraint #1
+    void GivenDuplicateUsernames_WhenVerify_ThenThrows() {   // constraint #1
         User a = mock(User.class);
         User b = mock(User.class);
         when(a.getUsername()).thenReturn("alice");
@@ -130,7 +131,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenDistinctUsernames_whenVerify_thenPasses() {   // constraint #1 — happy path
+    void GivenDistinctUsernames_WhenVerify_ThenPasses() {   // constraint #1 — happy path
         User a = mock(User.class);
         User b = mock(User.class);
         when(a.getUsername()).thenReturn("alice");
@@ -141,7 +142,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenBuyerWithTwoOrdersForSameEvent_whenVerify_thenThrows() {   // constraint #8
+    void GivenBuyerWithTwoOrdersForSameEvent_WhenVerify_ThenThrows() {   // constraint #8
         ActiveOrder order1 = orderFor(5, "ok-1", 7);
         ActiveOrder order2 = orderFor(5, "ok-2", 7);
         when(activeOrderRepository.findAll()).thenReturn(List.of(order1, order2));
@@ -150,7 +151,7 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenBuyerWithOrdersForDifferentEvents_whenVerify_thenPasses() {   // constraint #8 — happy path
+    void GivenBuyerWithOrdersForDifferentEvents_WhenVerify_ThenPasses() {   // constraint #8 — happy path
         ActiveOrder order1 = orderFor(5, "ok-1", 7);
         ActiveOrder order2 = orderFor(5, "ok-2", 8);
         when(activeOrderRepository.findAll()).thenReturn(List.of(order1, order2));
@@ -159,17 +160,36 @@ class SystemIntegrityVerifierTest {
     }
 
     @Test
-    void givenOversoldZone_whenVerify_thenThrows() {   // constraint #12
+    void GivenOversoldZone_WhenVerify_ThenThrows() {   // constraint #12
         when(eventRepository.findAll()).thenReturn(List.of(eventWithSoldUnits(200))); // 200 > capacity 100
 
         assertThrows(SystemIntegrityViolationException.class, verifier::verify);
     }
 
     @Test
-    void givenZoneWithinCapacity_whenVerify_thenPasses() {   // constraint #12 — happy path
+    void GivenZoneWithinCapacity_WhenVerify_ThenPasses() {   // constraint #12 — happy path
         when(eventRepository.findAll()).thenReturn(List.of(eventWithSoldUnits(0))); // sold 0 <= capacity 100
 
         assertDoesNotThrow(verifier::verify);
+    }
+
+    @Test
+    void GivenZoneSoldExactlyToCapacity_WhenVerify_ThenPasses() {   // constraint #12 — the edge
+        when(eventRepository.findAll()).thenReturn(List.of(eventWithSoldUnits(100))); // sold 100 == capacity 100
+
+        assertDoesNotThrow(verifier::verify);
+    }
+
+    // Reserved units are committed too, so a zone sold to capacity cannot also hold a reservation.
+    @Test
+    void GivenZoneSoldToCapacityWithOneUnitReserved_WhenVerify_ThenOversoldBySoldPlusReserved() {
+        when(eventRepository.findAll()).thenReturn(List.of(eventWithUnits(100, 1)));
+
+        SystemIntegrityViolationException violation = assertThrows(SystemIntegrityViolationException.class,
+                verifier::verify);
+
+        assertTrue(violation.getMessage().contains("event 1 has an oversold zone: sold+reserved=101 > capacity=100"),
+                violation.getMessage());
     }
 
     // ---- helpers ----
@@ -188,7 +208,15 @@ class SystemIntegrityVerifierTest {
     // resist mocking; instead the zone's soldAmount is corrupted directly to simulate an oversold DB row
     // (the domain API never lets sold exceed capacity, which is the whole point of the boot scan).
     private static Event eventWithSoldUnits(int sold) {
+        return eventWithUnits(sold, 0);
+    }
+
+    // The reservation goes through the zone's API while it is still legal; the sold count is then forced.
+    private static Event eventWithUnits(int sold, int reserved) {
         InventoryZone zone = new StandingZone(1, "Floor", 100, 50);
+        if (reserved > 0) {
+            zone.reserve(InventorySelection.standing(reserved, "held-order"));
+        }
         if (sold > 0) {
             setPrivateInt(zone, "soldAmount", sold);
         }
@@ -216,8 +244,9 @@ class SystemIntegrityVerifierTest {
     private static final int SHARED_EVENT_ID = 7;
     private static final int MEMBER_ID = 5;
 
-    // Two carts on one guest session id are a known, accepted race (#224, requirements.md §1 #8).
-    // Failing the scan on them would stop the boot (ADR-003) and block openMarket from CLOSED.
+    // V10 holds a guest session to one cart, but a pre-V10 instance serving during a rolling deploy can still
+    // leave two (NaimElijah/Ticketeer#224, requirements.md §1 #8), and failing the scan on them would stop the
+    // boot (ADR-003) and block openMarket from CLOSED. NaimElijah/Ticketeer#275 flips this test.
     @Test
     void GivenTwoGuestCartsOnOneSessionHoldingOneEvent_WhenVerify_ThenPasses() {
         ActiveOrder first = guestCartHolding("guest-session-1", SHARED_EVENT_ID);
@@ -225,7 +254,7 @@ class SystemIntegrityVerifierTest {
         when(activeOrderRepository.findAll()).thenReturn(List.of(first, second));
 
         assertDoesNotThrow(verifier::verify,
-                "two guest carts on one session id are a known race (#224), not a boot-stopping violation");
+                "two guest carts on one session id are left to the sweeper (#275), not a boot-stopping violation");
     }
 
     // Members stay in the scan: uk_active_orders_user_id holds them, so two carts are corrupt state.

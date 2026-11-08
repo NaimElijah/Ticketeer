@@ -1,6 +1,7 @@
 package com.ticketing.system.ui.components.venue;
 
 import com.ticketing.system.ui.components.kit.LkIcon;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.NativeButton;
@@ -30,7 +31,7 @@ public class PolicyGroup extends Div {
         NativeButton opBtn = new NativeButton();
         opBtn.addClassName("pe-op");
         opBtn.addClassName(isAnd ? "and" : "or");
-        opBtn.add(new Span(op.toUpperCase()));
+        opBtn.add(new Span(op.toUpperCase(DisplayLocale.PAGE)));
         Span caret = new Span(" ▾");
         caret.addClassName("pe-op-caret");
         opBtn.add(caret);

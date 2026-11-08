@@ -2,7 +2,13 @@ package com.ticketing.system.unit.infrastructure.seed.scenario;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +41,7 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.sales.application.service.CheckoutService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.shared.config.PlatformTimeProperties;
+import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.ui.dev.DevUserSeeder;
 
 /**
@@ -44,6 +51,42 @@ import com.ticketing.system.ui.dev.DevUserSeeder;
 class ScenarioRunnerTest {
 
     private static final String UNKNOWN_OPERATION = "no-such-operation u1\n";
+    private static final String REGISTER_ALICE = "register alice password123 alice@demo.test 30\n";
+
+    // ADR-021: the file is part of initialisation, so a missing one stops the boot whatever seed.fail-fast says.
+    @Test
+    void GivenMissingScenarioFileWithoutFailFast_WhenRun_ThenThrowsSoBootFails() {
+        String missing = "file:" + dir.resolve("absent.scenario");
+        ScenarioRunner runner = runner(SeedProperties.Mode.RESEED, false, missing);
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> runner.run(null));
+
+        assertTrue(refused.getMessage().contains(missing), "the refusal names the file, but was: " + refused.getMessage());
+    }
+
+    @Test
+    void GivenOffMode_WhenRun_ThenNothingRuns() throws IOException {
+        ScenarioRunnerFixture fixture = new ScenarioRunnerFixture();
+        fixture.assumeYes = true;
+
+        fixture.runner(SeedProperties.Mode.OFF, true, ScenarioRunnerFixture.scenarioFile(dir, REGISTER_ALICE)).run(null);
+
+        fixture.verifyNoScenarioStepRan();
+        verifyNoInteractions(fixture.repoCleaner, fixture.systemAdminService);
+    }
+
+    @Test
+    void GivenFailingStepWithoutFailFast_WhenRun_ThenTheLaterStepsStillRun() throws IOException {
+        ScenarioRunnerFixture fixture = new ScenarioRunnerFixture();
+        when(fixture.authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO("guest-sid", ScenarioRunnerFixture.NOW));
+
+        fixture.runner(SeedProperties.Mode.RESEED, false,
+                ScenarioRunnerFixture.scenarioFile(dir, UNKNOWN_OPERATION + REGISTER_ALICE)).run(null);
+
+        verify(fixture.authenticationService).register(argThat(request -> request.username().equals("alice")));
+        verify(fixture.repoCleaner, never()).clearAll();
+    }
 
     @TempDir
     Path dir;

@@ -46,6 +46,7 @@ class FreshGuestSessionTest {
     private static final CheckoutResultDTO KEPT_CONFIRMATION = new CheckoutResultDTO(75.0, 42, 9001,
             List.of(new CheckoutResultDTO.IssuedTicketDTO(1, "TIX-0001-A1")));
     private static final Instant KEPT_AT = Instant.parse("2027-01-01T12:00:00Z");
+    private static final long BADGE_READ_AT_MS = KEPT_AT.toEpochMilli();
 
     private AuthenticationService authenticationService;
     private INotificationService notificationService;
@@ -88,6 +89,7 @@ class FreshGuestSessionTest {
         when(authenticationService.startGuestSession())
                 .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
         OrderSession.setResult(KEPT_CONFIRMATION, KEPT_AT);
+        assertTrue(OrderSession.result(KEPT_AT).isPresent(), "precondition: the confirmation is kept");
 
         freshGuestSession.restore();
 
@@ -100,6 +102,7 @@ class FreshGuestSessionTest {
         when(authenticationService.startGuestSession())
                 .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
         OrderSession.setResult(KEPT_CONFIRMATION, KEPT_AT);
+        assertTrue(OrderSession.result(KEPT_AT).isPresent(), "precondition: the confirmation is kept");
 
         freshGuestSession.renewGuest();
 
@@ -115,6 +118,29 @@ class FreshGuestSessionTest {
 
         assertEquals(FRESH_GUEST_SESSION_ID, GuestSession.sessionId(),
                 "the guest session is a newly minted one, not the member's " + MEMBER_SESSION_ID);
+    }
+
+    // The new guest session has a cart of its own, so the next visitor must not see the member's count.
+    @Test
+    void GivenACachedCartBadge_WhenRestored_ThenItIsDropped() {
+        when(authenticationService.startGuestSession())
+                .thenReturn(new GuestSessionDTO(FRESH_GUEST_SESSION_ID, Instant.EPOCH));
+        CartBadgeCache.store(new CartBadgeCache.Badge(2, null), BADGE_READ_AT_MS);
+        assertTrue(CartBadgeCache.fresh(BADGE_READ_AT_MS).isPresent(), "precondition: the member's badge is cached");
+
+        freshGuestSession.restore();
+
+        assertTrue(CartBadgeCache.fresh(BADGE_READ_AT_MS).isEmpty(), "the member's cart count must be read again");
+    }
+
+    @Test
+    void GivenTheGuestSessionCannotBeStarted_WhenGuestRenewed_ThenTheDeadIdIsClearedWithoutThrowingAndNobodyIsSignedOut() {
+        when(authenticationService.startGuestSession()).thenThrow(new IllegalStateException("session store down"));
+
+        assertDoesNotThrow(freshGuestSession::renewGuest, "a failed guest-session start must not reach the view");
+
+        assertNull(GuestSession.sessionId(), "the dead session id must not stay pinned");
+        assertEquals(MEMBER_TOKEN, AuthSession.token(), "renewing the guest session signs nobody out");
     }
 
     @Test

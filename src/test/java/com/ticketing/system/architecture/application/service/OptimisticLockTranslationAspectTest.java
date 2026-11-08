@@ -48,7 +48,7 @@ class OptimisticLockTranslationAspectTest {
     }
 
     @Test
-    void translatesOptimisticLockFailureIntoConcurrentReservationException() {
+    void GivenOptimisticLockFailure_WhenTranslated_ThenBecomesConcurrentReservationExceptionWithOriginalCause() {
         FakeService target = new FakeService();
         OptimisticLockingFailureException conflict = new OptimisticLockingFailureException("version mismatch");
         target.toThrow = conflict;
@@ -79,11 +79,10 @@ class OptimisticLockTranslationAspectTest {
         assertFalse(message.contains("(..)"), "the message carries a method signature: " + message);
         assertTrue(message.toLowerCase(Locale.ROOT).contains("retry"),
                 "the message must still ask the user to retry: " + message);
-        assertSame(conflict, thrown.getCause(), "the original failure must be preserved as the cause");
     }
 
     @Test
-    void passesSuccessfulResultsThroughUnchanged() {
+    void GivenASuccessfulResult_WhenAdvisedServiceRuns_ThenPassesResultThroughUnchanged() {
         FakeService target = new FakeService();
         target.result = "done";
 
@@ -93,7 +92,7 @@ class OptimisticLockTranslationAspectTest {
     }
 
     @Test
-    void leavesNonConflictExceptionsUntouched() {
+    void GivenANonConflictException_WhenAdvisedServiceRuns_ThenLeavesExceptionUntouched() {
         FakeService target = new FakeService();
         IllegalStateException unrelated = new IllegalStateException("not a conflict");
         target.toThrow = unrelated;

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -91,7 +92,7 @@ class CommittedAdminPasswordRotationSessionsTest {
 
         contextWithTheRotation().run(context -> {
             assertThat(context).hasNotFailed();
-            assertThrows(InvalidTokenException.class, () -> sessionManager.validateAdminToken(issuedBefore),
+            assertThrowsExactly(InvalidTokenException.class, () -> sessionManager.validateAdminToken(issuedBefore),
                     "an admin session issued under the previous password must end when the password is rotated");
         });
     }
@@ -104,7 +105,7 @@ class CommittedAdminPasswordRotationSessionsTest {
 
         contextWithTheRotation().run(context -> {
             assertThat(context).hasNotFailed();
-            assertThrows(InvalidTokenException.class, () -> sessionManager.validateAdminToken(adminToken),
+            assertThrowsExactly(InvalidTokenException.class, () -> sessionManager.validateAdminToken(adminToken),
                     "precondition: the rotation ended the admin's session");
             assertDoesNotThrow(() -> sessionManager.validateToken(memberToken),
                     "a member whose id equals the admin's is not that admin; the member's session must stay");
@@ -120,7 +121,7 @@ class CommittedAdminPasswordRotationSessionsTest {
 
         contextWithTheRotation().run(context -> {
             assertThat(context).hasNotFailed();
-            assertThrows(InvalidTokenException.class, () -> sessionManager.validateAdminToken(defaultAdminToken),
+            assertThrowsExactly(InvalidTokenException.class, () -> sessionManager.validateAdminToken(defaultAdminToken),
                     "precondition: the rotation ended the default admin's session");
             assertTrue(sessionManager.validateAdminToken(otherAdminToken),
                     "only the rotated admin's sessions end");
@@ -174,7 +175,7 @@ class CommittedAdminPasswordRotationSessionsTest {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure()).isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining(String.valueOf(OTHER_ADMIN_ID));
-            assertThrows(InvalidTokenException.class, () -> sessionManager.validateAdminToken(otherAdminToken),
+            assertThrowsExactly(InvalidTokenException.class, () -> sessionManager.validateAdminToken(otherAdminToken),
                     "an admin refused for the committed password must not keep a session issued under it");
             assertDoesNotThrow(() -> sessionManager.validateToken(memberTokenWithTheOtherAdminsId),
                     "a member whose id equals the refused admin's is not that admin; the member's session must stay");

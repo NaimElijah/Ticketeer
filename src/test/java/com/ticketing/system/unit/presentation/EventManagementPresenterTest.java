@@ -36,6 +36,22 @@ import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
 import com.ticketing.system.ui.presenters.company.EventManagementPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.anyString;
+import com.ticketing.system.shared.exception.EventNotFoundException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
+import com.ticketing.system.shared.dto.EventUpdateDTO;
+import com.ticketing.system.shared.dto.LocationDTO;
+import jakarta.persistence.PersistenceException;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.ticketing.system.catalog.domain.ShowDate;
 
 /**
  * Unit tests for {@link EventManagementPresenter#create}. The create flow assembles an
@@ -49,6 +65,8 @@ class EventManagementPresenterTest {
     private static final String TOKEN = "owner-token";
     private static final int EVENT_ID = 9;
     private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
+    // The service is a mock and the presenter reads no clock: the dates are only passed through.
+    private static final LocalDateTime NOW = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private EventManagementService eventService;
     private CompanyManagementService companyService;
@@ -67,11 +85,11 @@ class EventManagementPresenterTest {
     }
 
     private static LocalDateTime futureStart() {
-        return LocalDateTime.now().plusDays(1);
+        return NOW.plusDays(1);
     }
 
     private static LocalDateTime futureEnd() {
-        return LocalDateTime.now().plusDays(1).plusHours(3);
+        return NOW.plusDays(1).plusHours(3);
     }
 
     private EventManagementPresenter.CreateOutcome createWith(Integer preferredCompanyId,
@@ -81,7 +99,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_success_returnsNewEventId() {
+    void GivenOneOwnedCompany_WhenCreate_ThenReturnsNewEventId() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
         when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("5"));
 
@@ -93,7 +111,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_prefersSelectedCompanyWhenOwned() {
+    void GivenASelectedCompanyThatIsOwned_WhenCreate_ThenPrefersTheSelectedCompany() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1), company(2)));
         when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("9"));
 
@@ -105,7 +123,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_preferredNotOwned_returnsChooseCompany() {
+    void GivenAPreferredCompanyNotOwned_WhenCreate_ThenReturnsChooseCompanyAndNothingCreated() {
         // A selected company the caller doesn't own must not silently retarget to another company.
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1), company(2)));
 
@@ -125,7 +143,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_noOwnedCompany_returnsNoCompany() {
+    void GivenNoOwnedCompany_WhenCreate_ThenReturnsNoCompanyAndNothingCreated() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of());
 
         assertInstanceOf(EventManagementPresenter.CreateOutcome.NoCompany.class,
@@ -134,7 +152,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_nullToken_returnsNotAuthenticated() {
+    void GivenANullToken_WhenCreate_ThenReturnsNotAuthenticatedAndNoServiceCall() {
         EventManagementPresenter.CreateOutcome outcome = presenter.create(null, 1, "Gala", "d",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
                 JERUSALEM,
@@ -145,7 +163,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenCreate_ThenReturnsNotAuthenticated() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
         when(eventService.addEvent(eq(TOKEN), any())).thenThrow(new InvalidTokenException());
 
@@ -154,7 +172,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_blankCategory_returnsInvalidInput() {
+    void GivenANullCategory_WhenCreate_ThenReturnsInvalidInputAndNoServiceCall() {
         // Required inputs are validated before any service call, so a null category maps to
         // InvalidInput (not a leaked NPE → Failure) and touches neither service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
@@ -165,7 +183,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_ratingOutOfRange_returnsInvalidInput() {
+    void GivenARatingOutOfRange_WhenCreate_ThenReturnsInvalidInputAndNoServiceCall() {
         // Rating is validated up front (0–5), so a bad value maps to InvalidInput and touches no service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
@@ -177,7 +195,7 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_nullRating_returnsInvalidInput() {
+    void GivenANullRating_WhenCreate_ThenReturnsInvalidInputAndNoServiceCall() {
         // Rating is required — a null rating maps to InvalidInput and touches no service.
         EventManagementPresenter.CreateOutcome outcome = presenter.create(TOKEN, 1, "Gala", "desc",
                 EventCategory.COMEDY.name(), "Israel", "Tel Aviv", futureStart(), futureEnd(),
@@ -226,7 +244,7 @@ class EventManagementPresenterTest {
                 .thenThrow(new IllegalArgumentException("Start time must be in the future"));
 
         EventManagementPresenter.CreateOutcome outcome =
-                createWith(null, LocalDateTime.now().minusDays(1), futureEnd());
+                createWith(null, NOW.minusDays(1), futureEnd());
 
         EventManagementPresenter.CreateOutcome.InvalidInput invalid =
                 assertInstanceOf(EventManagementPresenter.CreateOutcome.InvalidInput.class, outcome);
@@ -261,11 +279,11 @@ class EventManagementPresenterTest {
     }
 
     @Test
-    void create_serviceFailure_returnsFailure() {
+    void GivenTheServiceFailsInternally_WhenCreate_ThenFailureCarriesTheGenericText() {
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
         when(eventService.addEvent(eq(TOKEN), any())).thenThrow(new RuntimeException("boom"));
 
-        assertInstanceOf(EventManagementPresenter.CreateOutcome.Failure.class,
+        assertEquals(new EventManagementPresenter.CreateOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
                 createWith(null, futureStart(), futureEnd()));
     }
 
@@ -341,5 +359,247 @@ class EventManagementPresenterTest {
         for (String operatorText : List.of("gateway", "Connection refused", "Read timed out", "payment transaction", "9001")) {
             assertFalse(reason.contains(operatorText), "the reason shows operator text '" + operatorText + "': " + reason);
         }
+    }
+
+    // ---- load, save and the cancel's other outcomes (#189) ----
+
+    private static final EventUpdateDTO RENAME = new EventUpdateDTO(String.valueOf(EVENT_ID), "Gala Night II", null,
+            null, new LocationDTO("Israel", "Haifa"), null, null);
+
+    @Test
+    void GivenANullToken_WhenLoad_ThenNotAuthenticatedAndNoServiceCall() {
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotAuthenticated(), presenter.load(null, EVENT_ID));
+        verifyNoInteractions(eventService, companyService);
+    }
+
+    @Test
+    void GivenTheEvent_WhenLoad_ThenSuccessCarriesItsDetail() {
+        EventDetailDTO detail = detailWithId(String.valueOf(EVENT_ID));
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenReturn(detail);
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.Success(detail), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenLoad_ThenNotAuthenticated() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotAuthenticated(), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenNotAuthenticated() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotAuthenticated(), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAMissingEvent_WhenLoad_ThenNotFound() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.NotFound(), presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenTheServiceRefusesTheCaller_WhenLoad_ThenFailureCarriesTheRule() {
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view event " + EVENT_ID);
+        when(eventService.getEventDetail(TOKEN, EVENT_ID)).thenThrow(refusal);
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.Failure(refusal.getMessage()),
+                presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenLoad_ThenFailureCarriesTheGenericText() {
+        when(eventService.getEventDetail(TOKEN, EVENT_ID))
+                .thenThrow(new PersistenceException("could not prepare statement; table [events]"));
+
+        assertEquals(new EventManagementPresenter.LoadOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                presenter.load(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenANullToken_WhenSave_ThenNotAuthenticatedAndNoServiceCall() {
+        assertEquals(new EventManagementPresenter.SaveOutcome.NotAuthenticated(), presenter.save(null, RENAME));
+        verifyNoInteractions(eventService, companyService);
+    }
+
+    @Test
+    void GivenAnEdit_WhenSave_ThenTheServiceGetsItUnchangedAndSuccess() {
+        assertEquals(new EventManagementPresenter.SaveOutcome.Success(), presenter.save(TOKEN, RENAME));
+
+        verify(eventService).editEventDetails(TOKEN, RENAME);
+    }
+
+    @Test
+    void GivenARevokedToken_WhenSave_ThenNotAuthenticated() {
+        doThrow(new InvalidTokenException("revoked")).when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.NotAuthenticated(), presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenSave_ThenNotAuthenticated() {
+        doThrow(new SessionExpiredException()).when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.NotAuthenticated(), presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenTheEventRefusesTheEdit_WhenSave_ThenFailureCarriesTheRule() {
+        BusinessRuleViolationException rule = new BusinessRuleViolationException("An event on sale cannot be renamed.");
+        doThrow(rule).when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.Failure(rule.getMessage()), presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenSave_ThenFailureCarriesTheGenericText() {
+        doThrow(new PersistenceException("could not execute statement [update events set name=?]"))
+                .when(eventService).editEventDetails(TOKEN, RENAME);
+
+        assertEquals(new EventManagementPresenter.SaveOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                presenter.save(TOKEN, RENAME));
+    }
+
+    @Test
+    void GivenANullToken_WhenCancel_ThenNotAuthenticatedAndNothingIsCancelled() {
+        assertEquals(new EventManagementPresenter.CancelOutcome.NotAuthenticated(), presenter.cancel(null, EVENT_ID));
+        verifyNoInteractions(eventService);
+    }
+
+    @Test
+    void GivenARevokedToken_WhenCancel_ThenNotAuthenticated() {
+        doThrow(new InvalidTokenException("revoked")).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        assertEquals(new EventManagementPresenter.CancelOutcome.NotAuthenticated(), presenter.cancel(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenCancel_ThenNotAuthenticated() {
+        doThrow(new SessionExpiredException()).when(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+
+        assertEquals(new EventManagementPresenter.CancelOutcome.NotAuthenticated(), presenter.cancel(TOKEN, EVENT_ID));
+    }
+
+    @Test
+    void GivenTheCancelAndItsRefundsSucceed_WhenCancel_ThenSuccessAndTheEventIsCancelledOnce() {
+        assertEquals(new EventManagementPresenter.CancelOutcome.Success(), presenter.cancel(TOKEN, EVENT_ID));
+
+        verify(eventService).cancelEventAndRefund(TOKEN, EVENT_ID);
+    }
+
+    @Test
+    void GivenARevokedTokenWhenListingCompanies_WhenCreate_ThenNotAuthenticatedAndNothingCreated() {
+        when(companyService.findMyCompanies(TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.NotAuthenticated(),
+                createWith(null, futureStart(), futureEnd()));
+        verify(eventService, never()).addEvent(anyString(), any());
+    }
+
+    // ---- what the create form refuses before any service call, and what it sends (#189) ----
+
+    /** The create form's fields, valid until a test changes one. */
+    private static final class Form {
+        private String name = "Gala Night";
+        private String category = EventCategory.COMEDY.name();
+        private String country = "Israel";
+        private String city = "Tel Aviv";
+        private LocalDateTime starts = futureStart();
+        private LocalDateTime ends = futureEnd();
+        private List<String> artists = List.of("Headliner");
+        private Double rating = 4.5;
+    }
+
+    private EventManagementPresenter.CreateOutcome create(Form form) {
+        return presenter.create(TOKEN, null, form.name, "A great show", form.category, form.country, form.city,
+                form.starts, form.ends, JERUSALEM, form.artists, form.rating);
+    }
+
+    private static Arguments refused(String field, Consumer<Form> change, String reason) {
+        return Arguments.of(field, change, reason);
+    }
+
+    static Stream<Arguments> refusedForms() {
+        return Stream.of(
+            refused("a blank title", f -> f.name = "   ", "An event title is required."),
+            refused("no title", f -> f.name = null, "An event title is required."),
+            refused("a blank category", f -> f.category = " ", "A category is required."),
+            refused("a blank country", f -> f.country = "", "A country and a city are required."),
+            refused("a blank city", f -> f.city = "  ", "A country and a city are required."),
+            refused("no start", f -> f.starts = null, "A start and an end time are required."),
+            refused("no end", f -> f.ends = null, "A start and an end time are required."),
+            refused("no artists", f -> f.artists = null, "At least one artist is required."),
+            refused("an empty artist list", f -> f.artists = List.of(), "At least one artist is required."),
+            refused("a NaN rating", f -> f.rating = Double.NaN, "Rating must be between 0 and 5."),
+            refused("an infinite rating", f -> f.rating = Double.POSITIVE_INFINITY, "Rating must be between 0 and 5."),
+            refused("a negative infinite rating", f -> f.rating = Double.NEGATIVE_INFINITY, "Rating must be between 0 and 5."),
+            refused("a rating just below 0", f -> f.rating = -0.1, "Rating must be between 0 and 5."),
+            refused("a rating just above 5", f -> f.rating = 5.1, "Rating must be between 0 and 5."));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("refusedForms")
+    void GivenAFormWithAMissingOrBadField_WhenCreate_ThenInvalidInputWithItsReasonAndNoServiceCall(
+            String field, Consumer<Form> change, String reason) {
+        Form form = new Form();
+        change.accept(form);
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.InvalidInput(reason), create(form), field);
+        verifyNoInteractions(companyService, eventService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {0.0, 5.0})
+    void GivenARatingOnABound_WhenCreate_ThenTheEventIsCreatedWithThatRating(double rating) {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("5"));
+        Form form = new Form();
+        form.rating = rating;
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.Success("5"), create(form));
+
+        ArgumentCaptor<EventCreationDTO> request = ArgumentCaptor.forClass(EventCreationDTO.class);
+        verify(eventService).addEvent(eq(TOKEN), request.capture());
+        assertEquals(rating, request.getValue().rating());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, 60})
+    void GivenAnEndNotAfterTheStart_WhenCreate_ThenInvalidInputAndNothingCreated(long minutesBeforeTheStart) {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(1)));
+        Form form = new Form();
+        form.ends = form.starts.minusMinutes(minutesBeforeTheStart);
+
+        assertEquals(new EventManagementPresenter.CreateOutcome.InvalidInput("End time must be after start time"),
+                create(form));
+        verify(eventService, never()).addEvent(anyString(), any());
+    }
+
+    @Test
+    void GivenAValidForm_WhenCreate_ThenTheRequestCarriesEveryFieldAsEntered() {
+        when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(3)));
+        when(eventService.addEvent(eq(TOKEN), any())).thenReturn(detailWithId("5"));
+
+        create(new Form());
+
+        ArgumentCaptor<EventCreationDTO> captured = ArgumentCaptor.forClass(EventCreationDTO.class);
+        verify(eventService).addEvent(eq(TOKEN), captured.capture());
+        EventCreationDTO request = captured.getValue();
+        assertEquals(3, request.companyId());
+        assertEquals("Gala Night", request.name());
+        assertEquals("A great show", request.description());
+        assertEquals(List.of("Headliner"), request.artistsNames());
+        assertEquals(EventCategory.COMEDY, request.category());
+        assertEquals(4.5, request.rating());
+        assertEquals(new Location("Israel", "Tel Aviv"), request.location());
+        assertEquals(1, request.showDates().size(), "one show date");
+        ShowDate show = request.showDates().get(0);
+        assertEquals(futureStart(), show.getStartTime());
+        assertEquals(futureEnd(), show.getEndTime());
+        assertEquals(JERUSALEM, request.timeZone());
+        assertNull(request.purchasePolicy(), "a new event inherits its company's purchase policy");
     }
 }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -50,6 +51,8 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
  */
 class CompanyMembershipServiceTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-07-15T17:00:00Z"), ZoneOffset.UTC);
+
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
     // Outbound port to catalog's active-event count (replaces the former direct EventRepository read).
@@ -74,7 +77,7 @@ class CompanyMembershipServiceTest {
         userRepository = mock(UserRepository.class);
         companyRepository = mock(ProductionCompanyRepository.class);
         companyEventStatsPort = mock(CompanyEventStatsPort.class);
-        membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), Clock.systemUTC());
+        membershipService = new CompanyMembershipService(new MemoryCompanyAppointmentRepository(), FIXED_CLOCK);
         sessionManager = mock(SessionManager.class);
         when(sessionManager.validateToken(MEMBER_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(MEMBER_TOKEN)).thenReturn(USER_ID);
@@ -103,7 +106,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenFounderAppointment_whenListForUser_thenReturnsFounderMembership() {
+    void GivenFounderAppointment_WhenListForUser_ThenReturnsFounderMembership() {
         User user = new User(USER_ID, "founder", "founder@test.com", "hash", 30);
         membershipService.addFounderAppointment(USER_ID, COMPANY_ID);
 
@@ -124,7 +127,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenManagerAppointment_whenListForUser_thenReturnsManagerPermissions() {
+    void GivenManagerAppointment_WhenListForUser_ThenReturnsManagerPermissions() {
         User user = new User(USER_ID, "manager", "manager@test.com", "hash", 30);
         membershipService.receiveManagerAppointment(USER_ID, COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
         membershipService.acceptInvitation(USER_ID, COMPANY_ID);
@@ -161,7 +164,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenOwnerAppointment_whenIsOwnerOf_thenTrueForCoOwner() {
+    void GivenOwnerAppointment_WhenIsOwnerOf_ThenTrueForCoOwner() {
         User user = new User(USER_ID, "owner", "owner@test.com", "hash", 30);
         membershipService.receiveOwnerAppointment(USER_ID, COMPANY_ID, 1);
         membershipService.acceptInvitation(USER_ID, COMPANY_ID);
@@ -172,7 +175,7 @@ class CompanyMembershipServiceTest {
     }
 
     @Test
-    void givenManagerAppointment_whenIsOwnerOf_thenFalse() {
+    void GivenManagerAppointment_WhenIsOwnerOf_ThenFalse() {
         User user = new User(USER_ID, "manager", "manager@test.com", "hash", 30);
         membershipService.receiveManagerAppointment(USER_ID, COMPANY_ID, 1, List.of(Permission.VIEW_SALES));
         membershipService.acceptInvitation(USER_ID, COMPANY_ID);
@@ -190,7 +193,7 @@ class CompanyMembershipServiceTest {
     void GivenNoLiveMemberToken_WhenListForUser_ThenInvalidToken(String token) {
         seedFounder(OTHER_USER_ID, COMPANY_ID, "Other's Company");
 
-        assertThrows(InvalidTokenException.class, () -> service.listForUser(token));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.listForUser(token));
     }
 
     @Test
@@ -210,7 +213,7 @@ class CompanyMembershipServiceTest {
     void GivenNoLiveMemberToken_WhenIsOwnerOf_ThenInvalidToken(String token) {
         seedFounder(OTHER_USER_ID, COMPANY_ID, "Other's Company");
 
-        assertThrows(InvalidTokenException.class, () -> service.isOwnerOf(token, COMPANY_ID));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.isOwnerOf(token, COMPANY_ID));
     }
 
     @Test

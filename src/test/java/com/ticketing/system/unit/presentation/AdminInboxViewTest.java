@@ -60,6 +60,7 @@ class AdminInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheViewIsBuilt_ThenNoThreadIsOpenedAndEveryBadgeStays() {
         AdminInboxView view = new AdminInboxView(presenter, displayTime());
+        harness.attach(view);
 
         verify(presenter, never()).open(any(), any(), any());
         assertEquals(List.of("2", "2"), rows(view).stream().map(InboxViewHarness::badge).toList());
@@ -68,6 +69,7 @@ class AdminInboxViewTest {
     @Test
     void GivenAnInboxOfTwoThreads_WhenTheReaderClicksTheSecondRow_ThenOnlyThatThreadIsOpened() {
         AdminInboxView view = new AdminInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -84,6 +86,7 @@ class AdminInboxViewTest {
     void GivenTheSessionEnded_WhenTheReaderOpensARow_ThenTheSessionExpiredToastShowsAndTheBadgeStays() {
         when(presenter.open(any(), any(), any())).thenReturn(new AdminInboxPresenter.ActionOutcome.NotAuthenticated());
         AdminInboxView view = new AdminInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -91,10 +94,23 @@ class AdminInboxViewTest {
         assertEquals("2", badge(rows(view).get(1)));
     }
 
+    // The view selects the first row on its own, without opening it; a click on that row still opens it (#189).
+    @Test
+    void GivenTheRowTheViewSelectedOnItsOwn_WhenTheReaderClicksIt_ThenItIsOpened() {
+        AdminInboxView view = new AdminInboxView(presenter, displayTime());
+        harness.attach(view);
+        verify(presenter, never()).open(any(), any(), any());
+
+        click(rows(view).get(0));
+
+        verify(presenter).open(any(), eq(first), any());
+    }
+
     @Test
     void GivenTheOpenFails_WhenTheReaderOpensARow_ThenNoToastShowsAndTheBadgeStays() {
         when(presenter.open(any(), any(), any())).thenReturn(new AdminInboxPresenter.ActionOutcome.Failure("reason"));
         AdminInboxView view = new AdminInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 
@@ -112,6 +128,7 @@ class AdminInboxViewTest {
             return new AdminInboxPresenter.ActionOutcome.Success();
         });
         AdminInboxView view = new AdminInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(rows(view).get(1));
 

@@ -19,7 +19,6 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import com.vaadin.flow.internal.CurrentInstance;
 import com.vaadin.flow.server.VaadinRequest;
 
-import java.lang.reflect.Method;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -28,7 +27,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,19 +41,13 @@ import static org.mockito.Mockito.when;
 /**
  * Checks for the capability resolver. The guest checks run with no VaadinSession at all; the
  * signed-in checks install a map-backed session ({@link MapBackedVaadinSession}) and a mocked
- * {@link CompanyManagementService} behind {@link CompanyManagementBridge}. The marker / annotation
- * wiring is exercised by VaadinSmokeTest's view-construction pass.
+ * {@link CompanyManagementService} behind {@link CompanyManagementBridge}. {@code AuthBootstrapTest} covers the
+ * {@code @RequireCapability} gate that reads these capabilities.
  */
 class CapabilitiesTest {
 
     @Test
-    void resolverIsCallableWithoutSession() {
-        Set<Capability> caps = Capabilities.forCurrentUser();
-        assertNotNull(caps, "Capabilities.forCurrentUser() must never return null");
-    }
-
-    @Test
-    void guestBaseIncludesCatalogButNotCheckout() {
+    void GivenNoVaadinSession_WhenForCurrentUser_ThenGuestBaseIncludesCatalogButNotCheckoutOrWorkspaces() {
         // No VaadinSession in this test → resolver short-circuits to GUEST_BASE.
         Set<Capability> caps = Capabilities.forCurrentUser();
         assertTrue(caps.contains(Capability.BROWSE_CATALOG),
@@ -69,7 +61,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void hasAndHasAllAndHasAnyAreConsistent() {
+    void GivenOnlyTheGuestBaseline_WhenHasHasAllAndHasAny_ThenTheyAreConsistent() {
         // With only the guest baseline available, these helpers must agree.
         assertTrue(Capabilities.has(Capability.BROWSE_CATALOG));
         assertTrue(Capabilities.hasAll(Capability.BROWSE_CATALOG, Capability.VIEW_EVENT_DETAILS));
@@ -79,11 +71,11 @@ class CapabilitiesTest {
     }
 
     // ---- manager permission → capability mapping (the workspace gating matrix) ----
-    // capabilitiesFromPermissions is private static; we reflectively exercise the pure mapping so the
-    // matrix is pinned without faking a VaadinSession (which forCurrentUser would require).
+    // Read through forCurrentUser, as the gate reads them: what a manager of the current company holds
+    // beyond a member of no company and the workspace itself (capsFor).
 
     @Test
-    void everyManagerPermissionGrantsTheReadOnlyEventsHub() {
+    void GivenEveryManagerPermission_WhenForCurrentUser_ThenEachGrantsTheReadOnlyEventsHub() {
         for (Permission p : Permission.values()) {
             assertTrue(capsFor(p).contains(Capability.VIEW_COMPANY_EVENTS),
                 p + " must grant VIEW_COMPANY_EVENTS — every manager lands on the My Events hub");
@@ -91,7 +83,7 @@ class CapabilitiesTest {
     }
 
     @Test
-    void eachManagerPermissionGrantsExactlyItsOwnAction() {
+    void GivenEachManagerPermissionExceptManageInventory_WhenForCurrentUser_ThenItGrantsExactlyItsOwnAction() {
         assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES),
             capsFor(Permission.VIEW_SALES));
         assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_PURCHASE_POLICIES),
@@ -103,16 +95,14 @@ class CapabilitiesTest {
     }
 
     @Test
-    void manageInventoryOwnsTheFullEventLifecycleIncludingCancel() {
+    void GivenManageInventory_WhenForCurrentUser_ThenItOwnsTheFullEventLifecycleIncludingCancel() {
         Set<Capability> caps = capsFor(Permission.MANAGE_INVENTORY);
-        assertTrue(caps.contains(Capability.VIEW_COMPANY_EVENTS));
-        assertTrue(caps.contains(Capability.EDIT_COMPANY_EVENTS));
-        assertTrue(caps.contains(Capability.CANCEL_EVENT),
-            "MANAGE_INVENTORY grants cancel+refund as part of the event lifecycle");
+        assertEquals(EnumSet.of(Capability.VIEW_COMPANY_EVENTS, Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT),
+            caps, "MANAGE_INVENTORY grants the event lifecycle, cancel+refund included, and nothing more");
     }
 
     @Test
-    void aSalesOnlyManagerCannotEditOrCancelEvents() {   // no privilege escalation through the shared hub
+    void GivenASalesOnlyManager_WhenForCurrentUser_ThenCannotEditOrCancelEvents() {   // no privilege escalation through the shared hub
         Set<Capability> caps = capsFor(Permission.VIEW_SALES);
         assertFalse(caps.contains(Capability.EDIT_COMPANY_EVENTS),
             "VIEW_SALES sees My Events but must not edit them");
@@ -121,12 +111,12 @@ class CapabilitiesTest {
     }
 
     @Test
-    void combinedPermissionsGrantTheUnionOfTheirCapabilities() {
+    void GivenCombinedPermissions_WhenForCurrentUser_ThenGrantTheUnionOfTheirCapabilities() {
         Set<Capability> caps = capsFor(Permission.VIEW_SALES, Permission.MANAGE_INVENTORY);
-        assertTrue(caps.containsAll(EnumSet.of(
+        assertEquals(EnumSet.of(
             Capability.VIEW_COMPANY_EVENTS, Capability.VIEW_COMPANY_SALES,
-            Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT)),
-            "a manager holding both permissions gets the union of their capabilities");
+            Capability.EDIT_COMPANY_EVENTS, Capability.CANCEL_EVENT), caps,
+            "a manager holding both permissions gets the union of their capabilities, and nothing more");
     }
 
     // ---- resolution for a signed-in session: memberships are read with the member's own token ----
@@ -245,15 +235,19 @@ class CapabilitiesTest {
         AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, USER_ID, "member"));
     }
 
-    @SuppressWarnings("unchecked")
-    private static Set<Capability> capsFor(Permission... permissions) {
-        try {
-            Method m = Capabilities.class.getDeclaredMethod("capabilitiesFromPermissions", List.class);
-            m.setAccessible(true);
-            return (Set<Capability>) m.invoke(null, List.of(permissions));
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("could not invoke Capabilities.capabilitiesFromPermissions", e);
+    // What a manager holding these permissions gets for the current company, read through the public resolver.
+    private Set<Capability> capsFor(Permission... permissions) {
+        if (service == null) {
+            signInAsMember();
         }
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of());
+        Set<Capability> memberOfNoCompany = Capabilities.forCurrentUser();
+        when(service.listForUser(MEMBER_TOKEN)).thenReturn(List.of(new UserCompanyDTO(COMPANY_ID, "Acme", "desc",
+            "", MembershipRole.MANAGER, "ACTIVE", 1, 0, List.of(permissions))));
+        Set<Capability> granted = EnumSet.copyOf(Capabilities.forCurrentUser());
+        granted.removeAll(memberOfNoCompany);
+        assertTrue(granted.remove(Capability.OWNER_WORKSPACE), "a manager of the current company holds the workspace");
+        return granted;
     }
 
     // ---- an expired member token gets the dead-token fallback (#187) ----

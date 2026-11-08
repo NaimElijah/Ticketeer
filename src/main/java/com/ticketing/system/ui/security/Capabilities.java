@@ -4,7 +4,6 @@ import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
@@ -199,8 +198,8 @@ public final class Capabilities {
     private static List<UserCompanyDTO> readMemberships(String token, CompanyManagementService service) {
         try {
             return List.copyOf(service.listForUser(token));
-        } catch (InvalidTokenException | SessionExpiredException e) {
-            // The token died after sign-in: revoked (InvalidTokenException) or expired (SessionExpiredException).
+        } catch (InvalidTokenException e) {
+            // The token died after sign-in: revoked or expired (a SessionExpiredException is an InvalidTokenException).
             // A dead token holds no memberships, so it gets no company capabilities; AuthBootstrap signs the
             // visitor out on their next navigation. Any other failure is not a dead token and propagates.
             return List.of();

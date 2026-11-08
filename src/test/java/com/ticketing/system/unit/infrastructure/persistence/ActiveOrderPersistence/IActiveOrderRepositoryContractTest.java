@@ -8,15 +8,21 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.sales.domain.ActiveOrder;
+import com.ticketing.system.sales.domain.ActiveOrderStatus;
 import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 // Contract tests every ActiveOrderRepository implementation must satisfy. Future
 // JPA-backed adapter will subclass this with its own newRepository() factory;
@@ -36,7 +42,7 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void save_thenGetByUserId_returnsMemberCart() {
+    void GivenSavedMemberCart_WhenGetByUserId_ThenReturnsMemberCart() {
         ActiveOrder member = ActiveOrder.forMember(5, "sid-A", NOW);
         repo.save(member);
 
@@ -47,12 +53,12 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void getByUserId_returnsNullWhenMissing() {
+    void GivenNoCartForTheUser_WhenGetByUserId_ThenReturnsNull() {
         assertNull(repo.getByUserId(99));
     }
 
     @Test
-    void save_thenGetBySessionId_returnsGuestCart() {
+    void GivenSavedGuestCart_WhenGetBySessionId_ThenReturnsGuestCart() {
         ActiveOrder guest = ActiveOrder.forGuest("sid-G", NOW);
         repo.save(guest);
 
@@ -62,33 +68,31 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void getBySessionId_returnsEmptyWhenMissing() {
+    void GivenNoCartForTheSession_WhenGetBySessionId_ThenReturnsEmpty() {
         assertTrue(repo.getBySessionId("ghost-sid").isEmpty());
     }
 
+    // getBySessionId is the guest-cart lookup: a member's cart is found by its user id only, even on the
+    // session it was made in.
     @Test
-    void getBySessionId_returnsMemberCartWhenSessionMatches() {
-        // Member cart with active session — same lookup path as Guest.
-        ActiveOrder member = ActiveOrder.forMember(7, "sid-M", NOW);
-        repo.save(member);
+    void GivenOnlyAMemberCartOnTheSession_WhenGetBySessionId_ThenReturnsEmpty() {
+        repo.save(ActiveOrder.forMember(7, "sid-M", NOW));
 
-        Optional<ActiveOrder> found = repo.getBySessionId("sid-M");
-        assertTrue(found.isPresent());
-        assertEquals(7, found.get().getUserId());
+        assertTrue(repo.getBySessionId("sid-M").isEmpty(), "a member cart must not be returned as the session's cart");
     }
 
     @Test
-    void getBySessionId_nullReturnsEmpty() {
+    void GivenNullSessionId_WhenGetBySessionId_ThenReturnsEmpty() {
         assertTrue(repo.getBySessionId(null).isEmpty());
     }
 
     @Test
-    void getBySessionId_blankReturnsEmpty() {
+    void GivenBlankSessionId_WhenGetBySessionId_ThenReturnsEmpty() {
         assertTrue(repo.getBySessionId("   ").isEmpty());
     }
 
     @Test
-    void delete_removesCart() {
+    void GivenSavedCart_WhenDelete_ThenRemovesCart() {
         ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
         repo.save(cart);
         assertNotNull(repo.getByUserId(5));
@@ -98,14 +102,51 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void delete_unknownIsNoOp() {
-        ActiveOrder cart = ActiveOrder.forMember(99, "sid-Z", NOW);
-        assertDoesNotThrow(() -> repo.delete(cart));
+    void GivenUnknownOrNullCart_WhenDelete_ThenDoesNotThrowAndTheStoredCartStays() {
+        ActiveOrder stored = ActiveOrder.forMember(5, "sid-A", NOW);
+        repo.save(stored);
+        ActiveOrder unknown = ActiveOrder.forMember(99, "sid-Z", NOW);
+
+        assertDoesNotThrow(() -> repo.delete(unknown));
         assertDoesNotThrow(() -> repo.delete(null));
+
+        assertEquals(List.of(stored.getOrderKey()), repo.findAll().stream().map(ActiveOrder::getOrderKey).toList());
+    }
+
+    // A reservation, a removal and the sweeper all load the cart, change its lines and save it again
+    // under the cart's lock. The Memory adapter refuses that save without the lock
+    // (MemoryActiveOrderRepositoryContractTest); the Jpa adapter relies on @Version and needs none.
+    @Test
+    void GivenASavedCartWithLines_WhenLoadedChangedAndSavedUnderItsLock_ThenTheStoredCartHoldsTheNewLines() {
+        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
+        cart.addStandingReservation(1, 10, 2, 50.0, NOW);
+        repo.save(cart);
+
+        repo.lockForUpdate("user:5");
+        try {
+            ActiveOrder loaded = repo.getByUserId(5);
+            loaded.removeStandingSpots(1, 10, 1);
+            loaded.addSeatedReservation(1, 11, List.of("B2"), 75.0, NOW);
+            repo.save(loaded);
+        } finally {
+            repo.unlock("user:5");
+        }
+
+        ActiveOrder reloaded = repo.getByUserId(5);
+        assertEquals(cart.getOrderKey(), reloaded.getOrderKey());
+        assertEquals(List.of("1/10/standing", "1/11/B2"), lines(reloaded));
+        assertEquals(1, repo.findAll().size(), "the cart is updated, not stored a second time");
+    }
+
+    private static List<String> lines(ActiveOrder cart) {
+        return cart.getItems().stream()
+                .map(i -> i.geteventId() + "/" + i.getzoneId() + "/"
+                        + (i.getSeatNumber() == null ? "standing" : i.getSeatNumber()))
+                .sorted().toList();
     }
 
     @Test
-    void save_sameMemberTwiceCollapsesIdentity() {
+    void GivenAnotherCartOfTheMemberHoldingNothing_WhenSavingANewCart_ThenTheSecondCartWins() {
         // D9a edge: re-saving a Member cart (e.g., after promotion) replaces
         // any prior cart with the same userId that holds nothing.
         ActiveOrder cartV1 = ActiveOrder.forMember(5, "sid-A", NOW);
@@ -122,6 +163,8 @@ abstract class IActiveOrderRepositoryContractTest {
         // Only one cart for user 5 — the second one wins.
         assertEquals("sid-B", repo.getByUserId(5).getSessionId());
         assertEquals(0, repo.getByUserId(5).getItems().size());
+        assertEquals(List.of(cartV2.getOrderKey()), repo.findAll().stream().map(ActiveOrder::getOrderKey).toList(),
+                "the member keeps one cart: the empty first one is gone");
     }
 
     // Deleting a cart that still holds lines would leave its seats reserved under an order key that no
@@ -165,23 +208,55 @@ abstract class IActiveOrderRepositoryContractTest {
         assertEquals(1, kept.getItems().size());
     }
 
+    // The guest twin of the member case above. A database key on the guest session (#224) must not break
+    // it: the replaced cart's row has to be gone before the new cart's row is written.
     @Test
-    void save_guestAndMemberWithSameSessionId_stayDistinct() {
-        // Edge: a Guest cart and a Member cart that happen to share a sessionId
-        // should remain distinct rows (different identities).
+    void GivenAnotherGuestCartOfTheSessionHoldingNothing_WhenSavingANewGuestCart_ThenTheSecondCartWins() {
+        repo.save(ActiveOrder.forGuest("sid-G", NOW));
+
+        ActiveOrder second = ActiveOrder.forGuest("sid-G", NOW);
+        repo.lockForUpdate("sess:sid-G");
+        try {
+            repo.save(second);
+        } finally {
+            repo.unlock("sess:sid-G");
+        }
+
+        assertEquals(1, repo.findAll().size(), "the session keeps one cart");
+        assertEquals(second.getOrderKey(), repo.getBySessionId("sid-G").orElseThrow().getOrderKey(),
+                "the second cart replaced the empty one");
+    }
+
+    // A guest cart and a member cart that share a session id stay distinct carts, and the session's cart
+    // is the guest's, whichever was stored first: every caller of getBySessionId is a guest path.
+    @Test
+    void GivenAGuestCartThenAMemberCartOnOneSession_WhenGetBySessionId_ThenReturnsTheGuestCart() {
         ActiveOrder guest = ActiveOrder.forGuest("shared-sid", NOW);
         ActiveOrder member = ActiveOrder.forMember(5, "shared-sid", NOW);
         repo.save(guest);
         repo.save(member);
 
-        // Both retrievable.
-        assertNotNull(repo.getByUserId(5));
-        // getBySessionId hits one of them; either is OK for this contract.
-        assertTrue(repo.getBySessionId("shared-sid").isPresent());
+        assertSessionCartIsTheGuestCart(guest, member);
     }
 
     @Test
-    void findExpired_emptyWhenNoExpiredItems() {
+    void GivenAMemberCartThenAGuestCartOnOneSession_WhenGetBySessionId_ThenReturnsTheGuestCart() {
+        ActiveOrder member = ActiveOrder.forMember(5, "shared-sid", NOW);
+        ActiveOrder guest = ActiveOrder.forGuest("shared-sid", NOW);
+        repo.save(member);
+        repo.save(guest);
+
+        assertSessionCartIsTheGuestCart(guest, member);
+    }
+
+    private void assertSessionCartIsTheGuestCart(ActiveOrder guest, ActiveOrder member) {
+        assertEquals(guest.getOrderKey(), repo.getBySessionId("shared-sid").orElseThrow().getOrderKey(),
+                "the session's cart is its guest cart");
+        assertEquals(member.getOrderKey(), repo.getByUserId(5).getOrderKey(), "the member cart is still stored");
+    }
+
+    @Test
+    void GivenCartWithNoExpiredItems_WhenFindExpired_ThenNothingIsReturned() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-G", NOW);
         cart.addStandingReservation(1, 10, 1, 25.0, NOW);
         repo.save(cart);
@@ -223,25 +298,39 @@ abstract class IActiveOrderRepositoryContractTest {
     }
 
     @Test
-    void findAll_returnsEveryCart() {
-        repo.save(ActiveOrder.forMember(5, "sid-M", NOW));
-        repo.save(ActiveOrder.forGuest("sid-G", NOW));
+    void GivenMemberAndGuestCarts_WhenFindAll_ThenReturnsEveryCart() {
+        ActiveOrder member = ActiveOrder.forMember(5, "sid-M", NOW);
+        ActiveOrder guest = ActiveOrder.forGuest("sid-G", NOW);
+        repo.save(member);
+        repo.save(guest);
 
-        java.util.List<ActiveOrder> all = repo.findAll();
-        assertEquals(2, all.size());
+        assertEquals(Set.of(member.getOrderKey(), guest.getOrderKey()),
+                repo.findAll().stream().map(ActiveOrder::getOrderKey).collect(Collectors.toSet()));
     }
 
     @Test
-    void findAll_emptyWhenNoCarts() {
+    void GivenNoCarts_WhenFindAll_ThenReturnsEmpty() {
         assertTrue(repo.findAll().isEmpty());
     }
 
+    // PRE_CHECKOUT is stored by every other case here. The Jpa table holds the status under a check
+    // constraint that a migration must widen for each new constant (ADR-007).
     @Test
-    void save_persistsCartItems() {
+    void GivenACartFrozenForCheckout_WhenSavedAndFound_ThenItIsStillInCheckout() {
+        ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
+        cart.addStandingReservation(1, 10, 1, 50.0, NOW);
+        cart.markCheckoutInProgress();
+        repo.save(cart);
+
+        assertEquals(ActiveOrderStatus.CHECKOUT_IN_PROGRESS, repo.getByUserId(5).getStatus());
+    }
+
+    @Test
+    void GivenMemberCartWithStandingAndSeatedItems_WhenSave_ThenPersistsCartItems() {
         // A member cart with items survives save/reload (the "cart survives a restart" acceptance).
         ActiveOrder cart = ActiveOrder.forMember(5, "sid-A", NOW);
-        cart.addStandingReservation(1, 10, 2, 50.0, java.time.LocalDateTime.now());          // 2 standing
-        cart.addSeatedReservation(1, 11, java.util.List.of("A1"), 75.0, java.time.LocalDateTime.now()); // 1 seated
+        cart.addStandingReservation(1, 10, 2, 50.0, NOW);          // 2 standing
+        cart.addSeatedReservation(1, 11, java.util.List.of("A1"), 75.0, NOW); // 1 seated
         repo.save(cart);
 
         ActiveOrder found = repo.getByUserId(5);
@@ -249,5 +338,19 @@ abstract class IActiveOrderRepositoryContractTest {
         assertEquals(3, found.getItems().size());
         assertTrue(found.getItems().stream()
                 .anyMatch(i -> i.geteventId() == 1 && i.getzoneId() == 11 && "A1".equals(i.getSeatNumber())));
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("user:5");
+        repo.lockForUpdate("user:5");
+        repo.unlock("user:5");
+        repo.unlock("user:5");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "user:5");
     }
 }

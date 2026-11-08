@@ -24,6 +24,8 @@ import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.identity.application.service.MemberQueryService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.MemberDTO;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.presenters.account.MyProfilePresenter;
 import com.ticketing.system.ui.session.AuthSession;
@@ -109,6 +111,22 @@ class MyProfilePresenterTest {
         assertEquals(ServiceErrors.GENERIC_FAILURE_MESSAGE, failure.reason());
     }
 
+    @Test
+    void GivenAnExpiredToken_WhenLoad_ThenNotAuthenticated() {
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_USER_ID, "member"));
+        when(memberQueryService.getMemberProfile(MEMBER_TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(MyProfilePresenter.Outcome.NotAuthenticated.class, presenter.load());
+    }
+
+    @Test
+    void GivenARevokedToken_WhenLoad_ThenNotAuthenticated() {
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_USER_ID, "member"));
+        when(memberQueryService.getMemberProfile(MEMBER_TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertInstanceOf(MyProfilePresenter.Outcome.NotAuthenticated.class, presenter.load());
+    }
+
     // ---- UI-B6: a failure is logged once, with its exception (#187) ----
 
     @Test
@@ -145,5 +163,22 @@ class MyProfilePresenterTest {
             assertEquals(1, events, "the failure must be logged once");
             return throwables;
         }
+    }
+
+    // ---- a guest, and the text an outage shows (#189) ----
+
+    @Test
+    void GivenAGuest_WhenLoad_ThenNotAuthenticatedAndNoProfileIsRead() {
+        assertEquals(new MyProfilePresenter.Outcome.NotAuthenticated(), presenter.load());
+        verify(memberQueryService, never()).getMemberProfile(any());
+    }
+
+    @Test
+    void GivenTheStoreIsDown_WhenLoad_ThenFailureSaysTheServiceIsUnavailable() {
+        AuthSession.storeAuth(new AuthTokenDTO(MEMBER_TOKEN, TOKEN_EXPIRY_EPOCH_MILLIS, MEMBER_USER_ID, "member"));
+        when(memberQueryService.getMemberProfile(MEMBER_TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+
+        assertEquals(new MyProfilePresenter.Outcome.Failure(ServiceErrors.DB_UNAVAILABLE_MESSAGE), presenter.load());
     }
 }

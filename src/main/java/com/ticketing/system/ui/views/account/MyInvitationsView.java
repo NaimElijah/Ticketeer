@@ -16,6 +16,7 @@ import com.ticketing.system.ui.components.kit.LkStatusDot;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
@@ -29,7 +30,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 public class MyInvitationsView extends LkPage {
 
     private static final String OWNER_ROLE = "Owner";
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.ENGLISH);
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM uuuu", DisplayLocale.PAGE);
 
     private final MyInvitationsPresenter presenter;
     private final DisplayTime displayTime;
@@ -161,7 +161,7 @@ public class MyInvitationsView extends LkPage {
     private void handleAccept(InvitationDTO inv) {
         switch (presenter.accept(AuthSession.token(), inv.companyId())) {
             case MyInvitationsPresenter.ActionOutcome.Success ignored -> {
-                Toasts.success("Accepted — you are now a " + humanize(inv.role()).toLowerCase(Locale.ENGLISH)
+                Toasts.success("Accepted — you are now a " + humanize(inv.role()).toLowerCase(DisplayLocale.PAGE)
                     + " at " + inv.companyName() + ".");
                 // Reload in place: navigating to this view's own route is ignored, so it would
                 // refetch nothing (#187, UI-A10).
@@ -219,7 +219,7 @@ public class MyInvitationsView extends LkPage {
     }
 
     private static String humanize(String enumName) {
-        return Arrays.stream(enumName.toLowerCase(Locale.ENGLISH).split("_"))
+        return Arrays.stream(enumName.toLowerCase(DisplayLocale.PAGE).split("_"))
             .reduce((a, b) -> a + " " + b)
             .map(s -> Character.toUpperCase(s.charAt(0)) + s.substring(1))
             .orElse(enumName);

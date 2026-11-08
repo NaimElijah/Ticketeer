@@ -2,6 +2,7 @@ package com.ticketing.system.unit.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,18 +23,15 @@ import com.ticketing.system.identity.domain.Session;
 import com.ticketing.system.support.BaseDomainTest;
 
 /**
- * Regression coverage for the "invariants hold at runtime, not just at construction"
- * work: every state-mutating method re-asserts {@link
- * com.ticketing.system.shared.InvariantChecked#checkInvariants()}, and
- * collection getters hand back defensive copies so external code cannot corrupt an
- * aggregate behind its own back.
- *
- * <p>Aggregates that are deliberately driven into a rejected state are NOT registered
- * via {@link #track(Object)} — the mutator throws <em>after</em> writing the field, so
- * the object is left invalid on purpose and the {@code @AfterEach} harness would
- * (correctly) flag it.
+ * Regression coverage for the "invariants hold at runtime, not just at construction" work: the mutators
+ * driven here validate before they commit, so a refused call leaves the aggregate valid and as it was, and
+ * collection getters hand back defensive copies so external code cannot corrupt an aggregate behind its own
+ * back. Every aggregate here is registered with {@code track}, so the harness re-checks
+ * {@link com.ticketing.system.shared.InvariantChecked#checkInvariants()} after each test.
  */
 class RuntimeInvariantGuardTest extends BaseDomainTest {
+
+    private static final LocalDateTime CART_CREATED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private static final int COMPANY_ID = 100;
     private static final int OWNER_ID = 1;
@@ -59,12 +57,12 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     // --- Pattern A: status mutation re-asserts invariants ------------------------
 
     @Test
-    void addManager_whenTargetIsAlreadyOwner_throwsAndLeavesManagersUnchanged() {
+    void GivenTargetIsAlreadyOwner_WhenAddManager_ThenThrowsAndLeavesManagersUnchanged() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
 
         // OWNER_ID is the founder/owner — the owner/manager-overlap invariant forbids this.
-        assertThrows(RuntimeException.class, () -> company.addManager(OWNER_ID));
+        assertThrows(IllegalStateException.class, () -> company.addManager(OWNER_ID));
 
         // Validate-before-commit: the failed add rolled back, managers stays empty.
         assertFalse(company.getManagers().contains(OWNER_ID));
@@ -72,12 +70,13 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void clearSession_onMemberCart_succeeds() {
+    void GivenAMemberCart_WhenClearSession_ThenSucceedsAndKeepsTheMember() {
         // Member cart keeps userId after the session pointer clears — still valid.
-        ActiveOrder memberCart = track(ActiveOrder.forMember(42, "session-xyz", LocalDateTime.now()));
+        ActiveOrder memberCart = track(ActiveOrder.forMember(42, "session-xyz", CART_CREATED_AT));
 
         memberCart.clearSession();
 
+        assertNull(memberCart.getSessionId(), "the cart no longer points at the ended session");
         assertTrue(memberCart.isMember());
         assertEquals(42, memberCart.getUserId());
     }
@@ -85,7 +84,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     // --- Pattern B: defensive copies on leaky getters ----------------------------
 
     @Test
-    void getManagers_returnsDefensiveCopy_externalMutationDoesNotLeak() {
+    void GivenACompanyWithAManager_WhenGetManagers_ThenReturnsDefensiveCopyExternalMutationDoesNotLeak() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
         company.addManager(TARGET_ID);
@@ -98,7 +97,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void getOwnersIds_returnsDefensiveCopy_externalMutationDoesNotLeak() {
+    void GivenACompanyWithAnOwner_WhenGetOwnersIds_ThenReturnsDefensiveCopyExternalMutationDoesNotLeak() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
 
@@ -113,8 +112,8 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     // --- More validate-before-commit rollbacks -----------------------------------
 
     @Test
-    void session_touchBeforeCreatedAt_throwsAndRollsBack() {
-        Instant createdAt = Instant.now();
+    void GivenASession_WhenTouchBeforeCreatedAt_ThenThrowsAndRollsBack() {
+        Instant createdAt = Instant.parse("2027-07-15T17:00:00Z");
         Session session = track(new Session("sess-1", 1, createdAt, createdAt.plusSeconds(3600)));
 
         // lastSeenAt must stay >= createdAt — a backwards clock value must be rejected.
@@ -125,7 +124,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void ticket_setTicketIdNonPositive_throwsAndRollsBack() {
+    void GivenATicket_WhenSetTicketIdNonPositive_ThenThrowsAndRollsBack() {
         Ticket ticket = track(new Ticket(1, 0, 1, null, 10.0, 5, "BC-1"));
 
         assertThrows(IllegalStateException.class, () -> ticket.setTicketId(0));
@@ -135,7 +134,7 @@ class RuntimeInvariantGuardTest extends BaseDomainTest {
     }
 
     @Test
-    void setRating_outOfRange_throwsAndRollsBack() {
+    void GivenACompany_WhenSetRatingOutOfRange_ThenThrowsAndRollsBack() {
         ProductionCompany company = track(new ProductionCompany(
                 COMPANY_ID, OWNER_ID, "Acme", CompanyStatus.ACTIVE, "desc", 4.5));
 

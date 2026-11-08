@@ -81,8 +81,13 @@ class NotificationBellA11yTest {
 
         NotificationBellComponent bell = bell();
 
-        List<Element> emptyState = A11y.elements(bell, e -> A11y.text(e).toLowerCase(Locale.ROOT)
-            .contains("all caught up") && A11y.isButton(e));
+        List<Element> showing = A11y.elements(bell, e -> A11y.text(e).toLowerCase(Locale.ROOT)
+            .contains("all caught up"));
+        assertFalse(showing.isEmpty(), "the empty panel must say it is all caught up");
+        // A role=button that no key presses is no button to A11y.isButton, but is announced as one all the same.
+        List<Element> emptyState = showing.stream()
+            .filter(e -> "button".equals(A11y.role(e)) || A11y.isButton(e))
+            .toList();
         assertTrue(emptyState.isEmpty(),
             "the empty state is a message, not a button that does nothing: "
                 + emptyState.stream().map(A11y::describe).toList());

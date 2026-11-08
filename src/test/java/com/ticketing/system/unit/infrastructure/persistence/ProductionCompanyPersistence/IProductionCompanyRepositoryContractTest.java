@@ -11,6 +11,9 @@ import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
@@ -21,6 +24,7 @@ import com.ticketing.system.shared.domain.policy.AndPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchasePolicyJsonConverter;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract every {@link ProductionCompanyRepository} implementation must satisfy. The Memory and
@@ -44,7 +48,7 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void save_thenGetCompanyById_returnsTheSavedCompany() {
+    void GivenASavedCompany_WhenGetCompanyById_ThenReturnsTheSavedCompany() {
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
 
         ProductionCompany found = repo.getCompanyById(1);
@@ -53,13 +57,23 @@ abstract class IProductionCompanyRepositoryContractTest {
         assertEquals(CompanyStatus.ACTIVE, found.getStatus());
     }
 
+    // The Jpa table holds the status under a check constraint that a migration must widen for each new
+    // constant (ADR-007). Inherited, so the save commits and a missing value fails here.
+    @ParameterizedTest
+    @EnumSource(CompanyStatus.class)
+    void GivenACompanyInEachStatus_WhenSaved_ThenItIsFoundWithThatStatus(CompanyStatus status) {
+        repo.save(company(1, 7, "Acme", status));
+
+        assertEquals(status, repo.getCompanyById(1).getStatus());
+    }
+
     @Test
-    void getCompanyById_throwsWhenMissing() {
+    void GivenNoSuchCompany_WhenGetCompanyById_ThenThrowsCompanyNotFound() {
         assertThrows(CompanyNotFoundException.class, () -> repo.getCompanyById(9999));
     }
 
     @Test
-    void findByName_returnsSavedAndEmptyOtherwise() {
+    void GivenASavedCompany_WhenFindByName_ThenReturnsSavedAndEmptyOtherwise() {
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
 
         assertTrue(repo.findByName("Acme").isPresent());
@@ -68,14 +82,14 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void existsByName_trueAfterSaveFalseOtherwise() {
+    void GivenARepositoryBeforeAndAfterASave_WhenExistsByName_ThenTrueAfterSaveFalseOtherwise() {
         assertFalse(repo.existsByName("Acme"));
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
         assertTrue(repo.existsByName("Acme"));
     }
 
     @Test
-    void findActive_returnsOnlyActiveCompanies() {
+    void GivenActiveAndInactiveCompanies_WhenFindActive_ThenReturnsOnlyActiveCompanies() {
         repo.save(company(1, 7, "ActiveCo", CompanyStatus.ACTIVE));
         repo.save(company(2, 7, "InactiveCo", CompanyStatus.INACTIVE));
 
@@ -84,7 +98,7 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void findByFounder_returnsCompaniesFoundedByThatUser() {
+    void GivenCompaniesOfTwoFounders_WhenFindByFounder_ThenReturnsCompaniesFoundedByThatUser() {
         repo.save(company(1, 7, "First", CompanyStatus.ACTIVE));
         repo.save(company(2, 7, "Second", CompanyStatus.ACTIVE));
         repo.save(company(3, 9, "Other", CompanyStatus.ACTIVE));
@@ -94,8 +108,37 @@ abstract class IProductionCompanyRepositoryContractTest {
         assertTrue(repo.findByFounder(123).isEmpty());
     }
 
+    // Inherited, so the Jpa adapter hands back a detached copy: the change reaches the table only through
+    // updateCompany. The Memory adapter hands back the stored instance (#274).
     @Test
-    void nextId_producesDistinctIncreasingValues() {
+    void GivenALoadedCompanyWithANewDescription_WhenUpdateCompany_ThenTheStoredCompanyHasIt() {
+        repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
+        ProductionCompany loaded = repo.getCompanyById(1);
+        loaded.setDescription("a new description");
+
+        repo.updateCompany(loaded);
+
+        ProductionCompany stored = repo.getCompanyById(1);
+        assertEquals("a new description", stored.getDescription());
+        assertEquals("Acme", stored.getName(), "only the description changed");
+    }
+
+    // The admin view lists every company, whatever its status, unlike findActive.
+    @Test
+    void GivenCompaniesInEveryStatus_WhenFindAll_ThenEveryCompanyIsListed() {
+        CompanyStatus[] statuses = CompanyStatus.values();
+        for (int i = 0; i < statuses.length; i++) {
+            repo.save(company(i + 1, 7, "Company " + statuses[i], statuses[i]));
+        }
+
+        Set<String> expected = java.util.Arrays.stream(statuses).map(status -> "Company " + status)
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(expected,
+                repo.findAll().stream().map(ProductionCompany::getName).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
+    void GivenRepository_WhenNextIdCalledTwice_ThenProducesDistinctIncreasingValues() {
         int a = repo.nextId();
         int b = repo.nextId();
         assertNotEquals(a, b);
@@ -103,7 +146,7 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void save_persistsOwnerAndManagerLists() {
+    void GivenACompanyWithOwnersAndAManager_WhenSave_ThenPersistsOwnerAndManagerLists() {
         ProductionCompany c = company(1, 7, "Acme", CompanyStatus.ACTIVE); // founder 7 is the first owner
         c.addOwner(7, 8);   // owner 7 adds owner 8
         c.addManager(9);    // 9 becomes a manager
@@ -115,13 +158,13 @@ abstract class IProductionCompanyRepositoryContractTest {
     }
 
     @Test
-    void save_roundTripsTheDefaultNoPurchasePolicy() {
+    void GivenACompanyWithTheDefaultPolicy_WhenSave_ThenRoundTripsTheDefaultNoPurchasePolicy() {
         repo.save(company(1, 7, "Acme", CompanyStatus.ACTIVE));
         assertTrue(repo.getCompanyById(1).getPurchasePolicy() instanceof NoPurchasePolicy);
     }
 
     @Test
-    void save_roundTripsAComposedPurchasePolicyTree() {
+    void GivenACompanyWithAComposedPurchasePolicy_WhenSave_ThenRoundTripsTheComposedPurchasePolicyTree() {
         ProductionCompany c = company(1, 7, "Acme", CompanyStatus.ACTIVE);
         c.setPurchasePolicy(new AndPurchasePolicy(new AgePurchasePolicy(18), new MaxTicketsPurchasePolicy(4)));
         repo.save(c);
@@ -131,5 +174,19 @@ abstract class IProductionCompanyRepositoryContractTest {
         PurchasePolicyJsonConverter converter = new PurchasePolicyJsonConverter();
         assertEquals(converter.convertToDatabaseColumn(c.getPurchasePolicy()),
                 converter.convertToDatabaseColumn(found.getPurchasePolicy()));
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate(1);
+        repo.lockForUpdate(1);
+        repo.unlock(1);
+        repo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, 1);
     }
 }

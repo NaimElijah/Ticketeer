@@ -25,6 +25,7 @@ import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.presenters.messaging.SupportInboxPresenter;
 import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -49,14 +50,14 @@ class SupportInboxPresenterTest {
             initiatorType.equals("MEMBER") ? 1 : 0, initiatorType,
             initiatorType.equals("MEMBER") ? 0 : 1,
             initiatorType.equals("MEMBER") ? "ADMIN_GROUP" : "MEMBER",
-            "Subject " + id, LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Subject " + id, LAST_MESSAGE_AT, LAST_MESSAGE_AT, 0, List.of(),
             "alice", "TicketHub Support");
     }
 
     // -- load -----------------------------------------------------------------
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         SupportInboxPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(SupportInboxPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -64,7 +65,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void load_returnsAllConversationsFromService() {
+    void GivenComplaintInquiryAndOutreachConversations_WhenLoad_ThenReturnsAllConversationsFromService() {
         ConversationDTO complaint = conversation("c1", "COMPLAINT", "MEMBER");
         ConversationDTO inquiry = conversation("c2", "INQUIRY", "MEMBER");
         ConversationDTO outreach = conversation("c3", "DIRECT", "ADMIN");   // admin → member, member is counterparty
@@ -81,7 +82,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(service.viewMyConversations(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         SupportInboxPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -116,7 +117,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(service.viewMyConversations(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         SupportInboxPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -127,7 +128,7 @@ class SupportInboxPresenterTest {
     // -- reply ----------------------------------------------------------------
 
     @Test
-    void reply_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenReply_ThenReturnsNotAuthenticatedWithoutCallingService() {
         SupportInboxPresenter.ActionOutcome outcome = presenter.reply(null, "c1", "hi");
 
         assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -135,7 +136,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_happyPath_returnsSuccess_andSendsConversationIdAndBody() {
+    void GivenTheServiceAcceptsTheMessage_WhenReply_ThenReturnsSuccessAndSendsConversationIdAndBody() {
         SupportInboxPresenter.ActionOutcome outcome =
             presenter.reply(TOKEN, "c1", "any update?");
 
@@ -148,8 +149,8 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceFailsInternally_returnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed"))
+    void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
+        doThrow(new RuntimeException("could not execute statement"))
             .when(service).sendMessage(anyString(), any());
 
         SupportInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "late reply");
@@ -160,7 +161,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenReply_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(service).sendMessage(anyString(), any());
 
@@ -170,7 +171,7 @@ class SupportInboxPresenterTest {
     }
 
     @Test
-    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+    void GivenAClosedConversation_WhenReply_ThenReturnsFailureWithTheRulesMessage() {
         ConversationClosedException rule = new ConversationClosedException("c1");
         doThrow(rule).when(service).sendMessage(anyString(), any());
 
@@ -272,10 +273,30 @@ class SupportInboxPresenterTest {
     void GivenAnExpiredToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
         OpenedThreads opened = new OpenedThreads();
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
-        doThrow(new InvalidTokenException("bad")).when(service).markConversationRead(anyString(), anyString());
+        doThrow(new SessionExpiredException()).when(service).markConversationRead(anyString(), anyString());
 
         assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
 
         assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
+        OpenedThreads opened = new OpenedThreads();
+        ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
+        doThrow(new InvalidTokenException("revoked")).when(service).markConversationRead(anyString(), anyString());
+
+        assertInstanceOf(SupportInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
+
+        assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(service.viewMyConversations(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(SupportInboxPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 }

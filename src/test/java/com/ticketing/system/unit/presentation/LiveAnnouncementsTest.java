@@ -133,6 +133,7 @@ class LiveAnnouncementsTest {
             List.of(thread("c1", "COMPLAINT", "ADMIN_GROUP"))));
         when(presenter.badge(any(), any())).thenReturn(Optional.empty());
         AdminComplaintQueueView view = new AdminComplaintQueueView(presenter, displayTime());
+        harness.attach(view);
         Element region = liveRegionSaying(view, Pattern.compile("(?i)\\b2 complaints\\b"), "the complaint count");
 
         choose(view, "Open");
@@ -168,6 +169,7 @@ class LiveAnnouncementsTest {
     @Test
     void GivenTheQuantityIncreasedToItsMaximum_WhenTheSelectorRefreshes_ThenIncreaseIsAriaDisabledButStillFocusable() {
         VkQuantitySelector selector = new VkQuantitySelector(2, 1000, null);
+        harness.attach(selector);
         NativeButton increase = stepButtons(selector).get(1);
 
         click(increase);
@@ -175,10 +177,34 @@ class LiveAnnouncementsTest {
         assertAriaDisabledNotDisabled(increase.getElement(), "Increase once the maximum is reached");
     }
 
+    // The other half of the two rules above: a step that is open is not said to be unavailable (#189).
+    @Test
+    void GivenAQuantityBelowItsMaximum_WhenTheSelectorRenders_ThenIncreaseIsNotAriaDisabled() {
+        VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+
+        Element increase = stepButtons(selector).get(1).getElement();
+        assertFalse(A11y.disabledForAt(increase), "Increase below the maximum must be available: "
+            + A11y.describe(increase));
+    }
+
+    @Test
+    void GivenTheQuantityIncreasedAboveItsMinimum_WhenTheSelectorRefreshes_ThenDecreaseIsNotAriaDisabled() {
+        VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+        harness.attach(selector);
+
+        click(stepButtons(selector).get(1));
+
+        Element decrease = stepButtons(selector).get(0).getElement();
+        assertEquals(2, selector.getQuantity());
+        assertFalse(A11y.disabledForAt(decrease), "Decrease above the minimum must be available: "
+            + A11y.describe(decrease));
+    }
+
     // Kept: a button left focusable at the limit must still not step past it.
     @Test
     void GivenTheQuantityAtItsMinimum_WhenDecreaseIsActivated_ThenTheQuantityStaysAtOne() {
         VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+        harness.attach(selector);
 
         click(stepButtons(selector).get(0));
 
@@ -188,6 +214,7 @@ class LiveAnnouncementsTest {
     @Test
     void GivenAQuantitySelector_WhenTheQuantityIncreases_ThenTheSameLiveRegionAnnouncesTheCountAndPrice() {
         VkQuantitySelector selector = new VkQuantitySelector(3, 1000, null);
+        harness.attach(selector);
         Element region = liveRegionSaying(selector, Pattern.compile("(?i)\\b1 ticket\\b.*\\$10\\.00"),
             "the quantity and price");
 
@@ -230,7 +257,7 @@ class LiveAnnouncementsTest {
 
         field(view, TextField.class, "Search members").setValue("al");
 
-        assertAnnouncedByAnExistingRegion(view, regionsBefore, Pattern.compile("\\b2\\b"),
+        assertAnnouncedByAnExistingRegion(view, regionsBefore, Pattern.compile("\\b2 members found\\b"),
             "the number of members found");
     }
 
@@ -251,13 +278,13 @@ class LiveAnnouncementsTest {
         AdminSendMessagesView view = sendMessagesView();
         TextField search = field(view, TextField.class, "Search members");
         search.setValue("al");
+        assertFalse(regionsSayingFound(view).isEmpty(),
+            "precondition: a live region says how many members the search found: "
+                + politeRegions(view).stream().map(A11y::text).toList());
 
         search.setValue("");
 
-        List<String> stale = politeRegions(view).stream()
-            .map(A11y::text)
-            .filter(text -> Pattern.compile("(?i)\\bfound\\b").matcher(text).find())
-            .toList();
+        List<String> stale = regionsSayingFound(view);
         assertTrue(stale.isEmpty(), "with the query cleared no results show, so no live region may still say how "
             + "many members were found: " + stale);
     }
@@ -315,6 +342,13 @@ class LiveAnnouncementsTest {
             what + " must stay focusable, not be disabled, so focus is not lost from it: " + A11y.describe(button));
     }
 
+    private static List<String> regionsSayingFound(Component root) {
+        return politeRegions(root).stream()
+            .map(A11y::text)
+            .filter(text -> Pattern.compile("(?i)\\bfound\\b").matcher(text).find())
+            .toList();
+    }
+
     private static List<Element> politeRegions(Component root) {
         return A11y.elements(root, e -> A11y.politeLiveRegion(e).filter(e::equals).isPresent());
     }
@@ -327,6 +361,7 @@ class LiveAnnouncementsTest {
             .stream()
             .findFirst()
             .orElseThrow(() -> new AssertionError("no option \"" + option + "\" to choose"));
+        ViewHarness.openPopoverHolding(choice);
         A11y.activate(choice);
     }
 
@@ -346,13 +381,14 @@ class LiveAnnouncementsTest {
             EventStatus.ON_SALE, List.of(), ZoneOffset.UTC, List.of(), 50.0);
     }
 
-    private static SeatPickerView seatPicker() {
+    private SeatPickerView seatPicker() {
         SeatPickerPresenter presenter = mock(SeatPickerPresenter.class);
         when(presenter.loadZone(anyInt(), anyInt())).thenReturn(new SeatPickerPresenter.LoadOutcome.Loaded(
             new InventoryZoneDTO(8, "Floor", "SEATED", 2, 2, 0, 0, 10.0,
                 List.of(new SeatDTO("A1", 1, 0, "AVAILABLE"), new SeatDTO("A2", 2, 0, "AVAILABLE")), null),
             ZoneType.SEATED));
         SeatPickerView view = new SeatPickerView(presenter, new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", "5", "zoneId", "8"));
         return view;
     }
@@ -364,7 +400,7 @@ class LiveAnnouncementsTest {
             .orElseThrow(() -> new AssertionError("no seat " + label + " on the picker"));
     }
 
-    private static EventDetailsView eventPage() {
+    private EventDetailsView eventPage() {
         EventDetailsPresenter presenter = mock(EventDetailsPresenter.class);
         when(presenter.load(any(), anyInt())).thenReturn(new EventDetailsPresenter.Outcome.Success(
             new EventDetailDTO("5", "Coldplay", null, "Live", EventCategory.CONCERT, null, "3", "Acme",
@@ -374,6 +410,7 @@ class LiveAnnouncementsTest {
             3, 3, null));
         EventDetailsView view = new EventDetailsView(presenter, mock(SessionIdentity.class),
             new ReservationHoldProperties(10));
+        harness.attach(view);
         view.beforeEnter(routeTo("eventId", "5"));
         return view;
     }
@@ -385,12 +422,14 @@ class LiveAnnouncementsTest {
             .orElseThrow(() -> new AssertionError("no zone " + zone + " on the map"));
     }
 
-    private static AdminSendMessagesView sendMessagesView() {
+    private AdminSendMessagesView sendMessagesView() {
         ViewHarness.signInAdmin();
         AdminSendMessagesPresenter presenter = mock(AdminSendMessagesPresenter.class);
         when(presenter.load(any())).thenReturn(new AdminSendMessagesPresenter.Outcome.Success(List.of()));
         when(presenter.searchUsers(any(), any())).thenReturn(new AdminSendMessagesPresenter.SearchOutcome.Success(
             List.of(new MemberSearchResultDTO(7, "alice"), new MemberSearchResultDTO(8, "alan"))));
-        return new AdminSendMessagesView(presenter, displayTime());
+        AdminSendMessagesView view = new AdminSendMessagesView(presenter, displayTime());
+        harness.attach(view);
+        return view;
     }
 }

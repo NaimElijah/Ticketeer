@@ -23,7 +23,7 @@ class PurchaseStagePolicyTest {
     }
 
     @Test
-    void minTickets_skippedAtReserve_enforcedAtCheckout() {
+    void GivenAMinTicketsPolicy_WhenIsSatisfiedBy_ThenSkippedAtReserveEnforcedAtCheckout() {
         MinTicketsPurchasePolicy min = new MinTicketsPurchasePolicy(2);
 
         assertTrue(min.isSatisfiedBy(ctx(25, 1, PurchaseStage.RESERVE)),
@@ -35,7 +35,7 @@ class PurchaseStagePolicyTest {
     }
 
     @Test
-    void age_unknownSkippedAtReserve_failsAtCheckout() {
+    void GivenAnAgePolicyAndUnknownAge_WhenIsSatisfiedBy_ThenSkippedAtReserveFailsAtCheckout() {
         AgePurchasePolicy age = new AgePurchasePolicy(18);
 
         assertTrue(age.isSatisfiedBy(ctx(null, 1, PurchaseStage.RESERVE)),
@@ -45,7 +45,7 @@ class PurchaseStagePolicyTest {
     }
 
     @Test
-    void age_memberEnforcedAtBothStages() {
+    void GivenAnAgePolicyAndMemberAge_WhenIsSatisfiedBy_ThenEnforcedAtBothStages() {
         AgePurchasePolicy age = new AgePurchasePolicy(18);
 
         assertFalse(age.isSatisfiedBy(ctx(16, 1, PurchaseStage.RESERVE)),
@@ -54,10 +54,22 @@ class PurchaseStagePolicyTest {
                 "an of-age member is allowed at reserve");
         assertFalse(age.isSatisfiedBy(ctx(16, 1, PurchaseStage.CHECKOUT)),
                 "an under-age member is rejected at checkout");
+        assertTrue(age.isSatisfiedBy(ctx(20, 1, PurchaseStage.CHECKOUT)),
+                "an of-age member is allowed at checkout");
+    }
+
+    // "At least 18": a buyer who turned 18 qualifies.
+    @Test
+    void GivenABuyerExactlyAtTheMinimumAge_WhenIsSatisfiedBy_ThenTrueAtBothStages() {
+        AgePurchasePolicy age = new AgePurchasePolicy(18);
+
+        assertTrue(age.isSatisfiedBy(ctx(18, 1, PurchaseStage.RESERVE)));
+        assertTrue(age.isSatisfiedBy(ctx(18, 1, PurchaseStage.CHECKOUT)));
+        assertFalse(age.isSatisfiedBy(ctx(17, 1, PurchaseStage.CHECKOUT)), "one year short is refused");
     }
 
     @Test
-    void maxTickets_enforcedAtBothStages() {
+    void GivenAMaxTicketsPolicy_WhenIsSatisfiedBy_ThenEnforcedAtBothStages() {
         MaxTicketsPurchasePolicy max = new MaxTicketsPurchasePolicy(3);
 
         assertFalse(max.isSatisfiedBy(ctx(25, 4, PurchaseStage.RESERVE)),
@@ -69,7 +81,7 @@ class PurchaseStagePolicyTest {
     }
 
     @Test
-    void purchaseContext_defaultStageIsCheckout() {
+    void GivenAPurchaseContextBuiltWithoutAStage_WhenGetStage_ThenDefaultStageIsCheckout() {
         assertEquals(PurchaseStage.CHECKOUT, new PurchaseContext(1, 25, 10, 100, 1).getStage(),
                 "the existing 5-arg constructor must keep enforcing every rule (checkout)");
     }

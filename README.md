@@ -155,7 +155,7 @@ Module canvases and C4 diagrams: [docs/architecture/](docs/architecture/README.m
 | Framework | Spring Boot | 3.5.16 | Transactions, profiles and AOP, with the domain kept free of Spring |
 | UI | Vaadin Flow | 24.10.7 | Server-side Java views, so one language and one process from view to database |
 | Modularity | Spring Modulith | 1.4.14 | Module model, verification and generated module docs |
-| Architecture tests | ArchUnit | 1.4.2 | Fails the build on a layer violation or a module cycle |
+| Architecture tests | ArchUnit | 1.4.2 | Fails the build on a layer violation, a module cycle, a badly named test or a page formatted in the server's locale |
 | Persistence | Spring Data JPA on PostgreSQL, H2 | Boot-managed | One port per aggregate; the database is a configuration switch |
 | Schema migrations | Flyway | Boot-managed (11.7.2) | Versioned SQL applied at startup; Hibernate only validates ([ADR-007](docs/ADRs/ADR-007-flyway-schema-migrations.md)) |
 | Auth | jjwt + BCrypt | 0.13.0 | Signed session tokens and hashed passwords |
@@ -319,26 +319,32 @@ in [SEED.md](SEED.md#scenario-file-format):
 
 ## Testing
 
-About 2,100 test methods, organised by what they boot:
+About 4,000 test methods, organised by what they boot. Each name reads `Given…_When…_Then…`, and `TestConventionsTest` fails the build on one that doesn't ([ADR-023](docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md)):
 
 | Layer | Covers | Boots |
 |---|---|---|
 | `unit/` · `ui/` | Domain rules, services and presenters with mocked ports, both adapters of every repository port | Nothing, or `@DataJpaTest` on H2 for the JPA contract tests |
 | `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
-| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats, checkouts, cancellations and refunds | Spring under `test`: JPA repositories on H2; each `concurrency/` suite, and the checkout, cancellation and first-reservation races, also run on PostgreSQL as `Postgres…IT` |
-| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith) and `RepositoryAdapterProfileTest` (which adapter each profile set selects) | Nothing |
-| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database, with an index on every foreign key and listed queried column (`SchemaMigrationIT`), the concurrency suites and the checkout, cancellation and first-reservation races (`Postgres…IT` in `concurrency/` and `integration/`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
+| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats, checkouts, cancellations, refunds and registrations | Spring under `test`: JPA repositories on H2; each `concurrency/` suite, and the checkout, checkout-freeze, cancellation, first-reservation and registration races, also run on PostgreSQL as `Postgres…IT` |
+| `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith), `RepositoryAdapterProfileTest` (which adapter each profile set selects) and `TestConventionsTest` (test names, and the PostgreSQL check on every `*IT`); also the logging and optimistic-lock aspects' tests, in `architecture/application/service` so their pointcut matches them | Nothing, except a bare Spring context of the aspect and the transaction advice for `OptimisticLockTranslationOrderTest` |
+| `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database, with an index on every foreign key and listed queried column (`SchemaMigrationIT`), the concurrency suites and the checkout, checkout-freeze, cancellation, first-reservation and registration races (`Postgres…IT` in `concurrency/` and `integration/`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
 ```bash
 ./mvnw -Pno-vaadin test "-Dtest=ReservationServiceTest"                # one class
 ./mvnw -Pno-vaadin test "-Dtest=*UserRepositoryContractTest"           # both adapters of one port
-./mvnw -Pno-vaadin test "-Dtest=HexagonalRulesTest,ModularityTests"    # the architecture gates
+./mvnw -Pno-vaadin test "-Dtest=HexagonalRulesTest,ModularityTests,TestConventionsTest"    # the architecture gates
 ./mvnw -Pno-vaadin test-compile failsafe:integration-test failsafe:verify "-Dit.test=DbOutageRecoveryIT"   # one *IT, needs Docker
 ./mvnw verify                                                          # everything CI runs; needs Docker
 ```
 
 `-Pno-vaadin` skips Vaadin's frontend preparation, which the tests don't need. Use it for tests only,
 because the app then serves no views.
+
+Run tests from a shell that sets none of the variables `application.yml` reads, and none named after
+a property: most of them override the `test` profile. `PLATFORM_ADMIN_PASSWORD` fails the
+acceptance tests that sign in as the admin, and `SPRING_DATASOURCE_URL` with
+`SPRING_DATASOURCE_DRIVER_CLASS_NAME` would point the suite at that database. `application-test.yml`
+lists the ones known so far ([#261](https://github.com/NaimElijah/Ticketeer/issues/261)).
 
 **What gates a merge:** pull requests into `main` and `dev` need the CI check (`mvn -B verify` on
 Temurin 21, with the JVM in UTC) and CodeQL to pass. A second job, "Test in Asia/Jerusalem", runs

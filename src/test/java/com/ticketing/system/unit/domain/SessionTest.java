@@ -24,7 +24,7 @@ class SessionTest extends BaseDomainTest {
     private static final Instant AFTER_EXPIRY = Instant.parse("2026-01-01T01:01:00Z");
 
     @Test
-    void guestSession_hasNullUserId() {
+    void GivenNoUserId_WhenConstructed_ThenGuestSessionHasNullUserId() {
         Session guest = track(new Session("sid-1", null, T0, T_EXPIRES));
 
         assertTrue(guest.isGuest());
@@ -33,7 +33,7 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void memberSession_hasUserId() {
+    void GivenAUserId_WhenConstructed_ThenMemberSessionHasUserId() {
         Session member = track(new Session("sid-2", 5, T0, T_EXPIRES));
 
         assertFalse(member.isGuest());
@@ -42,13 +42,13 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void lastSeenAt_initializedToCreatedAt() {
+    void GivenACreatedAt_WhenConstructed_ThenLastSeenAtInitializedToCreatedAt() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertEquals(T0, s.getLastSeenAt());
     }
 
     @Test
-    void constructor_rejectsBlankSessionId() {
+    void GivenABlankOrNullSessionId_WhenConstructed_ThenRejects() {
         assertThrows(IllegalStateException.class,
                 () -> new Session("", null, T0, T_EXPIRES));
         assertThrows(IllegalStateException.class,
@@ -58,7 +58,7 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void constructor_rejectsNullTimestamps() {
+    void GivenNullTimestamps_WhenConstructed_ThenRejects() {
         assertThrows(IllegalStateException.class,
                 () -> new Session("sid", null, null, T_EXPIRES));
         assertThrows(IllegalStateException.class,
@@ -66,7 +66,7 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void promoteTo_setsUserId_andExtendsExpiry() {
+    void GivenAGuestSession_WhenPromoted_ThenSetsUserIdAndExtendsExpiry() {
         Session s = track(new Session("sid", null, T0, T_EXPIRES));
         Instant newExpiry = Instant.parse("2026-01-02T00:00:00Z");
 
@@ -78,7 +78,7 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void promoteTo_preservesSessionId() {
+    void GivenAGuestSession_WhenPromoted_ThenPreservesSessionId() {
         Session s = track(new Session("preserved-sid", null, T0, T_EXPIRES));
 
         s.promoteTo(7, T_EXPIRES.plusSeconds(60));
@@ -87,23 +87,30 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void promoteTo_rejectsAlreadyMember() {
-        Session s = new Session("sid", 5, T0, T_EXPIRES);
+    void GivenAMemberSession_WhenPromoted_ThenRejectsAlreadyMember() {
+        Session s = track(new Session("sid", 5, T0, T_EXPIRES));
 
         assertThrows(IllegalStateException.class,
                 () -> s.promoteTo(7, T_EXPIRES.plusSeconds(60)));
+
+        assertEquals(5, s.getUserId(), "a refused promotion must not hand the row to another member");
+        assertEquals(T_EXPIRES, s.getExpiresAt());
     }
 
     @Test
-    void promoteTo_rejectsNullExpiry() {
-        Session s = new Session("sid", null, T0, T_EXPIRES);
+    void GivenAGuestSession_WhenPromotedWithNullExpiry_ThenRejects() {
+        Session s = track(new Session("sid", null, T0, T_EXPIRES));
 
         assertThrows(IllegalArgumentException.class,
                 () -> s.promoteTo(7, null));
+
+        assertTrue(s.isGuest(), "a refused promotion leaves the row a guest row");
+        assertNull(s.getUserId());
+        assertEquals(T_EXPIRES, s.getExpiresAt());
     }
 
     @Test
-    void touch_updatesLastSeenAt() {
+    void GivenASession_WhenTouch_ThenUpdatesLastSeenAt() {
         Session s = track(new Session("sid", null, T0, T_EXPIRES));
         Instant later = T0.plusSeconds(60);
 
@@ -113,13 +120,13 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void touch_rejectsNull() {
+    void GivenASession_WhenTouchWithNull_ThenRejects() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertThrows(IllegalArgumentException.class, () -> s.touch(null));
     }
 
     @Test
-    void extendExpiry_updatesExpiresAt() {
+    void GivenASession_WhenExtendExpiry_ThenUpdatesExpiresAt() {
         Session s = track(new Session("sid", null, T0, T_EXPIRES));
         Instant later = T_EXPIRES.plusSeconds(600);
 
@@ -129,31 +136,31 @@ class SessionTest extends BaseDomainTest {
     }
 
     @Test
-    void extendExpiry_rejectsNull() {
+    void GivenASession_WhenExtendExpiryWithNull_ThenRejects() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertThrows(IllegalArgumentException.class, () -> s.extendExpiry(null));
     }
 
     @Test
-    void isExpiredAt_falseStrictlyBeforeExpiry() {
+    void GivenAnInstantStrictlyBeforeExpiry_WhenIsExpiredAt_ThenFalse() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertFalse(s.isExpiredAt(BEFORE_EXPIRY));
     }
 
     @Test
-    void isExpiredAt_trueAtExpiryBoundary() {
+    void GivenTheExpiryInstant_WhenIsExpiredAt_ThenTrueAtExpiryBoundary() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertTrue(s.isExpiredAt(T_EXPIRES));
     }
 
     @Test
-    void isExpiredAt_trueAfterExpiry() {
+    void GivenAnInstantAfterExpiry_WhenIsExpiredAt_ThenTrue() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertTrue(s.isExpiredAt(AFTER_EXPIRY));
     }
 
     @Test
-    void isExpiredAt_rejectsNull() {
+    void GivenANullInstant_WhenIsExpiredAt_ThenRejects() {
         Session s = new Session("sid", null, T0, T_EXPIRES);
         assertThrows(IllegalArgumentException.class, () -> s.isExpiredAt(null));
     }
@@ -181,6 +188,7 @@ class SessionTest extends BaseDomainTest {
         assertEquals(SessionKind.ADMIN, admin.getKind());
         assertEquals(5, admin.getUserId());
         assertFalse(admin.isGuest(), "a guest row is exactly a row without a user id");
+        assertFalse(admin.isMember(), "an admin row is not a member's, though it names a user id");
         assertEquals(T0, admin.getCreatedAt());
         assertEquals(T_EXPIRES, admin.getExpiresAt());
     }
@@ -218,10 +226,16 @@ class SessionTest extends BaseDomainTest {
         assertEquals(5, admin.getUserId());
     }
 
+    // Session.checkInvariants records the decision this pins: the Session domain stays permissive about
+    // userId values, because their bounds are the User aggregate's concern.
     @Test
-    void memberSession_acceptsZeroAndNegativeUserIds() {
-        // Domain doesn't validate userId positivity — that's the User aggregate's job.
-        assertDoesNotThrow(() -> new Session("sid-a", 0, T0, T_EXPIRES));
-        assertDoesNotThrow(() -> new Session("sid-b", -1, T0, T_EXPIRES));
+    void GivenZeroAndNegativeUserIds_WhenMemberSessionConstructed_ThenDoesNotThrow() {
+        Session zero = track(assertDoesNotThrow(() -> new Session("sid-a", 0, T0, T_EXPIRES)));
+        Session negative = track(assertDoesNotThrow(() -> new Session("sid-b", -1, T0, T_EXPIRES)));
+
+        assertEquals(0, zero.getUserId());
+        assertEquals(SessionKind.MEMBER, zero.getKind());
+        assertEquals(-1, negative.getUserId());
+        assertEquals(SessionKind.MEMBER, negative.getKind());
     }
 }

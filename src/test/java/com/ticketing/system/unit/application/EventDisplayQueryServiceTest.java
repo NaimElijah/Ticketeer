@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -70,6 +71,23 @@ class EventDisplayQueryServiceTest {
 
         assertEquals(ZonedDateTime.of(SHOW_START, JERUSALEM), info.eventStartsAt(),
                 "the event should start at its earliest show, not at the first show in the list");
+    }
+
+    // A draft can have no venue map yet; it still projects, with no venue and no zones.
+    @Test
+    void GivenADraftWithoutAVenueMap_WhenDescribed_ThenItHasNoVenueOrZonesAndTheRestIsProjected() {
+        Event draft = new Event(EVENT_ID, "Gala", 4.5, List.of("Artist"), EventCategory.CONCERT, 1, EventStatus.DRAFT,
+                null, List.of(new ShowDate(SHOW_START, SHOW_START.plusHours(3))), JERUSALEM, new NoPurchasePolicy(),
+                new DiscountPolicy(0));
+        when(events.findById(EVENT_ID)).thenReturn(draft);
+
+        EventDisplayInfoDTO described = service.describeEvent(EVENT_ID);
+
+        assertEquals("Gala", described.eventName());
+        assertEquals("CONCERT", described.category());
+        assertEquals(SHOW_START.atZone(JERUSALEM), described.eventStartsAt());
+        assertNull(described.venueLocation());
+        assertEquals(List.of(), described.zones());
     }
 
     private static Event eventAt(ZoneId timeZone) {

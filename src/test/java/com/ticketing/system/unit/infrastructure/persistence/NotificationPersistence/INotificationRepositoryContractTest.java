@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -21,6 +22,7 @@ import com.ticketing.system.notifications.application.port.out.NotificationRepos
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 import com.ticketing.system.notifications.domain.NotificationType;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract every {@link NotificationRepository} implementation must satisfy. The Memory and
@@ -59,7 +61,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheSavedNotification() {
+    void GivenASavedNotification_WhenFindById_ThenReturnsTheSavedNotification() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
 
         Notification found = repo.findById("n1");
@@ -70,17 +72,17 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void findById_returnsNullWhenMissing() {
+    void GivenNoSuchNotification_WhenFindById_ThenReturnsNull() {
         assertNull(repo.findById("ghost"));
     }
 
     @Test
-    void findById_returnsNullForNullId() {
+    void GivenANullId_WhenFindById_ThenReturnsNull() {
         assertNull(repo.findById(null));
     }
 
     @Test
-    void save_updatesALoadedNotificationInPlace() {
+    void GivenALoadedNotificationMarkedSent_WhenSave_ThenUpdatesItInPlace() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
         Notification loaded = repo.findById("n1");
         loaded.markSent();
@@ -90,7 +92,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void findByRecipientAndStatus_filtersByRecipientAndStatus() {
+    void GivenNotificationsOfSeveralRecipientsAndStatuses_WhenFindByRecipientAndStatus_ThenFiltersByRecipientAndStatus() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
         repo.save(note("n2", 5, NotificationStatus.SENT));
         repo.save(note("n3", 7, NotificationStatus.PENDING));
@@ -101,7 +103,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void findByRecipient_returnsAllForThatRecipient() {
+    void GivenNotificationsOfTwoRecipients_WhenFindByRecipient_ThenReturnsAllForThatRecipient() {
         repo.save(note("n1", 5, NotificationStatus.PENDING));
         repo.save(note("n2", 5, NotificationStatus.SENT));
         repo.save(note("n3", 7, NotificationStatus.PENDING));
@@ -111,7 +113,7 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void heterogeneousData_roundTrips() {
+    void GivenANotificationWithHeterogeneousData_WhenSaved_ThenDataRoundTrips() {
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", "ord-123");          // String
         data.put("total", 100);                  // Integer
@@ -127,9 +129,20 @@ abstract class INotificationRepositoryContractTest {
     }
 
     @Test
-    void emptyData_roundTripsAsEmptyMap() {
+    void GivenANotificationWithEmptyData_WhenSaved_ThenDataRoundTripsAsEmptyMap() {
         repo.save(note("n1", 5, NotificationStatus.PENDING)); // 6-arg ctor → empty data
         assertTrue(repo.findById("n1").getData().isEmpty());
+    }
+
+    // The JPA table holds the status under a check constraint too (ck_notifications_status), which a
+    // migration must widen for each new constant (ADR-007). Inherited, so each save commits, and a missing
+    // value fails here.
+    @ParameterizedTest
+    @EnumSource(NotificationStatus.class)
+    void GivenANotificationInEachStatus_WhenSaved_ThenItIsFoundByThatStatus(NotificationStatus status) {
+        repo.save(note("n1", 5, status));
+
+        assertEquals(Set.of("n1"), ids(repo.findByRecipientAndStatus(5, status)));
     }
 
     // The JPA table holds the type under a check constraint that a migration must widen for each new
@@ -142,5 +155,19 @@ abstract class INotificationRepositoryContractTest {
         List<Notification> found = repo.findByRecipient(5);
         assertEquals(1, found.size());
         assertEquals(type, found.get(0).getType());
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("n1");
+        repo.lockForUpdate("n1");
+        repo.unlock("n1");
+        repo.unlock("n1");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "n1");
     }
 }

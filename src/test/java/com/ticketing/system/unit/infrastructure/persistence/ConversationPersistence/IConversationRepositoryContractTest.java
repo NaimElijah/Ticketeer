@@ -6,11 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import com.ticketing.system.messaging.domain.Conversation;
 import com.ticketing.system.messaging.domain.ConversationStatus;
@@ -18,6 +22,7 @@ import com.ticketing.system.messaging.domain.ConversationType;
 import com.ticketing.system.messaging.application.port.out.ConversationRepository;
 import com.ticketing.system.messaging.domain.Message;
 import com.ticketing.system.messaging.domain.ParticipantType;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 /**
  * Contract every {@link ConversationRepository} implementation must satisfy. The Memory and JPA
@@ -26,6 +31,8 @@ import com.ticketing.system.messaging.domain.ParticipantType;
  * per-message read flag survive save/reload on both adapters.
  */
 abstract class IConversationRepositoryContractTest {
+
+    private static final LocalDateTime STARTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     protected abstract ConversationRepository newRepository();
 
@@ -39,7 +46,7 @@ abstract class IConversationRepositoryContractTest {
     /** INQUIRY: member (initiator) -> company (counterparty), first message from the member. */
     private Conversation inquiry(int memberId, int companyId, String subject, String firstBody) {
         return Conversation.start(ConversationType.INQUIRY, memberId, ParticipantType.MEMBER,
-                companyId, ParticipantType.COMPANY, subject, firstBody, LocalDateTime.now());
+                companyId, ParticipantType.COMPANY, subject, firstBody, STARTED_AT);
     }
 
     private Set<String> ids(List<Conversation> cs) {
@@ -47,7 +54,7 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindById_returnsTheConversation() {
+    void GivenASavedConversation_WhenFindById_ThenReturnsTheConversation() {
         Conversation c = inquiry(5, 10, "Help", "hello");
         repo.save(c);
 
@@ -59,13 +66,13 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void findById_emptyWhenMissingOrNull() {
+    void GivenAMissingOrNullId_WhenFindById_ThenIsEmpty() {
         assertFalse(repo.findById("ghost").isPresent());
         assertFalse(repo.findById(null).isPresent());
     }
 
     @Test
-    void findByParticipant_findsAsInitiatorAndAsCounterparty() {
+    void GivenASavedConversation_WhenFindByParticipant_ThenFindsAsInitiatorAndAsCounterpartyButNotForAnotherMember() {
         Conversation c = inquiry(5, 10, "Help", "hello");
         repo.save(c);
 
@@ -75,25 +82,122 @@ abstract class IConversationRepositoryContractTest {
     }
 
     @Test
-    void findByType_andFindByCompanyAsCounterparty_andFindByTypeAndStatus() {
+    void GivenASavedInquiry_WhenFindByType_ThenItIsFoundUnderItsTypeOnly() {
         Conversation c = inquiry(5, 10, "Help", "hello");
         repo.save(c);
 
         assertEquals(Set.of(c.getConversationId()), ids(repo.findByType(ConversationType.INQUIRY)));
         assertTrue(repo.findByType(ConversationType.COMPLAINT).isEmpty());
+    }
+
+    @Test
+    void GivenASavedInquiryToACompany_WhenFindByCompanyAsCounterparty_ThenItIsFoundForThatCompanyOnly() {
+        Conversation c = inquiry(5, 10, "Help", "hello");
+        repo.save(c);
 
         assertEquals(Set.of(c.getConversationId()), ids(repo.findByCompanyAsCounterparty(10)));
         assertTrue(repo.findByCompanyAsCounterparty(999).isEmpty());
+    }
+
+    @Test
+    void GivenASavedOpenInquiry_WhenFindByTypeAndStatus_ThenItIsFoundUnderItsStatusOnly() {
+        Conversation c = inquiry(5, 10, "Help", "hello");
+        repo.save(c);
 
         assertEquals(Set.of(c.getConversationId()),
                 ids(repo.findByTypeAndStatus(ConversationType.INQUIRY, ConversationStatus.OPEN)));
         assertTrue(repo.findByTypeAndStatus(ConversationType.INQUIRY, ConversationStatus.CLOSED).isEmpty());
     }
 
+    // The member Support Inbox (port Javadoc): what the member opened, inquiry or complaint, and the
+    // outreach an admin sent the member.
     @Test
-    void save_persistsMessagesInOrderWithReadState() {
+    void GivenTheMembersInquiryComplaintAndAnAdminsOutreach_WhenFindMemberInbox_ThenAllThreeAreListed() {
+        Conversation inquiry = inquiry(5, 10, "Help", "hello");
+        Conversation complaint = Conversation.start(ConversationType.COMPLAINT, 5, ParticipantType.MEMBER,
+                0, ParticipantType.ADMIN_GROUP, "Refund", "never arrived", STARTED_AT);
+        Conversation outreach = Conversation.start(ConversationType.DIRECT, 1, ParticipantType.ADMIN,
+                5, ParticipantType.MEMBER, "Notice", "about your account", STARTED_AT);
+        List.of(inquiry, complaint, outreach).forEach(repo::save);
+
+        assertEquals(Set.of(inquiry.getConversationId(), complaint.getConversationId(), outreach.getConversationId()),
+                ids(repo.findMemberInbox(5)));
+    }
+
+    // Ids of members, companies and admins share one integer space: company 5 and admin 5 are not member 5.
+    @Test
+    void GivenConversationsOfOtherMembersAndOfACompanyWithTheMembersId_WhenFindMemberInbox_ThenNoneIsListed() {
+        repo.save(inquiry(6, 10, "Another member's", "hello"));
+        repo.save(inquiry(6, 5, "To company 5", "hello"));
+        repo.save(Conversation.start(ConversationType.DIRECT, 1, ParticipantType.ADMIN,
+                5, ParticipantType.COMPANY, "To company 5", "about your company", STARTED_AT));
+        repo.save(Conversation.start(ConversationType.DIRECT, 5, ParticipantType.ADMIN,
+                6, ParticipantType.MEMBER, "From admin 5", "about your account", STARTED_AT));
+
+        assertTrue(repo.findMemberInbox(5).isEmpty(), "none of these belongs in member 5's inbox");
+    }
+
+    // The admin outreach history: DIRECT conversations an admin started, not those a member started.
+    @Test
+    void GivenDirectConversationsStartedByAnAdminAndByAMember_WhenFindByTypeAndInitiatorType_ThenOnlyTheAdminsMatch() {
+        Conversation byAdmin = Conversation.start(ConversationType.DIRECT, 1, ParticipantType.ADMIN,
+                5, ParticipantType.MEMBER, "Notice", "about your account", STARTED_AT);
+        Conversation byMember = Conversation.start(ConversationType.DIRECT, 5, ParticipantType.MEMBER,
+                6, ParticipantType.MEMBER, "Hi", "hello", STARTED_AT);
+        Conversation adminInquiry = Conversation.start(ConversationType.INQUIRY, 1, ParticipantType.ADMIN,
+                10, ParticipantType.COMPANY, "Question", "hello", STARTED_AT);
+        List.of(byAdmin, byMember, adminInquiry).forEach(repo::save);
+
+        assertEquals(Set.of(byAdmin.getConversationId()),
+                ids(repo.findByTypeAndInitiatorType(ConversationType.DIRECT, ParticipantType.ADMIN)));
+    }
+
+    // The Jpa tables hold the type, both participant types, the status and each message's sender type
+    // under check constraints that a migration must widen for each new constant (ADR-007). Inherited, so
+    // each save commits and a missing value fails here.
+    @ParameterizedTest
+    @EnumSource(ParticipantType.class)
+    void GivenAConversationWhoseParticipantsAreOfEachType_WhenSaved_ThenTheTypesComeBack(ParticipantType type) {
+        Conversation c = Conversation.start(ConversationType.DIRECT, 5, type, 10, type, "Hi", "hello", STARTED_AT);
+        repo.save(c);
+
+        Conversation found = repo.findById(c.getConversationId()).orElseThrow();
+        assertEquals(List.of(type, type, type),
+                List.of(found.getInitiatorType(), found.getCounterpartyType(), found.getMessages().get(0).getSenderType()));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ConversationType.class)
+    void GivenAConversationOfEachType_WhenSaved_ThenItIsFoundByThatType(ConversationType type) {
+        Conversation c = Conversation.start(type, 5, ParticipantType.MEMBER, 10, ParticipantType.COMPANY,
+                "Hi", "hello", STARTED_AT);
+        repo.save(c);
+
+        assertEquals(Set.of(c.getConversationId()), ids(repo.findByType(type)));
+    }
+
+    @Test
+    void GivenConversationsInEveryStatus_WhenSaved_ThenEachKeepsItsStatus() {
+        Conversation open = inquiry(5, 10, "Open", "hello");
+        Conversation responded = inquiry(5, 10, "Responded", "hello");
+        responded.transitionToResponded();
+        Conversation resolved = inquiry(5, 10, "Resolved", "hello");
+        resolved.transitionToResolved();
+        Conversation closed = inquiry(5, 10, "Closed", "hello");
+        closed.transitionToClosed();
+        List.of(open, responded, resolved, closed).forEach(repo::save);
+
+        Map<String, ConversationStatus> stored = repo.findByCompanyAsCounterparty(10).stream()
+                .collect(Collectors.toMap(Conversation::getSubject, Conversation::getStatus));
+
+        assertEquals(Map.of("Open", ConversationStatus.OPEN, "Responded", ConversationStatus.RESPONDED,
+                "Resolved", ConversationStatus.RESOLVED, "Closed", ConversationStatus.CLOSED), stored);
+    }
+
+    @Test
+    void GivenAConversationWithAReply_WhenSave_ThenPersistsMessagesInOrderWithReadState() {
         Conversation c = inquiry(5, 10, "Help", "first");
-        c.addMessage(10, ParticipantType.COMPANY, "reply", LocalDateTime.now());
+        c.addMessage(10, ParticipantType.COMPANY, "reply", STARTED_AT);
         repo.save(c);
 
         Conversation found = repo.findById(c.getConversationId()).orElseThrow();
@@ -107,5 +211,19 @@ abstract class IConversationRepositoryContractTest {
         found.markReadBy(5, ParticipantType.MEMBER);
         repo.save(found);
         assertTrue(repo.findById(c.getConversationId()).orElseThrow().getMessages().get(1).isRead());
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate("conversation-1");
+        repo.lockForUpdate("conversation-1");
+        repo.unlock("conversation-1");
+        repo.unlock("conversation-1");
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, "conversation-1");
     }
 }

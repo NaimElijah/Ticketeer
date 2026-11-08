@@ -63,18 +63,44 @@ public interface EventRepository extends IRepository<Event, Integer> {
     // #372 — full enumeration for the boot-time integrity scan (sellable <= inventory).
     List<Event> findAll();
 
-    // search across all events (filters from DTO).
+    /**
+     * Searches every event, in any status.
+     *
+     * @param filters the filters to narrow by; {@code null} means no filter, as {@link CatalogSearchFiltersDTO#empty()}
+     * @return the events matching every given filter, in no particular order
+     */
     List<Event> searchAll(CatalogSearchFiltersDTO filters);
-    // UC-7 — search across all events that are ON_SALE (filters from DTO).
+
+    /**
+     * Searches the events that are {@code ON_SALE}: the buyer's catalogue search (UC-7).
+     *
+     * @param filters the filters to narrow by; {@code null} means no filter, as {@link CatalogSearchFiltersDTO#empty()}
+     * @return the {@code ON_SALE} events matching every given filter, in no particular order
+     */
     List<Event> searchONSALE(CatalogSearchFiltersDTO filters);
-    // Owner event list — a single company's events (all statuses), narrowed by the DTO filters.
+
+    /**
+     * Searches one company's events, in any status: the owner's event list.
+     *
+     * @param companyId the company whose events to search
+     * @param filters   the filters to narrow by; {@code null} means no filter, as {@link CatalogSearchFiltersDTO#empty()}
+     * @return that company's events matching every given filter, in no particular order
+     */
     List<Event> searchByCompanyAll(int companyId, CatalogSearchFiltersDTO filters);
     
 
-    // Permanently removes a CANCELED event from the store.
+    /**
+     * Permanently removes a CANCELED event from the store, with everything it owns. An id the store does not
+     * hold changes nothing.
+     */
     void delete(int eventId);
 
+    /**
+     * Mints a new event id, greater than any this method returned before, a previous boot's included. So while
+     * every event's id comes from here, a new event never reuses a stored one's.
+     */
     int nextId();
 
+    /** Mints a new venue map id, on the same terms as {@link #nextId()}. */
     int nextVenueMapId();
 }

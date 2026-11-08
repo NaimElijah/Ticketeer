@@ -10,6 +10,7 @@ import com.ticketing.system.ui.presenters.account.MyProfilePresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.DescriptionList;
 import com.vaadin.flow.component.html.Div;
@@ -51,7 +52,9 @@ public class MyProfileView extends LkPage {
                     email = ok.member().email();
                 }
             }
-            case MyProfilePresenter.Outcome.NotAuthenticated ignored -> { /* keep placeholder */ }
+            // The route needs MEMBER_ACCOUNT, so only a token that died after the check gets here (#122).
+            case MyProfilePresenter.Outcome.NotAuthenticated ignored -> loadFailure = new LkBanner(LkBanner.Tone.warn,
+                new LkIcon("warning", 18), "Your session has expired — please sign in again.");
             case MyProfilePresenter.Outcome.Failure fail -> loadFailure = new LkBanner(LkBanner.Tone.warn,
                 new LkIcon("warning", 18), Lk.withReason("Could not load your profile", fail.reason()));
         }
@@ -98,8 +101,8 @@ public class MyProfileView extends LkPage {
         String[] parts = name.trim().split("\\s+");
         if (parts.length == 1) {
             String p = parts[0];
-            return p.substring(0, Math.min(2, p.length())).toUpperCase();
+            return p.substring(0, Math.min(2, p.length())).toUpperCase(DisplayLocale.PAGE);
         }
-        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        return ("" + parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase(DisplayLocale.PAGE);
     }
 }

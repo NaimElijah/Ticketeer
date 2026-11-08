@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import com.ticketing.system.shared.dto.ActiveOrderDTO;
 import com.ticketing.system.shared.InvariantChecked;
+import com.ticketing.system.shared.exception.CheckoutInProgressException;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
 
 import jakarta.persistence.CollectionTable;
@@ -20,6 +21,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
@@ -50,7 +53,8 @@ import jakarta.persistence.Version;
 // protected no-arg ctor lets Hibernate hydrate; the public ctor still enforces the invariants.
 //
 // Identity collapse (one cart per user / per guest session) is enforced in the repository's save,
-// reproducing the in-memory behaviour even though each cart has a distinct orderKey.
+// reproducing the in-memory behaviour even though each cart has a distinct orderKey. In the database,
+// uk_active_orders_user_id (V7) and uk_active_orders_guest_session_id (V10) hold it against concurrent saves.
 @Entity
 @Table(name = "active_orders")
 public class ActiveOrder implements InvariantChecked {
@@ -59,6 +63,11 @@ public class ActiveOrder implements InvariantChecked {
     private Integer userId;
     @Column(name = "session_id")
     private String sessionId;
+    // The column uk_active_orders_guest_session_id keys on (NaimElijah/Ticketeer#224, V10): the session id while this is a guest
+    // cart, null once a member owns it, since a member cart keeps the id of its session and may share it
+    // with that session's guest cart. Persistence-only, so nothing reads it; see deriveGuestSessionKey.
+    @Column(name = "guest_session_id")
+    private String guestSessionId;
     /** Status value: order is being processed by checkout — no new items or concurrent checkouts. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -565,16 +574,14 @@ public class ActiveOrder implements InvariantChecked {
      * Checks the order can be checked out at {@code now}: not already in checkout, not empty, no hold run out.
      *
      * @param now the current UTC wall time, against which each line's hold is checked
-     * @return {@code true}; every refusal throws instead
-     * @throws IllegalStateException if the order is already in checkout
+     * @throws CheckoutInProgressException if the order is already frozen in checkout, by a running attempt or an
+     *     interrupted one
      * @throws InvalidStateTransitionException if the order is empty or a line's hold has run out
      */
-    public boolean validateCanCheckout(LocalDateTime now) {
+    public void validateCanCheckout(LocalDateTime now) {
         synchronized (itemsLock) {
-            // Stays an IllegalStateException: SecondCheckoutAttemptJpaTest pins it as the cause of a second
-            // attempt's failure, and retyping it is tracked as NaimElijah/Ticketeer#240.
             if (status == ActiveOrderStatus.CHECKOUT_IN_PROGRESS) {
-                throw new IllegalStateException("Order is already being checked out");
+                throw new CheckoutInProgressException();
             }
 
             if (items.isEmpty()) {
@@ -586,8 +593,6 @@ public class ActiveOrder implements InvariantChecked {
                     throw new InvalidStateTransitionException("Cannot checkout because one or more tickets expired");
                 }
             }
-
-            return true;
         }
     }
 
@@ -701,6 +706,17 @@ public class ActiveOrder implements InvariantChecked {
                     lineDTOs
             );
         }
+    }
+
+    // Derived at each write rather than set by the methods that change userId or sessionId, so no path
+    // that changes either one, present or future, can leave the key stale. It also fills the key of a row
+    // that code from before V10 wrote during a rolling deploy, on that row's next write: without
+    // @DynamicUpdate Hibernate writes every column from the entity, so a key set only by those methods
+    // would stay null on such a guest cart for as long as it lived.
+    @PrePersist
+    @PreUpdate
+    private void deriveGuestSessionKey() {
+        guestSessionId = isGuest() ? sessionId : null;
     }
 
     @Override

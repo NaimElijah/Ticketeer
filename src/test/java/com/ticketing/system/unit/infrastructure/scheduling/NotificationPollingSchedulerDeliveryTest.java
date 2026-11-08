@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -168,6 +169,52 @@ class NotificationPollingSchedulerDeliveryTest {
             assertTrue(warnings.stream().anyMatch(message -> message.contains("uiId=" + UI_ID)
                             && message.contains("userId=" + MEMBER_ID)),
                     "the failure's WARN must carry uiId and userId as key=value, but the WARNs were " + warnings);
+        });
+    }
+
+    @Test
+    void GivenDeliveryFailsForTheFirstUi_WhenPoll_ThenTheSecondUiStillDelivers() {
+        AuthSession.storeAuth(memberToken(LIVE_TOKEN));
+        activeUis(uiRunningAccessInline(), uiRunningAccessInline());
+        when(dispatchService.deliverPending(MEMBER_ID))
+                .thenThrow(new IllegalStateException("dispatch store unavailable"))
+                .thenReturn(List.of());
+
+        withPoller(poller -> {
+            assertDoesNotThrow(poller::poll, "one UI's failed delivery must not abort the poll");
+
+            verify(dispatchService, times(2)).deliverPending(MEMBER_ID);
+        });
+    }
+
+    // Notifications are addressed by member id; a guest has none, so its inbox is never drained.
+    @Test
+    void GivenAGuestUi_WhenPoll_ThenNothingIsDelivered() {
+        activeUis(uiRunningAccessInline());
+
+        withPoller(poller -> {
+            poller.poll();
+
+            verify(dispatchService, never()).deliverPending(anyInt());
+        });
+    }
+
+    @Test
+    void GivenTheLivenessCheckFails_WhenPoll_ThenTheWarningSaysTheUserIsUnknown() {
+        AuthSession.storeAuth(memberToken(LIVE_TOKEN));
+        UI ui = uiRunningAccessInline();
+        when(ui.getUIId()).thenReturn(UI_ID);
+        activeUis(ui);
+        when(authenticationService.liveMemberId(LIVE_TOKEN)).thenThrow(new IllegalStateException("session store down"));
+
+        withPoller(poller -> {
+            poller.poll();
+
+            List<String> warnings = logs.messagesAt(Level.WARN);
+            assertTrue(warnings.stream().anyMatch(message -> message.contains("uiId=" + UI_ID)
+                            && message.contains("userId=unknown")),
+                    "a failure before the member is resolved names no member, but the WARNs were " + warnings);
+            verify(dispatchService, never()).deliverPending(anyInt());
         });
     }
 

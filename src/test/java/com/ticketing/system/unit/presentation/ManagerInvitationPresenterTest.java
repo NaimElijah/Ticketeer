@@ -24,6 +24,14 @@ import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.ui.presenters.company.ManagerInvitationPresenter;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import com.ticketing.system.shared.exception.UserNotFoundException;
+import com.ticketing.system.ui.support.ServiceErrors;
+import jakarta.persistence.PersistenceException;
 
 /**
  * {@link ManagerInvitationPresenter#invite} appoints the manager in the company the owner has
@@ -134,5 +142,75 @@ class ManagerInvitationPresenterTest {
 
     private static ProductionCompanyDTO company(int id, String name) {
         return new ProductionCompanyDTO(id, name, "desc", "ACTIVE", FOUNDER_ID);
+    }
+
+    // ---- what a failed invitation tells the owner (#189) ----
+
+    @Test
+    void GivenANullToken_WhenInvite_ThenNotAuthenticatedAndNoServiceCall() {
+        ManagerInvitationPresenter.Outcome outcome = presenter.invite(null, INVITEE, PERMISSIONS);
+
+        assertEquals(new ManagerInvitationPresenter.Outcome.NotAuthenticated(), outcome);
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void GivenARevokedToken_WhenInvite_ThenNotAuthenticatedAndNoAppointment() {
+        when(service.findOwnedCompanies(TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertEquals(new ManagerInvitationPresenter.Outcome.NotAuthenticated(),
+                presenter.invite(TOKEN, INVITEE, PERMISSIONS));
+        verify(service, never()).appointManager(anyString(), any());
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenInvite_ThenNotAuthenticatedAndNoAppointment() {
+        when(service.findOwnedCompanies(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new ManagerInvitationPresenter.Outcome.NotAuthenticated(),
+                presenter.invite(TOKEN, INVITEE, PERMISSIONS));
+        verify(service, never()).appointManager(anyString(), any());
+    }
+
+    // A typo in the invitee's name must name the invitee, not read as a generic failure.
+    @Test
+    void GivenAnUnknownInvitee_WhenInvite_ThenUserNotFoundNamingThemAndNoAppointment() {
+        CurrentCompanies.setCurrentCompany(SECOND_COMPANY_ID);
+        when(service.resolveUserId(TOKEN, "carlo")).thenThrow(new UserNotFoundException());
+
+        assertEquals(new ManagerInvitationPresenter.Outcome.UserNotFound("carlo"),
+                presenter.invite(TOKEN, "carlo", PERMISSIONS));
+        verify(service, never()).appointManager(anyString(), any());
+    }
+
+    @Test
+    void GivenTheServiceRefusesTheAppointment_WhenInvite_ThenFailureCarriesTheRule() {
+        CurrentCompanies.setCurrentCompany(SECOND_COMPANY_ID);
+        BusinessRuleViolationException rule = new BusinessRuleViolationException("carol already manages this company");
+        doThrow(rule).when(service).appointManager(eq(TOKEN), any());
+
+        assertEquals(new ManagerInvitationPresenter.Outcome.Failure(rule.getMessage()),
+                presenter.invite(TOKEN, INVITEE, PERMISSIONS));
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenInvite_ThenFailureCarriesTheGenericText() {
+        CurrentCompanies.setCurrentCompany(SECOND_COMPANY_ID);
+        doThrow(new PersistenceException("could not execute statement [insert into company_appointments]"))
+                .when(service).appointManager(eq(TOKEN), any());
+
+        assertEquals(new ManagerInvitationPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                presenter.invite(TOKEN, INVITEE, PERMISSIONS));
+    }
+
+    @Test
+    void GivenTheChosenPermissions_WhenInvite_ThenTheAppointmentCarriesThem() {
+        CurrentCompanies.setCurrentCompany(SECOND_COMPANY_ID);
+        List<Permission> chosen = List.of(Permission.VIEW_SALES, Permission.MANAGE_INVENTORY);
+
+        presenter.invite(TOKEN, INVITEE, chosen);
+
+        verify(service).appointManager(TOKEN,
+                new ManagerAppointmentRequestDTO(SECOND_COMPANY_ID, INVITEE_USER_ID, chosen));
     }
 }

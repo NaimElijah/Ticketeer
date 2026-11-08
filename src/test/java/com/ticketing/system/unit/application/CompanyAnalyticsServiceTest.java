@@ -3,6 +3,7 @@ package com.ticketing.system.unit.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -177,8 +178,26 @@ class CompanyAnalyticsServiceTest {
         assertEquals(20.0, stats.revenue30d());
     }
 
+    // The window's start is inclusive: a sale exactly thirty days before the clock counts, one a second
+    // earlier does not.
     @Test
-    void dashboard_aggregatesLiveCountersForTheCompany() {
+    void GivenSalesAtAndJustBeforeTheThirtyDayCutoff_WhenDashboard_ThenOnlyTheOneAtTheCutoffCounts() {
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt justBefore = OrderReceipt.forMember(1, BUYER_ID, 50.0, List.of(line(1, 50.0, EVENT_A)),
+                NOW.minusDays(30).minusSeconds(1));
+        OrderReceipt atTheCutoff = OrderReceipt.forMember(2, BUYER_ID, 20.0, List.of(line(2, 20.0, EVENT_A)),
+                NOW.minusDays(30));
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A))).thenReturn(List.of(justBefore, atTheCutoff));
+
+        CompanyDashboardDTO stats = service.dashboard(OWNER_TOKEN, COMPANY_ID);
+
+        assertEquals(1, stats.ticketsSold30d());
+        assertEquals(20.0, stats.revenue30d());
+    }
+
+    @Test
+    void GivenSalesInquiriesAndEventsOfTheCompany_WhenDashboard_ThenAggregatesLiveCountersForTheCompany() {
         givenOwner();
         LocalDateTime now = NOW;
 
@@ -271,7 +290,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void dashboard_freshCompanyWithNoEvents_returnsZeros() {
+    void GivenFreshCompanyWithNoEvents_WhenDashboard_ThenReturnsZerosAndNoRating() {
         givenOwner();
         when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of());
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
@@ -287,7 +306,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void dashboard_derivesRatingAsMeanOfCompanyEventRatings() {
+    void GivenTwoRatedEventsAndOneUnrated_WhenDashboard_ThenDerivesRatingAsMeanOfCompanyEventRatings() {
         givenOwner();
         when(eventRepository.findActiveByCompany(COMPANY_ID)).thenReturn(List.of());
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
@@ -308,7 +327,7 @@ class CompanyAnalyticsServiceTest {
     void GivenInvalidToken_WhenDashboard_ThenThrowsInvalidTokenException() {
         when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class, () -> service.dashboard(INVALID_TOKEN, COMPANY_ID));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.dashboard(INVALID_TOKEN, COMPANY_ID));
         verify(eventRepository, never()).findActiveByCompany(anyInt());
     }
 
@@ -390,7 +409,7 @@ class CompanyAnalyticsServiceTest {
     void GivenInvalidToken_WhenSalesHistory_ThenThrowsInvalidTokenException() {
         when(sessionManager.validateToken(INVALID_TOKEN)).thenReturn(false);
 
-        assertThrows(InvalidTokenException.class, () -> service.salesHistory(INVALID_TOKEN, COMPANY_ID));
+        assertThrowsExactly(InvalidTokenException.class, () -> service.salesHistory(INVALID_TOKEN, COMPANY_ID));
     }
 
     @Test
@@ -436,13 +455,14 @@ class CompanyAnalyticsServiceTest {
 
         PurchaseHistoryDTO result = service.salesHistory(TARGET_TOKEN, COMPANY_ID);
 
-        assertEquals(1, result.records().size());
+        assertEquals(List.of(1), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(40.0, result.records().get(0).totalPaid());
     }
 
     // ─── salesHistory unit tests ──────────────────────────────────────────────────
 
     @Test
-    void salesHistory_noEventsForCompany_returnsEmptyHistory() {
+    void GivenNoEventsForCompany_WhenSalesHistory_ThenReturnsEmptyHistory() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of());
 
@@ -452,7 +472,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void salesHistory_eventsExistButNoReceipts_returnsEmptyHistory() {
+    void GivenEventsExistButNoReceipts_WhenSalesHistory_ThenReturnsEmptyHistory() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A, EVENT_B));
         when(orderReceiptRepository.findByEventIds(List.of(EVENT_A, EVENT_B))).thenReturn(List.of());
@@ -463,7 +483,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void salesHistory_twoReceipts_returnsTwoRecords() {
+    void GivenTwoReceipts_WhenSalesHistory_ThenReturnsTwoRecords() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         OrderReceipt r1 = fullReceipt(false, NOW.minusDays(1),
@@ -475,11 +495,12 @@ class CompanyAnalyticsServiceTest {
 
         PurchaseHistoryDTO result = service.salesHistory(OWNER_TOKEN, COMPANY_ID);
 
-        assertEquals(2, result.records().size());
+        assertEquals(List.of(1, 2), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::orderReceiptId).toList());
+        assertEquals(List.of(50.0, 30.0), result.records().stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::totalPaid).toList());
     }
 
     @Test
-    void salesHistory_refundedReceiptIsIncluded() {
+    void GivenRefundedReceipt_WhenSalesHistory_ThenRefundedReceiptIsIncludedAsFullyRefunded() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         OrderReceipt r = fullReceipt(true, NOW.minusDays(3),
@@ -494,7 +515,7 @@ class CompanyAnalyticsServiceTest {
     }
 
     @Test
-    void salesHistory_linesFromOtherCompanyEventsAreExcluded() {
+    void GivenReceiptWithALineFromAnotherCompanysEvent_WhenSalesHistory_ThenLinesFromOtherCompanyEventsAreExcluded() {
         givenOwner();
         when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
         // receipt contains one line for EVENT_A and one for a different company's event
@@ -508,6 +529,29 @@ class CompanyAnalyticsServiceTest {
         assertEquals(1, result.records().size());
         assertEquals(1,     result.records().get(0).tickets().size()); // only EVENT_A ticket
         assertEquals(100.0, result.records().get(0).totalPaid());      // only EVENT_A revenue
+    }
+
+    // II.4.5: each sale shows the price stored on its receipt line when it was sold, so a sale made before a
+    // price change keeps its price. No repricing path exists to drive this end to end, so two sales of the
+    // same zone carry the price before and after the change.
+    @Test
+    void GivenTwoSalesOfOneZoneAtDifferentPrices_WhenSalesHistory_ThenEachShowsItsReceiptLinePrice() {
+        final double originalPrice = 100.0;
+        final double changedPrice = 150.0;
+        givenOwner();
+        when(eventRepository.findIdsByCompany(COMPANY_ID)).thenReturn(List.of(EVENT_A));
+        OrderReceipt soldBeforeTheChange = fullReceipt(false, NOW.minusDays(2), List.of(line(1, originalPrice, EVENT_A)), 1);
+        OrderReceipt soldAfterTheChange = fullReceipt(false, NOW.minusDays(1), List.of(line(2, changedPrice, EVENT_A)), 2);
+        when(orderReceiptRepository.findByEventIds(List.of(EVENT_A)))
+                .thenReturn(List.of(soldBeforeTheChange, soldAfterTheChange));
+        when(ticketRepository.findByOrderReceiptId(anyInt())).thenReturn(List.of());
+
+        List<PurchaseHistoryDTO.PurchaseRecordDTO> records = service.salesHistory(OWNER_TOKEN, COMPANY_ID).records();
+
+        assertEquals(List.of(originalPrice, changedPrice),
+                records.stream().map(PurchaseHistoryDTO.PurchaseRecordDTO::totalPaid).toList());
+        assertEquals(List.of(originalPrice, changedPrice),
+                records.stream().map(record -> record.tickets().get(0).pricePaid()).toList());
     }
 
     // ─── salesHistory payment data on shared orders (#121, UC-22) ─────────────────

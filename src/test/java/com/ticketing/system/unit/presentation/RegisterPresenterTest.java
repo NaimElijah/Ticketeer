@@ -21,8 +21,15 @@ import com.ticketing.system.ui.presenters.auth.RegisterPresenter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import jakarta.persistence.PersistenceException;
+import com.ticketing.system.ui.support.ServiceErrors;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 class RegisterPresenterTest {
+
+    // What AuthenticationService.register throws for an age outside the range it accepts.
+    private static final String AGE_OUT_OF_RANGE =
+        "Age must be from " + AuthenticationService.MIN_AGE + " to " + AuthenticationService.MAX_AGE;
 
     private AuthenticationService authenticationService;
     private RegisterPresenter presenter;
@@ -34,7 +41,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void success_returnsSuccessOutcome() {
+    void GivenValidRegistrationDetails_WhenAttemptRegister_ThenReturnsSuccessOutcome() {
         doNothing().when(authenticationService).register(any(RegisterRequestDTO.class));
 
         RegisterPresenter.Outcome outcome = presenter.attemptRegister(
@@ -45,7 +52,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void success_forwardsAllFieldsToTheService() {
+    void GivenValidRegistrationDetails_WhenAttemptRegister_ThenForwardsAllFieldsToTheService() {
         doNothing().when(authenticationService).register(any(RegisterRequestDTO.class));
 
         presenter.attemptRegister("adam", "adam@x.com", "password1", 22, "guest-sid");
@@ -61,7 +68,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void duplicateUsername_returnsUsernameTaken() {
+    void GivenADuplicateUsername_WhenAttemptRegister_ThenReturnsUsernameTaken() {
         doThrow(new DuplicateUsernameException("adam")).when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -71,7 +78,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void duplicateEmail_returnsEmailTaken() {
+    void GivenADuplicateEmail_WhenAttemptRegister_ThenReturnsEmailTaken() {
         doThrow(new DuplicateEmailException()).when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -81,7 +88,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void weakPassword_returnsWeakPasswordWithReason() {
+    void GivenAWeakPassword_WhenAttemptRegister_ThenReturnsWeakPasswordWithReason() {
         doThrow(new WeakPasswordException("must be at least 8 characters"))
             .when(authenticationService).register(any());
 
@@ -95,7 +102,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void invalidEmail_returnsInvalidEmail() {
+    void GivenAnInvalidEmail_WhenAttemptRegister_ThenReturnsInvalidEmail() {
         doThrow(new InvalidEmailFormatException())
             .when(authenticationService).register(any());
 
@@ -106,7 +113,7 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void guestSessionRequired_returnsGuestSessionMissingWithMessage() {
+    void GivenAGuestSessionIsRequired_WhenAttemptRegister_ThenReturnsGuestSessionMissingWithMessage() {
         doThrow(new GuestSessionRequiredException("session is not a guest session"))
             .when(authenticationService).register(any());
 
@@ -119,8 +126,8 @@ class RegisterPresenterTest {
     }
 
     @Test
-    void illegalArgument_returnsInvalidInputWithMessage() {
-        doThrow(new IllegalArgumentException("Age cannot be negative"))
+    void GivenAnIllegalArgument_WhenAttemptRegister_ThenReturnsInvalidInputWithMessage() {
+        doThrow(new IllegalArgumentException(AGE_OUT_OF_RANGE))
             .when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -128,12 +135,12 @@ class RegisterPresenterTest {
 
         RegisterPresenter.Outcome.InvalidInput bad =
             assertInstanceOf(RegisterPresenter.Outcome.InvalidInput.class, outcome);
-        assertEquals("Age cannot be negative", bad.reason());
+        assertEquals(AGE_OUT_OF_RANGE, bad.reason());
     }
 
     @Test
-    void unexpectedRuntime_returnsFailureWithMessage() {
-        doThrow(new IllegalStateException("database down"))
+    void GivenAnIllegalStateException_WhenAttemptRegister_ThenFailureCarriesItsMessage() {
+        doThrow(new IllegalStateException("Registration is paused for maintenance"))
             .when(authenticationService).register(any());
 
         RegisterPresenter.Outcome outcome =
@@ -141,6 +148,26 @@ class RegisterPresenterTest {
 
         RegisterPresenter.Outcome.Failure fail =
             assertInstanceOf(RegisterPresenter.Outcome.Failure.class, outcome);
-        assertEquals("database down", fail.reason());
+        assertEquals("Registration is paused for maintenance", fail.reason());
+    }
+
+    // ---- an internal failure reads as generic text, never as its own (#189) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenAttemptRegister_ThenFailureCarriesTheGenericText() {
+        doThrow(new PersistenceException("could not execute statement [insert into users]"))
+            .when(authenticationService).register(any());
+
+        assertEquals(new RegisterPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.attemptRegister("adam", "adam@x.com", "password1", 22, "guest-sid"));
+    }
+
+    @Test
+    void GivenTheDatabaseIsDown_WhenAttemptRegister_ThenFailureSaysTheServiceIsUnavailable() {
+        doThrow(new DataAccessResourceFailureException("could not get a connection"))
+            .when(authenticationService).register(any());
+
+        assertEquals(new RegisterPresenter.Outcome.Failure(ServiceErrors.DB_UNAVAILABLE_MESSAGE),
+            presenter.attemptRegister("adam", "adam@x.com", "password1", 22, "guest-sid"));
     }
 }

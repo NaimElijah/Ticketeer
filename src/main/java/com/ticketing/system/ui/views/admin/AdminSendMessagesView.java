@@ -8,6 +8,7 @@ import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkChip;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkGrid;
 import com.ticketing.system.ui.components.kit.LkIcon;
@@ -21,6 +22,7 @@ import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter.S
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
@@ -53,10 +55,12 @@ import java.util.Map;
 @RequireCapability(Capability.BROADCAST_ANNOUNCEMENT)
 public class AdminSendMessagesView extends LkPage {
 
-    private static final DateTimeFormatter SENT_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm");
+    private static final DateTimeFormatter SENT_FMT = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", DisplayLocale.PAGE);
     private static final String NO_RECIPIENT = "Add at least one recipient, or pick all members / all producers.";
     private static final String RECIPIENTS = "Recipients";
     private static final String SEARCH_MEMBERS = "Search members";
+    private static final String ENTER_SUBJECT = "Enter a subject.";
+    private static final String WRITE_MESSAGE = "Write the message.";
 
     private final AdminSendMessagesPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
@@ -101,10 +105,12 @@ public class AdminSendMessagesView extends LkPage {
 
         subject.setPlaceholder("Short, clear headline");
         subject.setRequired(true);
+        LkFieldRules.sayWhenEmpty(subject, ENTER_SUBJECT);
         subject.setWidthFull();
         LkTextLimit.apply(subject);
         body.setPlaceholder("Body of the message…");
         body.setRequired(true);
+        LkFieldRules.sayWhenEmpty(body, WRITE_MESSAGE);
         body.setHeight("160px");
         body.setWidthFull();
         LkTextLimit.apply(body);
@@ -231,10 +237,10 @@ public class AdminSendMessagesView extends LkPage {
     private void send() {
         errors.clear();
         if (subject.isEmpty()) {
-            errors.reject(subject, "Enter a subject.");
+            errors.reject(subject, ENTER_SUBJECT);
         }
         if (body.isEmpty()) {
-            errors.reject(body, "Write the message.");
+            errors.reject(body, WRITE_MESSAGE);
         }
         if (!errors.isEmpty()) {
             refuse("Subject and body are required.");
@@ -250,7 +256,7 @@ public class AdminSendMessagesView extends LkPage {
         switch (presenter.send(AuthSession.token(), subject.getValue(), body.getValue(),
                 ids, audience == Audience.ALL_MEMBERS, audience == Audience.ALL_PRODUCERS)) {
             case AdminSendMessagesPresenter.ActionOutcome.Success ok -> {
-                Toasts.success("Sent to " + String.format("%,d", ok.recipientCount()) + " recipient(s).");
+                Toasts.success("Sent to " + String.format(DisplayLocale.PAGE, "%,d", ok.recipientCount()) + " recipient(s).");
                 clearComposer();
                 reloadHistory();
             }
@@ -320,7 +326,7 @@ public class AdminSendMessagesView extends LkPage {
             Span subj = new Span(a.subject() == null ? "" : a.subject());
             subj.getStyle().set("font-weight", "600");
             row.put("subj", subj);
-            row.put("rec", String.format("%,d", a.recipientCount()));
+            row.put("rec", String.format(DisplayLocale.PAGE, "%,d", a.recipientCount()));
             grid.row(row);
         }
 

@@ -1,10 +1,12 @@
 package com.ticketing.system.unit.infrastructure.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import com.ticketing.system.bootstrap.scheduling.MarketOpener;
 import com.ticketing.system.governance.application.service.SystemAdminService;
@@ -12,8 +14,21 @@ import com.ticketing.system.testutil.LogCapture;
 
 import ch.qos.logback.classic.Level;
 
-/** The boot-time market opener's own log lines (#187 review follow-up 3). */
+/** The boot-time market opener: it asks the market to open, then logs the outcome (#187 review follow-up 3). */
 class MarketOpenerTest {
+
+    // Reading the state alone would only report a market the self-heal tick or an admin had opened.
+    @Test
+    void GivenTheOpenerRuns_WhenItReportsTheMarket_ThenItHasAskedTheMarketToOpenFirst() {
+        SystemAdminService admin = mock(SystemAdminService.class);
+        when(admin.isMarketOpen()).thenReturn(true);
+
+        new MarketOpener(admin).run(null);
+
+        InOrder openThenRead = inOrder(admin);
+        openThenRead.verify(admin).ensureMarketOpen();
+        openThenRead.verify(admin).isMarketOpen();
+    }
 
     // ensureMarketOpen has already logged why (WARN for a WSEP outage, ERROR otherwise): this line points
     // there rather than guessing a cause, since a failed integrity check or database also ends here.

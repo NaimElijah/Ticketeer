@@ -72,6 +72,7 @@ class PopoverTriggerA11yTest {
     @Test
     void GivenASelect_WhenTheUserPicksAnotherOption_ThenOnlyThatOptionIsMarkedChosen() {
         LkSelect select = new LkSelect("Israel", COUNTRIES).label(COUNTRY);
+        harness.attach(select);
         assertOnlyChosen(select, COUNTRIES, "Israel");
 
         choose(select, "France");
@@ -96,6 +97,7 @@ class PopoverTriggerA11yTest {
     @Test
     void GivenADateRange_WhenTheUserPicksAnotherPreset_ThenOnlyThatPresetIsMarkedChosen() {
         LkDateRangeField range = new LkDateRangeField("Next 7 days").label(WHEN);
+        harness.attach(range);
         List<String> presets = List.of("Any time", "Today", "Next 7 days", "Next 30 days");
         assertOnlyChosen(range, presets, "Next 7 days");
 
@@ -123,6 +125,7 @@ class PopoverTriggerA11yTest {
     @Test
     void GivenAFilterChip_WhenTheUserTicksAnotherOption_ThenBothTickedOptionsAreMarkedChosen() {
         LkFilterChip chip = new LkFilterChip(STATUS, STATUSES, false, List.of("Open"));
+        harness.attach(chip);
         assertOnlyChosen(chip, STATUSES, "Open");
 
         choose(chip, "Closed");
@@ -149,6 +152,10 @@ class PopoverTriggerA11yTest {
         String popup = trigger.getAttribute("aria-haspopup");
         assertTrue(popup != null && !popup.isBlank() && !"false".equals(popup),
             "the trigger must say it opens a popup (aria-haspopup): " + A11y.describe(trigger));
+        List<Popover> popovers = ViewHarness.find(field, Popover.class);
+        assertEquals(1, popovers.size(), "the field must have one popover");
+        assertEquals(trigger, popovers.get(0).getTarget().getElement(), "the popover must open from the trigger");
+        assertTrue(popovers.get(0).isOpenOnClick(), "the trigger's click must open the popover");
     }
 
     // The trigger is what takes focus outside the popover's overlay.
@@ -196,7 +203,9 @@ class PopoverTriggerA11yTest {
     }
 
     private static void choose(Component field, String label) {
-        A11y.activate(option(field, label));
+        Element option = option(field, label);
+        ViewHarness.openPopoverHolding(option);
+        A11y.activate(option);
     }
 
     private static void assertPopoverNamed(Component field, String label) {

@@ -69,7 +69,7 @@ class ConversationA11yTest {
     }
 
     @Test
-    void GivenASelectedRow_WhenAnotherRowIsSelected_ThenItIsNoLongerCurrent() {
+    void GivenASelectedRow_WhenItIsMarkedNotSelected_ThenItIsNoLongerCurrent() {
         MdConvRow row = new MdConvRow("comment", "Refund delay", "alice", "1h", null).active();
 
         row.active(false);
@@ -77,6 +77,24 @@ class ConversationA11yTest {
         String current = row.getElement().getAttribute("aria-current");
         assertTrue(current == null || "false".equals(current),
             "a row no longer selected must not stay current: " + A11y.describe(row.getElement()));
+    }
+
+    @Test
+    void GivenAnInboxShowingTheFirstThread_WhenTheReaderSelectsTheSecond_ThenOnlyTheSecondRowIsCurrent() {
+        ViewHarness.signInMember();
+        SupportInboxPresenter presenter = mock(SupportInboxPresenter.class);
+        when(presenter.load(any())).thenReturn(new SupportInboxPresenter.Outcome.Success(List.of(
+            thread("c1", "DIRECT", "MEMBER"), thread("c2", "DIRECT", "MEMBER"))));
+        when(presenter.badge(any(), any())).thenReturn(Optional.empty());
+        when(presenter.open(any(), any(), any())).thenReturn(new SupportInboxPresenter.ActionOutcome.Success());
+        SupportInboxView view = new SupportInboxView(presenter, displayTime());
+        harness.attach(view);
+        assertTrue(isCurrent(rows(view).get(0)), "precondition: the inbox shows its first thread");
+
+        click(rows(view).get(1));
+
+        assertFalse(isCurrent(rows(view).get(0)), "the row left must no longer be current");
+        assertTrue(isCurrent(rows(view).get(1)), "the row chosen must be current");
     }
 
     @Test
@@ -100,6 +118,14 @@ class ConversationA11yTest {
         String name = A11y.name(rows(view).get(1).getElement());
         assertTrue(Pattern.compile("(?i)\\bclosed\\b").matcher(name).find(),
             "a closed thread must say \"Closed\" in its row, not only be dimmed; the row is named \"" + name + "\"");
+        String open = A11y.name(rows(view).get(0).getElement());
+        assertFalse(Pattern.compile("(?i)\\bclosed\\b").matcher(open).find(),
+            "an open thread must not say \"Closed\"; its row is named \"" + open + "\"");
+    }
+
+    private static boolean isCurrent(MdConvRow row) {
+        String current = row.getElement().getAttribute("aria-current");
+        return current != null && !current.isBlank() && !"false".equals(current);
     }
 
     // ---- MdThread ----
@@ -175,15 +201,12 @@ class ConversationA11yTest {
 
     private void assertChoosingMovesFocusToHeading(Component view, String subject) {
         harness.attach(view);
-        int before = harness.focusTargets().size();
 
-        click(rows(view).get(1));
+        List<Element> focused = harness.focusCallsDuring(() -> click(rows(view).get(1)));
 
-        List<Element> all = harness.focusTargets();
-        List<Element> focused = all.subList(before, all.size());
-        assertTrue(focused.stream().anyMatch(t -> A11y.within(t, view.getElement())
-                && "heading".equals(A11y.role(t)) && A11y.text(t).contains(subject)),
-            "choosing a conversation must move focus to the heading of its detail, \"" + subject + "\", so the "
-                + "swap is announced; the focus calls were " + focused.stream().map(A11y::describe).toList());
+        assertTrue(ViewHarness.focusEndsOn(focused).filter(t -> A11y.within(t, view.getElement())
+                && "heading".equals(A11y.role(t)) && A11y.text(t).contains(subject)).isPresent(),
+            "choosing a conversation must end focus on the heading of its detail, \"" + subject + "\", so the "
+                + "swap is announced; the focus calls were, in order, " + focused.stream().map(A11y::describe).toList());
     }
 }

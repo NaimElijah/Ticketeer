@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ticketing.system.identity.domain.Admin;
 import com.ticketing.system.identity.application.port.out.AdminRepository;
+import com.ticketing.system.shared.exception.DuplicateUsernameException;
 
 /**
  * In-memory {@link AdminRepository}, used only by the in-memory test suite
@@ -30,8 +31,19 @@ public class MemoryAdminRepository implements AdminRepository {
     @Override
     public void unlock(Integer id) { locks.unlock(id); }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>No database constraint stands behind this adapter, so saves are serialised: the username check
+     * and the write are one step, as {@code uk_admins_username} makes them for the Jpa adapter.
+     */
     @Override
-    public void save(Admin admin) {
+    public synchronized void save(Admin admin) {
+        boolean usernameTakenByAnother = adminsById.values().stream()
+                .anyMatch(a -> a.getId() != admin.getId() && a.getUsername().equals(admin.getUsername()));
+        if (usernameTakenByAnother) {
+            throw new DuplicateUsernameException(admin.getUsername());
+        }
         adminsById.put(admin.getId(), admin);
     }
 

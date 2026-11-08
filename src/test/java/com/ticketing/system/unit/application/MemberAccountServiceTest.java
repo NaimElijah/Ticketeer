@@ -66,11 +66,11 @@ class MemberAccountServiceTest {
     private static OrderReceipt memberReceipt(int receiptId, int userId) {
         LocalDateTime t = LocalDateTime.of(2026, 6, 1, 12, 0);
         ReceiptLine line = new ReceiptLine(101, 150.00, 2, 1, "15", t);
-        return OrderReceipt.forMember(receiptId, userId, 150.00, List.of(line), LocalDateTime.now());
+        return OrderReceipt.forMember(receiptId, userId, 150.00, List.of(line), t);
     }
 
     @Test
-    void givenOwnReceipt_whenViewMyReceipt_thenRecordReturned() {
+    void GivenOwnReceipt_WhenViewMyReceipt_ThenRecordReturned() {
         OrderReceipt own = memberReceipt(RECEIPT_ID, USER_ID);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -88,17 +88,17 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenInvalidToken_whenViewMyReceipt_thenInvalidTokenThrown() {
+    void GivenInvalidToken_WhenViewMyReceipt_ThenInvalidTokenThrown() {
         Mockito.when(authenticationService.validateToken(INVALID_TOKEN)).thenReturn(false);
 
         assertThatThrownBy(() -> service.viewMyReceipt(INVALID_TOKEN, RECEIPT_ID))
-                .isInstanceOf(InvalidTokenException.class);
+                .isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByOrderReceiptId(Mockito.anyInt());
     }
 
     @Test
-    void givenMissingReceipt_whenViewMyReceipt_thenEntityNotFoundThrown() {
+    void GivenMissingReceipt_WhenViewMyReceipt_ThenEntityNotFoundThrown() {
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(Optional.empty());
@@ -108,7 +108,7 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenAnotherMembersReceipt_whenViewMyReceipt_thenUnauthorizedThrown() {
+    void GivenAnotherMembersReceipt_WhenViewMyReceipt_ThenUnauthorizedThrown() {
         OrderReceipt someoneElses = memberReceipt(RECEIPT_ID, OTHER_USER);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -122,10 +122,10 @@ class MemberAccountServiceTest {
     }
 
     @Test
-    void givenGuestReceipt_whenViewMyReceipt_thenUnauthorizedThrown() {
+    void GivenGuestReceipt_WhenViewMyReceipt_ThenUnauthorizedThrown() {
         LocalDateTime t = LocalDateTime.of(2026, 6, 1, 12, 0);
         ReceiptLine line = new ReceiptLine(101, 150.00, 2, 1, "15", t);
-        OrderReceipt guestReceipt = OrderReceipt.forGuest("g@example.com", "guest-sess-1", RECEIPT_ID, 150.00, List.of(line), LocalDateTime.now());
+        OrderReceipt guestReceipt = OrderReceipt.forGuest("g@example.com", "guest-sess-1", RECEIPT_ID, 150.00, List.of(line), t);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(Optional.of(guestReceipt));
@@ -159,13 +159,42 @@ class MemberAccountServiceTest {
                 .isSameAs(failure);
     }
 
-    // The session port answers false only for a null or blank token; viewMyReceipt then throws InvalidTokenException.
+    // The tickets and the catalog are read per receipt; either store failing must reach the caller, as the
+    // receipt store's does, rather than leave a record half-rendered.
+    @Test
+    void GivenTheTicketStoreFails_WhenViewMyHistory_ThenTheFailurePropagates() {
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("ticket store down");
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of(memberReceipt(RECEIPT_ID, USER_ID)));
+        Mockito.when(ticketRepository.findByOrderReceiptId(RECEIPT_ID)).thenThrow(failure);
+
+        Throwable thrown = catchThrowable(() -> service.viewMyHistory(memberAuth(VALID_TOKEN, USER_ID)));
+
+        assertThat(thrown).isSameAs(failure);
+    }
+
+    @Test
+    void GivenTheCatalogStoreFails_WhenViewMyHistory_ThenTheFailurePropagates() {
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("catalog store down");
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByHolderUserId(USER_ID)).thenReturn(List.of(memberReceipt(RECEIPT_ID, USER_ID)));
+        Mockito.when(ticketRepository.findByOrderReceiptId(RECEIPT_ID)).thenReturn(List.of());
+        Mockito.when(eventDisplayPort.describeEvent(Mockito.anyInt())).thenThrow(failure);
+
+        Throwable thrown = catchThrowable(() -> service.viewMyHistory(memberAuth(VALID_TOKEN, USER_ID)));
+
+        assertThat(thrown).isSameAs(failure);
+    }
+
+    // The session port answers false only for a null or blank token; viewMyHistory then throws InvalidTokenException.
     @Test
     void GivenBlankToken_WhenViewMyHistory_ThenInvalidTokenThrown() {
         Mockito.when(authenticationService.validateToken("  ")).thenReturn(false);
 
         assertThatThrownBy(() -> service.viewMyHistory(memberAuth("  ", USER_ID)))
-                .isInstanceOf(InvalidTokenException.class);
+                .isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(Mockito.anyInt());
     }
@@ -241,7 +270,7 @@ class MemberAccountServiceTest {
     // As viewMyReceipt refuses a null token: a missing credential is an invalid one.
     @Test
     void GivenNullAuthToken_WhenViewMyHistory_ThenInvalidTokenThrown() {
-        assertThatThrownBy(() -> service.viewMyHistory(null)).isInstanceOf(InvalidTokenException.class);
+        assertThatThrownBy(() -> service.viewMyHistory(null)).isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(orderReceiptRepository, Mockito.never()).findByHolderUserId(Mockito.anyInt());
     }

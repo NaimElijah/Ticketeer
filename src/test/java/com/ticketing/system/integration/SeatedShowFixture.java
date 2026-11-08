@@ -115,6 +115,11 @@ final class SeatedShowFixture {
         return zone(show.ownerToken(), show.eventId()).getAvailableAmount();
     }
 
+    /** The show's one zone as its owner reads it, with its sold and reserved counts. */
+    InventoryZoneDTO zoneOf(Show show) {
+        return zone(show.ownerToken(), show.eventId());
+    }
+
     /** Registers a member from a fresh guest session; the name is made unique from {@code baseName}. */
     String register(String baseName) {
         String name = baseName + "-" + uniqueSuffix();

@@ -7,11 +7,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 import com.ticketing.system.sales.application.port.out.PaymentGateway;
@@ -38,8 +41,11 @@ import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.shared.exception.RefundGatewayUnreachableException;
 import com.ticketing.system.shared.exception.RefundOutcomeUnknownException;
+import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
 import com.ticketing.system.testutil.Tickets;
+
+import ch.qos.logback.classic.Level;
 
 /**
  * Unit tests for {@link EventCancellationRefundService}: the refund / ticket-flip / holder-notice flow
@@ -71,7 +77,7 @@ class EventCancellationRefundServiceTest {
         paymentGateway = mock(PaymentGateway.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new EventCancellationRefundService(orderReceiptRepository, ticketRepository, paymentGateway,
-                eventPublisher, TestTransactions.noOpManager());
+                eventPublisher, TestTransactions.recordingManager());
 
         when(orderReceiptRepository.findByEventId(EVENT_ID)).thenAnswer(inv -> List.copyOf(receipts));
         when(orderReceiptRepository.findByOrderReceiptId(anyInt())).thenAnswer(inv -> receipts.stream()
@@ -105,7 +111,7 @@ class EventCancellationRefundServiceTest {
             total += prices[i];
         }
         OrderReceipt receipt = OrderReceipt.forMember(receiptId, holderUserId, total, lines,
-                LocalDateTime.now(),
+                AT,
                 List.of(TransactionRecord.paymentCharge(chargeOf(receiptId), "test-gateway", total, "ILS", AT)));
         receipts.add(receipt);
         return receipt;
@@ -222,7 +228,7 @@ class EventCancellationRefundServiceTest {
         OrderReceipt receipt = OrderReceipt.forMember(1, 7, 100.0,
                 List.of(new ReceiptLine(10, 30.0, EVENT_ID, ZONE_ID, "A1", AT),
                         new ReceiptLine(11, 70.0, OTHER_EVENT_ID, ZONE_ID, "B1", AT)),
-                LocalDateTime.now(),
+                AT,
                 List.of(TransactionRecord.paymentCharge(chargeOf(1), "test-gateway", 100.0, "ILS", AT)));
         receipts.add(receipt);
         Ticket cancelledEventTicket = new Ticket(EVENT_ID, ZONE_ID, 1, "A1", 30.0, 10, "BC10");
@@ -252,7 +258,7 @@ class EventCancellationRefundServiceTest {
     void GivenFreeTickets_WhenRefundCancelledEvent_ThenLinesAreRefundedWithoutAGatewayCall() {
         OrderReceipt receipt = OrderReceipt.forMember(1, 7, 0.0,
                 List.of(new ReceiptLine(10, 0.0, EVENT_ID, ZONE_ID, "A1", AT)),
-                LocalDateTime.now());
+                AT);
         receipts.add(receipt);
 
         refundCancelledEvent();
@@ -265,7 +271,7 @@ class EventCancellationRefundServiceTest {
     void GivenPaidReceiptWithoutACharge_WhenRefundCancelledEvent_ThenRefundFailsAndNothingIsClaimed() {
         OrderReceipt receipt = OrderReceipt.forMember(1, 7, 50.0,
                 List.of(new ReceiptLine(10, 50.0, EVENT_ID, ZONE_ID, "A1", AT)),
-                LocalDateTime.now());
+                AT);
         receipts.add(receipt);
 
         assertThrows(RefundFailedException.class, this::refundCancelledEvent);
@@ -343,7 +349,126 @@ class EventCancellationRefundServiceTest {
         verify(paymentGateway, never()).refund(eq(chargeOf(2)), anyDouble());
     }
 
+    // ADR-001: a declined refund moved no money, so its claim is released for a retry; when the release itself
+    // fails, the lines stay PENDING for manual recovery, and no later run refunds them.
+    @Test
+    void GivenADeclinedRefundWhoseClaimCannotBeReleased_WhenRefundCancelledEvent_ThenTheLinesStayPendingAndAnErrorNamesTheReceipt() {
+        OrderReceipt receipt = paidReceipt(1, 7, 50.0);
+        when(paymentGateway.refund(eq(chargeOf(1)), anyDouble())).thenThrow(new RefundFailedException(1, "declined"));
+        DataAccessResourceFailureException storeDown = new DataAccessResourceFailureException("database unreachable");
+        // The claim's lock succeeds, the release's fails, and later runs' succeed.
+        doNothing().doThrow(storeDown).doNothing().when(orderReceiptRepository).lockForUpdate(1);
+
+        try (LogCapture logs = LogCapture.of(EventCancellationRefundService.class)) {
+            RefundFailedException failed = assertThrows(RefundFailedException.class, this::refundCancelledEvent);
+
+            assertTrue(failed.getMessage().contains("still pending: [1]"), failed.getMessage());
+            assertTrue(allLinesPending(receipt), "the claim could not be released, so it stays");
+            assertTrue(logs.messagesAt(Level.ERROR).stream()
+                    .anyMatch(message -> message.contains("receipt 1") && message.contains("could not be released")),
+                    "an operator must learn which receipt needs manual recovery: " + logs.messagesAt(Level.ERROR));
+            assertTrue(logs.throwableClassNamesAt(Level.ERROR).contains(storeDown.getClass().getName()));
+        }
+
+        assertThrows(RefundFailedException.class, this::refundCancelledEvent, "a later run reports it still pending");
+        verify(paymentGateway, times(1)).refund(anyInt(), anyDouble());
+        assertTrue(allLinesPending(receipt));
+    }
+
+    // When a claim cannot be released, the run still goes on or stops as the gateway's failure says: a decline is
+    // one receipt's, so the run carries on; an unreachable gateway is everyone's, so it stops.
+    @Test
+    void GivenADeclineWhoseClaimCannotBeReleased_WhenRefundCancelledEvent_ThenTheOtherReceiptsAreStillRefunded() {
+        OrderReceipt first = paidReceipt(1, 7, 50.0);
+        OrderReceipt second = paidReceipt(2, 8, 50.0);
+        when(paymentGateway.refund(eq(chargeOf(1)), anyDouble())).thenThrow(new RefundFailedException(1, "declined"));
+        // Receipt 1's claim locks it, then its release fails to.
+        doNothing().doThrow(new DataAccessResourceFailureException("database unreachable"))
+                .when(orderReceiptRepository).lockForUpdate(1);
+
+        RefundFailedException failed = assertThrows(RefundFailedException.class, this::refundCancelledEvent);
+
+        assertTrue(failed.getMessage().contains("still pending: [1]"), failed.getMessage());
+        assertTrue(allLinesPending(first));
+        assertTrue(allLinesRefunded(second), "a decline is one receipt's, so the run carries on");
+        verify(paymentGateway).refund(chargeOf(2), 50.0);
+    }
+
+    @Test
+    void GivenAnUnreachableGatewayWhoseClaimCannotBeReleased_WhenRefundCancelledEvent_ThenTheRunStops() {
+        OrderReceipt first = paidReceipt(1, 7, 50.0);
+        OrderReceipt second = paidReceipt(2, 8, 50.0);
+        when(paymentGateway.refund(eq(chargeOf(1)), anyDouble()))
+                .thenThrow(new RefundGatewayUnreachableException(chargeOf(1), "refused", new RuntimeException()));
+        // Receipt 1's claim locks it, then its release fails to.
+        doNothing().doThrow(new DataAccessResourceFailureException("database unreachable"))
+                .when(orderReceiptRepository).lockForUpdate(1);
+
+        assertThrows(RefundGatewayUnreachableException.class, this::refundCancelledEvent);
+
+        assertTrue(allLinesPending(first));
+        assertTrue(noLineTouched(second), "an unreachable gateway stops the run");
+        verify(paymentGateway, never()).refund(eq(chargeOf(2)), anyDouble());
+    }
+
+    @Test
+    void GivenAGuestsPaidReceipt_WhenRefundCancelledEvent_ThenItIsRefundedAndNoNoticeIsPublished() {
+        OrderReceipt guestReceipt = OrderReceipt.forGuest("guest@example.com", "guest-session", 1, 50.0,
+                List.of(new ReceiptLine(10, 50.0, EVENT_ID, ZONE_ID, "A10", AT)), AT,
+                List.of(TransactionRecord.paymentCharge(chargeOf(1), "test-gateway", 50.0, "ILS", AT)));
+        receipts.add(guestReceipt);
+        Ticket guestTicket = new Ticket(EVENT_ID, ZONE_ID, 1, "A10", 50.0, 10, "BC10");
+        tickets.add(guestTicket);
+
+        refundCancelledEvent();
+
+        verify(paymentGateway).refund(chargeOf(1), 50.0);
+        assertTrue(allLinesRefunded(guestReceipt));
+        assertEquals(TicketStatus.REFUNDED, guestTicket.getStatus());
+        verifyNoInteractions(eventPublisher);
+    }
+
     // ---- tickets --------------------------------------------------------
+
+    // A closed ticket (refunded or voided) is left as it is: it is not refunded or voided again. A ticket ends up
+    // closed on a line not yet refunded when a receipt's refund was declined and its claim released: the run
+    // carries on, and voidUnsoldTickets voids that receipt's unsold tickets before a later run claims it.
+    @Test
+    void GivenClosedTicketsOnTheReceipt_WhenRefundCancelledEvent_ThenTheyAreLeftAsTheyAre() {
+        OrderReceipt receipt = paidReceipt(1, 7, 50.0, 30.0, 20.0);
+        Ticket refunded = Tickets.storedAs(TicketStatus.REFUNDED, EVENT_ID, ZONE_ID, 1, "A11", 30.0, 11, "BC11");
+        Ticket voided = Tickets.storedAs(TicketStatus.VOIDED, EVENT_ID, ZONE_ID, 1, "A12", 20.0, 12, "BC12");
+        tickets.removeIf(t -> t.getId() == 11 || t.getId() == 12);
+        tickets.addAll(List.of(refunded, voided));
+
+        refundCancelledEvent();
+
+        assertTrue(allLinesRefunded(receipt));
+        assertEquals(TicketStatus.REFUNDED, refunded.getStatus());
+        assertEquals(TicketStatus.VOIDED, voided.getStatus());
+        verify(ticketRepository, never()).save(refunded);
+        verify(ticketRepository, never()).save(voided);
+    }
+
+    // A ticket never sold, such as one stored RESERVED, is voided with its receipt; only a sold ticket can be
+    // refunded. The run's last step also voids every unsold ticket of the event, so a second receipt the gateway
+    // cannot reach stops the run before it: the ticket is voided by its receipt's own step or not at all.
+    @Test
+    void GivenAReservedTicketOnTheReceipt_WhenRefundCancelledEvent_ThenItIsVoided() {
+        OrderReceipt receipt = paidReceipt(1, 7, 50.0, 30.0);
+        Ticket reserved = Tickets.storedAs(TicketStatus.RESERVED, EVENT_ID, ZONE_ID, 1, "A11", 30.0, 11, "BC11");
+        tickets.removeIf(t -> t.getId() == 11);
+        tickets.add(reserved);
+        paidReceipt(2, 8, 50.0);
+        when(paymentGateway.refund(eq(chargeOf(2)), anyDouble()))
+                .thenThrow(new RefundGatewayUnreachableException(chargeOf(2), "refused", new RuntimeException()));
+
+        assertThrows(RefundGatewayUnreachableException.class, this::refundCancelledEvent);
+
+        assertTrue(allLinesRefunded(receipt));
+        assertEquals(TicketStatus.VOIDED, reserved.getStatus());
+        assertEquals(TicketStatus.REFUNDED, tickets.get(0).getStatus());
+    }
 
     @Test
     void GivenIssuedTicket_WhenRefundCancelledEvent_ThenTicketRefunded() {

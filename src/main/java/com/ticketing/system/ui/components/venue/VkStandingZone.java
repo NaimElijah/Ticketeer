@@ -1,5 +1,6 @@
 package com.ticketing.system.ui.components.venue;
 
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 
@@ -37,7 +38,7 @@ public class VkStandingZone extends Div {
 
         Div meta = new Div();
         meta.addClassName("vk-standing-meta");
-        meta.setText(String.format("%,d sold · %,d held · %,d left", sold, reserved, left));
+        meta.setText(String.format(DisplayLocale.PAGE, "%,d sold · %,d held · %,d left", sold, reserved, left));
 
         add(head, bar, meta);
     }

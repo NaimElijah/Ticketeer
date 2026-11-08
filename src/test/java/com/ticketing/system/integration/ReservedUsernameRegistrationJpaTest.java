@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
@@ -33,6 +34,7 @@ import com.ticketing.system.shared.exception.ReservedUsernameException;
         "identity.reserved-usernames=Box.Office, support",
         "platform.admin.username=Root.Admin"})
 @ActiveProfiles("test")
+@DirtiesContext // its properties give this class a context no other class reuses
 class ReservedUsernameRegistrationJpaTest {
 
     private static final String PASSWORD = "Password1";

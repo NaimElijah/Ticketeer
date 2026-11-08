@@ -1,6 +1,7 @@
 package com.ticketing.system.unit.infrastructure.persistence.EventPersistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,16 +10,26 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import com.ticketing.system.shared.dto.CatalogSearchFiltersDTO;
 import com.ticketing.system.catalog.domain.DiscountPolicy;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
+import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.catalog.domain.Seat;
+import com.ticketing.system.catalog.domain.SeatStatus;
+import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.catalog.domain.Location;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
@@ -26,9 +37,11 @@ import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.domain.VenueMap;
 import com.ticketing.system.catalog.domain.EventCategory;
+import com.ticketing.system.testutil.DefaultLocale;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
-// Contract tests every EventRepository implementation must satisfy. Future JPA-backed
-// adapter will subclass this with its own newRepository() factory; tests are reused.
+// Contract tests every EventRepository implementation must satisfy. The Memory and Jpa adapters each
+// subclass this with their own newRepository() factory; the tests are reused.
 public abstract class IEventRepositoryContractTest {
 
     protected abstract EventRepository newRepository();
@@ -40,6 +53,9 @@ public abstract class IEventRepositoryContractTest {
     private static final LocalDateTime FUTURE_START = LocalDateTime.of(2099, 6, 1, 18, 0);
     private static final LocalDateTime FUTURE_END = LocalDateTime.of(2099, 6, 1, 22, 0);
     private static final Location LOCATION = new Location("Belgium", "Brussels");
+    // The two companies the null-filter searches store events for.
+    private static final int NULL_FILTER_COMPANY_ID = 10;
+    private static final int NULL_FILTER_OTHER_COMPANY_ID = 20;
 
     @BeforeEach
     void setUp() {
@@ -80,18 +96,10 @@ public abstract class IEventRepositoryContractTest {
                 EventStatus.ON_SALE, venueMap, List.of(showDate), ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
     }
 
-    // === save ===
-
-    @Test
-    void WhenSave_GivenValidEvent_returnsTheSavedEvent() {
-        Event event = buildEvent(1, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT);
-        assertTrue(eventRepo.save(event));
-    }
-
     // === findById ===
 
     @Test
-    void givenSavedEvent_whenFindById_thenReturnsEvent() {
+    void GivenSavedEvent_WhenFindById_ThenReturnsEvent() {
         eventRepo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         Event found = eventRepo.findById(1);
@@ -124,6 +132,28 @@ public abstract class IEventRepositoryContractTest {
         assertThrows(EventNotFoundException.class, () -> inSaleTransaction(() -> eventRepo.findForSale(999)));
     }
 
+    // Inherited, so the Jpa subclass runs it outside a transaction and findById reads the zone and seat rows.
+    @Test
+    void GivenAnEventWithASeatedAndAStandingZone_WhenSavedAndFound_ThenBothZonesComeBackWithTheirSeatsAndCapacity() {
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(
+                new SeatedZone(1, "Stage", 80.0, List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0))),
+                new StandingZone(2, "Floor", 100, 50.0)));
+        eventRepo.save(new Event(1, "Seated Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0)));
+
+        VenueMap found = eventRepo.findById(1).getVenueMap();
+
+        SeatedZone seated = (SeatedZone) found.getInventoryZones().stream()
+                .filter(z -> z instanceof SeatedZone).findFirst().orElseThrow();
+        assertEquals(Map.of("A1", SeatStatus.AVAILABLE, "A2", SeatStatus.AVAILABLE),
+                seated.getSeats().stream().collect(Collectors.toMap(Seat::getLabel, Seat::getStatus)));
+        StandingZone standing = (StandingZone) found.getInventoryZones().stream()
+                .filter(z -> z instanceof StandingZone).findFirst().orElseThrow();
+        assertEquals("Floor", standing.getName());
+        assertEquals(100, standing.getCapacity());
+    }
+
     @Test
     void GivenEventInLondon_WhenSavedAndFound_ThenItsTimeZoneIsLondon() {
         eventRepo.save(buildEventInZone(1, ZoneId.of("Europe/London")));
@@ -131,10 +161,129 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(ZoneId.of("Europe/London"), eventRepo.findById(1).getTimeZone());
     }
 
+    // === save again: a loaded event, changed under its write lock ===
+    // The Memory adapter refuses the save without the lock (MemoryEventRepositoryTest); the Jpa adapter
+    // relies on @Version instead and needs none (JpaEventRepositoryContractTest).
+
+    @Test
+    void GivenASavedScheduledEvent_WhenLoadedChangedAndSavedUnderItsLock_ThenTheStoredEventHasTheChange() {
+        eventRepo.save(buildEvent(1, "Rock Night", 4.5, 10, EventStatus.SCHEDULED, EventCategory.CONCERT));
+
+        eventRepo.lockForUpdate(1);
+        try {
+            Event loaded = eventRepo.findById(1);
+            loaded.addPlacesToStandingZone(1, 20, 10);
+            loaded.transitionToOnSale();
+            eventRepo.save(loaded);
+        } finally {
+            eventRepo.unlock(1);
+        }
+
+        Event reloaded = eventRepo.findById(1);
+        assertEquals(EventStatus.ON_SALE, reloaded.getStatus());
+        assertEquals(List.of(120), standingCapacities(reloaded));
+        assertEquals(1, eventRepo.findAll().size(), "the event is updated, not stored a second time");
+    }
+
+    protected static List<Integer> standingCapacities(Event event) {
+        return event.getVenueMap().getInventoryZones().stream()
+                .map(z -> ((StandingZone) z).getCapacity()).toList();
+    }
+
+    // === delete: a CANCELED event is removed for good ===
+    // Under the event's write lock, which the Memory adapter requires (MemoryEventRepositoryTest) and the
+    // Jpa adapter ignores.
+
+    @Test
+    void GivenTwoSavedEvents_WhenOneIsDeletedUnderItsLock_ThenOnlyThatEventIsGone() {
+        eventRepo.save(buildEvent(1, "Gone", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "Kept", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
+
+        eventRepo.lockForUpdate(1);
+        try {
+            eventRepo.delete(1);
+        } finally {
+            eventRepo.unlock(1);
+        }
+
+        assertThrows(EventNotFoundException.class, () -> eventRepo.findById(1));
+        assertEquals(List.of(2), eventRepo.findAll().stream().map(Event::getId).toList());
+    }
+
+    @Test
+    void GivenNoSuchEvent_WhenDelete_ThenTheStoredEventsStay() {
+        eventRepo.save(buildEvent(1, "Kept", 4.5, 10, EventStatus.CANCELED, EventCategory.CONCERT));
+
+        eventRepo.lockForUpdate(999);
+        try {
+            eventRepo.delete(999);
+        } finally {
+            eventRepo.unlock(999);
+        }
+
+        assertEquals(List.of(1), eventRepo.findAll().stream().map(Event::getId).toList());
+    }
+
+    // === nextId / nextVenueMapId ===
+
+    @Test
+    void GivenRepository_WhenNextIdCalledTwice_ThenProducesDistinctIncreasingValues() {
+        int a = eventRepo.nextId();
+        int b = eventRepo.nextId();
+        assertTrue(a > 0, "an event id is positive: " + a);
+        assertTrue(b > a, "ids increase: " + a + " then " + b);
+    }
+
+    @Test
+    void GivenRepository_WhenNextVenueMapIdCalledTwice_ThenProducesDistinctIncreasingValues() {
+        int a = eventRepo.nextVenueMapId();
+        int b = eventRepo.nextVenueMapId();
+        assertTrue(a > 0, "a venue map id is positive: " + a);
+        assertTrue(b > a, "ids increase: " + a + " then " + b);
+    }
+
+    // === every enum constant is storable ===
+    // The Jpa tables hold status and category under check constraints that a migration must widen for
+    // each new constant (ADR-007). Inherited, so each save commits and a missing value fails here.
+
+    @ParameterizedTest
+    @EnumSource(EventStatus.class)
+    void GivenAnEventInEachStatus_WhenSaved_ThenItIsFoundByThatStatus(EventStatus status) {
+        eventRepo.save(buildEvent(1, "Status Show", 4.5, 10, status, EventCategory.CONCERT));
+
+        assertEquals(List.of(1), eventRepo.findByStatus(status).stream().map(Event::getId).toList());
+    }
+
+    @ParameterizedTest
+    @EnumSource(EventCategory.class)
+    void GivenAnEventInEachCategory_WhenSaved_ThenItIsFoundWithThatCategory(EventCategory category) {
+        eventRepo.save(buildEvent(1, "Category Show", 4.5, 10, EventStatus.ON_SALE, category));
+
+        assertEquals(category, eventRepo.findById(1).getCategory());
+    }
+
+    @Test
+    void GivenSeatsInEverySeatState_WhenSavedAndFound_ThenEachSeatKeepsItsState() {
+        VenueMap venueMap = new VenueMap(1, LOCATION, List.of(new SeatedZone(1, "Stage", 80.0,
+                List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0), new Seat("A3", 2, 0)))));
+        Event event = new Event(1, "Seated Show", 4.5, List.of("Artist A"), EventCategory.CONCERT, 10,
+                EventStatus.ON_SALE, venueMap, List.of(new ShowDate(FUTURE_START, FUTURE_END)),
+                ZoneId.of("Asia/Jerusalem"), new NoPurchasePolicy(), new DiscountPolicy(0));
+        event.reserveInventory(1, InventorySelection.seated(List.of("A2"), "order-held", FUTURE_START));
+        event.reserveInventory(1, InventorySelection.seated(List.of("A3"), "order-sold", FUTURE_START));
+        event.confirmInventorySale(1, InventorySelection.seated(List.of("A3"), "order-sold"));
+        eventRepo.save(event);
+
+        SeatedZone found = (SeatedZone) eventRepo.findById(1).getVenueMap().getInventoryZones().get(0);
+
+        assertEquals(Map.of("A1", SeatStatus.AVAILABLE, "A2", SeatStatus.RESERVED, "A3", SeatStatus.SOLD),
+                found.getSeats().stream().collect(Collectors.toMap(Seat::getLabel, Seat::getStatus)));
+    }
+
     // === findByCompanyId ===
 
     @Test
-    void givenEventsForMultipleCompanies_whenFindByCompanyId_thenReturnsOnlyMatchingCompanyEvents() {
+    void GivenEventsForMultipleCompanies_WhenFindByCompanyId_ThenReturnsOnlyMatchingCompanyEvents() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Event B", 3.8, 10, EventStatus.DRAFT, EventCategory.CONCERT));
         eventRepo.save(buildEvent(3, "Event C", 4.2, 20, EventStatus.ON_SALE, EventCategory.CONCERT));
@@ -146,7 +295,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenNoEventsForCompany_whenFindByCompanyId_thenReturnsEmptyList() {
+    void GivenNoEventsForCompany_WhenFindByCompanyId_ThenReturnsEmptyList() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.findByCompanyId(99);
@@ -157,7 +306,7 @@ public abstract class IEventRepositoryContractTest {
     // === findIdsByCompany ===
 
     @Test
-    void givenEventsForCompany_whenFindIdsByCompany_thenReturnsOnlyIdsForThatCompany() {
+    void GivenEventsForCompany_WhenFindIdsByCompany_ThenReturnsOnlyIdsForThatCompany() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Event B", 3.8, 10, EventStatus.DRAFT, EventCategory.CONCERT));
         eventRepo.save(buildEvent(3, "Event C", 4.2, 20, EventStatus.ON_SALE, EventCategory.CONCERT));
@@ -171,7 +320,7 @@ public abstract class IEventRepositoryContractTest {
     // === findActiveByCompany ===
 
     @Test
-    void givenMixedStatusEventsForCompany_whenFindActiveByCompany_thenReturnsOnlyOnSaleEventsForThatCompany() {
+    void GivenMixedStatusEventsForCompany_WhenFindActiveByCompany_ThenReturnsOnlyOnSaleEventsForThatCompany() {
         eventRepo.save(buildEvent(1, "On Sale", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Draft", 3.8, 10, EventStatus.DRAFT, EventCategory.CONCERT));
         eventRepo.save(buildEvent(3, "On Sale Other Company", 4.2, 20, EventStatus.ON_SALE, EventCategory.CONCERT));
@@ -185,7 +334,7 @@ public abstract class IEventRepositoryContractTest {
     // === findByStatus ===
 
     @Test
-    void givenEventsWithDifferentStatuses_whenFindByStatus_thenReturnsOnlyMatchingStatusEvents() {
+    void GivenEventsWithDifferentStatuses_WhenFindByStatus_ThenReturnsOnlyMatchingStatusEvents() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Event B", 3.8, 10, EventStatus.DRAFT, EventCategory.CONCERT));
         eventRepo.save(buildEvent(3, "Event C", 4.2, 20, EventStatus.ON_SALE, EventCategory.CONCERT));
@@ -199,7 +348,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenNoEventsMatchingStatus_whenFindByStatus_thenReturnsEmptyList() {
+    void GivenNoEventsMatchingStatus_WhenFindByStatus_ThenReturnsEmptyList() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.findByStatus(EventStatus.CANCELED);
@@ -210,7 +359,7 @@ public abstract class IEventRepositoryContractTest {
     // === findAll (#372 boot-time integrity scan) ===
 
     @Test
-    void givenEventsAcrossCompaniesAndStatuses_whenFindAll_thenReturnsEveryEvent() {
+    void GivenEventsAcrossCompaniesAndStatuses_WhenFindAll_ThenReturnsEveryEvent() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Event B", 3.8, 20, EventStatus.DRAFT, EventCategory.CONCERT));
 
@@ -222,14 +371,14 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenNoEvents_whenFindAll_thenReturnsEmptyList() {
+    void GivenNoEvents_WhenFindAll_ThenReturnsEmptyList() {
         assertTrue(eventRepo.findAll().isEmpty());
     }
 
     // === searchAll — eventName ===
 
     @Test
-    void givenMatchingEventName_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenMatchingEventName_WhenSearchAll_ThenReturnsMatchingEvent() {
         eventRepo.save(buildEvent(1, "Jazz Festival", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Rock Night", 3.8, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
@@ -241,7 +390,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenNonMatchingEventName_whensearchAll_thenReturnsEmpty() {
+    void GivenNonMatchingEventName_WhenSearchAll_ThenReturnsEmpty() {
         eventRepo.save(buildEvent(1, "Jazz Festival", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
@@ -253,7 +402,7 @@ public abstract class IEventRepositoryContractTest {
     // === searchAll — artistName ===
 
     @Test
-    void givenMatchingArtistName_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenMatchingArtistName_WhenSearchAll_ThenReturnsMatchingEvent() {
         VenueMap vm = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
         Event event = new Event(1, "Concert", 4.5, List.of("John Doe", "Jane Smith"),
                 EventCategory.CONCERT, 10, EventStatus.ON_SALE, vm,
@@ -272,7 +421,7 @@ public abstract class IEventRepositoryContractTest {
     // === searchAll — category ===
 
     @Test
-    void givenMatchingCategory_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenMatchingCategory_WhenSearchAll_ThenReturnsMatchingEvent() {
         eventRepo.save(buildEvent(1, "Hamlet", 4.5, 10, EventStatus.ON_SALE, EventCategory.MUSIC)); // MUSIC
         VenueMap vm = new VenueMap(2, LOCATION, List.of(new StandingZone(1, "Stalls", 100, 60)));
         Event theaterEvent = new Event(2, "Hamlet2", 4.5, List.of("Actor B"),
@@ -290,7 +439,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenUnknownCategory_whensearchAll_thenReturnsEmpty() {
+    void GivenUnknownCategory_WhenSearchAll_ThenReturnsEmpty() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
@@ -302,7 +451,7 @@ public abstract class IEventRepositoryContractTest {
     // === searchAll — keywords ===
 
     @Test
-    void givenMatchingKeywordInEventName_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenMatchingKeywordInEventName_WhenSearchAll_ThenReturnsMatchingEvent() {
         eventRepo.save(buildEvent(1, "Summer Festival", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
@@ -314,7 +463,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenMatchingKeywordInArtistName_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenMatchingKeywordInArtistName_WhenSearchAll_ThenReturnsMatchingEvent() {
         VenueMap vm = new VenueMap(1, LOCATION, List.of(new StandingZone(1, "Floor", 100, 50)));
         Event event = new Event(1, "Night Out", 4.5, List.of("Coldplay"),
                 EventCategory.CONCERT, 10, EventStatus.ON_SALE, vm,
@@ -332,7 +481,7 @@ public abstract class IEventRepositoryContractTest {
     // === searchAll — date range ===
 
     @Test
-    void givenEventWithShowDateInsideRange_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenEventWithShowDateInsideRange_WhenSearchAll_ThenReturnsMatchingEvent() {
         eventRepo.save(buildEvent(1, "Future Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT)); // show date:
                                                                                                            // 2099-06-01
 
@@ -380,7 +529,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenEventWithShowDateOutsideRange_whensearchAll_thenReturnsEmpty() {
+    void GivenEventWithShowDateOutsideRange_WhenSearchAll_ThenReturnsEmpty() {
         eventRepo.save(buildEvent(1, "Future Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT)); // show date:
                                                                                                            // 2099-06-01
 
@@ -395,7 +544,7 @@ public abstract class IEventRepositoryContractTest {
     // === searchAll — price range ===
 
     @Test
-    void givenEventWithZoneInPriceRange_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenEventWithZoneInPriceRange_WhenSearchAll_ThenReturnsMatchingEvent() {
         eventRepo.save(buildEvent(1, "Affordable Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT)); // zone
                                                                                                                // price
                                                                                                                // = 50
@@ -407,7 +556,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenEventWithZonePriceBelowMinPrice_whensearchAll_thenReturnsEmpty() {
+    void GivenEventWithZonePriceBelowMinPrice_WhenSearchAll_ThenReturnsEmpty() {
         eventRepo.save(buildEvent(1, "Cheap Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT)); // zone price
                                                                                                           // = 50
 
@@ -418,7 +567,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenMultiZoneEvent_whenCheapestPriceInRange_thenMatches() {
+    void GivenMultiZoneEvent_WhenCheapestPriceInRange_ThenMatches() {
         eventRepo.save(buildMultiZoneEvent(1)); // zones 30 / 50 / 100, cheapest = 30
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
@@ -428,7 +577,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenMultiZoneEvent_whenCheapestPriceBelowMin_thenExcludedEvenIfPricierZonesFit() {
+    void GivenMultiZoneEvent_WhenCheapestPriceBelowMin_ThenExcludedEvenIfPricierZonesFit() {
         eventRepo.save(buildMultiZoneEvent(1)); // cheapest = 30
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
@@ -438,22 +587,60 @@ public abstract class IEventRepositoryContractTest {
         assertTrue(result.isEmpty());
     }
 
+    @Test
+    void GivenCheapestPriceAboveMaxPrice_WhenSearchAll_ThenReturnsEmpty() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Pricey Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, 40.0, null, null, null, null, null, null, null));
+
+        assertTrue(result.isEmpty(), "an event whose cheapest ticket costs more than the maximum must not match");
+    }
+
+    // Both price bounds are inclusive: a buyer filtering "up to 50" or "from 50" sees an event at 50.
+    @Test
+    void GivenCheapestPriceEqualToMaxPrice_WhenSearchAll_ThenMatches() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Fifty Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, 50.0, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), result.stream().map(Event::getId).toList(),
+                "an event whose cheapest ticket costs exactly the maximum must match");
+    }
+
+    @Test
+    void GivenCheapestPriceEqualToMinPrice_WhenSearchAll_ThenMatches() {
+        // zone price = 50
+        eventRepo.save(buildEvent(1, "Fifty Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, 50.0, null, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), result.stream().map(Event::getId).toList(),
+                "an event whose cheapest ticket costs exactly the minimum must match");
+    }
+
     // === searchAll — event rating range ===
 
     @Test
-    void givenEventRatingAtOrAboveMin_whensearchAll_thenReturnsMatchingEvent() {
+    void GivenEventRatingAtOrAboveMin_WhenSearchAll_ThenReturnsMatchingEvent() {
         eventRepo.save(buildEvent(1, "Top Rated", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Low Rated", 2.0, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(3, "Rated At The Min", 4.0, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 null, null, null, null, null, null, null, null, null, 4.0, null, null, null));
 
-        assertEquals(1, result.size());
-        assertEquals("Top Rated", result.get(0).getName());
+        // The minimum is inclusive: an event rated exactly at it matches.
+        assertEquals(Set.of("Top Rated", "Rated At The Min"),
+                result.stream().map(Event::getName).collect(Collectors.toSet()));
     }
 
     @Test
-    void givenEventRatingAboveMax_whensearchAll_thenReturnsEmpty() {
+    void GivenEventRatingAboveMax_WhenSearchAll_ThenReturnsEmpty() {
         eventRepo.save(buildEvent(1, "Top Rated", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
 
         List<Event> result = eventRepo.searchAll(new CatalogSearchFiltersDTO(
@@ -463,7 +650,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenEventRatingWithinRange_whensearchAll_thenReturnsOnlyEventInBand() {
+    void GivenEventRatingWithinRange_WhenSearchAll_ThenReturnsOnlyEventInBand() {
         eventRepo.save(buildEvent(1, "Mid Rated", 3.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Low Rated", 1.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(3, "Top Rated", 5.0, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
@@ -478,7 +665,7 @@ public abstract class IEventRepositoryContractTest {
     // === searchAll — all-null filters ===
 
     @Test
-    void givenAllNullFilters_whensearchAll_thenReturnsAllEvents() {
+    void GivenAllNullFilters_WhenSearchAll_ThenReturnsAllEvents() {
         eventRepo.save(buildEvent(1, "Event A", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Event B", 3.8, 10, EventStatus.DRAFT, EventCategory.CONCERT));
 
@@ -488,10 +675,36 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(2, result.size());
     }
 
+    // === searchONSALE — the buyer's catalogue search (UC-7) ===
+
+    @Test
+    void GivenAnEventInEachStatus_WhenSearchONSALEWithNoFilters_ThenOnlyTheOnSaleEventIsReturned() {
+        EventStatus[] statuses = EventStatus.values();
+        for (int i = 0; i < statuses.length; i++) {
+            eventRepo.save(buildEvent(i + 1, statuses[i].name() + " Show", 4.5, 10, statuses[i], EventCategory.CONCERT));
+        }
+
+        List<Event> found = eventRepo.searchONSALE(CatalogSearchFiltersDTO.empty());
+
+        assertEquals(List.of(EventStatus.ON_SALE.name() + " Show"), found.stream().map(Event::getName).toList());
+    }
+
+    @Test
+    void GivenOnSaleAndDraftEventsOfOneName_WhenSearchONSALEByThatName_ThenOnlyTheMatchingOnSaleEventIsReturned() {
+        eventRepo.save(buildEvent(1, "Jazz Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(2, "Jazz Brunch", 4.5, 10, EventStatus.DRAFT, EventCategory.CONCERT));
+        eventRepo.save(buildEvent(3, "Rock Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
+
+        List<Event> found = eventRepo.searchONSALE(new CatalogSearchFiltersDTO(
+                "Jazz", null, null, null, null, null, null, null, null, null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
     // === searchByCompanyAll — company scope (all statuses) + filters ===
 
     @Test
-    void givenEventsForMultipleCompanies_whenSearchByCompanyAll_thenReturnsOnlyThatCompanyAllStatuses() {
+    void GivenEventsForMultipleCompanies_WhenSearchByCompanyAll_ThenReturnsOnlyThatCompanyAllStatuses() {
         eventRepo.save(buildEvent(1, "Draft One", 4.5, 10, EventStatus.DRAFT, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Live One", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(3, "Other Co", 4.5, 20, EventStatus.ON_SALE, EventCategory.CONCERT));
@@ -503,7 +716,7 @@ public abstract class IEventRepositoryContractTest {
     }
 
     @Test
-    void givenCompanyEvents_whenSearchByCompanyAllWithNameFilter_thenFiltersWithinThatCompany() {
+    void GivenCompanyEvents_WhenSearchByCompanyAllWithNameFilter_ThenFiltersWithinThatCompany() {
         eventRepo.save(buildEvent(1, "Jazz Night", 4.5, 10, EventStatus.DRAFT, EventCategory.CONCERT));
         eventRepo.save(buildEvent(2, "Rock Show", 4.5, 10, EventStatus.ON_SALE, EventCategory.CONCERT));
         eventRepo.save(buildEvent(3, "Jazz Night", 4.5, 20, EventStatus.ON_SALE, EventCategory.CONCERT));
@@ -513,6 +726,51 @@ public abstract class IEventRepositoryContractTest {
 
         assertEquals(1, result.size());
         assertEquals(1, result.get(0).getId());
+    }
+
+    // ---- a null filter is no filter ----
+    // Each search takes a null filter as CatalogSearchFiltersDTO.empty(), as OrderReceiptRepository.findGlobal
+    // does: the same events come back, not an exception.
+
+    @Test
+    void GivenEventsInEachStatusForTwoCompanies_WhenSearchAllWithANullFilter_ThenReturnsWhatTheEmptyFilterReturns() {
+        saveAnEventInEachStatusForEachCompany();
+
+        assertSameEvents(eventRepo.searchAll(CatalogSearchFiltersDTO.empty()), eventRepo.searchAll(null));
+    }
+
+    @Test
+    void GivenEventsInEachStatusForTwoCompanies_WhenSearchONSALEWithANullFilter_ThenReturnsWhatTheEmptyFilterReturns() {
+        saveAnEventInEachStatusForEachCompany();
+
+        assertSameEvents(eventRepo.searchONSALE(CatalogSearchFiltersDTO.empty()), eventRepo.searchONSALE(null));
+    }
+
+    @Test
+    void GivenEventsInEachStatusForTwoCompanies_WhenSearchByCompanyAllWithANullFilter_ThenReturnsWhatTheEmptyFilterReturns() {
+        saveAnEventInEachStatusForEachCompany();
+
+        assertSameEvents(eventRepo.searchByCompanyAll(NULL_FILTER_COMPANY_ID, CatalogSearchFiltersDTO.empty()),
+                eventRepo.searchByCompanyAll(NULL_FILTER_COMPANY_ID, null));
+    }
+
+    private void saveAnEventInEachStatusForEachCompany() {
+        EventStatus[] statuses = EventStatus.values();
+        for (int i = 0; i < statuses.length; i++) {
+            eventRepo.save(buildEvent(i + 1, statuses[i].name() + " Show", 4.5, NULL_FILTER_COMPANY_ID,
+                    statuses[i], EventCategory.CONCERT));
+            eventRepo.save(buildEvent(statuses.length + i + 1, statuses[i].name() + " Other Show", 4.5,
+                    NULL_FILTER_OTHER_COMPANY_ID, statuses[i], EventCategory.CONCERT));
+        }
+    }
+
+    private static void assertSameEvents(List<Event> withTheEmptyFilter, List<Event> withANullFilter) {
+        assertFalse(withTheEmptyFilter.isEmpty(), "the empty filter must find some of the stored events");
+        assertEquals(idsOf(withTheEmptyFilter), idsOf(withANullFilter));
+    }
+
+    private static Set<Integer> idsOf(List<Event> events) {
+        return events.stream().map(Event::getId).collect(Collectors.toSet());
     }
 
     // ---- search terms match as literal text, not as LIKE patterns (#187) ----
@@ -568,6 +826,31 @@ public abstract class IEventRepositoryContractTest {
         assertEquals(List.of(1), found.stream().map(Event::getId).toList());
     }
 
+    // The location term matches the country as well as the city.
+    @Test
+    void GivenEventsInTwoCountries_WhenSearchingByACountryTerm_ThenOnlyTheEventInThatCountryMatches() {
+        eventRepo.save(eventWithArtistAt(1, "Artist A", new Location("France", "Paris")));
+        eventRepo.save(eventWithArtistAt(2, "Artist A", new Location("Belgium", "Brussels")));
+
+        List<Event> found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null, null, null, "fRANce", null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
+    // II.2.3.a: the buyer's search of all events, searchONSALE, narrows by location; an event in another city
+    // of the same country is left out.
+    @Test
+    void GivenEventInAnotherCity_WhenSearchONSALEByLocation_ThenExcluded() {
+        eventRepo.save(eventWithArtistAt(1, "Artist A", new Location("France", "Paris")));
+        eventRepo.save(eventWithArtistAt(2, "Artist A", new Location("France", "Lyon")));
+
+        List<Event> found = eventRepo.searchONSALE(new CatalogSearchFiltersDTO(
+                null, null, null, null, null, null, null, null, "Paris", null, null, null, null));
+
+        assertEquals(List.of(1), found.stream().map(Event::getId).toList());
+    }
+
     private Event eventWithArtistAt(int id, String artist, Location location) {
         VenueMap venueMap = new VenueMap(id, location, List.of(new StandingZone(1, "Floor", 100, 50)));
         return new Event(id, "Concert " + id, 4.5, List.of(artist), EventCategory.CONCERT, 10, EventStatus.ON_SALE,
@@ -580,15 +863,9 @@ public abstract class IEventRepositoryContractTest {
     void GivenATurkishDefaultLocale_WhenSearchingByALowercaseCategory_ThenOnlyThatCategoryMatches() {
         eventRepo.save(buildEvent(1, "Jazz Night", 4.5, 10, EventStatus.ON_SALE, EventCategory.MUSIC));
         eventRepo.save(buildEvent(2, "Hamlet", 4.5, 10, EventStatus.ON_SALE, EventCategory.THEATER));
-        java.util.Locale defaultLocale = java.util.Locale.getDefault();
-        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
-        List<Event> found;
-        try {
-            found = eventRepo.searchAll(new CatalogSearchFiltersDTO(
-                    null, null, "music", null, null, null, null, null, null, null, null, null, null));
-        } finally {
-            java.util.Locale.setDefault(defaultLocale);
-        }
+        List<Event> found = DefaultLocale.callUnder(java.util.Locale.forLanguageTag("tr-TR"),
+                () -> eventRepo.searchAll(new CatalogSearchFiltersDTO(
+                        null, null, "music", null, null, null, null, null, null, null, null, null, null)));
 
         assertEquals(List.of(1), found.stream().map(Event::getId).toList());
     }
@@ -597,5 +874,31 @@ public abstract class IEventRepositoryContractTest {
         return eventRepo.searchAll(new CatalogSearchFiltersDTO(
                 eventName, null, null, null, null, null, null, null, null, null, null, null, null))
                 .stream().map(Event::getName).toList();
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        eventRepo.lockForUpdate(1);
+        eventRepo.lockForUpdate(1);
+        eventRepo.unlock(1);
+        eventRepo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(eventRepo, 1);
+    }
+
+    // The buyer lock is shared and reentrant too; once released, a lifecycle write can take the write lock.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenABuyerLockTakenTwiceAndReleasedTwice_WhenAnotherThreadTakesTheWriteLock_ThenItGetsIt() throws Exception {
+        eventRepo.lockForBuyerOperation(1);
+        eventRepo.lockForBuyerOperation(1);
+        eventRepo.unlockBuyerOperation(1);
+        eventRepo.unlockBuyerOperation(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(eventRepo, 1);
     }
 }

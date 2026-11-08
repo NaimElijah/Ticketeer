@@ -48,11 +48,13 @@ class AdminSignInLinksTest {
         ViewHarness.signInAdmin();
         SignOutFlow signOutFlow = mock(SignOutFlow.class);
         PlatformAdminLayout layout = new PlatformAdminLayout(signOutFlow, mock(NotificationBellPresenter.class));
+        harness.attach(layout);
         LkMenu.Item signOut = find(layout, LkMenu.Item.class).stream()
             .filter(item -> item.getElement().getTextRecursively().contains("Sign Out"))
             .findFirst()
             .orElseThrow(() -> new AssertionError("the admin menu has no Sign Out"));
 
+        ViewHarness.openPopoverHolding(signOut.getElement());
         click(signOut);
 
         verify(signOutFlow).execute();

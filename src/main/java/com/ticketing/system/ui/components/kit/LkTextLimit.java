@@ -3,6 +3,7 @@ package com.ticketing.system.ui.components.kit;
 import com.ticketing.system.shared.domain.TextLimits;
 import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.textfield.TextFieldBase;
+import com.vaadin.flow.data.binder.ValidationResult;
 import com.vaadin.flow.data.value.ValueChangeMode;
 
 /**
@@ -114,10 +115,13 @@ public final class LkTextLimit {
         field.setHelperText(limitText);
         if (flagged) {
             flagged = false;
-            field.setErrorMessage(null);
-            // Hand the verdict back to the field's own constraints, e.g. "required" on emptied text.
+            // Hand the verdict back to the field's own constraints, e.g. "required" on emptied text, with the words
+            // they give. The field's own validation ran first on this change and kept this limit's message, as one
+            // the view set, so dropping it alone would leave the field invalid and blank (#189).
             // A null context is what the field passes when it validates itself.
-            field.setInvalid(field.getDefaultValidator().apply(field.getValue(), null).isError());
+            ValidationResult verdict = field.getDefaultValidator().apply(field.getValue(), null);
+            field.setErrorMessage(verdict.isError() ? verdict.getErrorMessage() : null);
+            field.setInvalid(verdict.isError());
         }
     }
 

@@ -3,7 +3,7 @@
 Spring Modulith–generated documentation of the platform's bounded-context modules.
 
 The files here are a **hand-copied snapshot, last refreshed on 2026-07-09**, so they can lag the
-code. `ModularityTests.writesModuleDocumentation()` writes fresh output on every test run, but into
+code. `ModularityTests.GivenTheApplicationModules_WhenWriteModuleDocumentation_ThenTheComponentDiagramNamesEveryModule()` writes fresh output on every test run, but into
 `target/spring-modulith-docs/`, not into this folder. To refresh the snapshot, copy the files over
 from `target/`. Making the generator write here directly is tracked in #43.
 
@@ -65,16 +65,30 @@ Both gates run on every build and are **green**:
   - no backend context, `reporting` included, depends on `ui`;
   - `ui` never depends on another module's `application.port.out` or `adapter` packages. That is a
     deny-list: other modules' `domain` types and `config` records stay open to it (#208);
+  - `ui` formats dates and numbers, and changes case, only in a locale it names: `DisplayLocale.PAGE`
+    for text a page shows, `Locale.ROOT` for machine text
+    ([ADR-027](../ADRs/ADR-027-pages-format-in-a-fixed-locale.md));
+  - every `@Route` class is in `ui`, since Vaadin routes only `vaadin.allowed-packages` and silently
+    skips a view outside it;
+  - every listener of a `shared/event` notice is an `AFTER_COMMIT` `@TransactionalEventListener` with
+    `fallbackExecution`, on `@Async("notificationExecutor")`
+    ([ADR-004](../ADRs/ADR-004-no-outbox-for-notifications.md));
+  - production code reads time only from the `Clock` bean
+    ([ADR-008](../ADRs/ADR-008-event-time-zones-and-one-clock.md),
+    [ADR-022](../ADRs/ADR-022-system-current-time-millis-is-a-system-clock-read.md)), and tests read it
+    from a clock, never the JVM's ([ADR-024](../ADRs/ADR-024-tests-read-time-from-a-clock-never-the-jvm.md));
   - each module depends only on the modules its entry in the test's module map allows, plus the one
     `identity → notifications` class pair (#53). The graph is drawn in the Architecture section of
     the root [README](../../README.md) and described in
     [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md); the reasoning is in
     [ADR-011](../ADRs/ADR-011-archunit-module-map-as-the-boundary-gate.md);
-  - **`bounded_contexts_are_acyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is
+  - every allowed cross-module exception still matches a production dependency, so a dependency that
+    has gone cannot come back unnoticed;
+  - **`GivenProductionCode_WhenScanned_ThenBoundedContextsAreAcyclic()`** proves the module graph is a DAG, via ArchUnit slices. That is
     the same cycle engine Spring Modulith uses, run *without* the open-module exemption, so it is the
     substantive cycle guarantee.
-- **Spring Modulith `verify()`** (`ModularityTests.verifiesModuleBoundaries`) — **enabled** and green.
-  The modules are declared *open*, so Modulith validates the module model and cycle-freedom at its
-  level; full type-level encapsulation (closed modules exposing only named-interface ports) is
+- **Spring Modulith `verify()`** (`ModularityTests.GivenTheOpenApplicationModules_WhenVerifyModuleBoundaries_ThenReportsNoViolations`) — **enabled** and green, but it
+  checks little: every module is declared *open*, an open module exposes all its types, and Modulith's
+  cycle check leaves open modules out, so the rules above are the gate. Full type-level encapsulation (closed modules exposing only named-interface ports) is
   documented future work — this former layered monolith crosses boundaries through services and
   domain types, not only ports, so port-only encapsulation is a larger follow-on effort.

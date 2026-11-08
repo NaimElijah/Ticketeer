@@ -20,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.CannotCreateTransactionException;
+import jakarta.persistence.PersistenceException;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 class LoginPresenterTest {
 
@@ -33,7 +35,7 @@ class LoginPresenterTest {
     }
 
     @Test
-    void success_returnsSuccessOutcomeWrappingTheLoginDTO() {
+    void GivenValidCredentials_WhenAttemptLogin_ThenReturnsSuccessOutcomeWrappingTheLoginDTO() {
         LoginDTO expected = new LoginDTO(
             new AuthTokenDTO("jwt-token", 9_999_999_999L, 42, "adam"),
             null,
@@ -48,7 +50,7 @@ class LoginPresenterTest {
     }
 
     @Test
-    void success_forwardsAllThreeArgumentsToTheService() {
+    void GivenValidCredentials_WhenAttemptLogin_ThenForwardsAllThreeArgumentsToTheService() {
         when(authenticationService.login(any(LoginRequestDTO.class))).thenReturn(
             new LoginDTO(new AuthTokenDTO("t", 0L, 1, "u"), null, java.util.List.of())
         );
@@ -64,7 +66,7 @@ class LoginPresenterTest {
     }
 
     @Test
-    void authenticationFailed_returnsInvalidCredentials() {
+    void GivenAuthenticationFails_WhenAttemptLogin_ThenReturnsInvalidCredentials() {
         when(authenticationService.login(any())).thenThrow(new AuthenticationFailedException());
 
         LoginPresenter.Outcome outcome = presenter.attemptLogin("adam", "wrong", "guest-sid");
@@ -73,7 +75,7 @@ class LoginPresenterTest {
     }
 
     @Test
-    void guestSessionRequired_returnsGuestSessionMissingWithMessage() {
+    void GivenAGuestSessionIsRequired_WhenAttemptLogin_ThenReturnsGuestSessionMissingWithMessage() {
         when(authenticationService.login(any()))
             .thenThrow(new GuestSessionRequiredException("guest session expired"));
 
@@ -85,19 +87,19 @@ class LoginPresenterTest {
     }
 
     @Test
-    void unexpectedRuntime_returnsFailureWithMessage() {
+    void GivenAnIllegalStateException_WhenAttemptLogin_ThenFailureCarriesItsMessage() {
         when(authenticationService.login(any()))
-            .thenThrow(new IllegalStateException("database down"));
+            .thenThrow(new IllegalStateException("Sign-in is paused for maintenance"));
 
         LoginPresenter.Outcome outcome = presenter.attemptLogin("adam", "password123", "guest-sid");
 
         LoginPresenter.Outcome.Failure fail =
             assertInstanceOf(LoginPresenter.Outcome.Failure.class, outcome);
-        assertEquals("database down", fail.reason());
+        assertEquals("Sign-in is paused for maintenance", fail.reason());
     }
 
     @Test
-    void databaseUnavailable_returnsServiceUnavailable() {
+    void GivenTheDatabaseIsUnavailable_WhenAttemptLogin_ThenReturnsServiceUnavailable() {
         // A real DB outage surfaces as a connectivity exception (here, can't open a transaction)
         // — it must map to ServiceUnavailable, not the generic Failure shown for unexpected errors.
         when(authenticationService.login(any()))
@@ -106,5 +108,16 @@ class LoginPresenterTest {
         LoginPresenter.Outcome outcome = presenter.attemptLogin("adam", "password123", "guest-sid");
 
         assertInstanceOf(LoginPresenter.Outcome.ServiceUnavailable.class, outcome);
+    }
+
+    // ---- an internal failure reads as generic text, never as its own (#189) ----
+
+    @Test
+    void GivenAnInternalFailure_WhenAttemptLogin_ThenFailureCarriesTheGenericText() {
+        when(authenticationService.login(any()))
+            .thenThrow(new PersistenceException("could not execute statement [update sessions set kind=?]"));
+
+        assertEquals(new LoginPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.attemptLogin("adam", "password123", "guest-sid"));
     }
 }

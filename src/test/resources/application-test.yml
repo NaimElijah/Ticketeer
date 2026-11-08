@@ -10,11 +10,26 @@ spring:
   # No explicit dialect: Hibernate detects H2 here, and PostgreSQL when an *IT points the datasource
   # at a container (ADR-006). The schema comes from the Flyway migrations, as in every run (ADR-007).
 
-# JWT signing secret (test-only, never used in prod).
+# JWT signing secret (test-only, never used in prod). A JWT_SECRET variable in the shell still overrides it;
+# see the note at the end of this file.
 jwt:
   secret: test-only-secret-do-not-use-anywhere-else-must-be-at-least-256-bits-long
 
-# Session TTLs — test values keep absolute time short for fast tests.
+# The test profile's own session lengths. A variable in the shell can still override them; see the
+# note at the end of this file.
 session:
   member-ttl-minutes: 60
   guest-idle-timeout-minutes: 10
+
+# The hold on a reserved ticket, in minutes, that the suite assumes. Set here so the
+# TICKET_RESERVATION_DURATION variable that application.yml reads cannot reach a test-profile context.
+constants:
+  ticket-reservation-duration: 10
+
+# Spring binds an environment variable named after a property above any profile file, so such a variable in
+# the shell reaches the suite whatever this file says. Among them: JWT_SECRET and the two SESSION_* lengths
+# above; PLATFORM_ADMIN_USERNAME, PLATFORM_ADMIN_PASSWORD, PLATFORM_TIME_ZONE and AUTH_LOCKOUT_MAX_ATTEMPTS,
+# which this file leaves unpinned for that reason; and SPRING_DATASOURCE_URL with
+# SPRING_DATASOURCE_DRIVER_CLASS_NAME, which would point the suite at that database. A context built without
+# this profile also reads every variable application.yml names. Run tests from a shell that sets none of
+# them, until #261 keeps the shell out of the test JVM.

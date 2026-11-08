@@ -27,6 +27,12 @@ public class RegisterPresenter {
     /** The longest email registration accepts, so the form can cap its field at the same length. */
     public static final int MAX_EMAIL_LENGTH = AuthenticationService.MAX_EMAIL_LENGTH;
 
+    /** The youngest age registration accepts, so the form asks for the same range. */
+    public static final int MIN_AGE = AuthenticationService.MIN_AGE;
+
+    /** The oldest age registration accepts, so the form asks for the same range. */
+    public static final int MAX_AGE = AuthenticationService.MAX_AGE;
+
     private final AuthenticationService authenticationService;
 
     @Autowired

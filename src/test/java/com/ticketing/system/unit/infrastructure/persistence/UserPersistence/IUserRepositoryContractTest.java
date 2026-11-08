@@ -8,15 +8,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.ticketing.system.shared.exception.DuplicateEmailException;
 import com.ticketing.system.shared.exception.DuplicateUsernameException;
 import com.ticketing.system.shared.exception.UserNotFoundException;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
+import com.ticketing.system.testutil.RepositoryLockProbe;
 
 // Contract tests every UserRepository implementation must satisfy. Future JPA-backed
 // adapter will subclass this with its own newRepository() factory; tests are reused.
@@ -32,7 +36,7 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindByUsername_returnsTheSavedUser() {
+    void GivenSavedUser_WhenFindByUsername_ThenReturnsTheSavedUser() {
         int id = repo.nextId();
         User user = new User(id, "alice", "alice@example.com", "HASH",20);
         repo.save(user);
@@ -44,7 +48,7 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void save_thenFindByEmail_returnsTheSavedUser() {
+    void GivenSavedUser_WhenFindByEmail_ThenReturnsTheSavedUser() {
         int id = repo.nextId();
         User user = new User(id, "alice", "alice@example.com", "HASH",2);
         repo.save(user);
@@ -55,24 +59,47 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void findByUsername_returnsEmptyWhenMissing() {
+    void GivenNoSuchUser_WhenFindByUsername_ThenReturnsEmpty() {
         assertFalse(repo.findByUsername("ghost").isPresent());
     }
 
     @Test
-    void findByEmail_returnsEmptyWhenMissing() {
+    void GivenNoSuchUser_WhenFindByEmail_ThenReturnsEmpty() {
         assertFalse(repo.findByEmail("ghost@example.com").isPresent());
     }
 
+    // A null key matches no user, as it matches no admin, company or session: the lookups answer
+    // "none" rather than throw, with a user stored so an adapter that compares each one is exercised.
     @Test
-    void existsByUsername_falseWhenMissingTrueWhenSaved() {
+    void GivenASavedUser_WhenFindByUsernameNull_ThenReturnsEmpty() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.findByUsername(null).isPresent());
+    }
+
+    @Test
+    void GivenASavedUser_WhenFindByEmailNull_ThenReturnsEmpty() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.findByEmail(null).isPresent());
+    }
+
+    @Test
+    void GivenASavedUser_WhenExistsByUsernameNull_ThenFalse() {
+        repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH", 20));
+
+        assertFalse(repo.existsByUsername(null));
+    }
+
+    @Test
+    void GivenARepositoryBeforeAndAfterASave_WhenExistsByUsername_ThenFalseWhenMissingTrueWhenSaved() {
         assertFalse(repo.existsByUsername("alice"));
         repo.save(new User(repo.nextId(), "alice", "alice@example.com", "HASH",15));
         assertTrue(repo.existsByUsername("alice"));
     }
 
     @Test
-    void nextId_producesDistinctIncreasingValues() {
+    void GivenRepository_WhenNextIdCalledThreeTimes_ThenProducesDistinctIncreasingValues() {
         int a = repo.nextId();
         int b = repo.nextId();
         int c = repo.nextId();
@@ -83,7 +110,7 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void getUserById_returnsTheSavedUser() {
+    void GivenSavedUser_WhenGetUserById_ThenReturnsTheSavedUser() {
         int id = repo.nextId();
         User user = new User(id, "alice", "alice@example.com", "HASH",15);
         repo.save(user);
@@ -93,12 +120,28 @@ abstract class IUserRepositoryContractTest {
     }
 
     @Test
-    void getUserById_throwsWhenMissing() {
+    void GivenNoSuchUser_WhenGetUserById_ThenThrowsUserNotFound() {
         assertThrows(UserNotFoundException.class, () -> repo.getUserById(9999));
     }
 
+    // Backs the admin's broadcast to every member (II.6.3.2).
     @Test
-    void delete_removesTheUser() {
+    void GivenTwoSavedUsers_WhenFindAll_ThenReturnsBoth() {
+        int alice = repo.nextId();
+        repo.save(new User(alice, "alice", "alice@example.com", "HASH", 20));
+        int bob = repo.nextId();
+        repo.save(new User(bob, "bob", "bob@example.com", "HASH", 30));
+
+        assertEquals(Set.of(alice, bob), repo.findAll().stream().map(User::getUserId).collect(Collectors.toSet()));
+    }
+
+    @Test
+    void GivenNoUsers_WhenFindAll_ThenReturnsEmpty() {
+        assertTrue(repo.findAll().isEmpty());
+    }
+
+    @Test
+    void GivenSavedUser_WhenDelete_ThenRemovesTheUser() {
         int id = repo.nextId();
         repo.save(new User(id, "alice", "alice@example.com", "HASH",15));
         assertTrue(repo.existsByUsername("alice"));
@@ -140,5 +183,19 @@ abstract class IUserRepositoryContractTest {
 
         assertDoesNotThrow(() -> repo.save(alice), "saving a user again keeps its own username");
         assertTrue(repo.existsByUsername("alice"));
+    }
+
+    // IRepository's lock contract: reentrant, and free for another thread after as many unlocks as locks.
+    // The second lockForUpdate would hang a non-reentrant lock, hence the timeout on a separate thread.
+    // The Jpa adapter makes both calls no-ops (@Version guards its writes), so it passes trivially.
+    @Test
+    @Timeout(value = RepositoryLockProbe.TEST_TIMEOUT_SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void GivenALockTakenTwiceAndReleasedTwice_WhenAnotherThreadLocksTheSameId_ThenItGetsTheLock() throws Exception {
+        repo.lockForUpdate(1);
+        repo.lockForUpdate(1);
+        repo.unlock(1);
+        repo.unlock(1);
+
+        RepositoryLockProbe.assertAnotherThreadCanLock(repo, 1);
     }
 }

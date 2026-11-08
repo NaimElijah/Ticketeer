@@ -45,9 +45,11 @@ import lombok.extern.slf4j.Slf4j;
  * A gateway that declines, or that the request never reached, moved no money: the claim is released
  * so calling this again retries it. A decline is specific to one receipt, so the run carries on with
  * the others and reports every declined receipt at the end; an unreachable gateway stops the run.
- * When the gateway may have refunded without a usable answer, when a claim cannot be released, or when
- * a gateway refund cannot be recorded, the run stops and the lines stay PENDING; they are never
- * refunded twice, and that receipt needs manual recovery.
+ * When the gateway may have refunded without a usable answer, or when a gateway refund cannot be
+ * recorded, the run stops and the lines stay PENDING; they are never refunded twice, and that receipt
+ * needs manual recovery. A claim that cannot be released after a gateway failure also leaves its lines
+ * PENDING for manual recovery, logged at ERROR, but the run then carries on or stops as that failure
+ * would: on after a decline, stopped by an unreachable gateway.
  */
 @Service
 @Slf4j
@@ -95,8 +97,10 @@ public class EventCancellationRefundService {
      *                                            and calling this again resumes with the rest
      * @throws RefundFailedException              naming every receipt whose refund was declined, that
      *                                            has no payment charge, or whose refund is still pending
-     *                                            under another run's claim, after the others were
-     *                                            refunded; calling this again retries the declined ones
+     *                                            (under another run's claim, or a claim of this run that
+     *                                            could not be released), after the others were refunded;
+     *                                            calling this again retries the declined ones whose claim
+     *                                            was released
      */
     public void refundCancelledEvent(int eventId, String eventName) {
         Set<Integer> notifiedHolders = new HashSet<>();
@@ -118,9 +122,9 @@ public class EventCancellationRefundService {
         }
         voidUnsoldTickets(eventId);
 
-        // Every claim this run made is resolved by now, so a PENDING line left on the event belongs to
-        // another run still in flight, or to a claim a crash stranded. Either way the event is not fully
-        // refunded, and the owner must not be told it is.
+        // A PENDING line left on the event now belongs to another run still in flight, to a claim of this
+        // run whose release failed (logged at ERROR above), or to a claim a crash stranded. Either way the
+        // event is not fully refunded, and the owner must not be told it is.
         List<Integer> pendingReceiptIds = orderReceiptRepository.findByEventId(eventId).stream()
                 .filter(receipt -> receipt.hasPendingRefundFor(eventId))
                 .map(OrderReceipt::getId)

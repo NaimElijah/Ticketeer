@@ -7,6 +7,7 @@ import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -18,6 +19,7 @@ import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -58,6 +60,7 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
         this.presenter = presenter;
         this.displayTime = displayTime;
         reply.setRequired(true);
+        LkFieldRules.sayWhenEmpty(reply, WRITE_RESPONSE);
         LkTextLimit.apply(reply);
         title("Respond to Complaint");
         add(content);
@@ -156,6 +159,6 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
 
     private static String humanizeStatus(String status) {
         if (status == null || status.isEmpty()) return "";
-        return status.charAt(0) + status.substring(1).toLowerCase();
+        return status.charAt(0) + status.substring(1).toLowerCase(DisplayLocale.PAGE);
     }
 }

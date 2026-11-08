@@ -30,8 +30,12 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.AdminSendMessagesPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
+import jakarta.persistence.PersistenceException;
 
 class AdminSendMessagesPresenterTest {
+
+    private static final LocalDateTime SENT_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private static final String TOKEN = "jwt-token";
 
@@ -50,15 +54,15 @@ class AdminSendMessagesPresenterTest {
     private static ConversationDTO outreach(String id, int memberId, String subject, String body) {
         return new ConversationDTO(
             id, "DIRECT", "OPEN", 1, "ADMIN", memberId, "MEMBER",
-            subject, LocalDateTime.now(), LocalDateTime.now(), 0,
-            List.of(new MessageDTO("m-" + id, 1, "ADMIN", body, LocalDateTime.now(), false)),
+            subject, SENT_AT, SENT_AT, 0,
+            List.of(new MessageDTO("m-" + id, 1, "ADMIN", body, SENT_AT, false)),
             "TicketHub Support", "member" + memberId);
     }
 
     // -- send -----------------------------------------------------------------
 
     @Test
-    void send_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSend_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminSendMessagesPresenter.ActionOutcome outcome =
             presenter.send(null, "S", "B", List.of(1), false, false);
 
@@ -67,7 +71,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_explicitRecipients_passesIds_andReturnsRecipientCount() {
+    void GivenExplicitRecipients_WhenSend_ThenPassesIdsAndReturnsRecipientCount() {
         when(messaging.sendOutreach(eq(TOKEN), any())).thenReturn(new OutreachResultDTO(2, "conv-1"));
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
@@ -79,13 +83,12 @@ class AdminSendMessagesPresenterTest {
 
         ArgumentCaptor<OutreachRequestDTO> captor = ArgumentCaptor.forClass(OutreachRequestDTO.class);
         verify(messaging).sendOutreach(eq(TOKEN), captor.capture());
-        assertEquals("Notice", captor.getValue().subject());
-        assertEquals(List.of(7, 9), captor.getValue().recipientMemberIds());
-        assertTrue(!captor.getValue().allMembers() && !captor.getValue().allProducers());
+        assertEquals(new OutreachRequestDTO("Notice", "Body", List.of(7, 9), false, false), captor.getValue(),
+            "the subject, body and recipients go as entered, with neither everyone flag");
     }
 
     @Test
-    void send_allMembers_passesFlagThrough() {
+    void GivenAllMembersSelected_WhenSend_ThenPassesFlagThrough() {
         when(messaging.sendOutreach(eq(TOKEN), any())).thenReturn(new OutreachResultDTO(42, "conv-1"));
 
         presenter.send(TOKEN, "Notice", "Body", List.of(), true, false);
@@ -96,8 +99,8 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_serviceFailsInternally_returnsGenericFailure() {
-        doThrow(new RuntimeException("no recipients")).when(messaging).sendOutreach(anyString(), any());
+    void GivenTheServiceFailsInternally_WhenSend_ThenReturnsGenericFailure() {
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).sendOutreach(anyString(), any());
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
             presenter.send(TOKEN, "S", "B", List.of(7), false, false);
@@ -108,7 +111,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenSend_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(messaging).sendOutreach(anyString(), any());
 
         AdminSendMessagesPresenter.ActionOutcome outcome =
@@ -120,7 +123,7 @@ class AdminSendMessagesPresenterTest {
     // -- searchUsers ----------------------------------------------------------
 
     @Test
-    void searchUsers_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSearchUsers_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminSendMessagesPresenter.SearchOutcome outcome = presenter.searchUsers(null, "ali");
 
         assertInstanceOf(AdminSendMessagesPresenter.SearchOutcome.NotAuthenticated.class, outcome);
@@ -128,7 +131,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void searchUsers_returnsResults_fromMemberQueryService() {
+    void GivenTwoMatchingMembers_WhenSearchUsers_ThenReturnsTwoResultsFromMemberQueryService() {
         when(memberQuery.searchByUsername(TOKEN, "ali"))
             .thenReturn(List.of(new MemberSearchResultDTO(7, "alice"), new MemberSearchResultDTO(8, "alistair")));
 
@@ -136,7 +139,7 @@ class AdminSendMessagesPresenterTest {
 
         AdminSendMessagesPresenter.SearchOutcome.Success ok =
             assertInstanceOf(AdminSendMessagesPresenter.SearchOutcome.Success.class, outcome);
-        assertEquals(2, ok.results().size());
+        assertEquals(List.of(new MemberSearchResultDTO(7, "alice"), new MemberSearchResultDTO(8, "alistair")), ok.results());
     }
 
     @Test
@@ -151,7 +154,7 @@ class AdminSendMessagesPresenterTest {
     // -- load (grouping) ------------------------------------------------------
 
     @Test
-    void load_groupsFanOutBySubjectAndBody() {
+    void GivenAFanOutToTwoRecipientsWithTheSameSubjectAndBody_WhenLoad_ThenGroupsThemIntoOneHistoryRow() {
         // Two recipients of the same logical send → one history row with recipientCount = 2.
         when(messaging.viewSentOutreach(TOKEN)).thenReturn(List.of(
             outreach("c1", 7, "Maintenance", "We are down tonight."),
@@ -167,7 +170,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminSendMessagesPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(AdminSendMessagesPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -175,7 +178,7 @@ class AdminSendMessagesPresenterTest {
     }
 
     @Test
-    void send_ruleViolated_returnsFailureWithTheRulesMessage() {
+    void GivenARuleViolation_WhenSend_ThenReturnsFailureWithTheRulesMessage() {
         BusinessRuleViolationException rule = new BusinessRuleViolationException("Choose at least one recipient.");
         doThrow(rule).when(messaging).sendOutreach(anyString(), any());
 
@@ -183,5 +186,112 @@ class AdminSendMessagesPresenterTest {
             AdminSendMessagesPresenter.ActionOutcome.Failure.class,
             presenter.send(TOKEN, "S", "B", List.of(7), false, false));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenARevokedToken_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewSentOutreach(TOKEN)).thenThrow(new InvalidTokenException("revoked"));
+
+        assertInstanceOf(AdminSendMessagesPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
+    }
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewSentOutreach(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(AdminSendMessagesPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
+    }
+
+    // ---- what a send passes on, and how the history groups and orders the fan-out (#189) ----
+
+    @Test
+    void GivenAllProducersSelected_WhenSend_ThenOnlyThatFlagGoesWithTheMessage() {
+        when(messaging.sendOutreach(eq(TOKEN), any())).thenReturn(new OutreachResultDTO(5, "conv-1"));
+
+        presenter.send(TOKEN, "Notice", "Body", List.of(), false, true);
+
+        verify(messaging).sendOutreach(TOKEN, new OutreachRequestDTO("Notice", "Body", List.of(), false, true));
+    }
+
+    @Test
+    void GivenTheMemberSearchFailsInternally_WhenSearchUsers_ThenFailureCarriesTheGenericText() {
+        when(memberQuery.searchByUsername(TOKEN, "ali"))
+            .thenThrow(new PersistenceException("could not prepare statement [select * from users]"));
+
+        assertEquals(new AdminSendMessagesPresenter.SearchOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.searchUsers(TOKEN, "ali"));
+    }
+
+    @Test
+    void GivenTheHistoryFailsInternally_WhenLoad_ThenFailureCarriesTheGenericText() {
+        when(messaging.viewSentOutreach(TOKEN))
+            .thenThrow(new PersistenceException("could not prepare statement [select * from conversations]"));
+
+        assertEquals(new AdminSendMessagesPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.load(TOKEN));
+    }
+
+    // A logical send is one initiator, subject and body: the same subject with another body is another send.
+    @Test
+    void GivenTwoSendsWithTheSameSubjectButDifferentBodies_WhenLoad_ThenEachIsItsOwnRow() {
+        when(messaging.viewSentOutreach(TOKEN)).thenReturn(List.of(
+            outreachAt("c1", ADMIN_ID, 7, "Maintenance", "Down tonight.", SENT_AT),
+            outreachAt("c2", ADMIN_ID, 9, "Maintenance", "Down tomorrow.", SENT_AT.minusDays(1))));
+
+        assertEquals(List.of(
+                new AdminSendMessagesPresenter.SentOutreach(SENT_AT, "Maintenance", 1),
+                new AdminSendMessagesPresenter.SentOutreach(SENT_AT.minusDays(1), "Maintenance", 1)),
+            history());
+    }
+
+    @Test
+    void GivenTwoAdminsSendTheSameMessage_WhenLoad_ThenEachAdminsSendIsItsOwnRow() {
+        when(messaging.viewSentOutreach(TOKEN)).thenReturn(List.of(
+            outreachAt("c1", ADMIN_ID, 7, "Maintenance", "Down tonight.", SENT_AT),
+            outreachAt("c2", OTHER_ADMIN_ID, 9, "Maintenance", "Down tonight.", SENT_AT)));
+
+        assertEquals(2, history().size(), "one row per admin's send: " + history());
+    }
+
+    // Listed in neither time order nor its reverse, with subjects whose alphabetical order, either way, is not
+    // newest first, so only a sort by time gives the expected order.
+    @Test
+    void GivenSendsListedOutOfTimeOrder_WhenLoad_ThenTheHistoryIsNewestFirst() {
+        when(messaging.viewSentOutreach(TOKEN)).thenReturn(List.of(
+            outreachAt("c1", ADMIN_ID, 7, "Alpha", "a", SENT_AT.minusDays(1)),
+            outreachAt("c2", ADMIN_ID, 7, "Charlie", "c", SENT_AT.minusDays(2)),
+            outreachAt("c3", ADMIN_ID, 7, "Bravo", "b", SENT_AT)));
+
+        assertEquals(List.of("Bravo", "Alpha", "Charlie"),
+            history().stream().map(AdminSendMessagesPresenter.SentOutreach::subject).toList());
+    }
+
+    // The fan-out creates one thread per recipient, a moment apart; the send happened when the first was made.
+    @Test
+    void GivenAFanOutWhoseThreadsWereCreatedAMomentApart_WhenLoad_ThenTheRowIsDatedByTheEarliest() {
+        when(messaging.viewSentOutreach(TOKEN)).thenReturn(List.of(
+            outreachAt("c1", ADMIN_ID, 7, "Maintenance", "Down tonight.", SENT_AT.plusSeconds(2)),
+            outreachAt("c2", ADMIN_ID, 9, "Maintenance", "Down tonight.", SENT_AT),
+            outreachAt("c3", ADMIN_ID, 11, "Maintenance", "Down tonight.", SENT_AT.plusSeconds(1))));
+
+        assertEquals(List.of(new AdminSendMessagesPresenter.SentOutreach(SENT_AT, "Maintenance", 3)), history());
+    }
+
+    private static final int ADMIN_ID = 1;
+    private static final int OTHER_ADMIN_ID = 2;
+
+    private List<AdminSendMessagesPresenter.SentOutreach> history() {
+        return assertInstanceOf(AdminSendMessagesPresenter.Outcome.Success.class, presenter.load(TOKEN)).history();
+    }
+
+    private static ConversationDTO outreachAt(String id, int adminId, int memberId, String subject, String body,
+                                              LocalDateTime createdAt) {
+        return new ConversationDTO(
+            id, "DIRECT", "OPEN", adminId, "ADMIN", memberId, "MEMBER",
+            subject, createdAt, createdAt, 0,
+            List.of(new MessageDTO("m-" + id, adminId, "ADMIN", body, createdAt, false)),
+            "TicketHub Support", "member" + memberId);
     }
 }

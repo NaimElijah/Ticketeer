@@ -69,7 +69,7 @@ class EventCompletionSweeperTest {
     }
 
     @Test
-    void emptyScan_completesNothing() {
+    void GivenEmptyScan_WhenCompleteFinishedEvents_ThenCompletesNothing() {
         int completed = sweeper.completeFinishedEvents(AFTER_SHOW);
 
         assertEquals(0, completed);
@@ -78,7 +78,7 @@ class EventCompletionSweeperTest {
     }
 
     @Test
-    void pastOnSaleEvent_isCompletedAndSaved() {
+    void GivenPastOnSaleEvent_WhenCompleteFinishedEvents_ThenIsCompletedAndSavedUnderTheLock() {
         Event e = onSaleEvent(1, SHOW_END);
         when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
         when(eventRepo.findById(1)).thenReturn(e);
@@ -95,7 +95,7 @@ class EventCompletionSweeperTest {
     }
 
     @Test
-    void pastSoldOutEvent_isCompletedAndSaved() {
+    void GivenPastSoldOutEvent_WhenCompleteFinishedEvents_ThenIsCompletedAndSaved() {
         Event e = soldOutEvent(2, SHOW_END);
         when(eventRepo.findByStatus(EventStatus.SOLD_OUT)).thenReturn(List.of(e));
         when(eventRepo.findById(2)).thenReturn(e);
@@ -108,7 +108,7 @@ class EventCompletionSweeperTest {
     }
 
     @Test
-    void futureEvent_isUntouched() {
+    void GivenFutureEvent_WhenCompleteFinishedEvents_ThenIsUntouched() {
         Event e = onSaleEvent(3, SHOW_END);
         when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(e));
 
@@ -122,7 +122,7 @@ class EventCompletionSweeperTest {
 
     // Only ON_SALE and SOLD_OUT are scanned — DRAFT/SCHEDULED/CANCELED/COMPLETED are never queried.
     @Test
-    void onlyLiveStatusesAreScanned() {
+    void GivenNoLiveEvents_WhenCompleteFinishedEvents_ThenOnlyLiveStatusesAreScanned() {
         sweeper.completeFinishedEvents(AFTER_SHOW);
 
         verify(eventRepo).findByStatus(EventStatus.ON_SALE);
@@ -136,7 +136,7 @@ class EventCompletionSweeperTest {
     // Raced: scanned as ON_SALE, but by the time it's locked the owner has canceled it. The
     // re-check under the lock skips it — no completion — and the lock is still released.
     @Test
-    void statusChangedUnderLock_isSkipped() {
+    void GivenStatusChangedUnderLock_WhenCompleteFinishedEvents_ThenIsSkippedAndLockReleased() {
         Event scanned = onSaleEvent(4, SHOW_END);       // looked finished + ON_SALE during the scan
         Event canceledNow = canceledEvent(4, SHOW_END); // re-read under the lock returns CANCELED
         when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(scanned));
@@ -154,7 +154,7 @@ class EventCompletionSweeperTest {
     // Resilience: an event vanishing between scan and lock is skipped, its lock is still
     // released, and the rest of the tick proceeds.
     @Test
-    void vanishedEvent_isSkipped_lockReleased_sweepContinues() {
+    void GivenVanishedEvent_WhenCompleteFinishedEvents_ThenIsSkippedLockReleasedAndSweepContinues() {
         Event gone = onSaleEvent(5, SHOW_END);
         Event ok = onSaleEvent(6, SHOW_END);
         when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(gone, ok));
@@ -169,6 +169,26 @@ class EventCompletionSweeperTest {
         verify(eventRepo, never()).save(gone);
         assertEquals(EventStatus.COMPLETED, ok.getStatus());
         verify(eventRepo).save(ok);
+    }
+
+    // Resilience: a save that fails for one event (a lost @Version race, a database error) is logged and
+    // the next event is still completed; the failed one's lock is released and it is not counted.
+    @Test
+    void GivenSaveFailsForOneEvent_WhenCompleteFinishedEvents_ThenTheNextIsCompletedAndTheLockReleased() {
+        Event failing = onSaleEvent(7, SHOW_END);
+        Event ok = onSaleEvent(8, SHOW_END);
+        when(eventRepo.findByStatus(EventStatus.ON_SALE)).thenReturn(List.of(failing, ok));
+        when(eventRepo.findById(7)).thenReturn(failing);
+        when(eventRepo.findById(8)).thenReturn(ok);
+        when(eventRepo.save(failing)).thenThrow(new IllegalStateException("the event row could not be written"));
+
+        int completed = sweeper.completeFinishedEvents(AFTER_SHOW);
+
+        assertEquals(1, completed, "only the event whose save succeeded is counted");
+        verify(eventRepo).unlock(7);
+        assertEquals(EventStatus.COMPLETED, ok.getStatus());
+        verify(eventRepo).save(ok);
+        verify(eventRepo).unlock(8);
     }
 
     // -- the venue's zone decides when a show has ended (#74, ADR-008) --------

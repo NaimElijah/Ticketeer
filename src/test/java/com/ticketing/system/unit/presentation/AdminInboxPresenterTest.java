@@ -23,6 +23,7 @@ import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.SendMessageRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.presenters.messaging.AdminInboxPresenter;
 import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
@@ -44,14 +45,14 @@ class AdminInboxPresenterTest {
     private static ConversationDTO direct(String id) {
         return new ConversationDTO(
             id, "DIRECT", "OPEN", 1, "ADMIN", 7, "MEMBER",
-            "Heads up", LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Heads up", LAST_MESSAGE_AT, LAST_MESSAGE_AT, 0, List.of(),
             "TicketHub Support", "alice");
     }
 
     // -- load -----------------------------------------------------------------
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminInboxPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(AdminInboxPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -59,7 +60,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void load_success_returnsConversations() {
+    void GivenTheServiceReturnsConversations_WhenLoad_ThenReturnsConversations() {
         ConversationDTO a = direct("c1");
         when(messaging.viewAdminInbox(TOKEN)).thenReturn(List.of(a));
 
@@ -71,14 +72,14 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(messaging.viewAdminInbox(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         assertInstanceOf(AdminInboxPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(messaging.viewAdminInbox(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         AdminInboxPresenter.Outcome.Failure fail =
@@ -89,7 +90,7 @@ class AdminInboxPresenterTest {
     // -- reply ----------------------------------------------------------------
 
     @Test
-    void reply_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenReply_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.reply(null, "c1", "hi");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -97,7 +98,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_happyPath_sendsConversationIdAndBody() {
+    void GivenTheServiceAcceptsTheMessage_WhenReply_ThenReturnsSuccessAndSendsConversationIdAndBody() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.reply(TOKEN, "c1", "any update?");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.Success.class, outcome);
@@ -108,8 +109,8 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_serviceFailsInternally_returnsGenericFailure() {
-        doThrow(new RuntimeException("conversation closed")).when(messaging).sendMessage(anyString(), any());
+    void GivenTheServiceFailsInternally_WhenReply_ThenReturnsGenericFailure() {
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).sendMessage(anyString(), any());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.reply(TOKEN, "c1", "x"));
@@ -117,7 +118,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenReply_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(messaging).sendMessage(anyString(), any());
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class,
@@ -127,7 +128,7 @@ class AdminInboxPresenterTest {
     // -- close ----------------------------------------------------------------
 
     @Test
-    void close_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenClose_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.close(null, "c1");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -135,7 +136,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void close_happyPath_closesConversation() {
+    void GivenTheServiceAcceptsTheClose_WhenClose_ThenReturnsSuccessAndClosesConversation() {
         AdminInboxPresenter.ActionOutcome outcome = presenter.close(TOKEN, "c1");
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.Success.class, outcome);
@@ -143,8 +144,8 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void close_serviceFailsInternally_returnsGenericFailure() {
-        doThrow(new RuntimeException("already closed")).when(messaging).closeConversation(anyString(), anyString());
+    void GivenTheServiceFailsInternally_WhenClose_ThenReturnsGenericFailure() {
+        doThrow(new RuntimeException("could not execute statement")).when(messaging).closeConversation(anyString(), anyString());
 
         AdminInboxPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(AdminInboxPresenter.ActionOutcome.Failure.class, presenter.close(TOKEN, "c1"));
@@ -152,7 +153,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void close_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenClose_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad")).when(messaging).closeConversation(anyString(), anyString());
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class,
@@ -160,7 +161,7 @@ class AdminInboxPresenterTest {
     }
 
     @Test
-    void reply_conversationClosed_returnsFailureWithTheRulesMessage() {
+    void GivenAClosedConversation_WhenReply_ThenReturnsFailureWithTheRulesMessage() {
         ConversationClosedException rule = new ConversationClosedException("c1");
         doThrow(rule).when(messaging).sendMessage(anyString(), any());
 
@@ -262,10 +263,30 @@ class AdminInboxPresenterTest {
     void GivenAnExpiredToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
         OpenedThreads opened = new OpenedThreads();
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
-        doThrow(new InvalidTokenException("bad")).when(messaging).markConversationRead(anyString(), anyString());
+        doThrow(new SessionExpiredException()).when(messaging).markConversationRead(anyString(), anyString());
 
         assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
 
         assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
+        OpenedThreads opened = new OpenedThreads();
+        ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
+        doThrow(new InvalidTokenException("revoked")).when(messaging).markConversationRead(anyString(), anyString());
+
+        assertInstanceOf(AdminInboxPresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
+
+        assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewAdminInbox(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(AdminInboxPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 }

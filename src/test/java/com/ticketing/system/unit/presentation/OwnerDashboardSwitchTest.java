@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
+import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.reporting.application.service.CompanyAnalyticsService;
 import com.ticketing.system.shared.dto.CompanyDashboardDTO;
 import com.ticketing.system.shared.dto.MyCompanyDTO;
@@ -75,6 +76,24 @@ class OwnerDashboardSwitchTest {
 
         assertFalse(tileTitles(view).contains(MANAGERS_TILE),
             "a manager without permissions sees no Managers tile, but the dashboard shows " + tileTitles(view));
+    }
+
+    // The other half: the switch shows what the manager may do, not an empty dashboard (#189).
+    @Test
+    void GivenAFounderWhoAlsoManagesACompanyWithSalesAccess_WhenSwitchingToIt_ThenItsSalesTileShows() {
+        OwnerDashboardView view = dashboardFor(
+            founderOf(FOUNDED_ID, "Acme"), managerOf(MANAGED_ID, "Beta", Permission.VIEW_SALES));
+        assertFalse(tileTitles(view).isEmpty(), "precondition: the founder's dashboard shows tiles");
+
+        find(view, LkSelect.class).stream()
+            .filter(select -> "Acme".equals(select.getValue()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("the dashboard has no company selector"))
+            .setValue("Beta");
+
+        List<String> titles = tileTitles(view);
+        assertTrue(titles.contains("Sales History"), "a manager who may view sales sees its tile: " + titles);
+        assertFalse(titles.contains(MANAGERS_TILE), "but not the founder's Managers tile: " + titles);
     }
 
     @Test

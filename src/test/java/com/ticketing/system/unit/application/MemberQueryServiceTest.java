@@ -26,21 +26,29 @@ class MemberQueryServiceTest {
     }
 
     @Test
-    void usernameExists_delegatesToRepository() {
+    void GivenAnExistingUsername_WhenUsernameExists_ThenTrue() {
         when(userRepository.existsByUsername("naim.founder")).thenReturn(true);
 
         assertTrue(service.usernameExists("naim.founder"));
     }
 
     @Test
-    void usernameExists_trimsBeforeQuerying() {
+    void GivenAnUnknownUsername_WhenUsernameExists_ThenFalse() {
+        when(userRepository.existsByUsername("naim.founder")).thenReturn(true);
+        when(userRepository.existsByUsername("someone.else")).thenReturn(false);
+
+        assertFalse(service.usernameExists("someone.else"));
+    }
+
+    @Test
+    void GivenAPaddedUsername_WhenUsernameExists_ThenTrimsBeforeQuerying() {
         when(userRepository.existsByUsername("naim.founder")).thenReturn(true);
 
         assertTrue(service.usernameExists("  naim.founder  "));
     }
 
     @Test
-    void usernameExists_returnsFalseForNullOrBlankWithoutHittingRepo() {
+    void GivenNullOrBlank_WhenUsernameExists_ThenReturnsFalseWithoutHittingRepo() {
         assertFalse(service.usernameExists(null));
         assertFalse(service.usernameExists(""));
         assertFalse(service.usernameExists("   "));

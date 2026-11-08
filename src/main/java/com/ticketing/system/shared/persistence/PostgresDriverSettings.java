@@ -17,10 +17,13 @@ import com.zaxxer.hikari.HikariDataSource;
  * driver's {@code socketTimeout} ends such a read, in whole seconds, rounded up so it never ends one
  * before the configured time. {@code tcpKeepAlive} turns on the operating system's keepalive probes,
  * which find a dead peer on an idle pooled connection; with default kernel settings they start only
- * after two hours idle, so they are a backstop, not the bound.
+ * after two hours idle, so they are a backstop, not the bound. {@code logServerErrorDetail=false} keeps the
+ * server's DETAIL, which quotes the row's values, out of the driver's exception messages: a unique-key
+ * violation on {@code uk_active_orders_guest_session_id} would otherwise log a guest's live session id.
  *
- * <p>Set on the pool as driver properties rather than in the URL, so they also reach a datasource whose
- * URL comes from elsewhere, such as a Testcontainers service connection. Only a PostgreSQL URL gets
+ * <p>Set on the pool as driver properties, not only in the URL, so they also reach a datasource whose
+ * URL comes from elsewhere, such as a Testcontainers service connection or a URL set from the environment
+ * that leaves {@code logServerErrorDetail} out. Only a PostgreSQL URL gets
  * them: H2, which dev and the test suites run on, refuses settings it does not know.
  */
 @Configuration(proxyBeanMethods = false)
@@ -40,6 +43,7 @@ public class PostgresDriverSettings {
                     pool.addDataSourceProperty("socketTimeout",
                             String.valueOf(wholeSecondsRoundedUp(properties.getObject().socketTimeout())));
                     pool.addDataSourceProperty("tcpKeepAlive", "true");
+                    pool.addDataSourceProperty("logServerErrorDetail", "false");
                 }
                 return bean;
             }

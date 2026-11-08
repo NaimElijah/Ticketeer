@@ -20,6 +20,7 @@ import com.ticketing.system.ui.components.venue.VkVenueMap;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.catalog.EventDetailsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.ticketing.system.ui.views.messaging.NewInquiryView;
 import com.vaadin.flow.component.Component;
@@ -38,7 +39,6 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 @Route(value = "events/:eventId", layout = MainLayout.class)
 @PageTitle("Event · TicketHub")
@@ -46,7 +46,7 @@ import java.util.Locale;
 public class EventDetailsView extends LkPage implements BeforeEnterObserver {
 
     private static final DateTimeFormatter DATE_FMT =
-            DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm zzz", Locale.US);
+            DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm zzz", DisplayLocale.PAGE);
     private static final String CHOOSE_TICKETS = "Choose Tickets";
     private static final String ORGANIZER_RATING = "Organizer rating";
 
@@ -397,7 +397,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         if (name == null || name.isBlank()) {
             return "EVENT";
         }
-        return name.trim().substring(0, 1).toUpperCase(Locale.US);
+        return name.trim().substring(0, 1).toUpperCase(DisplayLocale.PAGE);
     }
 
     /** Rating shown without a trailing ".0" (e.g. 4.5 → "4.5", 4.0 → "4"). */
@@ -422,7 +422,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
         if (enumName == null || enumName.isBlank()) {
             return "";
         }
-        String lower = enumName.replace('_', ' ').toLowerCase(Locale.US);
+        String lower = enumName.replace('_', ' ').toLowerCase(DisplayLocale.PAGE);
         return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
@@ -451,7 +451,7 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
     }
 
     private static String pct(double v) {
-        return String.format(Locale.US, "%.2f%%", v);
+        return String.format(DisplayLocale.PAGE, "%.2f%%", v);
     }
 
     private static String escape(String s) {

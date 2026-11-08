@@ -20,6 +20,7 @@ import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.MinTicketsPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.NoPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.OrPurchasePolicy;
+import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDtoMapper;
@@ -185,5 +186,31 @@ class PurchasePolicyDtoMapperTest {
 
         assertEquals(PurchasePolicyDtoMapper.PolicyType.NONE.name(), dto.type());
         assertTrue(dto.children() == null || dto.children().isEmpty(), "a NONE policy has no children; got " + dto);
+    }
+
+    // A policy type the mapping has never heard of.
+    private static final class UnmappedPurchasePolicy implements PurchasePolicy {
+        @Override
+        public boolean isSatisfiedBy(PurchaseContext context) {
+            return true;
+        }
+
+        @Override
+        public String getFailureMessage() {
+            return "";
+        }
+    }
+
+    // Reading the unknown child as NONE would let a save of the composite erase it.
+    @Test
+    void GivenAnUnmappedPolicyNestedInAComposite_WhenToDto_ThenRefusedNamingItsType() {
+        PurchasePolicy nested = new AndPurchasePolicy(new AgePurchasePolicy(18),
+                new OrPurchasePolicy(new MaxTicketsPurchasePolicy(4), new UnmappedPurchasePolicy()));
+
+        UnsupportedOperationException refused = assertThrows(UnsupportedOperationException.class,
+                () -> PurchasePolicyDtoMapper.toDto(nested));
+
+        assertEquals("No DTO mapping for purchase policy type " + UnmappedPurchasePolicy.class.getName(),
+                refused.getMessage());
     }
 }

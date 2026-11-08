@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.shared.domain.TextLimits;
@@ -19,19 +21,33 @@ import com.vaadin.flow.component.textfield.TextField;
 /**
  * {@link MdReplyBar} keeps what the user wrote until the reply is sent, names its input for
  * assistive technology, and flags a reply over the stored length instead of truncating it.
- * Constructed headless; {@link Button#click()} fires the same listener a user's click does.
+ * Constructed headless; {@link ViewHarness#click} fires the same listener a user's click does, and only on a
+ * Send button a user could click.
  */
 class MdReplyBarTest {
 
     private static final String REPLY = "Thanks, that solved it.";
 
+    private ViewHarness harness;
+
+    @BeforeEach
+    void setUp() {
+        harness = new ViewHarness();
+    }
+
+    @AfterEach
+    void tearDown() {
+        harness.close();
+    }
+
     @Test
     void GivenASendThatFails_WhenTheUserSends_ThenTheReplyStaysInTheInput() {
         MdReplyBar bar = new MdReplyBar().onSend(text -> false);
+        harness.attach(bar);
         TextField input = inputOf(bar);
         input.setValue(REPLY);
 
-        sendButtonOf(bar).click();
+        ViewHarness.click(sendButtonOf(bar));
 
         assertEquals(REPLY, input.getValue());
     }
@@ -40,10 +56,11 @@ class MdReplyBarTest {
     void GivenASendThatSucceeds_WhenTheUserSends_ThenTheInputIsCleared() {
         List<String> sent = new ArrayList<>();
         MdReplyBar bar = new MdReplyBar().onSend(text -> sent.add(text));
+        harness.attach(bar);
         TextField input = inputOf(bar);
         input.setValue(REPLY);
 
-        sendButtonOf(bar).click();
+        ViewHarness.click(sendButtonOf(bar));
 
         assertEquals(List.of(REPLY), sent);
         assertTrue(input.isEmpty());
@@ -53,15 +70,27 @@ class MdReplyBarTest {
     void GivenAReplyOverTheLimit_WhenTheUserSends_ThenNothingIsSentAndTheReplyStays() {
         List<String> sent = new ArrayList<>();
         MdReplyBar bar = new MdReplyBar().onSend(text -> sent.add(text));
+        harness.attach(bar);
         TextField input = inputOf(bar);
         String tooLong = "a".repeat(TextLimits.MAX_TEXT_LENGTH + 1);
         input.setValue(tooLong);
 
-        sendButtonOf(bar).click();
+        ViewHarness.click(sendButtonOf(bar));
 
         assertTrue(sent.isEmpty());
         assertEquals(tooLong, input.getValue());
         assertTrue(input.isInvalid());
+    }
+
+    @Test
+    void GivenAnEmptyInput_WhenTheUserSends_ThenNothingIsSent() {
+        List<String> sent = new ArrayList<>();
+        MdReplyBar bar = new MdReplyBar().onSend(text -> sent.add(text));
+        harness.attach(bar);
+
+        ViewHarness.click(sendButtonOf(bar));
+
+        assertEquals(List.of(), sent);
     }
 
     @Test

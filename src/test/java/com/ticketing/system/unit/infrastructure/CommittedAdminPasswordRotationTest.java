@@ -3,6 +3,7 @@ package com.ticketing.system.unit.infrastructure;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
@@ -96,6 +97,8 @@ class CommittedAdminPasswordRotationTest {
     void GivenDefaultAdminWithTheCommittedPassword_WhenRotated_ThenAWarnIsLoggedThatNamesNoSecret() {
         Admin committed = defaultAdminWithPassword(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD);
         admins.save(committed);
+        // Read now: the rotation changes the stored admin in place, so read later this would be the new hash.
+        String committedHash = committed.getPasswordHash();
         logs = LogCapture.of(CommittedAdminPasswordRotation.class);
 
         rotationUnder(NO_PROFILE).afterSingletonsInstantiated();
@@ -103,10 +106,11 @@ class CommittedAdminPasswordRotationTest {
         List<String> logged = logs.eventsContaining("");
         assertTrue(logged.stream().anyMatch(event -> event.startsWith("WARN ")),
                 "replacing the default admin's password must be logged at WARN, but the log was " + logged);
-        assertEquals(List.of(), logs.eventsContaining(CONFIGURED_PASSWORD), "the configured password must not be logged");
-        assertEquals(List.of(), logs.eventsContaining(committed.getPasswordHash()), "the old hash must not be logged");
-        assertEquals(List.of(), logs.eventsContaining(admins.findById(DEFAULT_ADMIN_ID).getPasswordHash()),
-                "the new hash must not be logged");
+        String configuredHash = admins.findById(DEFAULT_ADMIN_ID).getPasswordHash();
+        assertNotEquals(committedHash, configuredHash, "precondition: the rotation stored a new hash");
+        logs.assertNeverLogged(CONFIGURED_PASSWORD);
+        logs.assertNeverLogged(committedHash);
+        logs.assertNeverLogged(configuredHash);
     }
 
     @Test
@@ -115,6 +119,8 @@ class CommittedAdminPasswordRotationTest {
         Admin other = new Admin(OTHER_ADMIN_ID, OTHER_ADMIN_USERNAME,
                 hasher.hash(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD), false);
         admins.save(other);
+        // A copy, since the repository hands back the stored admin itself.
+        String otherHashBefore = other.getPasswordHash();
         CommittedAdminPasswordRotation rotation = rotationUnder(NO_PROFILE);
 
         IllegalStateException refused = assertThrows(IllegalStateException.class,
@@ -122,9 +128,28 @@ class CommittedAdminPasswordRotationTest {
                 "an admin other than the default one with the committed password must stop the boot");
 
         assertFalse(refused.getMessage().contains(CONFIGURED_PASSWORD), "the refusal must not name the configured password");
-        assertFalse(refused.getMessage().contains(other.getPasswordHash()), "the refusal must not name the stored hash");
-        assertEquals(other.getPasswordHash(), admins.findById(OTHER_ADMIN_ID).getPasswordHash(),
+        assertFalse(refused.getMessage().contains(otherHashBefore), "the refusal must not name the stored hash");
+        assertEquals(otherHashBefore, admins.findById(OTHER_ADMIN_ID).getPasswordHash(),
                 "the refused admin is left for the operator to fix");
+    }
+
+    // The boot stops before the default admin is rotated: ADR-014 changes nothing else when it refuses.
+    @Test
+    void GivenTheDefaultAndAnotherAdminOnTheCommittedPassword_WhenRun_ThenTheBootStopsAndTheDefaultAdminKeepsItsHash() {
+        admins.save(defaultAdminWithPassword(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD));
+        admins.save(new Admin(OTHER_ADMIN_ID, OTHER_ADMIN_USERNAME,
+                hasher.hash(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD), false));
+        String defaultHashBefore = admins.findById(DEFAULT_ADMIN_ID).getPasswordHash();
+        CommittedAdminPasswordRotation rotation = rotationUnder(NO_PROFILE);
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                rotation::afterSingletonsInstantiated,
+                "another admin on the committed password must stop the boot, whatever the default admin has");
+
+        assertTrue(refused.getMessage().contains("[" + OTHER_ADMIN_ID + "]"),
+                "the refusal names the other admin's id, but was: " + refused.getMessage());
+        assertEquals(defaultHashBefore, admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
+                "a refused boot must not rotate the default admin");
     }
 
     @ParameterizedTest(name = "spring.profiles.active=''{0}''")
@@ -134,12 +159,13 @@ class CommittedAdminPasswordRotationTest {
         admins.save(committed);
         admins.save(new Admin(OTHER_ADMIN_ID, OTHER_ADMIN_USERNAME,
                 hasher.hash(CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD), false));
+        String committedHash = committed.getPasswordHash();
         CommittedAdminPasswordRotation rotation = rotationUnder(profile);
 
         assertDoesNotThrow(rotation::afterSingletonsInstantiated,
                 profile + " runs on the committed password by design");
 
-        assertEquals(committed.getPasswordHash(), admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
+        assertEquals(committedHash, admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
                 profile + " must leave the default admin's password as it is");
     }
 
@@ -147,10 +173,11 @@ class CommittedAdminPasswordRotationTest {
     void GivenDefaultAdminWhosePasswordIsAlreadyAnother_WhenRun_ThenItIsUnchanged() {
         Admin rotatedEarlier = defaultAdminWithPassword(EARLIER_ROTATED_PASSWORD);
         admins.save(rotatedEarlier);
+        String earlierHash = rotatedEarlier.getPasswordHash();
 
         rotationUnder(NO_PROFILE).afterSingletonsInstantiated();
 
-        assertEquals(rotatedEarlier.getPasswordHash(), admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
+        assertEquals(earlierHash, admins.findById(DEFAULT_ADMIN_ID).getPasswordHash(),
                 "a password that is not the committed one is the operator's, and stays");
     }
 

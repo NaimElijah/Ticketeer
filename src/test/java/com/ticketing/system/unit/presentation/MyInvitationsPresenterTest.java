@@ -25,8 +25,11 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.account.MyInvitationsPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.AppointmentNotFoundException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class MyInvitationsPresenterTest {
+
+    private static final LocalDateTime INVITED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private static final String TOKEN = "jwt-token";
 
@@ -42,13 +45,13 @@ class MyInvitationsPresenterTest {
     private static InvitationDTO invitation(int companyId, String role, String status) {
         return new InvitationDTO(
             String.valueOf(companyId), companyId, "Acme", role, "dana",
-            List.of("VIEW_SALES"), status, LocalDateTime.now());
+            List.of("VIEW_SALES"), status, INVITED_AT);
     }
 
     // -- load -----------------------------------------------------------------
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         MyInvitationsPresenter.Outcome outcome = presenter.load(null);
 
         assertInstanceOf(MyInvitationsPresenter.Outcome.NotAuthenticated.class, outcome);
@@ -56,7 +59,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void load_splitsPendingFromResolvedHistory() {
+    void GivenPendingAndResolvedInvitations_WhenLoad_ThenSplitsPendingFromResolvedHistory() {
         InvitationDTO pending = invitation(1, "Manager", "PENDING");
         InvitationDTO accepted = invitation(2, "Manager", "ACTIVE");
         InvitationDTO rejected = invitation(3, "Owner", "REJECTED");
@@ -71,7 +74,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(service.listMyInvitations(TOKEN)).thenThrow(new RuntimeException("backend down"));
 
         MyInvitationsPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -82,7 +85,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(service.listMyInvitations(TOKEN)).thenThrow(new InvalidTokenException("bad"));
 
         MyInvitationsPresenter.Outcome outcome = presenter.load(TOKEN);
@@ -93,7 +96,7 @@ class MyInvitationsPresenterTest {
     // -- accept / decline -----------------------------------------------------
 
     @Test
-    void accept_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenAccept_ThenReturnsNotAuthenticatedWithoutCallingService() {
         MyInvitationsPresenter.ActionOutcome outcome = presenter.accept(null, 7);
 
         assertInstanceOf(MyInvitationsPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -101,7 +104,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void accept_happyPath_returnsSuccess_andRespondsWithAcceptTrue() {
+    void GivenTheServiceAcceptsTheResponse_WhenAccept_ThenReturnsSuccessAndRespondsWithAcceptTrue() {
         MyInvitationsPresenter.ActionOutcome outcome = presenter.accept(TOKEN, 7);
 
         assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Success.class, outcome);
@@ -113,7 +116,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void decline_happyPath_returnsSuccess_andRespondsWithAcceptFalse() {
+    void GivenTheServiceAcceptsTheResponse_WhenDecline_ThenReturnsSuccessAndRespondsWithAcceptFalse() {
         MyInvitationsPresenter.ActionOutcome outcome = presenter.decline(TOKEN, 9);
 
         assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Success.class, outcome);
@@ -125,8 +128,8 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void accept_serviceFailsInternally_returnsGenericFailure() {
-        doThrow(new RuntimeException("no pending appointment"))
+    void GivenTheServiceFailsInternally_WhenAccept_ThenReturnsGenericFailure() {
+        doThrow(new RuntimeException("could not execute statement"))
             .when(service).respondToAppointment(anyString(), any());
 
         MyInvitationsPresenter.ActionOutcome outcome = presenter.accept(TOKEN, 7);
@@ -137,7 +140,7 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void decline_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenDecline_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(service).respondToAppointment(anyString(), any());
 
@@ -147,12 +150,21 @@ class MyInvitationsPresenterTest {
     }
 
     @Test
-    void accept_noPendingInvitation_returnsFailureWithTheRulesMessage() {
+    void GivenNoPendingInvitation_WhenAccept_ThenReturnsFailureWithTheRulesMessage() {
         AppointmentNotFoundException rule = new AppointmentNotFoundException("No pending invitation for this company");
         doThrow(rule).when(service).respondToAppointment(anyString(), any());
 
         MyInvitationsPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(MyInvitationsPresenter.ActionOutcome.Failure.class, presenter.accept(TOKEN, 7));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(service.listMyInvitations(TOKEN)).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(MyInvitationsPresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN));
     }
 }

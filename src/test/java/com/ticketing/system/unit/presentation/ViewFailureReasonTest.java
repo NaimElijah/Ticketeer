@@ -154,6 +154,7 @@ class ViewFailureReasonTest {
         MyInvitationsPresenter presenter = invitationsPresenter();
         when(presenter.accept(any(), anyInt())).thenReturn(new MyInvitationsPresenter.ActionOutcome.Failure(REASON));
         MyInvitationsView view = new MyInvitationsView(presenter, displayTime());
+        harness.attach(view);
 
         click(button(view, "Accept"));
 
@@ -165,6 +166,7 @@ class ViewFailureReasonTest {
         MyInvitationsPresenter presenter = invitationsPresenter();
         when(presenter.decline(any(), anyInt())).thenReturn(new MyInvitationsPresenter.ActionOutcome.Failure(REASON));
         MyInvitationsView view = new MyInvitationsView(presenter, displayTime());
+        harness.attach(view);
 
         click(button(view, "Reject"));
 
@@ -180,6 +182,18 @@ class ViewFailureReasonTest {
         MyProfileView view = new MyProfileView(presenter);
 
         assertPageShows(view, REASON);
+    }
+
+    // The view is behind MEMBER_ACCOUNT, so only a token that died after the check reaches this outcome (#122).
+    @Test
+    void GivenTheSessionDiedBeforeTheProfileLoads_WhenTheMemberOpensTheProfile_ThenThePageSaysToSignInAgain() {
+        ViewHarness.signInMember();
+        MyProfilePresenter presenter = mock(MyProfilePresenter.class);
+        when(presenter.load()).thenReturn(new MyProfilePresenter.Outcome.NotAuthenticated());
+
+        MyProfileView view = new MyProfileView(presenter);
+
+        assertPageShows(view, "Your session has expired — please sign in again.");
     }
 
     @Test
@@ -201,6 +215,7 @@ class ViewFailureReasonTest {
         ManagerInvitationPresenter presenter = mock(ManagerInvitationPresenter.class);
         when(presenter.invite(any(), any(), any())).thenReturn(new ManagerInvitationPresenter.Outcome.Failure(REASON));
         ManagerInvitationView view = new ManagerInvitationView(presenter);
+        harness.attach(view);
         field(view, TextField.class, "Username or email").setValue("carol");
 
         click(button(view, "Send Invitation"));
@@ -213,6 +228,7 @@ class ViewFailureReasonTest {
         MyCompaniesPresenter presenter = mock(MyCompaniesPresenter.class);
         when(presenter.appoint(any())).thenReturn(new MyCompaniesPresenter.AppointOutcome.Failure(REASON));
         OwnerAppointmentView view = new OwnerAppointmentView(presenter);
+        harness.attach(view);
         field(view, TextField.class, "Invitee username or email").setValue("carol");
 
         click(button(view, "Send Invitation"));
@@ -231,6 +247,7 @@ class ViewFailureReasonTest {
             new ManagerListPresenter.Outcome.Success("Acme", List.of(manager), List.of()));
         when(presenter.revoke(any(), anyInt(), anyInt())).thenReturn(new ManagerListPresenter.ActionOutcome.Failure(REASON));
         ManagerListView view = new ManagerListView(presenter, displayTime());
+        harness.attach(view);
 
         click(button(view, "Revoke"));
         assertTrue(harness.confirmOpenDialog(), "revoking asks for confirmation first");
@@ -258,6 +275,7 @@ class ViewFailureReasonTest {
             new CompanyInquiryInboxPresenter.SingleOutcome.Success(thread("c1", "INQUIRY", "COMPANY")));
         when(presenter.close(any(), any())).thenReturn(new CompanyInquiryInboxPresenter.ActionOutcome.Failure(REASON));
         CompanyInquiryRespondView view = new CompanyInquiryRespondView(presenter, displayTime());
+        harness.attach(view);
         view.beforeEnter(routeTo("id", "c1"));
 
         click(button(view, "Close Inquiry"));
@@ -286,6 +304,7 @@ class ViewFailureReasonTest {
         when(presenter.badge(any(), any())).thenReturn(Optional.empty());
         when(presenter.close(any(), any())).thenReturn(new AdminInboxPresenter.ActionOutcome.Failure(REASON));
         AdminInboxView view = new AdminInboxView(presenter, displayTime());
+        harness.attach(view);
 
         click(button(view, "Close Conversation"));
 
@@ -310,6 +329,7 @@ class ViewFailureReasonTest {
         SystemAnalyticsPresenter presenter = analyticsPresenter();
         when(presenter.openMarket(any(), any())).thenReturn(new SystemAnalyticsPresenter.MarketActionOutcome.Rejected(REASON));
         SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime());
+        harness.attach(view);
 
         click(button(view, "Open Market"));
 
@@ -321,6 +341,7 @@ class ViewFailureReasonTest {
         SystemAnalyticsPresenter presenter = analyticsPresenter();
         when(presenter.closeMarket(any(), any())).thenReturn(new SystemAnalyticsPresenter.MarketActionOutcome.Failure(REASON));
         SystemAnalyticsView view = new SystemAnalyticsView(presenter, displayTime());
+        harness.attach(view);
 
         click(button(view, "Close Market"));
 
@@ -330,16 +351,21 @@ class ViewFailureReasonTest {
     // ---- arrangement ----
 
     // One place per view to build it, so a constructor change touches one line.
-    private static LoginView loginView(LoginPresenter presenter) {
-        return new LoginView(presenter, mock(SessionIdentity.class));
+    private LoginView loginView(LoginPresenter presenter) {
+        LoginView view = new LoginView(presenter, mock(SessionIdentity.class));
+        harness.attach(view);
+        return view;
     }
 
-    private static RegisterView registerView(RegisterPresenter presenter, UsernameAvailabilityPresenter availability) {
-        return new RegisterView(presenter, availability, mock(SessionIdentity.class));
+    private RegisterView registerView(RegisterPresenter presenter, UsernameAvailabilityPresenter availability) {
+        RegisterView view = new RegisterView(presenter, availability, mock(SessionIdentity.class));
+        harness.attach(view);
+        return view;
     }
 
-    private static AdminLoginView adminSignInFilled(AdminLoginPresenter presenter) {
+    private AdminLoginView adminSignInFilled(AdminLoginPresenter presenter) {
         AdminLoginView view = new AdminLoginView(presenter);
+        harness.attach(view);
         field(view, TextField.class, "Admin username").setValue("admin");
         field(view, PasswordField.class, "Password").setValue("secret-pw");
         return view;

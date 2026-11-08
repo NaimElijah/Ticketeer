@@ -26,6 +26,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.ticketing.system.support.PostgresContainers;
+import com.ticketing.system.support.RunsOnPostgres;
 
 /**
  * The schema contract of every deployment (SLR.7, #31, ADR-007), checked on a clean PostgreSQL.
@@ -37,6 +38,7 @@ import com.ticketing.system.support.PostgresContainers;
  */
 @DataJpaTest
 @Testcontainers
+@RunsOnPostgres
 @DirtiesContext
 class SchemaMigrationIT {
 

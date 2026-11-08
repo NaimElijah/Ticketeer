@@ -56,7 +56,7 @@ class CommittedDefaultSecretsGuardTest {
 
     @ParameterizedTest(name = "spring.profiles.active=''{0}''")
     @ValueSource(strings = {"", "supabase"})
-    void GivenNoProfileAndTheCommittedJwtSecret_WhenStarting_ThenTheBootFails(String profiles) {
+    void GivenAProfileOutsideDevAndTestAndTheCommittedJwtSecret_WhenStarting_ThenTheBootFails(String profiles) {
         startingWith(profiles, CommittedDefaultSecretsGuard.COMMITTED_JWT_SECRET, OPERATOR_ADMIN_PASSWORD)
                 .run(context -> {
                     assertThat(context)
@@ -73,7 +73,7 @@ class CommittedDefaultSecretsGuardTest {
 
     @ParameterizedTest(name = "spring.profiles.active=''{0}''")
     @ValueSource(strings = {"", "supabase"})
-    void GivenNoProfileAndTheCommittedAdminPassword_WhenStarting_ThenTheBootFails(String profiles) {
+    void GivenAProfileOutsideDevAndTestAndTheCommittedAdminPassword_WhenStarting_ThenTheBootFails(String profiles) {
         startingWith(profiles, OPERATOR_JWT_SECRET, CommittedDefaultSecretsGuard.COMMITTED_ADMIN_PASSWORD)
                 .run(context -> {
                     assertThat(context)

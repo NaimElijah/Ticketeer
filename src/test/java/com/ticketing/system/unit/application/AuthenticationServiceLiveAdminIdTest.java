@@ -2,6 +2,8 @@ package com.ticketing.system.unit.application;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +14,7 @@ import java.util.OptionalInt;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.identity.adapter.out.persistence.MemorySessionRepository;
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
@@ -49,9 +52,12 @@ class AuthenticationServiceLiveAdminIdTest {
             "unit-test-secret-must-be-long-enough-for-hmac-sha-256-please-ignore-me";
     // Admin and member ids share one id space; the default admin is id 1, and so is the first member.
     private static final int ADMIN_ID = 1;
+    // An admin whose row has been deleted while a token signed for them is still live.
+    private static final int DELETED_ADMIN_ID = 2;
 
     private AdjustableClock clock;
     private JwtSessionManager sessionManager;
+    private AdminRepository admins;
     private AuthenticationService service;
 
     @BeforeEach
@@ -60,7 +66,7 @@ class AuthenticationServiceLiveAdminIdTest {
         SessionProperties sessionProperties = new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES);
         MemorySessionRepository sessions = new MemorySessionRepository(clock);
         sessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET), sessionProperties, sessions, clock);
-        AdminRepository admins = mock(AdminRepository.class);
+        admins = mock(AdminRepository.class);
         when(admins.findById(ADMIN_ID)).thenReturn(new Admin(ADMIN_ID, "admin", "hash", true));
         service = new AuthenticationService(
                 mock(UserRepository.class), mock(PasswordHasher.class), sessionManager,
@@ -68,7 +74,7 @@ class AuthenticationServiceLiveAdminIdTest {
                 sessions, mock(ISystemMetrics.class), clock, admins,
                 sessionProperties, new LockoutProperties(5, 15L),
                 new IdentityProperties(List.of(), "admin"),
-                TestTransactions.noOpManager());
+                TestTransactions.recordingManager());
     }
 
     @Test
@@ -105,6 +111,28 @@ class AuthenticationServiceLiveAdminIdTest {
         OptionalInt adminId = assertDoesNotThrow(() -> service.liveAdminId(adminToken));
 
         assertEquals(OptionalInt.empty(), adminId);
+    }
+
+    @Test
+    void GivenALiveTokenOfADeletedAdmin_WhenLiveAdminId_ThenEmptyWithoutThrowing() {
+        String tokenOfTheDeletedAdmin = sessionManager.generateAdminToken(DELETED_ADMIN_ID, "deleted-admin");
+        when(admins.findById(DELETED_ADMIN_ID)).thenReturn(null);
+
+        OptionalInt adminId = assertDoesNotThrow(() -> service.liveAdminId(tokenOfTheDeletedAdmin));
+
+        assertEquals(OptionalInt.empty(), adminId, "a token names no admin once that admin's row is gone");
+    }
+
+    @Test
+    void GivenTheAdminStoreFails_WhenLiveAdminId_ThenTheFailurePropagates() {
+        String adminToken = sessionManager.generateAdminToken(ADMIN_ID, "admin");
+        DataAccessResourceFailureException storeFailure =
+                new DataAccessResourceFailureException("admin store unreachable");
+        when(admins.findById(ADMIN_ID)).thenThrow(storeFailure);
+
+        assertSame(storeFailure, assertThrows(DataAccessResourceFailureException.class,
+                () -> service.liveAdminId(adminToken)),
+                "only a rejected token means \"no admin\"; a store failure must surface unchanged");
     }
 
     @Test

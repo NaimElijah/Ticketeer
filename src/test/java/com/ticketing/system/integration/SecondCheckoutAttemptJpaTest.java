@@ -1,5 +1,8 @@
 package com.ticketing.system.integration;
 
+import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.awaitOrFailWith;
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,12 +15,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -32,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -56,6 +60,8 @@ import com.ticketing.system.sales.domain.CartLineItem;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.CardDetailsDTO;
 import com.ticketing.system.shared.dto.CheckoutResultDTO;
+import com.ticketing.system.shared.exception.CheckoutInProgressException;
+import com.ticketing.system.shared.exception.ConcurrentReservationException;
 
 /**
  * UC-15 / UC-16, the 3-phase checkout (#185): an order frozen as CHECKOUT_IN_PROGRESS belongs to the
@@ -78,6 +84,9 @@ class SecondCheckoutAttemptJpaTest {
     private static final CardDetailsDTO CARD = new CardDetailsDTO("4111111111111234", "123", 12, 2030, "Test Holder");
     private static final String GUEST_EMAIL = "second-attempt-guest@test.com";
     private static final String CHECKOUT_FAILED = "Checkout failed, tickets returned to stock";
+    // CheckoutService's wrapper and buyer-facing text for an attempt whose freeze save lost a race.
+    private static final String NOTHING_CHANGED = "Checkout failed, nothing was changed";
+    private static final String CART_CHANGED = "Your cart changed while you were paying. Please try again.";
     private static final long AWAIT_SECONDS = 20;
 
     @Autowired private AuthenticationService authService;
@@ -231,7 +240,8 @@ class SecondCheckoutAttemptJpaTest {
             if (freeze == 1) {
                 Future<CheckoutResultDTO> loser = otherThreads.submit(() ->
                         checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD));
-                awaitOrFail(loserAtItsFreeze, "arrangement: the loser validates the order before it is frozen");
+                awaitOrFail(loserAtItsFreeze, Duration.ofSeconds(AWAIT_SECONDS),
+                        "arrangement: the loser validates the order before it is frozen");
                 invocation.callRealMethod();
                 afterTheSaveCommits(() -> {
                     winnerFrozen.countDown();
@@ -240,7 +250,8 @@ class SecondCheckoutAttemptJpaTest {
                 });
             } else if (freeze == 2) {
                 loserAtItsFreeze.countDown();
-                awaitOrFail(winnerFrozen, "arrangement: the winner's freeze commits first");
+                awaitOrFail(winnerFrozen, Duration.ofSeconds(AWAIT_SECONDS),
+                        "arrangement: the winner's freeze commits first");
                 invocation.callRealMethod();
             } else {
                 invocation.callRealMethod();
@@ -259,7 +270,7 @@ class SecondCheckoutAttemptJpaTest {
             Throwable winnerFailure = failureOf(
                     () -> checkoutService.checkoutMember(member.token(), newIdempotencyKey(), CURRENCY, CARD));
 
-            assertNotNull(loserFailure.get(), "arrangement: the loser's freeze must lose to the winner's");
+            assertFailedBecauseItsFreezeLost(loserFailure.get());
             assertFailedBecauseTheOrderWasInCheckout(laterFailure.get());
             stateAfterLater.get().assertFrozenWithItsSeat();
             assertNull(winnerFailure, "the winner, left alone, completes its purchase");
@@ -330,29 +341,23 @@ class SecondCheckoutAttemptJpaTest {
         return save.<ActiveOrder>getArgument(0).isCheckoutInProgress();
     }
 
-    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
-    private static Throwable failureOf(Callable<?> call) {
-        try {
-            call.call();
-            return null;
-        } catch (ExecutionException e) {
-            return e.getCause();
-        } catch (Exception e) {
-            return e;
-        }
-    }
-
-    private static void awaitOrFail(CountDownLatch latch, String what) throws InterruptedException {
-        if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-            throw new IllegalStateException(what + ", but it never did");
-        }
-    }
-
     private static void assertFailedBecauseTheOrderWasInCheckout(Throwable failure) {
         assertNotNull(failure, "the attempt must fail, but it completed");
         assertEquals(CHECKOUT_FAILED, failure.getMessage(), "the checkout failure wrapper");
-        assertInstanceOf(IllegalStateException.class, failure.getCause(),
+        assertInstanceOf(CheckoutInProgressException.class, failure.getCause(),
                 "the attempt fails on the order already being in checkout, but the cause was " + failure.getCause());
+    }
+
+    // The loser's freeze save lost on the winner's @Version, so it changed nothing: the buyer is told the cart
+    // changed and to try again, and the lost race stays the cause. Any other failure is not the race under test.
+    private static void assertFailedBecauseItsFreezeLost(Throwable failure) {
+        assertNotNull(failure, "arrangement: the loser's freeze must lose to the winner's, but the loser completed");
+        assertEquals(NOTHING_CHANGED, failure.getMessage(), "the checkout failure wrapper");
+        ConcurrentReservationException lostRace = assertInstanceOf(ConcurrentReservationException.class,
+                failure.getCause(), "the loser must fail on its lost freeze, but the cause was " + failure.getCause());
+        assertEquals(CART_CHANGED, lostRace.getMessage(), "what the buyer is told");
+        assertInstanceOf(ConcurrencyFailureException.class, lostRace.getCause(),
+                "the lost version race must stay the cause, but was " + lostRace.getCause());
     }
 
     // Whether the emptied cart row is kept or deleted is not specified; either way nothing is held.
@@ -381,9 +386,8 @@ class SecondCheckoutAttemptJpaTest {
         doAnswer(invocation -> {
             if (firstCharge.getAndSet(false)) {
                 charging.countDown();
-                if (!releaseCharge.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("the test never released the held charge");
-                }
+                awaitOrFailWith(releaseCharge, Duration.ofSeconds(AWAIT_SECONDS),
+                        "the test never released the held charge");
             }
             return invocation.callRealMethod();
         }).when(paymentGateway).charge(any());

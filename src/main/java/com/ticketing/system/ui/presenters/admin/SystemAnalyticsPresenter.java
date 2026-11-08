@@ -10,6 +10,7 @@ import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.session.AuthSession;
@@ -81,7 +82,7 @@ public class SystemAnalyticsPresenter {
                     ? systemAdminService.openMarket(request)
                     : systemAdminService.closeMarket(request);
             return new MarketActionOutcome.Success(state);
-        } catch (UnauthorizedActionException e) {
+        } catch (UnauthorizedActionException | InvalidTokenException e) {
             return new MarketActionOutcome.NotAuthenticated();
         } catch (MarketNotOpenException | InvalidStateTransitionException e) {
             return new MarketActionOutcome.Rejected(e.getMessage());

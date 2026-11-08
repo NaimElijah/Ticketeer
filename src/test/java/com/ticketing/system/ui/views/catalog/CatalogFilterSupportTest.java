@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -16,10 +15,10 @@ import org.junit.jupiter.api.Test;
  * category label → enum-name mapping and the date-range preset → concrete window. Shared by the
  * browse and owner event-list filters; needs no Vaadin/Spring.
  */
-class BrowseEventsFilterTest {
+class CatalogFilterSupportTest {
 
     @Test
-    void categoryFilterValue_mapsLabelsToEnumNames() {
+    void GivenCategoryLabels_WhenCategoryFilterValue_ThenMapsLabelsToEnumNames() {
         assertEquals("CONCERT",  CatalogFilterSupport.categoryFilterValue("Concerts"));
         assertEquals("SPORTS",   CatalogFilterSupport.categoryFilterValue("Sports"));
         assertEquals("THEATER",  CatalogFilterSupport.categoryFilterValue("Theatre"));
@@ -28,14 +27,14 @@ class BrowseEventsFilterTest {
     }
 
     @Test
-    void categoryFilterValue_allOrUnknownOrNull_isNull() {
+    void GivenAllOrUnknownOrNull_WhenCategoryFilterValue_ThenIsNull() {
         assertNull(CatalogFilterSupport.categoryFilterValue("All categories"));
         assertNull(CatalogFilterSupport.categoryFilterValue("Nonsense"));
         assertNull(CatalogFilterSupport.categoryFilterValue(null));
     }
 
     @Test
-    void dateWindow_anyTimeOrNull_isOpen() {
+    void GivenAnyTimeOrNull_WhenDateWindow_ThenIsOpen() {
         assertEquals(new CatalogFilterSupport.DateWindow(null, null),
                 CatalogFilterSupport.dateWindow("Any time", LocalDate.of(2026, 6, 24)));
         assertEquals(new CatalogFilterSupport.DateWindow(null, null),
@@ -43,7 +42,7 @@ class BrowseEventsFilterTest {
     }
 
     @Test
-    void dateWindow_relativePresets_resolveAgainstToday() {
+    void GivenRelativePresets_WhenDateWindow_ThenResolveAgainstToday() {
         LocalDate today = LocalDate.of(2026, 6, 24);
         assertEquals(new CatalogFilterSupport.DateWindow(today, today),
                 CatalogFilterSupport.dateWindow("Today", today));
@@ -58,16 +57,33 @@ class BrowseEventsFilterTest {
     }
 
     @Test
-    void dateWindow_thisWeekend_isUpcomingSaturdayToSunday() {
+    void GivenThisWeekendOnAWednesday_WhenDateWindow_ThenIsUpcomingSaturdayToSunday() {
         LocalDate today = LocalDate.of(2026, 6, 24); // a Wednesday
-        CatalogFilterSupport.DateWindow w = CatalogFilterSupport.dateWindow("This weekend", today);
-        assertEquals(DayOfWeek.SATURDAY, w.from().getDayOfWeek());
-        assertEquals(w.from().plusDays(1), w.to());          // Saturday → Sunday
-        assertFalse(w.from().isBefore(today));               // upcoming, not in the past
+
+        assertEquals(new CatalogFilterSupport.DateWindow(LocalDate.of(2026, 6, 27), LocalDate.of(2026, 6, 28)),
+                CatalogFilterSupport.dateWindow("This weekend", today));
     }
 
     @Test
-    void dateWindow_customRange_isOpenBounds() {
+    void GivenThisWeekendOnASaturday_WhenDateWindow_ThenIsTodayToTomorrow() {
+        LocalDate saturday = LocalDate.of(2026, 6, 27);
+
+        assertEquals(new CatalogFilterSupport.DateWindow(saturday, LocalDate.of(2026, 6, 28)),
+                CatalogFilterSupport.dateWindow("This weekend", saturday));
+    }
+
+    // On a Sunday the weekend is nearly over, so "This weekend" means what is left of it, today, not the next
+    // one (the owner's decision, 2026-11-07, #189).
+    @Test
+    void GivenThisWeekendOnASunday_WhenDateWindow_ThenIsTodayOnly() {
+        LocalDate sunday = LocalDate.of(2026, 6, 28);
+
+        assertEquals(new CatalogFilterSupport.DateWindow(sunday, sunday),
+                CatalogFilterSupport.dateWindow("This weekend", sunday));
+    }
+
+    @Test
+    void GivenCustomRange_WhenDateWindow_ThenIsOpenBounds() {
         // "Custom range" falls through to the default case — the view reads the
         // DatePicker values directly instead of using dateWindow().
         assertEquals(new CatalogFilterSupport.DateWindow(null, null),
@@ -77,23 +93,23 @@ class BrowseEventsFilterTest {
     // ── locationFilter ────────────────────────────────────────────────────────
 
     @Test
-    void locationFilter_citySelected_returnsCity() {
+    void GivenCityAndCountrySelected_WhenLocationFilter_ThenReturnsCity() {
         assertEquals("Tel Aviv", CatalogFilterSupport.locationFilter("Tel Aviv", "Israel"));
     }
 
     @Test
-    void locationFilter_citySelectedIgnoresCountry() {
+    void GivenCitySelectedWithAllCountries_WhenLocationFilter_ThenReturnsCity() {
         // city takes priority — country is redundant once city is known
         assertEquals("Tel Aviv", CatalogFilterSupport.locationFilter("Tel Aviv", "All countries"));
     }
 
     @Test
-    void locationFilter_onlyCountrySelected_returnsCountry() {
+    void GivenOnlyCountrySelected_WhenLocationFilter_ThenReturnsCountry() {
         assertEquals("Israel", CatalogFilterSupport.locationFilter("All cities", "Israel"));
     }
 
     @Test
-    void locationFilter_nothingSelected_returnsNull() {
+    void GivenNothingSelected_WhenLocationFilter_ThenReturnsNull() {
         assertNull(CatalogFilterSupport.locationFilter("All cities", "All countries"));
     }
 
@@ -101,25 +117,25 @@ class BrowseEventsFilterTest {
     // Pure prepend helpers — the data source supplies the (already distinct/sorted) values.
 
     @Test
-    void countryOptions_prependsAllCountries() {
+    void GivenCountries_WhenCountryOptions_ThenPrependsAllCountries() {
         assertEquals(List.of("All countries", "Israel", "USA"),
                 CatalogFilterSupport.countryOptions(List.of("Israel", "USA")));
     }
 
     @Test
-    void countryOptions_emptyOrNull_isJustSentinel() {
+    void GivenEmptyOrNullCountries_WhenCountryOptions_ThenIsJustSentinel() {
         assertEquals(List.of("All countries"), CatalogFilterSupport.countryOptions(List.of()));
         assertEquals(List.of("All countries"), CatalogFilterSupport.countryOptions(null));
     }
 
     @Test
-    void cityOptions_prependsAllCities() {
+    void GivenCities_WhenCityOptions_ThenPrependsAllCities() {
         assertEquals(List.of("All cities", "Tel Aviv", "Haifa"),
                 CatalogFilterSupport.cityOptions(List.of("Tel Aviv", "Haifa")));
     }
 
     @Test
-    void cityOptions_emptyOrNull_isJustSentinel() {
+    void GivenEmptyOrNullCities_WhenCityOptions_ThenIsJustSentinel() {
         assertEquals(List.of("All cities"), CatalogFilterSupport.cityOptions(List.of()));
         assertEquals(List.of("All cities"), CatalogFilterSupport.cityOptions(null));
     }
@@ -127,23 +143,23 @@ class BrowseEventsFilterTest {
     // ── isValidCustomRange ────────────────────────────────────────────────────
 
     @Test
-    void isValidCustomRange_fromBeforeTo_isValid() {
+    void GivenFromBeforeTo_WhenIsValidCustomRange_ThenIsValid() {
         assertTrue(CatalogFilterSupport.isValidCustomRange(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30)));
     }
 
     @Test
-    void isValidCustomRange_sameDay_isValid() {
+    void GivenSameDay_WhenIsValidCustomRange_ThenIsValid() {
         LocalDate day = LocalDate.of(2026, 6, 15);
         assertTrue(CatalogFilterSupport.isValidCustomRange(day, day));
     }
 
     @Test
-    void isValidCustomRange_fromAfterTo_isInvalid() {
+    void GivenFromAfterTo_WhenIsValidCustomRange_ThenIsInvalid() {
         assertFalse(CatalogFilterSupport.isValidCustomRange(LocalDate.of(2026, 6, 30), LocalDate.of(2026, 6, 1)));
     }
 
     @Test
-    void isValidCustomRange_openBounds_areValid() {
+    void GivenOpenBounds_WhenIsValidCustomRange_ThenAreValid() {
         // a single open-ended bound (or none) is a legitimate query, not an inversion
         assertTrue(CatalogFilterSupport.isValidCustomRange(null, LocalDate.of(2026, 6, 1)));
         assertTrue(CatalogFilterSupport.isValidCustomRange(LocalDate.of(2026, 6, 1), null));

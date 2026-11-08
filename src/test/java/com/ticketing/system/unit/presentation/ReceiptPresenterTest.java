@@ -25,6 +25,7 @@ import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.support.ServiceErrors;
 import ch.qos.logback.classic.Level;
 import jakarta.persistence.PersistenceException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class ReceiptPresenterTest {
 
@@ -47,7 +48,7 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_success_carriesReceipt() {
+    void GivenTheMembersOwnReceipt_WhenLoad_ThenCarriesReceipt() {
         PurchaseRecordDTO record = record();
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenReturn(record);
 
@@ -94,17 +95,17 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_missingReceipt_returnsNotFound() {
+    void GivenAMissingReceipt_WhenLoad_ThenNotFoundSaysTheReceiptWasNotFound() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
                 .thenThrow(new EntityNotFoundException("OrderReceipt", RECEIPT_ID));
 
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
 
-        assertInstanceOf(ReceiptPresenter.Outcome.NotFound.class, outcome);
+        assertEquals(new ReceiptPresenter.Outcome.NotFound("We couldn't find that receipt."), outcome);
     }
 
     @Test
-    void load_otherMembersReceipt_returnsNotFound() {
+    void GivenAnotherMembersReceipt_WhenLoad_ThenReturnsNotFound() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID))
                 .thenThrow(new UnauthorizedActionException("view receipt " + RECEIPT_ID, 42));
 
@@ -132,12 +133,12 @@ class ReceiptPresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsFailure() {
+    void GivenAnInvalidToken_WhenLoad_ThenFailureAsksTheMemberToSignIn() {
         when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenThrow(new InvalidTokenException());
 
         ReceiptPresenter.Outcome outcome = presenter.load(TOKEN, RECEIPT_ID);
 
-        assertInstanceOf(ReceiptPresenter.Outcome.Failure.class, outcome);
+        assertEquals(new ReceiptPresenter.Outcome.Failure("Please sign in to view this receipt."), outcome);
     }
 
     // ---- UI-B5: an internal failure goes through ServiceErrors (#187) ----
@@ -156,5 +157,15 @@ class ReceiptPresenterTest {
                     serviceErrorsLog.throwableClassNamesAt(Level.ERROR),
                     "the internal failure must be logged at ERROR with its exception by ServiceErrors");
         }
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenFailureAsksTheMemberToSignIn() {
+        when(memberAccountService.viewMyReceipt(TOKEN, RECEIPT_ID)).thenThrow(new SessionExpiredException());
+
+        assertEquals(new ReceiptPresenter.Outcome.Failure("Please sign in to view this receipt."),
+                presenter.load(TOKEN, RECEIPT_ID));
     }
 }

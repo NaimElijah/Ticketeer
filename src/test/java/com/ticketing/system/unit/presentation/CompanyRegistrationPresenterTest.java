@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.organization.application.service.CompanyManagementService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.presenters.company.CompanyRegistrationPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
@@ -113,5 +115,22 @@ class CompanyRegistrationPresenterTest {
         CompanyRegistrationPresenter.Outcome outcome = presenter.register(NAME, DESCRIPTION);
 
         assertInstanceOf(CompanyRegistrationPresenter.Outcome.NameTaken.class, outcome);
+    }
+
+    @Test
+    void GivenAnExpiredToken_WhenRegister_ThenNotAuthenticated() {
+        when(companyManagementService.registerCompany(eq(TOKEN), any())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(CompanyRegistrationPresenter.Outcome.NotAuthenticated.class,
+                presenter.register(NAME, DESCRIPTION));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenRegister_ThenNotAuthenticated() {
+        when(companyManagementService.registerCompany(eq(TOKEN), any()))
+                .thenThrow(new InvalidTokenException("revoked"));
+
+        assertInstanceOf(CompanyRegistrationPresenter.Outcome.NotAuthenticated.class,
+                presenter.register(NAME, DESCRIPTION));
     }
 }

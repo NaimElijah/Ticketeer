@@ -7,23 +7,81 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkTextRows;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.dom.Element;
 
 /**
  * Unit tests for {@link LkTextRows} — the repeatable add-row text input behind the
- * event-creation "Artists" field. Constructed headless (no UI), like {@code VaadinSmokeTest}.
+ * event-creation "Artists" field. Constructed headless; a test that clicks a row's remover attaches the rows
+ * to the harness's page first, as only a control on a page can be clicked.
  */
 class LkTextRowsTest {
 
     private static final int ARTIST_LIMIT = 40;
 
+    private ViewHarness harness;
+
+    @BeforeEach
+    void setUp() {
+        harness = new ViewHarness();
+    }
+
+    @AfterEach
+    void tearDown() {
+        harness.close();
+    }
+
+    // ---- removing a row, and editing again (#189) ----
+
+    // An artist the owner removed must not reach the event.
     @Test
-    void newComponent_startsWithOneEmptyRow_noValues() {
+    void GivenTwoRows_WhenTheFirstIsRemoved_ThenGetValuesHoldsOnlyTheSecond() {
+        LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
+        rows.setValues(List.of("Queen", "Muse"));
+        harness.attach(rows);
+
+        A11y.activate(removers(rows).get(0));
+
+        assertEquals(List.of("Muse"), rows.getValues());
+        assertEquals(List.of("Muse"), fieldValues(rows), "the removed row's field must be gone too");
+    }
+
+    @Test
+    void GivenOneRow_WhenItIsRemoved_ThenOneEmptyRowRemainsToTypeIn() {
+        LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
+        rows.setValues(List.of("Queen"));
+        harness.attach(rows);
+
+        A11y.activate(removers(rows).get(0));
+
+        assertEquals(List.of(), rows.getValues());
+        assertEquals(List.of(""), fieldValues(rows), "one empty row stays, so there is somewhere to type");
+    }
+
+    @Test
+    void GivenReadOnlyRows_WhenMadeEditableAgain_ThenTheAddButtonTheRemoversAndEditingReturn() {
+        LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
+        rows.setValues(List.of("A", "B"));
+        rows.readOnly(true);
+
+        rows.readOnly(false);
+
+        assertTrue(addButtonVisible(rows), "add button visible once editable again");
+        assertEquals(2, removeControlCount(rows), "one ✕ remove control per row again");
+        assertTrue(descendantsOf(rows, TextField.class).stream().noneMatch(TextField::isReadOnly),
+            "every row can be edited again");
+        assertEquals(List.of("A", "B"), rows.getValues());
+    }
+
+    @Test
+    void GivenNoValuesSet_WhenConstructed_ThenStartsWithOneEmptyRowAndNoValues() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         assertEquals(List.of(), rows.getValues());
@@ -31,7 +89,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void setValues_roundTripsInOrder_oneRowEach() {
+    void GivenThreeValues_WhenSetValues_ThenRoundTripsInOrderWithOneRowEach() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         rows.setValues(List.of("The Beatles", "Pink Floyd", "Queen"));
@@ -41,7 +99,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void getValues_trimsAndDropsBlanks() {
+    void GivenValuesWithPaddingAndBlanks_WhenGetValues_ThenTrimsAndDropsBlanks() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         rows.setValues(List.of("The Beatles", "   ", " Pink Floyd ", "", "  Queen"));
@@ -51,7 +109,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void setValues_emptyOrNull_keepsOneEmptyRow_whenEditable() {
+    void GivenAnEditableComponent_WhenSetValuesEmptyOrNull_ThenKeepsOneEmptyRow() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
 
         rows.setValues(List.of());
@@ -64,7 +122,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void editable_showsAddButtonAndRemoveControls() {
+    void GivenAnEditableComponent_WhenSetValues_ThenShowsAddButtonAndRemoveControls() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
         rows.setValues(List.of("A", "B"));
 
@@ -73,7 +131,7 @@ class LkTextRowsTest {
     }
 
     @Test
-    void readOnly_hidesAddButtonAndRemoveControls_butStillReportsValues() {
+    void GivenTwoRows_WhenReadOnly_ThenHidesAddButtonAndRemoveControlsButStillReportsValues() {
         LkTextRows rows = new LkTextRows("Artists", "+ Add artist");
         rows.setValues(List.of("A", "B"));
 
@@ -125,7 +183,15 @@ class LkTextRowsTest {
 
     // Each row has a remove control in the rendered DOM: a button (by role) whose name starts "Remove" (#188).
     private static int removeControlCount(Component root) {
-        return A11y.elements(root, e -> A11y.isButton(e) && A11y.name(e).startsWith("Remove")).size();
+        return removers(root).size();
+    }
+
+    private static List<Element> removers(Component root) {
+        return A11y.elements(root, e -> A11y.isButton(e) && A11y.name(e).startsWith("Remove"));
+    }
+
+    private static List<String> fieldValues(Component root) {
+        return descendantsOf(root, TextField.class).stream().map(TextField::getValue).toList();
     }
 
     private static boolean addButtonVisible(Component root) {

@@ -74,6 +74,23 @@ class WsepHttpClientResponseTest {
     }
 
     @Test
+    void GivenBodyExactlyAtTheCap_WhenPost_ThenReturnsIt() {
+        String atTheCap = "x".repeat(WsepHttpClient.MAX_RESPONSE_BODY_BYTES);
+        server.respondWith(200, atTheCap);
+
+        assertEquals(atTheCap, client.post(WsepHttpClient.action("issue_ticket")),
+                "a body of exactly " + WsepHttpClient.MAX_RESPONSE_BODY_BYTES + " bytes is within the cap");
+    }
+
+    @Test
+    void GivenBodyOneByteOverTheCap_WhenPost_ThenThrows() {
+        server.respondWith(200, "x".repeat(WsepHttpClient.MAX_RESPONSE_BODY_BYTES + 1));
+
+        assertThrows(WsepCommunicationException.class, () -> client.post(WsepHttpClient.action("issue_ticket")),
+                "one byte past the cap is no WSEP reply and must be refused");
+    }
+
+    @Test
     void GivenBodyOverTheCap_WhenPost_ThenThrowsWsepCommunicationException() {
         byte[] oversized = new byte[OVERSIZED_REPLY_BYTES];
         Arrays.fill(oversized, (byte) 'x');

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -21,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 import com.ticketing.system.catalog.application.dto.EventCreationDTO;
 import com.ticketing.system.catalog.application.dto.EventDetailDTO;
@@ -59,6 +62,7 @@ import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.MarketControlRequestDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO;
 import com.ticketing.system.shared.dto.VenueMapConfigDTO.ZoneConfigDTO;
+import com.ticketing.system.shared.event.EventCancelledNotice;
 import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
@@ -67,13 +71,16 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * through the payment service (I.3). Drives the real reserve → checkout → cancel path against live
  * services (test profile: in-memory repositories and the in-process payment and issuer stubs). The
  * payment stub is wrapped in a spy so a test can make one refund fail and count the refunds per charge.
+ * The events each test publishes are recorded, so a test can see which holders were notified.
  */
 @SpringBootTest
 @ActiveProfiles({"test", PersistenceProfiles.MEMORY})
+@RecordApplicationEvents
 class EventCancellationAcceptanceTest {
 
     private static final double TICKET_PRICE = 50.0;
     private static final int TICKETS_BOUGHT = 2;
+    private static final int GUEST_AGE = 25;
 
     @Autowired private AuthenticationService authService;
     @Autowired private CompanyManagementService companyService;
@@ -86,6 +93,8 @@ class EventCancellationAcceptanceTest {
     @Autowired private TicketRepository ticketRepository;
     @Autowired private CompanyAnalyticsService companyAnalyticsService;
     @Autowired private SystemAnalyticsService systemAnalyticsService;
+    @Autowired private Clock clock;
+    @Autowired private ApplicationEvents applicationEvents;
 
     @MockitoSpyBean
     private PaymentGateway paymentGateway;
@@ -117,6 +126,10 @@ class EventCancellationAcceptanceTest {
         List<Ticket> tickets = ticketRepository.findByOrderReceiptId(receiptId);
         assertFalse(tickets.isEmpty());
         assertTrue(tickets.stream().allMatch(t -> t.getStatus() == TicketStatus.REFUNDED));
+        // The positive control for the guest test's "no notice": a member's holder notice is recorded here.
+        assertEquals(List.of(new EventCancelledNotice(receipt.getHolderUserId(), event.eventId(), "Cancelled Show")),
+                applicationEvents.stream(EventCancelledNotice.class)
+                        .filter(notice -> notice.eventId() == event.eventId()).toList());
     }
 
     @Test
@@ -130,6 +143,28 @@ class EventCancellationAcceptanceTest {
 
         OrderReceipt receipt = orderReceiptRepository.findByOrderReceiptId(receiptId).orElseThrow();
         assertEquals(List.of(TICKET_PRICE * TICKETS_BOUGHT), refundAmounts(receipt));
+    }
+
+    // A guest has no member account, so the refund reaches the guest's card and no holder notice is published.
+    @Test
+    void GivenAGuestPaidOrder_WhenOwnerCancelsTheEvent_ThenRefundedAndNoHolderNotified() {
+        AuthTokenDTO owner = registerAndLogin("cancelOwner");
+        Fixture event = newStandingEvent(owner);
+        CheckoutResultDTO order = guestCheckout(event);
+
+        eventManagementService.cancelEventAndRefund(owner.token(), event.eventId());
+
+        OrderReceipt receipt = orderReceiptRepository.findByOrderReceiptId(order.orderReceiptId()).orElseThrow();
+        assertTrue(receipt.isGuestReceipt(), "arrangement: a guest's receipt");
+        assertTrue(receipt.getReceiptLines().stream().allMatch(ReceiptLine::isRefunded));
+        assertEquals(List.of(TICKET_PRICE * TICKETS_BOUGHT), refundAmounts(receipt));
+        verify(paymentGateway).refund(order.paymentTransactionId(), TICKET_PRICE * TICKETS_BOUGHT);
+        List<Ticket> tickets = ticketRepository.findByOrderReceiptId(order.orderReceiptId());
+        assertFalse(tickets.isEmpty());
+        assertTrue(tickets.stream().allMatch(t -> t.getStatus() == TicketStatus.REFUNDED));
+        assertEquals(0, applicationEvents.stream(EventCancelledNotice.class)
+                .filter(notice -> notice.eventId() == event.eventId())
+                .count(), "no holder notice for an event only a guest bought");
     }
 
     // #20 through catalog (review finding 6 on #129): the payment service declines one buyer's refund,
@@ -220,11 +255,21 @@ class EventCancellationAcceptanceTest {
                 "ILS", new CardDetailsDTO("4111111111111111", "123", 12, 2030, "Demo Buyer"));
     }
 
+    /** A guest reserves and checks out {@link #TICKETS_BOUGHT} standing tickets. */
+    private CheckoutResultDTO guestCheckout(Fixture event) {
+        String guestSessionId = authService.startGuestSession().sessionId();
+        reservationService.reserveForGuest(guestSessionId, event.eventId(), event.zoneId(),
+                InventorySelectionDTO.standing(TICKETS_BOUGHT));
+        return checkoutService.checkoutGuest(guestSessionId, "cancel-guest" + SEQ.incrementAndGet() + "@test.com",
+                "idem-cancel-" + SEQ.incrementAndGet(), "ILS",
+                new CardDetailsDTO("4111111111111111", "123", 12, 2030, "Guest Buyer"), GUEST_AGE);
+    }
+
     /** A company and a published single standing-zone event at {@link #TICKET_PRICE}. */
     private Fixture newStandingEvent(AuthTokenDTO owner) {
         int companyId = companyService.registerCompany(
                 owner.token(), new CompanyRegistrationDTO("CancelCo" + SEQ.incrementAndGet(), "desc")).companyId();
-        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime start = LocalDateTime.now(clock).plusDays(10);
         EventDetailDTO event = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Cancelled Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"), List.of(new ShowDate(start, start.plusHours(3))), ZoneId.of("Asia/Jerusalem"), null));

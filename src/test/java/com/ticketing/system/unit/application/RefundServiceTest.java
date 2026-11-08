@@ -1,17 +1,21 @@
 package com.ticketing.system.unit.application;
 
+import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +55,7 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.sales.adapter.out.persistence.MemoryOrderReceiptRepository;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.testutil.TestTransactions;
+import com.ticketing.system.testutil.Tickets;
 
 import ch.qos.logback.classic.Level;
 
@@ -64,6 +69,9 @@ class RefundServiceTest {
     @Mock InventoryCommandPort inventoryPort;
 
     RefundService service;
+
+    // How long the concurrent-refund race may wait for a request to start or end before it fails.
+    static final Duration RACE_BOUND = Duration.ofSeconds(20);
 
     static final String VALID_TOKEN   = "valid-token";
     static final String INVALID_TOKEN = "bad-token";
@@ -83,7 +91,7 @@ class RefundServiceTest {
     @BeforeEach
     void setUp() {
         service = new RefundService(authenticationService, orderReceiptRepository, ticketRepository,
-                paymentGateway, inventoryPort, TestTransactions.noOpManager());
+                paymentGateway, inventoryPort, TestTransactions.recordingManager());
     }
 
     private static OrderReceipt memberReceiptWithCharge(int userId) {
@@ -97,7 +105,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenOwnPaidOrder_whenRequestRefund_thenReceiptAndTicketsRefunded() {
+    void GivenOwnPaidOrder_WhenRequestRefund_ThenReceiptAndTicketsRefunded() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         RefundResultDTO result = gatewayResult();
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
@@ -118,7 +126,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenSeatedPaidOrder_whenRequestRefund_thenSeatReturnedToStock() {
+    void GivenSeatedPaidOrder_WhenRequestRefund_ThenSeatReturnedToStock() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         RefundResultDTO result = gatewayResult();
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
@@ -142,7 +150,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenInventoryReturnFails_whenRequestRefund_thenRefundStillSucceeds() {
+    void GivenInventoryReturnFails_WhenRequestRefund_ThenRefundStillSucceeds() {
         // Regression: a failure while returning inventory to stock must NOT propagate — the gateway
         // refund and the receipt/ticket flips have already committed, so the refund must still report
         // success. The inventory return is now owned by the catalog port; RefundService guards the call
@@ -169,17 +177,17 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenInvalidToken_whenRequestRefund_thenInvalidTokenThrown() {
+    void GivenInvalidToken_WhenRequestRefund_ThenInvalidTokenThrown() {
         Mockito.when(authenticationService.validateToken(INVALID_TOKEN)).thenReturn(false);
 
         assertThatThrownBy(() -> service.requestRefund(INVALID_TOKEN, ORDER_ID, "x"))
-                .isInstanceOf(InvalidTokenException.class);
+                .isExactlyInstanceOf(InvalidTokenException.class);
 
         Mockito.verify(paymentGateway, Mockito.never()).refund(Mockito.anyInt(), Mockito.anyDouble());
     }
 
     @Test
-    void givenMissingOrder_whenRequestRefund_thenEntityNotFoundThrown() {
+    void GivenMissingOrder_WhenRequestRefund_ThenEntityNotFoundThrown() {
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
         Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.empty());
@@ -189,7 +197,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenAnotherMembersOrder_whenRequestRefund_thenUnauthorizedThrown() {
+    void GivenAnotherMembersOrder_WhenRequestRefund_ThenUnauthorizedThrown() {
         OrderReceipt receipt = memberReceiptWithCharge(OTHER_USER);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -202,7 +210,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenAlreadyRefundedOrder_whenRequestRefund_thenNotEligibleThrown() {
+    void GivenAlreadyRefundedOrder_WhenRequestRefund_ThenNotEligibleThrown() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         receipt.markRefunded();
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
@@ -232,7 +240,7 @@ class RefundServiceTest {
     }
 
     @Test
-    void givenGatewayFailure_whenRequestRefund_thenRefundFailedPropagatesAndNoStateChange() {
+    void GivenGatewayFailure_WhenRequestRefund_ThenRefundFailedPropagatesAndNoStateChange() {
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
         Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
@@ -245,6 +253,92 @@ class RefundServiceTest {
 
         assertThat(receipt.isFullyRefunded()).isFalse();
         Mockito.verify(orderReceiptRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verifyNoInteractions(ticketRepository, inventoryPort);
+    }
+
+    // A guest's order has no member holder, so no member token can claim its refund.
+    @Test
+    void GivenAGuestsOrder_WhenAMemberRequestsItsRefund_ThenUnauthorizedAndTheGatewayIsNotCalled() {
+        OrderReceipt guestReceipt = OrderReceipt.forGuest("guest@example.com", "guest-session", ORDER_ID, TOTAL,
+                List.of(new ReceiptLine(101, TOTAL, 2, 1, "15", WHEN)), WHEN,
+                List.of(TransactionRecord.paymentCharge(PAYMENT_TX, "stub", TOTAL, "ILS", WHEN)));
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(guestReceipt));
+
+        assertThatThrownBy(() -> service.requestRefund(VALID_TOKEN, ORDER_ID, "x"))
+                .isExactlyInstanceOf(UnauthorizedActionException.class);
+
+        Mockito.verify(paymentGateway, Mockito.never()).refund(Mockito.anyInt(), Mockito.anyDouble());
+        Mockito.verify(orderReceiptRepository, Mockito.never()).save(Mockito.any());
+        assertThat(guestReceipt.hasRefundedOrPendingLines()).as("the guest's order is untouched").isFalse();
+        Mockito.verifyNoInteractions(ticketRepository, inventoryPort);
+    }
+
+    @Test
+    void GivenAPaidOrderWithoutACharge_WhenRequestRefund_ThenRefundFailedAndTheGatewayIsNotCalled() {
+        OrderReceipt uncharged = OrderReceipt.forMember(ORDER_ID, USER_ID, TOTAL,
+                List.of(new ReceiptLine(101, TOTAL, 2, 1, "15", WHEN)), WHEN);
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(uncharged));
+
+        assertThatThrownBy(() -> service.requestRefund(VALID_TOKEN, ORDER_ID, "x"))
+                .isExactlyInstanceOf(RefundFailedException.class)
+                .hasMessageContaining("receipt does not contain a payment transaction");
+
+        Mockito.verify(paymentGateway, Mockito.never()).refund(Mockito.anyInt(), Mockito.anyDouble());
+        Mockito.verify(orderReceiptRepository, Mockito.never()).save(Mockito.any());
+        assertThat(uncharged.hasRefundedOrPendingLines()).as("nothing is recorded as refunded").isFalse();
+        Mockito.verifyNoInteractions(ticketRepository, inventoryPort);
+    }
+
+    // A ticket that was never sold, such as one stored RESERVED, is voided with the order, and its place is
+    // not handed back to stock: only a sold place is.
+    @Test
+    void GivenAReservedTicketOnTheOrder_WhenRequestRefund_ThenItIsVoidedAndOnlyTheSoldSeatReturnsToStock() {
+        OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
+        Ticket sold = seatedTicket();
+        Ticket reserved = Tickets.storedAs(TicketStatus.RESERVED, EVENT_ID, ZONE_ID, ORDER_ID, "B2", TOTAL, 504,
+                "barcode-4");
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(receipt));
+        Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(gatewayResult());
+        Mockito.when(paymentGateway.getId()).thenReturn("stub");
+        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(sold, reserved));
+
+        service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
+
+        assertThat(reserved.getStatus()).isEqualTo(TicketStatus.VOIDED);
+        Mockito.verify(ticketRepository).save(reserved);
+        assertThat(sold.getStatus()).isEqualTo(TicketStatus.REFUNDED);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<InventoryLineDTO>> linesCaptor = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(inventoryPort).returnSoldToStock(linesCaptor.capture());
+        assertThat(linesCaptor.getValue())
+                .as("only the sold seat goes back to stock")
+                .containsExactly(new InventoryLineDTO(EVENT_ID, ZONE_ID, "A9"));
+    }
+
+    @Test
+    void GivenAStandingPaidOrder_WhenRequestRefund_ThenItsPlaceReturnsToStockWithoutASeat() {
+        OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
+        Mockito.when(authenticationService.validateToken(VALID_TOKEN)).thenReturn(true);
+        Mockito.when(authenticationService.extractUserId(VALID_TOKEN)).thenReturn(USER_ID);
+        Mockito.when(orderReceiptRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(java.util.Optional.of(receipt));
+        Mockito.when(paymentGateway.refund(PAYMENT_TX, TOTAL)).thenReturn(gatewayResult());
+        Mockito.when(paymentGateway.getId()).thenReturn("stub");
+        Mockito.when(ticketRepository.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of(ticket));
+
+        service.requestRefund(VALID_TOKEN, ORDER_ID, "Can't attend");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<InventoryLineDTO>> linesCaptor = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(inventoryPort).returnSoldToStock(linesCaptor.capture());
+        assertThat(linesCaptor.getValue())
+                .as("a standing place is one unit of its zone, named by no seat")
+                .containsExactly(new InventoryLineDTO(EVENT_ID, ZONE_ID, null));
     }
 
     // X1 regression: two concurrent refund requests for the same order must not both reach the gateway.
@@ -252,7 +346,7 @@ class RefundServiceTest {
     // the loser must see the order already refunded and bail. Deterministic given the lock (one wins,
     // one throws BusinessRuleViolationException) regardless of thread timing.
     @Test
-    void givenConcurrentRefundRequests_whenRequestRefund_thenGatewayRefundsExactlyOnce() throws Exception {
+    void GivenConcurrentRefundRequests_WhenRequestRefund_ThenGatewayRefundsExactlyOnce() throws Exception {
         OrderReceiptRepository realReceiptRepo = new MemoryOrderReceiptRepository();
         OrderReceipt receipt = memberReceiptWithCharge(USER_ID);
         realReceiptRepo.save(receipt); // id == ORDER_ID
@@ -275,30 +369,36 @@ class RefundServiceTest {
         Mockito.when(ticketRepo.findByOrderReceiptId(ORDER_ID)).thenReturn(List.of());
         InventoryCommandPort inventoryPortMock = Mockito.mock(InventoryCommandPort.class);
 
-        RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, inventoryPortMock, TestTransactions.noOpManager());
+        RefundService concurrentService = new RefundService(auth, realReceiptRepo, ticketRepo, countingGateway, inventoryPortMock, TestTransactions.recordingManager());
 
         int threads = 2;
-        CyclicBarrier barrier = new CyclicBarrier(threads);
+        CountDownLatch bothStarted = new CountDownLatch(threads);
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         AtomicInteger succeeded = new AtomicInteger();
         AtomicInteger alreadyRefunded = new AtomicInteger();
-        List<Future<?>> futures = new ArrayList<>();
-        for (int i = 0; i < threads; i++) {
-            futures.add(pool.submit(() -> {
-                barrier.await();
-                try {
-                    concurrentService.requestRefund(VALID_TOKEN, ORDER_ID, "x");
-                    succeeded.incrementAndGet();
-                } catch (BusinessRuleViolationException expected) {
-                    alreadyRefunded.incrementAndGet();
-                }
-                return null;
-            }));
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    bothStarted.countDown();
+                    awaitOrFail(bothStarted, RACE_BOUND, "both refund requests start");
+                    try {
+                        concurrentService.requestRefund(VALID_TOKEN, ORDER_ID, "x");
+                        succeeded.incrementAndGet();
+                    } catch (BusinessRuleViolationException expected) {
+                        alreadyRefunded.incrementAndGet();
+                    }
+                    return null;
+                }));
+            }
+            for (Future<?> f : futures) {
+                assertThat(failureOf(() -> f.get(RACE_BOUND.toSeconds(), TimeUnit.SECONDS)))
+                        .as("each refund request ends within %s, refunded or refused as already refunded", RACE_BOUND)
+                        .isNull();
+            }
+        } finally {
+            pool.shutdownNow();
         }
-        for (Future<?> f : futures) {
-            f.get();
-        }
-        pool.shutdownNow();
 
         assertThat(refundCalls.get()).isEqualTo(1);
         assertThat(succeeded.get()).isEqualTo(1);

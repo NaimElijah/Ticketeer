@@ -6,6 +6,7 @@ import com.ticketing.system.ui.components.kit.LkBanner;
 import com.ticketing.system.ui.components.kit.LkBtn;
 import com.ticketing.system.ui.components.kit.LkCard;
 import com.ticketing.system.ui.components.kit.LkCol;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.components.kit.LkIcon;
 import com.ticketing.system.ui.components.kit.LkPage;
@@ -36,6 +37,9 @@ import java.util.List;
 @RequireCapability(Capability.SUBMIT_COMPLAINT)
 public class SubmitComplaintView extends LkPage {
 
+    private static final String ENTER_SUBJECT = "Enter a subject.";
+    private static final String DESCRIBE_WHAT_HAPPENED = "Describe what happened.";
+
     private final SubmitComplaintPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
 
@@ -60,11 +64,13 @@ public class SubmitComplaintView extends LkPage {
 
         subject.setPlaceholder("Brief summary of the issue");
         subject.setRequired(true);
+        LkFieldRules.sayWhenEmpty(subject, ENTER_SUBJECT);
         LkTextLimit.apply(subject);
         subject.setWidthFull();
         details.setPlaceholder("Describe what happened, including any order or event references…");
         details.setMinHeight("160px");
         details.setRequired(true);
+        LkFieldRules.sayWhenEmpty(details, DESCRIBE_WHAT_HAPPENED);
         LkTextLimit detailsLimit = LkTextLimit.apply(details, presenter.maxDetailsLength(about.getValue()));
         details.setWidthFull();
         about.label("About");
@@ -95,10 +101,10 @@ public class SubmitComplaintView extends LkPage {
     private void submit() {
         errors.clear();
         if (subject.isEmpty()) {
-            errors.reject(subject, "Enter a subject.");
+            errors.reject(subject, ENTER_SUBJECT);
         }
         if (details.isEmpty()) {
-            errors.reject(details, "Describe what happened.");
+            errors.reject(details, DESCRIBE_WHAT_HAPPENED);
         }
         if (!errors.isEmpty()) {
             // The toast stays, but the refused fields now carry the message too, and the first takes focus (#188).

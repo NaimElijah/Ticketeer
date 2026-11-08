@@ -2,6 +2,7 @@ package com.ticketing.system.unit.infrastructure.seed.scenario;
 
 import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioCommand;
 import com.ticketing.system.bootstrap.dev.seed.scenario.ScenarioParser;
+import com.ticketing.system.testutil.DefaultLocale;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -16,7 +17,7 @@ class ScenarioParserTest {
     private final ScenarioParser parser = new ScenarioParser();
 
     @Test
-    void ignoresCommentsAndBlankLines() {
+    void GivenCommentsAndBlankLines_WhenParsed_ThenIgnoresThem() {
         List<ScenarioCommand> cmds = parser.parse("# a comment\n\n   # indented comment\nlogin u1\n");
         assertEquals(1, cmds.size());
         assertEquals("login", cmds.get(0).op());
@@ -24,7 +25,7 @@ class ScenarioParserTest {
     }
 
     @Test
-    void parsesPositionalAndNamedArgs() {
+    void GivenPositionalAndNamedArgs_WhenParsed_ThenReadsPositionalAndTypedNamedValues() {
         ScenarioCommand c = parser.parse("add-event u2 p1 e1 standing:30@50 publish=true days=20").get(0);
         assertEquals("add-event", c.op());
         assertEquals(List.of("u2", "p1", "e1", "standing:30@50"), c.positional());
@@ -33,14 +34,14 @@ class ScenarioParserTest {
     }
 
     @Test
-    void keepsQuotedPositionalValuesWithSpaces() {
+    void GivenQuotedPositionalValuesWithSpaces_WhenParsed_ThenKeepsThem() {
         ScenarioCommand c = parser.parse("open-company u1 p1 \"Live Nation Israel\" \"Arena tours\"").get(0);
         assertEquals("Live Nation Israel", c.pos(2));
         assertEquals("Arena tours", c.pos(3));
     }
 
     @Test
-    void keepsQuotedNamedValuesWithSpaces() {
+    void GivenQuotedNamedValuesWithSpaces_WhenParsed_ThenKeepsThem() {
         ScenarioCommand c = parser.parse(
             "contact-company carol live subject=\"Parking at the venue\" body=\"Is there parking?\"").get(0);
         assertEquals("Parking at the venue", c.named("subject"));
@@ -48,18 +49,29 @@ class ScenarioParserTest {
     }
 
     @Test
-    void opIsLowercasedAndLineNumbersTracked() {
+    void GivenUpperCaseOperationOnALaterLine_WhenParsed_ThenOpIsLowercasedAndLineNumberTracked() {
         ScenarioCommand c = parser.parse("# header line\nREGISTER u1 pw e@x.com 30").get(0);
         assertEquals("register", c.op());
         assertEquals(2, c.line());
     }
 
     @Test
-    void requirePosThrowsLocatedErrorWhenMissing() {
+    void GivenCommandMissingAPositional_WhenRequirePos_ThenThrowsErrorNamingTheMissingArgument() {
         ScenarioCommand c = parser.parse("login").get(0);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> c.requirePos(0, "user alias"));
-        assertTrue(ex.getMessage().contains("user alias"));
+        assertTrue(ex.getMessage().contains("user alias"), "the error names the argument, but was: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("line 1"), "the error names the line, but was: " + ex.getMessage());
+    }
+
+    @Test
+    void GivenANonIntegerNamedValue_WhenIntNamed_ThenTheErrorNamesTheLineAndTheKey() {
+        ScenarioCommand c = parser.parse("login u1\nreserve u1 e1 standing qty=two").get(1);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> c.intNamed("qty", 1));
+
+        assertTrue(ex.getMessage().contains("line 2"), "the error names the line, but was: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("qty"), "the error names the key, but was: " + ex.getMessage());
     }
 
     // ---- Defect 4: a bare expect-error is refused when the file is parsed (#187) ----
@@ -92,14 +104,8 @@ class ScenarioParserTest {
 
     @Test
     void GivenTurkishDefaultLocale_WhenAnUpperCaseOperationIsParsed_ThenItIsTheLowerCaseOperation() {
-        Locale original = Locale.getDefault();
-        Locale.setDefault(Locale.forLanguageTag("tr"));
-        try {
-            ScenarioCommand c = parser.parse("LOGIN u1").get(0);
+        ScenarioCommand c = DefaultLocale.callUnder(Locale.forLanguageTag("tr"), () -> parser.parse("LOGIN u1").get(0));
 
-            assertEquals("login", c.op());
-        } finally {
-            Locale.setDefault(original);
-        }
+        assertEquals("login", c.op());
     }
 }

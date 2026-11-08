@@ -1,5 +1,7 @@
 package com.ticketing.system.integration;
 
+import static com.ticketing.system.testutil.Races.awaitOrFail;
+import static com.ticketing.system.testutil.Races.failureOf;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,9 +14,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -57,6 +58,7 @@ import com.ticketing.system.shared.dto.CardDetailsDTO;
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@DirtiesContext // its bean overrides give this class a context no other class reuses
 class CancelDuringCheckoutJpaTest {
 
     private static final String SEAT = SeatedShowFixture.SEATS.get(0);
@@ -100,7 +102,7 @@ class CancelDuringCheckoutJpaTest {
         try {
             Future<?> checkout = threads.submit(() -> checkoutService.checkoutMember(
                     member.token(), "cancel-race-" + UUID.randomUUID(), CURRENCY, CARD));
-            awaitOrFail(inPhase3, "arrangement: the checkout reaches Phase 3");
+            awaitOrFail(inPhase3, Duration.ofSeconds(AWAIT_SECONDS), "arrangement: the checkout reaches Phase 3");
             Future<?> cancel = threads.submit(() -> {
                 eventManagementService.cancelEventAndRefund(show.ownerToken(), show.eventId());
                 return null;
@@ -131,7 +133,7 @@ class CancelDuringCheckoutJpaTest {
             invocation.callRealMethod();
             if (first.getAndSet(false)) {
                 inPhase3.countDown();
-                awaitOrFail(releasePhase3, "the test releases the held checkout");
+                awaitOrFail(releasePhase3, Duration.ofSeconds(AWAIT_SECONDS), "the test releases the held checkout");
             }
             return null;
         }).when(inventoryPort).validateEventsOnSale(anyList());
@@ -145,23 +147,5 @@ class CancelDuringCheckoutJpaTest {
     protected int count(String sql) {
         Integer count = jdbc.queryForObject(sql, Integer.class);
         return count == null ? 0 : count;
-    }
-
-    /** What the call threw, unwrapped from a Future's ExecutionException; {@code null} when it returned. */
-    private static Throwable failureOf(Callable<?> call) {
-        try {
-            call.call();
-            return null;
-        } catch (ExecutionException e) {
-            return e.getCause();
-        } catch (Exception e) {
-            return e;
-        }
-    }
-
-    private static void awaitOrFail(CountDownLatch latch, String what) throws InterruptedException {
-        if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-            throw new IllegalStateException(what + ", but it never did");
-        }
     }
 }

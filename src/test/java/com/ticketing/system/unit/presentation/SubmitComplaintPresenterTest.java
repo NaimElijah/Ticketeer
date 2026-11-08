@@ -24,8 +24,11 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.SubmitComplaintPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class SubmitComplaintPresenterTest {
+
+    private static final LocalDateTime SUBMITTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private static final String TOKEN = "jwt-token";
 
@@ -42,12 +45,12 @@ class SubmitComplaintPresenterTest {
         return new ConversationDTO(
             id, "COMPLAINT", "OPEN",
             1, "MEMBER", 0, "ADMIN_GROUP",
-            "Refund delay", LocalDateTime.now(), LocalDateTime.now(),
+            "Refund delay", SUBMITTED_AT, SUBMITTED_AT,
             0, List.of(), "alice", "TicketHub Support");
     }
 
     @Test
-    void submit_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSubmit_ThenReturnsNotAuthenticatedWithoutCallingService() {
         SubmitComplaintPresenter.Outcome outcome =
             presenter.submit(null, "Subject", "Body", "Payment or refund");
 
@@ -56,7 +59,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_happyPath_returnsSuccessWithConversationId_andForwardsFormFields() {
+    void GivenTheServiceOpensAComplaint_WhenSubmit_ThenReturnsSuccessWithConversationIdAndForwardsFormFields() {
         when(service.submitComplaint(eq(TOKEN), any())).thenReturn(conversation("conv-42"));
 
         SubmitComplaintPresenter.Outcome outcome =
@@ -76,7 +79,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenSubmit_ThenReturnsGenericFailure() {
         when(service.submitComplaint(eq(TOKEN), any()))
             .thenThrow(new RuntimeException("backend down"));
 
@@ -89,7 +92,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenSubmit_ThenReturnsNotAuthenticated() {
         when(service.submitComplaint(eq(TOKEN), any()))
             .thenThrow(new InvalidTokenException("bad"));
 
@@ -100,7 +103,7 @@ class SubmitComplaintPresenterTest {
     }
 
     @Test
-    void submit_ruleViolated_returnsFailureWithTheRulesMessage() {
+    void GivenARuleViolation_WhenSubmit_ThenReturnsFailureWithTheRulesMessage() {
         BusinessRuleViolationException rule = new BusinessRuleViolationException("A complaint needs a subject.");
         when(service.submitComplaint(eq(TOKEN), any())).thenThrow(rule);
 
@@ -119,5 +122,15 @@ class SubmitComplaintPresenterTest {
     @Test
     void GivenNoCategory_WhenMaxDetailsLength_ThenTheWholeColumn() {
         assertEquals(255, presenter.maxDetailsLength(null));
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenSubmit_ThenReturnsNotAuthenticated() {
+        when(service.submitComplaint(eq(TOKEN), any())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(SubmitComplaintPresenter.Outcome.NotAuthenticated.class,
+                presenter.submit(TOKEN, "Subject", "Body", null));
     }
 }

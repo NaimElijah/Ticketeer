@@ -31,11 +31,14 @@ import com.ticketing.system.shared.dto.ConversationDTO;
 import com.ticketing.system.shared.dto.RespondToComplaintRequestDTO;
 import com.ticketing.system.messaging.application.service.MessagingService;
 import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.ui.presenters.messaging.AdminComplaintQueuePresenter;
 import com.ticketing.system.ui.presenters.messaging.OpenedThreads;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.ConversationClosedException;
 import com.ticketing.system.testutil.LogCapture;
+import static org.mockito.Mockito.verifyNoInteractions;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 class AdminComplaintQueuePresenterTest {
 
@@ -53,14 +56,14 @@ class AdminComplaintQueuePresenterTest {
     private static ConversationDTO complaint(String id, String status) {
         return new ConversationDTO(
             id, "COMPLAINT", status, 1, "MEMBER", 0, "ADMIN_GROUP",
-            "Subject " + id, LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Subject " + id, LAST_MESSAGE_AT, LAST_MESSAGE_AT, 0, List.of(),
             "alice", "TicketHub Support");
     }
 
     // -- load -----------------------------------------------------------------
 
     @Test
-    void load_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenLoad_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminComplaintQueuePresenter.Outcome outcome = presenter.load(null, "Open");
 
         assertInstanceOf(AdminComplaintQueuePresenter.Outcome.NotAuthenticated.class, outcome);
@@ -68,7 +71,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_open_returnsOnlyOpenAndResponded_andQueriesWithoutServerStatus() {
+    void GivenComplaintsInEveryStatus_WhenLoadWithTheOpenFilter_ThenReturnsOnlyOpenAndRespondedAndQueriesWithoutServerStatus() {
         ConversationDTO open = complaint("c1", "OPEN");
         ConversationDTO responded = complaint("c2", "RESPONDED");
         ConversationDTO resolved = complaint("c3", "RESOLVED");
@@ -87,7 +90,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_resolved_returnsOnlyResolvedAndClosed() {
+    void GivenComplaintsInEveryStatus_WhenLoadWithTheResolvedFilter_ThenReturnsOnlyResolvedAndClosed() {
         ConversationDTO open = complaint("c1", "OPEN");
         ConversationDTO responded = complaint("c2", "RESPONDED");
         ConversationDTO resolved = complaint("c3", "RESOLVED");
@@ -101,7 +104,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_allFilter_sendsNullStatus() {
+    void GivenTheAllFilter_WhenLoad_ThenSendsNullStatus() {
         when(messaging.viewAllComplaints(eq(TOKEN), any())).thenReturn(List.of());
 
         presenter.load(TOKEN, "All");
@@ -112,7 +115,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_nullFilter_sendsNullStatus() {
+    void GivenANullFilter_WhenLoad_ThenSendsNullStatus() {
         when(messaging.viewAllComplaints(eq(TOKEN), any())).thenReturn(List.of());
 
         presenter.load(TOKEN, null);
@@ -123,7 +126,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_success_returnsComplaints() {
+    void GivenTheServiceReturnsComplaints_WhenLoad_ThenReturnsComplaints() {
         ConversationDTO a = complaint("c1", "OPEN");
         ConversationDTO b = complaint("c2", "RESPONDED");
         when(messaging.viewAllComplaints(eq(TOKEN), any())).thenReturn(List.of(a, b));
@@ -136,7 +139,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoad_ThenReturnsNotAuthenticated() {
         when(messaging.viewAllComplaints(eq(TOKEN), any())).thenThrow(new InvalidTokenException("bad"));
 
         AdminComplaintQueuePresenter.Outcome outcome = presenter.load(TOKEN, "All");
@@ -145,9 +148,9 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void load_serviceFailsInternally_returnsGenericFailure() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenReturnsGenericFailure() {
         when(messaging.viewAllComplaints(eq(TOKEN), any()))
-            .thenThrow(new RuntimeException("not an admin"));
+            .thenThrow(new RuntimeException("could not execute statement"));
 
         AdminComplaintQueuePresenter.Outcome outcome = presenter.load(TOKEN, "All");
 
@@ -159,7 +162,7 @@ class AdminComplaintQueuePresenterTest {
     // -- respond (one-shot) ---------------------------------------------------
 
     @Test
-    void respond_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenRespond_ThenReturnsNotAuthenticatedWithoutCallingService() {
         AdminComplaintQueuePresenter.ActionOutcome outcome = presenter.respond(null, "c1", "resolved");
 
         assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -167,7 +170,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void respond_happyPath_returnsSuccess_andSendsBodyWithResolvedStatus() {
+    void GivenTheServiceAcceptsTheResponse_WhenRespond_ThenReturnsSuccessAndSendsConversationIdAndBodyWithResolvedStatus() {
         AdminComplaintQueuePresenter.ActionOutcome outcome =
             presenter.respond(TOKEN, "c1", "Refund issued — resolved.");
 
@@ -181,8 +184,8 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void respond_serviceFailsInternally_returnsGenericFailure() {
-        doThrow(new RuntimeException("already resolved"))
+    void GivenTheServiceFailsInternally_WhenRespond_ThenReturnsGenericFailure() {
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).respondToComplaint(anyString(), any());
 
         AdminComplaintQueuePresenter.ActionOutcome outcome = presenter.respond(TOKEN, "c1", "late");
@@ -193,7 +196,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void respond_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenRespond_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(messaging).respondToComplaint(anyString(), any());
 
@@ -205,15 +208,7 @@ class AdminComplaintQueuePresenterTest {
     // -- loadOne --------------------------------------------------------------
 
     @Test
-    void loadOne_nullToken_returnsNotAuthenticated_withoutCallingService() {
-        AdminComplaintQueuePresenter.SingleOutcome outcome = presenter.loadOne(null, "c1");
-
-        assertInstanceOf(AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated.class, outcome);
-        verify(messaging, never()).viewConversation(anyString(), anyString());
-    }
-
-    @Test
-    void loadOne_success_returnsConversation() {
+    void GivenAnExistingConversation_WhenLoadOne_ThenReturnsConversation() {
         ConversationDTO c = complaint("c1", "OPEN");
         when(messaging.viewConversation(TOKEN, "c1")).thenReturn(c);
 
@@ -225,7 +220,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void loadOne_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenLoadOne_ThenReturnsNotAuthenticated() {
         when(messaging.viewConversation(eq(TOKEN), anyString())).thenThrow(new InvalidTokenException("bad"));
 
         AdminComplaintQueuePresenter.SingleOutcome outcome = presenter.loadOne(TOKEN, "c1");
@@ -234,7 +229,7 @@ class AdminComplaintQueuePresenterTest {
     }
 
     @Test
-    void respond_conversationClosed_returnsFailureWithTheRulesMessage() {
+    void GivenAClosedConversation_WhenRespond_ThenReturnsFailureWithTheRulesMessage() {
         ConversationClosedException rule = new ConversationClosedException("c1");
         doThrow(rule).when(messaging).respondToComplaint(anyString(), any());
 
@@ -347,7 +342,18 @@ class AdminComplaintQueuePresenterTest {
     void GivenAnExpiredToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
         OpenedThreads opened = new OpenedThreads();
         ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
-        doThrow(new InvalidTokenException("bad")).when(messaging).markConversationRead(anyString(), anyString());
+        doThrow(new SessionExpiredException()).when(messaging).markConversationRead(anyString(), anyString());
+
+        assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
+
+        assertEquals(Optional.of("2"), presenter.badge(thread, opened));
+    }
+
+    @Test
+    void GivenARevokedToken_WhenOpened_ThenNotAuthenticatedAndTheBadgeStays() {
+        OpenedThreads opened = new OpenedThreads();
+        ConversationDTO thread = unreadThread("c1", 2, LAST_MESSAGE_AT);
+        doThrow(new InvalidTokenException("revoked")).when(messaging).markConversationRead(anyString(), anyString());
 
         assertInstanceOf(AdminComplaintQueuePresenter.ActionOutcome.NotAuthenticated.class, presenter.open(TOKEN, thread, opened));
 
@@ -357,7 +363,7 @@ class AdminComplaintQueuePresenterTest {
     // ---- The respond page survives a failed mark-read (#187) ----
     //
     // Marking the thread read is a side effect of opening it. When the mark fails, the reader still
-    // gets the thread; only an expired session stops the page.
+    // gets the thread; only a dead session, expired or revoked, stops the page.
 
     @Test
     void GivenTheMarkFailsInternally_WhenLoadOne_ThenTheThreadIsStillShown() {
@@ -391,7 +397,16 @@ class AdminComplaintQueuePresenterTest {
 
     @Test
     void GivenTheSessionExpiredWhenMarking_WhenLoadOne_ThenNotAuthenticatedAndTheThreadIsNotLoaded() {
-        doThrow(new InvalidTokenException("bad")).when(messaging).markConversationRead(TOKEN, "c1");
+        doThrow(new SessionExpiredException()).when(messaging).markConversationRead(TOKEN, "c1");
+
+        assertInstanceOf(AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated.class, presenter.loadOne(TOKEN, "c1"));
+
+        verify(messaging, never()).viewConversation(anyString(), anyString());
+    }
+
+    @Test
+    void GivenTheTokenRevokedWhenMarking_WhenLoadOne_ThenNotAuthenticatedAndTheThreadIsNotLoaded() {
+        doThrow(new InvalidTokenException("revoked")).when(messaging).markConversationRead(TOKEN, "c1");
 
         assertInstanceOf(AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated.class, presenter.loadOne(TOKEN, "c1"));
 
@@ -408,5 +423,40 @@ class AdminComplaintQueuePresenterTest {
         InOrder order = inOrder(messaging);
         order.verify(messaging).markConversationRead(TOKEN, "c1");
         order.verify(messaging).viewConversation(TOKEN, "c1");
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenLoad_ThenReturnsNotAuthenticated() {
+        when(messaging.viewAllComplaints(eq(TOKEN), any())).thenThrow(new SessionExpiredException());
+
+        assertInstanceOf(AdminComplaintQueuePresenter.Outcome.NotAuthenticated.class, presenter.load(TOKEN, "All"));
+    }
+
+    // ---- a signed-out respond page touches nothing; a thread or queue that fails to load says why (#189) ----
+
+    @Test
+    void GivenANullToken_WhenLoadOne_ThenNotAuthenticatedAndNothingIsViewedOrMarkedRead() {
+        assertEquals(new AdminComplaintQueuePresenter.SingleOutcome.NotAuthenticated(), presenter.loadOne(null, "c1"));
+
+        verifyNoInteractions(messaging);
+    }
+
+    @Test
+    void GivenTheThreadFailsToLoad_WhenLoadOne_ThenFailureCarriesTheGenericText() {
+        when(messaging.viewConversation(TOKEN, "c1"))
+            .thenThrow(new PersistenceException("could not extract ResultSet [select * from conversations]"));
+
+        assertEquals(new AdminComplaintQueuePresenter.SingleOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+            presenter.loadOne(TOKEN, "c1"));
+    }
+
+    @Test
+    void GivenTheQueueRefusesTheCaller_WhenLoad_ThenFailureCarriesTheRule() {
+        UnauthorizedActionException refusal = new UnauthorizedActionException("view all complaints");
+        when(messaging.viewAllComplaints(eq(TOKEN), any())).thenThrow(refusal);
+
+        assertEquals(new AdminComplaintQueuePresenter.Outcome.Failure(refusal.getMessage()), presenter.load(TOKEN, "All"));
     }
 }

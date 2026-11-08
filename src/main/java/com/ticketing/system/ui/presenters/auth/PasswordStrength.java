@@ -1,15 +1,19 @@
 package com.ticketing.system.ui.presenters.auth;
 
+import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.Set;
+
+import com.ticketing.system.identity.application.service.AuthenticationService;
 
 /**
  * Client-side mirror of {@code AuthenticationService.validatePassword}
  * plus extra rules for a "strong" tier.
  *
  * <p>The server is the source of truth — {@link #passesServerRules(String)}
- * matches the server check exactly (≥8 chars, ≥1 letter, ≥1 digit). The
- * extra rules at {@link #STRONG} tier are presentation-only nudges.
+ * matches the server check exactly (≥8 chars, at most
+ * {@link AuthenticationService#MAX_PASSWORD_UTF8_BYTES} bytes in UTF-8, ≥1 letter,
+ * ≥1 digit). The extra rules at {@link #STRONG} tier are presentation-only nudges.
  *
  * <p>Used by the {@code PasswordStrengthMeter} component that renders
  * below the password field in {@code RegisterView}.
@@ -25,14 +29,18 @@ public enum PasswordStrength {
     /** Server rules + extra length / variety. Meter shows green. */
     STRONG;
 
+    /**
+     * One check the meter shows as a chip. {@link #NOT_TOO_LONG} is met by a password of at most
+     * {@link AuthenticationService#MAX_PASSWORD_UTF8_BYTES} bytes in UTF-8, the longest register accepts.
+     */
     public enum Rule {
-        MIN_8_CHARS, HAS_LETTER, HAS_DIGIT,
+        MIN_8_CHARS, NOT_TOO_LONG, HAS_LETTER, HAS_DIGIT,
         MIN_12_CHARS, HAS_UPPERCASE, HAS_LOWERCASE, HAS_SPECIAL
     }
 
     /** Set of the server-side rules — failing any of these means WEAK. */
     public static final Set<Rule> SERVER_REQUIRED = EnumSet.of(
-        Rule.MIN_8_CHARS, Rule.HAS_LETTER, Rule.HAS_DIGIT
+        Rule.MIN_8_CHARS, Rule.NOT_TOO_LONG, Rule.HAS_LETTER, Rule.HAS_DIGIT
     );
 
     /** Extra rules that lift FAIR → STRONG. */
@@ -64,6 +72,9 @@ public enum PasswordStrength {
         int len = pw.length();
         if (len >= 8) met.add(Rule.MIN_8_CHARS);
         if (len >= 12) met.add(Rule.MIN_12_CHARS);
+        if (pw.getBytes(StandardCharsets.UTF_8).length <= AuthenticationService.MAX_PASSWORD_UTF8_BYTES) {
+            met.add(Rule.NOT_TOO_LONG);
+        }
         for (int i = 0; i < len; i++) {
             char c = pw.charAt(i);
             if (Character.isLetter(c)) met.add(Rule.HAS_LETTER);

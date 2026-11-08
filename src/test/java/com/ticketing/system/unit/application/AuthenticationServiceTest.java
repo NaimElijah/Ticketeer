@@ -22,6 +22,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
@@ -48,6 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -68,6 +70,7 @@ import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.port.out.PasswordHasher;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
+import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.notifications.application.service.NotificationDispatchService;
 import com.ticketing.system.identity.application.port.out.CartRestorationPort;
@@ -108,6 +111,7 @@ class AuthenticationServiceTest {
     private SessionManager mockSessionManager;
     private SessionRepository mockSessionRepo;
     private AdminRepository mockAdminRepo;
+    private ISystemMetrics mockMetrics;
     private Clock fixedClock;
     private AuthenticationService service;
     private NotificationDispatchService mockNotification;
@@ -122,6 +126,7 @@ class AuthenticationServiceTest {
         mockCartRestorationPort = mock(CartRestorationPort.class);
         mockSessionRepo = mock(SessionRepository.class);
         mockAdminRepo = mock(AdminRepository.class);
+        mockMetrics = mock(ISystemMetrics.class);
         fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
         // The service may hash a throwaway secret when it is built (its dummy hash for unknown
         // usernames), so the mock answers with a hash and forgets that call: each test sees only the
@@ -129,10 +134,10 @@ class AuthenticationServiceTest {
         when(mockHasher.hash(any())).thenReturn(HASH_FROM_THE_HASHER);
         service = new AuthenticationService(
                 mockUserRepo, mockHasher, mockSessionManager, mockCartRestorationPort, mockNotification,
-                mockSessionRepo, mock(ISystemMetrics.class),
+                mockSessionRepo, mockMetrics,
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY, TestTransactions.noOpManager());
+                IDENTITY, TestTransactions.recordingManager());
         clearInvocations(mockHasher);
     }
 
@@ -152,7 +157,7 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void startGuestSession_returnsDtoWithNonBlankId() {
+    void GivenAFixedClock_WhenStartGuestSession_ThenReturnsDtoWithNonBlankIdCreatedAtTheClock() {
         GuestSessionDTO dto = service.startGuestSession();
         assertNotNull(dto.sessionId());
         assertTrue(!dto.sessionId().isBlank());
@@ -160,7 +165,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void startGuestSession_savesGuestRow() {
+    void GivenAFixedClock_WhenStartGuestSession_ThenSavesOneGuestRowCreatedAtTheClock() {
         service.startGuestSession();
         ArgumentCaptor<Session> captured = ArgumentCaptor.forClass(Session.class);
         verify(mockSessionRepo, times(1)).save(captured.capture());
@@ -170,7 +175,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void startGuestSession_eachCallProducesDistinctIds() {
+    void GivenAGuestSessionAlreadyStarted_WhenStartGuestSession_ThenEachCallProducesDistinctIds() {
         GuestSessionDTO a = service.startGuestSession();
         GuestSessionDTO b = service.startGuestSession();
         assertNotEquals(a.sessionId(), b.sessionId());
@@ -181,23 +186,26 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void endGuestSession_deletesRow() {
+    void GivenGuestSession_WhenEndGuestSession_ThenDeletesRow() {
         mockValidGuestSession("guest-1");
 
         service.endGuestSession("guest-1");
         verify(mockSessionRepo, times(1)).delete("guest-1");
+        verify(mockMetrics).record(MetricType.VISITOR_EXIT);
     }
 
     @Test
-    void endGuestSession_nullIsNoOp() {
+    void GivenNullSessionId_WhenEndGuestSession_ThenIsNoOpDeletingNothing() {
         service.endGuestSession(null);
         verify(mockSessionRepo, never()).delete(any());
+        verifyNoInteractions(mockMetrics);
     }
 
     @Test
-    void endGuestSession_blankIsNoOp() {
+    void GivenBlankSessionId_WhenEndGuestSession_ThenIsNoOpDeletingNothing() {
         service.endGuestSession("   ");
         verify(mockSessionRepo, never()).delete(any());
+        verifyNoInteractions(mockMetrics);
     }
 
     // ----------------------------------------------------------------------
@@ -205,7 +213,7 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void givenMalformedEmail_whenRegister_thenInvalidEmailFormatExceptionThrown() {
+    void GivenMalformedEmail_WhenRegister_ThenInvalidEmailFormatExceptionThrown() {
         assertThrows(InvalidEmailFormatException.class,
                 () -> service.register(new RegisterRequestDTO("alice", "not-an-email", "Password1", "guest-1", 56)));
         verifyNoInteractions(mockHasher);
@@ -214,13 +222,13 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenNullEmail_whenRegister_thenInvalidEmailFormatExceptionThrown() {
+    void GivenNullEmail_WhenRegister_ThenInvalidEmailFormatExceptionThrown() {
         assertThrows(InvalidEmailFormatException.class,
                 () -> service.register(new RegisterRequestDTO("alice", null, "Password1", "guest-1", 56)));
     }
 
     @Test
-    void givenShortPassword_whenRegister_thenWeakPasswordExceptionThrown() {
+    void GivenShortPassword_WhenRegister_ThenWeakPasswordExceptionThrown() {
         assertThrows(WeakPasswordException.class,
                 () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", "Pw1", "guest-1", 56)));
         verifyNoInteractions(mockHasher);
@@ -228,21 +236,21 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenPasswordWithoutDigit_whenRegister_thenWeakPasswordExceptionThrown() {
+    void GivenPasswordWithoutDigit_WhenRegister_ThenWeakPasswordExceptionThrown() {
         assertThrows(WeakPasswordException.class,
                 () -> service
                         .register(new RegisterRequestDTO("alice", "alice@example.com", "Passwords", "guest-1", 56)));
     }
 
     @Test
-    void givenPasswordWithoutLetter_whenRegister_thenWeakPasswordExceptionThrown() {
+    void GivenPasswordWithoutLetter_WhenRegister_ThenWeakPasswordExceptionThrown() {
         assertThrows(WeakPasswordException.class,
                 () -> service
                         .register(new RegisterRequestDTO("alice", "alice@example.com", "12345678", "guest-1", 56)));
     }
 
     @Test
-    void givenNullPassword_whenRegister_thenWeakPasswordExceptionThrown() {
+    void GivenNullPassword_WhenRegister_ThenWeakPasswordExceptionThrown() {
         assertThrows(WeakPasswordException.class,
                 () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", null, "guest-1", 56)));
     }
@@ -252,7 +260,7 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void givenNoGuestSessionId_whenRegister_thenGuestSessionRequiredExceptionThrown() {
+    void GivenNoGuestSessionId_WhenRegister_ThenGuestSessionRequiredExceptionThrown() {
         assertThrows(GuestSessionRequiredException.class,
                 () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", null, 56)));
         verifyNoInteractions(mockHasher);
@@ -260,20 +268,20 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenBlankGuestSessionId_whenRegister_thenGuestSessionRequiredExceptionThrown() {
+    void GivenBlankGuestSessionId_WhenRegister_ThenGuestSessionRequiredExceptionThrown() {
         assertThrows(GuestSessionRequiredException.class,
                 () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", "   ", 56)));
     }
 
     @Test
-    void givenUnknownGuestSessionId_whenRegister_thenGuestSessionRequiredExceptionThrown() {
+    void GivenUnknownGuestSessionId_WhenRegister_ThenGuestSessionRequiredExceptionThrown() {
         when(mockSessionRepo.findById("ghost")).thenReturn(Optional.empty());
         assertThrows(GuestSessionRequiredException.class,
                 () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", "ghost", 56)));
     }
 
     @Test
-    void givenMemberSessionIdAsGuest_whenRegister_thenGuestSessionRequiredExceptionThrown() {
+    void GivenMemberSessionIdAsGuest_WhenRegister_ThenGuestSessionRequiredExceptionThrown() {
         Session memberSession = new Session("sid", 99, T0, T0.plusSeconds(3600));
         when(mockSessionRepo.findById("sid")).thenReturn(Optional.of(memberSession));
         assertThrows(GuestSessionRequiredException.class,
@@ -281,7 +289,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenExpiredGuestSession_whenRegister_thenGuestSessionRequiredExceptionThrown() {
+    void GivenExpiredGuestSession_WhenRegister_ThenGuestSessionRequiredExceptionThrown() {
         Session expired = new Session("sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(mockSessionRepo.findById("sid")).thenReturn(Optional.of(expired));
         assertThrows(GuestSessionRequiredException.class,
@@ -293,7 +301,7 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void givenRegistrationData_whenRegister_thenUserCreatedWithHashedPassword() {
+    void GivenRegistrationData_WhenRegister_ThenUserCreatedWithHashedPassword() {
         mockValidGuestSession("guest-1");
         when(mockUserRepo.existsByUsername("alice")).thenReturn(false);
         when(mockUserRepo.findByEmail("alice@example.com")).thenReturn(Optional.empty());
@@ -308,10 +316,11 @@ class AuthenticationServiceTest {
         assertEquals(42, savedUser.getValue().getUserId());
         assertEquals("alice", savedUser.getValue().getUsername());
         assertEquals("alice@example.com", savedUser.getValue().getEmail());
+        assertEquals("HASHED", savedUser.getValue().getPasswordHash());
     }
 
     @Test
-    void givenSuccessfulRegistration_whenCheckSession_thenStillGuest() {
+    void GivenAGuestSession_WhenRegister_ThenItStaysAGuestAndNoTokenIsIssued() {
         Session guest = mockValidGuestSession("guest-1");
         when(mockUserRepo.existsByUsername(any())).thenReturn(false);
         when(mockUserRepo.findByEmail(any())).thenReturn(Optional.empty());
@@ -327,8 +336,23 @@ class AuthenticationServiceTest {
         verify(mockSessionManager, never()).generateTokenForSession(any(), any());
     }
 
+    // The session stays a guest, but registering is activity on it (II.1.4 / D10a).
     @Test
-    void givenTakenUsername_whenRegister_thenDuplicateUsernameExceptionThrown() {
+    void GivenAGuestSessionStartedEarlier_WhenRegister_ThenTheSessionIsTouchedAtTheClockAndSaved() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService onClock = newService(clock, new LockoutProperties(5, 15L));
+        Session guest = givenRegistrationWillSucceed("guest-1");
+        clock.advance(Duration.ofMinutes(5));
+
+        onClock.register(new RegisterRequestDTO("bob", "bob@example.com", "Password1", "guest-1", 56));
+
+        assertEquals(T0.plus(Duration.ofMinutes(5)), guest.getLastSeenAt(),
+                "registering must touch the session at the clock");
+        verify(mockSessionRepo).save(guest);
+    }
+
+    @Test
+    void GivenTakenUsername_WhenRegister_ThenDuplicateUsernameExceptionThrown() {
         mockValidGuestSession("guest-1");
         when(mockUserRepo.existsByUsername("alice")).thenReturn(true);
 
@@ -340,7 +364,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenTakenEmail_whenRegister_thenDuplicateEmailExceptionThrown() {
+    void GivenTakenEmail_WhenRegister_ThenDuplicateEmailExceptionThrown() {
         mockValidGuestSession("guest-1");
         when(mockUserRepo.existsByUsername("alice")).thenReturn(false);
         when(mockUserRepo.findByEmail("alice@example.com"))
@@ -475,6 +499,41 @@ class AuthenticationServiceTest {
     }
 
     // ----------------------------------------------------------------------
+    // Register — the age is from 1 to 120, the range the form asks for (#189). A caller that skips
+    // the form is refused with the other format checks, before any repository call or hash, with a
+    // message the visitor can read. User's invariant still refuses only a negative age, so a stored
+    // age of 0 keeps loading.
+    // ----------------------------------------------------------------------
+
+    private static final String AGE_OUT_OF_RANGE = "Age must be from 1 to 120";
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 121})
+    void GivenAnAgeOutsideOneTo120_WhenRegister_ThenRefusedBeforeAnyRepositoryCallAndNothingSaved(int age) {
+        givenRegistrationWillSucceed("guest-1");
+        clearInvocations(mockHasher);
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", "guest-1", age)),
+                "an age of " + age + " is outside 1 to 120");
+
+        assertEquals(AGE_OUT_OF_RANGE, refused.getMessage());
+        verifyNoInteractions(mockUserRepo);
+        verifyNoInteractions(mockSessionRepo);
+        verifyNoInteractions(mockHasher);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 120})
+    void GivenAnAgeAtEitherEndOfOneTo120_WhenRegister_ThenRegisteredWithThatAge(int age) {
+        givenRegistrationWillSucceed("guest-1");
+
+        service.register(new RegisterRequestDTO("alice", "alice@example.com", "Password1", "guest-1", age));
+
+        verify(mockUserRepo, times(1)).save(argThat(user -> user.getAge() == age));
+    }
+
+    // ----------------------------------------------------------------------
     // Reserved usernames (#76): identity.reserved-usernames plus the default admin's username,
     // matched ignoring case and surrounding whitespace.
     // ----------------------------------------------------------------------
@@ -519,7 +578,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenBadEmailAndTakenUsername_whenRegister_thenFormatFailsFirst() {
+    void GivenBadEmailAndTakenUsername_WhenRegister_ThenFormatFailsFirst() {
         // Ordering check: format validators run before any repo lookup OR session
         // check.
         when(mockUserRepo.existsByUsername(any())).thenReturn(true);
@@ -574,7 +633,7 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void givenNoGuestSessionId_whenLogin_thenGuestSessionRequiredExceptionThrown() {
+    void GivenNoGuestSessionId_WhenLogin_ThenGuestSessionRequiredExceptionThrown() {
         assertThrows(GuestSessionRequiredException.class,
                 () -> service.login(new LoginRequestDTO("alice", "Password1", null)));
         verifyNoInteractions(mockUserRepo);
@@ -582,14 +641,14 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenUnknownGuestSessionId_whenLogin_thenGuestSessionRequiredExceptionThrown() {
+    void GivenUnknownGuestSessionId_WhenLogin_ThenGuestSessionRequiredExceptionThrown() {
         when(mockSessionRepo.findById("ghost")).thenReturn(Optional.empty());
         assertThrows(GuestSessionRequiredException.class,
                 () -> service.login(new LoginRequestDTO("alice", "Password1", "ghost")));
     }
 
     @Test
-    void givenMemberSessionIdAsGuest_whenLogin_thenGuestSessionRequiredExceptionThrown() {
+    void GivenMemberSessionIdAsGuest_WhenLogin_ThenGuestSessionRequiredExceptionThrown() {
         Session memberSession = new Session("sid", 99, T0, T0.plusSeconds(3600));
         when(mockSessionRepo.findById("sid")).thenReturn(Optional.of(memberSession));
         assertThrows(GuestSessionRequiredException.class,
@@ -597,7 +656,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenExpiredGuestSession_whenLogin_thenGuestSessionRequiredExceptionThrown() {
+    void GivenExpiredGuestSession_WhenLogin_ThenGuestSessionRequiredExceptionThrown() {
         Session expired = new Session("sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(mockSessionRepo.findById("sid")).thenReturn(Optional.of(expired));
         assertThrows(GuestSessionRequiredException.class,
@@ -609,7 +668,7 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void givenValidCredentials_whenLogin_thenTokenIssued() {
+    void GivenValidCredentials_WhenLogin_ThenTokenIssued() {
         mockValidGuestSession("guest-1");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
@@ -617,7 +676,7 @@ class AuthenticationServiceTest {
         when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("ISSUED_TOKEN");
         when(mockSessionManager.extractExpiration("ISSUED_TOKEN")).thenReturn(9999L);
         when(mockCartRestorationPort.restoreActiveOrder(7)).thenReturn(null);
-        when(mockNotification.deliverPending(7)).thenReturn(null);
+        when(mockNotification.deliverPending(7)).thenReturn(List.of());
 
         LoginDTO loginResult = service.login(new LoginRequestDTO("alice", "Password1", "guest-1"));
         AuthTokenDTO result = loginResult.authToken();
@@ -629,7 +688,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenValidCredentials_whenLogin_thenSessionPromotedInPlace() {
+    void GivenValidCredentials_WhenLogin_ThenSessionPromotedInPlace() {
         Session guest = mockValidGuestSession("preserved-sid");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
@@ -651,13 +710,29 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenWrongPassword_whenLogin_thenAuthenticationFailedExceptionThrown() {
+    void GivenTheClockPastTheGuestSessionsStart_WhenLogin_ThenTheSessionExpiresAMemberTtlAfterTheClock() {
+        AdjustableClock clock = new AdjustableClock(T0);
+        AuthenticationService onClock = newService(clock, new LockoutProperties(5, 15L));
+        Session guest = mockValidGuestSession("guest-1");
+        clock.advance(Duration.ofMinutes(10));
+        User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
+        when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(mockHasher.matches("Password1", "STORED_HASH")).thenReturn(true);
+        when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("TOK");
+
+        onClock.login(new LoginRequestDTO("alice", "Password1", "guest-1"));
+
+        assertEquals(T0.plus(Duration.ofMinutes(10)).plus(MEMBER_TTL_MINUTES, ChronoUnit.MINUTES), guest.getExpiresAt(),
+                "a promoted session must expire a member TTL after the clock, not keep the guest's expiry");
+        verify(mockSessionRepo).save(guest);
+    }
+
+    @Test
+    void GivenWrongPassword_WhenLogin_ThenAuthenticationFailedExceptionThrown() {
         mockValidGuestSession("guest-1");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 77);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
         when(mockHasher.matches("wrong", "STORED_HASH")).thenReturn(false);
-        when(mockCartRestorationPort.restoreActiveOrder(7)).thenReturn(null);
-        when(mockNotification.deliverPending(7)).thenReturn(null);
 
         assertThrows(AuthenticationFailedException.class,
                 () -> service.login(new LoginRequestDTO("alice", "wrong", "guest-1")));
@@ -665,7 +740,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenNoSuchUser_whenLogin_thenSameGenericRejection() {
+    void GivenNoSuchUser_WhenLogin_ThenSameGenericRejection() {
         mockValidGuestSession("guest-1");
         when(mockUserRepo.findByUsername("ghost")).thenReturn(Optional.empty());
 
@@ -677,14 +752,18 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void givenInvalidCredentials_whenLogin_thenRejected() {
-        mockValidGuestSession("guest-1");
+    void GivenInvalidCredentials_WhenLogin_ThenTheGuestSessionIsLeftAsItWasAndNoCartIsMerged() {
+        Session guest = mockValidGuestSession("guest-1");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 89);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
         when(mockHasher.matches("badpass", "STORED_HASH")).thenReturn(false);
 
         assertThrows(AuthenticationFailedException.class,
                 () -> service.login(new LoginRequestDTO("alice", "badpass", "guest-1")));
+
+        assertTrue(guest.isGuest(), "a refused login must not promote the guest session");
+        verify(mockSessionRepo, never()).save(any());
+        verifyNoInteractions(mockCartRestorationPort, mockNotification);
     }
 
     // ----------------------------------------------------------------------
@@ -692,14 +771,14 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void extractUserId_delegatesToSessionManager() {
+    void GivenAToken_WhenExtractUserId_ThenDelegatesToSessionManagerAndReturnsItsUserId() {
         when(mockSessionManager.extractUserId("T")).thenReturn(42);
         assertEquals(42, service.extractUserId("T"));
         verify(mockSessionManager).extractUserId("T");
     }
 
     @Test
-    void validateToken_delegatesToSessionManager() {
+    void GivenAToken_WhenValidateToken_ThenDelegatesToSessionManager() {
         when(mockSessionManager.validateToken("T")).thenReturn(true);
         assertTrue(service.validateToken("T"));
         verify(mockSessionManager).validateToken("T");
@@ -747,7 +826,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY, TestTransactions.noOpManager());
+                IDENTITY, TestTransactions.recordingManager());
         String adminToken = realSessionManager.generateAdminToken(sharedId, "admin");
 
         assertEquals(OptionalInt.empty(), serviceOnRealSessions.liveMemberId(adminToken),
@@ -763,7 +842,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void logout_delegatesToSessionManagerInvalidate() {
+    void GivenAToken_WhenLogout_ThenDelegatesToSessionManagerInvalidate() {
         service.logout(new LogoutRequestDTO("SOME_TOKEN"));
         verify(mockSessionManager).invalidate("SOME_TOKEN");
     }
@@ -775,7 +854,8 @@ class AuthenticationServiceTest {
         service.logout(new LogoutRequestDTO("SOME_TOKEN"));
 
         verify(mockSessionManager).invalidate("SOME_TOKEN");
-        verify(mockSessionManager, never()).tryExtractUserId(any());
+        verifyNoMoreInteractions(mockSessionManager);
+        verifyNoInteractions(mockSessionRepo);
     }
 
     // #187: a logout whose revocation failed leaves the session, and so the token, live; it must not
@@ -792,10 +872,23 @@ class AuthenticationServiceTest {
         assertSame(storeFailure, thrown, "logout must let the session store's own failure out unchanged");
     }
 
+    // Runs on the real session manager: a token that does not parse names no session, so it revokes none.
     @Test
-    void logout_idempotent_doesNotThrowForGarbageToken() {
-        service.logout(new LogoutRequestDTO("not-a-real-token"));
-        verify(mockSessionManager).invalidate("not-a-real-token");
+    void GivenAGarbageToken_WhenLogout_ThenDoesNotThrowAndAnotherMembersSessionStaysLive() {
+        MemorySessionRepository sessions = new MemorySessionRepository(fixedClock);
+        JwtSessionManager realSessionManager = new JwtSessionManager(new JwtProperties(JWT_TEST_SECRET),
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), sessions, fixedClock);
+        AuthenticationService serviceOnRealSessions = new AuthenticationService(
+                mockUserRepo, mockHasher, realSessionManager, mockCartRestorationPort, mockNotification,
+                sessions, mock(ISystemMetrics.class),
+                fixedClock, mockAdminRepo,
+                new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
+                IDENTITY, TestTransactions.recordingManager());
+        String liveMemberToken = realSessionManager.generateToken(7, "alice");
+
+        assertDoesNotThrow(() -> serviceOnRealSessions.logout(new LogoutRequestDTO("not-a-real-token")));
+
+        assertTrue(realSessionManager.validateToken(liveMemberToken), "a garbage token must revoke no session");
     }
 
     // ----------------------------------------------------------------------
@@ -808,7 +901,7 @@ class AuthenticationServiceTest {
     // ----------------------------------------------------------------------
 
     @Test
-    void login_delegatesCartMergeToPortOnPromotion() {
+    void GivenValidCredentials_WhenLogin_ThenDelegatesCartMergeToPortOnPromotion() {
         mockValidGuestSession("preserved-sid");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
@@ -822,7 +915,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void login_returnsRestoredCartFromPort() {
+    void GivenACartRestoredByThePort_WhenLogin_ThenReturnsRestoredCartFromPort() {
         mockValidGuestSession("sid-1");
         User user = new User(7, "alice", "alice@example.com", "STORED_HASH", 56);
         when(mockUserRepo.findByUsername("alice")).thenReturn(Optional.of(user));
@@ -841,7 +934,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void logout_doesNotTouchCart() {
+    void GivenAToken_WhenLogout_ThenDoesNotTouchCart() {
         // D9a: Member cart must survive logout, restored on next login — logout must
         // never invoke the cart-restoration port at all.
         service.logout(new LogoutRequestDTO("SOME_TOKEN"));
@@ -851,7 +944,7 @@ class AuthenticationServiceTest {
     // ---- admin sign-in (#290) ----
 
     @Test
-    void signInAsAdmin_validCredentials_returnsAdminFlaggedToken() {
+    void GivenValidCredentials_WhenSignInAsAdmin_ThenReturnsAdminFlaggedToken() {
         when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "hashed", true));
         when(mockHasher.matches("pw", "hashed")).thenReturn(true);
         when(mockSessionManager.generateAdminToken(1, "admin")).thenReturn("admin-jwt");
@@ -865,20 +958,20 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void signInAsAdmin_unknownUsername_throwsAuthenticationFailed() {
+    void GivenUnknownAdminUsername_WhenSignInAsAdmin_ThenThrowsAuthenticationFailed() {
         when(mockAdminRepo.findByUsername("ghost")).thenReturn(null);
         assertThrows(AuthenticationFailedException.class, () -> service.signInAsAdmin("ghost", "pw"));
     }
 
     @Test
-    void signInAsAdmin_wrongPassword_throwsAuthenticationFailed() {
+    void GivenWrongPassword_WhenSignInAsAdmin_ThenThrowsAuthenticationFailed() {
         when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "hashed", true));
         when(mockHasher.matches("wrong", "hashed")).thenReturn(false);
         assertThrows(AuthenticationFailedException.class, () -> service.signInAsAdmin("admin", "wrong"));
     }
 
     @Test
-    void signInAsAdmin_locksAfterFiveFailures() {
+    void GivenFiveFailures_WhenSignInAsAdminWithTheCorrectPassword_ThenThrowsAccountLocked() {
         when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "hashed", true));
         when(mockHasher.matches(any(), any())).thenReturn(false);
 
@@ -997,12 +1090,13 @@ class AuthenticationServiceTest {
         return email;
     }
 
-    private void givenRegistrationWillSucceed(String guestSessionId) {
-        mockValidGuestSession(guestSessionId);
+    private Session givenRegistrationWillSucceed(String guestSessionId) {
+        Session guest = mockValidGuestSession(guestSessionId);
         when(mockUserRepo.existsByUsername(any())).thenReturn(false);
         when(mockUserRepo.findByEmail(any())).thenReturn(Optional.empty());
         when(mockUserRepo.nextId()).thenReturn(42);
         when(mockHasher.hash(any())).thenReturn("HASHED");
+        return guest;
     }
 
     // ----------------------------------------------------------------------
@@ -1145,7 +1239,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 fixedClock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), new LockoutProperties(5, 15L),
-                IDENTITY, TestTransactions.noOpManager());
+                IDENTITY, TestTransactions.recordingManager());
     }
 
     // ----------------------------------------------------------------------
@@ -1158,6 +1252,7 @@ class AuthenticationServiceTest {
     private static final long LOCK_MINUTES = 15;
     private static final String RIGHT_PASSWORD = "Password1";
     private static final String WRONG_PASSWORD = "wrong-password";
+    private static final String DEAD_GUEST_SESSION = "guest-session-that-was-never-issued";
 
     @Test
     void GivenFewerThanMaxFailures_WhenTheLockWindowHasPassed_ThenTheCountStartsFromZero() {
@@ -1202,6 +1297,52 @@ class AuthenticationServiceTest {
         assertThrows(AccountLockedException.class,
                 () -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
                 MAX_ATTEMPTS + " failures inside one window must lock the account");
+    }
+
+    @Test
+    void GivenMaxMinusOneFailuresThenASuccess_WhenMemberFailsMaxMinusOneTimesMore_ThenTheCountRestartedFromZero() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+        lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1"));
+        failLogins(lockoutService, MAX_ATTEMPTS - 1);
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "a sign-in must restart the count, so the failures before it no longer count towards the lock");
+    }
+
+    @Test
+    void GivenMaxMinusOneAdminFailuresThenASuccess_WhenAdminFailsMaxMinusOneTimesMore_ThenTheCountRestartedFromZero() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        String adminPassword = "AdminPass1";
+        when(mockAdminRepo.findByUsername("admin")).thenReturn(new Admin(1, "admin", "ADMIN_HASH", true));
+        when(mockHasher.matches(any(), eq("ADMIN_HASH")))
+                .thenAnswer(invocation -> adminPassword.equals(invocation.getArgument(0)));
+        when(mockSessionManager.generateAdminToken(1, "admin")).thenReturn("admin-jwt");
+
+        failAdminSignIns(lockoutService, MAX_ATTEMPTS - 1);
+        lockoutService.signInAsAdmin("admin", adminPassword);
+        failAdminSignIns(lockoutService, MAX_ATTEMPTS - 1);
+
+        assertDoesNotThrow(() -> lockoutService.signInAsAdmin("admin", adminPassword),
+                "an admin sign-in must restart the count, so the failures before it no longer count towards the lock");
+    }
+
+    @Test
+    void GivenMaxAttemptsFromADeadGuestSession_WhenAliceSignsInFromALiveOne_ThenSignedInBecauseNoneWasCounted() {
+        AuthenticationService lockoutService = newService(fixedClock, new LockoutProperties(MAX_ATTEMPTS, LOCK_MINUTES));
+        givenMemberAliceWithAnyGuestSession(fixedClock);
+        when(mockSessionRepo.findById(DEAD_GUEST_SESSION)).thenReturn(Optional.empty());
+
+        for (int i = 0; i < MAX_ATTEMPTS; i++) {
+            assertThrows(GuestSessionRequiredException.class,
+                    () -> lockoutService.login(new LoginRequestDTO("alice", WRONG_PASSWORD, DEAD_GUEST_SESSION)));
+        }
+
+        assertDoesNotThrow(() -> lockoutService.login(new LoginRequestDTO("alice", RIGHT_PASSWORD, "guest-1")),
+                "an attempt refused for want of a guest session must not count towards the lock");
+        verify(mockHasher, times(1)).matches(any(), any());
     }
 
     // The locked message rounds the time left in the window up to whole minutes.
@@ -1323,7 +1464,7 @@ class AuthenticationServiceTest {
                 mockSessionRepo, mock(ISystemMetrics.class),
                 clock, mockAdminRepo,
                 new SessionProperties(MEMBER_TTL_MINUTES, GUEST_IDLE_MINUTES), lockout, identity,
-                TestTransactions.noOpManager());
+                TestTransactions.recordingManager());
         clearInvocations(mockHasher);
         return built;
     }
@@ -1340,6 +1481,13 @@ class AuthenticationServiceTest {
                     now.plus(GUEST_IDLE_MINUTES, ChronoUnit.MINUTES)));
         });
         when(mockSessionManager.generateTokenForSession(any(), any())).thenReturn("TOK");
+    }
+
+    private static void failAdminSignIns(AuthenticationService target, int times) {
+        for (int i = 0; i < times; i++) {
+            assertThrows(AuthenticationFailedException.class, () -> target.signInAsAdmin("admin", WRONG_PASSWORD),
+                    "a wrong password inside an unlocked window is refused as a failed sign-in, not a lock");
+        }
     }
 
     private static void failLogins(AuthenticationService target, int times) {

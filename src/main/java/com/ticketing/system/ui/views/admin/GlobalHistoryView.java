@@ -19,6 +19,7 @@ import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.admin.GlobalHistoryPresenter;
 import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
@@ -42,7 +43,7 @@ import java.util.Set;
 @RequireCapability(Capability.VIEW_GLOBAL_HISTORY)
 public class GlobalHistoryView extends LkPage {
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM yyyy", DisplayLocale.PAGE);
     private static final String DATE_ALL = "All time";
     private static final String STATUS_PAID = "Paid";
     private static final String STATUS_PARTLY_REFUNDED = "Partly refunded";
@@ -224,7 +225,7 @@ public class GlobalHistoryView extends LkPage {
     }
 
     private static String money(double amount) {
-        return String.format("$%,.2f", amount);
+        return String.format(DisplayLocale.PAGE, "$%,.2f", amount);
     }
 
     private static String orElse(String value, String fallback) {

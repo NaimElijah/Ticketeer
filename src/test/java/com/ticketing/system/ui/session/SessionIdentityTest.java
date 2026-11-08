@@ -3,6 +3,7 @@ package com.ticketing.system.ui.session;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -18,6 +19,7 @@ import java.util.OptionalInt;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.shared.dto.AuthTokenDTO;
@@ -133,6 +135,23 @@ class SessionIdentityTest {
         verify(freshGuestSession, never()).restore();
     }
 
+    // ---- a store that cannot answer ------------------------------------------------------------
+    // An outage says nothing about the token, so the member is not signed out; the failure reaches the caller.
+
+    @Test
+    void GivenTheStoreIsDown_WhenIsMember_ThenTheFailurePropagatesAndTheTokenStays() {
+        storeSignedInMember();
+        when(authenticationService.liveMemberId(MEMBER_TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+        SessionIdentity identity = identity();
+
+        assertThrows(DataAccessResourceFailureException.class, identity::isMember);
+
+        assertEquals(MEMBER_TOKEN, AuthSession.token());
+        assertEquals(MEMBER_SESSION_ID, GuestSession.sessionId());
+        verify(freshGuestSession, never()).restore();
+    }
+
     // ---- a live stored token ------------------------------------------------------------------
 
     @Test
@@ -166,14 +185,16 @@ class SessionIdentityTest {
     @Test
     void GivenAStoredAdminToken_WhenEveryQuestionIsAsked_ThenNotAMemberAndTheGuestSessionIsNeverRestored() {
         storeSignedInAdmin();
+        givenLiveGuestSession(GUEST_SESSION_ID);
         when(authenticationService.liveMemberId(ADMIN_TOKEN)).thenReturn(OptionalInt.empty());
         SessionIdentity identity = identity();
 
         assertFalse(identity.isMember(), "an admin is not a member");
-        identity.memberToken();
-        identity.memberUserId();
-        identity.credential();
-        identity.guestSessionId();
+        assertNull(identity.memberToken(), "an admin token is no member token");
+        // Admin and member ids share one id space, so the admin's id 1 must not be read as member 1.
+        assertEquals(NO_MEMBER, identity.memberUserId(), "an admin has no member user id");
+        assertEquals(GUEST_SESSION_ID, identity.credential(), "an admin buys as a guest, on the guest session");
+        assertEquals(GUEST_SESSION_ID, identity.guestSessionId());
 
         verify(freshGuestSession, never()).restore();
         assertEquals(ADMIN_TOKEN, AuthSession.token(), "the admin's sign-in must survive member-identity checks");
@@ -211,6 +232,27 @@ class SessionIdentityTest {
         assertEquals(ADMIN_TOKEN, AuthSession.token(), "replacing the guest session must not sign the admin out");
         assertTrue(AuthSession.isAdmin(), "the admin must still be an admin");
         verify(freshGuestSession, never()).restore();
+    }
+
+    @Test
+    void GivenNoGuestSessionId_WhenCredential_ThenAGuestSessionIsStartedPinnedAndReturned() {
+        SessionIdentity identity = identity();
+
+        assertEquals(FRESH_GUEST_SESSION_ID, identity.credential());
+        assertEquals(FRESH_GUEST_SESSION_ID, GuestSession.sessionId());
+    }
+
+    // A credential the backend would refuse is worse than none: with no live guest session there is none.
+    @Test
+    void GivenADeadGuestSessionAndNoNewOneCanStart_WhenCredential_ThenNullAndTheDeadIdIsDropped() {
+        GuestSession.setSessionId(DEAD_GUEST_SESSION_ID);
+        when(authenticationService.isLiveGuestSession(DEAD_GUEST_SESSION_ID)).thenReturn(false);
+        when(authenticationService.startGuestSession())
+                .thenThrow(new DataAccessResourceFailureException("connection refused"));
+        SessionIdentity identity = identity();
+
+        assertNull(identity.credential(), "the dead " + DEAD_GUEST_SESSION_ID + " must not be handed on");
+        assertNull(GuestSession.sessionId());
     }
 
     @Test

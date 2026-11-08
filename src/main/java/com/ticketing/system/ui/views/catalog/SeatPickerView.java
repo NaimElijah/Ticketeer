@@ -24,6 +24,7 @@ import com.ticketing.system.ui.components.venue.VkStandingZone;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.catalog.SeatPickerPresenter;
 import com.ticketing.system.ui.session.CartBadgeCache;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.views.order.CartView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Text;
@@ -428,7 +429,7 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     }
 
     private static String money(double v) {
-        return String.format(java.util.Locale.US, "$%,.2f", v);
+        return String.format(DisplayLocale.PAGE, "$%,.2f", v);
     }
 
     private static String escape(String s) {

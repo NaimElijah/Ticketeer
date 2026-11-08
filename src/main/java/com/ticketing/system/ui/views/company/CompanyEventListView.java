@@ -25,6 +25,7 @@ import com.ticketing.system.ui.security.Capability;
 import com.ticketing.system.ui.security.RequireCapability;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.CurrentCompanies;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.views.company.CompanySalesView;
 import com.ticketing.system.ui.views.catalog.CatalogFilterSupport;
@@ -48,7 +49,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -62,10 +62,12 @@ public class CompanyEventListView extends LkPage {
     private static final String STATUS_ALL = "All statuses";
     private static final List<String> STATUS_OPTIONS = List.of(
             STATUS_ALL, "Draft", "Scheduled", "On sale", "Sold out", "Cancelled", "Completed");
+    // The list's price bounds have no maximum, unlike the browse page's.
+    private static final String PRICE_BELOW_MIN = "Enter a price of " + CatalogFilterSupport.PRICE_MIN + " or more.";
 
     /** Human-readable start date + time, e.g. "Jul 19, 2026 · 5:41 PM" (no ISO "T"/seconds gibberish). */
     private static final DateTimeFormatter DATE_TIME_FMT =
-            DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a zzz", Locale.US);
+            DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a zzz", DisplayLocale.PAGE);
 
     private final CompanyEventListPresenter presenter;
     private final DisplayTime displayTime;
@@ -190,10 +192,16 @@ public class CompanyEventListView extends LkPage {
         customFromPicker = new DatePicker();
         customFromPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_FROM);
         customFromPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_FROM);
+        customFromPicker.setI18n(new DatePicker.DatePickerI18n()
+                .setMaxErrorMessage(CatalogFilterSupport.START_AFTER_END)
+                .setBadInputErrorMessage(CatalogFilterSupport.NOT_A_DATE));
         customFromPicker.addValueChangeListener(e -> { customToPicker.setMin(e.getValue()); reloadCustomIfValid(); });
         customToPicker = new DatePicker();
         customToPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_TO);
         customToPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_TO);
+        customToPicker.setI18n(new DatePicker.DatePickerI18n()
+                .setMinErrorMessage(CatalogFilterSupport.END_BEFORE_START)
+                .setBadInputErrorMessage(CatalogFilterSupport.NOT_A_DATE));
         customToPicker.addValueChangeListener(e -> { customFromPicker.setMax(e.getValue()); reloadCustomIfValid(); });
         customRangeRow = new Div();
         customRangeRow.getStyle().set("display", "flex").set("gap", "6px");
@@ -349,8 +357,12 @@ public class CompanyEventListView extends LkPage {
     private IntegerField numberRangeField(String placeholder, Consumer<Integer> onChange) {
         IntegerField f = new IntegerField();
         f.setPlaceholder(placeholder);
-        f.setMin(0);
-        f.setStep(10);
+        f.setMin(CatalogFilterSupport.PRICE_MIN);
+        f.setStep(CatalogFilterSupport.PRICE_STEP);
+        f.setI18n(new IntegerField.IntegerFieldI18n()
+                .setBadInputErrorMessage(CatalogFilterSupport.PRICE_NOT_A_WHOLE_NUMBER)
+                .setMinErrorMessage(PRICE_BELOW_MIN)
+                .setStepErrorMessage(CatalogFilterSupport.PRICE_OFF_STEP));
         f.setPrefixComponent(new Span("$"));
         f.setValueChangeMode(ValueChangeMode.LAZY);
         f.setWidth("100px");
@@ -361,9 +373,14 @@ public class CompanyEventListView extends LkPage {
     private NumberField ratingField(String placeholder, Consumer<Double> onChange) {
         NumberField f = new NumberField();
         f.setPlaceholder(placeholder);
-        f.setMin(0);
-        f.setMax(5);
-        f.setStep(0.5);
+        f.setMin(CatalogFilterSupport.RATING_MIN);
+        f.setMax(CatalogFilterSupport.RATING_MAX);
+        f.setStep(CatalogFilterSupport.RATING_STEP);
+        f.setI18n(new NumberField.NumberFieldI18n()
+                .setBadInputErrorMessage(CatalogFilterSupport.RATING_NOT_A_NUMBER)
+                .setMinErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE)
+                .setMaxErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE)
+                .setStepErrorMessage(CatalogFilterSupport.RATING_OFF_STEP));
         f.setValueChangeMode(ValueChangeMode.LAZY);
         f.setWidth("90px");
         f.addValueChangeListener(e -> onChange.accept(e.getValue()));
@@ -410,7 +427,7 @@ public class CompanyEventListView extends LkPage {
         // Cheapest ticket price (the same value the catalog's price-range filter matches on); "—"
         // for events with no venue/zones yet (e.g. drafts). Format with cents so it matches the
         // actual ticket price (e.g. $49.99, not a truncated $49).
-        row.put("from", ev.minPrice() > 0 ? String.format("$%,.2f", ev.minPrice()) : "—");
+        row.put("from", ev.minPrice() > 0 ? String.format(DisplayLocale.PAGE, "$%,.2f", ev.minPrice()) : "—");
 
         // Read as "Rating 4.5 of 5", not "star 4.5" (#188).
         row.put("rating", ev.rating() == null ? "—" : Lk.rating(ratingText(ev.rating())));

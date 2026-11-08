@@ -25,6 +25,8 @@ import com.ticketing.system.notifications.domain.NotificationType;
 @ActiveProfiles({"test", PersistenceProfiles.MEMORY})
 class NotificationAcceptanceTest {
 
+    private static final LocalDateTime CREATED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
+
     @Autowired
     private NotificationDispatchService notificationDispatchService;
 
@@ -60,7 +62,7 @@ class NotificationAcceptanceTest {
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
                 "Your purchase has been confirmed",
-                LocalDateTime.now());
+                CREATED_AT);
 
         // Store the pending notification (simulating UC-36 offline dispatch)
         notificationDispatchService.storePending(notification);
@@ -85,7 +87,7 @@ class NotificationAcceptanceTest {
                 NotificationType.EVENT_SOLD_OUT,
                 NotificationStatus.PENDING,
                 "Event is sold out",
-                LocalDateTime.now());
+                CREATED_AT);
 
         // For online recipients, notifications should go directly to live push (UC-35
         // online branch)
@@ -119,7 +121,7 @@ class NotificationAcceptanceTest {
                 NotificationType.PURCHASE_CONFIRMED,
                 NotificationStatus.PENDING,
                 "Your purchase has been confirmed",
-                LocalDateTime.now());
+                CREATED_AT);
 
         Notification notif2 = new Notification(
                 "notif-acc-37-2",
@@ -127,7 +129,7 @@ class NotificationAcceptanceTest {
                 NotificationType.EVENT_SOLD_OUT,
                 NotificationStatus.PENDING,
                 "An event you're interested in is sold out",
-                LocalDateTime.now());
+                CREATED_AT);
 
         // Store the pending notifications
         notificationDispatchService.storePending(notif1);

@@ -15,6 +15,7 @@ import com.ticketing.system.governance.application.service.SystemAnalyticsServic
 import com.ticketing.system.ui.presenters.admin.AdminDashboardPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
  * Unit tests for {@link AdminDashboardPresenter} (#279). The analytics service is mocked; the
@@ -42,7 +43,7 @@ class AdminDashboardPresenterTest {
     }
 
     @Test
-    void load_returnsSuccess_withOverview() {
+    void GivenTheServiceReturnsAnOverview_WhenLoad_ThenReturnsSuccessWithOverview() {
         AdminOverviewDTO overview = new AdminOverviewDTO(2, 3, 1, 1500.0);
         when(analyticsService.adminOverview(ADMIN_TOKEN)).thenReturn(overview);
 
@@ -54,9 +55,9 @@ class AdminDashboardPresenterTest {
     }
 
     @Test
-    void load_returnsFailure_whenServiceThrows() {
+    void GivenTheServiceFailsInternally_WhenLoad_ThenFailureCarriesTheGenericText() {
         when(analyticsService.adminOverview(ADMIN_TOKEN)).thenThrow(new RuntimeException("boom"));
 
-        assertInstanceOf(AdminDashboardPresenter.Outcome.Failure.class, presenter.load());
+        assertEquals(new AdminDashboardPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE), presenter.load());
     }
 }

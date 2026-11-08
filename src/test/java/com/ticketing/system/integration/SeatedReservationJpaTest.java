@@ -1,8 +1,10 @@
 package com.ticketing.system.integration;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -62,9 +64,10 @@ class SeatedReservationJpaTest {
     @Autowired private SystemAdminService systemAdminService;
     @Autowired private EventCompletionSweeper eventCompletionSweeper;
     @Autowired private EventRepository eventRepository;
+    @Autowired private Clock clock;
 
     @Test
-    void memberReservesTwoFreeSeats_underJpa_succeeds() {
+    void GivenAPublishedSeatedEventUnderJpa_WhenMemberReservesTwoFreeSeats_ThenSucceedsAndOneSeatStaysAvailable() {
         ensureMarketOpen();
 
         AuthTokenDTO owner = registerAndLogin("seatOwner");
@@ -83,7 +86,7 @@ class SeatedReservationJpaTest {
     }
 
     @Test
-    void publishedFutureEvent_survivesTheCompletionSweep_andStaysReservable() {
+    void GivenAPublishedFutureEvent_WhenCompletionSweepRuns_ThenSurvivesTheSweepAndStaysReservable() {
         ensureMarketOpen();
         AuthTokenDTO owner = registerAndLogin("sweepOwner");
         int companyId = companyService.registerCompany(
@@ -92,15 +95,23 @@ class SeatedReservationJpaTest {
 
         // The dev @Scheduled completion sweep runs ~60s after boot, before a buyer reserves. A
         // future-dated event must survive it (only events whose last show has ended get COMPLETED).
-        eventCompletionSweeper.completeFinishedEvents(java.time.Clock.systemUTC().instant());
+        eventCompletionSweeper.completeFinishedEvents(clock.instant());
 
         assertEquals(EventStatus.ON_SALE, eventRepository.findById(eventId).getStatus(),
                 "a future-dated event must NOT be auto-completed by the sweeper");
 
         AuthTokenDTO buyer = registerAndLogin("sweepBuyer");
-        assertNotNull(reservationService.reserveForMember(buyer.token(), eventId,
-                seatedZone(buyer.token(), eventId).getId(), InventorySelectionDTO.seated(List.of("A1", "A2"))),
-                "the event is still ON_SALE after the sweep, so reserve must succeed");
+        int zoneId = seatedZone(buyer.token(), eventId).getId();
+        ReservationResultDTO result = reservationService.reserveForMember(buyer.token(), eventId, zoneId,
+                InventorySelectionDTO.seated(List.of("A1", "A2")));
+
+        // The event is still ON_SALE after the sweep, so the reservation holds the two seats asked for.
+        assertAll(
+                () -> assertEquals(eventId, result.getEventId(), "the event reserved"),
+                () -> assertEquals(zoneId, result.getZoneId(), "the zone reserved"),
+                () -> assertEquals(List.of("A1", "A2"), result.getSeatNumbers(), "the seats held"),
+                () -> assertEquals(1, seatedZone(buyer.token(), eventId).getAvailableAmount(),
+                        "2 of the 3 seats are now held"));
     }
 
     // ---- helpers --------------------------------------------------------
@@ -119,7 +130,7 @@ class SeatedReservationJpaTest {
         EventDetailDTO ev = eventManagementService.addEvent(owner.token(), new EventCreationDTO(
                 companyId, "Seated Show", "desc", List.of("Artist"), EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(10), LocalDateTime.now().plusDays(10).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(10), LocalDateTime.now(clock).plusDays(10).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         int eventId = Integer.parseInt(ev.eventId());

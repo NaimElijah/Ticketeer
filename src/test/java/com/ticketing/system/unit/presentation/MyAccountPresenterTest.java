@@ -64,7 +64,7 @@ class MyAccountPresenterTest {
 
         MyAccountPresenter.Outcome outcome = presenter.loadHistory();
 
-        assertInstanceOf(MyAccountPresenter.Outcome.Failure.class, outcome,
+        assertEquals(new MyAccountPresenter.Outcome.Failure(ServiceErrors.DB_UNAVAILABLE_MESSAGE), outcome,
                 "a failed load must give a failure outcome, got " + outcome);
     }
 

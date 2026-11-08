@@ -36,6 +36,7 @@ import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.internal.PendingJavaScriptInvocation;
 import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.DomEvent;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.function.DeploymentConfiguration;
@@ -46,6 +47,7 @@ import com.vaadin.flow.internal.nodefeature.ElementListenerMap;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.Location;
 import com.vaadin.flow.router.QueryParameters;
+import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteParameters;
 import com.vaadin.flow.server.RouteRegistry;
 import com.vaadin.flow.router.Router;
@@ -61,9 +63,13 @@ import elemental.json.Json;
  *
  * <p>On top of that it records navigations instead of routing them, installs a map-backed
  * {@code VaadinSession} for the session holders, and a {@link VaadinService} whose router answers every
- * route with a stub URL, so a view or layout that builds a {@code RouterLink} can be constructed. It can
+ * route with a stub URL, so a view or layout that builds a {@code RouterLink} can be constructed, unless the
+ * link leaves out a mandatory route parameter: then, as in Flow, it has no URL and the link throws. The stub
+ * URL is {@code stub/} and the route's path with the link's parameters filled in, so a test can read where a
+ * link leads ({@link #linkTo}). It can
  * also sign a member or an admin in, and make the member a company's founder or manager through
- * {@link CompanyManagementBridge}, which it restores on {@link #close()}. Create one per test.
+ * {@link CompanyManagementBridge}, which it clears while open and restores on {@link #close()}.
+ * Create one per test.
  */
 final class ViewHarness implements AutoCloseable {
 
@@ -73,6 +79,8 @@ final class ViewHarness implements AutoCloseable {
     static final int ADMIN_ID = 1;
 
     private static final Pattern TAG = Pattern.compile("<[^>]*>");
+    // What every link's URL starts with; a route's path follows it.
+    private static final String STUB_URL = "stub";
     // A script focusing its Nth parameter: Focusable.focus() and callJsFunction("focus") both send one.
     private static final Pattern FOCUS_CALL = Pattern.compile("\\$(\\d+)\\.focus\\(");
 
@@ -82,9 +90,12 @@ final class ViewHarness implements AutoCloseable {
     private final List<List<Object>> javaScript = new ArrayList<>();
     private final List<Element> focused = new ArrayList<>();
     private CompanyManagementService companyManagementService;
-    private CompanyManagementService bridgedBefore;
+    // The bridge is static, and a Spring context closed by an earlier test class leaves its dead service
+    // in it, so a view test must never inherit what it holds.
+    private final CompanyManagementService bridgedBefore = CompanyManagementBridge.service();
 
     ViewHarness() {
+        new CompanyManagementBridge(null);
         MapBackedVaadinSession.install();
         VaadinService.setCurrent(service);
         UI.setCurrent(ui);
@@ -107,7 +118,6 @@ final class ViewHarness implements AutoCloseable {
      */
     CompanyManagementService memberships(UserCompanyDTO... memberships) {
         if (companyManagementService == null) {
-            bridgedBefore = CompanyManagementBridge.service();
             companyManagementService = mock(CompanyManagementService.class);
             new CompanyManagementBridge(companyManagementService);
         }
@@ -229,8 +239,9 @@ final class ViewHarness implements AutoCloseable {
     /**
      * The element of every focus call queued so far, in order: the element parameter a script calls
      * {@code $N.focus(} on, as a component's {@code focus()} and {@code callJsFunction("focus")} do. A call
-     * counts only when its element can take focus when the call is sent (visible, enabled, and natively
-     * focusable or carrying a {@code tabindex}): the browser ignores focus on anything else. A call made on a
+     * counts only when its element can take focus when the call is sent (rendered, with no hidden ancestor and
+     * not inside a closed popover or dialog; enabled; and natively focusable or carrying a {@code tabindex}):
+     * the browser ignores focus on anything else. A call made on a
      * component that was detached before the response is dropped, as the browser never sees it, and a
      * script that focuses an element it looks up itself, such as the skip link's click handler, is no
      * focus call.
@@ -238,6 +249,25 @@ final class ViewHarness implements AutoCloseable {
     List<Element> focusTargets() {
         javaScriptCalls();
         return List.copyOf(focused);
+    }
+
+    /**
+     * The targets of the focus calls {@code action} queues, in the order sent. {@link #focusTargets()} says
+     * which calls count.
+     */
+    List<Element> focusCallsDuring(Runnable action) {
+        int before = focusTargets().size();
+        action.run();
+        List<Element> all = focusTargets();
+        return List.copyOf(all.subList(before, all.size()));
+    }
+
+    /**
+     * The element focus ends on after {@code focusCalls}, sent in that order: the last, since each call takes
+     * focus from the one before. Empty when there were none, so focus stayed where it was.
+     */
+    static Optional<Element> focusEndsOn(List<Element> focusCalls) {
+        return focusCalls.isEmpty() ? Optional.empty() : Optional.of(focusCalls.get(focusCalls.size() - 1));
     }
 
     // The element a call focuses: parameter N of its first "$N.focus(", when that element can take focus.
@@ -278,9 +308,16 @@ final class ViewHarness implements AutoCloseable {
         return cells;
     }
 
-    /** All text {@code root} shows: text nodes plus the text of every {@code innerHTML} property. */
+    /**
+     * All text {@code root} shows: the text nodes, then the text of every {@code innerHTML} property, of each
+     * element that is visible with all its ancestors up to {@code root}. A hidden element's text is left out,
+     * as the browser does not render it; a hidden {@code root} shows nothing. Hidden text still reaches the
+     * browser, so this cannot show that data stayed private: a test of that asserts the data never reached
+     * the component.
+     */
     static String text(Component root) {
-        StringBuilder text = new StringBuilder(root.getElement().getTextRecursively());
+        StringBuilder text = new StringBuilder();
+        appendShownText(root.getElement(), text);
         appendInnerHtml(root.getElement(), text);
         return text.toString();
     }
@@ -326,15 +363,84 @@ final class ViewHarness implements AutoCloseable {
             .orElseThrow(() -> new AssertionError("no " + type.getSimpleName() + " labelled \"" + label + "\""));
     }
 
-    /** Clicks {@code component} as the visitor would. */
+    /**
+     * Clicks {@code component} as the visitor would, which only a control on the page, shown and enabled, allows.
+     *
+     * @throws AssertionError when {@code component} is attached to no UI (a view the test never attached, or a
+     *     control a rebuild removed), it or an ancestor is hidden, or it is disabled
+     */
     static void click(Component component) {
+        A11y.requireActionable(component.getElement(), "click");
+        forceClick(component);
+    }
+
+    /**
+     * Fires a click on {@code component} whether or not it shows or is enabled. For a hidden or disabled
+     * control no request can do this: Flow drops a client event aimed at a hidden control, and at a disabled
+     * one unless its listener opts in with {@code DisabledUpdateMode.ALWAYS}. It does not check whether a
+     * popover or dialog is open. Only for a test that pins a view's own guard behind such a control, so the
+     * guard still holds if that ever changes.
+     *
+     * @throws AssertionError when {@code component} is attached to no UI: a control on no page is not one a
+     *     guard protects
+     */
+    static void forceClick(Component component) {
+        if (component.getUI().isEmpty()) {
+            throw new AssertionError("cannot force a click on " + A11y.describe(component.getElement())
+                + ": it is attached to no UI");
+        }
         ComponentUtil.fireEvent(component, new ClickEvent<>(component));
     }
 
-    /** Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}. */
+    /**
+     * Fires a DOM click on {@code element}, for a listener added with {@code addEventListener}.
+     *
+     * @throws AssertionError when {@code element} is attached to no UI, it or an ancestor is hidden, or it is
+     *     disabled
+     */
     static void domClick(Element element) {
+        A11y.requireActionable(element, "click");
         element.getNode().getFeature(ElementListenerMap.class)
             .fireEvent(new DomEvent(element, "click", Json.createObject()));
+    }
+
+    /**
+     * Opens the popover holding {@code element} as a visitor does, by clicking its trigger, so a test can then
+     * reach what the popover shows. The browser opens a popover set to open on a click, and a server-side
+     * click does not, so such a popover is opened directly once its trigger proves to be one a visitor could
+     * click; any other trigger is clicked, and its listener must open the popover. An open popover is left as
+     * it is.
+     *
+     * @throws AssertionError when no popover holds {@code element}, it has no trigger or no visitor could
+     *     click it, or the click leaves the popover closed
+     */
+    static void openPopoverHolding(Element element) {
+        Popover popover = popoverHolding(element);
+        if (popover.isOpened()) {
+            return;
+        }
+        Component trigger = popover.getTarget();
+        if (trigger == null) {
+            throw new AssertionError(A11y.describe(element) + " sits in a popover with no trigger to open it");
+        }
+        if (popover.isOpenOnClick()) {
+            A11y.requireActionable(trigger.getElement(), "click");
+            popover.open();
+        } else {
+            click(trigger);
+        }
+        if (!popover.isOpened()) {
+            throw new AssertionError("clicking " + A11y.describe(trigger.getElement()) + " left its popover closed");
+        }
+    }
+
+    private static Popover popoverHolding(Element element) {
+        for (Element a = element; a != null; a = a.getParent()) {
+            if (a.getComponent().orElse(null) instanceof Popover popover) {
+                return popover;
+            }
+        }
+        throw new AssertionError("no popover holds " + A11y.describe(element));
     }
 
     /** {@code true} when {@code component} and every ancestor is visible. */
@@ -349,9 +455,7 @@ final class ViewHarness implements AutoCloseable {
 
     @Override
     public void close() {
-        if (companyManagementService != null) {
-            new CompanyManagementBridge(bridgedBefore);
-        }
+        new CompanyManagementBridge(bridgedBefore);
         UI.setCurrent(null);
         VaadinService.setCurrent(null);
         MapBackedVaadinSession.uninstall();
@@ -396,7 +500,20 @@ final class ViewHarness implements AutoCloseable {
             .forEach(row -> cells.add(row.getChild(column).getTextRecursively()));
     }
 
+    private static void appendShownText(Element element, StringBuilder text) {
+        if (element.isTextNode()) {
+            text.append(element.getText());
+            return;
+        }
+        if (element.isVisible()) {
+            element.getChildren().forEach(child -> appendShownText(child, text));
+        }
+    }
+
     private static void appendInnerHtml(Element element, StringBuilder text) {
+        if (element.isTextNode() || !element.isVisible()) {
+            return;
+        }
         if (element.hasProperty("innerHTML")) {
             text.append(' ').append(TAG.matcher(element.getProperty("innerHTML", "")).replaceAll(" "));
         }
@@ -411,13 +528,18 @@ final class ViewHarness implements AutoCloseable {
             .orElse("");
     }
 
-    // RouterLink asks the current service's router for the URL of its target; every target gets one.
+    // RouterLink asks the current service's router for the URL of its target. As in Flow's registry, a target
+    // whose @Route has a mandatory parameter the link does not give has no URL, so RouterLink.setRoute throws
+    // here as it does in production (the /owner crash); every other target gets a stub URL naming its path.
     private static VaadinService stubRouterService() {
-        Answer<Object> urlForEveryTarget = call -> call.getMethod().getReturnType() == Optional.class
+        Answer<Object> registryUrls = call -> "getTargetUrl".equals(call.getMethod().getName())
+            && call.getArguments().length == 2
+            ? stubUrl(call.getArgument(0), call.getArgument(1))
+            : call.getMethod().getReturnType() == Optional.class
             && call.getMethod().getName().toLowerCase().contains("url")
             ? Optional.of("stub")
             : Mockito.RETURNS_DEFAULTS.answer(call);
-        RouteRegistry registry = mock(RouteRegistry.class, urlForEveryTarget);
+        RouteRegistry registry = mock(RouteRegistry.class, registryUrls);
         Router router = mock(Router.class);
         when(router.getRegistry()).thenReturn(registry);
         VaadinService service = mock(VaadinService.class);
@@ -425,6 +547,60 @@ final class ViewHarness implements AutoCloseable {
         // A component that reads the deployment mode when attached (Flow's Label does) finds development mode.
         when(service.getDeploymentConfiguration()).thenReturn(mock(DeploymentConfiguration.class));
         return service;
+    }
+
+    private static Optional<String> stubUrl(Class<?> target, RouteParameters parameters) {
+        Route route = target.getAnnotation(Route.class);
+        return route == null ? Optional.of(STUB_URL) : routePath(route.value(), parameters).map(ViewHarness::stubUrl);
+    }
+
+    private static String stubUrl(String path) {
+        return path.isEmpty() ? STUB_URL : STUB_URL + "/" + path;
+    }
+
+    // The route template's path with each parameter's value in its place, as Flow builds a link's URL: a
+    // parameter segment is ":name", with "?" (optional) or "*" (wildcard) after the name and "(regex)" after
+    // that when the template restricts its values. Empty when a mandatory parameter has no value.
+    private static Optional<String> routePath(String template, RouteParameters parameters) {
+        List<String> path = new ArrayList<>();
+        for (String segment : template.split("/")) {
+            if (!segment.startsWith(":")) {
+                if (!segment.isEmpty()) {
+                    path.add(segment);
+                }
+                continue;
+            }
+            String name = segment.substring(1, segment.contains("(") ? segment.indexOf('(') : segment.length());
+            boolean optional = name.endsWith("?") || name.endsWith("*");
+            Optional<String> value = parameters.get(optional ? name.substring(0, name.length() - 1) : name);
+            if (value.isPresent()) {
+                path.add(value.get());
+            } else if (!optional) {
+                return Optional.empty();
+            }
+        }
+        return Optional.of(String.join("/", path));
+    }
+
+    /**
+     * The URL a link to {@code target} with these {@code name, value} parameters gets: {@code stub/} and the
+     * route's path with the parameters filled in, to compare with a rendered link's {@code href}.
+     *
+     * @throws IllegalArgumentException when a name has no value after it
+     * @throws AssertionError when the parameters leave out one the route needs
+     */
+    static String linkTo(Class<?> target, String... nameValuePairs) {
+        if (nameValuePairs.length % 2 != 0) {
+            throw new IllegalArgumentException("a link to " + target.getSimpleName() + " was given a name with no value: "
+                + List.of(nameValuePairs));
+        }
+        Map<String, String> params = new java.util.LinkedHashMap<>();
+        for (int i = 0; i + 1 < nameValuePairs.length; i += 2) {
+            params.put(nameValuePairs[i], nameValuePairs[i + 1]);
+        }
+        return stubUrl(target, new RouteParameters(params))
+            .orElseThrow(() -> new AssertionError(target.getSimpleName() + "'s route needs a parameter that "
+                + List.of(nameValuePairs) + " does not give"));
     }
 
     // Records instead of queueing in the state tree (see InboxViewHarness), and records navigations

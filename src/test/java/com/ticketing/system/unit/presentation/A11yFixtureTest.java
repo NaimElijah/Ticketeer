@@ -2,18 +2,22 @@ package com.ticketing.system.unit.presentation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.Element;
 
 /**
@@ -21,6 +25,10 @@ import com.vaadin.flow.dom.Element;
  * the element the script focuses, and only when that element can take focus; a {@code role=button} that a
  * keyboard cannot press is no button. Without these, a focus test passes on a call the browser ignores,
  * and a button test passes on a span that only listens for clicks.
+ *
+ * <p>They also click and read only what shows (#189): a click, an activation or a key press fails on a hidden
+ * or disabled control, one in a closed popover or dialog, or one attached to no page, which no visitor can use;
+ * a focus call on one does not count; and text under a hidden element is not shown text.
  */
 class A11yFixtureTest {
 
@@ -75,6 +83,51 @@ class A11yFixtureTest {
 
         assertEquals(List.of(), harness.focusTargets(),
             "a listener that will focus an element it looks up later is no focus call now");
+    }
+
+    // Flow holds back a script whose own element is hidden, so a shown element runs this one.
+    @Test
+    void GivenAButtonInAHiddenContainer_WhenAScriptFocusesIt_ThenTheCallDoesNotCount() {
+        NativeButton pay = new NativeButton("Pay");
+        Div container = new Div();
+        NativeButton retry = new NativeButton("Retry");
+        container.add(retry);
+        container.setVisible(false);
+        page.add(pay, container);
+
+        pay.getElement().executeJs("$0.focus()", retry.getElement());
+
+        assertEquals(List.of(), harness.focusTargets(), "the browser ignores focus on a button it does not render");
+    }
+
+    // ---- #189: focus ends on the last focus call ----
+
+    @Test
+    void GivenAnActionThatFocusesTwoElements_WhenItsFocusCallsAreRead_ThenFocusEndsOnTheSecond() {
+        NativeButton first = new NativeButton("Remove Hamlet");
+        NativeButton second = new NativeButton("Your cart");
+        page.add(first, second);
+
+        List<Element> focused = harness.focusCallsDuring(() -> {
+            first.focus();
+            second.focus();
+        });
+
+        assertEquals(List.of(first.getElement(), second.getElement()), focused, "both calls, in the order sent");
+        assertEquals(second.getElement(), ViewHarness.focusEndsOn(focused).orElseThrow(),
+            "each focus call takes focus from the one before, so the browser ends on the last");
+    }
+
+    @Test
+    void GivenAnActionThatFocusesNothing_WhenItsFocusCallsAreRead_ThenFocusEndsNowhereNew() {
+        NativeButton earlier = new NativeButton("Earlier");
+        page.add(earlier);
+        earlier.focus();
+
+        List<Element> focused = harness.focusCallsDuring(() -> { });
+
+        assertEquals(List.of(), focused, "a focus call made before the action is not the action's");
+        assertTrue(ViewHarness.focusEndsOn(focused).isEmpty());
     }
 
     // ---- focusTargets: the target must be able to take focus ----
@@ -136,6 +189,356 @@ class A11yFixtureTest {
         Element button = new NativeButton("Save").getElement();
 
         assertTrue(A11y.isButton(button), "the browser presses a native button with Enter and Space itself");
+    }
+
+    // ---- #189: a click needs a control that shows and is enabled ----
+
+    @Test
+    void GivenAShownEnabledButton_WhenClicked_ThenItsListenerRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        page.add(button);
+
+        ViewHarness.click(button);
+
+        assertEquals(1, clicks.get(), "a click on a shown, enabled button must reach its listener");
+    }
+
+    @Test
+    void GivenAHiddenButton_WhenClicked_ThenTheClickFailsAndItsListenerNeverRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        button.setVisible(false);
+        page.add(button);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(button), "no visitor can click a hidden button");
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+    }
+
+    @Test
+    void GivenAHiddenButton_WhenClicked_ThenTheFailureNamesIt() {
+        NativeButton button = new NativeButton("Pay", e -> { });
+        button.setVisible(false);
+        page.add(button);
+
+        AssertionError refused = assertThrows(AssertionError.class, () -> ViewHarness.click(button));
+
+        assertTrue(refused.getMessage().contains("named \"Pay\""), "the failure must say which control: " + refused);
+    }
+
+    @Test
+    void GivenAButtonInAHiddenContainer_WhenClicked_ThenTheClickFails() {
+        Div container = new Div();
+        container.setVisible(false);
+        NativeButton button = new NativeButton("Pay", e -> { });
+        container.add(button);
+        page.add(container);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(button),
+            "a button inside a hidden container does not show, so no visitor can click it");
+    }
+
+    @Test
+    void GivenADisabledButton_WhenClicked_ThenTheClickFails() {
+        NativeButton button = new NativeButton("Pay", e -> { });
+        button.setEnabled(false);
+        page.add(button);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(button),
+            "the browser sends no click on a disabled button");
+    }
+
+    @Test
+    void GivenAButtonInADisabledContainer_WhenClicked_ThenTheClickFails() {
+        Div container = new Div();
+        NativeButton button = new NativeButton("Pay", e -> { });
+        container.add(button);
+        container.setEnabled(false);
+        page.add(container);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(button),
+            "a button inside a disabled container is disabled too");
+    }
+
+    @Test
+    void GivenADisabledButton_WhenForceClicked_ThenItsListenerRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        button.setEnabled(false);
+        page.add(button);
+
+        ViewHarness.forceClick(button);
+
+        assertEquals(1, clicks.get(), "a forced click skips the guards, so it reaches the listener");
+    }
+
+    @Test
+    void GivenAHiddenButton_WhenTheInboxHarnessClicksIt_ThenTheClickFails() {
+        NativeButton button = new NativeButton("Open", e -> { });
+        button.setVisible(false);
+        page.add(button);
+
+        assertThrows(AssertionError.class, () -> InboxViewHarness.click(button));
+    }
+
+    @Test
+    void GivenADisabledElementWithAClickListener_WhenDomClicked_ThenTheClickFails() {
+        Div card = new Div();
+        card.getElement().addEventListener("click", e -> { });
+        card.setEnabled(false);
+        page.add(card);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.domClick(card.getElement()));
+    }
+
+    @Test
+    void GivenAHiddenElementWithAKeyListener_WhenAKeyIsFired_ThenTheEventFails() {
+        Div row = new Div();
+        row.getElement().addEventListener("keydown", e -> { }).setFilter("event.key === 'Enter'");
+        row.setVisible(false);
+        page.add(row);
+
+        assertThrows(AssertionError.class, () -> A11y.fire(row.getElement(), "keydown"),
+            "no key press reaches an element the browser does not render");
+    }
+
+    @Test
+    void GivenAHandlerThatHidesItsContainer_WhenAClickBubbles_ThenTheHiddenContainerGetsNoClick() {
+        AtomicInteger containerClicks = new AtomicInteger();
+        Div container = new Div();
+        container.getElement().addEventListener("click", e -> containerClicks.incrementAndGet());
+        Span row = new Span("Remove");
+        row.getElement().addEventListener("click", e -> container.setVisible(false));
+        container.add(row);
+        page.add(container);
+
+        A11y.fireBubbling(row.getElement(), page.getElement(), "click");
+
+        assertEquals(0, containerClicks.get(), "Flow drops the click for a container the row's handler hid");
+    }
+
+    @Test
+    void GivenAButtonInAClosedPopover_WhenClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton apply = new NativeButton("Apply", e -> clicks.incrementAndGet());
+        page.add(popover(new NativeButton("Filters"), apply));
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(apply),
+            "a closed popover keeps its content on the server, but the browser shows none of it");
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+    }
+
+    @Test
+    void GivenAPopoverOpenedThroughItsTrigger_WhenAButtonInItIsClicked_ThenItsListenerRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton apply = new NativeButton("Apply", e -> clicks.incrementAndGet());
+        page.add(popover(new NativeButton("Filters"), apply));
+
+        ViewHarness.openPopoverHolding(apply.getElement());
+        ViewHarness.click(apply);
+
+        assertEquals(1, clicks.get(), "a click on a button in an open popover must reach its listener");
+    }
+
+    @Test
+    void GivenAPopoverWhoseTriggerIsDisabled_WhenOpenedThroughIt_ThenTheOpeningFails() {
+        NativeButton trigger = new NativeButton("Filters");
+        trigger.setEnabled(false);
+        NativeButton apply = new NativeButton("Apply");
+        Popover popover = popover(trigger, apply);
+        page.add(popover);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.openPopoverHolding(apply.getElement()),
+            "no visitor can open a popover through a trigger the browser does not let them click");
+        assertFalse(popover.isOpened());
+    }
+
+    @Test
+    void GivenAButtonInAClosedDialog_WhenClicked_ThenTheClickFails() {
+        NativeButton confirm = new NativeButton("Confirm", e -> { });
+        Dialog dialog = new Dialog(confirm);
+        page.add(dialog);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(confirm),
+            "the browser shows nothing of a dialog that is not open");
+    }
+
+    @Test
+    void GivenAButtonInAnOpenDialog_WhenClicked_ThenItsListenerRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton confirm = new NativeButton("Confirm", e -> clicks.incrementAndGet());
+        Dialog dialog = new Dialog(confirm);
+        page.add(dialog);
+        dialog.setOpened(true);
+
+        ViewHarness.click(confirm);
+
+        assertEquals(1, clicks.get(), "a click on a button in an open dialog must reach its listener");
+    }
+
+    @Test
+    void GivenAHiddenElementWithAClickListener_WhenDomClicked_ThenTheClickFails() {
+        Div card = new Div();
+        card.getElement().addEventListener("click", e -> { });
+        card.setVisible(false);
+        page.add(card);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.domClick(card.getElement()));
+    }
+
+    @Test
+    void GivenAShownSpanWithAClickListener_WhenActivated_ThenItsListenerRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        Span span = roleButtonSpan();
+        span.addClickListener(e -> clicks.incrementAndGet());
+        page.add(span);
+
+        A11y.activate(span.getElement());
+
+        assertEquals(1, clicks.get(), "activating a shown, enabled control must reach its listener");
+    }
+
+    @Test
+    void GivenAHiddenSpanWithAClickListener_WhenActivated_ThenTheActivationFails() {
+        Span span = roleButtonSpan();
+        span.addClickListener(e -> { });
+        span.setVisible(false);
+        page.add(span);
+
+        assertThrows(AssertionError.class, () -> A11y.activate(span.getElement()));
+    }
+
+    @Test
+    void GivenADisabledElementWithADomClickListener_WhenActivated_ThenTheActivationFails() {
+        Div card = new Div();
+        card.getElement().addEventListener("click", e -> { });
+        card.setEnabled(false);
+        page.add(card);
+
+        assertThrows(AssertionError.class, () -> A11y.activate(card.getElement()));
+    }
+
+    // ---- #263 review: a control on no page cannot be used ----
+
+    @Test
+    void GivenAButtonInAViewNeverAttached_WhenClicked_ThenTheClickFailsAndItsListenerNeverRuns() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        Div view = new Div(button);
+        assertFalse(view.getUI().isPresent(), "precondition: the view is on no page");
+
+        AssertionError refused = assertThrows(AssertionError.class, () -> ViewHarness.click(button),
+            "a view the router never attached shows nothing, so no visitor can click it");
+
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+        assertTrue(refused.getMessage().contains("attached to no UI"), "the failure must say why: " + refused);
+    }
+
+    @Test
+    void GivenAButtonARebuildRemoved_WhenClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        page.add(button);
+        ViewHarness.click(button);
+
+        page.remove(button);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.click(button),
+            "a control the page no longer shows cannot be clicked");
+        assertEquals(1, clicks.get(), "only the click made while it showed reaches the listener");
+    }
+
+    // Disabled as in GivenADisabledButton_WhenForceClicked_ThenItsListenerRuns, which a forced click reaches, so
+    // being on no page is the one difference and the reason the click fails.
+    @Test
+    void GivenAButtonOnNoPage_WhenForceClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        NativeButton button = new NativeButton("Pay", e -> clicks.incrementAndGet());
+        button.setEnabled(false);
+
+        assertThrows(AssertionError.class, () -> ViewHarness.forceClick(button));
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+    }
+
+    @Test
+    void GivenADetachedElementWithAClickListener_WhenDomClicked_ThenTheClickFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        Div card = new Div();
+        card.getElement().addEventListener("click", e -> clicks.incrementAndGet());
+
+        assertThrows(AssertionError.class, () -> ViewHarness.domClick(card.getElement()));
+        assertEquals(0, clicks.get(), "a refused click must not reach the listener");
+    }
+
+    @Test
+    void GivenADetachedSpanWithAClickListener_WhenActivated_ThenTheActivationFails() {
+        AtomicInteger clicks = new AtomicInteger();
+        Span span = roleButtonSpan();
+        span.addClickListener(e -> clicks.incrementAndGet());
+
+        assertThrows(AssertionError.class, () -> A11y.activate(span.getElement()));
+        assertEquals(0, clicks.get(), "a refused activation must not reach the listener");
+    }
+
+    // A popover the trigger opens on a click, as the kit's LkPopover builds one; the trigger sits on the page
+    // beside it.
+    private Popover popover(NativeButton trigger, NativeButton content) {
+        Popover popover = new Popover();
+        popover.add(content);
+        popover.setTarget(trigger);
+        popover.setOpenOnClick(true);
+        page.add(trigger);
+        return popover;
+    }
+
+    // ---- #189: text under a hidden element is not shown ----
+
+    @Test
+    void GivenAHiddenChild_WhenTheHarnessReadsTheText_ThenOnlyTheShownTextCounts() {
+        Span shown = new Span("Tickets on sale");
+        Span hidden = new Span("Could not load events");
+        hidden.setVisible(false);
+        page.add(shown, hidden);
+
+        String text = ViewHarness.text(page);
+
+        assertTrue(text.contains("Tickets on sale"), "shown text must count: " + text);
+        assertFalse(text.contains("Could not load events"), "hidden text must not count: " + text);
+    }
+
+    @Test
+    void GivenAHiddenChildWithMarkup_WhenTheHarnessReadsTheText_ThenItsMarkupTextDoesNotCount() {
+        Div hidden = new Div();
+        hidden.getElement().setProperty("innerHTML", "<b>Could not load events</b>");
+        hidden.setVisible(false);
+        page.add(hidden);
+
+        String text = ViewHarness.text(page);
+
+        assertFalse(text.contains("Could not load events"), "hidden markup must not count: " + text);
+    }
+
+    @Test
+    void GivenAHiddenChild_WhenA11yReadsTheText_ThenOnlyTheShownTextCounts() {
+        Span shown = new Span("Held for 7 minutes");
+        Span hidden = new Span("Expired");
+        hidden.setVisible(false);
+        page.add(shown, hidden);
+
+        assertEquals("Held for 7 minutes", A11y.text(page.getElement()), "a screen reader reads no hidden text");
+    }
+
+    @Test
+    void GivenAFieldLabelledByAHiddenElement_WhenNamed_ThenTheHiddenElementStillNamesIt() {
+        Span label = new Span("Card number");
+        label.setId("card-label");
+        label.setVisible(false);
+        Div field = new Div();
+        field.getElement().setAttribute("aria-labelledby", "card-label");
+        page.add(label, field);
+
+        assertEquals("Card number", A11y.name(field.getElement()),
+            "aria-labelledby reads the element it names even when that element is hidden");
     }
 
     private static Span roleButtonSpan() {

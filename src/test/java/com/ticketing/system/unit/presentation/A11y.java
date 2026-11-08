@@ -14,6 +14,9 @@ import com.vaadin.flow.component.ClickEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.HasValue;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
+import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.popover.Popover;
 import com.vaadin.flow.dom.DomEvent;
 import com.vaadin.flow.dom.Element;
 import com.vaadin.flow.internal.nodefeature.ElementListenerMap;
@@ -150,17 +153,32 @@ final class A11y {
         return FOCUSABLE_TAGS.contains(e.getTag()) || ("a".equals(e.getTag()) && e.hasAttribute("href"));
     }
 
-    /** {@code true} when the element and every ancestor up to {@code root} is visible, and it is focusable. */
+    /** {@code true} when the browser renders the element and every ancestor up to {@code root}, and it is focusable. */
     static boolean inTabOrder(Element e, Element root) {
+        return unrendered(e, root).isEmpty() && focusable(e);
+    }
+
+    /**
+     * The nearest of {@code e} and its ancestors, up to {@code root} or else to the top, that the browser does
+     * not render: one set invisible, or a closed popover or dialog. A closed overlay keeps its content
+     * attached on the server, but the browser shows none of it until it opens.
+     */
+    static Optional<Element> unrendered(Element e, Element root) {
         for (Element a = e; a != null; a = a.getParent()) {
-            if (!a.isVisible()) {
-                return false;
+            if (!a.isVisible() || a.getComponent().filter(A11y::isClosedOverlay).isPresent()) {
+                return Optional.of(a);
             }
             if (a.equals(root)) {
                 break;
             }
         }
-        return focusable(e);
+        return Optional.empty();
+    }
+
+    private static boolean isClosedOverlay(Component c) {
+        return c instanceof Popover popover && !popover.isOpened()
+            || c instanceof Dialog dialog && !dialog.isOpened()
+            || c instanceof ConfirmDialog confirm && !confirm.isOpened();
     }
 
     static boolean disabled(Element e) {
@@ -240,13 +258,14 @@ final class A11y {
     }
 
     /**
-     * {@code true} when a script's {@code focus()} on {@code e} takes effect: it is visible and enabled, and
-     * natively focusable or carries a {@code tabindex} of any value ({@code -1} included, which makes it
-     * focusable from a script without making it a Tab stop). The browser ignores focus on anything else,
-     * such as a heading without a {@code tabindex}.
+     * {@code true} when a script's {@code focus()} on {@code e} takes effect: the browser renders it and every
+     * ancestor, it is enabled, and it is natively focusable or carries a {@code tabindex} of any value
+     * ({@code -1} included, which makes it focusable from a script without making it a Tab stop). The browser
+     * ignores focus on anything else, such as a heading without a {@code tabindex} or a button in a hidden
+     * container.
      */
     static boolean scriptFocusable(Element e) {
-        if (!e.isVisible() || disabled(e)) {
+        if (unrendered(e, null).isPresent() || disabled(e)) {
             return false;
         }
         return tabIndex(e) != null || FOCUSABLE_TAGS.contains(e.getTag())
@@ -285,7 +304,7 @@ final class A11y {
             ? e.getAttribute("aria-labelledby") : e.getProperty("accessibleNameRef", "");
         if (labelledBy != null && !labelledBy.isBlank()) {
             String fromIds = Arrays.stream(labelledBy.trim().split("\\s+"))
-                .map(id -> byId(e, id).map(A11y::text).orElse(""))
+                .map(id -> byId(e, id).map(A11y::referencedText).orElse(""))
                 .collect(Collectors.joining(" "));
             if (!fromIds.isBlank()) {
                 return normalise(fromIds);
@@ -335,27 +354,38 @@ final class A11y {
 
     /**
      * The text a screen reader reads from {@code e}'s content: text nodes and {@code innerHTML}, minus
-     * anything under {@code aria-hidden="true"}; children separated by a space, whitespace collapsed.
+     * anything hidden ({@code setVisible(false)}, which the browser does not render) and anything under
+     * {@code aria-hidden="true"}; children separated by a space, whitespace collapsed. A hidden {@code e}
+     * reads as "". Hidden text still reaches the browser, so this cannot show that data stayed private: a test
+     * of that asserts the data never reached the component.
      */
     static String text(Element e) {
         StringBuilder out = new StringBuilder();
-        appendText(e, out);
+        appendText(e, out, true);
         return normalise(out.toString());
     }
 
-    private static void appendText(Element e, StringBuilder out) {
+    // The accessible name computation (step 2A) still reads an element that aria-labelledby names directly
+    // when it is hidden, so a hidden label element keeps naming its field.
+    private static String referencedText(Element e) {
+        StringBuilder out = new StringBuilder();
+        appendText(e, out, e.isVisible());
+        return normalise(out.toString());
+    }
+
+    private static void appendText(Element e, StringBuilder out, boolean skipHidden) {
         if (e.isTextNode()) {
             out.append(e.getText());
             return;
         }
-        if ("true".equals(e.getAttribute("aria-hidden"))) {
+        if ("true".equals(e.getAttribute("aria-hidden")) || (skipHidden && !e.isVisible())) {
             return;
         }
         if (e.hasProperty("innerHTML")) {
             out.append(' ').append(TAG.matcher(e.getProperty("innerHTML", "")).replaceAll(" ")).append(' ');
         }
         e.getChildren().forEach(child -> {
-            appendText(child, out);
+            appendText(child, out, skipHidden);
             if (!child.isTextNode()) {
                 out.append(' ');
             }
@@ -374,7 +404,12 @@ final class A11y {
                 d.append(' ').append(n).append("=\"").append(e.getAttribute(n)).append('"');
             }
         });
-        return d.append("> named \"").append(name(e)).append('"').toString();
+        // A hidden element's content reads as "", so a failure about one names it by the text it would show.
+        String named = name(e);
+        if (named.isEmpty() && !e.isVisible()) {
+            named = referencedText(e);
+        }
+        return d.append("> named \"").append(named).append('"').toString();
     }
 
     // ---- keyboard and DOM events ---------------------------------------------------------------
@@ -395,8 +430,16 @@ final class A11y {
     /**
      * Fires a DOM event on {@code e} as the browser would report it, with every listener expression true,
      * so a listener whose filter names a key runs as if that key was pressed.
+     *
+     * @throws AssertionError when the browser does not render {@code e} or it is disabled, as no visitor's
+     *     click or key press reaches it then
      */
     static void fire(Element e, String type) {
+        requireActionable(e, type);
+        dispatch(e, type);
+    }
+
+    private static void dispatch(Element e, String type) {
         JsonObject data = Json.createObject();
         listenerExpressions(e, type).forEach(x -> data.put(x, true));
         e.getNode().getFeature(ElementListenerMap.class).fireEvent(new DomEvent(e, type, data));
@@ -405,13 +448,44 @@ final class A11y {
     /**
      * Activates {@code e} as a click does: through its component's click listeners when it has any (they
      * expect a click's coordinates, which a bare DOM event lacks), else as a DOM click.
+     *
+     * @throws AssertionError when {@code e} is attached to no UI, it or an ancestor is hidden, or it is disabled,
+     *     as no visitor can click it then
      */
     static void activate(Element e) {
+        requireActionable(e, "activate");
         Optional<Component> component = e.getComponent();
         if (component.isPresent() && ComponentUtil.hasEventListener(component.get(), ClickEvent.class)) {
             ComponentUtil.fireEvent(component.get(), new ClickEvent<>(component.get()));
         } else {
             fire(e, "click");
+        }
+    }
+
+    /**
+     * Fails unless a visitor could {@code action} {@code e}: it is attached to a UI, the browser renders it and
+     * every ancestor (none is hidden or a closed popover or dialog), and it is enabled. Flow hands a component
+     * event to its listeners whatever the component's state, while the browser never sends a click on a control
+     * it does not show or that is disabled, nor on one that a rebuild removed or that was never attached, so a
+     * test without this check would prove a control works that no visitor can use.
+     *
+     * @throws AssertionError naming the detached element, the hidden element, the closed overlay or the disabled
+     *     state
+     */
+    static void requireActionable(Element e, String action) {
+        if (!e.getNode().isAttached()) {
+            throw new AssertionError("cannot " + action + " " + describe(e)
+                + ": it is attached to no UI, so the browser does not show it");
+        }
+        Optional<Element> unrendered = unrendered(e, null);
+        if (unrendered.isPresent()) {
+            Element a = unrendered.get();
+            String state = a.isVisible() ? "closed" : "hidden";
+            throw new AssertionError("cannot " + action + " " + describe(e) + ": "
+                + (a.equals(e) ? "it is " + state : "it sits in " + state + " " + describe(a)));
+        }
+        if (disabled(e)) {
+            throw new AssertionError("cannot " + action + " " + describe(e) + ": it is disabled");
         }
     }
 
@@ -442,13 +516,32 @@ final class A11y {
         return showing.isEmpty() ? "nothing" : describe(showing.get(showing.size() - 1));
     }
 
-    /** Fires {@code type} on {@code e} and each ancestor up to {@code root}, as a bubbling event reaches them. */
+    /**
+     * Fires {@code type} on {@code e} and each ancestor up to {@code root}, as a bubbling event reaches them. An
+     * ancestor that a handler below it hid, or that is disabled, gets nothing: Flow drops the event for it.
+     *
+     * @throws AssertionError when the browser does not render {@code e} or it is disabled, as no visitor's
+     *     click or key press reaches it then
+     */
     static void fireBubbling(Element e, Element root, String type) {
+        requireActionable(e, type);
         for (Element a = e; a != null; a = a.getParent()) {
-            fire(a, type);
+            if (flowDelivers(a)) {
+                dispatch(a, type);
+            }
             if (a.equals(root)) {
                 return;
             }
         }
+    }
+
+    // Flow hands a client event to an element only while it and every ancestor is visible and it is enabled.
+    private static boolean flowDelivers(Element e) {
+        for (Element a = e; a != null; a = a.getParent()) {
+            if (!a.isVisible()) {
+                return false;
+            }
+        }
+        return !disabled(e);
     }
 }

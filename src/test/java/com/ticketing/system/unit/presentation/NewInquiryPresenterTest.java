@@ -27,8 +27,11 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.presenters.messaging.NewInquiryPresenter;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 
 class NewInquiryPresenterTest {
+
+    private static final LocalDateTime STARTED_AT = LocalDateTime.of(2027, 7, 15, 17, 0);
 
     private static final String TOKEN = "jwt-token";
 
@@ -46,7 +49,7 @@ class NewInquiryPresenterTest {
     // -- searchCompanies ------------------------------------------------------
 
     @Test
-    void searchCompanies_returnsMatches() {
+    void GivenAMatchingCompany_WhenSearchCompanies_ThenReturnsMatches() {
         when(catalog.searchCompaniesByName("ac"))
             .thenReturn(List.of(new CompanySummaryDTO(1, "Acme", null)));
 
@@ -59,7 +62,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void searchCompanies_serviceThrows_returnsFailure() {
+    void GivenTheServiceThrows_WhenSearchCompanies_ThenReturnsGenericFailure() {
         when(catalog.searchCompaniesByName(anyString())).thenThrow(new RuntimeException("catalog down"));
 
         NewInquiryPresenter.SearchOutcome outcome = presenter.searchCompanies("ac");
@@ -72,7 +75,7 @@ class NewInquiryPresenterTest {
     // -- submit ---------------------------------------------------------------
 
     @Test
-    void submit_nullToken_returnsNotAuthenticated_withoutCallingService() {
+    void GivenANullToken_WhenSubmit_ThenReturnsNotAuthenticatedWithoutCallingService() {
         NewInquiryPresenter.ActionOutcome outcome = presenter.submit(null, 5, "S", "B");
 
         assertInstanceOf(NewInquiryPresenter.ActionOutcome.NotAuthenticated.class, outcome);
@@ -80,10 +83,10 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_happyPath_returnsConversationId_andTargetsCompany() {
+    void GivenTheServiceStartsAConversation_WhenSubmit_ThenReturnsConversationIdAndTargetsCompany() {
         ConversationDTO conv = new ConversationDTO(
             "conv-1", "INQUIRY", "OPEN", 1, "MEMBER", 5, "COMPANY",
-            "Parking?", LocalDateTime.now(), LocalDateTime.now(), 0, List.of(),
+            "Parking?", STARTED_AT, STARTED_AT, 0, List.of(),
             "alice", "Acme");
         when(messaging.startConversation(eq(TOKEN), any())).thenReturn(conv);
 
@@ -96,13 +99,13 @@ class NewInquiryPresenterTest {
         ArgumentCaptor<StartConversationRequestDTO> captor =
             ArgumentCaptor.forClass(StartConversationRequestDTO.class);
         verify(messaging).startConversation(eq(TOKEN), captor.capture());
-        assertEquals(5, captor.getValue().counterpartyId());
-        assertEquals("Parking?", captor.getValue().subject());
+        assertEquals(new StartConversationRequestDTO(5, "Parking?", "Is there parking?"), captor.getValue(),
+            "the inquiry goes to the company with the subject and body as typed");
     }
 
     @Test
-    void submit_serviceFailsInternally_returnsGenericFailure() {
-        doThrow(new RuntimeException("company not found"))
+    void GivenTheServiceFailsInternally_WhenSubmit_ThenReturnsGenericFailure() {
+        doThrow(new RuntimeException("could not execute statement"))
             .when(messaging).startConversation(anyString(), any());
 
         NewInquiryPresenter.ActionOutcome outcome = presenter.submit(TOKEN, 5, "S", "B");
@@ -113,7 +116,7 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_invalidToken_returnsNotAuthenticated() {
+    void GivenAnInvalidToken_WhenSubmit_ThenReturnsNotAuthenticated() {
         doThrow(new InvalidTokenException("bad"))
             .when(messaging).startConversation(anyString(), any());
 
@@ -123,12 +126,22 @@ class NewInquiryPresenterTest {
     }
 
     @Test
-    void submit_companyNotFound_returnsFailureWithTheRulesMessage() {
+    void GivenTheCompanyIsNotFound_WhenSubmit_ThenReturnsFailureWithTheRulesMessage() {
         CompanyNotFoundException rule = new CompanyNotFoundException();
         doThrow(rule).when(messaging).startConversation(anyString(), any());
 
         NewInquiryPresenter.ActionOutcome.Failure fail =
             assertInstanceOf(NewInquiryPresenter.ActionOutcome.Failure.class, presenter.submit(TOKEN, 5, "S", "B"));
         assertEquals(rule.getMessage(), fail.reason());
+    }
+
+    // ---- an expired session reads as a dead one, as a revoked token does (ADR-025, #189) ----
+
+    @Test
+    void GivenAnExpiredSession_WhenSubmit_ThenReturnsNotAuthenticated() {
+        doThrow(new SessionExpiredException()).when(messaging).startConversation(anyString(), any());
+
+        assertInstanceOf(NewInquiryPresenter.ActionOutcome.NotAuthenticated.class,
+                presenter.submit(TOKEN, 5, "S", "B"));
     }
 }

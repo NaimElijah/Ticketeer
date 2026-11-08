@@ -6,7 +6,6 @@ import com.ticketing.system.organization.application.dto.MembershipRole;
 import com.ticketing.system.organization.application.dto.UserCompanyDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.exception.InvalidTokenException;
-import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.sales.application.service.ReservationService;
 import com.ticketing.system.organization.domain.Permission;
@@ -21,6 +20,7 @@ import com.ticketing.system.ui.session.CompanyManagementBridge;
 import com.ticketing.system.ui.session.CurrentCompanies;
 import com.ticketing.system.ui.session.MockPermissions;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.ServiceErrors;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -122,7 +122,7 @@ public final class DevPanel {
         if (token == null || AuthSession.isAdmin() || CompanyManagementBridge.service() == null) return List.of();
         try {
             return CompanyManagementBridge.service().listForUser(token);
-        } catch (InvalidTokenException | SessionExpiredException e) {
+        } catch (InvalidTokenException e) {
             // A token that died since the last navigation holds no memberships, as in Capabilities;
             // AuthBootstrap signs the visitor out on their next navigation.
             return List.of();
@@ -444,7 +444,7 @@ public final class DevPanel {
     }
 
     private static String prettify(String snake) {
-        String[] parts = snake.toLowerCase().split("_");
+        String[] parts = snake.toLowerCase(DisplayLocale.PAGE).split("_");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < parts.length; i++) {
             if (parts[i].isEmpty()) continue;

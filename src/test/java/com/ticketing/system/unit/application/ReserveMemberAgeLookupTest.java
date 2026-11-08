@@ -67,7 +67,6 @@ class ReserveMemberAgeLookupTest {
     @BeforeEach
     void liveMemberOnAnOpenMarket() {
         when(marketGate.isOpen()).thenReturn(true);
-        when(sessionManager.validateToken(MEMBER_TOKEN)).thenReturn(true);
         when(sessionManager.extractUserId(MEMBER_TOKEN)).thenReturn(USER_ID);
         when(inventoryPort.reserve(anyInt(), anyInt(), any(), anyString(), any(), anyInt(), any(), anyInt()))
                 .thenReturn(PRICE);

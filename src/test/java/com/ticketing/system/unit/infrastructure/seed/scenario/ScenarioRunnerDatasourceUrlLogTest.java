@@ -1,6 +1,5 @@
 package com.ticketing.system.unit.infrastructure.seed.scenario;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,7 +8,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +87,7 @@ class ScenarioRunnerDatasourceUrlLogTest {
     }
 
     private void assertNoQueryLogged() {
-        assertEquals(List.of(), logs.eventsContaining(DB_PASSWORD), "the URL's password must not be logged");
-        assertEquals(List.of(), logs.eventsContaining(DB_USER), "the URL's query must not be logged");
+        logs.assertNeverLogged(DB_PASSWORD);
+        logs.assertNeverLogged(DB_USER);
     }
 }

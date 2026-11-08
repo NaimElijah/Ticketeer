@@ -4,6 +4,7 @@ import com.ticketing.system.shared.dto.LoginDTO;
 import com.ticketing.system.ui.components.Toasts;
 import com.ticketing.system.ui.components.kit.Lk;
 import com.ticketing.system.ui.components.kit.LkAuthCard;
+import com.ticketing.system.ui.components.kit.LkFieldRules;
 import com.ticketing.system.ui.components.kit.LkFormErrors;
 import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.auth.LoginPresenter;
@@ -30,6 +31,9 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 @AnonymousAllowed
 public class LoginView extends LkAuthCard {
 
+    private static final String ENTER_USERNAME = "Enter your username.";
+    private static final String ENTER_PASSWORD = "Enter your password.";
+
     private final LoginPresenter presenter;
     // The guest id comes from here, not GuestSession: a guest session expires a fixed time after it
     // starts, and SessionIdentity replaces a dead one before login is asked to promote it.
@@ -45,12 +49,14 @@ public class LoginView extends LkAuthCard {
         // The autocomplete tokens let a browser or password manager fill the fields (#188, WCAG 1.3.5).
         TextField username = new TextField("Username");
         username.setRequired(true);
+        LkFieldRules.sayWhenEmpty(username, ENTER_USERNAME);
         username.setAutofocus(true);
         username.setAutocomplete(Autocomplete.USERNAME);
         username.setWidthFull();
 
         PasswordField password = new PasswordField("Password");
         password.setRequired(true);
+        LkFieldRules.sayWhenEmpty(password, ENTER_PASSWORD);
         password.setAutocomplete(Autocomplete.CURRENT_PASSWORD);
         password.setWidthFull();
 
@@ -71,10 +77,10 @@ public class LoginView extends LkAuthCard {
     private void attemptSignIn(TextField username, PasswordField password) {
         errors.clear();
         if (username.isEmpty()) {
-            errors.reject(username, "Enter your username.");
+            errors.reject(username, ENTER_USERNAME);
         }
         if (password.isEmpty()) {
-            errors.reject(password, "Enter your password.");
+            errors.reject(password, ENTER_PASSWORD);
         }
         if (!errors.isEmpty()) {
             Toasts.failure("Please enter both username and password.");

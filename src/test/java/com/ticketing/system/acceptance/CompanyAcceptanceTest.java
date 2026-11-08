@@ -1,14 +1,18 @@
 package com.ticketing.system.acceptance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -50,6 +54,7 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
+import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.Permission;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
@@ -75,6 +80,8 @@ class CompanyAcceptanceTest {
 
         @Autowired
         private OrderReceiptRepository orderReceiptRepository;
+        @Autowired
+        private Clock clock;
 
         private AuthTokenDTO registerAndLoginMember(String name) {
                 String sid = authService.startGuestSession().sessionId();
@@ -110,7 +117,7 @@ class CompanyAcceptanceTest {
 
         // UC-20
         @Test
-        void GivenOwner_WhenConfigureVenueMapWithCapacity_ThenInventoryZoneCapacityAdded() {
+        void GivenAStandingZoneOfAHundred_WhenOwnerAddsFiftyPlaces_ThenItHoldsAHundredAndFifty() {
                 AuthTokenDTO owner = registerAndLoginMember("capacityOwner");
 
                 int companyId = companyService.registerCompany(
@@ -126,8 +133,8 @@ class CompanyAcceptanceTest {
                                 4.5,
                                 new Location("Test Venue", "Test City"),
                                 List.of(new ShowDate(
-                                                LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(30))),
+                                                LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(30))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null);
                 EventDetailDTO event = eventManagementService.addEvent(owner.token(), eventRequest);
@@ -141,9 +148,6 @@ class CompanyAcceptanceTest {
 
                 Event storedEvent = eventRepository.findById(Integer.parseInt(event.eventId()));
 
-                // eventManagementService.updateStandingZoneCapacity(owner.token(), companyId,
-                // storedEvent.getId(), 1, 150);
-                //
                 eventManagementService.addPlacesToStandingZone(owner.token(), companyId, storedEvent.getId(), 1, 50);
                 InventoryZone zone = storedEvent.getVenueMap().getInventoryZones().stream()
                                 .filter(z -> z.getId() == 1)
@@ -186,7 +190,7 @@ class CompanyAcceptanceTest {
                 companyId, "Empty Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.0,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
@@ -205,7 +209,7 @@ class CompanyAcceptanceTest {
                 companyId, "Sales Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
@@ -213,8 +217,8 @@ class CompanyAcceptanceTest {
         int receiptId = orderReceiptRepository.nextId();
         OrderReceipt receipt = OrderReceipt.forMember(
                 receiptId, owner.userId(), 80.0,
-                List.of(new ReceiptLine(1, 80.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now());
+                List.of(new ReceiptLine(1, 80.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock));
         orderReceiptRepository.save(receipt);
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
@@ -233,23 +237,31 @@ class CompanyAcceptanceTest {
                 companyId, "Multi Sales Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Haifa"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
         int eventId = Integer.parseInt(event.eventId());
+        int firstReceiptId = orderReceiptRepository.nextId();
         orderReceiptRepository.save(OrderReceipt.forMember(
-                orderReceiptRepository.nextId(), owner.userId(), 50.0,
-                List.of(new ReceiptLine(1, 50.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now()));
+                firstReceiptId, owner.userId(), 50.0,
+                List.of(new ReceiptLine(1, 50.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock)));
+        int secondReceiptId = orderReceiptRepository.nextId();
         orderReceiptRepository.save(OrderReceipt.forMember(
-                orderReceiptRepository.nextId(), owner.userId(), 30.0,
-                List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now()));
+                secondReceiptId, owner.userId(), 30.0,
+                List.of(new ReceiptLine(2, 30.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock)));
 
         PurchaseHistoryDTO result = companyAnalyticsService.salesHistory(owner.token(), companyId);
 
-        assertEquals(2, result.records().size());
+        // The read side does not promise an order, so the records are compared as a set.
+        assertEquals(Set.of(List.of(firstReceiptId, 50.0, 1), List.of(secondReceiptId, 30.0, 2)),
+                result.records().stream()
+                        .map(record -> List.<Object>of(record.orderReceiptId(), record.totalPaid(),
+                                record.tickets().get(0).ticketId()))
+                        .collect(Collectors.toSet()),
+                "each order's receipt, total and ticket");
         }
 
         @Test
@@ -262,7 +274,7 @@ class CompanyAcceptanceTest {
                 companyId, "Refund Event", "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Jerusalem"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
 
@@ -270,8 +282,8 @@ class CompanyAcceptanceTest {
         int receiptId = orderReceiptRepository.nextId();
         OrderReceipt receipt = OrderReceipt.forMember(
                 receiptId, owner.userId(), 60.0,
-                List.of(new ReceiptLine(1, 60.0, eventId, 1, null, LocalDateTime.now())),
-                LocalDateTime.now());
+                List.of(new ReceiptLine(1, 60.0, eventId, 1, null, LocalDateTime.now(clock))),
+                LocalDateTime.now(clock));
         receipt.markRefunded();
         orderReceiptRepository.save(receipt);
 
@@ -300,7 +312,7 @@ class CompanyAcceptanceTest {
                 orderReceiptRepository.nextId(), buyer.userId(), 300.0,
                 List.of(new ReceiptLine(1, 100.0, eventId, 1, null, purchasedAt),
                         new ReceiptLine(2, 200.0, otherEventId, 1, null, purchasedAt)),
-                LocalDateTime.now(),
+                purchasedAt,
                 List.of(TransactionRecord.paymentCharge(4242, "test-gateway", 300.0, "ILS", purchasedAt),
                         TransactionRecord.ticketIssuance("ISS-4242", "test-issuer", purchasedAt))));
 
@@ -318,7 +330,7 @@ class CompanyAcceptanceTest {
                 companyId, name, "desc", List.of("Artist"),
                 EventCategory.CONCERT, 4.5,
                 new Location("Israel", "Tel Aviv"),
-                List.of(new ShowDate(LocalDateTime.now().plusDays(1), LocalDateTime.now().plusDays(1).plusHours(3))),
+                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1), LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                 ZoneId.of("Asia/Jerusalem"),
                 null));
         return Integer.parseInt(event.eventId());
@@ -401,7 +413,7 @@ class CompanyAcceptanceTest {
 
         // UC-24
         @Test
-        void GivenOwner_WhenAppointManager_ThenWithPermissions() {
+        void GivenOwner_WhenAppointManager_ThenAPendingAppointmentWithThePermissions() {
                 AuthTokenDTO owner = registerAndLoginMember("owner24a");
                 AuthTokenDTO manager = registerAndLoginMember("manager24a");
 
@@ -418,10 +430,11 @@ class CompanyAcceptanceTest {
                 companyService.appointManager(owner.token(),
                                 new ManagerAppointmentRequestDTO(companyId, manager.userId(), permissions));
 
-                assertNotEquals(null, companyMembershipService.getPendingCompanyAppointment(manager.userId(), companyId));
-                assertEquals(permissions,
-                                companyMembershipService.getPendingCompanyAppointment(manager.userId(), companyId)
-                                                .getPermissions().stream().toList());
+                CompanyAppointment pending = companyMembershipService.getPendingCompanyAppointment(manager.userId(),
+                                companyId);
+                assertNotNull(pending, "the appointment must wait for the manager's answer");
+                assertEquals(owner.userId(), pending.getInviterId(), "the appointing owner is its inviter");
+                assertEquals(permissions, pending.getPermissions().stream().toList());
         }
 
         @Test
@@ -450,8 +463,9 @@ class CompanyAcceptanceTest {
                                                 .getPermissions().stream().toList());
         }
 
+        // `other` holds no appointment in the company, so the owner check refuses the edit before the appointer check.
         @Test
-        void GivenDifferentOwner_WhenEditPermissions_ThenRejected() {
+        void GivenAMemberOutsideTheCompany_WhenEditPermissions_ThenRefusedAsNoOwnerAndThePermissionsAreUnchanged() {
                 AuthTokenDTO owner = registerAndLoginMember("owner24c");
                 AuthTokenDTO other = registerAndLoginMember("other24c");
                 AuthTokenDTO manager = registerAndLoginMember("manager24c");
@@ -467,10 +481,13 @@ class CompanyAcceptanceTest {
 
                 companyService.respondToAppointment(manager.token(), new AppointmentResponseDTO(companyId, true));
 
-                assertThrows(RuntimeException.class, () -> companyService.editManagerPermissions(
-                                other.token(),
-                                new PermissionEditDTO(companyId, manager.userId(), List.of(Permission.EDIT_POLICIES))));
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
+                                () -> companyService.editManagerPermissions(other.token(),
+                                                new PermissionEditDTO(companyId, manager.userId(),
+                                                                List.of(Permission.EDIT_POLICIES))));
 
+                assertEquals("Not authorized to perform action: User is not an owner in this company",
+                                refused.getMessage());
                 assertEquals(original,
                                 companyMembershipService.getActiveCompanyAppointment(manager.userId(), companyId)
                                                 .getPermissions().stream().toList());
@@ -519,8 +536,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Summer Festival", "desc", List.of("DJ Max"),
                                 EventCategory.FESTIVAL, 4.5,
                                 new Location("Germany", "Berlin"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(4))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(4))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -551,8 +568,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Manager View Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("France", "Paris"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -574,22 +591,27 @@ class CompanyAcceptanceTest {
                                 companyId, "Private Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Spain", "Madrid"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
-                assertThrows(RuntimeException.class,
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
                                 () -> eventManagementService.getEventDetail(outsider.token(),
                                                 Integer.parseInt(created.eventId())));
+
+                assertEquals("Not authorized to perform action: User is not a member of this company",
+                                refused.getMessage());
         }
 
         // -------------------------------------------------------------------------
         // editEventDetails — acceptance tests
         // -------------------------------------------------------------------------
 
+        // The Memory adapters hand back the stored instance, so these show what an edit changes, not that it
+        // persists; EventEditPersistenceJpaTest reads an edit back from the database.
         @Test
-        void GivenOwner_WhenEditEventName_ThenNameIsUpdatedInRepository() {
+        void GivenOwner_WhenEditEventName_ThenTheEventReadsTheNewName() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner1");
                 int companyId = companyService.registerCompany(
                                 owner.token(), new CompanyRegistrationDTO("EditCo1", "desc")).companyId();
@@ -598,8 +620,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Original Name", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Italy", "Rome"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -611,7 +633,7 @@ class CompanyAcceptanceTest {
         }
 
         @Test
-        void GivenOwner_WhenEditEventCategory_ThenCategoryIsUpdatedInRepository() {
+        void GivenOwner_WhenEditEventCategory_ThenTheEventReadsTheNewCategory() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner2");
                 int companyId = companyService.registerCompany(
                                 owner.token(), new CompanyRegistrationDTO("EditCo2", "desc")).companyId();
@@ -620,8 +642,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Category Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Japan", "Tokyo"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -642,8 +664,8 @@ class CompanyAcceptanceTest {
                                 companyId, "Old Name", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Brazil", "Rio"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
@@ -655,8 +677,9 @@ class CompanyAcceptanceTest {
                 assertEquals(EventCategory.THEATER, stored.getCategory());
         }
 
+        // Editing an event's details needs MANAGE_INVENTORY; this manager holds VIEW_SALES only.
         @Test
-        void GivenManagerWithoutConfigureVenuePermission_WhenEditEventDetails_ThenThrows() {
+        void GivenManagerWithoutManageInventory_WhenEditEventDetails_ThenMissingPermissionAndTheEventIsUnchanged() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner4");
                 AuthTokenDTO manager = registerAndLoginMember("editManager4");
                 int companyId = companyService.registerCompany(
@@ -671,20 +694,25 @@ class CompanyAcceptanceTest {
                                 companyId, "Restricted Event", "desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("UK", "London"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
-                assertThrows(RuntimeException.class,
+                UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class,
                                 () -> eventManagementService.editEventDetails(manager.token(),
                                                 new EventUpdateDTO(created.eventId(), "Blocked Edit", null, null, null,
                                                                 null,
                                                                 null)));
+
+                assertEquals("Not authorized to perform action: Missing permission: MANAGE_INVENTORY",
+                                refused.getMessage());
+                assertEquals("Restricted Event", eventManagementService.getEventDetail(owner.token(),
+                                Integer.parseInt(created.eventId())).name(), "the refused edit must not reach the event");
         }
 
         @Test
-        void GivenOwner_WhenEditAllFields_ThenDescriptionLocationAndShowDatesPersist() {
+        void GivenOwner_WhenEditAllFields_ThenTheEventReadsTheNewDetailsAndShowDates() {
                 AuthTokenDTO owner = registerAndLoginMember("editOwner5");
                 int companyId = companyService.registerCompany(
                                 owner.token(), new CompanyRegistrationDTO("EditCo5", "desc")).companyId();
@@ -693,12 +721,12 @@ class CompanyAcceptanceTest {
                                 companyId, "Full Edit Event", "original desc", List.of("Artist"),
                                 EventCategory.MUSIC, 4.0,
                                 new Location("Italy", "Rome"),
-                                List.of(new ShowDate(LocalDateTime.now().plusDays(1),
-                                                LocalDateTime.now().plusDays(1).plusHours(3))),
+                                List.of(new ShowDate(LocalDateTime.now(clock).plusDays(1),
+                                                LocalDateTime.now(clock).plusDays(1).plusHours(3))),
                                 ZoneId.of("Asia/Jerusalem"),
                                 null));
 
-                LocalDateTime newStart = LocalDateTime.now().plusDays(20);
+                LocalDateTime newStart = LocalDateTime.now(clock).plusDays(20);
                 eventManagementService.editEventDetails(owner.token(), new EventUpdateDTO(
                                 created.eventId(), "Full Edit Renamed", "updated desc", "THEATER",
                                 new LocationDTO("France", "Paris"),

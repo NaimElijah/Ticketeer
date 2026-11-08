@@ -2,6 +2,7 @@ package com.ticketing.system.ui.components.admin;
 
 import com.ticketing.system.organization.application.dto.OrganizationalTreeNodeDTO;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.Composite;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.ListItem;
@@ -30,7 +31,7 @@ public class OrgTreeRenderer extends Composite<Div> {
         boolean isOwner  = "Owner".equals(dto.role());
         String variant   = dto.isFounder() ? "founder" : isOwner ? "owner" : "manager";
         String roleLabel = dto.isFounder() ? "Founder" : isOwner ? "Owner"  : "Manager";
-        String initial   = dto.username().substring(0, 1).toUpperCase();
+        String initial   = dto.username().substring(0, 1).toUpperCase(DisplayLocale.PAGE);
         boolean isManager = !dto.isFounder() && !isOwner;
         String sub = dto.isFounder() ? "Company Founder"
                 : isManager ? dto.grantedPermissions().stream()

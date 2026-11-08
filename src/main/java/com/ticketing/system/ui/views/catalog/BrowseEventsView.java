@@ -18,6 +18,7 @@ import com.ticketing.system.ui.layouts.MainLayout;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.presenters.catalog.BrowseEventsPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
+import com.ticketing.system.ui.support.DisplayLocale;
 import com.ticketing.system.ui.support.DisplayTime;
 import com.ticketing.system.ui.support.EventCategoryLabels;
 import com.vaadin.flow.component.Component;
@@ -73,6 +74,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private static final String DATE_ANY    = CatalogFilterSupport.DATE_ANY;
 
     private static final List<String> CATEGORIES = CatalogFilterSupport.CATEGORIES;
+
+    private static final int PRICE_FILTER_MAX = 1000;
+    private static final String PRICE_OUT_OF_RANGE =
+            "Enter a price from " + CatalogFilterSupport.PRICE_MIN + " to " + PRICE_FILTER_MAX + ".";
 
     private static final List<String> SORTS = List.of(
             "Date · soonest", "Price · low to high", "Price · high to low",
@@ -254,6 +259,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         customFromPicker = new DatePicker();
         customFromPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_FROM);
         customFromPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_FROM);
+        customFromPicker.setI18n(new DatePicker.DatePickerI18n()
+                .setMaxErrorMessage(CatalogFilterSupport.START_AFTER_END)
+                .setBadInputErrorMessage(CatalogFilterSupport.NOT_A_DATE));
         customFromPicker.addValueChangeListener(e -> {
             customToPicker.setMin(e.getValue());   // null clears the constraint
             runCustomSearchIfValid();
@@ -262,6 +270,9 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         customToPicker = new DatePicker();
         customToPicker.setPlaceholder(CatalogFilterSupport.CUSTOM_TO);
         customToPicker.setAriaLabel(CatalogFilterSupport.CUSTOM_TO);
+        customToPicker.setI18n(new DatePicker.DatePickerI18n()
+                .setMinErrorMessage(CatalogFilterSupport.END_BEFORE_START)
+                .setBadInputErrorMessage(CatalogFilterSupport.NOT_A_DATE));
         customToPicker.addValueChangeListener(e -> {
             customFromPicker.setMax(e.getValue());
             runCustomSearchIfValid();
@@ -332,9 +343,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private Component buildPriceRange() {
         priceMin = new IntegerField();
         priceMin.setPlaceholder(CatalogFilterSupport.BOUND_MIN);
-        priceMin.setMin(0);
-        priceMin.setMax(1000);
-        priceMin.setStep(10);
+        priceMin.setMin(CatalogFilterSupport.PRICE_MIN);
+        priceMin.setMax(PRICE_FILTER_MAX);
+        priceMin.setStep(CatalogFilterSupport.PRICE_STEP);
+        priceMin.setI18n(priceRules());
         priceMin.setPrefixComponent(new Span("$"));
         priceMin.setValueChangeMode(ValueChangeMode.LAZY);
         priceMin.getStyle().set("flex", "1 1 0");
@@ -346,9 +358,10 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
 
         priceMax = new IntegerField();
         priceMax.setPlaceholder(CatalogFilterSupport.BOUND_MAX);
-        priceMax.setMin(0);
-        priceMax.setMax(1000);
-        priceMax.setStep(10);
+        priceMax.setMin(CatalogFilterSupport.PRICE_MIN);
+        priceMax.setMax(PRICE_FILTER_MAX);
+        priceMax.setStep(CatalogFilterSupport.PRICE_STEP);
+        priceMax.setI18n(priceRules());
         priceMax.setPrefixComponent(new Span("$"));
         priceMax.setValueChangeMode(ValueChangeMode.LAZY);
         priceMax.getStyle().set("flex", "1 1 0");
@@ -359,6 +372,14 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         });
 
         return rangeWrap("Price range", priceMin, priceMax);
+    }
+
+    private static IntegerField.IntegerFieldI18n priceRules() {
+        return new IntegerField.IntegerFieldI18n()
+                .setBadInputErrorMessage(CatalogFilterSupport.PRICE_NOT_A_WHOLE_NUMBER)
+                .setMinErrorMessage(PRICE_OUT_OF_RANGE)
+                .setMaxErrorMessage(PRICE_OUT_OF_RANGE)
+                .setStepErrorMessage(CatalogFilterSupport.PRICE_OFF_STEP);
     }
 
     private Component buildEventRatingRange() {
@@ -393,9 +414,14 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private static NumberField ratingField(String placeholder, Consumer<Double> onChange) {
         NumberField f = new NumberField();
         f.setPlaceholder(placeholder);
-        f.setMin(0);
-        f.setMax(5);
-        f.setStep(0.5);
+        f.setMin(CatalogFilterSupport.RATING_MIN);
+        f.setMax(CatalogFilterSupport.RATING_MAX);
+        f.setStep(CatalogFilterSupport.RATING_STEP);
+        f.setI18n(new NumberField.NumberFieldI18n()
+                .setBadInputErrorMessage(CatalogFilterSupport.RATING_NOT_A_NUMBER)
+                .setMinErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE)
+                .setMaxErrorMessage(CatalogFilterSupport.RATING_OUT_OF_RANGE)
+                .setStepErrorMessage(CatalogFilterSupport.RATING_OFF_STEP));
         f.setValueChangeMode(ValueChangeMode.LAZY);
         f.getStyle().set("flex", "1 1 0");
         f.addValueChangeListener(e -> onChange.accept(e.getValue()));
@@ -537,7 +563,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         StringBuilder s = new StringBuilder();
         s.append(n).append(" event").append(n == 1 ? "" : "s");
         if (!CAT_ALL.equals(filterCategory))
-            s.append(" · ").append(filterCategory.toLowerCase());
+            s.append(" · ").append(filterCategory.toLowerCase(DisplayLocale.PAGE));
         if (!filterArtist.isBlank())
             s.append(" · ").append(filterArtist);
         if (!CITY_ALL.equals(filterCity))
@@ -550,7 +576,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
                 s.append(" · ").append(customFromPicker.getValue())
                  .append(" → ").append(customToPicker.getValue());
             } else if (!"Custom range".equals(filterDateRange)) {
-                s.append(" · ").append(filterDateRange.toLowerCase());
+                s.append(" · ").append(filterDateRange.toLowerCase(DisplayLocale.PAGE));
             }
         }
         if (filterPriceMin != null || filterPriceMax != null) {
@@ -588,7 +614,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         row.put("cat", ev.category);
         row.put("venue", ev.venue);
         row.put("date", ev.date);
-        row.put("from", ev.priceCents > 0 ? String.format("$%,.2f", ev.priceCents / 100.0) : "—");
+        row.put("from", ev.priceCents > 0 ? String.format(DisplayLocale.PAGE, "$%,.2f", ev.priceCents / 100.0) : "—");
         // Read as "Rating 4.5 of 5", not "star 4.5" (#188).
         row.put("rating", ev.rating == null ? "—" : Lk.rating(ratingText(ev.rating)));
         row.put("status", new LkStatusDot(ev.tone, ev.status));
@@ -624,7 +650,7 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
         return wrap;
     }
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("d MMM", DisplayLocale.PAGE);
 
     private static EventRow toRow(EventSummaryDTO dto) {
         LocalDateTime start = (dto.showDates() == null || dto.showDates().isEmpty())

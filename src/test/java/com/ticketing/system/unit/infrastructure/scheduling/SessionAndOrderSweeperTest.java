@@ -1,15 +1,18 @@
 package com.ticketing.system.unit.infrastructure.scheduling;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -22,14 +25,17 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
 
+import com.ticketing.system.sales.application.event.OrderExpiredEvent;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.application.port.out.ActiveOrderRepository;
 import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
 import com.ticketing.system.catalog.domain.InventorySelection;
+import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
 import com.ticketing.system.identity.application.port.out.SessionRepository;
@@ -55,6 +61,7 @@ class SessionAndOrderSweeperTest {
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
     // Cart holds are UTC wall time read from the sweeper's clock (ADR-008), so carts are stamped relative to T0.
     private static final LocalDateTime NOW = LocalDateTime.ofInstant(T0, ZoneOffset.UTC);
+    private static final int STANDING_CAPACITY = 5;
 
     private SessionRepository sessionRepo;
     private ActiveOrderRepository orderRepo;
@@ -85,7 +92,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void emptySweep_noWorkDone() {
+    void GivenNothingExpired_WhenSweep_ThenNoWorkDone() {
         sweeper.sweep();
 
         verify(sessionRepo).findExpiredBefore(T0);
@@ -99,7 +106,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void expiredGuestSessionWithCart_deletesSessionAndCart_releasesTickets() {
+    void GivenExpiredGuestSessionWithCart_WhenSweepExpiredSessions_ThenDeletesSessionAndCartAndReleasesTickets() {
         Session guest = new Session("guest-sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
 
@@ -107,7 +114,8 @@ class SessionAndOrderSweeperTest {
         cart.addStandingReservation(1, 10, 2, 50.0, NOW);  // 2 tickets, event=1, zone=10
         when(orderRepo.getBySessionId("guest-sid")).thenReturn(Optional.of(cart));
 
-        Event event = mock(Event.class);
+        StandingZone zone = standingZoneHolding(10, cart, 2);
+        Event event = createEventWithZones(1, List.of(zone));
         when(eventRepo.findById(1)).thenReturn(event);
 
         int cleaned = sweeper.sweepExpiredSessions(T0);
@@ -115,12 +123,12 @@ class SessionAndOrderSweeperTest {
         assertEquals(1, cleaned);
         verify(orderRepo).delete(cart);
         verify(sessionRepo).delete("guest-sid");
-        verify(event).releaseInventory(eq(10), argThat(s -> s.isStandingSelection() && s.getQuantity() == 2));     // 2 tickets in zone 10 released
+        assertReleased(zone);
         verify(eventRepo).save(event);
     }
 
     @Test
-    void expiredGuestSessionWithoutCart_deletesSessionOnly() {
+    void GivenExpiredGuestSessionWithoutCart_WhenSweepExpiredSessions_ThenDeletesSessionOnlyAndRecordsVisitorExit() {
         Session guest = new Session("orphan-sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
         when(orderRepo.getBySessionId("orphan-sid")).thenReturn(Optional.empty());
@@ -139,7 +147,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void expiredMemberSession_deletesSession_butPreservesCart_D9a() {
+    void GivenExpiredMemberSession_WhenSweepExpiredSessions_ThenDeletesSessionButPreservesCartWithoutVisitorExitD9a() {
         Session member = new Session("member-sid", 5, T0.minusSeconds(86400 + 60),
                 T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(member));
@@ -160,20 +168,71 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void cartWithExpiredItems_deletedAndTicketsReleased() {
+    void GivenCartWithExpiredItems_WhenSweepExpiredOrders_ThenDeletedAndTicketsReleased() {
         ActiveOrder expiredCart = ActiveOrder.forMember(5, "sid-1", NOW);
         expiredCart.addStandingReservation(2, 20, 3, 30.0, NOW.minusMinutes(30));
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(expiredCart));
 
-        Event event = mock(Event.class);
+        StandingZone zone = standingZoneHolding(20, expiredCart, 3);
+        Event event = createEventWithZones(2, List.of(zone));
         when(eventRepo.findById(2)).thenReturn(event);
 
         int cleaned = sweeper.sweepExpiredOrders(T0);
 
         assertEquals(1, cleaned);
         verify(orderRepo).delete(expiredCart);
-        verify(event).releaseInventory(eq(20), argThat(s -> s.isStandingSelection() && s.getQuantity() == 3));
+        assertReleased(zone);
         verify(eventRepo).save(event);
+    }
+
+    // The expiry notice tells the owner's open checkout views (CheckoutPresenter.onOrderExpired), which find
+    // a member by user id and a guest by session id.
+    @Test
+    void GivenAMembersCartWithExpiredItems_WhenSweepExpiredOrders_ThenPublishesOrderExpiredForThatMember() {
+        ActiveOrder expiredCart = new ActiveOrder(5, NOW);
+        expiredCart.addStandingReservation(2, 20, 1, 30.0, NOW.minusMinutes(30));
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(expiredCart));
+        when(eventRepo.findById(2)).thenReturn(createEventWithZones(2, List.of(standingZoneHolding(20, expiredCart, 1))));
+
+        sweeper.sweepExpiredOrders(T0);
+
+        verify(eventPublisher).publishEvent(new OrderExpiredEvent(5, null));
+        verifyNoMoreInteractions(eventPublisher);
+    }
+
+    @Test
+    void GivenAGuestsCartWithExpiredItems_WhenSweepExpiredOrders_ThenPublishesOrderExpiredForThatGuestsSession() {
+        ActiveOrder expiredCart = ActiveOrder.forGuest("sid-expired", NOW);
+        expiredCart.addStandingReservation(2, 20, 1, 30.0, NOW.minusMinutes(30));
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(expiredCart));
+        when(eventRepo.findById(2)).thenReturn(createEventWithZones(2, List.of(standingZoneHolding(20, expiredCart, 1))));
+
+        sweeper.sweepExpiredOrders(T0);
+
+        verify(eventPublisher).publishEvent(new OrderExpiredEvent(0, "sid-expired"));
+        verifyNoMoreInteractions(eventPublisher);
+    }
+
+    // The deadlock guard: the order lock first, then the events by ascending id, as reservation and checkout
+    // take them, released in reverse. The cart lists the higher event id first, so only a sort puts 1 first.
+    @Test
+    void GivenCartOverTwoEvents_WhenSweepExpiredOrders_ThenLocksTheOrderThenEventsInIdOrderAndUnlocksInReverse() {
+        ActiveOrder cart = new ActiveOrder(5, NOW);
+        cart.addStandingReservation(2, 20, 1, 30.0, NOW.minusMinutes(30));
+        cart.addStandingReservation(1, 10, 1, 30.0, NOW.minusMinutes(30));
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
+        when(eventRepo.findById(1)).thenReturn(createEventWithZones(1, List.of(standingZoneHolding(10, cart, 1))));
+        when(eventRepo.findById(2)).thenReturn(createEventWithZones(2, List.of(standingZoneHolding(20, cart, 1))));
+
+        sweeper.sweepExpiredOrders(T0);
+
+        InOrder locks = inOrder(orderRepo, eventRepo);
+        locks.verify(orderRepo).lockForUpdate("user:5");
+        locks.verify(eventRepo).lockForUpdate(1);
+        locks.verify(eventRepo).lockForUpdate(2);
+        locks.verify(eventRepo).unlock(2);
+        locks.verify(eventRepo).unlock(1);
+        locks.verify(orderRepo).unlock("user:5");
     }
 
     // The scan may list a cart whose hold has not run out at the sweeper's clock (a stale scan, or a
@@ -192,34 +251,37 @@ class SessionAndOrderSweeperTest {
     }
 
     @Test
-    void cartWithExpiredItemsAcrossMultipleEvents_releasesPerZoneAggregated() {
+    void GivenCartWithExpiredItemsAcrossMultipleEvents_WhenSweepExpiredOrders_ThenReleasesPerZoneAndSavesEachEventOnce() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-multi", NOW);
         cart.addStandingReservation(1, 10, 2, 50.0, NOW.minusMinutes(30));   // 2 in event=1 zone=10
         cart.addStandingReservation(1, 20, 1, 75.0, NOW.minusMinutes(30));   // 1 in event=1 zone=20
         cart.addStandingReservation(2, 30, 1, 100.0, NOW.minusMinutes(30));  // 1 in event=2 zone=30
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
 
-        Event event1 = mock(Event.class);
-        Event event2 = mock(Event.class);
+        StandingZone zone10 = standingZoneHolding(10, cart, 2);
+        StandingZone zone20 = standingZoneHolding(20, cart, 1);
+        StandingZone zone30 = standingZoneHolding(30, cart, 1);
+        Event event1 = createEventWithZones(1, List.of(zone10, zone20));
+        Event event2 = createEventWithZones(2, List.of(zone30));
         when(eventRepo.findById(1)).thenReturn(event1);
         when(eventRepo.findById(2)).thenReturn(event2);
 
         sweeper.sweepExpiredOrders(T0);
 
-        verify(event1).releaseInventory(eq(10), argThat(s -> s.isStandingSelection() && s.getQuantity() == 2));
-        verify(event1).releaseInventory(eq(20), argThat(s -> s.isStandingSelection() && s.getQuantity() == 1));
-        verify(event2).releaseInventory(eq(30), argThat(s -> s.isStandingSelection() && s.getQuantity() == 1));
+        assertReleased(zone10);
+        assertReleased(zone20);
+        assertReleased(zone30);
         verify(eventRepo, times(1)).save(event1);  // saved once after both zones updated
         verify(eventRepo, times(1)).save(event2);
         verify(orderRepo).delete(cart);
     }
 
     @Test
-    void cartWithEventMissingFromRepo_skipsReleaseGracefully() {
+    void GivenCartWithEventMissingFromRepo_WhenSweepExpiredOrders_ThenSkipsReleaseGracefullyAndDeletesCart() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-1", NOW);
         cart.addStandingReservation(99, 10, 1, 25.0, NOW.minusMinutes(30));
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
-        when(eventRepo.findById(99)).thenReturn(null);  // event vanished
+        when(eventRepo.findById(99)).thenThrow(new EventNotFoundException(99));  // event vanished
 
         sweeper.sweepExpiredOrders(T0);
 
@@ -233,7 +295,7 @@ class SessionAndOrderSweeperTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void combinedSweep_handlesSessionsAndOrders_logsAggregate() {
+    void GivenExpiredSessionAndExpiredCart_WhenSweep_ThenHandlesSessionsAndOrders() {
         Session guest = new Session("sid-g", null, T0.minusSeconds(3600), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
         when(orderRepo.getBySessionId("sid-g")).thenReturn(Optional.empty());
@@ -242,25 +304,29 @@ class SessionAndOrderSweeperTest {
         expiredCart.addStandingReservation(1, 10, 1, 30.0, NOW.minusMinutes(30));
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(expiredCart));
 
-        Event event = mock(Event.class);
-        when(eventRepo.findById(1)).thenReturn(event);
+        StandingZone zone = standingZoneHolding(10, expiredCart, 1);
+        when(eventRepo.findById(1)).thenReturn(createEventWithZones(1, List.of(zone)));
 
         sweeper.sweep();  // entry point — drives both passes
 
         verify(sessionRepo).delete("sid-g");
         verify(orderRepo).delete(expiredCart);
-        verify(event).releaseInventory(eq(10), argThat(s -> s.isStandingSelection() && s.getQuantity() == 1));
+        assertReleased(zone);
     }
 
+    // findExpired lists only carts holding an expired line, but a guest's cart can be empty when the guest's
+    // session ends: the guest removed every line, or never added one.
     @Test
-    void emptyOrderItems_releaseStandingSpotsIsNoOp() {
-        // Defensive: an ActiveOrder with no line items shouldn't blow up.
+    void GivenExpiredGuestSessionWithAnEmptyCart_WhenSweepExpiredSessions_ThenTheCartIsDeletedAndNoEventIsTouched() {
+        Session guest = new Session("sid-empty", null, T0.minusSeconds(7200), T0.minusSeconds(60));
+        when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
         ActiveOrder emptyCart = ActiveOrder.forGuest("sid-empty", NOW);
-        when(orderRepo.findExpired(NOW)).thenReturn(List.of(emptyCart));
+        when(orderRepo.getBySessionId("sid-empty")).thenReturn(Optional.of(emptyCart));
 
-        sweeper.sweepExpiredOrders(T0);
+        sweeper.sweepExpiredSessions(T0);
 
         verify(orderRepo).delete(emptyCart);
+        verify(sessionRepo).delete("sid-empty");
         verify(eventRepo, never()).findById(anyInt());
         verify(eventRepo, never()).save(any());
     }
@@ -275,7 +341,7 @@ class SessionAndOrderSweeperTest {
 
 
     @Test
-    void expiredSeatedOrder_releasesExactReservedSeats() {
+    void GivenExpiredSeatedOrder_WhenSweepExpiredOrders_ThenReleasesExactReservedSeats() {
         ActiveOrder expiredCart = ActiveOrder.forMember(5, "sid-1", NOW);
 
         SeatedZone seatedZone = new SeatedZone(
@@ -315,7 +381,7 @@ class SessionAndOrderSweeperTest {
 
 
     @Test
-    void expiredMixedOrder_releasesStandingQuantityAndExactSeatedSeats() {
+    void GivenExpiredMixedOrder_WhenSweepExpiredOrders_ThenReleasesStandingQuantityAndExactSeatedSeats() {
         ActiveOrder expiredCart = ActiveOrder.forGuest("sid-mixed", NOW);
 
         StandingZone standingZone = new StandingZone(10, "General Admission", 5, 50.0);
@@ -353,7 +419,7 @@ class SessionAndOrderSweeperTest {
 
 
     @Test
-    void expiredGuestSessionWithSeatedCart_releasesExactSeatsAndDeletesCart() {
+    void GivenExpiredGuestSessionWithSeatedCart_WhenSweepExpiredSessions_ThenReleasesExactSeatsAndDeletesSessionAndCart() {
         Session guest = new Session("guest-seated-sid", null, T0.minusSeconds(7200), T0.minusSeconds(60));
         when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
 
@@ -410,23 +476,47 @@ class SessionAndOrderSweeperTest {
         verify(eventRepo, never()).save(any());
     }
 
-
-
-
-
-
-
-
-
-
-    // R1-sweeper re-check: findExpired() returned this cart, but by the time the sweeper locks it the
-    // buyer has manually removed the expired line (now allowed), leaving only fresh items. The sweeper
-    // must re-validate expiry under the lock and NOT destroy the salvaged cart.
+    // The class Javadoc's policy covers the session path too: the checkout owns the cart's holds until it
+    // completes or reverts the cart, so a guest session that ends meanwhile leaves the cart alone.
     @Test
-    void cartNoLongerExpiredWhenLocked_isSkippedNotDeleted() {
+    void GivenAGuestCartInCheckout_WhenItsSessionExpires_ThenTheCartIsNeitherReleasedNorDeleted() {
+        Session guest = new Session("sid-paying", null, T0.minusSeconds(7200), T0.minusSeconds(60));
+        when(sessionRepo.findExpiredBefore(T0)).thenReturn(List.of(guest));
+        ActiveOrder cart = ActiveOrder.forGuest("sid-paying", NOW);
+        cart.addStandingReservation(1, 10, 1, 50.0, NOW);
+        cart.markCheckoutInProgress();
+        when(orderRepo.getBySessionId("sid-paying")).thenReturn(Optional.of(cart));
+
+        sweeper.sweepExpiredSessions(T0);
+
+        verify(orderRepo, never()).delete(any());
+        verify(eventRepo, never()).lockForUpdate(anyInt());
+        verify(eventRepo, never()).save(any());
+    }
+
+
+
+
+
+
+
+
+
+
+    // R1-sweeper re-check: findExpired() returned this cart while it held an expired line, but the buyer
+    // removes that line while the sweeper waits for the order lock, leaving only a fresh one. The sweeper
+    // must re-validate expiry under the lock and NOT destroy the salvaged cart. The removal happens inside
+    // lockForUpdate, so a check made before the lock would still see the expired line.
+    @Test
+    void GivenCartNoLongerExpiredWhenLocked_WhenSweepExpiredOrders_ThenIsSkippedNotDeleted() {
         ActiveOrder healthyAgain = ActiveOrder.forMember(5, "sid-healthy", NOW);
-        healthyAgain.addStandingReservation(1, 10, 1, 30.0, NOW); // fresh, not expired
+        healthyAgain.addStandingReservation(1, 10, 1, 30.0, NOW.minusMinutes(30)); // expired at the scan
+        healthyAgain.addStandingReservation(1, 20, 1, 30.0, NOW); // fresh, not expired
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(healthyAgain));
+        doAnswer(lockTaken -> {
+            healthyAgain.removeStandingSpots(1, 10, 1);
+            return null;
+        }).when(orderRepo).lockForUpdate("user:5");
 
         int cleaned = sweeper.sweepExpiredOrders(T0);
 
@@ -439,33 +529,92 @@ class SessionAndOrderSweeperTest {
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+    // The same race, when the buyer removes the cart's only line while the sweeper waits for the lock: under
+    // the lock the cart is empty, with nothing left to keep, so it is deleted and no event is read or saved.
+    @Test
+    void GivenACartEmptiedWhileTheSweeperWaitsForItsLock_WhenSweepExpiredOrders_ThenItIsDeletedAndNoEventIsReadOrSaved() {
+        ActiveOrder emptiedCart = ActiveOrder.forMember(5, "sid-emptied", NOW);
+        emptiedCart.addStandingReservation(1, 10, 1, 30.0, NOW.minusMinutes(30)); // expired at the scan
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(emptiedCart));
+        doAnswer(lockTaken -> {
+            emptiedCart.removeStandingSpots(1, 10, 1);
+            return null;
+        }).when(orderRepo).lockForUpdate("user:5");
+
+        sweeper.sweepExpiredOrders(T0);
+
+        verify(orderRepo).delete(emptiedCart);
+        verify(orderRepo).unlock("user:5");
+        verify(eventRepo, never()).findById(anyInt());
+        verify(eventRepo, never()).save(any());
+    }
+
     // RC1: one zone release failing (e.g. a double-release race with abandonActiveOrder) must not abort
     // release of the other events or the deletion of the order.
     @Test
-    void zoneReleaseFailure_doesNotAbortRemainingReleasesOrDelete() {
+    void GivenZoneReleaseFailure_WhenSweepExpiredOrders_ThenDoesNotAbortRemainingReleasesOrDelete() {
         ActiveOrder cart = ActiveOrder.forGuest("sid-resilient", NOW);
         cart.addStandingReservation(1, 10, 1, 50.0, NOW.minusMinutes(30)); // event 1 -> throws
         cart.addStandingReservation(2, 20, 1, 60.0, NOW.minusMinutes(30)); // event 2 -> ok
         when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
 
-        Event event1 = mock(Event.class);
-        Event event2 = mock(Event.class);
+        // Zone 10 no longer holds the cart's place, as after abandonActiveOrder released it first, so the
+        // real release refuses it.
+        Event event1 = createEventWithZones(1, List.of(new StandingZone(10, "General Admission", STANDING_CAPACITY, 50.0)));
+        StandingZone zone20 = standingZoneHolding(20, cart, 1);
+        Event event2 = createEventWithZones(2, List.of(zone20));
         when(eventRepo.findById(1)).thenReturn(event1);
         when(eventRepo.findById(2)).thenReturn(event2);
-        doThrow(new IllegalStateException("boom")).when(event1).releaseInventory(eq(10), any());
 
         int cleaned = sweeper.sweepExpiredOrders(T0);
 
         assertEquals(1, cleaned);
         // event2's release still ran and was persisted despite event1 throwing...
-        verify(event2).releaseInventory(eq(20), any());
+        assertReleased(zone20);
         verify(eventRepo).save(event2);
         verify(eventRepo, never()).save(event1); // nothing released on event1
         // ...and the order was still deleted.
         verify(orderRepo).delete(cart);
     }
 
+    // Only a zone's release is guarded; a failing save fails the tick, which rolls back as one transaction.
+    @Test
+    void GivenEventSaveFails_WhenSweepExpiredOrders_ThenItPropagatesAndEveryLockIsReleased() {
+        ActiveOrder cart = new ActiveOrder(5, NOW);
+        cart.addStandingReservation(1, 10, 1, 30.0, NOW.minusMinutes(30));
+        cart.addStandingReservation(2, 20, 1, 30.0, NOW.minusMinutes(30));
+        when(orderRepo.findExpired(NOW)).thenReturn(List.of(cart));
+        Event event1 = createEventWithZones(1, List.of(standingZoneHolding(10, cart, 1)));
+        when(eventRepo.findById(1)).thenReturn(event1);
+        when(eventRepo.findById(2)).thenReturn(createEventWithZones(2, List.of(standingZoneHolding(20, cart, 1))));
+        IllegalStateException saveFailure = new IllegalStateException("the event row could not be written");
+        doThrow(saveFailure).when(eventRepo).save(event1);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> sweeper.sweepExpiredOrders(T0));
+
+        assertSame(saveFailure, thrown, "the save's failure must reach the tick unchanged");
+        verify(eventRepo).unlock(1);
+        verify(eventRepo).unlock(2);
+        verify(orderRepo).unlock("user:5");
+        verify(orderRepo, never()).delete(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
     // test helper functions:
+
+    // A zone of STANDING_CAPACITY places, `held` of them reserved under the order's key, as a reservation
+    // leaves it, so the sweeper's release runs against real inventory. Named by id: a venue's names are unique.
+    private static StandingZone standingZoneHolding(int zoneId, ActiveOrder order, int held) {
+        StandingZone zone = new StandingZone(zoneId, "Standing " + zoneId, STANDING_CAPACITY, 30.0);
+        zone.reserve(InventorySelection.standing(held, order.getOrderKey()));
+        return zone;
+    }
+
+    private static void assertReleased(StandingZone zone) {
+        assertEquals(0, zone.getReservedAmount(), "zone " + zone.getId() + " must hold nothing for the swept order");
+        assertEquals(STANDING_CAPACITY, zone.getAvailableAmount(), "every place of zone " + zone.getId()
+                + " must be back on sale");
+    }
 
     private PurchasePolicy acceptingPurchasePolicy() {
         return new NoPurchasePolicy();

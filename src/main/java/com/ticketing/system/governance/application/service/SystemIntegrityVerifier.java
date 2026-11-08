@@ -42,8 +42,10 @@ import lombok.extern.slf4j.Slf4j;
  *   <li><b>§1 #6 active company has ≥1 Owner — VERIFIED.</b></li>
  *   <li><b>§1 #4 producer (owner/manager) is a registered user — VERIFIED.</b></li>
  *   <li><b>§1 #1 unique username, #8 ≤1 active order/member/event, #12 sellable ≤ inventory —
- *       VERIFIED.</b> Guest carts are left out of #8: a race can leave two on one session id, an
- *       accepted state until NaimElijah/Ticketeer#224, and this scan's failure stops the boot.</li>
+ *       VERIFIED.</b> Guest carts are left out of #8: a pre-V10 instance serving during a rolling
+ *       deploy can still leave two on one session id (NaimElijah/Ticketeer#224, V10's header), and this
+ *       scan's failure stops the boot. NaimElijah/Ticketeer#275 scans them once no such instance can
+ *       serve.</li>
  *   <li>The II.4.8.3 appointment tree (single appointer, no ownership cycles) is structural but
  *       not scanned, and owner revocation can currently break it (#126).</li>
  * </ul>
@@ -189,9 +191,11 @@ public class SystemIntegrityVerifier {
     }
 
     // #8 — at most one active order per member per event; flag a member whose two distinct orders
-    // both hold the same event. Guest carts are skipped: two on one session id are a known race
-    // (NaimElijah/Ticketeer#224, requirements.md §1 #8) that the sweeper clears, and failing here
-    // would stop the boot (ADR-003) and block reopening the market.
+    // both hold the same event. Guest carts are skipped: uk_active_orders_guest_session_id (V10,
+    // NaimElijah/Ticketeer#224) holds a session to one, except the carts a pre-V10 instance writes during
+    // a rolling deploy, which the sweeper clears (requirements.md §1 #8), and failing here would stop the
+    // boot (ADR-003) and block reopening the market. NaimElijah/Ticketeer#275 scans guests once no such
+    // instance can serve.
     private void verifyOneActiveOrderPerMemberEvent() {
         Map<Integer, Map<Integer, String>> orderByMemberEvent = new HashMap<>();
         for (ActiveOrder order : activeOrderRepository.findAll()) {

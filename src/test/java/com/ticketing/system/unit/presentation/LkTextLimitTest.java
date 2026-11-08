@@ -26,6 +26,7 @@ class LkTextLimitTest {
     private static final int LOWERED_LIMIT = 4;
     private static final String WITHIN = "a".repeat(LIMIT);
     private static final String OVER = "a".repeat(LIMIT + 2);
+    private static final String ENTER_A_SUBJECT = "Enter a subject.";
 
     @Test
     void GivenALimitedField_WhenTheValueGoesOverTheLimit_ThenTheFieldIsInvalidAndItsHelperSaysByHowMuch() {
@@ -189,6 +190,21 @@ class LkTextLimitTest {
         assertTrue(field.isInvalid());
         assertFalse(LkTextLimit.exceeds(field));
         assertNoErrorMessage(field);
+    }
+
+    // Handed back to its own rule, the field says what that rule says, or it is invalid with nothing saying why (#189).
+    @Test
+    void GivenARequiredFieldWithItsOwnMessageOverTheLimit_WhenItIsEmptied_ThenItSaysItsOwnMessage() {
+        TextField field = new TextField("Subject");
+        field.setRequired(true);
+        field.setI18n(new TextField.TextFieldI18n().setRequiredErrorMessage(ENTER_A_SUBJECT));
+        LkTextLimit.apply(field, LIMIT);
+        field.setValue(OVER);
+
+        field.setValue("");
+
+        assertTrue(field.isInvalid());
+        assertEquals(ENTER_A_SUBJECT, field.getErrorMessage());
     }
 
     @Test

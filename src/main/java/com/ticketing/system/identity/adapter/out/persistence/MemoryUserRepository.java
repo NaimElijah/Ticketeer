@@ -58,12 +58,10 @@ public class MemoryUserRepository implements UserRepository {
     }
 
     @Override
-    public void updateUser(User targetUser) {
-        usersById.put(targetUser.getUserId(), targetUser);
-    }
-
-    @Override
     public Optional<User> findByUsername(String username) {
+        if (username == null) {
+            return Optional.empty();
+        }
         return usersById.values().stream()
                 .filter(u -> username.equals(u.getUsername()))
                 .findFirst();
@@ -71,6 +69,9 @@ public class MemoryUserRepository implements UserRepository {
 
     @Override
     public Optional<User> findByEmail(String email) {
+        if (email == null) {
+            return Optional.empty();
+        }
         return usersById.values().stream()
                 .filter(u -> email.equals(u.getEmail()))
                 .findFirst();

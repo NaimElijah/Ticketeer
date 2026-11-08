@@ -30,6 +30,7 @@ class LoggingAspectTest {
 
     private static final String FAILURE = "boom";
     private static final String RECOVERED = "recovered";
+    private static final String SECRET = "hunter2-the-members-password";
 
     /** The service called second, through its proxy. */
     static class InnerService {
@@ -39,6 +40,14 @@ class LoggingAspectTest {
 
         public String succeed() {
             return "ok";
+        }
+
+        public String signIn(String username, String password) {
+            return "ok";
+        }
+
+        public void refuseSignIn(String username, String password) {
+            throw new IllegalStateException(FAILURE);
         }
     }
 
@@ -160,6 +169,27 @@ class LoggingAspectTest {
         assertTrue(debugLines.stream().anyMatch(line -> line.contains(InnerService.class.getSimpleName())
                         && line.contains(IllegalStateException.class.getSimpleName())),
                 "the handled inner failure must still be logged at DEBUG, got: " + debugLines);
+    }
+
+    // "Argument counts only": a password, a token or personal data passed to a service never reaches the log.
+    @Test
+    void GivenASecretArgument_WhenTheAdvisedCallReturns_ThenTheEntryLineGivesOnlyTheArgumentCount() {
+        assertEquals("ok", inner.signIn("alice", SECRET));
+
+        assertTrue(logs.messagesAt(Level.DEBUG).stream().anyMatch(line -> line.contains("signIn")
+                        && line.contains("(2 args)")),
+                "the entry line names the call and its argument count, got: " + logs.messagesAt(Level.DEBUG));
+        logs.assertNeverLogged(SECRET);
+        logs.assertNeverLogged("alice");
+    }
+
+    @Test
+    void GivenASecretArgument_WhenTheAdvisedCallFails_ThenNoLevelLogsIt() {
+        assertThrows(IllegalStateException.class, () -> inner.refuseSignIn("alice", SECRET));
+
+        assertEquals(1, logs.messagesAt(Level.WARN).size(), "precondition: the failure is logged at WARN");
+        logs.assertNeverLogged(SECRET);
+        logs.assertNeverLogged("alice");
     }
 
     private static <T> T advised(T target, LoggingAspect aspect) {

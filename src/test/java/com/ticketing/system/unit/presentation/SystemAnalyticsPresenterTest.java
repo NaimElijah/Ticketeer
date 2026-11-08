@@ -21,11 +21,18 @@ import com.ticketing.system.governance.application.service.SystemAdminService;
 import com.ticketing.system.governance.application.service.SystemAnalyticsService;
 import com.ticketing.system.governance.config.AnalyticsProperties;
 import com.ticketing.system.shared.exception.InvalidStateTransitionException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.MarketNotOpenException;
+import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.presenters.admin.SystemAnalyticsPresenter;
 import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.MapBackedVaadinSession;
+import com.ticketing.system.ui.support.ServiceErrors;
+import static org.mockito.Mockito.verifyNoInteractions;
+import com.ticketing.system.shared.dto.MarketControlRequestDTO;
+import com.ticketing.system.shared.exception.BusinessRuleViolationException;
+import jakarta.persistence.PersistenceException;
 
 /**
  * Unit tests for {@link SystemAnalyticsPresenter} (UC-46 / #43, #279). Both
@@ -61,7 +68,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void load_returnsSuccess_withMarketAndAnalytics() {
+    void GivenMarketAndAnalyticsAvailable_WhenLoad_ThenReturnsSuccessWithMarketAndAnalytics() {
         MarketStateDTO market = marketState("OPEN");
         SystemAnalyticsDTO analytics = zeroAnalytics();
         when(adminService.viewMarketState(TOKEN)).thenReturn(market);
@@ -76,14 +83,14 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void load_returnsFailure_whenAServiceThrows() {
+    void GivenTheAdminServiceFailsInternally_WhenLoad_ThenFailureCarriesTheGenericText() {
         when(adminService.viewMarketState(TOKEN)).thenThrow(new RuntimeException("boom"));
 
-        assertInstanceOf(SystemAnalyticsPresenter.Outcome.Failure.class, presenter.load());
+        assertEquals(new SystemAnalyticsPresenter.Outcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE), presenter.load());
     }
 
     @Test
-    void openMarket_withNullToken_isNotAuthenticated_andDoesNotCallService() {
+    void GivenANullToken_WhenOpenMarket_ThenIsNotAuthenticatedAndDoesNotCallService() {
         SystemAnalyticsPresenter.MarketActionOutcome outcome = presenter.openMarket(null, "x");
 
         assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class, outcome);
@@ -91,7 +98,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void openMarket_success_returnsUpdatedState() {
+    void GivenTheServiceOpensTheMarket_WhenOpenMarket_ThenReturnsUpdatedState() {
         MarketStateDTO opened = marketState("OPEN");
         when(adminService.openMarket(any())).thenReturn(opened);
 
@@ -103,7 +110,7 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void openMarket_unauthorized_mapsToNotAuthenticated() {
+    void GivenAnUnauthorizedCaller_WhenOpenMarket_ThenMapsToNotAuthenticated() {
         when(adminService.openMarket(any())).thenThrow(new UnauthorizedActionException("nope"));
 
         assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class,
@@ -111,27 +118,44 @@ class SystemAnalyticsPresenterTest {
     }
 
     @Test
-    void openMarket_marketNotOpen_mapsToRejected() {
-        when(adminService.openMarket(any())).thenThrow(new MarketNotOpenException("platform not initialized"));
+    void GivenAnExpiredAdminToken_WhenOpenMarket_ThenNotAuthenticated() {
+        when(adminService.openMarket(any())).thenThrow(new SessionExpiredException());
 
-        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Rejected.class,
+        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class,
                 presenter.openMarket(TOKEN, "go"));
     }
 
     @Test
-    void closeMarket_invalidTransition_mapsToRejected() {
+    void GivenARevokedAdminToken_WhenOpenMarket_ThenNotAuthenticated() {
+        when(adminService.openMarket(any())).thenThrow(new InvalidTokenException("revoked"));
+
+        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated.class,
+                presenter.openMarket(TOKEN, "go"));
+    }
+
+    @Test
+    void GivenAMarketNotOpenRefusal_WhenOpenMarket_ThenRejectedWithItsReason() {
+        MarketNotOpenException refusal = new MarketNotOpenException("platform not initialized");
+        when(adminService.openMarket(any())).thenThrow(refusal);
+
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Rejected(refusal.getMessage()),
+                presenter.openMarket(TOKEN, "go"));
+    }
+
+    @Test
+    void GivenAnInvalidTransition_WhenCloseMarket_ThenRejectedWithItsReason() {
         when(adminService.closeMarket(any()))
                 .thenThrow(new InvalidStateTransitionException("market is not open; cannot close"));
 
-        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Rejected.class,
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Rejected("market is not open; cannot close"),
                 presenter.closeMarket(TOKEN, "stop"));
     }
 
     @Test
-    void closeMarket_unexpectedError_mapsToFailure() {
+    void GivenAnUnexpectedError_WhenCloseMarket_ThenFailureCarriesTheGenericText() {
         when(adminService.closeMarket(any())).thenThrow(new RuntimeException("db down"));
 
-        assertInstanceOf(SystemAnalyticsPresenter.MarketActionOutcome.Failure.class,
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
                 presenter.closeMarket(TOKEN, "stop"));
     }
 
@@ -142,5 +166,52 @@ class SystemAnalyticsPresenterTest {
 
     private static SystemAnalyticsDTO zeroAnalytics() {
         return new SystemAnalyticsDTO(0L, 0d, 0d, 0d, 0d, 0d, 0L, 0L, 0L, 0L, 0L, 5);
+    }
+
+    // ---- the analytics half of the load, the close action, and what each action sends (#189) ----
+
+    @Test
+    void GivenTheMarketLoadsButTheAnalyticsFail_WhenLoad_ThenFailureCarriesTheAnalyticsReason() {
+        when(adminService.viewMarketState(TOKEN)).thenReturn(marketState("OPEN"));
+        BusinessRuleViolationException refusal = new BusinessRuleViolationException("Analytics are being recomputed");
+        when(analyticsService.computeAnalytics(TOKEN)).thenThrow(refusal);
+
+        assertEquals(new SystemAnalyticsPresenter.Outcome.Failure(refusal.getMessage()), presenter.load());
+    }
+
+    @Test
+    void GivenANullOrBlankToken_WhenCloseMarket_ThenNotAuthenticatedAndTheServiceIsNotCalled() {
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated(), presenter.closeMarket(null, "x"));
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.NotAuthenticated(), presenter.closeMarket(" ", "x"));
+        verifyNoInteractions(adminService);
+    }
+
+    @Test
+    void GivenTheServiceClosesTheMarket_WhenCloseMarket_ThenSuccessWithTheNewStateAndACloseRequest() {
+        MarketStateDTO closed = marketState("CLOSED");
+        when(adminService.closeMarket(any())).thenReturn(closed);
+
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Success(closed), presenter.closeMarket(TOKEN, "stop"));
+
+        verify(adminService).closeMarket(new MarketControlRequestDTO("CLOSE", "stop", TOKEN));
+        verify(adminService, never()).openMarket(any());
+    }
+
+    @Test
+    void GivenTheServiceOpensTheMarket_WhenOpenMarket_ThenAnOpenRequestCarriesTheReasonAndToken() {
+        when(adminService.openMarket(any())).thenReturn(marketState("OPEN"));
+
+        presenter.openMarket(TOKEN, "go");
+
+        verify(adminService).openMarket(new MarketControlRequestDTO("OPEN", "go", TOKEN));
+        verify(adminService, never()).closeMarket(any());
+    }
+
+    @Test
+    void GivenAnInternalFailure_WhenOpenMarket_ThenFailureCarriesTheGenericText() {
+        when(adminService.openMarket(any())).thenThrow(new PersistenceException("could not execute statement"));
+
+        assertEquals(new SystemAnalyticsPresenter.MarketActionOutcome.Failure(ServiceErrors.GENERIC_FAILURE_MESSAGE),
+                presenter.openMarket(TOKEN, "go"));
     }
 }

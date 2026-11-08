@@ -1,0 +1,11 @@
+# Fixture for RepositoryAdapterProfileTest: names the suite profiles (test, memory) under each key that
+# activates a profile, in each form the test reads, beside a profile that is not one of them (dev).
+# It is not named application*, so no Spring context and no shipped-file scan ever loads it.
+spring:
+  profiles:
+    active: ${FIXTURE_PROFILES:test}
+    include:
+      - dev
+      - memory
+    group:
+      local: dev, test

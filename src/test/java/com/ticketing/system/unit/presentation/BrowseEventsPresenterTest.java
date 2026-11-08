@@ -43,7 +43,7 @@ class BrowseEventsPresenterTest {
     }
 
     @Test
-    void search_delegatesToSearchGlobalAndReturnsResults() {
+    void GivenMatchingEvents_WhenSearch_ThenDelegatesToSearchGlobalAndReturnsResults() {
         CatalogSearchFiltersDTO filters = CatalogSearchFiltersDTO.empty();
         List<EventSummaryDTO> events = List.of(summary());
         when(catalogService.searchGlobal(eq(CRED), eq(filters))).thenReturn(events);
@@ -77,8 +77,10 @@ class BrowseEventsPresenterTest {
             presenter.search(CRED, filters);
 
             assertFalse(failureLogs.messagesAt(Level.ERROR).isEmpty(), "the failure itself is logged");
+            failureLogs.assertNeverLogged(text);
+            // The presenter itself logs nothing on this path, its failure goes through ServiceErrors above;
+            // this guards a log line added to it later.
             assertEquals(List.of(), presenterLogs.eventsContaining(text), "the search text must not be logged");
-            assertEquals(List.of(), failureLogs.eventsContaining(text), "the search text must not be logged");
         }
     }
 }

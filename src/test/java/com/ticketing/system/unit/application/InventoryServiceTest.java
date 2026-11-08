@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -38,7 +40,9 @@ import com.ticketing.system.catalog.domain.StandingZone;
 import com.ticketing.system.organization.application.port.out.ProductionCompanyRepository;
 import com.ticketing.system.organization.domain.CompanyStatus;
 import com.ticketing.system.organization.domain.ProductionCompany;
+import com.ticketing.system.shared.domain.policy.MaxTicketsPurchasePolicy;
 import com.ticketing.system.shared.domain.policy.PurchaseContext;
+import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import com.ticketing.system.shared.exception.ConcurrentReservationException;
 import com.ticketing.system.shared.exception.EventNotFoundException;
 import com.ticketing.system.shared.exception.EventNotOnSaleException;
@@ -73,21 +77,24 @@ class InventoryServiceTest {
         // A sale loads its events through findForSale; each test stubs the events once, on findById.
         when(eventRepository.findForSale(anyInt())).thenAnswer(call -> eventRepository.findById(call.<Integer>getArgument(0)));
         companyRepository = mock(ProductionCompanyRepository.class);
-        service = new InventoryService(eventRepository, companyRepository, TestTransactions.noOpManager());
+        service = new InventoryService(eventRepository, companyRepository, TestTransactions.recordingManager());
     }
 
     // ---- reserve --------------------------------------------------------
 
     /** Reserve acquires the event buyer-lock, validates policy, mutates, saves, and unlocks — in order. */
     @Test
-    void reserve_locksValidatesReservesSaves_andReturnsUnitPrice() {
+    void GivenAnEventOfAnActiveCompany_WhenReserve_ThenLocksValidatesReservesSavesUnlocksAndReturnsUnitPrice() {
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
         InventoryZone zone = mock(InventoryZone.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.getVenueMap().getZone(SEATED_ZONE)).thenReturn(zone);
         when(zone.getprice()).thenReturn(120.0);
         when(event.getCompanyId()).thenReturn(COMPANY_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(activeCompany());
+        ProductionCompany company = activeCompany();
+        PurchasePolicy companyPolicy = new MaxTicketsPurchasePolicy(4);
+        company.setPurchasePolicy(companyPolicy);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
 
         double price = service.reserve(EVENT_ID, SEATED_ZONE,
                 InventorySelectionDTO.seated(List.of("A1", "A2")), ORDER_KEY, HOLD_UNTIL, 42, 30, 2);
@@ -96,7 +103,8 @@ class InventoryServiceTest {
         // Strict ordering: buyer-lock first, policy before the mutation, save under the lock, unlock last.
         InOrder ordered = inOrder(eventRepository, event);
         ordered.verify(eventRepository).lockForBuyerOperation(EVENT_ID);
-        ordered.verify(event).validateEffectivePolicy(any(), any(PurchaseContext.class));
+        ArgumentCaptor<PurchaseContext> context = ArgumentCaptor.forClass(PurchaseContext.class);
+        ordered.verify(event).validateEffectivePolicy(same(companyPolicy), context.capture());
         ordered.verify(event).reserveInventory(eq(SEATED_ZONE), any(InventorySelection.class));
         ordered.verify(eventRepository).save(event);
         ordered.verify(eventRepository).unlockBuyerOperation(EVENT_ID);
@@ -106,11 +114,13 @@ class InventoryServiceTest {
         assertThat(sel.getValue().getSeatNumbers()).containsExactly("A1", "A2");
         assertThat(sel.getValue().getOrderKey()).isEqualTo(ORDER_KEY);
         assertThat(sel.getValue().getHoldUntil()).isEqualTo(HOLD_UNTIL);
+        // The policy weighs this buyer and the whole quantity, at the RESERVE stage, which defers the minimum.
+        assertThat(describe(context.getValue())).isEqualTo("buyer=42 age=30 event=10 company=100 quantity=2 stage=RESERVE");
     }
 
     /** A policy rejection is raised BEFORE any inventory mutation, and the lock is still released. */
     @Test
-    void reserve_policyRejected_doesNotReserve_andStillUnlocks() {
+    void GivenPolicyRejected_WhenReserve_ThenThrowsDoesNotReserveAndStillUnlocks() {
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
         InventoryZone zone = mock(InventoryZone.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -130,7 +140,7 @@ class InventoryServiceTest {
 
     /** A missing event fails fast (and, being pre-mutation, releases the lock it took). */
     @Test
-    void reserve_eventNotFound_throwsAndUnlocks() {
+    void GivenEventNotFound_WhenReserve_ThenThrowsAndUnlocks() {
         when(eventRepository.findById(EVENT_ID)).thenThrow(new EventNotFoundException(EVENT_ID));
 
         assertThatThrownBy(() -> service.reserve(EVENT_ID, SEATED_ZONE,
@@ -144,7 +154,7 @@ class InventoryServiceTest {
 
     /** Release delegates to the domain, saves under the lock, unlocks, and returns the unit price. */
     @Test
-    void release_releasesSavesUnlocks_andReturnsPrice() {
+    void GivenAnExistingEvent_WhenRelease_ThenReleasesSavesUnlocksAndReturnsPrice() {
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
         InventoryZone zone = mock(InventoryZone.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
@@ -163,7 +173,7 @@ class InventoryServiceTest {
 
     /** Restore re-reserves WITHOUT re-running the purchase policy (it is a rollback compensation). */
     @Test
-    void restore_reReservesWithoutPolicy() {
+    void GivenAnExistingEvent_WhenRestore_ThenReReservesWithoutPolicySavesAndUnlocks() {
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
@@ -180,7 +190,7 @@ class InventoryServiceTest {
 
     /** Refund return groups by event+zone, returns SOLD seats/places to stock under the buyer lock. */
     @Test
-    void returnSoldToStock_returnsSeatedAndStandingUnderLock() {
+    void GivenSoldSeatedAndStandingLines_WhenReturnSoldToStock_ThenReturnsSeatedAndStandingUnderLock() {
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
@@ -205,7 +215,7 @@ class InventoryServiceTest {
 
     /** A stock-return failure is swallowed (best-effort) and the lock is still released. */
     @Test
-    void returnSoldToStock_failureIsSwallowed_andLockReleased() {
+    void GivenADomainFailure_WhenReturnSoldToStock_ThenFailureIsSwallowedAndLockReleased() {
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         doThrow(new IllegalStateException("boom")).when(event).returnSoldToStock(anyInt(), any());
@@ -220,9 +230,9 @@ class InventoryServiceTest {
 
     /** Pricing delegates to the event's discount policy; a missing event fails with EventNotFound. */
     @Test
-    void priceTicket_delegatesToDiscountPolicy_andFailsWhenMissing() {
+    void GivenAnExistingAndAMissingEvent_WhenPriceTicket_ThenDelegatesToDiscountPolicyAndFailsWhenMissing() {
         Event event = mock(Event.class);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.of(2027, 7, 15, 17, 0);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.calculatePriceforoneticket(2, 40.0, now)).thenReturn(36.0);
 
@@ -235,7 +245,7 @@ class InventoryServiceTest {
 
     /** eventName returns the name, or fails with EventNotFound when the event is gone. */
     @Test
-    void eventName_returnsName_orThrowsWhenMissing() {
+    void GivenAnExistingAndAMissingEvent_WhenEventName_ThenReturnsNameOrThrowsWhenMissing() {
         Event event = mock(Event.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.getName()).thenReturn("Rock Night");
@@ -247,22 +257,28 @@ class InventoryServiceTest {
 
     /** CHECKOUT-stage policy validation loads the event, resolves its company, and delegates. */
     @Test
-    void validatePurchasePolicy_delegates_andPropagatesRejection() {
+    void GivenAPolicyThatRejects_WhenValidatePurchasePolicy_ThenDelegatesAndPropagatesRejection() {
         Event event = mock(Event.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         when(event.getId()).thenReturn(EVENT_ID);
         when(event.getCompanyId()).thenReturn(COMPANY_ID);
-        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(activeCompany());
-        doThrow(new PolicyViolationException("min 2")).when(event)
-                .validateEffectivePolicy(any(), any(PurchaseContext.class));
+        ProductionCompany company = activeCompany();
+        PurchasePolicy companyPolicy = new MaxTicketsPurchasePolicy(4);
+        company.setPurchasePolicy(companyPolicy);
+        when(companyRepository.getCompanyById(COMPANY_ID)).thenReturn(company);
+        PolicyViolationException rejection = new PolicyViolationException("min 2");
+        doThrow(rejection).when(event).validateEffectivePolicy(any(), any(PurchaseContext.class));
 
-        assertThatThrownBy(() -> service.validatePurchasePolicy(EVENT_ID, 42, 30, 1))
-                .isInstanceOf(PolicyViolationException.class);
+        assertThatThrownBy(() -> service.validatePurchasePolicy(EVENT_ID, 42, 30, 1)).isSameAs(rejection);
+
+        ArgumentCaptor<PurchaseContext> context = ArgumentCaptor.forClass(PurchaseContext.class);
+        verify(event).validateEffectivePolicy(same(companyPolicy), context.capture());
+        assertThat(describe(context.getValue())).isEqualTo("buyer=42 age=30 event=10 company=100 quantity=1 stage=CHECKOUT");
     }
 
     /** On-sale check accepts ON_SALE and SOLD_OUT, rejects other states, and flags a missing event. */
     @Test
-    void validateEventsOnSale_acceptsSellable_rejectsOthers() {
+    void GivenOnSaleSoldOutDraftAndMissingEvents_WhenValidateEventsOnSale_ThenAcceptsSellableRejectsOthers() {
         Event onSale = mock(Event.class);
         when(onSale.getStatus()).thenReturn(EventStatus.ON_SALE);
         Event soldOut = mock(Event.class);
@@ -286,7 +302,7 @@ class InventoryServiceTest {
 
     /** A seat still RESERVED by this order passes; a different owner or a non-RESERVED seat fails. */
     @Test
-    void validateCanConfirmSale_enforcesSeatStatusAndOwnership() {
+    void GivenASeatReservedByThisOrderAndAnAvailableSeat_WhenValidateCanConfirmSale_ThenEnforcesSeatStatusAndOwnership() {
         SeatedZone seated = new SeatedZone(SEATED_ZONE, "Orchestra", 120.0,
                 List.of(new Seat("A1", 0, 0), new Seat("A2", 1, 0)));
         seated.reserve(InventorySelection.seated(List.of("A1"), ORDER_KEY)); // A1 RESERVED by order-1
@@ -310,7 +326,7 @@ class InventoryServiceTest {
 
     /** A standing zone without enough RESERVED stock to cover the lines cannot be confirmed. */
     @Test
-    void validateCanConfirmSale_standingWithoutEnoughReserved_throws() {
+    void GivenStandingWithoutEnoughReserved_WhenValidateCanConfirmSale_ThenThrows() {
         StandingZone standing = new StandingZone(STANDING_ZONE, "Floor", 10, 40.0);
         standing.reserve(InventorySelection.standing(1, ORDER_KEY)); // only 1 reserved
         Event event = mock(Event.class, RETURNS_DEEP_STUBS);
@@ -326,9 +342,9 @@ class InventoryServiceTest {
 
     // ---- confirmSale (+ compensation) / releaseHeld --------------------
 
-    /** Confirm marks each zone SOLD and saves the event once. */
+    /** Confirm marks each zone SOLD for this order, which owns the held units, and saves the event once. */
     @Test
-    void confirmSale_confirmsEachZone_andSaves() {
+    void GivenLinesInTwoZones_WhenConfirmSale_ThenConfirmsEachZoneAndSaves() {
         Event event = mock(Event.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
 
@@ -336,19 +352,24 @@ class InventoryServiceTest {
                 new InventoryLineDTO(EVENT_ID, SEATED_ZONE, "A1"),
                 new InventoryLineDTO(EVENT_ID, STANDING_ZONE, null)), ORDER_KEY);
 
-        verify(event, times(2)).confirmInventorySale(anyInt(), any(InventorySelection.class));
+        ArgumentCaptor<Integer> zones = ArgumentCaptor.forClass(Integer.class);
+        ArgumentCaptor<InventorySelection> selections = ArgumentCaptor.forClass(InventorySelection.class);
+        verify(event, times(2)).confirmInventorySale(zones.capture(), selections.capture());
+        assertThat(describeEach(zones.getAllValues(), selections.getAllValues())).containsExactlyInAnyOrder(
+                "zone 1: seats [A1] for order-1", "zone 2: 1 standing for order-1");
         verify(eventRepository).save(event);
     }
 
     /** A confirm that fails partway compensates the already-confirmed unit back to AVAILABLE, then rethrows. */
     @Test
-    void confirmSale_partialFailure_compensatesConfirmedUnits() {
+    void GivenPartialFailure_WhenConfirmSale_ThenCompensatesConfirmedUnitsAndThrows() {
         Event event = mock(Event.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         AtomicInteger calls = new AtomicInteger();
+        RuntimeException secondZoneFails = new RuntimeException("confirm boom on the second zone");
         doAnswer(inv -> {
             if (calls.incrementAndGet() == 2) {
-                throw new RuntimeException("confirm boom on the second zone");
+                throw secondZoneFails;
             }
             return null;
         }).when(event).confirmInventorySale(anyInt(), any(InventorySelection.class));
@@ -356,16 +377,24 @@ class InventoryServiceTest {
         assertThatThrownBy(() -> service.confirmSale(List.of(
                 new InventoryLineDTO(EVENT_ID, SEATED_ZONE, "A1"),
                 new InventoryLineDTO(EVENT_ID, STANDING_ZONE, null)), ORDER_KEY))
-                .isInstanceOf(RuntimeException.class);
+                .isSameAs(secondZoneFails);
 
-        // Two confirm attempts; the first (successful) unit is reversed SOLD -> AVAILABLE.
-        verify(event, times(2)).confirmInventorySale(anyInt(), any(InventorySelection.class));
-        verify(event, times(1)).returnSoldToStock(anyInt(), any(InventorySelection.class));
+        // Two confirm attempts; the first (successful) unit, and only it, is reversed SOLD -> AVAILABLE.
+        ArgumentCaptor<Integer> confirmedZones = ArgumentCaptor.forClass(Integer.class);
+        ArgumentCaptor<InventorySelection> confirmed = ArgumentCaptor.forClass(InventorySelection.class);
+        verify(event, times(2)).confirmInventorySale(confirmedZones.capture(), confirmed.capture());
+        ArgumentCaptor<Integer> returnedZone = ArgumentCaptor.forClass(Integer.class);
+        ArgumentCaptor<InventorySelection> returned = ArgumentCaptor.forClass(InventorySelection.class);
+        verify(event, times(1)).returnSoldToStock(returnedZone.capture(), returned.capture());
+        assertThat(describeEach(returnedZone.getAllValues(), returned.getAllValues()))
+                .as("the reversal names the zone and units the first confirm sold")
+                .containsExactly(describeEach(confirmedZones.getAllValues(), confirmed.getAllValues()).get(0));
+        assertThat(returned.getValue().getOrderKey()).isEqualTo(ORDER_KEY);
     }
 
     /** Release-held frees each still-RESERVED zone; a zone that can't be released is skipped best-effort. */
     @Test
-    void releaseHeld_releasesEachZone_bestEffort() {
+    void GivenAZoneThatCannotBeReleased_WhenReleaseHeld_ThenReleasesEachZoneBestEffort() {
         Event event = mock(Event.class);
         when(eventRepository.findById(EVENT_ID)).thenReturn(event);
         // The standing zone can no longer be released; the seated one still can.
@@ -387,6 +416,24 @@ class InventoryServiceTest {
     }
 
     // ---- helpers --------------------------------------------------------
+
+    private static String describe(PurchaseContext context) {
+        return "buyer=" + context.getBuyerId() + " age=" + context.getBuyerAge() + " event=" + context.getEventId()
+                + " company=" + context.getCompanyId() + " quantity=" + context.getQuantity() + " stage=" + context.getStage();
+    }
+
+    /** Each (zone, selection) pair as {@code zone Z: <units> for <order key>}, in call order. */
+    private static List<String> describeEach(List<Integer> zones, List<InventorySelection> selections) {
+        List<String> described = new ArrayList<>();
+        for (int i = 0; i < zones.size(); i++) {
+            InventorySelection selection = selections.get(i);
+            String units = selection.isStandingSelection()
+                    ? selection.getQuantity() + " standing"
+                    : "seats " + selection.getSeatNumbers();
+            described.add("zone " + zones.get(i) + ": " + units + " for " + selection.getOrderKey());
+        }
+        return described;
+    }
 
     /** A permissive active company (its default NoPurchasePolicy never rejects). */
     private ProductionCompany activeCompany() {

@@ -2,24 +2,29 @@ package com.ticketing.system.unit.presentation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.ticketing.system.shared.dto.AuthTokenDTO;
 import com.ticketing.system.shared.dto.GuestSessionDTO;
 import com.ticketing.system.shared.dto.LogoutRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
 import com.ticketing.system.ui.security.SignOutFlow;
+import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.session.FreshGuestSession;
+import com.ticketing.system.ui.session.GuestSession;
+import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.testutil.LogCapture;
 import com.ticketing.system.ui.session.UnreadAlertsSendBack;
 import com.ticketing.system.notifications.application.port.in.INotificationService;
-import com.vaadin.flow.server.VaadinSession;
 
 import ch.qos.logback.classic.Level;
 
@@ -30,7 +35,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
+/**
+ * {@link SignOutFlow#execute()} revokes the visitor's token, then leaves the Vaadin session signed out with
+ * a fresh guest session id. The session state is arranged and read through {@link AuthSession} and
+ * {@link GuestSession} on a map-backed session, never through their attribute keys (#189).
+ */
 class SignOutFlowTest {
+
+    private static final Instant GUEST_SESSION_CREATED_AT = Instant.parse("2027-07-15T17:00:00Z");
+    private static final String FRESH_GUEST_ID = "fresh-sid";
+    private static final String MEMBER_TOKEN = "jwt-abc";
+    // Login promotes the guest session in place, so a signed-in member's guest id is their own session.
+    private static final String PROMOTED_SESSION_ID = "member-sid";
+    private static final int MEMBER_ID = 42;
 
     private AuthenticationService authenticationService;
     private SignOutFlow signOutFlow;
@@ -42,19 +59,19 @@ class SignOutFlowTest {
         signOutFlow = new SignOutFlow(authenticationService, new FreshGuestSession(authenticationService,
                 new UnreadAlertsSendBack(mock(INotificationService.class))));
         when(authenticationService.startGuestSession())
-            .thenReturn(new GuestSessionDTO("fresh-sid", Instant.now()));
+            .thenReturn(new GuestSessionDTO(FRESH_GUEST_ID, GUEST_SESSION_CREATED_AT));
     }
 
     @AfterEach
     void tearDown() {
-        VaadinSession.setCurrent(null);
+        MapBackedVaadinSession.uninstall();
         if (logs != null) {
             logs.close();
         }
     }
 
     @Test
-    void execute_withoutVaadinSession_callsStartGuestSessionAndSkipsLogout() {
+    void GivenNoVaadinSession_WhenExecute_ThenCallsStartGuestSessionAndSkipsLogout() {
         signOutFlow.execute();
 
         verify(authenticationService).startGuestSession();
@@ -62,23 +79,19 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_withTokenPresent_callsLogoutWithThatTokenThenMintsGuest() {
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
-        VaadinSession.setCurrent(session);
+    void GivenATokenPresent_WhenExecute_ThenCallsLogoutWithThatTokenThenMintsGuest() {
+        signedInMember(MEMBER_TOKEN);
 
         signOutFlow.execute();
 
         InOrder order = inOrder(authenticationService);
-        order.verify(authenticationService).logout(argThat(req -> "jwt-abc".equals(req.token())));
+        order.verify(authenticationService).logout(new LogoutRequestDTO(MEMBER_TOKEN));
         order.verify(authenticationService).startGuestSession();
     }
 
     @Test
-    void execute_withNullToken_skipsLogout() {
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute("authSession.token")).thenReturn(null);
-        VaadinSession.setCurrent(session);
+    void GivenASessionWithNoToken_WhenExecute_ThenSkipsLogoutAndStillMintsGuest() {
+        MapBackedVaadinSession.install();
 
         signOutFlow.execute();
 
@@ -87,10 +100,8 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_withBlankToken_skipsLogout() {
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute("authSession.token")).thenReturn("   ");
-        VaadinSession.setCurrent(session);
+    void GivenABlankToken_WhenExecute_ThenSkipsLogoutAndStillMintsGuest() {
+        signedInMember("   ");
 
         signOutFlow.execute();
 
@@ -99,59 +110,57 @@ class SignOutFlowTest {
     }
 
     @Test
-    void execute_pinsFreshGuestSessionIdOnSession() {
-        VaadinSession session = mock(VaadinSession.class);
-        VaadinSession.setCurrent(session);
+    void GivenAMemberWhoseGuestIdIsTheirOwnSession_WhenExecute_ThenTheFreshGuestSessionIdIsPinned() {
+        signedInMember(MEMBER_TOKEN);
 
         signOutFlow.execute();
 
-        verify(session).setAttribute(eq("guestSession.sessionId"), eq("fresh-sid"));
+        assertEquals(FRESH_GUEST_ID, GuestSession.sessionId());
     }
 
     @Test
-    void execute_clearsAuthSessionAttributes() {
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
-        VaadinSession.setCurrent(session);
+    void GivenASignedInAdmin_WhenExecute_ThenNoTokenNoSignInAndNoAdminRemain() {
+        MapBackedVaadinSession.install();
+        AuthSession.storeAuth(new AuthTokenDTO("admin-jwt", 0L, 1, "admin", true));
 
         signOutFlow.execute();
 
-        // The Vaadin attributes that AuthSession.signOut() clears — token is
-        // nulled, signedIn flips to false, admin flips to false.
-        verify(session).setAttribute("authSession.token", null);
-        verify(session).setAttribute("authSession.signedIn", Boolean.FALSE);
-        verify(session).setAttribute("authSession.admin", Boolean.FALSE);
+        assertNull(AuthSession.token(), "the token is gone");
+        assertFalse(AuthSession.isSignedIn(), "the visitor is signed out");
+        assertFalse(AuthSession.isAdmin(), "the visitor is no admin any more");
     }
 
+    // FreshGuestSession.restore never leaves the member's own session pinned as the guest id.
     @Test
-    void execute_doesNotThrowWhenStartGuestSessionFails() {
+    void GivenStartGuestSessionFails_WhenExecute_ThenTheMembersSessionIdIsClearedAndNothingIsThrown() {
+        signedInMember(MEMBER_TOKEN);
         when(authenticationService.startGuestSession())
             .thenThrow(new IllegalStateException("session store down"));
 
         assertDoesNotThrow(() -> signOutFlow.execute());
+
+        assertNull(GuestSession.sessionId(), "the member's promoted session id must not stay pinned");
+        assertFalse(AuthSession.isSignedIn(), "the visitor is signed out even without a new guest session");
     }
 
     @Test
-    void execute_doesNotThrowWhenLogoutFails() {
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
-        VaadinSession.setCurrent(session);
-        org.mockito.Mockito.doThrow(new IllegalStateException("downstream blew up"))
+    void GivenLogoutFails_WhenExecute_ThenDoesNotThrowAndStillMintsGuest() {
+        signedInMember(MEMBER_TOKEN);
+        doThrow(new IllegalStateException("downstream blew up"))
             .when(authenticationService).logout(any());
 
         assertDoesNotThrow(() -> signOutFlow.execute());
         // Still mints the new guest so the next register/login can proceed.
         verify(authenticationService).startGuestSession();
+        assertEquals(FRESH_GUEST_ID, GuestSession.sessionId());
     }
 
     // #187: a failed logout may leave the session, and so the token, live while the user sees a
     // sign-out. That is actionable, so it is an ERROR, with the exception for its cause and stack.
     @Test
     void GivenLogoutFails_WhenExecute_ThenAnErrorIsLoggedWithTheExceptionAttached() {
-        VaadinSession session = mock(VaadinSession.class);
-        when(session.getAttribute("authSession.token")).thenReturn("jwt-abc");
-        VaadinSession.setCurrent(session);
-        org.mockito.Mockito.doThrow(new IllegalStateException("session store unreachable"))
+        signedInMember(MEMBER_TOKEN);
+        doThrow(new IllegalStateException("session store unreachable"))
             .when(authenticationService).logout(any());
         logs = LogCapture.of(SignOutFlow.class);
 
@@ -160,5 +169,11 @@ class SignOutFlowTest {
         assertThat(logs.throwableClassNamesAt(Level.ERROR))
             .as("the failed logout must be logged at ERROR with the exception attached")
             .containsExactly(IllegalStateException.class.getName());
+    }
+
+    private static void signedInMember(String token) {
+        MapBackedVaadinSession.install();
+        GuestSession.setSessionId(PROMOTED_SESSION_ID);
+        AuthSession.storeAuth(new AuthTokenDTO(token, 0L, MEMBER_ID, "member"));
     }
 }

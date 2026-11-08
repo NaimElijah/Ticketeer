@@ -9,6 +9,9 @@ import com.ticketing.system.catalog.application.dto.EventDetailDTO;
 import com.ticketing.system.shared.dto.EventPolicyConfigDTO;
 import com.ticketing.system.shared.dto.LoginRequestDTO;
 import com.ticketing.system.shared.dto.PurchasePolicyDTO;
+import com.ticketing.system.shared.exception.CompanyNotFoundException;
+import com.ticketing.system.shared.exception.InvalidTokenException;
+import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.identity.application.dto.RegisterRequestDTO;
 import com.ticketing.system.identity.application.service.AuthenticationService;
@@ -25,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -40,6 +44,7 @@ class PurchasePolicyAcceptanceTest {
     @Autowired private CompanyManagementService companyService;
     @Autowired private EventManagementService  eventManagementService;
     @Autowired private ReservationService      reservationService;
+    @Autowired private Clock clock;
 
     // unique counter so each @BeforeEach creates a fresh user + company
     private static final AtomicInteger SEQ = new AtomicInteger(0);
@@ -76,8 +81,8 @@ class PurchasePolicyAcceptanceTest {
                         0.0,
                         new Location("Israel", "Tel Aviv"),
                         List.of(new ShowDate(
-                                LocalDateTime.now().plusDays(30),
-                                LocalDateTime.now().plusDays(30).plusHours(3)
+                                LocalDateTime.now(clock).plusDays(30),
+                                LocalDateTime.now(clock).plusDays(30).plusHours(3)
                         )),
                         ZoneId.of("Asia/Jerusalem"),
                         null
@@ -92,8 +97,11 @@ class PurchasePolicyAcceptanceTest {
         assertEquals("NONE", dto.type());
     }
 
+    // On the Memory adapters a read hands back the stored instance, so these show what the owner reads back, not
+    // that a policy persists. JpaEventRepositoryContractTest and IProductionCompanyRepositoryContractTest read
+    // policies back from the database.
     @Test
-    void GivenAgePolicy_WhenSetEventPolicyAndGet_ThenRoundTrips() {
+    void GivenAgePolicy_WhenSetEventPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("AGE", 18, null, null, null);
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, policy));
 
@@ -103,7 +111,7 @@ class PurchasePolicyAcceptanceTest {
     }
 
     @Test
-    void GivenMinTicketsPolicy_WhenSetEventPolicyAndGet_ThenRoundTrips() {
+    void GivenMinTicketsPolicy_WhenSetEventPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("MIN_TICKETS", null, 2, null, null);
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, policy));
 
@@ -113,7 +121,7 @@ class PurchasePolicyAcceptanceTest {
     }
 
     @Test
-    void GivenMaxTicketsPolicy_WhenSetEventPolicyAndGet_ThenRoundTrips() {
+    void GivenMaxTicketsPolicy_WhenSetEventPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("MAX_TICKETS", null, null, 5, null);
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, policy));
 
@@ -131,8 +139,7 @@ class PurchasePolicyAcceptanceTest {
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, and));
 
         PurchasePolicyDTO loaded = eventManagementService.getEventPurchasePolicy(token, companyId, eventId);
-        assertEquals("AND", loaded.type());
-        assertEquals(2, loaded.children().size());
+        assertEquals(and, loaded, "the tree must come back with each child's type, value and place");
     }
 
     @Test
@@ -144,8 +151,7 @@ class PurchasePolicyAcceptanceTest {
         eventManagementService.setEventPolicies(token, new EventPolicyConfigDTO(companyId, eventId, or));
 
         PurchasePolicyDTO loaded = eventManagementService.getEventPurchasePolicy(token, companyId, eventId);
-        assertEquals("OR", loaded.type());
-        assertEquals(2, loaded.children().size());
+        assertEquals(or, loaded, "the tree must come back with each child's type, value and place");
     }
 
     @Test
@@ -161,16 +167,25 @@ class PurchasePolicyAcceptanceTest {
         assertEquals(10, loaded.maximumTickets());
     }
 
+    // A string that is no JWT fails parsing, so the refusal names the failed validation.
     @Test
     void GivenInvalidToken_WhenGetEventPolicy_ThenThrows() {
-        assertThrows(RuntimeException.class, () ->
+        InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class, () ->
                 eventManagementService.getEventPurchasePolicy("bad-token", companyId, eventId));
+
+        assertEquals("Invalid authentication token: token validation failed", refused.getMessage());
     }
 
+    // The company is looked up before membership or the event, so a company that does not exist is refused
+    // as such. EventManagementServiceTest covers the refusal of another company's event.
     @Test
-    void GivenWrongCompanyId_WhenGetEventPolicy_ThenThrows() {
-        assertThrows(RuntimeException.class, () ->
-                eventManagementService.getEventPurchasePolicy(token, companyId + 9999, eventId));
+    void GivenUnknownCompanyId_WhenGetEventPolicy_ThenCompanyNotFound() {
+        int unknownCompanyId = companyId + 9999;
+
+        CompanyNotFoundException refused = assertThrowsExactly(CompanyNotFoundException.class, () ->
+                eventManagementService.getEventPurchasePolicy(token, unknownCompanyId, eventId));
+
+        assertEquals("ProductionCompany not found: " + unknownCompanyId, refused.getMessage());
     }
 
 
@@ -181,7 +196,7 @@ class PurchasePolicyAcceptanceTest {
     }
 
     @Test
-    void GivenAgePolicy_WhenSetCompanyPolicyAndGet_ThenRoundTrips() {
+    void GivenAgePolicy_WhenSetCompanyPolicyAndGet_ThenTheOwnerReadsItBack() {
         PurchasePolicyDTO policy = new PurchasePolicyDTO("AGE", 21, null, null, null);
         companyService.setCompanyPolicies(token, new CompanyPolicyConfigDTO(companyId, policy, List.of()));
 
@@ -199,22 +214,26 @@ class PurchasePolicyAcceptanceTest {
         companyService.setCompanyPolicies(token, new CompanyPolicyConfigDTO(companyId, and, List.of()));
 
         PurchasePolicyDTO loaded = companyService.getCompanyPurchasePolicy(token, companyId);
-        assertEquals("AND", loaded.type());
-        assertEquals(2, loaded.children().size());
+        assertEquals(and, loaded, "the tree must come back with each child's type, value and place");
     }
 
     @Test
     void GivenInvalidToken_WhenGetCompanyPolicy_ThenThrows() {
-        assertThrows(RuntimeException.class, () ->
+        InvalidTokenException refused = assertThrowsExactly(InvalidTokenException.class, () ->
                 companyService.getCompanyPurchasePolicy("bad-token", companyId));
+
+        assertEquals("Invalid authentication token: token validation failed", refused.getMessage());
     }
 
+    // Reading a company's policy needs EDIT_POLICIES, which a member outside the company does not hold.
     @Test
     void GivenNonOwner_WhenGetCompanyPolicy_ThenThrows() {
         int seq = SEQ.incrementAndGet();
         AuthTokenDTO other = registerAndLogin("nonOwner" + seq);
-        assertThrows(RuntimeException.class, () ->
+        UnauthorizedActionException refused = assertThrowsExactly(UnauthorizedActionException.class, () ->
                 companyService.getCompanyPurchasePolicy(other.token(), companyId));
+
+        assertEquals("Not authorized to perform action: Missing permission: EDIT_POLICIES", refused.getMessage());
     }
 
     @Test

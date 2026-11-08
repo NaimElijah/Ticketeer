@@ -1,5 +1,6 @@
 package com.ticketing.system.unit.infrastructure.notifications;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import com.ticketing.system.notifications.config.DropAndLogRejectionHandler;
+import com.ticketing.system.testutil.LogCapture;
+
+import ch.qos.logback.classic.Level;
 
 /**
  * ADR-004: when the notification executor is saturated, a delivery is dropped. Submitting it must not
@@ -60,6 +64,17 @@ class DropAndLogRejectionHandlerTest {
         executor.getThreadPoolExecutor().shutdown();
         assertTrue(executor.getThreadPoolExecutor().awaitTermination(WAIT_SECONDS, TimeUnit.SECONDS));
         assertFalse(ran.get(), "a dropped notification must never run, on the caller or later");
+    }
+
+    // A dropped notification is lost for good, so the operator must hear of the first one at once.
+    @Test
+    void GivenSaturatedExecutor_WhenANotificationIsSubmitted_ThenTheDropIsLoggedAtWarn() {
+        try (LogCapture logs = LogCapture.of(DropAndLogRejectionHandler.class)) {
+            executor.submit(() -> { });
+
+            assertThat(logs.messagesAt(Level.WARN))
+                    .containsExactly("Notification queue full (1 waiting); 1 notification(s) dropped since startup");
+        }
     }
 
     @Test
