@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -21,6 +22,7 @@ import com.ticketing.system.organization.domain.AppointmentStatus;
 import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.organization.domain.CompanyRole;
 import com.ticketing.system.organization.domain.Permission;
+import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 /**
@@ -37,6 +39,13 @@ class CompanyMembershipServiceLifecycleTest {
     private static final int OWNER_ID = 1;
     private static final int COMPANY_ID = 100;
     private static final int OTHER_COMPANY_ID = 200;
+
+    // The refusals a caller reads (ServiceErrors shows a DomainException's message).
+    private static final String NO_INVITATION_TO_ACCEPT = "Cannot accept invitation: no appointment found for the specified company";
+    private static final String NO_INVITATION_TO_REJECT = "Cannot reject invitation: no appointment found for the specified company";
+    private static final String NO_APPOINTMENT_TO_REVOKE =
+            "Cannot remove appointment: no active appointment found to revoke for the specified company";
+    private static final String NO_APPOINTMENT_TO_EDIT = "No active appointment to edit found for the specified company";
 
     private CompanyMembershipService membership;
     private List<Permission> defaultPermissions;
@@ -123,26 +132,41 @@ class CompanyMembershipServiceLifecycleTest {
 
     @Test
     void GivenNoInvitation_WhenAcceptInvitation_ThenThrowException() {
-        assertThrows(RuntimeException.class, () -> membership.acceptInvitation(USER_ID, COMPANY_ID));
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                () -> membership.acceptInvitation(USER_ID, COMPANY_ID));
+
+        assertEquals(NO_INVITATION_TO_ACCEPT, refused.getMessage());
     }
 
     @Test
     void GivenNoInvitation_WhenRejectInvitation_ThenThrowException() {
-        assertThrows(RuntimeException.class, () -> membership.rejectInvitation(USER_ID, COMPANY_ID));
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                () -> membership.rejectInvitation(USER_ID, COMPANY_ID));
+
+        assertEquals(NO_INVITATION_TO_REJECT, refused.getMessage());
     }
 
+    // The other company's invitation is the user's only one, and the refusal leaves it pending.
     @Test
     void GivenInvitationForOtherCompany_WhenAcceptInvitation_ThenThrowException() {
         membership.receiveManagerAppointment(USER_ID, OTHER_COMPANY_ID, OWNER_ID, defaultPermissions);
 
-        assertThrows(RuntimeException.class, () -> membership.acceptInvitation(USER_ID, COMPANY_ID));
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                () -> membership.acceptInvitation(USER_ID, COMPANY_ID));
+
+        assertEquals(NO_INVITATION_TO_ACCEPT, refused.getMessage());
+        assertEquals(List.of(OTHER_COMPANY_ID + ":" + AppointmentStatus.PENDING), appointmentsOfUser());
     }
 
     @Test
     void GivenInvitationForOtherCompany_WhenRejectInvitation_ThenThrowException() {
         membership.receiveManagerAppointment(USER_ID, OTHER_COMPANY_ID, OWNER_ID, defaultPermissions);
 
-        assertThrows(RuntimeException.class, () -> membership.rejectInvitation(USER_ID, COMPANY_ID));
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                () -> membership.rejectInvitation(USER_ID, COMPANY_ID));
+
+        assertEquals(NO_INVITATION_TO_REJECT, refused.getMessage());
+        assertEquals(List.of(OTHER_COMPANY_ID + ":" + AppointmentStatus.PENDING), appointmentsOfUser());
     }
 
     @Test
@@ -157,7 +181,10 @@ class CompanyMembershipServiceLifecycleTest {
 
     @Test
     void GivenNoAppointment_WhenRevokeManagerAppointment_ThenThrowException() {
-        assertThrows(RuntimeException.class, () -> membership.revokeAppointment(USER_ID, COMPANY_ID, OWNER_ID));
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                () -> membership.revokeAppointment(USER_ID, COMPANY_ID, OWNER_ID));
+
+        assertEquals(NO_APPOINTMENT_TO_REVOKE, refused.getMessage());
     }
 
     @Test
@@ -165,7 +192,11 @@ class CompanyMembershipServiceLifecycleTest {
         membership.receiveManagerAppointment(USER_ID, OTHER_COMPANY_ID, OWNER_ID, defaultPermissions);
         membership.acceptInvitation(USER_ID, OTHER_COMPANY_ID);
 
-        assertThrows(RuntimeException.class, () -> membership.revokeAppointment(USER_ID, COMPANY_ID, OWNER_ID));
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
+                () -> membership.revokeAppointment(USER_ID, COMPANY_ID, OWNER_ID));
+
+        assertEquals(NO_APPOINTMENT_TO_REVOKE, refused.getMessage());
+        assertEquals(List.of(OTHER_COMPANY_ID + ":" + AppointmentStatus.ACTIVE), appointmentsOfUser());
     }
 
     @Test
@@ -188,8 +219,10 @@ class CompanyMembershipServiceLifecycleTest {
         List<Permission> newPermissions = new ArrayList<>();
         newPermissions.add(Permission.EDIT_POLICIES);
 
-        assertThrows(RuntimeException.class,
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
                 () -> membership.modifyManagerPermissions(USER_ID, COMPANY_ID, USER_ID, newPermissions));
+
+        assertEquals(NO_APPOINTMENT_TO_EDIT, refused.getMessage());
     }
 
     @Test
@@ -200,8 +233,12 @@ class CompanyMembershipServiceLifecycleTest {
         List<Permission> newPermissions = new ArrayList<>();
         newPermissions.add(Permission.EDIT_POLICIES);
 
-        assertThrows(RuntimeException.class,
+        AppointmentNotFoundException refused = assertThrowsExactly(AppointmentNotFoundException.class,
                 () -> membership.modifyManagerPermissions(USER_ID, COMPANY_ID, USER_ID, newPermissions));
+
+        assertEquals(NO_APPOINTMENT_TO_EDIT, refused.getMessage());
+        assertEquals(Set.copyOf(defaultPermissions),
+                membership.getActiveCompanyAppointment(USER_ID, OTHER_COMPANY_ID).getPermissions());
     }
 
     // Owners hold every permission implicitly, so an owner appointment never takes an explicit set.
@@ -227,5 +264,12 @@ class CompanyMembershipServiceLifecycleTest {
 
         assertEquals(Set.copyOf(defaultPermissions),
                 membership.getActiveCompanyAppointment(USER_ID, COMPANY_ID).getPermissions());
+    }
+
+    /** Each of the user's appointments as {@code companyId:status}, sorted. */
+    private List<String> appointmentsOfUser() {
+        return membership.getAllCompanyAppointments(USER_ID).stream()
+                .map(appointment -> appointment.getCompanyId() + ":" + appointment.getStatus())
+                .sorted().toList();
     }
 }
