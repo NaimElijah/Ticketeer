@@ -22,6 +22,11 @@ public class ReservationHoldConfig {
 
     private final ReservationHoldProperties properties;
 
+    /**
+     * Creates the configuration.
+     *
+     * @param properties the validated hold window, in minutes
+     */
     public ReservationHoldConfig(ReservationHoldProperties properties) {
         this.properties = properties;
     }

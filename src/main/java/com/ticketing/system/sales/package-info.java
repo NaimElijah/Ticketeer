@@ -2,19 +2,21 @@
  * Sales &amp; Ticketing bounded context (the platform's core transactional context).
  *
  * <p>Owns the reserve &rarr; checkout &rarr; ticket &rarr; refund lifecycle: the {@code ActiveOrder}
- * (cart), {@code OrderReceipt}, and {@code Ticket} aggregates plus the purchase-policy model.
+ * (cart), {@code OrderReceipt}, and {@code Ticket} aggregates.
  * Hexagonal layout: {@code domain}, {@code application.port.out} (driven ports
  * {@code ActiveOrderRepository}, {@code OrderReceiptRepository}, {@code TicketRepository},
- * {@code PaymentGateway}, {@code TicketIssuer}), {@code application.service}
- * ({@code ReservationService}, {@code CheckoutService}, {@code RefundService}),
- * {@code adapter.out.persistence} and {@code adapter.out.wsep} (WSEP + stub gateways).
+ * {@code PaymentGateway}, {@code TicketIssuer}, {@code MarketGate}), {@code application.service}
+ * ({@code ReservationService}, {@code CheckoutService}, {@code RefundService},
+ * {@code EventCancellationRefundService}), {@code adapter.in.event} (catalog's cancellation event),
+ * {@code adapter.out.persistence}, {@code adapter.out.wsep} (WSEP + stub gateways) and
+ * {@code adapter.out.catalog} and {@code adapter.out.identity} (adapters for other contexts' ports).
  *
- * <p>Migration note: this step is a mechanical relocation. Several cross-context couplings remain
- * transitional and are addressed in dedicated follow-up steps: sales still loads catalog {@code Event}
- * and mutates its inventory directly (&rarr; an inbound inventory command port on catalog) and notifies
- * synchronously (&rarr; domain events). The market gate is already inverted: sales queries the
- * {@code MarketGate} outbound port, which governance implements — sales no longer imports governance.
- * Module-boundary verification is switched on at Step 10.
+ * <p>Sales changes catalog inventory only through catalog's inbound {@code InventoryCommandPort}, and
+ * publishes its notices as {@code shared.event} events that the notifications context consumes after
+ * commit (ADR-004). The checkout also uses catalog's {@code EventRepository} port directly, for the
+ * event buyer lock it takes in Phase 3 and in its rollback. The row lock a sale holds on its events
+ * (ADR-015) is taken through catalog's inventory port. The market gate is inverted: sales queries the
+ * {@code MarketGate} outbound port, which governance implements.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Sales & Ticketing", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.sales;

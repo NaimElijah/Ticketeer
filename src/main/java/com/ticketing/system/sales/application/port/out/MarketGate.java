@@ -6,7 +6,7 @@ package com.ticketing.system.sales.application.port.out;
  * <p>UC-32 / I.2.1: no money moves and no tickets may be held while the market is closed. Sales
  * enforces that gate but must not know <em>who</em> owns the market lifecycle. This port inverts the
  * dependency: sales depends only on this interface, and governance (the top-level consumer) supplies
- * the implementation. Sales therefore no longer imports any governance type.
+ * the implementation. Sales therefore imports no governance type.
  */
 public interface MarketGate {
 

@@ -21,7 +21,7 @@ import com.ticketing.system.shared.IRepository;
  *
  * <p>The {@link IRepository} contract uses {@link String} as the lock-id type
  * — callers should normalize to {@code "user:" + userId} or {@code "sess:" + sessionId}
- * when calling {@link #lockForUpdate(String)} to avoid id collisions between
+ * when calling {@code lockForUpdate} to avoid id collisions between
  * the two identity spaces.
  */
 public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> {
@@ -63,6 +63,9 @@ public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> 
      */
     List<ActiveOrder> findExpired(LocalDateTime now);
 
-    // #372 — full enumeration for the boot-time integrity scan (<=1 active order per buyer/event).
+    /**
+     * Returns every cart. The platform integrity scans use it to re-check each cart's invariants and
+     * that no member holds two carts for one event (#372).
+     */
     List<ActiveOrder> findAll();
 }

@@ -15,8 +15,10 @@ import com.ticketing.system.sales.domain.Ticket;
  */
 public interface SpringDataTicketRepository extends JpaRepository<Ticket, Integer> {
 
+    /** The tickets of the event, in any state. */
     List<Ticket> findByEventId(int eventId);
 
+    /** The tickets of one receipt. */
     List<Ticket> findByOrderReceiptId(int orderReceiptId);
 
     /** Highest existing ticketId (0 when empty) — seeds the assigned-id sequence across restarts. */

@@ -1,7 +1,7 @@
 package com.ticketing.system.sales.adapter.out.wsep;
-import com.ticketing.system.shared.external.SensitiveDataMasker; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
+import com.ticketing.system.shared.external.SensitiveDataMasker;
+import com.ticketing.system.shared.external.WsepCommunicationException;
+import com.ticketing.system.shared.external.WsepHttpClient;
 
 import java.net.ConnectException;
 import java.net.http.HttpConnectTimeoutException;
@@ -48,6 +48,12 @@ public class WsepPaymentGateway implements PaymentGateway {
     private final WsepHttpClient http;
     private final Clock clock;   // stamps charges and refunds (UTC wall time, ADR-008)
 
+    /**
+     * Creates the gateway.
+     *
+     * @param http  the WSEP client that sends each action
+     * @param clock the source of the time stamped on charges and refunds (ADR-008)
+     */
     public WsepPaymentGateway(WsepHttpClient http, Clock clock) {
         this.http = http;
         this.clock = clock;
@@ -98,8 +104,8 @@ public class WsepPaymentGateway implements PaymentGateway {
             body = http.post(form);
         } catch (WsepCommunicationException e) {
             // No answer from WSEP (timeout / connection error). This is NOT a decline — the charge
-            // never reached a verdict — so it gets the unreachable subtype, which the Presentation
-            // layer surfaces as a generic error (no gateway wording leaked).
+            // never reached a verdict — so it gets the unreachable subtype, which the checkout
+            // presenter surfaces as a generic error (no gateway wording leaked).
             throw new PaymentGatewayUnreachableException("payment gateway unreachable: " + e.getMessage(), e);
         }
 

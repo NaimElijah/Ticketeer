@@ -67,6 +67,16 @@ public class CartLineItem implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected CartLineItem() { }
 
+    /**
+     * Creates the line for one place.
+     *
+     * @param eventId            the event, positive
+     * @param zoneId             the zone, not negative
+     * @param seatNumber         the seat label, or {@code null} for a standing place; not blank if given
+     * @param priceAtReservation the unit price when the place was reserved, not negative
+     * @param addedAt            when the hold started (UTC wall time, ADR-008); not {@code null}
+     * @throws IllegalStateException if an argument breaks the limits above
+     */
     public CartLineItem(int eventId, int zoneId, String seatNumber, double priceAtReservation, LocalDateTime addedAt) {
         this.eventId = eventId;
         this.zoneId = zoneId;
@@ -104,10 +114,12 @@ public class CartLineItem implements InvariantChecked {
         return zoneId;
     }
 
+    /** Returns the unit price recorded when the place was reserved, before any discount policy. */
     public double getPriceAtReservation() {
         return priceAtoneticketReservation;
     }
 
+    /** Returns when the hold started, as UTC wall time (ADR-008). */
     public LocalDateTime getAddedAt() {
         return addedAt;
     }
@@ -118,6 +130,7 @@ public class CartLineItem implements InvariantChecked {
         checkInvariants();   // re-runs the existing invariant guard (addedAt != null, etc.)
     }
 
+    /** Returns the seat label, or {@code null} for a standing place. */
     public String getSeatNumber() {
         return seatNumber;
     }
@@ -158,10 +171,14 @@ public class CartLineItem implements InvariantChecked {
         return getRemainingTime(now).isZero();
     }
 
+    /**
+     * Returns the line as a DTO. The event name is a placeholder, not the event's name: the service that
+     * shows the cart fills it in.
+     */
     public CartLineDTO toDTO() {
         return new CartLineDTO(
                 eventId,
-                "Event Name Placeholder", // This should be replaced with actual event name retrieval logic
+                "Event Name Placeholder", // not the event's name: the service that shows the cart fills it in
                 zoneId,
                 seatNumber,   // seatNumber is null for standing-zone tickets
                 priceAtoneticketReservation,

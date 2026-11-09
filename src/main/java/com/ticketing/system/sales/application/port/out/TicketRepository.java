@@ -5,11 +5,21 @@ import java.util.List;
 
 import com.ticketing.system.shared.IRepository;
 
-// Aggregate-root entry point for the unified Ticket aggregate.
+/** Aggregate-root entry point for the unified {@link Ticket} aggregate. */
 public interface TicketRepository extends IRepository<Ticket, Integer> {
 
+    /**
+     * Returns the ticket with this id.
+     *
+     * @return the ticket, or {@code null} if there is none
+     */
     Ticket findById(int ticktid);
 
+    /**
+     * Stores the ticket, inserting it or updating the stored ticket with the same id.
+     *
+     * @return {@code true}; both adapters return {@code true} after every save
+     */
     boolean save(Ticket ticket);
 
     /**
@@ -21,11 +31,10 @@ public interface TicketRepository extends IRepository<Ticket, Integer> {
      */
     int nextId();
 
-    // UC-8 / UC-22 — render venue map / list company sales.
-    // Keys are int: Ticket stores eventId/zoneId as int, so the port uses int end-to-end.
+    /** Returns every ticket of the event, in any state (UC-8, UC-22); empty if there are none. */
     List<Ticket> findByEventId(int eventId);
 
-    // UC-10 / UC-22 / UC-16 — tickets that belong to one OrderReceipt.
+    /** Returns the tickets that belong to one receipt (UC-10, UC-22, UC-16); empty if there are none. */
     List<Ticket> findByOrderReceiptId(int orderReceiptId);
 }
   

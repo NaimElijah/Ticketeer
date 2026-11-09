@@ -15,13 +15,10 @@ import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 
 /**
- * In-memory {@link TicketRepository}. Lets Spring wire
- * CatalogService / CheckoutService / EventManagementService /
- * MemberAccountService. Used only by the in-memory test suite ({@code test} with
+ * In-memory {@link TicketRepository}. Used only by the in-memory test suite ({@code test} with
  * {@code memory}); every other run gets {@link JpaTicketRepository}.
  *
- * <p>All keys are {@code int}, matching the {@code Ticket} fields end-to-end (the
- * former {@code String} eventId/zoneId on the port have been corrected to {@code int}).
+ * <p>All keys are {@code int}, matching the {@code Ticket} fields end-to-end.
  */
 @Repository
 @Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)

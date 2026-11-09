@@ -18,14 +18,20 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// In-process payment gateway for TESTS ONLY (@Profile("test")). Every real run
-// (default/prod + the dev profile) uses WsepPaymentGateway instead; the profile
-// keeps the singular PaymentGateway injection in CheckoutService unambiguous —
-// exactly one gateway bean exists per profile.
+/**
+ * In-process {@link PaymentGateway} for tests only ({@code @Profile("test")}). Every real run, the
+ * {@code dev} profile included, uses {@link WsepPaymentGateway} instead, so exactly one gateway bean
+ * exists per profile and the single {@code PaymentGateway} that {@code CheckoutService} takes is
+ * unambiguous.
+ *
+ * <p>Charges are kept in memory by idempotency key: repeating a key with the same request returns the
+ * first charge, and a different request under that key throws {@code IdempotencyConflictException}. A
+ * refund is accepted for a known charge and an amount up to what was charged. A request must name
+ * exactly one buyer, a member id or a guest email.
+ */
 @Component
 @Profile("test")
 public class StubPaymentGateway implements PaymentGateway {
-    //*Note: changed from not implemented to what's below here, can change however wanted though, it's a stub for our needs */
     private static final String GATEWAY_ID = "stub-payment-gateway";
 
     private final AtomicInteger transactionIds = new AtomicInteger(1);
@@ -34,6 +40,11 @@ public class StubPaymentGateway implements PaymentGateway {
     private final ConcurrentHashMap<Integer, PaymentResultDTO> chargesByTransactionId = new ConcurrentHashMap<>();
     private final Clock clock;
 
+    /**
+     * Creates the stub.
+     *
+     * @param clock the source of the time stamped on charges and refunds (ADR-008)
+     */
     public StubPaymentGateway(Clock clock) {
         this.clock = clock;
     }
@@ -44,9 +55,14 @@ public class StubPaymentGateway implements PaymentGateway {
     }
 
     // Toggleable for UC-1/UC-32 tests: lets a test simulate an unreachable provider so the
-    // initialize / open-market failure paths can be exercised. Production default: reachable.
+    // initialize / open-market failure paths can be exercised. Default: reachable.
     private volatile boolean reachable = true;
 
+    /**
+     * Sets what {@link #verifyConnection()} reports from now on.
+     *
+     * @param reachable {@code false} simulates an unreachable provider
+     */
     public void setReachable(boolean reachable) {
         this.reachable = reachable;
     }
@@ -118,13 +134,6 @@ public class StubPaymentGateway implements PaymentGateway {
 
     
 
-
-
-    // #################################################################################
-    //
-    // Helper methods for validating requests and comparing them for idempotency checks.
-    //
-    // #################################################################################
 
 
     private void validateChargeRequest(PaymentRequestDTO request) {

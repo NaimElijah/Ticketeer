@@ -1,7 +1,7 @@
 package com.ticketing.system.sales.adapter.out.wsep;
-import com.ticketing.system.shared.external.SensitiveDataMasker; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
+import com.ticketing.system.shared.external.SensitiveDataMasker;
+import com.ticketing.system.shared.external.WsepCommunicationException;
+import com.ticketing.system.shared.external.WsepHttpClient;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -51,6 +51,12 @@ public class WsepTicketIssuer implements TicketIssuer {
     private final WsepHttpClient http;
     private final Clock clock;   // stamps issuances (UTC wall time, ADR-008)
 
+    /**
+     * Creates the issuer.
+     *
+     * @param http  the WSEP client that sends each action
+     * @param clock the source of the time stamped on issuances (ADR-008)
+     */
     public WsepTicketIssuer(WsepHttpClient http, Clock clock) {
         this.http = http;
         this.clock = clock;
