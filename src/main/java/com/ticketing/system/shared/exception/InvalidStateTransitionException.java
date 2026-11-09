@@ -6,7 +6,7 @@ package com.ticketing.system.shared.exception;
  * {@code Conversation}, and by {@code EventManagementService}, {@code SystemAdminService} (closing a
  * market that is not open) and {@code CheckoutService} for the same kind of refusal.
  *
- * <p>The three-argument form builds "X cannot transition from A to B". The message reaches the user.
+ * <p>The three-argument form builds "X cannot transition from A to B". The message reaches the user, except that {@code CheckoutPresenter} replaces it with fixed text.
  */
 public class InvalidStateTransitionException extends DomainException {
 

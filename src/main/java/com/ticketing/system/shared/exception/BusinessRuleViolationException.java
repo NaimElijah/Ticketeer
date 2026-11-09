@@ -4,7 +4,7 @@ package com.ticketing.system.shared.exception;
  * Catch-all for a broken business rule that has no more specific exception, such as deleting an
  * event with sales history, an outreach that matches no recipients or user text over the length limit
  * ({@code TextLimits}). Prefer a specific subclass when one fits; this is for the long tail. The
- * message reaches the user.
+ * message reaches the user, except that {@code RefundPresenter} replaces it with fixed text.
  */
 public class BusinessRuleViolationException extends DomainException {
 

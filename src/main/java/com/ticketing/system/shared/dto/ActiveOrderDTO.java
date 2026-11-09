@@ -34,8 +34,7 @@ public record ActiveOrderDTO(
      * @param eventName      the event's name, filled in by the service that returns the cart
      * @param seatNumber     the seat's label; {@code null} for a ticket in a standing zone
      * @param pricePerTicket the ticket's price when it was reserved
-     * @param addedAt        when the hold started, in UTC wall time (ADR-008); a renewal at checkout
-     *                       starts it again
+     * @param addedAt        when the hold started, in UTC wall time (ADR-008)
      */
     public record CartLineDTO(
             int eventId,

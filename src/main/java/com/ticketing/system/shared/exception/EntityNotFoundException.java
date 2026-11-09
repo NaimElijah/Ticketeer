@@ -3,7 +3,8 @@ package com.ticketing.system.shared.exception;
 /**
  * Thrown when a lookup by id finds nothing, for example a receipt or an active order in the sales and
  * reporting services. It is also the base of the typed not-found exceptions for a company, an event,
- * a user, a conversation, a ticket and a venue map. The message reaches the user.
+ * a user, a conversation, a ticket and a venue map. The message reaches the user, except that the receipt and refund
+ * presenters replace it with not-found text, so that another member's receipt looks like a missing one.
  */
 public class EntityNotFoundException extends DomainException {
 

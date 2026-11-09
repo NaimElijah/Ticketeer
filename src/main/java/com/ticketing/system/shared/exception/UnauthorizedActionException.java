@@ -8,7 +8,9 @@ package com.ticketing.system.shared.exception;
  * {@code ProductionCompany} and {@code Event} throw it, besides the services (UC-19/21/22/23/24/25,
  * UC-16, UC-31/32).
  *
- * <p>The message states the refused action and reaches the user.
+ * <p>The receipt and refund presenters turn it into not-found text for a receipt that is not the
+ * caller's, and the market-action presenter turns it into a not-authenticated outcome for a
+ * non-admin.
  */
 public class UnauthorizedActionException extends DomainException {
 

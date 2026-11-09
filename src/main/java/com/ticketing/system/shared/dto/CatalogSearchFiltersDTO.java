@@ -4,13 +4,14 @@ import java.time.LocalDate;
 
 /**
  * The optional filters of a catalog search (UC-7), input to {@code CatalogService.searchGlobal} and
- * {@code searchByCompany}.
+ * {@code searchByCompany}, and to {@code EventManagementService.listEventsForCompany}, the owner's
+ * event list.
  *
  * <p>A {@code null} component is an absent filter; an event must satisfy every filter that is set.
  * The search methods refuse a range whose lower bound is above its upper bound, and a
  * {@code fromDate} after {@code toDate}, with {@code IllegalArgumentException}, and text longer than
  * the user-text limit with {@code BusinessRuleViolationException}. The company-rating bounds apply to
- * a global search only; {@code searchByCompany} drops them.
+ * a global search only; {@code searchByCompany} and {@code listEventsForCompany} drop them.
  *
  * @param eventName        text the event's name contains, case aside
  * @param artistName       text that at least one of the event's artist names contains, case aside

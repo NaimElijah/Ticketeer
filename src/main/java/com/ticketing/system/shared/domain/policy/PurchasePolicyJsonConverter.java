@@ -51,6 +51,7 @@ public class PurchasePolicyJsonConverter implements AttributeConverter<PurchaseP
      * @return the policy tree, never {@code null}
      * @throws IllegalStateException if the text is not valid JSON
      * @throws IllegalArgumentException if a node names a policy type this converter does not know
+     * @throws NullPointerException if a node lacks a field its type requires
      */
     @Override
     public PurchasePolicy convertToEntityAttribute(String json) {

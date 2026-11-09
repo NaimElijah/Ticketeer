@@ -23,7 +23,6 @@ public record VenueMapConfigDTO(
     /**
      * One zone definition: either seated (with a seat list) or standing (with a capacity and no seats).
      *
-     * @param seated    whether the zone has numbered seats
      * @param capacity  how many tickets a standing zone holds, which must be positive; not used for a
      *                  seated zone
      * @param seats     the seats of a seated zone; {@code null} for a standing zone
@@ -40,10 +39,6 @@ public record VenueMapConfigDTO(
 
     /**
      * One seat of a seated zone.
-     *
-     * @param label the seat's label within the zone
-     * @param x     the seat's horizontal coordinate
-     * @param y     the seat's vertical coordinate
      */
     public record SeatConfigDTO(
             String label,

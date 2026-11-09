@@ -11,7 +11,6 @@ import java.time.Instant;
  * session in place.
  *
  * @param sessionId the guest session's id, which is its credential; {@link #toString()} leaves it out
- * @param createdAt when the session started
  */
 public record GuestSessionDTO(String sessionId, Instant createdAt) {
 

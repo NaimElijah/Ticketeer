@@ -16,7 +16,6 @@ import java.util.List;
  * @param minPrice    the lowest zone price; {@code 0} when the event has no zone
  * @param maxPrice    the highest zone price; {@code 0} when the event has no zone
  * @param soldOut     whether the event's status is SOLD_OUT
- * @param artistsNames the artists' names
  */
 public record EventSummaryDTO(
     int eventId,

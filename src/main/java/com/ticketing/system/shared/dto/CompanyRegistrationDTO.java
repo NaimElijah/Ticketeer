@@ -12,9 +12,6 @@ public class CompanyRegistrationDTO {
 
     /**
      * Creates a registration request. Nothing is validated here; the service checks it.
-     *
-     * @param name        the company's name
-     * @param description what the company is
      */
     public CompanyRegistrationDTO(String name, String description) {
         this.name = name;

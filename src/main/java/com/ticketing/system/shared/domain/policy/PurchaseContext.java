@@ -29,7 +29,7 @@ public class PurchaseContext implements InvariantChecked {
     /**
      * Creates the context of a purchase check at {@code stage}.
      *
-     * @param buyerId the buyer's id
+     * @param buyerId the member's id, or -1 for a guest
      * @param buyerAge the buyer's age in years, or {@code null} when it is not known yet, as for a guest
      *        at reserve time
      * @param eventId the event being bought

@@ -6,7 +6,6 @@ package com.ticketing.system.shared.dto;
  * so the caller supplies only the target company and the message.
  *
  * @param counterpartyId   the id of the company to write to
- * @param firstMessageBody the text of the first message
  */
 public record StartConversationRequestDTO(
     int counterpartyId,

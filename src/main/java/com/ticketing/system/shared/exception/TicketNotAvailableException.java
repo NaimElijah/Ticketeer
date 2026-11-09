@@ -2,8 +2,9 @@ package com.ticketing.system.shared.exception;
 
 /**
  * Thrown by {@code Ticket.reserve} when the ticket's status is not {@code AVAILABLE}, which also
- * leaves the ticket as it was. SLR.1.2 race condition prevention (UC-9). The message reaches the
- * user.
+ * leaves the ticket as it was. SLR.1.2 race condition prevention (UC-9).
+ *
+ * <p>No production code throws it today: {@code Ticket.reserve} is called only from tests.
  */
 public class TicketNotAvailableException extends DomainException {
 
@@ -19,7 +20,7 @@ public class TicketNotAvailableException extends DomainException {
     /**
      * Creates the exception with a specific text.
      *
-     * @param message the text the user reads
+     * @param message the reason the ticket cannot be reserved
      */
     public TicketNotAvailableException(String message) {
         super(message);

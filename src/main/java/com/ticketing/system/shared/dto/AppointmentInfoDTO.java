@@ -13,9 +13,8 @@ import java.util.List;
  * @param targetUserId       the member the appointment is offered to
  * @param appointerUserId    the owner who made the offer
  * @param role               {@code Owner} or {@code Manager}
- * @param status             {@code PENDING}, {@code ACTIVE}, {@code REJECTED} or {@code REVOKED}
+ * @param status             {@code ACTIVE} in the managers list, {@code PENDING} in the pending invitations
  * @param grantedPermissions the names of the permissions granted; empty for an owner
- * @param createdAt          when the appointment was created
  */
 public record AppointmentInfoDTO(
     String appointmentId,

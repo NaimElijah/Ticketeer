@@ -6,7 +6,8 @@ package com.ticketing.system.shared.exception;
  * {@code @Version} conflict ({@code OptimisticLockTranslationAspect}).
  *
  * <p>No service retries it: it reaches the user, who retries. {@code CheckoutService.runPhase3}
- * retries on Spring's {@code ConcurrencyFailureException} instead, before any translation (ADR-015).
+ * and the clean-up steps of {@code InventoryService} retry on Spring's {@code ConcurrencyFailureException}
+ * instead, before any translation (ADR-015, ADR-017).
  */
 public class ConcurrentReservationException extends DomainException {
 

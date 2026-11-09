@@ -3,7 +3,9 @@ package com.ticketing.system.shared.event;
 /**
  * Integration event published by the sales context (ReservationService) when a member's
  * attempt to remove a ticket reservation fails. The notifications context listens for it and
- * raises a removal-failure notification. The listener hands its components to
+ * would raise a removal-failure notification, but none is delivered today: the notice is published inside
+ * the removal's transaction, which rolls back on failure, so the after-commit listener never runs
+ * (ADR-004). The listener hands its components to
  * {@code INotificationService.notifyRemoveTicketReservationFailure}.
  *
  * @param userId the member whose removal attempt failed

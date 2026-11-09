@@ -5,7 +5,8 @@ package com.ticketing.system.shared.exception;
  * I.1.1) or of opening the market (UC-32, I.2.1), both in {@code SystemAdminService}.
  *
  * <p>An unreachable external service at those gates is an {@link ExternalServiceUnavailableException}
- * instead. At boot a failure here stops the application (ADR-003). The message reaches the user.
+ * instead. At boot a failure at the initialization gate stops the application (ADR-003); at the market-open
+ * gate the market self-heal logs it and retries.
  */
 public class InitializationIntegrityException extends DomainException {
 

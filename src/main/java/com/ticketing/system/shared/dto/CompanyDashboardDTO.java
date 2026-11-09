@@ -11,7 +11,7 @@ package com.ticketing.system.shared.dto;
  * @param activeEvents   the company's ON_SALE events
  * @param ticketsSold30d the company's ticket lines that are not refunded, on receipts from the
  *                       trailing 30 days (#21)
- * @param revenue30d     the prices of those lines
+ * @param revenue30d     the sum of those lines' prices
  * @param openInquiries  the INQUIRY conversations that are not closed or resolved, with the company as
  *                       the counterparty
  * @param rating         the mean of the ratings of the company's events; {@code null} when none of its

@@ -4,9 +4,8 @@ package com.ticketing.system.shared.exception;
  * Thrown when the external ticket-issuance service fails to issue the tickets after the charge: it
  * rejects the request, or its reply fails validation. UC-34.
  *
- * <p>This exception triggers the UC-4 auto-refund flow (I.3.3). The message reaches the user, but
- * checkout reports the failure to the buyer without it, because it can carry the issuer's own error
- * text.
+ * <p>This exception triggers the UC-4 auto-refund flow (I.3.3). Checkout reports the failure to the
+ * buyer without the message, because it can carry the issuer's own error text.
  */
 public class TicketIssuanceFailedException extends DomainException {
 

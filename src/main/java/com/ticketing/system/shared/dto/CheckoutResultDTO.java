@@ -3,11 +3,11 @@ package com.ticketing.system.shared.dto;
 import java.util.List;
 
 /**
- * Output of the {@code CheckoutService} checkout methods (UC-10). Returned only on success;
- * a failure throws a domain exception.
+ * Output of the {@code CheckoutService} checkout methods (UC-10). Returned only on success. A failure
+ * reaches the caller as a plain {@code RuntimeException} whose cause is the reason, except a closed
+ * market, which is thrown as {@code MarketNotOpenException}.
  *
  * @param totalCharged         the amount charged to the buyer
- * @param orderReceiptId       the id of the stored order receipt
  * @param paymentTransactionId the payment gateway's id for the charge
  * @param issuedTickets        the tickets bought, one entry each
  */

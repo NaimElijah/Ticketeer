@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
  * is a {@code PaymentGatewayException} thrown by the gateway adapter.
  *
  * @param paymentTransactionId the gateway's id for the charge
- * @param gatewayName          which gateway took the payment
  * @param chargedAt            when the gateway charged, in UTC wall time (ADR-008)
  */
 public record PaymentResultDTO(

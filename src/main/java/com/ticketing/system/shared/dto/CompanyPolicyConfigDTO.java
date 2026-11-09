@@ -8,7 +8,6 @@ import java.util.List;
  * <p>The service stores only {@code defaultPurchasePolicy}. It does not read
  * {@code defaultDiscountPolicies}: a company has no discount to set (requirements II.4.3).
  *
- * @param companyId             the company whose policy is set
  * @param defaultPurchasePolicy the company's purchase policy; {@code null} means no policy
  */
 public record CompanyPolicyConfigDTO(

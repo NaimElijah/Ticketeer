@@ -26,7 +26,6 @@ public class InventoryZoneDTO {
      * @param availableAmount how many tickets can still be reserved
      * @param reservedAmount  how many tickets are held in carts
      * @param soldAmount      how many tickets are sold
-     * @param price           the price of one ticket
      * @param seats           the zone's seats; empty for a standing zone, and a {@code null} list is
      *                        stored as empty
      * @param placement       where the zone sits on the venue grid; {@code null} when it is unplaced
@@ -93,6 +92,7 @@ public class InventoryZoneDTO {
         return seats;
     }
 
+    /** Returns where the zone sits on the venue grid, or {@code null} when it is unplaced. */
     public GridPlacementDTO getPlacement() {
         return placement;
     }

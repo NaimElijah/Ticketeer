@@ -9,7 +9,7 @@ import java.time.LocalDate;
  * @param status   a {@code ConversationStatus} name, case aside; {@code null} or blank for every
  *                 status. Any other text is refused with {@code IllegalArgumentException}
  * @param memberId the member who filed the complaint
- * @param fromDate inclusive lower bound on the day the complaint was filed
+ * @param fromDate inclusive lower bound on the day the complaint was filed, in UTC
  * @param toDate   inclusive upper bound on that day
  */
 public record ComplaintFilterDTO(

@@ -17,8 +17,6 @@ package com.ticketing.system.shared.domain.policy;
  * </ul>
  */
 public enum PurchaseStage {
-    /** A tentative check while the cart is still being built. */
     RESERVE,
-    /** The final check, with every rule enforced. */
     CHECKOUT
 }

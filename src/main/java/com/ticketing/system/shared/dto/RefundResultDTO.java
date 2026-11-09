@@ -11,7 +11,7 @@ import java.util.List;
  *
  * @param orderReceiptId     the payment transaction id the refund reverses, as text. Both gateway
  *                           adapters fill it so; it is not an order receipt id
- * @param refundedTicketIds  empty in both gateway adapters, which refund a charge, not tickets
+ * @param refundedTicketIds  empty in both gateway adapters
  * @param failedTicketIds    empty in both gateway adapters; no code reads it
  */
 public record RefundResultDTO(

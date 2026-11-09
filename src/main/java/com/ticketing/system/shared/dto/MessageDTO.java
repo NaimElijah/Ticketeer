@@ -7,8 +7,7 @@ import java.time.LocalDateTime;
  * independent of the domain enum.
  *
  * @param senderId   the sender's id, within the space of its {@code senderType}
- * @param senderType {@code MEMBER}, {@code COMPANY}, {@code ADMIN}, {@code ADMIN_GROUP} or
- *                   {@code SYSTEM}
+ * @param senderType {@code MEMBER}, {@code COMPANY} or {@code ADMIN}
  * @param read       whether the other side has read it
  */
 public record MessageDTO(

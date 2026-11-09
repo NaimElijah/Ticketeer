@@ -9,9 +9,9 @@ package com.ticketing.system.shared.dto;
  * refuses a key another buyer used. {@code WsepPaymentGateway} does not send it to WSEP, so WSEP cannot
  * deduplicate; only {@code StubPaymentGateway} deduplicates charges by it.
  *
- * <p>{@code buyerUserId} and {@code buyerEmail} are the dual identity of a member and a guest purchase:
- * a member has {@code buyerUserId} set and {@code buyerEmail} optional; a guest has no
- * {@code buyerUserId} and needs {@code buyerEmail} (D5 reversed: guests can check out).
+ * <p>Exactly one of {@code buyerUserId} and {@code buyerEmail} is set: a member has
+ * {@code buyerUserId}, a guest has {@code buyerEmail} (D5 reversed: guests can check out).
+ * {@code StubPaymentGateway} refuses a request with both or neither.
  *
  * @param card the raw card details; the gateway (WSEP {@code pay}) needs them
  */

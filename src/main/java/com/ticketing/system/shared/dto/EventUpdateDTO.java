@@ -7,7 +7,8 @@ import java.util.List;
  * Input to {@code EventManagementService.editEventDetails} (UC-19): a partial update, in which a
  * {@code null} component means "leave this field alone". The service converts location and
  * showDates into their domain equivalents and the Event aggregate applies the II.3.5.2 state rules
- * (DRAFT or SCHEDULED only).
+ * (DRAFT or SCHEDULED only). A changed schedule or time zone must still leave every show starting in
+ * the future; otherwise the update is refused with {@code IllegalArgumentException}.
  *
  * @param eventId     the event's id, as text; text that is not a number is refused with
  *                    {@code IllegalArgumentException}

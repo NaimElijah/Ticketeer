@@ -1,7 +1,7 @@
 package com.ticketing.system.shared.exception;
 
 /**
- * Thrown when a refund did not happen: the gateway rejected it, its result failed validation, the
+ * Thrown when a refund fails: the gateway rejected it, its result failed validation, the
  * receipt holds no payment transaction to refund, or a cancelled event's refunds left receipts
  * unrefunded. UC-4.
  *
@@ -12,7 +12,10 @@ package com.ticketing.system.shared.exception;
  *
  * <p>A gateway refunds by charge id, so {@code forPaymentTransaction} labels its subject a payment
  * transaction, not an order, and nobody looks for an order by a charge id
- * (NaimElijah/Ticketeer#187). The message reaches the user.
+ * (NaimElijah/Ticketeer#187).
+ *
+ * <p>{@code RefundPresenter} shows the member fixed text. A cancel shows its owner the plain summary of
+ * the receipts it could not refund as written, and fixed text for the two subtypes.
  */
 public class RefundFailedException extends DomainException {
 

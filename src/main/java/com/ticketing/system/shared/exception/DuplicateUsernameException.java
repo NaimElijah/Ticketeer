@@ -5,7 +5,7 @@ package com.ticketing.system.shared.exception;
  * {@code AuthenticationService.register} and by the user and admin repositories when a save finds
  * the username taken. UC-11.
  *
- * <p>A taken email is {@link DuplicateEmailException}. The message reaches the user.
+ * <p>{@link DuplicateEmailException} is the separate type for an email.
  */
 public class DuplicateUsernameException extends DomainException {
 
