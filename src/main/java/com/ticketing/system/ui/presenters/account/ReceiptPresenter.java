@@ -17,7 +17,7 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * Read-only presenter for {@code ReceiptView} (#276). Loads one member-owned order receipt and
+ * Read-only presenter for {@code ReceiptView} (upstream#276). Loads one member-owned order receipt and
  * returns a sealed {@link Outcome} the view switches on — the view never calls the service
  * directly.
  *

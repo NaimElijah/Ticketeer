@@ -23,7 +23,7 @@ import com.ticketing.system.organization.domain.Permission;
  * {@code @DataJpaTest} provides H2 + real {@code company_appointments} and {@code appointment_permissions}
  * tables. Each test starts from an empty schema ({@link #cleanTable()}) so the suite is
  * order-independent. This proves the appointment aggregate persists independently now that it is no
- * longer cascaded from {@code User} (task #20). CI never touches a real database.
+ * longer cascaded from {@code User}. CI never touches a real database.
  */
 @DataJpaTest
 @Import(JpaCompanyAppointmentRepository.class)

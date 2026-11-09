@@ -43,12 +43,12 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Full-page receipt for one member-owned order (#276). Reached by clicking "View" on the
+ * Full-page receipt for one member-owned order (upstream#276). Reached by clicking "View" on the
  * {@code MyAccountView} orders grid ({@code receipt/:receiptId}, the order receipt's id). Loads the
  * receipt through {@link ReceiptPresenter}; the view never calls the service directly and handles
  * load failures only through the presenter's sealed {@code Outcome}. A receipt that isn't
  * the signed-in member's renders the same not-found banner as a missing one. An order that still
- * qualifies offers "Request Refund" here (#284), handled through {@link RefundPresenter}.
+ * qualifies offers "Request Refund" here (upstream#284), handled through {@link RefundPresenter}.
  */
 @Route(value = "receipt/:receiptId", layout = MainLayout.class)
 @PageTitle("Receipt · TicketHub")
@@ -153,7 +153,7 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
         return actions;
     }
 
-    // ---- refund (#284): order-level, member-initiated ----
+    // ---- refund (upstream#284): order-level, member-initiated ----
 
     private static boolean refundEligible(PurchaseRecordDTO r) {
         // A member refund covers the whole order, so any refunded line (e.g. a cancelled event) rules it out.

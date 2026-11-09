@@ -68,7 +68,7 @@ public class WsepPaymentGateway implements PaymentGateway {
     public boolean verifyConnection() {
         try {
             // Retried (idempotent handshake): a cold-starting WSEP endpoint may miss the first attempt
-            // but answer a later one, so a transient blip doesn't leave the market closed at boot (#455).
+            // but answer a later one, so a transient blip doesn't leave the market closed at boot (upstream#455).
             boolean ok = "OK".equalsIgnoreCase(http.postWithRetry(WsepHttpClient.action("handshake")));
             log.debug("wsep handshake: reachable={}", ok);
             return ok;

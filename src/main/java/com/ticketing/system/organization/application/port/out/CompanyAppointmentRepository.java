@@ -7,7 +7,7 @@ import com.ticketing.system.organization.domain.CompanyAppointment;
 import com.ticketing.system.shared.IRepository;
 
 /**
- * Aggregate-root entry point for the {@link CompanyAppointment} aggregate (task #20).
+ * Aggregate-root entry point for the {@link CompanyAppointment} aggregate.
  *
  * <p>Promoting {@code CompanyAppointment} off the {@code User} aggregate onto its own repository is
  * what breaks the last {@code identity -> organization} cycle: appointments are now looked up by the

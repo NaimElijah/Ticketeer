@@ -63,7 +63,7 @@ import com.ticketing.system.catalog.adapter.out.persistence.SpringDataEventRepos
 import com.ticketing.system.organization.adapter.out.persistence.SpringDataProductionCompanyRepository;
 
 /**
- * No-double-sell concurrency proof (V3-TX-03 / #361), run on the real JPA stack.
+ * No-double-sell concurrency proof (V3-TX-03 / upstream#361), run on the real JPA stack.
  *
  * <p>The contract tests cover reservation <em>behaviour</em> but not concurrency. This test fires N
  * buyers at a single unit of inventory at once and asserts <strong>exactly one wins</strong> with no

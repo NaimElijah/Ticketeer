@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  * admin is never a member, since admins have no notification inbox. A UI that detached before its turn
  * is skipped, and a failure for one UI is logged with its exception; neither stops the others.
  *
- * <p>Real-time WebSocket/SSE delivery (#225) will replace this when implemented.
+ * <p>Real-time WebSocket/SSE delivery (#61) will replace this when implemented.
  */
 @Component
 @Slf4j

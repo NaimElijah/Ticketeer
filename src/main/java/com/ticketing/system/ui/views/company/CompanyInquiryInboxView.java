@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Company's member-inquiry inbox (#268): lists the member inquiries addressed to the company,
+ * Company's member-inquiry inbox (upstream#268): lists the member inquiries addressed to the company,
  * lets an owner/manager read each thread and open the response page for one that is still
  * open — all backed by {@link CompanyInquiryInboxPresenter} → {@code MessagingService}. Replying
  * and closing happen on {@link CompanyInquiryRespondView}.
@@ -49,8 +49,8 @@ import java.util.Set;
  * is absent or not the member's, and a topbar selector lets a member of several companies switch. A
  * client-side Status chip filters the loaded threads.
  *
- * <p>Second wired master/detail messaging inbox after {@code SupportInboxView} (#277);
- * {@code AdminComplaintQueueView} (#269) mirrors this pattern.
+ * <p>Second wired master/detail messaging inbox after {@code SupportInboxView} (upstream#277);
+ * {@code AdminComplaintQueueView} (upstream#269) mirrors this pattern.
  *
  * <p>Served at {@code /owner/inquiries}.
  */

@@ -47,7 +47,7 @@ import com.ticketing.system.sales.adapter.out.persistence.SpringDataOrderReceipt
 import com.ticketing.system.identity.adapter.out.security.JwtSessionManager;
 
 /**
- * No-double-refund concurrency proof (#410), run on the real JPA stack.
+ * No-double-refund concurrency proof (upstream#410), run on the real JPA stack.
  *
  * <p>Under JPA the receipt's {@code lockForUpdate} used to be a no-op, so two concurrent refund
  * requests for the same receipt could both pass the eligibility check and both call
@@ -168,14 +168,14 @@ class RefundConcurrencyTest {
         assertEquals(1, refunded.get(), "exactly one refund should succeed");
         assertEquals(CONCURRENT_REQUESTS - 1, alreadyRefunded.get(),
                 "every other request must bail as already-refunded");
-        // The crux of #410: the gateway is hit exactly once despite the concurrent double-clicks.
+        // The crux of upstream#410: the gateway is hit exactly once despite the concurrent double-clicks.
         verify(paymentGateway, times(1)).refund(anyInt(), anyDouble());
         assertTrue(orderReceiptRepository.findByOrderReceiptId(RECEIPT_ID).orElseThrow().isFullyRefunded(),
                 "the receipt is recorded as refunded");
     }
 
     // The slow WSEP refund runs while the first request holds the receipt's row lock, so a double-click's
-    // second request must wait there, not read the still-unrefunded receipt and refund it again (#410).
+    // second request must wait there, not read the still-unrefunded receipt and refund it again (upstream#410).
     @Test
     void GivenAFirstRefundHeldInTheGateway_WhenASecondRefundOfTheSameReceiptArrives_ThenItWaitsOnTheRowLockAndNeverReachesTheGateway()
             throws Exception {

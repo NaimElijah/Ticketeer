@@ -11,7 +11,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for the pure filter-mapping helpers of {@link CatalogFilterSupport} (#271) — the UI
+ * Unit tests for the pure filter-mapping helpers of {@link CatalogFilterSupport} (upstream#271) — the UI
  * category label → enum-name mapping and the date-range preset → concrete window. Shared by the
  * browse and owner event-list filters; needs no Vaadin/Spring.
  */

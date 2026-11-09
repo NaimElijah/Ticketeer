@@ -216,7 +216,7 @@ class VaadinSmokeTest {
         assertFalse(text.contains("unreachable"), "an unchecked service is not reported down: " + text);
     }
 
-    // ---- the live top-bar search panel (#281) ----
+    // ---- the live top-bar search panel (upstream#281) ----
 
     @Test
     void GivenRecentSearches_WhenTheLiveSearchPanelOpens_ThenItListsThem() {

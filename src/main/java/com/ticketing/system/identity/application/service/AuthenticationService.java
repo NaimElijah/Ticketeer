@@ -122,9 +122,9 @@ public class AuthenticationService {
     private final long guestIdleMinutes;
     private final long memberTtlMinutes;
 
-    // Admin sign-in (#290).
+    // Admin sign-in (upstream#290).
     private final AdminRepository adminRepository;
-    // Brute-force lockout (SLR.2 / #148), shared by member and admin sign-in.
+    // Brute-force lockout (SLR.2 / upstream#148), shared by member and admin sign-in.
     private final LoginAttemptTracker loginAttempts;
     // Names no member may register (#76): identity.reserved-usernames plus the default admin's
     // username, trimmed and lower-cased.
@@ -482,7 +482,7 @@ public class AuthenticationService {
         // 1. Guest session must exist, before the attempt is counted.
         requireActiveGuestSession(request.guestSessionId());
 
-        // 1b. Brute-force lockout (SLR.2 #148) — same policy as admin sign-in. The attempt is
+        // 1b. Brute-force lockout (SLR.2 upstream#148) — same policy as admin sign-in. The attempt is
         //     counted before the password is checked, so attempts that arrive together cannot all
         //     reach the hasher before the first failure is recorded.
         Admission admission = loginAttempts.admit(Pool.MEMBER, request.username());
@@ -554,7 +554,7 @@ public class AuthenticationService {
     private record Promotion(AuthTokenDTO token, ActiveOrderDTO activeOrder) { }
 
     /**
-     * Admin sign-in (#290). Authenticates against the persisted admin pool (never the member pool
+     * Admin sign-in (upstream#290). Authenticates against the persisted admin pool (never the member pool
      * — disjoint-pool rule), applies the shared lock-after-N policy, audit-logs every failure, and
      * issues an ADMIN-role JWT so the backend admin gate can authorize it.
      *

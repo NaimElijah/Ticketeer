@@ -73,7 +73,7 @@ public class SystemAdminService {
     private final String defaultAdminPassword;
     private static final int DEFAULT_ADMIN_ID = 1;
 
-    // Platform lifecycle state: in memory, not persisted. openMarket()/closeMarket() (UC-32, #307)
+    // Platform lifecycle state: in memory, not persisted. openMarket()/closeMarket() (UC-32, upstream#307)
     // build on top of this status.
     private enum PlatformStatus { UNINITIALIZED, READY, OPEN, CLOSED }
     private volatile PlatformStatus status = PlatformStatus.UNINITIALIZED;
@@ -231,7 +231,7 @@ public class SystemAdminService {
     }
 
     /**
-     * UC-32 (#9, I.2.1): opens the trading market so reservations and checkouts are accepted.
+     * UC-32 (upstream#9, I.2.1): opens the trading market so reservations and checkouts are accepted.
      * Admin-only.
      *
      * <p>Re-verifies both external services (I.2.2), then that a System Admin exists, then the
@@ -287,7 +287,7 @@ public class SystemAdminService {
     }
 
     /**
-     * System-internal, idempotent recovery hook (#455): brings the market to OPEN if it safely can.
+     * System-internal, idempotent recovery hook (upstream#455): brings the market to OPEN if it safely can.
      * Used by the auto-opener and the self-heal scheduler so a transient external-service blip at boot
      * (e.g. a cold-starting WSEP endpoint) doesn't leave the market closed with no recovery (V3 Req 6).
      * Not admin-gated: the platform acts on itself, not on a user request. Respects an admin's

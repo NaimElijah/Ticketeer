@@ -114,7 +114,7 @@ public class JwtSessionManager implements SessionManager {
         return buildJwt(userId, username, sid, ROLE_MEMBER, now, expiry);
     }
 
-    // Admin sign-in (#290): the row is an Admin session and the JWT carries the ADMIN role, so the
+    // Admin sign-in (upstream#290): the row is an Admin session and the JWT carries the ADMIN role, so the
     // token passes only the admin readers (admin ids and member ids share an id space).
     @Override
     public String generateAdminToken(int adminId, String username) {

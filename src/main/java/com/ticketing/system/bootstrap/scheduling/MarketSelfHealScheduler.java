@@ -9,7 +9,7 @@ import com.ticketing.system.governance.application.service.SystemAdminService;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Self-heals the trading market in every real run (#455). If a transient external-service outage —
+ * Self-heals the trading market in every real run (upstream#455). If a transient external-service outage —
  * e.g. a cold-starting WSEP endpoint — left the market closed at boot, this periodically re-attempts
  * the open so the system recovers <i>without a restart</i> (V3 Req 6).
  *

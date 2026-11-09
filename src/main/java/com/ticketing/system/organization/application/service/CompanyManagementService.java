@@ -388,7 +388,7 @@ public class CompanyManagementService {
     }
 
     // ---------------------------------------------------------------------------
-    // Read-side roster queries (#264 — wire ManagerListView).
+    // Read-side roster queries (upstream#264 — wire ManagerListView).
     // ---------------------------------------------------------------------------
 
     /**

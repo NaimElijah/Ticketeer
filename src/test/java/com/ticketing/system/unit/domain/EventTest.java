@@ -187,7 +187,7 @@ class EventTest extends BaseDomainTest {
                 List.of(FIXED_SHOW), JERUSALEM, null, new DiscountPolicy(0)));
     }
 
-    // Construction-time invariant enforcement (issue #303): a freshly-constructed
+    // Construction-time invariant enforcement (issue upstream#303): a freshly-constructed
     // Event
     // must satisfy its invariants, so invalid args fail at construction with
     // IllegalStateException.
@@ -982,7 +982,7 @@ class EventTest extends BaseDomainTest {
         return new DiscountPolicy(0);
     }
 
-    // -- DRAFT -> SCHEDULED transition (issue #305) -----------------------
+    // -- DRAFT -> SCHEDULED transition (issue upstream#305) -----------------------
 
     @Test
     void GivenDraftEventWithInventory_WhenConfigureVenueMap_ThenStatusScheduled() {

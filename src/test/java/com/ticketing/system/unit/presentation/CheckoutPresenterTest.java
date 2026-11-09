@@ -57,7 +57,7 @@ import com.ticketing.system.ui.presenters.order.CheckoutPresenter;
 import com.ticketing.system.ui.session.SessionIdentity;
 
 /**
- * Pins the payment-failure mapping in {@link CheckoutPresenter#payAsMember} (issue #428): a real
+ * Pins the payment-failure mapping in {@link CheckoutPresenter#payAsMember} (issue upstream#428): a real
  * gateway decline and a gateway-unreachable failure must map to DIFFERENT outcomes, because the
  * View renders a clear "Payment declined" for the former and a generic error for the latter.
  *

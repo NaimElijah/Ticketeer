@@ -59,7 +59,7 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 /**
  * A member's whole-order refund and an event-cancellation refund of the same receipt, at once, on the
  * real JPA stack (#20). Each path takes the receipt's row lock: the member refund holds it across the
- * gateway call (#410), the cancellation only while it claims the event's lines and while it records the
+ * gateway call (upstream#410), the cancellation only while it claims the event's lines and while it records the
  * refund. Whichever path reaches the receipt first refunds it; the other must then refund nothing, so each
  * line's money goes back once and the receipt and its tickets agree on what was refunded.
  *

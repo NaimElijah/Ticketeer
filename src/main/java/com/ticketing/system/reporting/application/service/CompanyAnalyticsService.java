@@ -62,7 +62,7 @@ public class CompanyAnalyticsService {
     private final TicketRepository ticketRepository;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
-    // Company-membership/authorization checks moved off the User aggregate (task #20); reporting
+    // Company-membership/authorization checks moved off the User aggregate; reporting
     // already depends on organization.
     private final CompanyMembershipService companyMembershipService;
     // Session/token port — every company-scoped read authenticates its caller (#22).

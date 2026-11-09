@@ -13,7 +13,7 @@ import com.ticketing.system.shared.domain.policy.PurchaseContext;
 import com.ticketing.system.shared.domain.policy.PurchaseStage;
 
 /**
- * V2-POL-05 (#220): purchase-policy rules must behave differently at the RESERVE
+ * V2-POL-05 (upstream#220): purchase-policy rules must behave differently at the RESERVE
  * stage (cart still being built) vs. the final CHECKOUT.
  */
 class PurchaseStagePolicyTest {

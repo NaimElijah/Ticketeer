@@ -107,7 +107,7 @@ class EventManagementServiceTest {
         private EventSalesHistoryPort eventSalesHistoryPort;
         private UserRepository userRepository;
         // Real membership service over an in-memory appointment repo — seeds/answers company-membership
-        // permission checks now that appointments live off the User aggregate (task #20).
+        // permission checks now that appointments live off the User aggregate.
         private CompanyMembershipService membershipService;
         private ApplicationEventPublisher eventPublisher;
 

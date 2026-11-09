@@ -34,7 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * System-admin complaint queue (#269): lists the platform-wide member complaints and lets an admin
+ * System-admin complaint queue (upstream#269): lists the platform-wide member complaints and lets an admin
  * read each thread, filter by status group and open the response page for one — all backed by
  * {@link AdminComplaintQueuePresenter} → {@code MessagingService}.
  *
@@ -42,8 +42,8 @@ import java.util.List;
  * that opens {@link AdminComplaintRespondView}, where the admin's single response is sent through
  * {@code respondToComplaint}; that call appends the response and resolves the complaint in one step.
  *
- * <p>Third wired master/detail messaging inbox after {@code SupportInboxView} (#277) and
- * {@code CompanyInquiryInboxView} (#268).
+ * <p>Third wired master/detail messaging inbox after {@code SupportInboxView} (upstream#277) and
+ * {@code CompanyInquiryInboxView} (upstream#268).
  *
  * <p>Served at {@code /admin/complaints}.
  */

@@ -15,7 +15,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * MVP presenter for {@code CompanyInquiryInboxView} (#268). Holds no Vaadin imports so the
+ * MVP presenter for {@code CompanyInquiryInboxView} (upstream#268). Holds no Vaadin imports so the
  * outcome → UI translation lives in the view and the service-call decision tree is unit-testable
  * in isolation (the view reads the token from {@code AuthSession} and passes it in, mirroring
  * {@code SupportInboxPresenter} / {@code OwnerDashboardPresenter}).

@@ -29,7 +29,7 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Read-side aggregator for the System Analytics dashboard (UC-46 / #43, #279).
+ * Read-side aggregator for the System Analytics dashboard (UC-46 / upstream#43, upstream#279).
  *
  * <p>Pure query service. Visitor / registration / reservation activity comes
  * from the live {@link ISystemMetrics} counters; purchases are derived from the
@@ -147,7 +147,7 @@ public class SystemAnalyticsService {
     }
 
     /**
-     * Headline counters for the admin workspace landing page (#279): active companies, live
+     * Headline counters for the admin workspace landing page (upstream#279): active companies, live
      * (ON_SALE) events, open (non-closed) complaints, and non-refunded revenue over the trailing
      * 30 days.
      *

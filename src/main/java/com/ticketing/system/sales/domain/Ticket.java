@@ -56,7 +56,7 @@ public class Ticket implements InvariantChecked {
     @Column(nullable = false)
     private TicketStatus status;
 
-    // D7 (auth rework #181): nullable. Set on the Member path of CheckoutService;
+    // D7 (auth rework upstream#181): nullable. Set on the Member path of CheckoutService;
     // stays null for Guest purchases.
     @Column(name = "holder_user_id")
     private Integer holderUserId;

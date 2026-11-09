@@ -93,7 +93,7 @@ public class SessionAndOrderSweeper {
      * or rolls back as a whole. A failure the release loop handles itself does not roll it back.
      */
     @Scheduled(fixedDelayString = "${sweeper.fixed-delay-ms:60000}")
-    // F3/#371: the tick's inventory releases + row deletes commit as one transaction; an optimistic-lock
+    // F3/upstream#371: the tick's inventory releases + row deletes commit as one transaction; an optimistic-lock
     // conflict rolls the tick back and the next @Scheduled pass re-sweeps (retry via cadence — no Spring-Retry dep).
     @Transactional
     public void sweep() {

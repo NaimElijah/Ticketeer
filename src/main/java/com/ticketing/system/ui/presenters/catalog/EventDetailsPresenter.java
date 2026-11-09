@@ -16,7 +16,7 @@ import com.ticketing.system.ui.support.ServiceErrors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * MVP presenter for {@code EventDetailsView} (#272). Loads the public event detail plus its
+ * MVP presenter for {@code EventDetailsView} (upstream#272). Loads the public event detail plus its
  * venue/zone summary and returns a sealed {@link Outcome} the view switches on —
  * the view never calls services directly nor uses {@code try/catch}. Only the organizer's rating
  * is best-effort: a failure to read it leaves the page without a rating and fails nothing.

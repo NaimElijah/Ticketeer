@@ -89,7 +89,7 @@ public class MemberAccountService {
 
     /**
      * UC-16 (single receipt): one of the signed-in member's own orders, enriched for the receipt page
-     * (#276). It throws distinct exceptions, as {@link #viewMyHistory} does. {@code ReceiptPresenter}
+     * (upstream#276). It throws distinct exceptions, as {@link #viewMyHistory} does. {@code ReceiptPresenter}
      * shows a missing receipt and another member's the same way, so receipt ids on other accounts
      * stay hidden.
      *

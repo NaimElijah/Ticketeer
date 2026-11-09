@@ -20,7 +20,7 @@ import java.util.function.Function;
 /**
  * Self-contained bell icon + unread badge + notification dropdown.
  * Reads NotificationSession on construction; call refresh() to update it
- * from the current session state (hook for future real-time delivery, #225).
+ * from the current session state (hook for future real-time delivery, #61).
  *
  * <p>The bell's name carries the unread count ("Notifications, 3 unread"), which the badge
  * only shows, and a refresh updates the bell in place: the poller refreshes it on every tick,

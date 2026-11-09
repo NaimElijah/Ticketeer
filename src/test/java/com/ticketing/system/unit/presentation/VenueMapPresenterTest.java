@@ -36,7 +36,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * Unit guard for {@code VenueMapPresenter.saveMap}: the venue map is persisted to the
  * <em>event's own</em> company (resolved via {@code getEventDetail(...).companyId()}), not the
  * caller's "first owned company". This is what lets a manager granted {@code CONFIGURE_VENUE} —
- * who has no Owner appointment — save a layout edit (#429), and what targets the correct company
+ * who has no Owner appointment — save a layout edit (upstream#429), and what targets the correct company
  * for a multi-company owner.
  */
 class VenueMapPresenterTest {

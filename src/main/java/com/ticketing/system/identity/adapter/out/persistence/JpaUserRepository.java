@@ -21,14 +21,14 @@ import com.ticketing.system.identity.domain.User;
  * JPA-backed {@link UserRepository} — active in every run but the in-memory test suite. Adapts the
  * domain port onto Spring Data ({@link SpringDataUserRepository}); the application layer depends
  * only on {@code UserRepository}, never on Spring Data. Company appointments are no longer owned by
- * the user (task #20) — they persist through the separate {@code CompanyAppointmentRepository}.
+ * the user — they persist through the separate {@code CompanyAppointmentRepository}.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code User}'s
  * {@code @Version} optimistic lock. {@code save} delegates to Spring Data (insert fresh / update
  * loaded under {@code @Version}) and flushes, so the {@code uk_users_username} and
  * {@code uk_users_email} constraints are checked inside the adapter. {@code save} and {@code delete}
  * are {@code @Transactional}, so they join the caller's transaction and also work when called
- * outside one (#359).
+ * outside one (upstream#359).
  *
  * <p>{@link #nextId()} keeps the assigned-id design (the service mints the id, then constructs the
  * User) but seeds an in-memory counter from the current {@code max(userId)} in the database on

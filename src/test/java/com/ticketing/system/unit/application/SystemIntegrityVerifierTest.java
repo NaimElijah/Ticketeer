@@ -67,7 +67,7 @@ class SystemIntegrityVerifierTest {
         when(activeOrderRepository.findAll()).thenReturn(List.of());
     }
 
-    // ---- existing structural scans (#4 / #6) ----
+    // ---- existing structural scans (constraints #4 / #6) ----
 
     @Test
     void GivenEmptySystem_WhenVerify_ThenPasses() {
@@ -108,7 +108,7 @@ class SystemIntegrityVerifierTest {
         assertThrows(SystemIntegrityViolationException.class, verifier::verify);
     }
 
-    // ---- #372 V3 scans against loaded state ----
+    // ---- upstream#372 V3 scans against loaded state ----
 
     @Test
     void GivenLoadedAggregateThatViolatesItsInvariant_WhenVerify_ThenThrows() {   // re-validation sweep

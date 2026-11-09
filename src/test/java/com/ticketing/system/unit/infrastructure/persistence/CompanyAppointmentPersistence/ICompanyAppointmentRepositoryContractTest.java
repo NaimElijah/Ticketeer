@@ -26,7 +26,7 @@ import com.ticketing.system.testutil.RepositoryLockProbe;
  * Contract every {@link CompanyAppointmentRepository} implementation must satisfy. The Memory and JPA
  * adapters each subclass this with their own {@link #newRepository()} factory; the tests are reused.
  * This is where the appointment-persistence coverage lives now that {@code CompanyAppointment} is a
- * standalone aggregate rather than an owned child of {@code User} (task #20) — it pins that role,
+ * standalone aggregate rather than an owned child of {@code User} — it pins that role,
  * status and the granted permission set survive save/reload on both backends, and that appointments
  * are queryable by the appointed user's id ({@code targetId}) and by company.
  */

@@ -35,7 +35,7 @@ import jakarta.persistence.PersistenceContext;
  * That never happens in the application (sids are unique), only in the in-memory
  * overwrite contract; it's handled by copying the state onto the managed row via
  * {@link Session#overwriteFrom}. Each write carries its own {@code @Transactional}, so it joins the
- * caller's transaction and also works when called outside one (#359).
+ * caller's transaction and also works when called outside one (upstream#359).
  *
  * <p>{@code existsByUserId}'s "now" comes from the injected {@link Clock} (parity with
  * {@code MemorySessionRepository}), and the member-kind and non-expired filters run in SQL.

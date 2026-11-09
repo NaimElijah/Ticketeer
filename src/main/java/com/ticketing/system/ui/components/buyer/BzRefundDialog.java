@@ -9,7 +9,7 @@ import com.ticketing.system.ui.support.DisplayLocale;
 import com.vaadin.flow.component.textfield.TextArea;
 
 /**
- * Member refund-request confirm (V2-DLG-01 / #284). A thin reusable wrapper over {@link LkConfirm}
+ * Member refund-request confirm (V2-DLG-01 / upstream#284). A thin reusable wrapper over {@link LkConfirm}
  * that adds a reason {@link TextArea} and, on confirm, hands the reason back to the caller — which
  * runs the actual refund through {@code RefundPresenter}. Shared by {@code ReceiptView} and
  * {@code MyAccountView} so the confirm UX lives in one place.

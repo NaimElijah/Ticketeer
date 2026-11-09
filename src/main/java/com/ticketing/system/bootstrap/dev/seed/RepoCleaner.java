@@ -1,7 +1,7 @@
 package com.ticketing.system.bootstrap.dev.seed;
 
 /**
- * Wipes the business data for a {@code seed.mode=wipe}/{@code reset} run (#366); the admins stay.
+ * Wipes the business data for a {@code seed.mode=wipe}/{@code reset} run (upstream#366); the admins stay.
  *
  * <p>{@link JpaRepoCleaner} deletes the rows from the database. The in-memory adapters need no
  * cleaner: they exist only in the test suite, where {@code ScenarioRunner}, the sole caller, never

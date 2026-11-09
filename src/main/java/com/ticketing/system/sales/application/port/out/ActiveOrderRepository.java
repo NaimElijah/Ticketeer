@@ -65,7 +65,7 @@ public interface ActiveOrderRepository extends IRepository<ActiveOrder, String> 
 
     /**
      * Returns every cart. The platform integrity scans use it to re-check each cart's invariants and
-     * that no member holds two carts for one event (#372).
+     * that no member holds two carts for one event (upstream#372).
      */
     List<ActiveOrder> findAll();
 }

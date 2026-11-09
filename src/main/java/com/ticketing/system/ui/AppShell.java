@@ -16,7 +16,7 @@ import com.vaadin.flow.theme.Theme;
  * {@code ui/components/kit/}), the other {@code ui/components} and the views attach to
  * their rendered DOM.
  *
- * <p>Long-polling transport per [#212 V2-F-07] — Tier C exempts real-time
+ * <p>Long-polling transport per [upstream#212 V2-F-07] — Tier C exempts real-time
  * WebSocket push. Background threads use {@code UI.access(...)} to update
  * the UI safely from scheduler threads.
  */

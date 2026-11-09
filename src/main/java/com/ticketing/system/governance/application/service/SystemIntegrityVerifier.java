@@ -43,7 +43,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li><b>§1 #6 active company has ≥1 Owner — VERIFIED.</b></li>
  *   <li><b>§1 #4 producer (owner/manager) is a registered user — VERIFIED.</b></li>
  *   <li><b>§1 #1 unique username, #8 ≤1 active order/member/event, #12 sellable ≤ inventory —
- *       VERIFIED.</b> Guest carts are left out of #8: a pre-V10 instance serving during a rolling
+ *       VERIFIED.</b> Guest carts are left out of §1 #8: a pre-V10 instance serving during a rolling
  *       deploy can still leave two on one session id (NaimElijah/Ticketeer#224, V10's header), and this
  *       scan's failure stops the boot. NaimElijah/Ticketeer#275 scans them once no such instance can
  *       serve.</li>
@@ -115,7 +115,7 @@ public class SystemIntegrityVerifier {
      * capacity.
      *
      * <p>Read-only: the scans never write. The one transaction also keeps the loaded aggregates
-     * attached while the scans traverse them (#372).
+     * attached while the scans traverse them (upstream#372).
      *
      * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException at the first
      *         violation. The message names the offending records by id; for a broken aggregate
@@ -125,7 +125,7 @@ public class SystemIntegrityVerifier {
     public void verify() {
         verifyActiveCompaniesHaveOwner();      // constraint #6
         verifyProducersAreUsers();             // constraint #4
-        revalidateLoadedAggregates();          // #372 — re-run each loaded aggregate's own invariants
+        revalidateLoadedAggregates();          // upstream#372 — re-run each loaded aggregate's own invariants
         verifyUniqueUsernames();               // constraint #1
         verifyOneActiveOrderPerMemberEvent();  // constraint #8, members only
         verifyInventoryWithinCapacity();       // constraint #12
@@ -135,7 +135,7 @@ public class SystemIntegrityVerifier {
     // Every message below names its records by id, never by a company name or a username: the self-heal
     // logs a violation at ERROR on every tick while it lasts.
 
-    // #6 — every active production company has at least one Owner.
+    // constraint #6 — every active production company has at least one Owner.
     private void verifyActiveCompaniesHaveOwner() {
         for (ProductionCompany company : companyRepository.findActive()) {
             if (company.getOwnerIds().isEmpty()) {
@@ -145,7 +145,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #4 — every producer (owner or manager) of an active company resolves to a known user.
+    // constraint #4 — every producer (owner or manager) of an active company resolves to a known user.
     private void verifyProducersAreUsers() {
         for (ProductionCompany company : companyRepository.findActive()) {
             List<Integer> producerIds = new ArrayList<>(company.getOwnerIds());
@@ -162,7 +162,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // ---- #372: re-validate the state loaded from the repositories ----
+    // ---- upstream#372: re-validate the state loaded from the repositories ----
 
     // Re-run every loaded aggregate's own invariant. A row persisted (or hand-edited) into a state
     // that breaks its aggregate invariant blocks the market from opening.
@@ -190,7 +190,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #1 — usernames are system-wide unique. On the Jpa adapters uk_users_username (V4) already
+    // constraint #1 — usernames are system-wide unique. On the Jpa adapters uk_users_username (V4) already
     // forbids a duplicate; this scan still covers the Memory adapter and any row written around the
     // adapters.
     private void verifyUniqueUsernames() {
@@ -208,7 +208,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #8 — at most one active order per member per event; flag a member whose two distinct orders
+    // constraint #8 — at most one active order per member per event; flag a member whose two distinct orders
     // both hold the same event. Guest carts are skipped: uk_active_orders_guest_session_id (V10,
     // NaimElijah/Ticketeer#224) holds a session to one, except the carts a pre-V10 instance writes during
     // a rolling deploy, which the sweeper clears (requirements.md §1 #8), and failing here would stop the
@@ -239,7 +239,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #12 — a zone's committed tickets (sold + reserved) must not exceed its physical capacity.
+    // constraint #12 — a zone's committed tickets (sold + reserved) must not exceed its physical capacity.
     private void verifyInventoryWithinCapacity() {
         for (Event event : eventRepository.findAll()) {
             if (event.getVenueMap() == null || event.getVenueMap().getInventoryZones() == null) {

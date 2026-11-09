@@ -30,7 +30,7 @@ public interface SpringDataOrderReceiptRepository
 
     /**
      * Pessimistic-write fetch (SELECT … FOR UPDATE) of a receipt by id — backs the refund critical
-     * section's row lock (#410). The lock is held until the surrounding transaction commits, so
+     * section's row lock (upstream#410). The lock is held until the surrounding transaction commits, so
      * concurrent refunds of the same receipt serialise and only one reaches {@code paymentGateway.refund()}.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

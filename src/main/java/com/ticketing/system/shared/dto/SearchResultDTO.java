@@ -1,7 +1,7 @@
 package com.ticketing.system.shared.dto;
 
 /**
- * One row of the top-bar search (V2-SEARCH-01 / #281). It covers events, artists and venues, and every
+ * One row of the top-bar search (V2-SEARCH-01 / upstream#281). It covers events, artists and venues, and every
  * row carries the representative event to open, since there are no dedicated artist or venue pages:
  * each row navigates to that event's EventDetailsView.
  *

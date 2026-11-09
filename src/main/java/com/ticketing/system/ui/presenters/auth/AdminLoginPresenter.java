@@ -13,7 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * MVP presenter for {@code AdminLoginView} (#290). Holds no Vaadin imports; the
+ * MVP presenter for {@code AdminLoginView} (upstream#290). Holds no Vaadin imports; the
  * view switches over the typed {@link Outcome}. Mirrors {@link LoginPresenter}.
  */
 @Component

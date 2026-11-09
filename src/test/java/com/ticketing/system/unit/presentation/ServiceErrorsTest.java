@@ -23,7 +23,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
- * The DB-outage classifier is the deterministic core of #427: it decides whether a thrown error is
+ * The DB-outage classifier is the deterministic core of upstream#427: it decides whether a thrown error is
  * the database being unreachable (→ friendly "temporarily unavailable") or something else. Tested
  * with the real Spring/JDBC exception types so no live DB is needed, and with the look-alikes that
  * must NOT be treated as an outage.

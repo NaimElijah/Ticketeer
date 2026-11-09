@@ -17,7 +17,7 @@ import com.ticketing.system.ui.session.AuthSession;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * MVP presenter for {@code SystemAnalyticsView} (UC-46 / #43, #279). Vaadin-free
+ * MVP presenter for {@code SystemAnalyticsView} (UC-46 / upstream#43, upstream#279). Vaadin-free
  * POJO: combines the market snapshot ({@link SystemAdminService#viewMarketState(String)})
  * with the live platform metrics ({@link SystemAnalyticsService#computeAnalytics(String)}), both read
  * with the signed-in admin's token,

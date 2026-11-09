@@ -16,7 +16,7 @@ import java.util.function.Function;
  * <ul>
  *   <li>the original <b>static</b> {@code (recents, groups)} constructor + {@link #defaults()},
  *       a render-only reference panel; and</li>
- *   <li>the <b>live</b> {@code (recents, searchFn)} constructor (V2-SEARCH-01 / #281) — a debounced
+ *   <li>the <b>live</b> {@code (recents, searchFn)} constructor (V2-SEARCH-01 / upstream#281) — a debounced
  *       {@link TextField} that calls {@code searchFn} and renders typed rows, an empty state, and a
  *       zero-results state. The kit stays framework-pure: callers inject a
  *       {@code Function<String, List<Row>>} and each {@link Row} carries its own navigation
@@ -103,7 +103,7 @@ public class LkSearchPanel extends Div {
         }
     }
 
-    // ---- live, backend-driven panel (#281) ----
+    // ---- live, backend-driven panel (upstream#281) ----
     /**
      * A live panel: a search field that calls {@code searchFn} 200 ms after the user stops typing.
      * While the field is empty it shows the recent searches, or a hint when there are none;

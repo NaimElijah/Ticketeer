@@ -70,7 +70,7 @@ class TicketTest extends BaseDomainTest {
     }
 
     // ---------------------------------------------------------------------
-    // D7 — nullable holderUserId (auth rework #181)
+    // D7 — nullable holderUserId (auth rework upstream#181)
     // ---------------------------------------------------------------------
 
     @Test

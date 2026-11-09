@@ -356,7 +356,7 @@ public abstract class IEventRepositoryContractTest {
         assertTrue(result.isEmpty());
     }
 
-    // === findAll (#372 boot-time integrity scan) ===
+    // === findAll (upstream#372 boot-time integrity scan) ===
 
     @Test
     void GivenEventsAcrossCompaniesAndStatuses_WhenFindAll_ThenReturnsEveryEvent() {

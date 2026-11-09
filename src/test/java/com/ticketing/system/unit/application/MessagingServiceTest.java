@@ -89,7 +89,7 @@ class MessagingServiceTest {
     private AdminRepository adminRepository;
     private UserRepository userRepository;
     private ProductionCompanyRepository companyRepository;
-    // Mocked membership service — "acts for company" now resolves via it (by userId), task #20.
+    // Mocked membership service — "acts for company" now resolves via it (by userId).
     private CompanyMembershipService membershipService;
     private ApplicationEventPublisher eventPublisher;
     private MessagingService service;
