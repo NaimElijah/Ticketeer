@@ -23,7 +23,8 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * {@code @Version} check. The write is {@code @Transactional}, so a save made with no transaction
  * open commits on its own: {@code NotificationDispatchService.deliverPending} and
  * {@code NotificationService.revertSentToPending} suspend their callers' transactions and rely on
- * that. Reads inherit Spring Data's read-only tx.
+ * that. {@code findById} inherits Spring Data's read-only tx; the two derived finders run with no
+ * transaction of their own.
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)

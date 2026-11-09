@@ -22,7 +22,7 @@ public interface PushNotificationService {
 
     /**
      * Checks if the delivery channel is currently capable of reaching the user.
-     * {@code NotificationDispatchService.deliverPending} does not consult it.
+     * Nothing calls it today.
      *
      * @param recipientUserId the member to check
      * @return true if a push to the member can be attempted now

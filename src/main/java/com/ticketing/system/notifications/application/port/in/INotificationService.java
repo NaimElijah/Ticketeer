@@ -89,9 +89,10 @@ public interface INotificationService {
     void notifyEventCancelled(int userId, int eventId, String eventName);
 
     /**
-     * Tells a member their manager role in a company was revoked.
+     * Tells a member their appointment in a company was revoked. The text says manager role, whether
+     * the revoked appointment was a manager's or a co-owner's.
      *
-     * @param userId      the former manager
+     * @param userId      the member whose appointment was revoked, a manager or a co-owner
      * @param companyId   the company
      * @param companyName the company's name, shown in the text; not null
      */
@@ -113,17 +114,19 @@ public interface INotificationService {
      *
      * @param userId      the invited member
      * @param companyId   the company the appointment is in
-     * @param companyName the company's name, shown in the notification
+     * @param companyName the company's name, shown in the notification; not null
      */
     void notifyManagerAppointmentPending(int userId, int companyId, String companyName);
 
     /**
-     * Tells a member their role in a company was updated.
+     * Tells a member their role in a company was updated: they accepted an appointment, or an owner
+     * edited their permissions.
      *
-     * @param userId      the member whose role changed
+     * @param userId      the member whose role changed or whose permissions were edited
      * @param companyId   the company
      * @param companyName the company's name, shown in the text; not null
-     * @param newRole     the new role, shown in the text as given; not null
+     * @param newRole     the text shown after "updated to": the role's name, or the
+     *                    permissions-updated label when a manager's permissions were edited; not null
      */
     void notifyRoleChanged(int userId, int companyId, String companyName, String newRole);
 
@@ -131,14 +134,17 @@ public interface INotificationService {
      * Messaging → notification bridge. Fired when a new message/inquiry arrives for a
      * recipient (member or company owner) so they get a DIRECT_MESSAGE notification, stored PENDING
      * and shown on their next poll or login.
-     * {@code conversationId} lets the UI deep-link to the thread; {@code senderLabel} is a
-     * human-readable origin (e.g. "a system admin", "a production company").
+     * {@code conversationId} is kept in the notification's data payload, which nothing reads yet, so
+     * the alert does not link to the thread; {@code senderLabel} is a human-readable origin (e.g. "a
+     * system admin", "a production company").
      *
      * @param recipientUserId the member who receives the alert
-     * @param conversationId  the conversation the message belongs to; not null
+     * @param conversationId  the conversation the message belongs to; kept in the data payload, not
+     *                        shown in the text; not null
      * @param senderLabel     the origin shown in the text; not null
      * @param subject         the conversation's subject, shown in the text; null reads as empty
-     * @param snippet         a short preview of the message body; null reads as empty
+     * @param snippet         a short preview of the message body; kept in the data payload, not shown
+     *                        in the text; null reads as empty
      */
     void notifyNewMessage(int recipientUserId, String conversationId, String senderLabel,
             String subject, String snippet);
@@ -150,9 +156,10 @@ public interface INotificationService {
      * the notifications already stored stay, and the rest are not stored.
      *
      * @param recipients  every recipient and the conversation opened for them, at least one
-     * @param senderLabel human-readable origin, e.g. "a system admin"
+     * @param senderLabel human-readable origin, e.g. "a system admin"; not null
      * @param subject     the conversations' shared subject; null reads as empty
-     * @param snippet     a short preview of the message body; null reads as empty
+     * @param snippet     a short preview of the message body; not shown in the text; null reads as
+     *                    empty
      * @throws IllegalArgumentException if {@code recipients} is null or empty; nothing is stored
      */
     void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
@@ -164,7 +171,7 @@ public interface INotificationService {
      * session's bell still shows them.
      * Nothing changes when the id is unknown, belongs to another member, or is already READ.
      *
-     * @param userId         the member who clicked the notification
+     * @param userId         the member who clicked the notification, or used Mark All Read
      * @param notificationId the notification's id
      * @throws org.springframework.dao.DataAccessException if the store fails to read or save it; the
      *         notification then stays as it was

@@ -19,8 +19,13 @@ public interface NotificationRepository extends IRepository<Notification, String
      *
      * @param notification the notification to store
      * @throws org.springframework.dao.OptimisticLockingFailureException on the JPA adapter, if another
-     *         save of the same notification won first (a lost {@code @Version} race); the in-memory
+     *         save of the same notification won first (a lost {@code @Version} race); within a
+     *         caller's transaction the conflict appears when that transaction commits. The in-memory
      *         adapter never throws it
+     * @throws org.springframework.transaction.TransactionException on the JPA adapter, if the
+     *         transaction the save opens (none within a caller's) gets no connection
+     *         ({@code CannotCreateTransactionException}) or fails to commit
+     *         ({@code TransactionSystemException})
      */
     void save(Notification notification);
 

@@ -9,6 +9,6 @@ public enum NotificationStatus {
     PENDING,
     /** Shown in the bell, awaiting user interaction. */
     SENT,
-    /** The member clicked it. */
+    /** The member clicked it, or used Mark All Read. */
     READ
 }

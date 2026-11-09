@@ -58,6 +58,9 @@ public class NotificationDispatchService {
      * @param notification the notification to store; its status must be PENDING
      * @throws IllegalArgumentException if the notification is not PENDING; nothing is stored
      * @throws org.springframework.dao.DataAccessException if the store fails
+     * @throws TransactionException if the transaction this call opens (none when it joins its caller's)
+     *         gets no connection ({@code CannotCreateTransactionException}) or fails to commit
+     *         ({@code TransactionSystemException}); nothing is stored
      */
     @Transactional
     public void dispatch(Notification notification) {
@@ -80,8 +83,6 @@ public class NotificationDispatchService {
      * @throws UnsupportedOperationException always
      */
     public void dispatchFromEvent(Object domainEvent) {
-        // This will eventually resolve the notification details from the event
-        // and call dispatch(Notification).
         throw new UnsupportedOperationException("UC-35: not implemented");
     }
 
@@ -120,10 +121,9 @@ public class NotificationDispatchService {
      *
      * @param userId the member whose notifications are delivered
      * @return the notifications this call delivered, as shown to the member; empty when none
-     * @throws DataAccessException  if the store fails reading the pending notifications
-     * @throws TransactionException if that read's transaction fails: no connection can be had for it
-     *                              ({@code CannotCreateTransactionException}), or it fails to commit
-     *                              ({@code TransactionSystemException})
+     * @throws DataAccessException if the store fails reading the pending notifications; the JPA
+     *                             adapter reads with no transaction of its own, so a lost connection
+     *                             surfaces here
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<NotificationDTO> deliverPending(int userId) {

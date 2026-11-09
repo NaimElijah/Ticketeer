@@ -24,10 +24,11 @@ import jakarta.persistence.Version;
  *
  * <p>The lifecycle moves PENDING to SENT ({@link #markSent()}), SENT back to PENDING
  * ({@link #markPending()}), and SENT or PENDING to READ ({@link #markRead()}). Every transition and
- * every constructor re-checks {@link #checkInvariants()}.
+ * every public constructor re-checks {@link #checkInvariants()}.
  *
- * <p>Mapping: the String id is assigned by the application (the services use a random UUID) and never
- * generated. The recipient is referenced by its user id, a plain column and not an association.
+ * <p>Mapping: the String id is assigned by the application ({@code NotificationService}, the only code
+ * that builds notifications, uses a random UUID) and never generated. The recipient is referenced by
+ * its user id, a plain column and not an association.
  * {@code type} and {@code status} are stored by name, {@code @Version} drives optimistic locking, and the
  * {@code data} payload is one JSON text column via {@link NotificationDataJsonConverter} rather than a
  * side table. The fields are non-final with a protected no-arg constructor so Hibernate can hydrate; the
@@ -196,9 +197,10 @@ public class Notification implements InvariantChecked {
     }
 
     /**
-     * Moves the notification from SENT or PENDING to READ, when the member clicks it. PENDING is allowed
-     * because a session ending in another browser or on another device sends SENT rows back to PENDING
-     * while this session's bell still shows them, and that click must still count (#187).
+     * Moves the notification from SENT or PENDING to READ, when the member clicks it or uses Mark All
+     * Read. PENDING is allowed because a session ending in another browser or on another device sends
+     * SENT rows back to PENDING while this session's bell still shows them, and that click must still
+     * count (#187).
      *
      * @throws IllegalStateException if it is already READ; the status is unchanged
      */
