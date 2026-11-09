@@ -28,6 +28,7 @@ public class MemberQueryService {
     private final UserRepository userRepository;
     private final SessionManager sessionManager;
 
+    /** Creates the service over the user store and the token checks that gate its reads. */
     public MemberQueryService(UserRepository userRepository, SessionManager sessionManager) {
         this.userRepository = userRepository;
         this.sessionManager = sessionManager;

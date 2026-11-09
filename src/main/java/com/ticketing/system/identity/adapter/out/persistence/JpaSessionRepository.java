@@ -50,6 +50,11 @@ public class JpaSessionRepository implements SessionRepository {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * Creates the adapter over its Spring Data repository.
+     *
+     * @param clock the source of "now" for {@link #existsByUserId}'s expiry check
+     */
     public JpaSessionRepository(SpringDataSessionRepository data, Clock clock) {
         this.data = data;
         this.clock = clock;

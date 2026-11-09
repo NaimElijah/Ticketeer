@@ -32,6 +32,7 @@ public class JpaAdminRepository implements AdminRepository {
 
     private final SpringDataAdminRepository data;
 
+    /** Creates the adapter over its Spring Data repository. */
     public JpaAdminRepository(SpringDataAdminRepository data) {
         this.data = data;
     }

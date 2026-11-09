@@ -9,7 +9,12 @@ import com.ticketing.system.shared.IRepository;
 /** Aggregate-root entry point for the User aggregate. */
 public interface UserRepository extends IRepository<User, Integer> {
 
-    /** @throws com.ticketing.system.shared.exception.UserNotFoundException if no user with that id exists */
+    /**
+     * By-id lookup that treats a missing user as an error.
+     *
+     * @return the user with that id, never {@code null}
+     * @throws com.ticketing.system.shared.exception.UserNotFoundException if no user with that id exists
+     */
     User getUserById(int targetId);
 
     /**

@@ -137,6 +137,17 @@ public class AuthenticationService {
     // Login's database steps, so its notifications are delivered after they commit.
     private final TransactionTemplate transactionTemplate;
 
+    /**
+     * Wires the service and builds its in-memory state: the sign-in lockout counters and the set of
+     * reserved usernames. Hashes one throwaway password with {@code passwordHasher}, once, so an
+     * unknown username can be checked against a hash that costs as much as a real one.
+     *
+     * @param notificationDispatchService delivers a member's pending notifications after login
+     * @param sessionProperties           the guest session lifetime and the member session lifetime
+     * @param lockoutProperties           the sign-in lockout policy, shared by member and admin sign-in
+     * @param identityProperties          the reserved usernames and the default admin's username
+     * @param transactionManager          runs login's database steps in a programmatic transaction
+     */
     public AuthenticationService(
             UserRepository userRepository,
             PasswordHasher passwordHasher,
@@ -546,6 +557,18 @@ public class AuthenticationService {
      * Admin sign-in (#290). Authenticates against the persisted admin pool (never the member pool
      * — disjoint-pool rule), applies the shared lock-after-N policy, audit-logs every failure, and
      * issues an ADMIN-role JWT so the backend admin gate can authorize it.
+     *
+     * <p>The username is trimmed before the lookup and before attempts are counted. An unknown
+     * username and a wrong password raise the same exception, after the same password-hash work.
+     *
+     * @param username    the admin's username
+     * @param rawPassword the password as typed
+     * @return the admin token, its expiry in epoch milliseconds, the admin's id and username, with
+     *     the admin flag set
+     * @throws AccountLockedException        the username's attempt window already holds
+     *                                       {@code auth.lockout.max-attempts} attempts; the password
+     *                                       is not checked
+     * @throws AuthenticationFailedException invalid credentials
      */
     // Read-WRITE: generateAdminToken persists a brand-new Session row. A read-only transaction
     // would leave Hibernate in MANUAL flush mode, so the assigned-id INSERT would never flush
@@ -616,9 +639,16 @@ public class AuthenticationService {
         log.info("session revoked at logout");
     }
 
-    // Deferred from V1. Not in the UC-12 spec, no acceptance test gates it, and a
-    // proper refresh-token flow needs a separate token store + revocation (overlaps
-    // with UC-14 logout). Revisit if a later UC requires it.
+    /**
+     * Token refresh is not built: this method always throws.
+     *
+     * <p>Not in the UC-12 spec, and a refresh-token flow needs a separate token store and revocation
+     * (overlaps with UC-14 logout). Revisit if a later UC requires it.
+     *
+     * @param request ignored
+     * @return never returns normally
+     * @throws UnsupportedOperationException always
+     */
     public AuthTokenDTO refreshToken(RefreshTokenRequestDTO request) {
         throw new UnsupportedOperationException("refresh-token flow deferred from V1");
     }

@@ -10,17 +10,18 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 
-// V3: mapped to JPA. userId is an ASSIGNED @Id (minted by UserRepository.nextId(), never
-// @GeneratedValue); email and username are unique (uk_users_email, uk_users_username); @Version
-// drives optimistic locking. A protected no-arg ctor lets Hibernate hydrate; the public ctor still
-// enforces the invariants.
-//
-// Task #20: company appointments used to live here as an owned @OneToMany collection with ~17
-// membership/authorization methods, which forced the foundational identity context to import four
-// organization types. That collection and those methods have been promoted to the standalone
-// organization CompanyAppointment aggregate (owned by CompanyAppointmentRepository /
-// CompanyMembershipService), so User now imports NOTHING from organization and the last
-// identity -> organization cycle is gone.
+/**
+ * A registered member: the aggregate root for a member's login identity.
+ *
+ * <p>{@code userId} is an assigned {@code @Id}, minted by {@code UserRepository.nextId()}, never
+ * {@code @GeneratedValue}. Username and email are each unique ({@code uk_users_username},
+ * {@code uk_users_email}). {@code @Version} drives optimistic locking. The protected no-arg
+ * constructor exists so Hibernate can hydrate instances; the public constructor still enforces the
+ * invariants.
+ *
+ * <p>The user holds no company appointments and imports nothing from {@code organization}: those
+ * belong to the {@code organization} context's {@code CompanyAppointment} aggregate (task #20).
+ */
 @Entity
 @Table(name = "users",
         uniqueConstraints = @UniqueConstraint(name = "uk_users_username", columnNames = "username"))
@@ -47,7 +48,20 @@ public class User implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected User() { }
 
-    /** Constructs a user with the given assigned id, credentials and age, enforcing the invariants. */
+    /**
+     * Constructs a user with the given assigned id, credentials and age, enforcing the invariants.
+     *
+     * @param userId   the id minted by {@code UserRepository.nextId()}; positive
+     * @param username the login name, non-blank, at most {@value TextLimits#MAX_TEXT_LENGTH}
+     *                 characters; the character rules are applied at registration, not here
+     * @param email    the contact address, non-blank; its format is checked at registration, not here
+     * @param password the stored password hash, non-blank; never the raw password
+     * @param age      whole years, not negative; feeds age-gated purchase policies
+     * @throws com.ticketing.system.shared.exception.BusinessRuleViolationException if
+     *     {@code username} is longer than the limit
+     * @throws IllegalStateException if {@code userId} is not positive, {@code username},
+     *     {@code email} or {@code password} is {@code null} or blank, or {@code age} is negative
+     */
     public User(int userId, String username, String email, String password, int age) {
         TextLimits.requireFits("Username", username);
         this.userId = userId;
