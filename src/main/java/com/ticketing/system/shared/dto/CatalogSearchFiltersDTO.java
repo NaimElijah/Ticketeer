@@ -8,7 +8,7 @@ import java.time.LocalDate;
  * event list.
  *
  * <p>A {@code null} component is an absent filter; an event must satisfy every filter that is set.
- * The search methods refuse a range whose lower bound is above its upper bound, and a
+ * {@code searchGlobal} and {@code searchByCompany} refuse a range whose lower bound is above its upper bound, and a
  * {@code fromDate} after {@code toDate}, with {@code IllegalArgumentException}, and text longer than
  * the user-text limit with {@code BusinessRuleViolationException}. The company-rating bounds apply to
  * a global search only; {@code searchByCompany} and {@code listEventsForCompany} drop them.

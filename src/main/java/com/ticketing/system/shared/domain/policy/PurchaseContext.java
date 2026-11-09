@@ -64,6 +64,7 @@ public class PurchaseContext implements InvariantChecked {
         }
     }
 
+    /** Returns the member's id, or -1 for a guest. */
     public int getBuyerId() {
         return buyerId;
     }

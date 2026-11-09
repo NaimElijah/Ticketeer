@@ -14,7 +14,6 @@ package com.ticketing.system.shared.event;
  * @param recipientUserId the user who should receive the notification
  * @param conversationId conversation the message belongs to (for UI deep-linking)
  * @param senderLabel human-readable origin, e.g. "a system admin"
- * @param subject the conversation subject
  * @param snippet a short preview of the message body
  */
 public record NewMessageNotice(

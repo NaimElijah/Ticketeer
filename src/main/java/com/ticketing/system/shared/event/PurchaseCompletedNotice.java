@@ -9,7 +9,6 @@ import java.util.List;
  * {@code INotificationService.notifyPurchaseCompleted}, which the listener calls with them.
  *
  * @param userId the member who completed the purchase
- * @param totalPrice total price of the order
  * @param ticketIds ids of the tickets that were issued in this purchase
  */
 public record PurchaseCompletedNotice(
