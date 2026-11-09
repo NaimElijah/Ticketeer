@@ -44,6 +44,8 @@ import java.util.List;
  *
  * <p>Third wired master/detail messaging inbox after {@code SupportInboxView} (#277) and
  * {@code CompanyInquiryInboxView} (#268).
+ *
+ * <p>Served at {@code /admin/complaints}.
  */
 @Route(value = "admin/complaints", layout = PlatformAdminLayout.class)
 @PageTitle("Complaint Queue · Admin")
@@ -73,6 +75,9 @@ public class AdminComplaintQueueView extends LkPage {
     /** The status filter the last render built; {@code null} while a banner stands in for the queue. */
     private LkSelect statusSelect;
 
+    /**
+     * Creates the page and loads the complaint queue.
+     */
     public AdminComplaintQueueView(AdminComplaintQueuePresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

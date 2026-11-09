@@ -31,6 +31,11 @@ import jakarta.annotation.security.PermitAll;
 
 import java.util.List;
 
+/**
+ * Complaint form for members, served at {@code /support/new}. It takes a category, a subject and the
+ * details, and sends them to the platform admins. On success it opens {@link SupportInboxView} with
+ * the new thread selected.
+ */
 @Route(value = "support/new", layout = MainLayout.class)
 @PageTitle("Submit Complaint · TicketHub")
 @PermitAll
@@ -48,6 +53,9 @@ public class SubmitComplaintView extends LkPage {
     private final TextField subject = new TextField("Subject");
     private final TextArea  details = new TextArea("Details");
 
+    /**
+     * Builds the complaint form.
+     */
     public SubmitComplaintView(SubmitComplaintPresenter presenter) {
         this.presenter = presenter;
 

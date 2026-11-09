@@ -31,6 +31,12 @@ import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Order confirmation, served at {@code /order-confirmed}. It shows the receipt number, the payment
+ * transaction id, the total and the issued tickets with their barcodes. It reads the result kept by
+ * {@code OrderSession}; with none, or one past its age limit, it sends the visitor to
+ * {@link BrowseEventsView}. Leaving for another page ends the confirmation. Open to guests.
+ */
 @Route(value = "order-confirmed", layout = MainLayout.class)
 @PageTitle("Order Confirmed · TicketHub")
 @AnonymousAllowed
@@ -57,6 +63,8 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
     }
 
     /**
+     * Creates the page; its content is built when the route is entered.
+     *
      * @param clock the application clock (ADR-008), for the confirmation's age
      */
     public OrderConfirmationView(Clock clock) {

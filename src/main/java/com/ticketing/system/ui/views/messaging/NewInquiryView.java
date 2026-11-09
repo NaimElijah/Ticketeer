@@ -42,6 +42,8 @@ import java.util.List;
  * writes a title + description, and submits. The inquiry opens a two-way chat that the company's
  * eligible role-holders answer; replies surface in the member's Support inbox. Backed by
  * {@link NewInquiryPresenter} → {@code MessagingService}.
+ *
+ * <p>Served at {@code /support/inquiry/new}.
  */
 @Route(value = "support/inquiry/new", layout = MainLayout.class)
 @PageTitle("New Inquiry · TicketHub")
@@ -66,6 +68,9 @@ public class NewInquiryView extends LkPage implements BeforeEnterObserver {
     private Integer selectedCompanyId;
     private String selectedCompanyName;
 
+    /**
+     * Builds the inquiry form; a {@code ?company=} query parameter is applied when the route is entered.
+     */
     public NewInquiryView(NewInquiryPresenter presenter) {
         this.presenter = presenter;
         title("New Inquiry");

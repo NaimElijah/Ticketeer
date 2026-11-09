@@ -33,6 +33,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Member's invitations page, served at {@code /my-invitations}. It lists the pending offers of a
+ * company role, each with Accept and Reject, and a history of the offers already answered.
+ */
 @Route(value = "my-invitations", layout = MainLayout.class)
 @PageTitle("Invitations · TicketHub")
 @PermitAll
@@ -49,6 +53,9 @@ public class MyInvitationsView extends LkPage {
      *  in place ({@link #reload()}) without disturbing the page header. */
     private final LkCol content = new LkCol().gap(0);
 
+    /**
+     * Creates the page and loads the member's invitations.
+     */
     public MyInvitationsView(MyInvitationsPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

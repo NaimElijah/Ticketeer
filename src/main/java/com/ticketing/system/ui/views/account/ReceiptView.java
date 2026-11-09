@@ -67,6 +67,9 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
     private final Div bodyHolder = new Div();
     private int receiptId;
 
+    /**
+     * Creates the page; the receipt is loaded when the route is entered.
+     */
     public ReceiptView(ReceiptPresenter presenter, RefundPresenter refundPresenter,
             SessionIdentity sessionIdentity, DisplayTime displayTime) {
         this.presenter = presenter;

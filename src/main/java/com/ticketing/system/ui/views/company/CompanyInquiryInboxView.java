@@ -51,6 +51,8 @@ import java.util.Set;
  *
  * <p>Second wired master/detail messaging inbox after {@code SupportInboxView} (#277);
  * {@code AdminComplaintQueueView} (#269) mirrors this pattern.
+ *
+ * <p>Served at {@code /owner/inquiries}.
  */
 @Route(value = "owner/inquiries", layout = WorkspaceLayout.class)
 @PageTitle("Customer Inquiries · TicketHub")
@@ -77,6 +79,9 @@ public class CompanyInquiryInboxView extends LkPage {
     private Integer companyId;   // the company currently being viewed (kept across reloads)
     private LkCard detailCard;
 
+    /**
+     * Creates the page and loads the inquiries of the company in focus.
+     */
     public CompanyInquiryInboxView(CompanyInquiryInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

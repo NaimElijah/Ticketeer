@@ -44,6 +44,12 @@ import com.vaadin.flow.router.RouteParameters;
 
 import jakarta.annotation.security.PermitAll;
 
+/**
+ * Purchase-policy editor, served at {@code /owner/policies/:companyId?/:eventId?}. The member picks a
+ * company and a scope, the company's default policy or one event's, and builds the rules as nested
+ * AND/OR groups and rules on a canvas, with a plain-English summary of the result. Save stores the
+ * policy. The optional route parameters preselect the company and the event.
+ */
 @Route(value = "owner/policies/:companyId?/:eventId?", layout = WorkspaceLayout.class)
 @PageTitle("Purchase policies · TicketHub")
 @PermitAll
@@ -75,6 +81,9 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
     private NativeButton                  companyBtn;
     private NativeButton                  eventBtn;
 
+    /**
+     * Builds the editor; the companies, events and policy are loaded when the route is entered.
+     */
     public PurchasePolicyEditorView(PurchasePolicyEditorPresenter presenter) {
         this.presenter = presenter;
         this.root = presenter.emptyPolicy();

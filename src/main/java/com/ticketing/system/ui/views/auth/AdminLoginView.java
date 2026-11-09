@@ -36,6 +36,9 @@ public class AdminLoginView extends LkAuthCard {
     private final AdminLoginPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
 
+    /**
+     * Builds the admin sign-in form.
+     */
     public AdminLoginView(AdminLoginPresenter presenter) {
         super("Admin sign-in", "Restricted — platform administrators only.");
         this.presenter = presenter;

@@ -53,6 +53,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+/**
+ * Company workspace list of the selected company's events, served at {@code /owner/events}. It
+ * filters as the browse page does, without the company rating and with an owner-only Status filter
+ * applied to the loaded list. The row actions (edit, venue map, policies, sales, change status,
+ * cancel or remove) each depend on the member's capabilities. "New Event" opens
+ * {@link EventManagementView} in create mode, for a member who may edit events.
+ */
 @Route(value = "owner/events", layout = WorkspaceLayout.class)
 @PageTitle("My Events · TicketHub")
 @PermitAll
@@ -107,6 +114,9 @@ public class CompanyEventListView extends LkPage {
     private NumberField eventRatingMin;
     private NumberField eventRatingMax;
 
+    /**
+     * Creates the page and loads the selected company's events.
+     */
     public CompanyEventListView(CompanyEventListPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

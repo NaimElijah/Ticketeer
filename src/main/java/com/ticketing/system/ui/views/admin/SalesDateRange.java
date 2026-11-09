@@ -11,8 +11,10 @@ import java.util.List;
  */
 public final class SalesDateRange {
 
+    /** The preset that applies no lower bound. */
     public static final String ALL_TIME = "All time";
 
+    /** The presets, in the order a filter offers them. */
     public static final List<String> OPTIONS = List.of(
             "Last 7 days", "Last 30 days", "This quarter", "This year", ALL_TIME);
 

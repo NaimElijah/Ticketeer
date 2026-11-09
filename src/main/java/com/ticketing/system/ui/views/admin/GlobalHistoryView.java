@@ -37,6 +37,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * Admin's platform-wide purchase history, served at {@code /admin/global-history}. It shows summary
+ * figures and a grid of orders, narrowed by date range, company, event and status. The records are
+ * loaded once, when the page is created; the filters narrow that list without a reload. When the
+ * history cannot be loaded, only an error banner is shown.
+ */
 @Route(value = "admin/global-history", layout = PlatformAdminLayout.class)
 @PageTitle("Global Purchase History · Admin")
 @PermitAll
@@ -60,6 +66,9 @@ public class GlobalHistoryView extends LkPage {
     private Div statsSlot;
     private Div gridSlot;
 
+    /**
+     * Creates the page and loads the purchase records.
+     */
     public GlobalHistoryView(GlobalHistoryPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

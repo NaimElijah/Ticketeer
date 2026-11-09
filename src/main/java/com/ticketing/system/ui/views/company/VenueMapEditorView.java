@@ -46,6 +46,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+/**
+ * Venue-map editor, served at {@code /owner/venue/:eventId}. The owner places zones on the venue grid,
+ * defines each as seated (rows and seats per row) or standing (a capacity) with a price, previews the
+ * layout and saves it. Save Map stays disabled until the event's saved map has loaded, so a
+ * placeholder zone never replaces it. An id that is no number names no event.
+ */
 @Route(value = "owner/venue/:eventId", layout = WorkspaceLayout.class)
 @PageTitle("Venue Map · TicketHub")
 @PermitAll
@@ -107,6 +113,13 @@ public class VenueMapEditorView extends LkPage implements BeforeEnterObserver {
     private Div seatedEditor;
     private Div standingEditor;
 
+    /**
+     * Builds the editor around a placeholder zone; the event's saved map is loaded when the route is
+     * entered.
+     *
+     * @param venueLimits the bounds the editor applies to the grid size, to the seats in a zone and to
+     *     a standing zone's capacity
+     */
     public VenueMapEditorView(VenueMapPresenter presenter, VenueLimitsProperties venueLimits) {
         this.presenter = presenter;
         this.venueLimits = venueLimits;

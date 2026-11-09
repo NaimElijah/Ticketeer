@@ -39,6 +39,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Managers page of the company in focus, served at {@code /owner/managers}. It lists the active
+ * managers, with actions to edit their permissions or revoke them, and the pending invitations. An
+ * Invite Manager button opens {@link ManagerInvitationView}.
+ */
 @Route(value = "owner/managers", layout = WorkspaceLayout.class)
 @PageTitle("Managers · TicketHub")
 @PermitAll
@@ -56,6 +61,9 @@ public class ManagerListView extends LkPage {
     /** The "Active Managers" heading, while the roster shows. */
     private H2 activeHeading;
 
+    /**
+     * Creates the page and loads the company's managers and pending invitations.
+     */
     public ManagerListView(ManagerListPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

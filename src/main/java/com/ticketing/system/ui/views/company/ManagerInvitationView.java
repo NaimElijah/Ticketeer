@@ -29,6 +29,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Form for inviting a member as a manager of the company in focus, served at
+ * {@code /owner/managers/invite}. It takes the invitee's username or email and the permissions to
+ * grant, at least one of them. A sent invitation returns to {@link ManagerListView}.
+ */
 @Route(value = "owner/managers/invite", layout = WorkspaceLayout.class)
 @PageTitle("Invite Manager · TicketHub")
 @PermitAll
@@ -54,6 +59,9 @@ private final ManagerInvitationPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
     // Keep references so we can read isChecked() on submit.
     private final Map<LkCheckRow, Permission> checkRows = new LinkedHashMap<>();
+    /**
+     * Builds the invitation form.
+     */
     public ManagerInvitationView(ManagerInvitationPresenter presenter) {
         this.presenter = presenter;
         title("Invite a Manager");

@@ -29,13 +29,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * The signed-in member's companies, served at {@code /my-companies}. A grid lists the companies where
+ * the member is founder, owner or manager; Open selects one and goes to {@link OwnerDashboardView},
+ * Events to {@link CompanyEventListView}. A member with no company sees an empty state that offers
+ * {@link CompanyRegistrationView}. For members only: an admin, who is no member, never reaches it
+ * (ADR-012).
+ */
 @Route(value = "my-companies", layout = MainLayout.class)
 @PageTitle("My Companies · TicketHub")
 @PermitAll
-// A signed-in member's own data: an admin, who is no member, never reaches it (ADR-012).
 @RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyCompaniesView extends LkPage {
 
+    /**
+     * Creates the page and loads the member's companies.
+     */
     public MyCompaniesView(MyCompaniesPresenter membershipPresenter) {
         title("My Companies");
         subtitle("Companies where you are a founder, owner, or manager.");

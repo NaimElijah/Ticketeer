@@ -47,6 +47,8 @@ import java.util.List;
  * <p>This is the first wired master/detail messaging inbox; {@code
  * CompanyInquiryInboxView} (#268) and {@code AdminComplaintQueueView} (#269)
  * mirror this pattern.
+ *
+ * <p>Served at {@code /support}.
  */
 @Route(value = "support", layout = MainLayout.class)
 @PageTitle("Support · TicketHub")
@@ -71,6 +73,10 @@ public class SupportInboxView extends LkPage implements BeforeEnterObserver {
     /** The open thread's reply bar; {@code null} while the thread takes no reply. */
     private MdReplyBar replyBar;
 
+    /**
+     * Creates the page and loads the member's conversations; a {@code ?c=} query parameter is applied
+     * when the route is entered.
+     */
     public SupportInboxView(SupportInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

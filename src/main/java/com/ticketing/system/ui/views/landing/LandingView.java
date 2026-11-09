@@ -50,6 +50,9 @@ public class LandingView extends LkPage {
 
     private final LandingPresenter presenter;
 
+    /**
+     * Creates the page and loads the featured and upcoming events.
+     */
     public LandingView(LandingPresenter presenter) {
         this.presenter = presenter;
 

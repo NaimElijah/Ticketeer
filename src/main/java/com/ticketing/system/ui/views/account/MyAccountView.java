@@ -43,6 +43,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Member's account page, served at {@code /my-account}. It shows a welcome banner with the order and
+ * ticket counts, a "My Orders" grid whose rows open the {@link ReceiptView} receipt and offer
+ * Request Refund while the order still qualifies, and a "My Tickets" grid of the tickets still in
+ * use. A refund rebuilds the page in place. When the history cannot be loaded, an error banner
+ * replaces the counts and grids.
+ */
 @Route(value = "my-account", layout = MainLayout.class)
 @PageTitle("My Account · TicketHub")
 @PermitAll
@@ -69,6 +76,9 @@ public class MyAccountView extends LkPage {
     /** Each order's View button, by order id, as the last render made them. */
     private final Map<Integer, NativeButton> orderViewButtons = new HashMap<>();
 
+    /**
+     * Creates the page and renders the member's order and ticket history.
+     */
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
                          SessionIdentity sessionIdentity, DisplayTime displayTime) {
         this.displayTime = displayTime;   // the rows below are rendered during construction

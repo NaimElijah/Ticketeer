@@ -36,6 +36,8 @@ import java.util.List;
  * answers a member inquiry: the full chat thread plus a reply box. Replies surface in the member's
  * Support inbox and the member can reply again (two-way chat). The thread can also be closed here.
  * Backed by {@link CompanyInquiryInboxPresenter} → {@code MessagingService}.
+ *
+ * <p>Served at {@code /owner/inquiries/:id/respond}, where {@code id} is the inquiry's conversation id.
  */
 @Route(value = "owner/inquiries/:id/respond", layout = WorkspaceLayout.class)
 @PageTitle("Respond to Inquiry · TicketHub")
@@ -51,6 +53,9 @@ public class CompanyInquiryRespondView extends LkPage implements BeforeEnterObse
     /** The inquiry's reply bar; {@code null} while the inquiry takes no reply. */
     private MdReplyBar replyBar;
 
+    /**
+     * Creates the page; the inquiry is loaded when the route is entered.
+     */
     public CompanyInquiryRespondView(CompanyInquiryInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

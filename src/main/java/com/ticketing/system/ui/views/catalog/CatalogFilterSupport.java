@@ -19,17 +19,26 @@ public final class CatalogFilterSupport {
 
     private CatalogFilterSupport() { }
 
+    /** The category option that applies no category filter. */
     public static final String CAT_ALL     = "All categories";
+    /** The country option that applies no country filter. */
     public static final String COUNTRY_ALL = "All countries";
+    /** The city option that applies no city filter. */
     public static final String CITY_ALL    = "All cities";
+    /** The date-range preset that applies no date filter. */
     public static final String DATE_ANY    = "Any time";
 
-    // The placeholder and the accessible name of a range's lower and upper bound, and of a custom date
-    // range's two pickers. A field's name holds its visible text (#188, WCAG 2.5.3), and the named group
-    // around a range supplies what it bounds, so a screen reader says "Price range, Min".
+    /**
+     * The placeholder and accessible name of a range's lower bound. A field's name holds its visible
+     * text (#188, WCAG 2.5.3), and the named group around a range supplies what it bounds, so a screen
+     * reader says "Price range, Min".
+     */
     public static final String BOUND_MIN   = "Min";
+    /** The placeholder and accessible name of a range's upper bound; see {@link #BOUND_MIN}. */
     public static final String BOUND_MAX   = "Max";
+    /** The placeholder and accessible name of a custom date range's first picker; see {@link #BOUND_MIN}. */
     public static final String CUSTOM_FROM = "Start date";
+    /** The placeholder and accessible name of a custom date range's second picker; see {@link #BOUND_MIN}. */
     public static final String CUSTOM_TO   = "End date";
 
     // A range filter's field checks its bounds itself and turns red when a value breaks one, so each rule needs

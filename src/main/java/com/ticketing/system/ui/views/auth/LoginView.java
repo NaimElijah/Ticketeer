@@ -26,6 +26,11 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
+/**
+ * Member sign-in page, served at {@code /login}. A successful sign-in promotes the visitor's guest
+ * session to the member's, restores the member's cart and opens {@link BrowseEventsView}. It links
+ * to {@link RegisterView}, and to {@link AdminLoginView} for administrators, who sign in elsewhere.
+ */
 @Route(value = "login", layout = MainLayout.class)
 @PageTitle("Sign In · TicketHub")
 @AnonymousAllowed

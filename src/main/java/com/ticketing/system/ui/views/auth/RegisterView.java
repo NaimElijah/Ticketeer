@@ -31,6 +31,11 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
+/**
+ * Registration page, served at {@code /register}. The form takes a username, email, age and
+ * password; it checks the username's availability as the visitor types and shows the password's
+ * strength. A successful registration opens {@link LoginView}.
+ */
 @Route(value = "register", layout = MainLayout.class)
 @PageTitle("Register · TicketHub")
 @AnonymousAllowed
@@ -62,6 +67,12 @@ public class RegisterView extends LkAuthCard {
     /** Says the username check's result as it arrives (#188, WCAG 4.1.3). */
     private final Span availabilityStatus = Lk.asStatus(new Span());
 
+    /**
+     * Builds the registration form.
+     *
+     * @param sessionIdentity supplies the guest session id that registration is given; a dead one is
+     *     replaced with a fresh guest session first
+     */
     public RegisterView(RegisterPresenter presenter,
                         UsernameAvailabilityPresenter usernameAvailability,
                         SessionIdentity sessionIdentity) {

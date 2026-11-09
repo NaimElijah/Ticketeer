@@ -44,6 +44,8 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
  * Zone picker (V2-CAT-03 / V2-RES-01 / V2-RES-02). Loads the selected zone via presenter
  * and renders the picker matching its type — {@link VkSeatedZonePicker} for SEATED,
  * {@link VkQuantitySelector} for STANDING.
+ *
+ * <p>Served at {@code /events/:eventId/seats/:zoneId}. Open to guests.
  */
 @Route(value = "events/:eventId/seats/:zoneId", layout = MainLayout.class)
 @PageTitle("Pick Tickets · TicketHub")

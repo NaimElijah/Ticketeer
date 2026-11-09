@@ -30,6 +30,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Company workspace home, served at {@code /owner}. For the company in focus it shows the rating and
+ * live events and, where the member's permissions allow, tickets sold, 30-day revenue and open
+ * inquiries, with tiles that open the workspace pages the member may use. A company selector appears
+ * for a member of several companies.
+ */
 @Route(value = "owner", layout = WorkspaceLayout.class)
 @PageTitle("Workspace · TicketHub")
 @PermitAll
@@ -45,6 +51,9 @@ public class OwnerDashboardView extends LkPage {
     /** The company selector the last reload built; {@code null} for a member of one company, or a banner. */
     private LkSelect companySelector;
 
+    /**
+     * Creates the page and loads the dashboard for the company in focus.
+     */
     public OwnerDashboardView(OwnerDashboardPresenter presenter) {
         this.presenter = presenter;
 
