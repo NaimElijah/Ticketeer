@@ -9,6 +9,11 @@ package com.ticketing.system.shared.exception;
  */
 public class DuplicateUsernameException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param username the username that is already taken
+     */
     public DuplicateUsernameException(String username) {
         super("Username already taken: " + username);
     }

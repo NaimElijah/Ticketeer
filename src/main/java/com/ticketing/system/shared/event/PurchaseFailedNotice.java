@@ -5,9 +5,12 @@ package com.ticketing.system.shared.event;
  * fails after being attempted. The notifications context listens for it and raises a
  * purchase-failed notification. The listener hands its components to
  * {@code INotificationService.notifyPurchaseFailed}. It is published only for a member's checkout.
+ *
+ * @param userId the member whose checkout failed
+ * @param reason human-readable failure reason to surface to the member
  */
 public record PurchaseFailedNotice(
-        int userId,     // the member whose checkout failed
-        String reason   // human-readable failure reason to surface to the member
+        int userId,
+        String reason
 ) {
 }

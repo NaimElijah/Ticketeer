@@ -10,10 +10,16 @@ package com.ticketing.system.shared.exception;
  */
 public class MarketNotOpenException extends DomainException {
 
+    /** Creates the exception with the standard text. */
     public MarketNotOpenException() {
         super("Market is not currently open for transactions");
     }
 
+    /**
+     * Creates the exception with a reason.
+     *
+     * @param reason why the market is not open
+     */
     public MarketNotOpenException(String reason) {
         super("Market is not open: " + reason);
     }

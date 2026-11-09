@@ -9,6 +9,11 @@ package com.ticketing.system.shared.exception;
  */
 public class TicketNotFoundException extends EntityNotFoundException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param ticketId the id that was looked up
+     */
     public TicketNotFoundException(Object ticketId) {
         super("Ticket", ticketId);
     }

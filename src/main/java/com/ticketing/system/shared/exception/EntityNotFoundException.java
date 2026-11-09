@@ -1,12 +1,27 @@
 package com.ticketing.system.shared.exception;
 
-// Generic "looked up by ID, not found" — used by repositories and any service doing by-ID lookup.
+/**
+ * Thrown when a lookup by id finds nothing, for example a receipt or an active order in the sales and
+ * reporting services. It is also the base of the typed not-found exceptions for a company, an event,
+ * a user, a conversation, a ticket and a venue map. The message reaches the user.
+ */
 public class EntityNotFoundException extends DomainException {
 
+    /**
+     * Creates the exception for an id that matched nothing.
+     *
+     * @param entityType a display name for the kind of entity, for example {@code "OrderReceipt"}
+     * @param id the id that was looked up
+     */
     public EntityNotFoundException(String entityType, Object id) {
         super(entityType + " not found: " + id);
     }
 
+    /**
+     * Creates the exception with a specific text.
+     *
+     * @param message the text the user reads
+     */
     public EntityNotFoundException(String message) {
         super(message);
     }

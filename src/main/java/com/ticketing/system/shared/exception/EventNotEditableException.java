@@ -9,10 +9,21 @@ package com.ticketing.system.shared.exception;
  */
 public class EventNotEditableException extends DomainException {
 
+    /**
+     * Creates the exception for a frozen field.
+     *
+     * @param eventId the event being edited
+     * @param field the name of the field that is frozen
+     */
     public EventNotEditableException(Object eventId, String field) {
         super("Event " + eventId + " field '" + field + "' is not editable after tickets are sold");
     }
 
+    /**
+     * Creates the exception with a specific text.
+     *
+     * @param message the text the user reads
+     */
     public EventNotEditableException(String message) {
         super(message);
     }

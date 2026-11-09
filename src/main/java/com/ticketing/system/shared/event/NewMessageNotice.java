@@ -10,12 +10,18 @@ package com.ticketing.system.shared.event;
  *
  * <p>An admin outreach does not use it: the whole send publishes one {@link OutreachSentNotice}
  * (ADR-019).
+ *
+ * @param recipientUserId the user who should receive the notification
+ * @param conversationId conversation the message belongs to (for UI deep-linking)
+ * @param senderLabel human-readable origin, e.g. "a system admin"
+ * @param subject the conversation subject
+ * @param snippet a short preview of the message body
  */
 public record NewMessageNotice(
-        int recipientUserId,     // the user who should receive the notification
-        String conversationId,   // conversation the message belongs to (for UI deep-linking)
-        String senderLabel,      // human-readable origin, e.g. "a system admin"
-        String subject,          // the conversation subject
-        String snippet           // a short preview of the message body
+        int recipientUserId,
+        String conversationId,
+        String senderLabel,
+        String subject,
+        String snippet
 ) {
 }

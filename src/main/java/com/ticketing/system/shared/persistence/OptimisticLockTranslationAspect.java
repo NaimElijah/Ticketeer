@@ -51,6 +51,15 @@ public class OptimisticLockTranslationAspect {
     public void applicationService() {
     }
 
+    /**
+     * Runs the advised call and re-types an optimistic-lock conflict, logging the advised signature at WARN.
+     *
+     * @param joinPoint the advised call
+     * @return what the advised method returned
+     * @throws ConcurrentReservationException if the call fails with an {@link OptimisticLockingFailureException};
+     *         the original is its cause
+     * @throws Throwable any other failure of the advised method, rethrown as it was
+     */
     @Around("applicationService()")
     public Object translateOptimisticLock(ProceedingJoinPoint joinPoint) throws Throwable {
         try {

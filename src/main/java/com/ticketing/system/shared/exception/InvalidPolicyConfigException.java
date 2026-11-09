@@ -9,6 +9,11 @@ package com.ticketing.system.shared.exception;
  */
 public class InvalidPolicyConfigException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param reason what is wrong with the policy
+     */
     public InvalidPolicyConfigException(String reason) {
         super("Invalid policy configuration: " + reason);
     }

@@ -10,10 +10,21 @@ package com.ticketing.system.shared.exception;
  */
 public class InvalidPermissionException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param requiredPermission the permission that is missing
+     */
     public InvalidPermissionException(String requiredPermission) {
         super("Missing required permission: " + requiredPermission);
     }
 
+    /**
+     * Creates the exception for a user.
+     *
+     * @param requiredPermission the permission that is missing
+     * @param userId the user who lacks it
+     */
     public InvalidPermissionException(String requiredPermission, Object userId) {
         super("User " + userId + " lacks required permission: " + requiredPermission);
     }

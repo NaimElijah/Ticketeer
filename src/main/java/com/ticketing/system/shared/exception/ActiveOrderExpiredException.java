@@ -11,10 +11,16 @@ package com.ticketing.system.shared.exception;
  */
 public class ActiveOrderExpiredException extends DomainException {
 
+    /** Creates the exception with the standard expiry text. */
     public ActiveOrderExpiredException() {
         super("Active order has expired; tickets have been released to inventory");
     }
 
+    /**
+     * Creates the exception with a specific text.
+     *
+     * @param message the text the user reads
+     */
     public ActiveOrderExpiredException(String message) {
         super(message);
     }

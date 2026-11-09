@@ -10,6 +10,11 @@ package com.ticketing.system.shared.exception;
  */
 public class GuestCheckoutMissingContactException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param reason the whole message, as the user may read it
+     */
     public GuestCheckoutMissingContactException(String reason) {
         super(reason);
     }

@@ -8,6 +8,11 @@ package com.ticketing.system.shared.exception;
  */
 public class DuplicateCompanyException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param name the company name that is already registered
+     */
     public DuplicateCompanyException(String name) {
         super("Company name already registered: " + name);
     }

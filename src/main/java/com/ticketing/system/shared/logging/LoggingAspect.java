@@ -47,6 +47,13 @@ public class LoggingAspect {
     public void applicationService() {
     }
 
+    /**
+     * Traces one advised call as the class describes, and passes its outcome through unchanged.
+     *
+     * @param joinPoint the advised call
+     * @return what the advised method returned
+     * @throws Throwable whatever the advised method threw, rethrown as it was
+     */
     @Around("applicationService()")
     public Object traceServiceMethod(ProceedingJoinPoint joinPoint) throws Throwable {
         String signature = joinPoint.getSignature().toShortString();

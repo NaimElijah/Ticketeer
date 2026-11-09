@@ -6,6 +6,7 @@ package com.ticketing.system.shared.exception;
  */
 public class DuplicateEmailException extends DomainException {
 
+    /** Creates the exception with its fixed message. */
     public DuplicateEmailException() {
         super("Email already registered");
     }

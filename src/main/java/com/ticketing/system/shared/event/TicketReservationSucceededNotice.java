@@ -5,11 +5,16 @@ package com.ticketing.system.shared.event;
  * successfully reserves tickets. The notifications context listens for it and raises a
  * reservation-success notification. The listener hands its components to
  * {@code INotificationService.notifyTicketReservationSuccess}.
+ *
+ * @param userId the member who reserved the tickets
+ * @param eventId the event the reservation belongs to
+ * @param zoneId the zone within the event that was reserved
+ * @param quantity how many tickets were reserved
  */
 public record TicketReservationSucceededNotice(
-        int userId,    // the member who reserved the tickets
-        int eventId,   // the event the reservation belongs to
-        int zoneId,    // the zone within the event that was reserved
-        int quantity   // how many tickets were reserved
+        int userId,
+        int eventId,
+        int zoneId,
+        int quantity
 ) {
 }

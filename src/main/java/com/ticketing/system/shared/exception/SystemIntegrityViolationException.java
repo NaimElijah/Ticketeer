@@ -16,6 +16,12 @@ package com.ticketing.system.shared.exception;
  */
 public class SystemIntegrityViolationException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param reason the violated constraint and the record that breaks it, without personal data: the
+     *        message is logged
+     */
     public SystemIntegrityViolationException(String reason) {
         super("System integrity violation: " + reason);
     }

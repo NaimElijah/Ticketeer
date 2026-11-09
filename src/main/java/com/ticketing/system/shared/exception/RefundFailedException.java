@@ -10,9 +10,9 @@ package com.ticketing.system.shared.exception;
  * {@link RefundGatewayUnreachableException} and {@link RefundOutcomeUnknownException} are the
  * subtypes for a request that never reached the gateway and for one that may have been processed.
  *
- * <p>The message names what failed to be refunded: an order (receipt) where a service refunds one,
- * a payment transaction where a gateway refunds by charge id ({@code forPaymentTransaction}), so
- * nobody looks for an order by a charge id (NaimElijah/Ticketeer#187). It reaches the user.
+ * <p>A gateway refunds by charge id, so {@code forPaymentTransaction} labels its subject a payment
+ * transaction, not an order, and nobody looks for an order by a charge id
+ * (NaimElijah/Ticketeer#187). The message reaches the user.
  */
 public class RefundFailedException extends DomainException {
 

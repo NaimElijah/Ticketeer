@@ -5,10 +5,14 @@ package com.ticketing.system.shared.event;
  * member's manager appointment in a company is revoked. The notifications context listens for it
  * and raises a manager-revoked notification. The listener hands its components to
  * {@code INotificationService.notifyManagerRevoked}.
+ *
+ * @param userId the member whose appointment was revoked
+ * @param companyId the company the appointment belonged to
+ * @param companyName the display name of that company
  */
 public record ManagerRevokedNotice(
-        int userId,          // the member whose appointment was revoked
-        int companyId,       // the company the appointment belonged to
-        String companyName   // the display name of that company
+        int userId,
+        int companyId,
+        String companyName
 ) {
 }

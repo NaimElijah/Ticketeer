@@ -41,6 +41,11 @@ public class InMemorySystemMetrics implements ISystemMetrics {
     private final Map<MetricType, ConcurrentLinkedDeque<Instant>> events = new EnumMap<>(MetricType.class);
     private final Map<MetricType, AtomicLong> totals = new EnumMap<>(MetricType.class);
 
+    /**
+     * Creates the counters, all empty.
+     *
+     * @param clock the clock that stamps each event and sets the start of a window
+     */
     public InMemorySystemMetrics(Clock clock) {
         this.clock = clock;
         for (MetricType type : MetricType.values()) {

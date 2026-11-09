@@ -9,6 +9,12 @@ package com.ticketing.system.shared.exception;
  */
 public class EventNotOnSaleException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param eventId the event that cannot be sold
+     * @param currentStatus the name of the event's status
+     */
     public EventNotOnSaleException(Object eventId, String currentStatus) {
         super("Event " + eventId + " is not on sale (current status: " + currentStatus + ")");
     }

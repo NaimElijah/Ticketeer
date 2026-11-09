@@ -9,6 +9,11 @@ package com.ticketing.system.shared.exception;
  */
 public class EventAlreadyCanceledException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param eventId the event that is already canceled
+     */
     public EventAlreadyCanceledException(Object eventId) {
         super("Event " + eventId + " is already canceled");
     }

@@ -12,10 +12,21 @@ package com.ticketing.system.shared.exception;
  */
 public class PaymentGatewayUnreachableException extends PaymentGatewayException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param reason what was wrong with the exchange
+     */
     public PaymentGatewayUnreachableException(String reason) {
         super(reason);
     }
 
+    /**
+     * Creates the exception with the transport failure behind it.
+     *
+     * @param reason what was wrong with the exchange
+     * @param cause the transport failure, or {@code null}
+     */
     public PaymentGatewayUnreachableException(String reason, Throwable cause) {
         super(reason, cause);
     }

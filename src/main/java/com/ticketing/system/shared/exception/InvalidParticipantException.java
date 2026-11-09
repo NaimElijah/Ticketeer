@@ -7,10 +7,21 @@ package com.ticketing.system.shared.exception;
  */
 public class InvalidParticipantException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param participantId the user who is not a participant
+     * @param conversationId the conversation they tried to act on
+     */
     public InvalidParticipantException(Object participantId, Object conversationId) {
         super("Participant " + participantId + " is not part of conversation " + conversationId);
     }
 
+    /**
+     * Creates the exception with a specific text.
+     *
+     * @param message the text the user reads
+     */
     public InvalidParticipantException(String message) {
         super(message);
     }

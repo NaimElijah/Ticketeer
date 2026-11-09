@@ -10,6 +10,11 @@ package com.ticketing.system.shared.exception;
  */
 public class CompanyClosedException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param companyId the company whose status is not {@code ACTIVE}
+     */
     public CompanyClosedException(int companyId) {
         super("Company " + companyId + " is closed");
     }

@@ -10,10 +10,22 @@ package com.ticketing.system.shared.exception;
  */
 public class InvalidStateTransitionException extends DomainException {
 
+    /**
+     * Creates the exception for a refused transition.
+     *
+     * @param entityType the kind of entity, for example {@code "Event"}
+     * @param fromState the name of the current state
+     * @param toState the name of the state that was requested
+     */
     public InvalidStateTransitionException(String entityType, String fromState, String toState) {
         super(entityType + " cannot transition from " + fromState + " to " + toState);
     }
 
+    /**
+     * Creates the exception with a specific text.
+     *
+     * @param message the text the user reads
+     */
     public InvalidStateTransitionException(String message) {
         super(message);
     }

@@ -10,6 +10,12 @@ public class MinTicketsPurchasePolicy implements PurchasePolicy, InvariantChecke
 
     private final int minimumTickets;
 
+    /**
+     * Creates the policy.
+     *
+     * @param minimumTickets the fewest tickets a purchase must hold at checkout
+     * @throws IllegalStateException if {@code minimumTickets} is negative
+     */
     public MinTicketsPurchasePolicy(int minimumTickets) {
         this.minimumTickets = minimumTickets;
         checkInvariants();

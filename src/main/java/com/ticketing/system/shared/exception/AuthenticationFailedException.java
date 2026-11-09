@@ -11,6 +11,7 @@ package com.ticketing.system.shared.exception;
  */
 public class AuthenticationFailedException extends DomainException {
 
+    /** Creates the exception with its fixed, generic message. */
     public AuthenticationFailedException() {
         super("Invalid credentials");
     }

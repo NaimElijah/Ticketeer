@@ -11,10 +11,21 @@ package com.ticketing.system.shared.exception;
  */
 public class PolicyViolationException extends DomainException {
 
+    /**
+     * Creates the exception for a named policy.
+     *
+     * @param policyName the policy that was violated
+     * @param reason why the purchase violates it
+     */
     public PolicyViolationException(String policyName, String reason) {
         super("Policy '" + policyName + "' violated: " + reason);
     }
 
+    /**
+     * Creates the exception with a specific text.
+     *
+     * @param message the refusal text the buyer reads
+     */
     public PolicyViolationException(String message) {
         super(message);
     }

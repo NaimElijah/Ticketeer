@@ -12,10 +12,21 @@ package com.ticketing.system.shared.exception;
  */
 public class UnauthorizedActionException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param action the action that was refused
+     */
     public UnauthorizedActionException(String action) {
         super("Not authorized to perform action: " + action);
     }
 
+    /**
+     * Creates the exception for a known actor.
+     *
+     * @param action the action that was refused
+     * @param actorId the actor who attempted it
+     */
     public UnauthorizedActionException(String action, Object actorId) {
         super("Actor " + actorId + " not authorized to perform action: " + action);
     }

@@ -9,6 +9,12 @@ public class MaxTicketsPurchasePolicy implements PurchasePolicy, InvariantChecke
 
     private final int maximumTickets;
 
+    /**
+     * Creates the policy.
+     *
+     * @param maximumTickets the most tickets one purchase may hold
+     * @throws IllegalStateException if {@code maximumTickets} is negative
+     */
     public MaxTicketsPurchasePolicy(int maximumTickets) {
         this.maximumTickets = maximumTickets;
         checkInvariants();

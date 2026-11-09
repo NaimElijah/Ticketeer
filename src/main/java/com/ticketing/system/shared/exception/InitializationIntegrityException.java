@@ -5,11 +5,15 @@ package com.ticketing.system.shared.exception;
  * I.1.1) or of opening the market (UC-32, I.2.1), both in {@code SystemAdminService}.
  *
  * <p>An unreachable external service at those gates is an {@link ExternalServiceUnavailableException}
- * instead. At boot a failure here stops the application (ADR-003). The message names the reason and
- * reaches the user.
+ * instead. At boot a failure here stops the application (ADR-003). The message reaches the user.
  */
 public class InitializationIntegrityException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param reason the post-condition that does not hold
+     */
     public InitializationIntegrityException(String reason) {
         super("Platform initialization integrity check failed: " + reason);
     }

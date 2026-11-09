@@ -10,6 +10,11 @@ package com.ticketing.system.shared.exception;
  */
 public class IdempotencyConflictException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param idempotencyKey the key that was presented again
+     */
     public IdempotencyConflictException(String idempotencyKey) {
         super("Idempotency key already used with different parameters: " + idempotencyKey);
     }

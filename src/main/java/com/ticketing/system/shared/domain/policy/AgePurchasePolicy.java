@@ -10,6 +10,12 @@ public class AgePurchasePolicy implements PurchasePolicy, InvariantChecked {
 
     private final int minimumAge;
 
+    /**
+     * Creates the policy.
+     *
+     * @param minimumAge the youngest age, in years, that may buy; zero allows every known age
+     * @throws IllegalStateException if {@code minimumAge} is negative
+     */
     public AgePurchasePolicy(int minimumAge) {
         this.minimumAge = minimumAge;
         checkInvariants();

@@ -7,10 +7,20 @@ package com.ticketing.system.shared.exception;
  */
 public class TicketNotAvailableException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param ticketId the ticket that is not available
+     */
     public TicketNotAvailableException(Object ticketId) {
         super("Ticket not available: " + ticketId);
     }
 
+    /**
+     * Creates the exception with a specific text.
+     *
+     * @param message the text the user reads
+     */
     public TicketNotAvailableException(String message) {
         super(message);
     }

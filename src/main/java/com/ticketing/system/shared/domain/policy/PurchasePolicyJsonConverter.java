@@ -27,6 +27,14 @@ public class PurchasePolicyJsonConverter implements AttributeConverter<PurchaseP
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /**
+     * Serializes a policy tree to JSON; a {@code null} policy is stored as the no-restriction policy.
+     *
+     * @param policy the policy tree, or {@code null}
+     * @return the JSON text, never {@code null}
+     * @throws IllegalStateException if the tree cannot be serialized
+     * @throws IllegalArgumentException if the tree holds a policy type this converter does not know
+     */
     @Override
     public String convertToDatabaseColumn(PurchasePolicy policy) {
         try {
@@ -36,6 +44,14 @@ public class PurchasePolicyJsonConverter implements AttributeConverter<PurchaseP
         }
     }
 
+    /**
+     * Rebuilds a policy tree from its JSON text; a {@code null} or blank column is the no-restriction policy.
+     *
+     * @param json the stored JSON, or {@code null}
+     * @return the policy tree, never {@code null}
+     * @throws IllegalStateException if the text is not valid JSON
+     * @throws IllegalArgumentException if a node names a policy type this converter does not know
+     */
     @Override
     public PurchasePolicy convertToEntityAttribute(String json) {
         if (json == null || json.isBlank()) {

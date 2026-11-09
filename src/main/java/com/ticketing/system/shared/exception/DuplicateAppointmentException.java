@@ -9,6 +9,12 @@ package com.ticketing.system.shared.exception;
  */
 public class DuplicateAppointmentException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param userId the user who already has an appointment
+     * @param companyId the company of that appointment
+     */
     public DuplicateAppointmentException(Object userId, Object companyId) {
         super("User " + userId + " already has an appointment at company " + companyId);
     }
