@@ -1,8 +1,18 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when company registration uses an already-taken company name. UC-18.
+/**
+ * Reserved for a company registration whose name is already taken. UC-18.
+ *
+ * <p>No production code throws it today: {@code CompanyManagementService.registerCompany} refuses a
+ * taken name with an {@link IllegalStateException} carrying {@code COMPANY_NAME_TAKEN_MESSAGE}.
+ */
 public class DuplicateCompanyException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param name the company name that is already registered
+     */
     public DuplicateCompanyException(String name) {
         super("Company name already registered: " + name);
     }

@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
+package com.ticketing.system.shared.domain.policy;
 
 import com.ticketing.system.shared.InvariantChecked;
 
@@ -10,6 +10,12 @@ public class AgePurchasePolicy implements PurchasePolicy, InvariantChecked {
 
     private final int minimumAge;
 
+    /**
+     * Creates the policy.
+     *
+     * @param minimumAge the youngest age, in years, that may buy; zero allows every known age
+     * @throws IllegalStateException if {@code minimumAge} is negative
+     */
     public AgePurchasePolicy(int minimumAge) {
         this.minimumAge = minimumAge;
         checkInvariants();

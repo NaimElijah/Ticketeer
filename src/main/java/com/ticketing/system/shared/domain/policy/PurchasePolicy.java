@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain so catalog/organization can depend on it without an upward edge)
+package com.ticketing.system.shared.domain.policy;
 
 /**
  * A rule that decides whether a purchase (reserve or checkout) is allowed for a given context.
@@ -14,8 +14,21 @@ package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocab
  */
 public interface PurchasePolicy {
 
+    /**
+     * Tells whether {@code context} meets this policy.
+     *
+     * @param context the purchase to check; a leaf policy other than {@link NoPurchasePolicy} refuses {@code null}
+     * @return {@code true} if the purchase is allowed
+     * @throws IllegalArgumentException if a leaf policy is given a {@code null} context
+     */
     boolean isSatisfiedBy(PurchaseContext context);
 
+    /**
+     * The refusal text for this policy as a whole, written for the buyer. A composite names every rule it
+     * holds; see {@link #getFailureMessage(PurchaseContext)} for the rules a purchase broke.
+     *
+     * @return the text, empty for a policy with no rule
+     */
     String getFailureMessage();
 
     /**

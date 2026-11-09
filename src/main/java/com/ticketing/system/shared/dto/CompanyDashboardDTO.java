@@ -1,12 +1,22 @@
 package com.ticketing.system.shared.dto;
 
-// Owner-workspace dashboard counters for a single company (V2-WIRE-OWNER-DASH).
-// revenue30d / ticketsSold30d are the company's lines that are not refunded, on receipts from the
-// trailing 30 days (#21); activeEvents counts ON_SALE events; openInquiries counts unresolved
-// INQUIRY conversations where the company is the counterparty. rating is DERIVED — the mean
-// of the company's events' ratings (null when none of its events are rated).
-// revenue30d and ticketsSold30d are null when the caller lacks VIEW_SALES, and openInquiries is
-// null when the caller lacks RESPOND_TO_INQUIRIES: the service withholds them at the boundary (#22).
+/**
+ * Owner-workspace dashboard counters for one company (V2-WIRE-OWNER-DASH), returned by
+ * {@code CompanyAnalyticsService.dashboard}.
+ *
+ * <p>The service withholds a figure the caller may not see: {@code revenue30d} and
+ * {@code ticketsSold30d} are {@code null} without VIEW_SALES, and {@code openInquiries} is
+ * {@code null} without RESPOND_TO_INQUIRIES (#22).
+ *
+ * @param activeEvents   the company's ON_SALE events
+ * @param ticketsSold30d the company's ticket lines that are not refunded, on receipts from the
+ *                       trailing 30 days (#21)
+ * @param revenue30d     the sum of those lines' prices
+ * @param openInquiries  the INQUIRY conversations that are not closed or resolved, with the company as
+ *                       the counterparty
+ * @param rating         the mean of the ratings of the company's events; {@code null} when none of its
+ *                       events is rated
+ */
 public record CompanyDashboardDTO(
     int activeEvents,
     Integer ticketsSold30d,

@@ -41,13 +41,19 @@ public class LoggingAspect {
 
     /**
      * Matches every public method in a bounded context's {@code application.service} package
-     * ({@code com.ticketing.system.<context>.application.service}). The legacy
-     * {@code Core.Application.services} clause was dropped once that package was emptied (Step 8).
+     * ({@code com.ticketing.system.<context>.application.service}).
      */
     @Pointcut("execution(public * com.ticketing.system..application.service..*(..))")
     public void applicationService() {
     }
 
+    /**
+     * Traces one advised call as the class describes, and passes its outcome through unchanged.
+     *
+     * @param joinPoint the advised call
+     * @return what the advised method returned
+     * @throws Throwable whatever the advised method threw, rethrown as it was
+     */
     @Around("applicationService()")
     public Object traceServiceMethod(ProceedingJoinPoint joinPoint) throws Throwable {
         String signature = joinPoint.getSignature().toShortString();

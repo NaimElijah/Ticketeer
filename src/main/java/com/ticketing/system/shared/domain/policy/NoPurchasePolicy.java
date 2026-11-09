@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
+package com.ticketing.system.shared.domain.policy;
 
 /**
  * The null-object purchase policy: imposes no restriction, so every purchase is allowed.

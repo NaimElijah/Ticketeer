@@ -6,6 +6,7 @@ package com.ticketing.system.shared.exception;
  */
 public class InvalidEmailFormatException extends DomainException {
 
+    /** Creates the exception with its fixed message. */
     public InvalidEmailFormatException() {
         super("Invalid email format");
     }

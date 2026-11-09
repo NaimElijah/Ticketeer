@@ -1,7 +1,11 @@
 package com.ticketing.system.shared.dto;
 
-// Input for token-refresh flow per lecture 2's JWT pattern.
-// UC-12 (token expired → client hits refresh endpoint).
+/**
+ * Input to {@code AuthenticationService.refreshToken} (UC-12), which always throws
+ * {@code UnsupportedOperationException}: the refresh-token flow is deferred from V1.
+ *
+ * @param refreshToken the refresh token, which is a credential; {@link #toString()} leaves it out
+ */
 public record RefreshTokenRequestDTO(
     String refreshToken
 ) {

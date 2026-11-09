@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
+package com.ticketing.system.shared.domain.policy;
 
 import java.util.Objects;
 
@@ -12,6 +12,13 @@ public class OrPurchasePolicy implements PurchasePolicy, InvariantChecked {
     private final PurchasePolicy leftPolicy;
     private final PurchasePolicy rightPolicy;
 
+    /**
+     * Creates the composite.
+     *
+     * @param leftPolicy one policy, either of which may be satisfied
+     * @param rightPolicy the other policy
+     * @throws IllegalStateException if either policy is {@code null}
+     */
     public OrPurchasePolicy(PurchasePolicy leftPolicy, PurchasePolicy rightPolicy) {
         this.leftPolicy = leftPolicy;
         this.rightPolicy = rightPolicy;

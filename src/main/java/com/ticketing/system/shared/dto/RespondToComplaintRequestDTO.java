@@ -1,11 +1,13 @@
 package com.ticketing.system.shared.dto;
 
-// Input to MessagingService.respondToComplaint() — admin response to a complaint Conversation.
-// 'newStatus' transitions the conversation: typically RESPONDED (further dialogue expected)
-// or RESOLVED (terminal). Sent as string.
+/**
+ * Input to {@code MessagingService.respondToComplaint}: an admin's response to a complaint
+ * conversation. The service resolves the complaint with its single reply. It takes the admin from the
+ * token and does not read {@code adminId} or {@code newStatus}.
+ */
 public record RespondToComplaintRequestDTO(
     String conversationId,
     int adminId,
     String body,
-    String newStatus                 // ConversationStatus value as string (RESPONDED / RESOLVED / CLOSED)
+    String newStatus
 ) {}

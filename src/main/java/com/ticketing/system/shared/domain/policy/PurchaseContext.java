@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
+package com.ticketing.system.shared.domain.policy;
 
 import com.ticketing.system.shared.InvariantChecked;
 
@@ -16,11 +16,28 @@ public class PurchaseContext implements InvariantChecked {
 
     private final PurchaseStage stage;
 
-    /** Final-checkout context (every rule enforced). */
+    /**
+     * Creates the context of a final checkout, where every rule is enforced. The parameters are those of
+     * {@link #PurchaseContext(int, Integer, int, int, int, PurchaseStage)}.
+     *
+     * @throws IllegalArgumentException if {@code quantity} is not positive
+     */
     public PurchaseContext(int buyerId, Integer buyerAge, int eventId, int companyId, int quantity) {
         this(buyerId, buyerAge, eventId, companyId, quantity, PurchaseStage.CHECKOUT);
     }
 
+    /**
+     * Creates the context of a purchase check at {@code stage}.
+     *
+     * @param buyerId the member's id, or -1 for a guest
+     * @param buyerAge the buyer's age in years, or {@code null} when it is not known yet, as for a guest
+     *        at reserve time
+     * @param eventId the event being bought
+     * @param companyId the company that owns the event
+     * @param quantity how many tickets the purchase holds; positive
+     * @param stage the stage the check runs at; {@code null} means {@link PurchaseStage#CHECKOUT}
+     * @throws IllegalArgumentException if {@code quantity} is not positive
+     */
     public PurchaseContext(int buyerId, Integer buyerAge, int eventId, int companyId, int quantity,
             PurchaseStage stage) {
         if (quantity <= 0) {
@@ -47,10 +64,16 @@ public class PurchaseContext implements InvariantChecked {
         }
     }
 
+    /** Returns the member's id, or -1 for a guest. */
     public int getBuyerId() {
         return buyerId;
     }
 
+    /**
+     * The buyer's age in years.
+     *
+     * @return the age, or {@code null} when it is not known
+     */
     public Integer getBuyerAge() {
         return buyerAge;
     }

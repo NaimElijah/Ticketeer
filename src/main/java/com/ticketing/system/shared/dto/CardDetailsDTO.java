@@ -1,14 +1,16 @@
 package com.ticketing.system.shared.dto;
 
-// Raw card details captured at checkout and carried to the payment gateway.
-// The real WSEP `pay` action needs all of these on the wire (card_number, cvv,
-// month, year, holder); the in-process stub only looks at the card number.
-//
-// toString() is overridden so the card data can never leak through an
-// accidental log/{}-interpolation of this record (or of a PaymentRequestDTO
-// that holds it) — only the last 4 of the card are ever rendered: never the cvv,
-// never the holder's name (personal data), never the expiry (which, with a
-// leaked card number, is most of what a payment needs).
+/**
+ * Raw card details captured at checkout and carried to the payment gateway.
+ *
+ * <p>The real WSEP {@code pay} action needs all of these on the wire (card_number, cvv, month, year,
+ * holder).
+ *
+ * <p>{@link #toString()} is overridden so the card data cannot leak through an accidental log of
+ * this record, or of a {@link PaymentRequestDTO} that holds it. It renders only the last 4 digits of
+ * the card: never the cvv, never the holder's name (personal data), never the expiry (which, with a
+ * leaked card number, is most of what a payment needs).
+ */
 public record CardDetailsDTO(
     String cardNumber,
     String cvv,

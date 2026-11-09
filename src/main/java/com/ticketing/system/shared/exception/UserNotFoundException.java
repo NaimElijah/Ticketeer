@@ -1,16 +1,24 @@
 package com.ticketing.system.shared.exception;
 
-// Specific subclass of EntityNotFoundException for User lookups.
-// UC-12, UC-13, UC-16, UC-23/24, UC-31, etc.
+/**
+ * The {@link EntityNotFoundException} for a user lookup. UC-12, UC-13, UC-16, UC-23/24, UC-31, etc.
+ */
 public class UserNotFoundException extends EntityNotFoundException {
 
-    // Id-free message for user-facing paths — the id is written to the server log at the throw site,
-    // not leaked to the UI (avoids exposing internal identifiers / enabling enumeration).
+    /**
+     * Creates the exception with an id-free message, for user-facing paths, so the id does not leak to
+     * the UI (avoids exposing internal identifiers and enabling enumeration). A throw site that wants the
+     * id in the server log writes it there itself.
+     */
     public UserNotFoundException() {
         super("User not found");
     }
 
-    // "User not found: <id>".
+    /**
+     * Creates the exception for a user id that matched no user.
+     *
+     * @param userId the id that was looked up
+     */
     public UserNotFoundException(int userId) {
         super("User", userId);
     }

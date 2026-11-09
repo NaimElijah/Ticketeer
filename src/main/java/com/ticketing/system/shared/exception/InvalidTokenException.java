@@ -10,6 +10,7 @@ package com.ticketing.system.shared.exception;
  */
 public class InvalidTokenException extends DomainException {
 
+    /** Creates the exception with its generic message. */
     public InvalidTokenException() {
         super("Invalid authentication token");
     }

@@ -6,12 +6,17 @@ package com.ticketing.system.shared.event;
  * invitation changes no role, so it publishes {@link OwnerAppointmentPendingNotice} or
  * {@link ManagerAppointmentPendingNotice} instead. The notifications context listens for it and
  * raises a role-changed notification.
- * Mirrors the former {@code INotificationService.notifyRoleChanged} call.
+ * The listener hands its components to {@code INotificationService.notifyRoleChanged}.
+ *
+ * @param userId the member whose role changed
+ * @param companyId the company the role applies to
+ * @param companyName the display name of that company
+ * @param newRole the new role label to surface to the member
  */
 public record RoleChangedNotice(
-        int userId,          // the member whose role changed
-        int companyId,       // the company the role applies to
-        String companyName,  // the display name of that company
-        String newRole       // the new role label to surface to the member
+        int userId,
+        int companyId,
+        String companyName,
+        String newRole
 ) {
 }

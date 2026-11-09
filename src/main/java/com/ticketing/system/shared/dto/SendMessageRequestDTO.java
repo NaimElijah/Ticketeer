@@ -1,9 +1,13 @@
 package com.ticketing.system.shared.dto;
 
-// Input to MessagingService.sendMessage() — append a message to an existing Conversation.
+/**
+ * Input to {@code MessagingService.sendMessage}: appends a message to an existing conversation. The
+ * service works out the sender from the token and the conversation, and does not read {@code senderId}
+ * or {@code senderType}.
+ */
 public record SendMessageRequestDTO(
     String conversationId,
     int senderId,
-    String senderType,               // ParticipantType value as string
+    String senderType,
     String body
 ) {}

@@ -15,6 +15,11 @@ package com.ticketing.system.shared.exception;
  */
 public class MissingDefaultAdminException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param reason what went wrong; it becomes part of the message, which is logged
+     */
     public MissingDefaultAdminException(String reason) {
         super("Could not establish default System Admin: " + reason);
     }

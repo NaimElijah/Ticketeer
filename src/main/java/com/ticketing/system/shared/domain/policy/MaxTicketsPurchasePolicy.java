@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
+package com.ticketing.system.shared.domain.policy;
 
 import com.ticketing.system.shared.InvariantChecked;
 
@@ -9,6 +9,12 @@ public class MaxTicketsPurchasePolicy implements PurchasePolicy, InvariantChecke
 
     private final int maximumTickets;
 
+    /**
+     * Creates the policy.
+     *
+     * @param maximumTickets the most tickets one purchase may hold
+     * @throws IllegalStateException if {@code maximumTickets} is negative
+     */
     public MaxTicketsPurchasePolicy(int maximumTickets) {
         this.maximumTickets = maximumTickets;
         checkInvariants();
