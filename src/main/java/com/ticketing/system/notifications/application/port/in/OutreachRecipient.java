@@ -6,7 +6,8 @@ package com.ticketing.system.notifications.application.port.in;
  * send.
  *
  * @param userId         the member who receives the alert
- * @param conversationId the conversation opened for that member, for the alert's deep link
+ * @param conversationId the conversation opened for that member; kept in the alert's data payload,
+ *                       which nothing reads yet
  */
 public record OutreachRecipient(int userId, String conversationId) {
 }
