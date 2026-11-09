@@ -21,18 +21,21 @@ _Event listeners_
 _Others_
 
 * `c.t.s.n.application.port.out.PushNotificationService` (via `c.t.s.n.adapter.out.push.InMemoryNotificationService`)
+* `c.t.s.n.config.NotificationAsyncConfig`
 |Aggregate roots
 |* `c.t.s.n.domain.Notification`
 |Events listened to
-|* `c.t.s.s.event.EventCancelledNotice` 
-* `c.t.s.s.event.ManagerRevokedNotice` 
-* `c.t.s.s.event.TicketReservationFailedNotice` 
-* `c.t.s.s.event.NewMessageNotice` 
-* `c.t.s.s.event.PurchaseFailedNotice` 
-* `c.t.s.s.event.RoleChangedNotice` 
-* `c.t.s.s.event.ReservationRemovalSucceededNotice` 
+|* `c.t.s.s.event.ReservationRemovalSucceededNotice` 
+* `c.t.s.s.event.OutreachSentNotice` 
 * `c.t.s.s.event.ReservationRemovalFailedNotice` 
-* `c.t.s.s.event.OwnerAppointmentPendingNotice` 
 * `c.t.s.s.event.PurchaseCompletedNotice` 
+* `c.t.s.s.event.ManagerAppointmentPendingNotice` 
+* `c.t.s.s.event.RoleChangedNotice` 
+* `c.t.s.s.event.EventCancelledNotice` 
+* `c.t.s.s.event.TicketReservationFailedNotice` 
+* `c.t.s.s.event.OwnerAppointmentPendingNotice` 
+* `c.t.s.s.event.NewMessageNotice` 
+* `c.t.s.s.event.ManagerRevokedNotice` 
+* `c.t.s.s.event.PurchaseFailedNotice` 
 * `c.t.s.s.event.TicketReservationSucceededNotice` 
 |===

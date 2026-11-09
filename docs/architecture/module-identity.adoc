@@ -20,6 +20,13 @@ _Repositories_
 * `c.t.s.i.adapter.out.persistence.SpringDataSessionRepository`
 * `c.t.s.i.adapter.out.persistence.SpringDataUserRepository`
 
+_Configuration properties_
+
+* `c.t.s.i.config.IdentityProperties`
+* `c.t.s.i.config.JwtProperties`
+* `c.t.s.i.config.LockoutProperties`
+* `c.t.s.i.config.SessionProperties`
+
 _Others_
 
 * `c.t.s.i.application.port.out.PasswordHasher` (via `c.t.s.i.adapter.out.security.BcryptPasswordHasher`)

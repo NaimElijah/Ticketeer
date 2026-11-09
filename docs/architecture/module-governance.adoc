@@ -9,6 +9,11 @@
 * `c.t.s.g.application.service.SystemAnalyticsService`
 * `c.t.s.g.application.service.SystemIntegrityVerifier`
 
+_Configuration properties_
+
+* `c.t.s.g.config.AnalyticsProperties`
+* `c.t.s.g.config.PlatformAdminProperties`
+
 _Others_
 
 * `c.t.s.g.adapter.out.MarketGateAdapter`
@@ -18,6 +23,7 @@ _Others_
 * `c.t.s.s.application.port.out.OrderReceiptRepository` (in Sales & Ticketing)
 * `c.t.s.s.application.port.out.TicketRepository` (in Sales & Ticketing)
 * `c.t.s.c.application.port.out.EventRepository` (in Catalog & Events)
+* `c.t.s.c.application.port.in.CatalogEventDisplayPort` (in Catalog & Events)
 * `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
 * `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
 * `c.t.s.i.application.port.out.PasswordHasher` (in Identity & Access)

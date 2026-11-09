@@ -2,10 +2,11 @@
 
 Spring Modulith–generated documentation of the platform's bounded-context modules.
 
-The files here are a **hand-copied snapshot, last refreshed on 2026-07-09**, so they can lag the
+The files here are a **hand-copied snapshot, last refreshed on 2026-11-09**, so they can lag the
 code. `ModularityTests.GivenTheApplicationModules_WhenWriteModuleDocumentation_ThenTheComponentDiagramNamesEveryModule()` writes fresh output on every test run, but into
 `target/spring-modulith-docs/`, not into this folder. To refresh the snapshot, copy the files over
-from `target/`. Making the generator write here directly is tracked in #43.
+from `target/`. The generator can order a file's lines differently from run to run, so copy
+only a file whose sorted lines changed. Making the generator write here directly is tracked in #43.
 
 ## Files
 
@@ -46,8 +47,7 @@ or transitively):
 - **bootstrap** — the application composition root: lifecycle runners, `@Scheduled` sweepers, and
   the dev seed/`.scenario` engine. A pure sink that wires the contexts together.
 
-Each backend context follows the canonical hexagonal layout
-`domain / application(port.in, port.out, service) / adapter(out.*)`. The seams between contexts are
+Each backend context follows the hexagonal layout `domain / application(port.in, port.out, service) / adapter(in, out.*)`, with each layer present only where the context needs it: `governance` and `reporting` have no `domain`, `reporting` has no `adapter`, and only `catalog` and `notifications` have an inbound port package. The seams between contexts are
 ports and events (e.g. `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`,
 `EventSalesHistoryPort`, `EventCancelledEvent`, the `shared/event` notices); other cross-context
 calls still use services, repository ports and entities, and #54 replaces them.
