@@ -1,10 +1,15 @@
 package com.ticketing.system.shared.dto;
 
-// Input to AuthenticationService.login() (UC-12).
-//
-// guestSessionId is REQUIRED — login is always a promotion of an existing
-// Guest session into a Member session (per spec II.1.5 / D10a). A login
-// without a guestSessionId raises GuestSessionRequiredException.
+/**
+ * Input to {@code AuthenticationService.login} (UC-12).
+ *
+ * <p>{@code guestSessionId} is required: login is always a promotion of an existing Guest session
+ * into a Member session (per spec II.1.5 / D10a). A login without one raises
+ * {@code GuestSessionRequiredException}.
+ *
+ * @param rawPassword    the password as typed; {@link #toString()} leaves it out
+ * @param guestSessionId the guest session to promote, which is the guest's credential
+ */
 public record LoginRequestDTO(
     String username,
     String rawPassword,

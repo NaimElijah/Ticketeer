@@ -1,12 +1,18 @@
 package com.ticketing.system.shared.dto;
 
-// Input to SystemAdminService.openMarket() / closeMarket() (UC-32).
-// 'action' is not read: the method called decides whether the market opens or closes.
-// 'reason' is logged by closeMarket (a blank one is replaced by a default); openMarket ignores it.
-// 'token' carries the requesting admin's session credential — the service
-// authorizes the toggle via requireSystemAdmin(token).
+/**
+ * Input to {@code SystemAdminService.openMarket} and {@code closeMarket} (UC-32).
+ *
+ * <p>{@code action} is not read: the method called decides whether the market opens or closes.
+ * {@code reason} is logged by {@code closeMarket}, which replaces a blank one with a default;
+ * {@code openMarket} ignores it.
+ *
+ * @param action {@code OPEN} or {@code CLOSE}
+ * @param token  the requesting admin's session credential, which the service checks with
+ *               {@code requireSystemAdmin}; {@link #toString()} leaves it out
+ */
 public record MarketControlRequestDTO(
-    String action,                       // "OPEN" / "CLOSE"
+    String action,
     String reason,
     String token
 ) {

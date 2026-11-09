@@ -1,20 +1,25 @@
 package com.ticketing.system.shared.dto;
 
-// Input to PaymentGateway.charge() (UC-33).
-// 'idempotencyKey' is the client's checkout key, required and non-blank. It protects against a repeated
-// checkout, not a lost gateway reply: CheckoutService replays the first result for a key it has completed
-// (CheckoutIdempotencyCache, in memory) instead of charging again, and refuses a key another buyer used.
-// WsepPaymentGateway does not send it to WSEP, so WSEP cannot deduplicate; only StubPaymentGateway
-// deduplicates charges by it.
-//
-// buyerUserId / buyerEmail are dual identity for Member vs Guest purchases:
-//   - Member: buyerUserId set, buyerEmail optional.
-//   - Guest:  buyerUserId null, buyerEmail required (D5 reversed — Guests can check out).
+/**
+ * Input to {@code PaymentGateway.charge} (UC-33).
+ *
+ * <p>{@code idempotencyKey} is the client's checkout key, required and non-blank. It protects against
+ * a repeated checkout, not a lost gateway reply: {@code CheckoutService} replays the first result for
+ * a key it has completed ({@code CheckoutIdempotencyCache}, in memory) instead of charging again, and
+ * refuses a key another buyer used. {@code WsepPaymentGateway} does not send it to WSEP, so WSEP cannot
+ * deduplicate; only {@code StubPaymentGateway} deduplicates charges by it.
+ *
+ * <p>{@code buyerUserId} and {@code buyerEmail} are the dual identity of a member and a guest purchase:
+ * a member has {@code buyerUserId} set and {@code buyerEmail} optional; a guest has no
+ * {@code buyerUserId} and needs {@code buyerEmail} (D5 reversed: guests can check out).
+ *
+ * @param card the raw card details; the gateway (WSEP {@code pay}) needs them
+ */
 public record PaymentRequestDTO(
     String idempotencyKey,
     double amount,
     String currency,
-    CardDetailsDTO card,                  // raw card details — the gateway (WSEP `pay`) needs them
+    CardDetailsDTO card,
     Integer buyerUserId,
     String buyerEmail
 ) {

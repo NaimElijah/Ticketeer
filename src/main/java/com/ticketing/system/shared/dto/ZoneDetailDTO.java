@@ -1,5 +1,17 @@
 package com.ticketing.system.shared.dto;
 
+/**
+ * One zone of an event's venue layout, as the owner's editor reads it (see {@link VenueLayoutDTO}).
+ *
+ * @param seated      whether the zone has numbered seats
+ * @param rows        the number of seat rows of a seated zone, grouped by the leading letters of the
+ *                    seat labels; {@code 0} for a standing zone
+ * @param seatsPerRow the largest number of seats in one row of a seated zone; {@code 0} for a standing
+ *                    zone
+ * @param capacity    how many tickets a standing zone holds; {@code 0} for a seated zone
+ * @param price       the price of one ticket
+ * @param placement   where the zone sits on the venue grid; {@code null} when it is unplaced
+ */
 public record ZoneDetailDTO(
     String name,
     boolean seated,
@@ -7,5 +19,5 @@ public record ZoneDetailDTO(
     int seatsPerRow,
     int capacity,
     double price,
-    GridPlacementDTO placement   // null = unplaced
+    GridPlacementDTO placement
 ) {}

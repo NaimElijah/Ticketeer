@@ -2,6 +2,10 @@ package com.ticketing.system.shared.dto;
 
 import java.util.List;
 
+/**
+ * A zone of an event's venue map with its current stock, as {@code CatalogService.getEventVenueMap}
+ * returns it inside {@link VenueMapDTO}.
+ */
 public class InventoryZoneDTO {
     private final int id;
     private final String name;
@@ -14,6 +18,19 @@ public class InventoryZoneDTO {
     private final List<SeatDTO> seats;
     private final GridPlacementDTO placement;   // null = unplaced (auto-layout)
 
+    /**
+     * Creates a zone view.
+     *
+     * @param zoneType        {@code STANDING} or {@code SEATED}
+     * @param capacity        how many tickets the zone holds
+     * @param availableAmount how many tickets can still be reserved
+     * @param reservedAmount  how many tickets are held in carts
+     * @param soldAmount      how many tickets are sold
+     * @param price           the price of one ticket
+     * @param seats           the zone's seats; empty for a standing zone, and a {@code null} list is
+     *                        stored as empty
+     * @param placement       where the zone sits on the venue grid; {@code null} when it is unplaced
+     */
     public InventoryZoneDTO(
             int id,
             String name,

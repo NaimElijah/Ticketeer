@@ -2,8 +2,14 @@ package com.ticketing.system.shared.dto;
 
 import java.time.LocalDateTime;
 
-// Returned by NotificationDispatchService.deliverPending() (UC-37) and any inbox view.
-// 'type' and 'status' are sent as strings to keep the DTO independent of domain enums.
+/**
+ * A notification, returned by {@code NotificationDispatchService.deliverPending} (UC-37) and by any
+ * inbox view. {@code type} and {@code status} are strings, to keep the DTO independent of the domain
+ * enums.
+ *
+ * @param type   the notification type's name
+ * @param status the notification status's name
+ */
 public record NotificationDTO(
     String notificationId,
     String type,

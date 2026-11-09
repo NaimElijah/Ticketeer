@@ -2,21 +2,29 @@ package com.ticketing.system.shared.dto;
 
 import java.util.List;
 
-// Output of CheckoutService checkout methods (UC-10).
-// Returned only on success; failures throw domain exceptions.
+/**
+ * Output of the {@code CheckoutService} checkout methods (UC-10). Returned only on success;
+ * a failure throws a domain exception.
+ *
+ * @param totalCharged         the amount charged to the buyer
+ * @param orderReceiptId       the id of the stored order receipt
+ * @param paymentTransactionId the payment gateway's id for the charge
+ * @param issuedTickets        the tickets bought, one entry each
+ */
 public record CheckoutResultDTO(
     double totalCharged,
     int orderReceiptId,
     int paymentTransactionId,
     List<IssuedTicketDTO> issuedTickets
 ) {
-    // One issued ticket: the persisted ticket id (minted by TicketRepository.nextId) plus
-    // the barcode VALUE the issuance provider actually returned (the real WSEP TIX code,
-    // or the stub's code) — so the confirmation can show the true barcode instead of
-    // fabricating one from the id.
+    /**
+     * One issued ticket: the stored ticket id (minted by {@code TicketRepository.nextId}) and the
+     * barcode value the issuer actually returned (the real WSEP TIX code, or the stub's code), so the
+     * confirmation shows the true barcode instead of one made up from the id.
+     */
     public record IssuedTicketDTO(int ticketId, String barcode) {}
 
-    // Convenience for callers/tests that only need the ids.
+    /** Returns the ids of the issued tickets; empty when {@code issuedTickets} is {@code null}. */
     public List<Integer> issuedTicketIds() {
         return issuedTickets == null
                 ? List.of()

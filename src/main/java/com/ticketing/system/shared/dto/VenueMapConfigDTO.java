@@ -2,26 +2,49 @@ package com.ticketing.system.shared.dto;
 
 import java.util.List;
 
-// Input to EventManagementService.configureVenueMap() (UC-20): the event's venue map is replaced by
-// these zones and seats, and a DRAFT event with at least one zone becomes SCHEDULED. No Ticket is
-// created here; tickets are created at checkout.
+/**
+ * Input to {@code EventManagementService.configureVenueMap} (UC-20): the event's venue map is replaced
+ * by these zones and seats, and a DRAFT event with at least one zone becomes SCHEDULED. No Ticket is
+ * created here; tickets are created at checkout.
+ *
+ * @param eventId   the event's id, as text
+ * @param venueName not read by the service: the new map keeps the event's stored location
+ * @param gridRows  the rows of the venue canvas grid; zero or less falls back to the default
+ * @param gridCols  the columns of the venue canvas grid; zero or less falls back to the default
+ * @param zones     the zones; zone ids are assigned 1 to N in this order
+ */
 public record VenueMapConfigDTO(
     String eventId,
     String venueName,
-    int gridRows,        // venue canvas grid; <= 0 falls back to the VenueMap default
+    int gridRows,
     int gridCols,
     List<ZoneConfigDTO> zones
 ) {
-    // One zone definition. Either seated (with seat layout/list) or standing (only with capacity, null for seats).
+    /**
+     * One zone definition: either seated (with a seat list) or standing (with a capacity and no seats).
+     *
+     * @param seated    whether the zone has numbered seats
+     * @param capacity  how many tickets a standing zone holds, which must be positive; not used for a
+     *                  seated zone
+     * @param seats     the seats of a seated zone; {@code null} for a standing zone
+     * @param placement where the zone sits on the grid; {@code null} leaves the zone unplaced
+     */
     public record ZoneConfigDTO(
         String zoneName,
         boolean seated,
         Integer capacity,
-        List<SeatConfigDTO> seats,  // null for standing zones
+        List<SeatConfigDTO> seats,
         double pricePerTicket,
-        GridPlacementDTO placement  // null = leave the zone unplaced on the grid
+        GridPlacementDTO placement
     ) {}
 
+    /**
+     * One seat of a seated zone.
+     *
+     * @param label the seat's label within the zone
+     * @param x     the seat's horizontal coordinate
+     * @param y     the seat's vertical coordinate
+     */
     public record SeatConfigDTO(
             String label,
             double x,
