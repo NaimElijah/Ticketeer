@@ -349,6 +349,8 @@ public class ActiveOrder implements InvariantChecked {
      * @param zoneId      the zone the reservation must belong to
      * @param quantity    the standing quantity to validate (used only when {@code seatNumbers} is empty)
      * @param seatNumbers the seated seat labels to validate (empty for a standing selection)
+     * @throws IllegalArgumentException if the order holds no line of the event, fewer standing places of
+     *     the zone than {@code quantity}, or not every given seat
      */
     public void validateContainsReservation(int eventId, int zoneId, int quantity, List<String> seatNumbers) {
         synchronized (itemsLock) {
@@ -456,7 +458,7 @@ public class ActiveOrder implements InvariantChecked {
     
 
 
-    /** Returns a copy of the cart's lines, in the order they were added. */
+    /** Returns a copy of the cart's lines, in no guaranteed order once loaded from the database. */
     public List<CartLineItem> getItems() {
         synchronized (itemsLock) {
             return new ArrayList<>(items);
@@ -578,7 +580,12 @@ public class ActiveOrder implements InvariantChecked {
         return createdAt;
     }
 
-    /** Resets every line item's hold timer to a fresh full window starting at {@code now}. */
+    /**
+     * Resets every line item's hold timer to a fresh full window starting at {@code now}.
+     *
+     * @param now the start of the new window (UTC wall time, ADR-008)
+     * @throws IllegalStateException if the cart is in checkout
+     */
     public void renewReservationTimers(LocalDateTime now) {
         synchronized (itemsLock) {
             ensureModifiable();              // refuses while CHECKOUT_IN_PROGRESS (existing guard)
@@ -691,7 +698,7 @@ public class ActiveOrder implements InvariantChecked {
 
 
     /**
-     * Empties the cart and returns the lines it held, for the caller to turn into tickets. Does not check
+     * Empties a cart whose sale has committed; checkout ignores the returned lines. Does not check
      * whether the cart is in checkout; the checkout sets it to {@code CHECKOUT_IN_PROGRESS} first.
      *
      * @throws IllegalStateException if the cart is empty

@@ -46,8 +46,8 @@ import com.ticketing.system.shared.exception.UserFacingErrors;
  * same order. A hold lasts the configured reservation window and is stamped with the cart's order key.
  * Inventory changes go through catalog's {@code InventoryCommandPort}.
  *
- * <p>The write methods are transactional. A member gets a notice after each reserve or remove; no notice
- * is published for a guest, who has no user to notify.
+ * <p>The write methods are transactional. A member gets a notice after each successful reserve or
+ * remove, delivered after commit; no notice is published for a guest, who has no user to notify.
  */
 @Service
 @Slf4j
@@ -116,7 +116,9 @@ public class ReservationService {
      * member has none. The hold starts now and lasts the configured reservation window.
      *
      * <p>If the cart cannot take the selection after inventory was held, the hold is released again and
-     * the original failure is rethrown. A member gets a success or failure notice.
+     * the original failure is rethrown. A member gets a success notice after commit. A failure notice is
+     * published as well, but the transaction rolls back with the rethrown failure, so it is never
+     * delivered (NaimElijah/Ticketeer#63); the caller sees the exception.
      *
      * @param token        the member's session token
      * @param eventId      the event to hold tickets in
@@ -129,6 +131,10 @@ public class ReservationService {
      * @throws SessionExpiredException  if the token has expired
      * @throws MarketNotOpenException   if the market is closed
      * @throws IllegalStateException    if the member's cart is in checkout
+     * @throws com.ticketing.system.shared.exception.UserNotFoundException if the member's user record
+     *     cannot be found, which the purchase-policy age check needs
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException
+     *     if another request changed the same cart or zone concurrently, detected on save or at commit
      * @throws RuntimeException         the inventory port's refusal, for example an unavailable seat or a
      *     purchase-policy violation, propagated unchanged
      */
@@ -153,6 +159,8 @@ public class ReservationService {
      * @throws SessionExpiredException  if {@code sessionId} is not a live guest session's id
      * @throws MarketNotOpenException   if the market is closed
      * @throws IllegalStateException    if the guest's cart is in checkout
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException
+     *     if another request changed the same cart or zone concurrently, detected on save or at commit
      * @throws RuntimeException         the inventory port's refusal, propagated unchanged
      */
     @Transactional
@@ -166,7 +174,9 @@ public class ReservationService {
      * while the market is closed, and also for lines whose hold has run out.
      *
      * <p>If the cart cannot be updated after inventory was released, the hold is restored and the
-     * original failure is rethrown. A member gets a success or failure notice.
+     * original failure is rethrown. A member gets a success notice after commit. A failure notice is
+     * published as well, but the transaction rolls back with the rethrown failure, so it is never
+     * delivered (NaimElijah/Ticketeer#63); the caller sees the exception.
      *
      * @param token        the member's session token
      * @param eventId      the event of the held tickets
@@ -178,6 +188,8 @@ public class ReservationService {
      * @throws InvalidTokenException    if the token is not a live member token
      * @throws SessionExpiredException  if the token has expired
      * @throws IllegalStateException    if the member's cart is in checkout
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException
+     *     if another request changed the same cart or zone concurrently, detected on save or at commit
      * @throws RuntimeException         the inventory port's refusal, propagated unchanged
      */
     @Transactional
@@ -199,6 +211,8 @@ public class ReservationService {
      *     that {@link #removeForMember} refuses
      * @throws SessionExpiredException  if {@code sessionId} is not a live guest session's id
      * @throws IllegalStateException    if the guest's cart is in checkout
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException
+     *     if another request changed the same cart or zone concurrently, detected on save or at commit
      * @throws RuntimeException         the inventory port's refusal, propagated unchanged
      */
     @Transactional
@@ -280,7 +294,7 @@ public class ReservationService {
             orderModified = true;
 
             activeOrderRepository.save(activeOrder);
-            notifySuccessAfterUnlock = true; // the notice goes out in the finally block, after the unlock
+            notifySuccessAfterUnlock = true;
             systemMetrics.record(MetricType.RESERVATION);
             return buildReservationResult(eventId, zoneId, selection, addedAt);
 
@@ -388,7 +402,7 @@ public class ReservationService {
 
             activeOrderRepository.save(activeOrder);
 
-            notifySuccessAfterUnlock = true; // the notice goes out in the finally block, after the unlock
+            notifySuccessAfterUnlock = true;
 
             return buildReservationResult(eventId, zoneId, selection, now());
 
@@ -740,7 +754,6 @@ public class ReservationService {
         }
         log.info("Active order found for userId={}, restoring ActiveOrderDTO", userId);
         ActiveOrderDTO activeOrderDTO = activeOrder.toDTO(now());
-        // Each line gets its event's name.
         List<ActiveOrderDTO.CartLineDTO> enrichedLines = new ArrayList<>();
         for (ActiveOrderDTO.CartLineDTO line : activeOrderDTO.lines()) {
             String eventName = eventNameFor(line.eventId());
@@ -945,8 +958,7 @@ public class ReservationService {
     }
 
     /**
-    * Removes a line from the cart, automatically determining whether the user is a Member or Guest.
-    * The UI just calls this method, no need to handle InventorySelectionDTO or user type.
+    * Removes a line from the cart, determining from the credential whether the buyer is a member or a guest.
     *
     * @param userTokenOrSessionId a member token or a guest's raw session id; a credential shaped like a
     *     JWT must validate as a member token
@@ -956,6 +968,9 @@ public class ReservationService {
     * @return the removed selection, as {@link #removeForMember} returns it
     * @throws IllegalArgumentException if the credential is blank, or as {@link #removeForMember}
     *     refuses
+    * @throws InvalidTokenException    if a JWT-shaped credential is not a live member token
+    * @throws SessionExpiredException  if the member token has expired, or the credential is not a
+    *     live guest session's id
     */
     @Transactional
     public ReservationResultDTO removeLine(String userTokenOrSessionId, int eventId, int zoneId,

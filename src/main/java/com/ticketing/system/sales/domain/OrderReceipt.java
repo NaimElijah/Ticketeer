@@ -135,6 +135,7 @@ public class OrderReceipt implements InvariantChecked {
      * @param receiptLines the purchased lines, not empty
      * @param purchaseTime when the purchase completed, as UTC wall time from the injected clock (ADR-008)
      * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
      */
     public static OrderReceipt forMember(int receiptId, int userId, double totalAmount, List<ReceiptLine> receiptLines,
             LocalDateTime purchaseTime) {
@@ -152,6 +153,7 @@ public class OrderReceipt implements InvariantChecked {
      * @param transactionRecords the payment and issuance records to keep on the receipt; may be
      *     {@code null} for none
      * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
      */
     public static OrderReceipt forMember(
             int receiptId,
@@ -183,6 +185,7 @@ public class OrderReceipt implements InvariantChecked {
      * @param receiptLines   the purchased lines, not empty
      * @param purchaseTime   when the purchase completed, as UTC wall time (ADR-008)
      * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
      */
     public static OrderReceipt forGuest(String guestEmail, String guestSessionId, int receiptId, double totalAmount,
             List<ReceiptLine> receiptLines, LocalDateTime purchaseTime) {
@@ -201,6 +204,7 @@ public class OrderReceipt implements InvariantChecked {
      * @param transactionRecords the payment and issuance records to keep on the receipt; may be
      *     {@code null} for none
      * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
      */
     public static OrderReceipt forGuest(String guestEmail, String guestSessionId, int receiptId,
             double totalAmount, List<ReceiptLine> receiptLines, LocalDateTime purchaseTime,

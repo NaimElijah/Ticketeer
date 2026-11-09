@@ -7,8 +7,9 @@ import com.ticketing.system.shared.dto.IssuanceResultDTO;
  * Port for external ticket-issuance / barcode-generation services. Implementations live in
  * {@code sales.adapter.out.wsep}: the WSEP issuer outside the {@code test} profile, a stub under it.
  *
- * <p>Multi-provider support (I.4.2): this interface stays single, so a provider is one more bean.
- * Governance's reachability probe takes every {@code TicketIssuer} bean; checkout takes a single one.
+ * <p>Only one implementation can be wired today: checkout injects a single {@code TicketIssuer}, so a
+ * second bean breaks startup (requirements I.4, OQ-13). Only governance's reachability probe takes a
+ * list of them.
  */
 public interface TicketIssuer {
 
@@ -16,8 +17,7 @@ public interface TicketIssuer {
     String getId();
 
     /**
-     * Checks that the issuer is reachable and accepts this platform's credentials (UC-1 / I.1.3 startup
-     * verification).
+     * Checks that the issuer answers the handshake (UC-1 / I.1.3 startup verification).
      *
      * @return {@code true} if it is; {@code false} otherwise, including when the check itself fails
      */

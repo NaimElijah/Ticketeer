@@ -9,8 +9,9 @@ import java.util.List;
 /**
  * Read model of purchase history: the purchases of one member (UC-16, from
  * {@code MemberAccountService.viewMyHistory()}), and the same shape for a company's sales (UC-22) and the
- * admin's global history (UC-31). The record is immutable (II.3.5.2). Prices, times and transactions are
- * those recorded at purchase; a ticket's status and refund state are current.
+ * admin's global history (UC-31). The record is immutable (II.3.5.2). Prices and the purchase time are
+ * those recorded at purchase; transactions grow with later refunds, and a ticket's status and refund
+ * state are current.
  *
  * @param records the purchases, one per receipt
  */
@@ -23,12 +24,10 @@ public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
      * @param buyerUserId    the member's user id; null for guest purchases
      * @param guestEmail     the guest's email; null for member purchases
      * @param purchasedAt    when the purchase completed, as UTC wall time (ADR-008)
-     * @param totalPaid      the total of the lines the record covers: the whole order, or only the lines
-     *     of the selected events or of one company
+     * @param totalPaid      the total of the lines the record covers
      * @param refundStatus   how much of this record's lines is refunded: over this record's lines only, so
      *     a company's record ignores other companies' refunds
-     * @param transactions   the order's payment, issuance and refund records; empty in a company's sales
-     *     record, since a transaction covers the whole order
+     * @param transactions   the order's payment, issuance and refund records; may be empty
      * @param tickets        one entry per line the record covers
      * @param buyerName      the member's username, resolved when the record is built; null for guests
      *     (use {@code guestEmail}) and when the member cannot be found
@@ -69,7 +68,6 @@ public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
      * the event, company or port they come from is unavailable.
      *
      * @param seatNumber    the seat label; null for a standing zone
-     * @param pricePaid     the price of this line
      * @param currentStatus the ticket's status now; a line with no stored ticket reads REFUNDED or PAID
      *     from its refund state
      * @param eventName     the event's name; null if unresolved

@@ -8,9 +8,9 @@ import com.ticketing.system.shared.dto.RefundResultDTO;
  * Port for external payment processing. Implementations live in {@code sales.adapter.out.wsep}: the
  * WSEP gateway outside the {@code test} profile, a stub under it.
  *
- * <p>Multi-provider support (I.3.2): this interface stays single, so a provider is one more bean.
- * Governance's reachability probe takes every {@code PaymentGateway} bean; checkout and both refund
- * paths take a single one.
+ * <p>Only one implementation can be wired today: checkout and both refund paths inject a single
+ * {@code PaymentGateway}, so a second bean breaks startup (requirements I.3, OQ-13). Only governance's
+ * reachability probe takes a list of them.
  */
 public interface PaymentGateway {
 
@@ -21,8 +21,7 @@ public interface PaymentGateway {
     String getId();
 
     /**
-     * Checks that the gateway is reachable and accepts this platform's credentials (UC-1 / I.1.2
-     * startup verification).
+     * Checks that the gateway answers the handshake (UC-1 / I.1.2 startup verification).
      *
      * @return {@code true} if it is; {@code false} otherwise, including when the check itself fails
      */
@@ -43,7 +42,7 @@ public interface PaymentGateway {
      * Refunds an existing charge (UC-4 / I.3.3).
      *
      * @param paymentTransactionId the gateway's transaction id of the charge, positive
-     * @param amount               the amount to refund
+     * @param amount               the amount to refund; ADR-001 describes how the WSEP adapter applies it
      * @return the gateway's record of the refund
      * @throws com.ticketing.system.shared.exception.RefundFailedException if the gateway declines
      * @throws com.ticketing.system.shared.exception.RefundGatewayUnreachableException if the request

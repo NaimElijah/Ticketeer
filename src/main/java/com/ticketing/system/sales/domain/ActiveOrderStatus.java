@@ -7,6 +7,9 @@ package com.ticketing.system.sales.domain;
 public enum ActiveOrderStatus {
     /** The cart is open for changes and has not been checked out. */
     PRE_CHECKOUT,
-    /** A checkout is running on the cart, which refuses changes and a second checkout. */
+    /**
+     * A checkout has frozen the cart, by a running attempt or an interrupted one; the cart refuses
+     * changes and a second checkout.
+     */
     CHECKOUT_IN_PROGRESS
 }

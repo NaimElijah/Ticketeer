@@ -37,8 +37,9 @@ import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 // Catalog inbound port + its sales-safe line DTO: catalog owns event pricing, policy validation,
 // on-sale checks, and inventory confirm/release.
-// EventRepository (a catalog outbound port taking int ids) is used only for the Phase-3 event
-// buyer-lock, which must span the whole validate -> persist -> confirm critical section in sales.
+// EventRepository (a catalog outbound port taking int ids) is used only for the event buyer-lock, taken in
+// Phase 3 and in the rollback. It must span the whole validate -> persist -> confirm critical section in
+// sales, and is a real lock on the in-memory adapters only (a no-op on the Jpa adapters).
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
 import com.ticketing.system.catalog.application.port.out.EventRepository;
@@ -68,10 +69,10 @@ import com.ticketing.system.identity.domain.User;
  * ({@link #checkoutMember}) or a guest ({@link #checkoutGuest}).
  *
  * <p>The payment gateway and the ticket issuer are called outside any lock and database transaction,
- * so a slow external service never pins a connection; only the final database unit of Phase 3 is a
- * transaction, run by this service itself. The methods are therefore not {@code @Transactional}.
- * Market state is read through {@link MarketGate}. Purchase and failure notices are published as
- * {@code shared.event} events.
+ * so a slow external service never pins a connection. The Phase 3 database unit is the only transaction
+ * this service opens, so its methods are not {@code @Transactional}; the refund requested on the failure
+ * path runs after that transaction has ended. Market state is read through {@link MarketGate}.
+ * Purchase and failure notices are published as {@code shared.event} events.
  */
 @Service
 @Slf4j
@@ -94,7 +95,7 @@ public class CheckoutService {
             "These places were taken while you were paying. Any charge is being refunded; please choose again.";
 
     private final ActiveOrderRepository activeOrderRepository;
-    // Retained ONLY for the Phase-3 event buyer-lock (lockEvents/unlockEvents): the lock must be held in
+    // Retained ONLY for the event buyer-lock (lockEvents/unlockEvents, Phase 3 and rollback): the lock must be held in
     // sales across the whole validate -> persist -> confirm section, spanning several port calls plus
     // sales' own ticket/receipt persistence, so it can't move inside a single port method. Takes int ids.
     private final EventRepository eventRepository;
@@ -146,7 +147,8 @@ public class CheckoutService {
      * Creates the service.
      *
      * @param activeOrderRepository the carts
-     * @param eventRepository       catalog's event port, used only for the shared event lock Phase 3 holds
+     * @param eventRepository       catalog's event port, used only for the event buyer lock taken in Phase 3
+     *                              and in the rollback
      * @param inventoryPort         catalog port that prices, validates and confirms inventory
      * @param ticketRepository      the tickets saved by a purchase
      * @param orderReceiptRepository the receipts saved by a purchase
@@ -223,18 +225,22 @@ public class CheckoutService {
      * Buys a member's cart in the three phases that keep slow external calls out of any lock and
      * transaction. Phase 1 validates the cart and freezes it, under the cart's order lock. Phase 2 prices
      * the lines, then calls the payment gateway and the ticket issuer, holding no lock. Phase 3 takes the
-     * order lock and the shared event locks again, checks that the cart and the holds are as Phase 1 saw
+     * order lock again and the event buyer locks, checks that the cart and the holds are as Phase 1 saw
      * them, and in one database transaction saves the tickets and the receipt and confirms the inventory
-     * sale. The cart is then consumed.
+     * sale. That transaction also holds the row lock on each event that catalog takes through the
+     * inventory port (ADR-015). The cart is then consumed.
      *
      * <p>A repeated call with an {@code idempotencyKey} that already completed for this member returns
      * the first result without charging again, and does so even if the market has closed since. The
      * completed results are kept in memory, so a restart forgets them.
      *
-     * <p>If a phase fails, the cart is unfrozen, the held places are returned to stock, the cart is
-     * cleared, and, when the payment gateway was already charged and the sale did not commit, a refund of
-     * the charged amount is requested from it. The member gets a purchase notice on success and a
-     * failure notice on failure once the token has been accepted (delivered after commit, ADR-004).
+     * <p>If a phase fails, the cart and its places are left as they are when this attempt lost the freeze
+     * or when another attempt has frozen the cart. Otherwise the rollback is best-effort: the held places
+     * are returned to stock and the cart is cleared, and a release that fails leaves the cart frozen.
+     * When the payment gateway reported a valid charge and the sale did not commit, a refund of the
+     * charged amount is requested from it. The member gets a purchase notice on success, and a failure
+     * notice on failure once the token has been accepted, except for a closed market, which publishes
+     * none (ADR-004).
      *
      * @param token          the member's session token
      * @param idempotencyKey the client's key for this purchase attempt; a retry sends the same key
@@ -412,9 +418,9 @@ public class CheckoutService {
      * idempotent replay and failure handling. The cart is found by the guest session id, and the
      * idempotency key is bound to the session id and the email together.
      *
-     * <p>The session must be live, which is checked after the replay lookup and the market gate, so a
-     * completed purchase can be replayed after its session ended. No purchase notice is published, since
-     * a guest has no user to notify. The guest's session id is never logged.
+     * <p>A new purchase needs a live session; repeating a completed purchase returns its first result.
+     * No purchase notice is published, since a guest has no user to notify. The guest's session id is
+     * never logged.
      *
      * @param guestSessionId the raw id of the guest's live session
      * @param guestEmail     the email the receipt belongs to
@@ -630,7 +636,6 @@ public class CheckoutService {
         }
     }
 
-    // Refuses a blank idempotency key or currency, or a card without a number.
     private void validatePaymentInput(String idempotencyKey, String currency, CardDetailsDTO card,
             Integer userId) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
@@ -688,7 +693,6 @@ public class CheckoutService {
         }
     }
 
-    // Unlocks in the reverse of the order lockEvents took them.
     private void unlockEvents(List<Integer> eventIds) {
         for (int i = eventIds.size() - 1; i >= 0; i--) {
             eventRepository.unlockBuyerOperation(eventIds.get(i));

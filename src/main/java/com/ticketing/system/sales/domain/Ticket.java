@@ -262,8 +262,11 @@ public class Ticket implements InvariantChecked {
 
     /**
      * Assigns this ticket to a Member at checkout (D7). Called once from the
-     * Member path of {@code CheckoutService.checkout}. Guest tickets stay
+     * Member path of {@code CheckoutService.checkoutMember}. Guest tickets stay
      * unassigned (holderUserId remains null).
+     *
+     * @param userId the member's user id, or {@code null} to clear it
+     * @throws IllegalArgumentException if {@code userId} is not positive
      */
     public void setHolderUserId(Integer userId) {
         if (userId != null && userId <= 0) {

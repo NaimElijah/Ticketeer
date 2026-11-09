@@ -14,7 +14,8 @@
  * <p>Sales changes catalog inventory only through catalog's inbound {@code InventoryCommandPort}, and
  * publishes its notices as {@code shared.event} events that the notifications context consumes after
  * commit (ADR-004). The checkout also uses catalog's {@code EventRepository} port directly, for the
- * shared event lock a sale holds (ADR-015). The market gate is inverted: sales queries the
+ * event buyer lock it takes in Phase 3 and in its rollback. The row lock a sale holds on its events
+ * (ADR-015) is taken through catalog's inventory port. The market gate is inverted: sales queries the
  * {@code MarketGate} outbound port, which governance implements.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Sales & Ticketing", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
