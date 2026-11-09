@@ -25,8 +25,8 @@ import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 
 /**
  * Inbound adapter that turns cross-context integration events (the {@code *Notice} records in
- * {@code shared.event}) into calls on the notifications facade. This is the ONLY edge from the
- * source contexts (sales, catalog, organization, messaging) into notifications: they publish
+ * {@code shared.event}) into calls on the notifications facade. This is the only way the source
+ * contexts (sales, catalog, organization, messaging) raise a notification: they publish
  * shared-kernel events, this listener consumes them, so no source context imports notifications.
  *
  * <p>Every notice is consumed after the publisher's transaction commits, on the single
@@ -40,7 +40,6 @@ import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 @Async(NotificationAsyncConfig.NOTIFICATION_EXECUTOR)
 public class NotificationEventListener {
 
-    // The existing notifications facade this adapter delegates to (unchanged application bean).
     private final INotificationService notificationService;
 
     /**
@@ -49,13 +48,12 @@ public class NotificationEventListener {
      * @param notificationService the inbound notifications port to delegate every event to
      */
     public NotificationEventListener(INotificationService notificationService) {
-        this.notificationService = notificationService; // store the facade for delegation
+        this.notificationService = notificationService;
     }
 
     /** Raises a purchase-confirmed notification when a purchase completes. */
     @TransactionalEventListener(fallbackExecution = true)
     public void on(PurchaseCompletedNotice notice) {
-        // Delegate 1:1 to the former facade call, preserving arguments.
         notificationService.notifyPurchaseCompleted(notice.userId(), notice.totalPrice(), notice.ticketIds());
     }
 

@@ -57,13 +57,11 @@ public class Notification implements InvariantChecked {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
     /**
-     * Structured payload — type-specific key/value data the recipient (or UI) can
-     * render. E.g. PURCHASE_CONFIRMED carries {@code orderId}, {@code total},
-     * {@code eventName}; EVENT_CANCELLED carries {@code eventId}, {@code reason}.
-     * The {@link #message} stays the human-readable summary; {@code data} is the
-     * machine-readable companion. Never null — empty map for notifications with
-     * no extra context. Persisted as one JSON text column (see
-     * {@link NotificationDataJsonConverter}).
+     * Structured payload — type-specific key/value data, the machine-readable companion of the
+     * human-readable {@link #message}. Which keys a type carries is decided where the notification is
+     * built ({@code NotificationService}); some types, such as PURCHASE_CONFIRMED, carry none. Not part
+     * of {@link #toDTO()}. Never null — empty map for notifications with no extra context. Persisted as
+     * one JSON text column (see {@link NotificationDataJsonConverter}).
      */
     @Convert(converter = NotificationDataJsonConverter.class)
     @Column(name = "data", columnDefinition = "text", nullable = false)
@@ -77,8 +75,9 @@ public class Notification implements InvariantChecked {
     }
 
     /**
-     * Backward-compatible 6-arg constructor — leaves {@link #data} as an empty map.
-     * Existing callers that don't carry structured payload data keep working.
+     * Creates a notification with an empty {@link #data} payload.
+     *
+     * @throws IllegalStateException if an invariant fails (see {@link #checkInvariants()})
      */
     public Notification(String id, int recipientUserId, NotificationType type,
             NotificationStatus status, String message, LocalDateTime createdAt) {
@@ -86,9 +85,10 @@ public class Notification implements InvariantChecked {
     }
 
     /**
-     * Full constructor including the structured {@code data} payload. New callers
-     * (e.g. CheckoutService building a PURCHASE_CONFIRMED notification) should use
-     * this and populate the relevant type-specific keys.
+     * Creates a notification with a structured {@code data} payload. The payload is copied; null reads
+     * as empty.
+     *
+     * @throws IllegalStateException if an invariant fails (see {@link #checkInvariants()})
      */
     public Notification(String id, int recipientUserId, NotificationType type,
             NotificationStatus status, String message, LocalDateTime createdAt,

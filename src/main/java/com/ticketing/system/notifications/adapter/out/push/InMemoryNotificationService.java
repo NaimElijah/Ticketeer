@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
  * replaces this with WebSocket, SSE or email delivery.
  *
  * <p>It holds no state on purpose. It is the only {@link PushNotificationService} in every profile, and
- * each login, poll and session end re-delivers notifications, so anything kept here would grow for the
- * life of the process. Tests that need a failed delivery mock the port instead.
+ * each login and poll delivers notifications, and a session end sends the shown ones back to be
+ * delivered again, so anything kept here would grow for the life of the process. Tests that need a failed delivery mock the port instead.
  */
 @Component
 public class InMemoryNotificationService implements PushNotificationService {

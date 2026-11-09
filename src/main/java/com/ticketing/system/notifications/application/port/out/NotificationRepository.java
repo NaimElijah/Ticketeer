@@ -15,9 +15,10 @@ public interface NotificationRepository extends IRepository<Notification, String
 
     Notification findById(String notificationId);
 
-    // Used by UC-37 (NotificationDispatchService.deliverPending) on successful login.
+    // Used by UC-37 (NotificationDispatchService.deliverPending) at login and on every poll, and by
+    // NotificationService.revertSentToPending to find the SENT ones.
     List<Notification> findByRecipientAndStatus(int recipientUserId, NotificationStatus status);
 
-    // Used by MemberAccountService for inbox view of a member's notification history.
+    // Every notification of the recipient, whatever its status.
     List<Notification> findByRecipient(int recipientUserId);
 }

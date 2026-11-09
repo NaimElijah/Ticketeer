@@ -9,13 +9,6 @@ import com.ticketing.system.notifications.application.port.out.NotificationRepos
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 
-// Owns the entire notification subsystem (UC-35, UC-36, UC-37).
-// - UC-35: dispatch on domain event → check online → push live or hand off to UC-36
-// - UC-36: persist as PENDING for offline recipients
-// - UC-37: deliver pending on MemberLoggedIn event (PENDING → DELIVERED)
-//
-// The Domain-Events pattern was committed at UC-35 (see design_walkthrough_summary.md §6).
-// Listener wiring (which domain events trigger dispatchFromEvent) lives in code, off-diagram.
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -23,6 +16,16 @@ import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Stores notifications and delivers them to members (UC-35, UC-36, UC-37).
+ *
+ * <p>{@link #dispatch} stores every notification as PENDING (UC-36). {@link #deliverPending} later
+ * pushes a member's PENDING notifications and marks them SENT (UC-37); identity's
+ * {@code AuthenticationService} calls it at login, and bootstrap's {@code NotificationPollingScheduler}
+ * calls it on every poll. Nothing is pushed at dispatch time, whether or not the recipient is signed in.
+ * {@link #dispatchFromEvent}, UC-35's event-driven entry point, is not implemented: notices reach
+ * notifications through {@code NotificationEventListener} and {@code NotificationService}.
+ */
 @Service
 @Slf4j
 public class NotificationDispatchService {

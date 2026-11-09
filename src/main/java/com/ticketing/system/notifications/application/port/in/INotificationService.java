@@ -4,8 +4,8 @@ import java.util.List;
 
 // High-level, application-facing notification facade. Each notifyXxx method translates a
 // business event into a Notification domain object and delegates to NotificationDispatchService,
-// which persists it and routes delivery. The low-level push channel (WebSocket / SSE / email)
-// is a separate port, PushNotificationService.
+// which stores it as PENDING; its deliverPending pushes it later. The low-level push channel
+// (WebSocket / SSE / email) is a separate port, PushNotificationService.
 // V1 implementation is NotificationService.
 public interface INotificationService {
 
@@ -83,7 +83,8 @@ public interface INotificationService {
 
     /**
      * Messaging → notification bridge. Fired when a new message/inquiry arrives for a
-     * recipient (member or company owner) so they get a real-time DIRECT_MESSAGE notification.
+     * recipient (member or company owner) so they get a DIRECT_MESSAGE notification, stored PENDING
+     * and shown on their next poll or login.
      * {@code conversationId} lets the UI deep-link to the thread; {@code senderLabel} is a
      * human-readable origin (e.g. "a system admin", "a production company").
      */
