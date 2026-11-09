@@ -9,9 +9,12 @@ import com.ticketing.system.shared.InvariantChecked;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 
-// V3: an @Embeddable value object — one row in an Event's show_dates element collection. Its times
-// are wall-clock times at the venue; they mean an instant only together with the event's time zone
-// (ADR-008). A protected no-arg ctor lets Hibernate instantiate it.
+/**
+ * One show of an {@link Event}: an {@code @Embeddable} value object, one row in the event's
+ * {@code show_dates} element collection. Its times are wall-clock times at the venue; they mean an
+ * instant only together with the event's time zone (ADR-008), as {@link #startsAt} and {@link #endsAt}
+ * read them. A protected no-arg constructor lets Hibernate instantiate it.
+ */
 @Embeddable
 public class ShowDate implements InvariantChecked {
     @Column(name = "start_time", nullable = false)

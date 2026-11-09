@@ -8,17 +8,35 @@ import com.ticketing.system.catalog.domain.Event;
 import com.ticketing.system.catalog.domain.EventStatus;
 import com.ticketing.system.catalog.domain.Location;
 
+/**
+ * Maps an {@link Event} to the DTOs the catalog returns: the summary row of a search or browse list, and
+ * the full detail of one event.
+ */
 public class EventMapper {
 
-
-    /** Cheapest ticket price across the event's zones, or 0 when it has no venue map / no zones. */
+    /**
+     * Returns the cheapest ticket price across the event's zones.
+     *
+     * @param event the event
+     * @return the lowest zone price, or 0 when the event has no venue map or no zones
+     */
     public static double minZonePrice(Event event) {
         return (event.getVenueMap() != null && !event.getVenueMap().getInventoryZones().isEmpty())
                 ? event.getVenueMap().getInventoryZones().stream().mapToDouble(z -> z.getprice()).min().getAsDouble()
                 : 0;
     }
 
-    // Converts an Event to an EventSummaryDTO, for CatalogService's browse, featured, upcoming and search results.
+    /**
+     * Converts an event to the summary row of CatalogService's browse, featured, upcoming and search
+     * results. The event must have a venue map with a location. The price range runs from the cheapest
+     * zone to the dearest, both 0 for an event with no zones.
+     *
+     * @param event                       the event
+     * @param productionCompanyRepository where the owning company's name is looked up
+     * @return the summary; its sold-out flag is set when the event is SOLD_OUT
+     * @throws com.ticketing.system.shared.exception.CompanyNotFoundException if the owning company does
+     *     not exist
+     */
     public EventSummaryDTO convertEventToEventSummaryDTO(Event event, ProductionCompanyRepository productionCompanyRepository) {
         double minPrice = minZonePrice(event);
         double maxPrice = (event.getVenueMap() != null && !event.getVenueMap().getInventoryZones().isEmpty())
@@ -41,9 +59,15 @@ public class EventMapper {
     }
 
 
-    // HELPER METHOD to convert Event --> EventDetailDTO (full detail, incl. lineup).
-    // Used by EventManagementService (owner-side) and CatalogService (guest-side); the
-    // caller resolves the company name since the two services reach the company differently.
+    /**
+     * Converts an event to its full detail, including the lineup. Both EventManagementService (owner
+     * side) and CatalogService (buyer side) use it; the caller resolves the company name, since the two
+     * services reach the company differently.
+     *
+     * @param event       the event
+     * @param companyName the owning company's name
+     * @return the detail; its location is {@code null} when the event has no venue map
+     */
     public EventDetailDTO toEventDetailDTO(Event event, String companyName) {
         Location location = event.getVenueMap() != null ? event.getVenueMap().getLocation() : null;
         return new EventDetailDTO(

@@ -48,6 +48,18 @@ public class StandingZone extends InventoryZone {
     /** For JPA only — do not call from application code. */
     protected StandingZone() { }
 
+    /**
+     * Creates a zone with the given capacity and nothing reserved or sold.
+     *
+     * @param id       the zone's id within its map
+     * @param name     the zone's name; non-blank, at most {@code TextLimits.MAX_TEXT_LENGTH} characters
+     * @param capacity the number of places; not negative
+     * @param price    the price of one place, from 0 to {@link #MAX_PRICE}
+     * @throws com.ticketing.system.shared.exception.BusinessRuleViolationException if the name is too
+     *     long; its message is shown to the user
+     * @throws IllegalStateException if the name is blank, the capacity is negative, or the price is out
+     *                               of range
+     */
     public StandingZone(int id, String name, int capacity, double price) {
         super(id, name, price);
         this.capacity = capacity;
@@ -204,8 +216,14 @@ public class StandingZone extends InventoryZone {
     }
 
     // There is deliberately no capacity setter: capacity changes only through addPlaces and removePlaces.
+    /**
+     * Adds places to the zone's capacity. Adding never harms existing holds or sales, so there is no
+     * further check.
+     *
+     * @param amountToAdd the number of places to add; positive
+     * @throws IllegalArgumentException if {@code amountToAdd} is not positive
+     */
     public void addPlaces(int amountToAdd) {
-        // can add places without really checking, not harmful
         synchronized (inventoryLock) {
             validatePositiveQuantity(amountToAdd);
             this.capacity += amountToAdd;
@@ -213,9 +231,15 @@ public class StandingZone extends InventoryZone {
         }
     }
 
+    /**
+     * Removes places from the zone's capacity. Capacity may not drop below the reserved plus sold places:
+     * that would cancel existing holds or sales.
+     *
+     * @param amountToRemove the number of places to remove; positive and at most the available places
+     * @throws IllegalArgumentException if {@code amountToRemove} is not positive or exceeds the available
+     *                                  places
+     */
     public void removePlaces(int amountToRemove) {
-        // can only remove places if it doesn't cause capacity to drop below reserved + sold,
-        // otherwise we would have to cancel existing reservations or sales, which is not allowed.
         synchronized (inventoryLock) {
             validatePositiveQuantity(amountToRemove);
 

@@ -44,6 +44,11 @@ public class JpaEventRepository implements EventRepository {
     private final AtomicInteger venueMapIdSequence = new AtomicInteger(0);
     private volatile boolean seeded = false;
 
+    /**
+     * Creates the adapter.
+     *
+     * @param data the Spring Data repository it delegates to
+     */
     public JpaEventRepository(SpringDataEventRepository data) {
         this.data = data;
     }

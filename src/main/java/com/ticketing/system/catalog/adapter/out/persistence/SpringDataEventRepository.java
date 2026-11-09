@@ -26,6 +26,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
  */
 public interface SpringDataEventRepository extends JpaRepository<Event, Integer>, JpaSpecificationExecutor<Event> {
 
+    /** The events of one company, in any status. */
     @Query("select e from Event e where e.comapnyid = :companyId")
     List<Event> findByCompanyId(@Param("companyId") int companyId);
 
@@ -34,18 +35,23 @@ public interface SpringDataEventRepository extends JpaRepository<Event, Integer>
     @Query("select e from Event e where e.id = :id")
     Optional<Event> findByIdForShare(@Param("id") int id);
 
+    /** The ids of one company's events, in any status. */
     @Query("select e.id from Event e where e.comapnyid = :companyId")
     List<Integer> findIdsByCompany(@Param("companyId") int companyId);
 
+    /** The ON_SALE events of one company. */
     @Query("select e from Event e where e.comapnyid = :companyId "
             + "and e.status = com.ticketing.system.catalog.domain.EventStatus.ON_SALE")
     List<Event> findActiveByCompany(@Param("companyId") int companyId);
 
+    /** The events in one lifecycle status, whichever company owns them. */
     List<Event> findByStatus(EventStatus status);
 
+    /** The highest event id stored, or 0 when there is none; seeds the id sequence. */
     @Query("select coalesce(max(e.id), 0) from Event e")
     int findMaxEventId();
 
+    /** The highest venue map id stored, or 0 when there is none; seeds the id sequence. */
     @Query("select coalesce(max(v.id), 0) from VenueMap v")
     int findMaxVenueMapId();
 }
